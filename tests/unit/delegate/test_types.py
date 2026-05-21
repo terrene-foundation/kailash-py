@@ -1,28 +1,73 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Tier-1 tests for the canonical Delegate type substrate (S2 of #1035).
+"""Tier-1 tests for the canonical Delegate type substrate (S2 + S2.5 of #1035).
 
 Mirrors invariants surfaced in the kailash-rs reference extraction report at
 ``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-
-extraction.md`` §1 (kailash-delegate-types).
+extraction.md`` §1 (kailash-delegate-types). S2.5 restructures S2's flat
+anchor types into the canonical rs shape per /autonomize Option A:
+
+- ``Identity`` → ``DelegateIdentity`` with opaque delegate_id UUID + 3 refs
+- ``Role`` with opaque role_id UUID + structured RoleScope + RoleLifecycleState
+- ``GenesisRecord`` → ``DelegateGenesisRecord`` composing the existing
+  ``kailash.trust.chain.GenesisRecord`` (§249 compose-don't-re-derive)
+- ``PrincipalDirectory.resolve`` keyed on UUID delegate_id
 """
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
 
 import pytest
 
 from kailash.delegate.types import (
-    GenesisRecord,
-    Identity,
+    CapabilitySet,
+    DelegateGenesisRecord,
+    DelegateIdentity,
     LifecycleError,
     LifecycleState,
     PrincipalDirectory,
     Role,
+    RoleLifecycleState,
+    RoleScope,
 )
 from kailash.trust._json import canonical_json_dumps
+from kailash.trust.chain import AuthorityType
+from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
+
+# ---------------------------------------------------------------------------
+# Test fixtures — substrate genesis block (cryptographic surface)
+# ---------------------------------------------------------------------------
+
+
+def _substrate_genesis(
+    *,
+    signature: str = "d" * 128,
+    signature_algorithm: str = "Ed25519",
+) -> SubstrateGenesisRecord:
+    """Build a substrate GenesisRecord with default Ed25519 128-hex signature."""
+    return SubstrateGenesisRecord(
+        id="g-test-0001",
+        agent_id="agent-1",
+        authority_id="auth-1",
+        authority_type=AuthorityType.ORGANIZATION,
+        created_at=datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc),
+        signature=signature,
+        signature_algorithm=signature_algorithm,
+    )
+
+
+def _delegate_genesis(**overrides: object) -> DelegateGenesisRecord:
+    defaults: dict[str, object] = {
+        "block": _substrate_genesis(),
+        "spec_version": "1",
+        "capabilities": ("read", "write"),
+    }
+    defaults.update(overrides)
+    return DelegateGenesisRecord(**defaults)  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # LifecycleState — D3 linear chain
@@ -46,8 +91,6 @@ def test_lifecycle_state_chain_exhaustive() -> None:
 def test_lifecycle_state_wire_format_is_lowercase_string() -> None:
     """Cross-SDK canonical wire format: lowercase string value."""
     assert LifecycleState.POSTURE_GRADED.value == "posture_graded"
-    # str-backed Enum allows direct comparison with string literals so wire
-    # payloads round-trip without explicit coercion.
     assert LifecycleState.ACTIVE == "active"
 
 
@@ -57,7 +100,6 @@ def test_lifecycle_state_wire_format_is_lowercase_string() -> None:
 
 
 def test_lifecycle_error_typed() -> None:
-    """``LifecycleError`` is an Exception with a useful named-successor msg."""
     err = LifecycleError(
         from_state=LifecycleState.PROPOSED,
         to_state=LifecycleState.ACTIVE,
@@ -71,7 +113,6 @@ def test_lifecycle_error_typed() -> None:
 
 
 def test_lifecycle_error_without_expected_successor() -> None:
-    """When the from-state has no legal successor, message says so."""
     err = LifecycleError(
         from_state=LifecycleState.ARCHIVED,
         to_state=LifecycleState.ACTIVE,
@@ -80,155 +121,371 @@ def test_lifecycle_error_without_expected_successor() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Identity — frozen, slots, post-init guards
+# RoleLifecycleState — distinct from LifecycleState (rs role.rs:50-61)
 # ---------------------------------------------------------------------------
 
 
-def test_identity_frozen() -> None:
-    ident = Identity(tenant_id="t1", principal_id="p1")
-    with pytest.raises(FrozenInstanceError):
-        ident.tenant_id = "t2"  # type: ignore[misc]
-
-
-def test_identity_post_init_rejects_empty_tenant_id() -> None:
-    with pytest.raises(ValueError, match="tenant_id"):
-        Identity(tenant_id="", principal_id="p")
-
-
-def test_identity_post_init_rejects_empty_principal_id() -> None:
-    with pytest.raises(ValueError, match="principal_id"):
-        Identity(tenant_id="t", principal_id="")
-
-
-def test_identity_display_name_optional() -> None:
-    ident = Identity(tenant_id="t1", principal_id="p1")
-    assert ident.display_name is None
-    named = Identity(tenant_id="t1", principal_id="p1", display_name="Alice")
-    assert named.display_name == "Alice"
+def test_role_lifecycle_state_chain_exhaustive() -> None:
+    """4-state role lifecycle: draft, active, suspended, retired."""
+    members = list(RoleLifecycleState)
+    assert len(members) == 4
+    assert {m.value for m in members} == {"draft", "active", "suspended", "retired"}
 
 
 # ---------------------------------------------------------------------------
-# Role — frozen, scope is frozenset, post-init guards
+# DelegateIdentity — F2 restructure (opaque UUID + 3 eager-required refs)
 # ---------------------------------------------------------------------------
 
 
-def test_role_frozen_scope_is_frozenset() -> None:
-    """``Role.scope`` is a ``frozenset`` (immutable per rs convention)."""
-    role = Role(role_id="r1", tenant_id="t1", scope={"read", "write"})
-    assert isinstance(role.scope, frozenset)
-    assert role.scope == frozenset({"read", "write"})
-
-
-def test_role_scope_coerces_list_to_frozenset() -> None:
-    role = Role(role_id="r1", tenant_id="t1", scope=["a", "b", "a"])  # type: ignore[arg-type]
-    assert role.scope == frozenset({"a", "b"})
-
-
-def test_role_post_init_rejects_empty_ids() -> None:
-    with pytest.raises(ValueError, match="role_id"):
-        Role(role_id="", tenant_id="t1")
-    with pytest.raises(ValueError, match="tenant_id"):
-        Role(role_id="r1", tenant_id="")
-
-
-# ---------------------------------------------------------------------------
-# GenesisRecord — frozen, post-init guards, canonical-dict byte stability
-# ---------------------------------------------------------------------------
-
-
-def _make_genesis(**overrides: object) -> GenesisRecord:
+def _make_identity(**overrides: object) -> DelegateIdentity:
     defaults: dict[str, object] = {
-        "genesis_id": "g-0001",
-        "created_at": datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc),
-        "principal_directory_anchor": "a" * 64,
-        "initial_envelope_hash": "b" * 64,
-        "delegation_proof": "c" * 128,
-        "signature": "d" * 128,
-        "spec_version": "1",
-        "capabilities": ("read", "write"),
+        "delegate_id": uuid.uuid4(),
+        "sovereign_ref": "sov-1",
+        "role_binding_ref": "rb-1",
+        "genesis_ref": "g-1",
     }
     defaults.update(overrides)
-    return GenesisRecord(**defaults)  # type: ignore[arg-type]
+    return DelegateIdentity(**defaults)  # type: ignore[arg-type]
 
 
-def test_genesis_record_frozen() -> None:
-    g = _make_genesis()
+def test_delegate_identity_frozen() -> None:
+    ident = _make_identity()
     with pytest.raises(FrozenInstanceError):
-        g.genesis_id = "g-9999"  # type: ignore[misc]
+        ident.sovereign_ref = "other"  # type: ignore[misc]
 
 
-def test_genesis_record_rejects_naive_datetime() -> None:
-    with pytest.raises(ValueError, match="timezone-aware"):
-        _make_genesis(created_at=datetime(2026, 5, 21, 12, 0, 0))
+def test_delegate_identity_requires_uuid_delegate_id() -> None:
+    with pytest.raises(TypeError, match="uuid.UUID"):
+        DelegateIdentity(
+            delegate_id="not-a-uuid",  # type: ignore[arg-type]
+            sovereign_ref="s",
+            role_binding_ref="rb",
+            genesis_ref="g",
+        )
 
 
-def test_genesis_record_rejects_empty_required_fields() -> None:
-    for field_name in (
-        "genesis_id",
-        "principal_directory_anchor",
-        "initial_envelope_hash",
-        "delegation_proof",
-        "signature",
-        "spec_version",
-    ):
-        with pytest.raises(ValueError, match=field_name):
-            _make_genesis(**{field_name: ""})
+def test_delegate_identity_post_init_rejects_empty_sovereign_ref() -> None:
+    with pytest.raises(ValueError, match="sovereign_ref"):
+        _make_identity(sovereign_ref="")
 
 
-def test_genesis_record_to_canonical_dict_byte_canonical() -> None:
-    """``to_canonical_dict()`` → ``canonical_json_dumps`` is deterministic.
+def test_delegate_identity_post_init_rejects_empty_role_binding_ref() -> None:
+    with pytest.raises(ValueError, match="role_binding_ref"):
+        _make_identity(role_binding_ref="")
 
-    Two calls with the same input produce byte-identical JSON, which is the
-    cross-SDK parity contract for rs ↔ py reference fixtures.
+
+def test_delegate_identity_post_init_rejects_empty_genesis_ref() -> None:
+    with pytest.raises(ValueError, match="genesis_ref"):
+        _make_identity(genesis_ref="")
+
+
+def test_delegate_identity_no_legacy_fields() -> None:
+    """Post-F2: tenant_id / principal_id / display_name are gone.
+
+    Structural invariant test: if those fields ever return, this test
+    fires and forces a re-audit against the rs canonical shape.
     """
-    g1 = _make_genesis()
-    g2 = _make_genesis()
-    json1 = canonical_json_dumps(g1.to_canonical_dict())
-    json2 = canonical_json_dumps(g2.to_canonical_dict())
-    assert json1 == json2
-    # The canonical encoder sorts keys; the resulting string contains every
-    # named field so cross-SDK parity is grep-able post-incident.
-    for field_name in (
-        "genesis_id",
-        "created_at",
-        "principal_directory_anchor",
-        "initial_envelope_hash",
-        "delegation_proof",
-        "signature",
-        "spec_version",
-        "capabilities",
-    ):
-        assert f'"{field_name}"' in json1
+    ident = _make_identity()
+    assert not hasattr(ident, "tenant_id")
+    assert not hasattr(ident, "principal_id")
+    assert not hasattr(ident, "display_name")
 
 
-def test_genesis_record_capabilities_coerced_to_tuple() -> None:
-    """Iterables passed to ``capabilities`` are coerced to a tuple."""
-    g = _make_genesis(capabilities=["read", "write"])
+# ---------------------------------------------------------------------------
+# CapabilitySet — explicit intersect (no union — rs B1)
+# ---------------------------------------------------------------------------
+
+
+def test_capability_set_intersect_returns_set_intersection() -> None:
+    a = CapabilitySet(capabilities=("read", "write", "admin"))
+    b = CapabilitySet(capabilities=("read", "admin", "delete"))
+    result = a.intersect(b)
+    assert set(result.capabilities) == {"read", "admin"}
+
+
+def test_capability_set_intersect_preserves_self_order() -> None:
+    """Order from self is preserved (rs Vec.contains iteration semantics)."""
+    a = CapabilitySet(capabilities=("c", "a", "b"))
+    b = CapabilitySet(capabilities=("a", "b", "c"))
+    result = a.intersect(b)
+    assert result.capabilities == ("c", "a", "b")
+
+
+def test_capability_set_intersect_empty_pair_is_empty() -> None:
+    a = CapabilitySet(capabilities=("read",))
+    b = CapabilitySet(capabilities=("write",))
+    assert a.intersect(b).capabilities == ()
+
+
+def test_capability_set_no_union_method() -> None:
+    """Structural invariant: union is deliberately NOT provided (rs B1).
+
+    Union would be a privilege-escalation primitive. If a sibling method
+    ever lands here, this test fires and forces a re-audit.
+    """
+    assert not hasattr(CapabilitySet, "union")
+
+
+def test_capability_set_coerces_iterable_to_tuple() -> None:
+    cs = CapabilitySet(capabilities=["a", "b"])  # type: ignore[arg-type]
+    assert isinstance(cs.capabilities, tuple)
+
+
+def test_capability_set_intersect_rejects_non_capability_set() -> None:
+    a = CapabilitySet(capabilities=("read",))
+    with pytest.raises(TypeError, match="CapabilitySet"):
+        a.intersect(["read"])  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# RoleScope — both axes (rs B4)
+# ---------------------------------------------------------------------------
+
+
+def test_role_scope_holds_both_axes() -> None:
+    cs = CapabilitySet(capabilities=("read",))
+    scope = RoleScope(domain="d/t/r", capabilities=cs)
+    assert scope.domain == "d/t/r"
+    assert scope.capabilities is cs
+
+
+def test_role_scope_rejects_empty_domain() -> None:
+    with pytest.raises(ValueError, match="domain"):
+        RoleScope(domain="", capabilities=CapabilitySet())
+
+
+def test_role_scope_rejects_non_capability_set() -> None:
+    with pytest.raises(TypeError, match="CapabilitySet"):
+        RoleScope(domain="d", capabilities=["read"])  # type: ignore[arg-type]
+
+
+def test_role_scope_default_capabilities_is_empty() -> None:
+    scope = RoleScope(domain="d")
+    assert scope.capabilities == CapabilitySet()
+
+
+# ---------------------------------------------------------------------------
+# Role — opaque UUID + structured scope + lifecycle (F3)
+# ---------------------------------------------------------------------------
+
+
+def _make_role(**overrides: object) -> Role:
+    defaults: dict[str, object] = {
+        "role_id": uuid.uuid4(),
+        "display_name": "Reader",
+        "scope": RoleScope(domain="d", capabilities=CapabilitySet(("read",))),
+        "lifecycle": RoleLifecycleState.ACTIVE,
+    }
+    defaults.update(overrides)
+    return Role(**defaults)  # type: ignore[arg-type]
+
+
+def test_role_frozen() -> None:
+    r = _make_role()
+    with pytest.raises(FrozenInstanceError):
+        r.display_name = "Other"  # type: ignore[misc]
+
+
+def test_role_requires_uuid_role_id() -> None:
+    with pytest.raises(TypeError, match="uuid.UUID"):
+        _make_role(role_id="not-a-uuid")
+
+
+def test_role_rejects_empty_display_name() -> None:
+    with pytest.raises(ValueError, match="display_name"):
+        _make_role(display_name="")
+
+
+def test_role_rejects_non_role_scope() -> None:
+    with pytest.raises(TypeError, match="RoleScope"):
+        _make_role(scope={"domain": "d"})
+
+
+def test_role_rejects_non_lifecycle_state() -> None:
+    with pytest.raises(TypeError, match="RoleLifecycleState"):
+        _make_role(lifecycle="active")
+
+
+def test_role_no_legacy_scope_frozenset() -> None:
+    """Post-F3: scope is RoleScope, NOT frozenset[str].
+
+    Structural invariant test: if scope ever regresses to frozenset, this
+    fires and forces a re-audit against the rs canonical shape.
+    """
+    r = _make_role()
+    assert isinstance(r.scope, RoleScope)
+    assert not isinstance(r.scope, frozenset)
+
+
+# ---------------------------------------------------------------------------
+# DelegateGenesisRecord — composes substrate chain.GenesisRecord (F4 + F6 + F7)
+# ---------------------------------------------------------------------------
+
+
+def test_delegate_genesis_record_frozen() -> None:
+    g = _delegate_genesis()
+    with pytest.raises(FrozenInstanceError):
+        g.spec_version = "2"  # type: ignore[misc]
+
+
+def test_delegate_genesis_record_composes_substrate_block() -> None:
+    """Per §249 — block is held verbatim, not re-derived."""
+    block = _substrate_genesis()
+    g = DelegateGenesisRecord(block=block, spec_version="1", capabilities=())
+    assert g.block is block
+    # The composed block remains the canonical source of cryptographic
+    # fields. genesis_id is a convenience accessor.
+    assert g.genesis_id == block.id
+
+
+def test_delegate_genesis_record_rejects_non_substrate_block() -> None:
+    with pytest.raises(TypeError, match="kailash.trust.chain.GenesisRecord"):
+        DelegateGenesisRecord(
+            block={"id": "g"},  # type: ignore[arg-type]
+            spec_version="1",
+        )
+
+
+def test_delegate_genesis_record_rejects_empty_spec_version() -> None:
+    with pytest.raises(ValueError, match="spec_version"):
+        _delegate_genesis(spec_version="")
+
+
+def test_delegate_genesis_record_rejects_naive_datetime() -> None:
+    naive_block = SubstrateGenesisRecord(
+        id="g-1",
+        agent_id="a",
+        authority_id="u",
+        authority_type=AuthorityType.ORGANIZATION,
+        created_at=datetime(2026, 5, 21, 12, 0, 0),  # naive
+        signature="d" * 128,
+    )
+    with pytest.raises(ValueError, match="timezone-aware"):
+        DelegateGenesisRecord(block=naive_block, spec_version="1")
+
+
+def test_delegate_genesis_record_capabilities_coerced_to_tuple() -> None:
+    g = _delegate_genesis(capabilities=["read", "write"])
     assert g.capabilities == ("read", "write")
 
 
+# F6 — hex length + format validation
+
+
+def test_delegate_genesis_record_rejects_short_signature() -> None:
+    """Ed25519 signature MUST be exactly 128 hex chars."""
+    block = _substrate_genesis(signature="d" * 64)  # too short
+    with pytest.raises(ValueError, match="128 hex chars"):
+        DelegateGenesisRecord(block=block, spec_version="1")
+
+
+def test_delegate_genesis_record_rejects_long_signature() -> None:
+    block = _substrate_genesis(signature="d" * 256)  # too long
+    with pytest.raises(ValueError, match="128 hex chars"):
+        DelegateGenesisRecord(block=block, spec_version="1")
+
+
+def test_delegate_genesis_record_rejects_uppercase_hex_signature() -> None:
+    """Lowercase-only hex preserves cross-SDK byte parity."""
+    block = _substrate_genesis(signature="D" * 128)
+    with pytest.raises(ValueError, match="lowercase hex"):
+        DelegateGenesisRecord(block=block, spec_version="1")
+
+
+def test_delegate_genesis_record_rejects_non_hex_signature() -> None:
+    block = _substrate_genesis(signature="g" * 128)  # 'g' not in [0-9a-f]
+    with pytest.raises(ValueError, match="lowercase hex"):
+        DelegateGenesisRecord(block=block, spec_version="1")
+
+
+def test_delegate_genesis_record_skips_hex_validation_for_non_ed25519() -> None:
+    """ECDSA / KMS signatures use different length conventions.
+
+    The hex check fires only for ``Ed25519`` (the EATP-mandated default).
+    Per ``eatp.md`` §Cryptography: 'AWS KMS uses ECDSA P-256 — document
+    the algorithm mismatch.'
+    """
+    block = _substrate_genesis(
+        signature="abcdef",  # short — but algorithm is ECDSA
+        signature_algorithm="ECDSA-P256",
+    )
+    g = DelegateGenesisRecord(block=block, spec_version="1")
+    assert g.block.signature == "abcdef"
+
+
+# F7 — to_signing_dict / to_canonical_dict split
+
+
+def test_to_signing_dict_excludes_signature() -> None:
+    """The signing payload is the pre-signature canonical bytes.
+
+    Signers compute the signature over THIS dict's canonical-JSON
+    encoding; including the signature would create a circular dependency.
+    """
+    g = _delegate_genesis()
+    signing = g.to_signing_dict()
+    assert "block" in signing
+    assert "signature" not in signing["block"]
+    assert signing["spec_version"] == "1"
+
+
+def test_to_canonical_dict_includes_signature() -> None:
+    g = _delegate_genesis()
+    canonical = g.to_canonical_dict()
+    assert canonical["block"]["signature"] == "d" * 128
+    assert canonical["block"]["signature_algorithm"] == "Ed25519"
+    assert canonical["spec_version"] == "1"
+
+
+def test_to_canonical_dict_byte_canonical_round_trip() -> None:
+    """Two records with identical fields emit byte-identical canonical JSON."""
+    g1 = _delegate_genesis()
+    g2 = _delegate_genesis()
+    json1 = canonical_json_dumps(g1.to_canonical_dict())
+    json2 = canonical_json_dumps(g2.to_canonical_dict())
+    assert json1 == json2
+    # Nested block payload is grep-able in the canonical output.
+    for field_name in ("block", "spec_version", "capabilities"):
+        assert f'"{field_name}"' in json1
+
+
 # ---------------------------------------------------------------------------
-# PrincipalDirectory — frozen, deterministic lookup, duplicate rejection
+# PrincipalDirectory — F5 keyed on delegate_id UUID
 # ---------------------------------------------------------------------------
 
 
 def test_principal_directory_resolve_hit_miss() -> None:
-    alice = Identity(tenant_id="t1", principal_id="alice")
-    bob = Identity(tenant_id="t1", principal_id="bob")
+    alice_id = uuid.uuid4()
+    bob_id = uuid.uuid4()
+    eve_id = uuid.uuid4()
+    alice = _make_identity(delegate_id=alice_id)
+    bob = _make_identity(delegate_id=bob_id)
     directory = PrincipalDirectory(identities=(alice, bob))
-    assert directory.resolve("alice") == alice
-    assert directory.resolve("bob") == bob
-    assert directory.resolve("eve") is None
+    assert directory.resolve(alice_id) is alice
+    assert directory.resolve(bob_id) is bob
+    assert directory.resolve(eve_id) is None
 
 
-def test_principal_directory_rejects_duplicate_identity() -> None:
-    alice1 = Identity(tenant_id="t1", principal_id="alice")
-    alice2 = Identity(tenant_id="t1", principal_id="alice", display_name="A")
+def test_principal_directory_resolve_requires_uuid() -> None:
+    directory = PrincipalDirectory()
+    with pytest.raises(TypeError, match="uuid.UUID"):
+        directory.resolve("not-a-uuid")  # type: ignore[arg-type]
+
+
+def test_principal_directory_rejects_duplicate_delegate_id() -> None:
+    shared_id = uuid.uuid4()
+    one = _make_identity(delegate_id=shared_id, sovereign_ref="sov-1")
+    two = _make_identity(delegate_id=shared_id, sovereign_ref="sov-2")
     with pytest.raises(ValueError, match="duplicate identity"):
-        PrincipalDirectory(identities=(alice1, alice2))
+        PrincipalDirectory(identities=(one, two))
 
 
 def test_principal_directory_frozen() -> None:
     directory = PrincipalDirectory()
     with pytest.raises(FrozenInstanceError):
         directory.identities = ()  # type: ignore[misc]
+
+
+def test_principal_directory_coerces_iterable_to_tuple() -> None:
+    directory = PrincipalDirectory(identities=[_make_identity()])  # type: ignore[arg-type]
+    assert isinstance(directory.identities, tuple)

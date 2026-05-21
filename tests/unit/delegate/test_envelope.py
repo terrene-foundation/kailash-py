@@ -16,18 +16,28 @@ from datetime import datetime, timezone
 import pytest
 
 from kailash.delegate.envelope import DelegateConstraintEnvelope, EnvelopeWideningError
-from kailash.delegate.types import GenesisRecord
+from kailash.delegate.types import DelegateGenesisRecord
+from kailash.trust.chain import AuthorityType
+from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
 
 
-def _make_genesis() -> GenesisRecord:
-    return GenesisRecord(
-        genesis_id="g-test-0001",
+def _make_genesis() -> DelegateGenesisRecord:
+    """Build a DelegateGenesisRecord composing a substrate GenesisRecord.
+
+    Post-S2.5 (F4): the canonical anchor composes the existing
+    ``kailash.trust.chain.GenesisRecord`` per §249 (rs composition.rs:51-88).
+    """
+    block = SubstrateGenesisRecord(
+        id="g-test-0001",
+        agent_id="agent-1",
+        authority_id="auth-1",
+        authority_type=AuthorityType.ORGANIZATION,
         created_at=datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc),
-        principal_directory_anchor="a" * 64,
-        initial_envelope_hash="b" * 64,
-        delegation_proof="c" * 128,
         signature="d" * 128,
+    )
+    return DelegateGenesisRecord(
+        block=block,
         spec_version="1",
         capabilities=("read",),
     )
@@ -59,7 +69,7 @@ def test_from_genesis_rejects_non_envelope_type() -> None:
 
 def test_from_genesis_rejects_non_genesis_type() -> None:
     envelope = _envelope_with_budget(100.0)
-    with pytest.raises(TypeError, match="GenesisRecord"):
+    with pytest.raises(TypeError, match="DelegateGenesisRecord"):
         DelegateConstraintEnvelope.from_genesis(envelope, "not-a-genesis")  # type: ignore[arg-type]
 
 

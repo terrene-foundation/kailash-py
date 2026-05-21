@@ -41,7 +41,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from kailash.delegate.types import GenesisRecord
+from kailash.delegate.types import DelegateGenesisRecord
 from kailash.trust.envelope import ConstraintEnvelope
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class DelegateConstraintEnvelope:
     def from_genesis(
         cls,
         envelope: ConstraintEnvelope,
-        genesis: GenesisRecord,
+        genesis: DelegateGenesisRecord,
     ) -> "DelegateConstraintEnvelope":
         """Construct from a genesis-seeded envelope (the only widening path).
 
@@ -99,10 +99,10 @@ class DelegateConstraintEnvelope:
                 "ConstraintEnvelope; got "
                 f"{type(envelope).__name__}"
             )
-        if not isinstance(genesis, GenesisRecord):
+        if not isinstance(genesis, DelegateGenesisRecord):
             raise TypeError(
                 "DelegateConstraintEnvelope.from_genesis requires a "
-                f"GenesisRecord; got {type(genesis).__name__}"
+                f"DelegateGenesisRecord; got {type(genesis).__name__}"
             )
         return cls(inner=envelope, genesis_id=genesis.genesis_id)
 
