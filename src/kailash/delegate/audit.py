@@ -504,9 +504,14 @@ class WitnessedCrossAnchor:
         anchor tier (never transmitted to the witness tier).
 
         Args:
-            salt: 32-byte residency-boundary secret drawn from the OS
-                CSPRNG (``secrets.token_bytes(32)``). NEVER transmits
-                to the witness tier.
+            salt: 32-byte residency-boundary secret. **Callers MUST
+                draw this from the OS CSPRNG**
+                (``secrets.token_bytes(32)`` or equivalent). This
+                helper rejects obvious low-entropy patterns (≤2
+                unique bytes — all-zero, all-one, repeating-byte) but
+                does NOT attempt full CSPRNG attestation; the 256-bit
+                entropy guarantee is the caller's responsibility.
+                NEVER transmits to the witness tier.
             anchor_head_entry_hash: 64-char hex SHA-256 of the anchor
                 chain's current head entry.
 
@@ -712,18 +717,23 @@ class AuditChainEngine:
                 "AuditChainEngine.emit_event(signer_identity) MUST be a "
                 f"DelegateIdentity; got {type(signer_identity).__name__}"
             )
-        # C3 audit-visibility classifier — REASONING_SCRATCHPAD is
-        # declared on DelegateEventType for cross-SDK enum parity but
-        # MUST NOT enter the audit chain (mirrors rs
-        # ``DelegateEventKind::is_audit_visible``). Reject early so the
-        # caller hits an actionable typed error rather than the
-        # downstream ``not in _VALID_EVENT_TYPES`` rejection.
-        if event_type == DelegateEventType.REASONING_SCRATCHPAD.value:
+        # C3 audit-visibility classifier — only events in the
+        # _AUDIT_VISIBLE_EVENT_TYPES allowlist may enter the audit
+        # chain. REASONING_SCRATCHPAD is reasoning-private (mirrors rs
+        # ``DelegateEventKind::is_audit_visible``); any future
+        # cross-SDK enum variant added to DelegateEventType is REJECTED
+        # by default until it is explicitly promoted to audit-visible.
+        # The frozenset allowlist is the structural defense — a
+        # literal-equality check against one variant would silently
+        # admit every newly-added private variant on the next enum
+        # extension. (R2-MED-3 fix-immediately.)
+        if event_type not in _AUDIT_VISIBLE_EVENT_TYPES:
             raise AuditChainEmissionError(
-                "REASONING_SCRATCHPAD events are reasoning-private (C3 "
-                "audit-visibility classifier) and MUST NOT enter the "
-                "audit chain; the variant exists for cross-SDK enum "
-                "parity only"
+                f"event_type={event_type!r} is not audit-visible (C3 "
+                "audit-visibility classifier); only events declared in "
+                "_AUDIT_VISIBLE_EVENT_TYPES may enter the audit chain. "
+                "REASONING_SCRATCHPAD and any future reasoning-private "
+                "variants are excluded by default"
             )
         # Pre-validate JSON-serializability of event_payload so a
         # downstream canonical_json_dumps crash inside the locked
