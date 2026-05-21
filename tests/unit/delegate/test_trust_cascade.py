@@ -708,3 +708,91 @@ def test_delegate_identity_from_dict_accepts_uuid_object_directly() -> None:
         }
     )
     assert reconstructed.delegate_id == uid
+
+
+# ---------------------------------------------------------------------------
+# TenantScope.to_dict / from_dict — B2 (sec H-3) public-classmethod promotion
+# ---------------------------------------------------------------------------
+
+
+def test_tenant_scope_to_dict_global_variant() -> None:
+    """Global variant serializes to the tagged-union ``{"type": "Global"}``."""
+    assert TenantScope.global_().to_dict() == {"type": "Global"}
+
+
+def test_tenant_scope_to_dict_tenant_variant() -> None:
+    """Tenant variant serializes with the discriminator + tenant_id."""
+    assert TenantScope.for_tenant("tenant-a").to_dict() == {
+        "type": "Tenant",
+        "tenant_id": "tenant-a",
+    }
+
+
+def test_tenant_scope_from_dict_round_trip_global() -> None:
+    """Round-trip: TenantScope.from_dict(scope.to_dict()) == scope (Global)."""
+    scope = TenantScope.global_()
+    assert TenantScope.from_dict(scope.to_dict()) == scope
+
+
+def test_tenant_scope_from_dict_round_trip_tenant() -> None:
+    """Round-trip: TenantScope.from_dict(scope.to_dict()) == scope (Tenant)."""
+    scope = TenantScope.for_tenant("tenant-xyz")
+    assert TenantScope.from_dict(scope.to_dict()) == scope
+
+
+def test_tenant_scope_from_dict_rejects_non_dict() -> None:
+    """Non-dict payloads MUST raise TypeError."""
+    with pytest.raises(TypeError, match="requires a dict"):
+        TenantScope.from_dict("not-a-dict")  # type: ignore[arg-type]
+
+
+def test_tenant_scope_from_dict_rejects_missing_type() -> None:
+    """Missing discriminator MUST raise ValueError."""
+    with pytest.raises(ValueError, match="unknown discriminator"):
+        TenantScope.from_dict({"tenant_id": "tenant-a"})
+
+
+def test_tenant_scope_from_dict_rejects_unknown_type() -> None:
+    """Unknown discriminator MUST raise ValueError."""
+    with pytest.raises(ValueError, match="unknown discriminator"):
+        TenantScope.from_dict({"type": "Bogus"})
+
+
+def test_tenant_scope_from_dict_tenant_requires_tenant_id() -> None:
+    """type=Tenant payload without tenant_id MUST raise ValueError."""
+    with pytest.raises(ValueError, match="requires a string tenant_id"):
+        TenantScope.from_dict({"type": "Tenant"})
+
+
+def test_tenant_scope_from_dict_tenant_rejects_empty_tenant_id() -> None:
+    """type=Tenant payload with empty tenant_id MUST raise ValueError.
+
+    Inherits the for_tenant() invariant: empty tenant id rejected at
+    TenantScope construction.
+    """
+    with pytest.raises(ValueError, match="non-empty tenant id"):
+        TenantScope.from_dict({"type": "Tenant", "tenant_id": ""})
+
+
+def test_tenant_scope_from_dict_tenant_rejects_non_string_tenant_id() -> None:
+    """type=Tenant payload with non-string tenant_id MUST raise ValueError."""
+    with pytest.raises(ValueError, match="requires a string tenant_id"):
+        TenantScope.from_dict({"type": "Tenant", "tenant_id": 42})
+
+
+def test_grant_moment_to_signing_dict_uses_tenant_scope_to_dict() -> None:
+    """B2: GrantMoment.to_signing_dict routes through TenantScope.to_dict,
+    not the removed private _tenant_to_dict helper. Asserts the tenant
+    sub-dict matches the public method's output exactly."""
+    scope = TenantScope.for_tenant("tenant-a")
+    gm = GrantMoment(
+        cascade_id=uuid.uuid4(),
+        parent_delegate_id=uuid.uuid4(),
+        child_delegate_id=uuid.uuid4(),
+        tenant=scope,
+        granted_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+        grant_proof="a" * 128,
+    )
+    payload = gm.to_signing_dict()
+    assert payload["tenant"] == scope.to_dict()
+    assert payload["tenant"] == {"type": "Tenant", "tenant_id": "tenant-a"}

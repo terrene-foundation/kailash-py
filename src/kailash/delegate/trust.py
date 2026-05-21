@@ -243,6 +243,62 @@ class TenantScope:
         """
         return self._is_global
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this :class:`TenantScope` to its canonical wire dict.
+
+        B2 (sec H-3): promoted from the private module-level
+        ``_tenant_to_dict`` helper to a public instance method per the EATP
+        SDK convention that every public dataclass exposes ``to_dict`` +
+        ``from_dict``. Cross-SDK ingest/emit paths route through this method
+        (and :meth:`from_dict`) instead of the now-removed private helper.
+
+        Cross-SDK wire format mirrors rs's tagged-union JSON: ``{"type":
+        "Global"}`` or ``{"type": "Tenant", "tenant_id": "..."}``. The
+        discriminator key is ``type`` for compatibility with rs serde's
+        default tagged-enum representation.
+
+        CROSS-SDK note (B6): rs ``cascade.rs::TenantScope`` does NOT yet
+        declare serde derives, so the rs wire format is UNDEFINED. When rs
+        adds serde, this wire format MUST be reconciled.
+        """
+        if self.is_global:
+            return {"type": "Global"}
+        return {"type": "Tenant", "tenant_id": self.tenant_id}
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> TenantScope:
+        """Deserialize a :class:`TenantScope` from its canonical wire dict.
+
+        B2 (sec H-3): promoted from the private module-level
+        ``_tenant_from_dict`` helper to a public classmethod per the EATP SDK
+        convention. Inverse of :meth:`to_dict`.
+
+        Raises:
+            TypeError: if ``payload`` is not a dict.
+            ValueError: on missing/unknown discriminator or missing /
+                non-string ``tenant_id`` for the Tenant variant.
+        """
+        if not isinstance(payload, dict):
+            raise TypeError(
+                f"TenantScope.from_dict requires a dict; got "
+                f"{type(payload).__name__}"
+            )
+        discriminator = payload.get("type")
+        if discriminator == "Global":
+            return cls.global_()
+        if discriminator == "Tenant":
+            tenant_id = payload.get("tenant_id")
+            if not isinstance(tenant_id, str):
+                raise ValueError(
+                    "TenantScope.from_dict payload type=Tenant requires a "
+                    "string tenant_id"
+                )
+            return cls.for_tenant(tenant_id)
+        raise ValueError(
+            f"TenantScope.from_dict: unknown discriminator: {discriminator!r} "
+            f"(expected 'Global' or 'Tenant')"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TenantScopedCascade — the F1/F5/Option-A gate
@@ -524,7 +580,7 @@ class GrantMoment:
             "cascade_id": str(self.cascade_id),
             "parent_delegate_id": str(self.parent_delegate_id),
             "child_delegate_id": str(self.child_delegate_id),
-            "tenant": _tenant_to_dict(self.tenant),
+            "tenant": self.tenant.to_dict(),
             "granted_at": self.granted_at.isoformat(),
         }
 
@@ -541,40 +597,7 @@ class GrantMoment:
         return payload
 
 
-def _tenant_to_dict(tenant: TenantScope) -> dict[str, Any]:
-    """Serialize a :class:`TenantScope` to its canonical dict shape.
-
-    Cross-SDK wire format mirrors rs's tagged-union JSON: ``{"type":
-    "Global"}`` or ``{"type": "Tenant", "tenant_id": "..."}``. The
-    discriminator key is ``type`` for compatibility with rs serde's
-    default tagged-enum representation.
-    """
-    if tenant.is_global:
-        return {"type": "Global"}
-    return {"type": "Tenant", "tenant_id": tenant.tenant_id}
-
-
-def _tenant_from_dict(payload: dict[str, Any]) -> TenantScope:
-    """Deserialize a :class:`TenantScope` from its canonical dict shape.
-
-    Inverse of :func:`_tenant_to_dict`. Raises :class:`ValueError` on
-    unknown discriminator or missing ``tenant_id`` for the Tenant variant.
-    """
-    if not isinstance(payload, dict):
-        raise TypeError(
-            f"TenantScope payload MUST be a dict; got {type(payload).__name__}"
-        )
-    discriminator = payload.get("type")
-    if discriminator == "Global":
-        return TenantScope.global_()
-    if discriminator == "Tenant":
-        tenant_id = payload.get("tenant_id")
-        if not isinstance(tenant_id, str):
-            raise ValueError(
-                "TenantScope payload type=Tenant requires a string tenant_id"
-            )
-        return TenantScope.for_tenant(tenant_id)
-    raise ValueError(
-        f"unknown TenantScope discriminator: {discriminator!r} "
-        f"(expected 'Global' or 'Tenant')"
-    )
+# Note: B2 (sec H-3) — the prior module-level _tenant_to_dict /
+# _tenant_from_dict helpers were promoted to TenantScope.to_dict (instance
+# method) and TenantScope.from_dict (classmethod) above. The private helpers
+# were internal-only (no external callers), so promotion is API-additive.
