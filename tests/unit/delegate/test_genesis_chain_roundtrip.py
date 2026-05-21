@@ -1,14 +1,29 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Tier-2 wiring test for ``DelegateGenesisRecord`` ↔ ``TrustLineageChain``.
+"""Tier-1 wiring test for ``DelegateGenesisRecord`` ↔ ``TrustLineageChain``.
 
 S2.5 F10 (analyst recommendation): verify the composed
 :class:`DelegateGenesisRecord` round-trips through the existing
 :class:`kailash.trust.chain.TrustLineageChain` facade. Per §249
 (compose, don't re-derive) and ``orphan-detection.md`` MUST Rule 2
-(every wired manager has a Tier 2 integration test): the F4 restructure
+(every wired manager has an integration test): the F4 restructure
 that composed the substrate ``chain.GenesisRecord`` is only "wired" if
 something exercises the import path + facade-call shape end-to-end.
+
+**Tier classification (B5, Round 2 sec M-3):** this test was originally
+authored under ``tests/integration/`` with a "Protocol-Satisfying
+Deterministic Adapter" framing per ``rules/testing.md`` § 3-Tier
+Testing. On re-review the framing does not hold — ``TrustLineageChain``
+is a plain ``@dataclass`` (not a ``typing.Protocol`` satisfier), so the
+adapter exception does not apply. The test still exercises the
+load-bearing composition contract (import path, facade-call shape,
+cryptographic surface), so it is moved to ``tests/unit/`` and marked
+``@pytest.mark.unit`` — admitting it as Tier-1 wiring, not Tier-2.
+
+**Tier-2 follow-up (deferred to S3 trust integration shard):** a
+real-Postgres-backed ``TrustChainStore`` test exercising end-to-end
+persistence of the composed block + verification against the audit
+trail. Tracking surface: S3 trust integration plan.
 
 This test exercises:
 
@@ -19,19 +34,12 @@ This test exercises:
    load.
 2. The FACADE-CALL shape — ``DelegateGenesisRecord(block=<substrate>)``
    then ``TrustLineageChain(genesis=<substrate>)`` — confirming both
-   sides agree on the same in-memory substrate object.
+   sides agree on a value-equal substrate object (B4 snapshot
+   semantics: identity differs, canonical bytes identical).
 3. The CRYPTOGRAPHIC SURFACE — ``to_signing_dict()`` and
    ``to_canonical_dict()`` produce dicts whose ``block`` field has the
    substrate's expected ``to_signing_payload`` keys, byte-stable across
    repeat construction.
-
-Real infrastructure scope: this test uses chain's in-memory backing
-(``TrustLineageChain`` is a dataclass; the trust-chain audit-anchors
-list and constraint envelope are also in-memory) per the Tier-2
-contract's "Protocol-Satisfying Deterministic Adapter" exception
-documented in ``rules/testing.md`` § 3-Tier Testing. No mocks; the
-real ``TrustLineageChain`` and real ``chain.GenesisRecord`` are
-constructed and exercised.
 """
 
 from __future__ import annotations
@@ -45,7 +53,7 @@ from kailash.trust._json import canonical_json_dumps
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_delegate_genesis_record_composes_chain_genesis_record() -> None:
     """The composed substrate block is reachable through the wrapper.
 
@@ -79,7 +87,7 @@ def test_delegate_genesis_record_composes_chain_genesis_record() -> None:
     assert delegate_genesis.genesis_id == "g-tier2-0001"
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_delegate_genesis_record_block_powers_trust_lineage_chain() -> None:
     """The substrate block plugs directly into ``TrustLineageChain``.
 
@@ -119,7 +127,7 @@ def test_delegate_genesis_record_block_powers_trust_lineage_chain() -> None:
     assert isinstance(h1, str) and len(h1) > 0
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_canonical_dict_round_trip_is_byte_stable() -> None:
     """Two constructions with identical inputs emit byte-identical JSON.
 
@@ -153,7 +161,7 @@ def test_canonical_dict_round_trip_is_byte_stable() -> None:
     assert '"capabilities":' in json1
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_signing_dict_excludes_signature_through_full_round_trip() -> None:
     """The signing payload omits the signature; canonical includes it.
 
