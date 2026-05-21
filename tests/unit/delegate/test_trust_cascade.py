@@ -796,3 +796,124 @@ def test_grant_moment_to_signing_dict_uses_tenant_scope_to_dict() -> None:
     payload = gm.to_signing_dict()
     assert payload["tenant"] == scope.to_dict()
     assert payload["tenant"] == {"type": "Tenant", "tenant_id": "tenant-a"}
+
+
+# ---------------------------------------------------------------------------
+# GrantMoment.tightened_envelope — B3 (analyst H-1) cascade chain-of-custody
+# ---------------------------------------------------------------------------
+
+
+def test_grant_moment_carries_tightened_envelope_post_cascade() -> None:
+    """B3: cascade_child emits a GrantMoment whose tightened_envelope is the
+    actual post-tightening envelope, not None. Downstream consumers consume
+    this attribute rather than re-calling tighten_with."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    scope = _scope()
+
+    gm = casc.cascade_child(
+        parent_env,
+        child_env,
+        parent_identity=_identity(suffix="parent"),
+        child_identity=_identity(suffix="child"),
+        parent_scope=scope,
+        child_scope=scope,
+        child_tenant=TenantScope.global_(),
+        grant_proof="a" * 128,
+    )
+    assert gm.tightened_envelope is not None
+    assert isinstance(gm.tightened_envelope, DelegateConstraintEnvelope)
+    # The tightened envelope MUST equal the result of parent.tighten_with(child)
+    # — single source of truth. (Computed twice on this fixture; result should
+    # match byte-for-byte via canonical dict.)
+    expected = parent_env.tighten_with(child_env.inner)
+    assert gm.tightened_envelope.to_dict() == expected.to_dict()
+
+
+def test_grant_moment_to_canonical_dict_includes_tightened_envelope() -> None:
+    """B3: to_canonical_dict (and to_signing_dict) MUST include the
+    tightened_envelope key when present, so cross-SDK fixtures reflect the
+    post-cascade envelope state."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    scope = _scope()
+
+    gm = casc.cascade_child(
+        parent_env,
+        child_env,
+        parent_identity=_identity(suffix="parent"),
+        child_identity=_identity(suffix="child"),
+        parent_scope=scope,
+        child_scope=scope,
+        child_tenant=TenantScope.global_(),
+        grant_proof="a" * 128,
+    )
+    canonical = gm.to_canonical_dict()
+    assert "tightened_envelope" in canonical
+    assert canonical["tightened_envelope"] == gm.tightened_envelope.to_dict()
+    # Signing dict ALSO carries it (signed payload covers the envelope state).
+    signing = gm.to_signing_dict()
+    assert "tightened_envelope" in signing
+    # to_canonical_dict adds grant_proof on top; signing excludes it.
+    assert "grant_proof" not in signing
+    assert canonical["grant_proof"] == "a" * 128
+
+
+def test_grant_moment_omits_tightened_envelope_when_none() -> None:
+    """B3: direct GrantMoment construction without tightened_envelope (replay
+    paths, pre-B3 fixtures) MUST omit the key entirely — preserving the
+    pre-B3 wire format."""
+    gm = GrantMoment(
+        cascade_id=uuid.uuid4(),
+        parent_delegate_id=uuid.uuid4(),
+        child_delegate_id=uuid.uuid4(),
+        tenant=TenantScope.global_(),
+        granted_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+        grant_proof="a" * 128,
+    )
+    assert gm.tightened_envelope is None
+    signing = gm.to_signing_dict()
+    assert "tightened_envelope" not in signing
+    canonical = gm.to_canonical_dict()
+    assert "tightened_envelope" not in canonical
+
+
+def test_grant_moment_rejects_non_envelope_tightened_envelope() -> None:
+    """Type discipline at the GrantMoment boundary — defense-in-depth."""
+    with pytest.raises(TypeError, match="tightened_envelope MUST be"):
+        GrantMoment(
+            cascade_id=uuid.uuid4(),
+            parent_delegate_id=uuid.uuid4(),
+            child_delegate_id=uuid.uuid4(),
+            tenant=TenantScope.global_(),
+            granted_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+            grant_proof="a" * 128,
+            tightened_envelope="not-an-envelope",  # type: ignore[arg-type]
+        )
+
+
+# ---------------------------------------------------------------------------
+# GrantMoment.to_signing_bytes — B5 (sec M-3) cross-SDK byte-canonical helper
+# ---------------------------------------------------------------------------
+
+
+def test_grant_moment_to_signing_bytes_returns_canonical_json_bytes() -> None:
+    """B5: to_signing_bytes returns UTF-8 canonical-JSON bytes matching what
+    canonical_json_dumps would produce. Closes the trap where a caller uses
+    json.dumps() without sort_keys + separators and produces non-canonical
+    bytes that break cross-SDK rs↔py verification."""
+    gm = GrantMoment(
+        cascade_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        parent_delegate_id=uuid.UUID("00000000-0000-0000-0000-000000000002"),
+        child_delegate_id=uuid.UUID("00000000-0000-0000-0000-000000000003"),
+        tenant=TenantScope.for_tenant("tenant-a"),
+        granted_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+        grant_proof="a" * 128,
+    )
+    bytes_out = gm.to_signing_bytes()
+    assert isinstance(bytes_out, bytes)
+    # Round-trip via canonical_json_dumps yields the same bytes.
+    expected = canonical_json_dumps(gm.to_signing_dict()).encode("utf-8")
+    assert bytes_out == expected

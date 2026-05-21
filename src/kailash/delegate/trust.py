@@ -455,15 +455,16 @@ class TenantScopedCascade:
         # Step 3 (F5): envelope tightening — delegated to the existing
         # wrapper that already carries the pre-intersection widening check
         # per S2.5 F1. Propagates EnvelopeWideningError verbatim.
-        _tightened = parent_envelope.tighten_with(child_envelope.inner)
-        # The tightened envelope is computed for side-effect (raises on
-        # widen); the emitted GrantMoment does NOT carry it because the
-        # canonical chain-of-custody record per rs grant.rs is identity +
-        # tenant + proof + timestamp — not the post-tightening envelope.
-        # The envelope contract is enforced by the raise above; downstream
-        # consumers requesting the tightened envelope MUST call tighten_with
-        # explicitly (S6 runtime spine will surface it).
-        del _tightened
+        #
+        # B3 (analyst H-1): the tightened envelope is now carried on the
+        # emitted GrantMoment instead of being discarded. Downstream
+        # consumers (S5/S6 runtime spine) MUST observe the post-tightening
+        # envelope as part of the chain-of-custody — recomputing it at
+        # every consumer doubled the tighten_with cost AND risked one site
+        # computing differently than another (silent drift). Carrying it
+        # on the GrantMoment keeps the cascade as the single source of
+        # truth for the F5 tightening result.
+        tightened = parent_envelope.tighten_with(child_envelope.inner)
 
         # Step 4: emit the chain-of-custody GrantMoment.
         return GrantMoment(
@@ -475,6 +476,7 @@ class TenantScopedCascade:
                 granted_at if granted_at is not None else datetime.now(timezone.utc)
             ),
             grant_proof=grant_proof,
+            tightened_envelope=tightened,
         )
 
 
@@ -518,6 +520,19 @@ class GrantMoment:
         grant_proof: Hex-encoded Ed25519 signature, exactly 128 lowercase
             hex chars. Validated via the substrate
             :func:`kailash.delegate.types._validate_hex` helper.
+        tightened_envelope: B3 (analyst H-1) — the post-cascade tightened
+            envelope produced by Step 3 (F5). Defaults to ``None`` when the
+            GrantMoment is constructed outside the cascade pipeline (e.g.
+            replayed from a wire-format payload that pre-dates the field).
+            S5/S6 runtime spine consumers observe the post-tightening
+            envelope from this attribute rather than re-calling
+            ``tighten_with`` at every site.
+
+    CROSS-SDK note (B7): py ``GrantMoment`` is a flat record; rs
+    ``GrantMoment::issue`` walks a ``DelegationChain`` substrate that py
+    does not yet expose. The py contract is structurally reduced — chain
+    composition lands in a separate workstream (see brief
+    ``workspaces/kailash-trust-chain-crypto-expansion/``).
     """
 
     cascade_id: uuid.UUID
@@ -526,6 +541,7 @@ class GrantMoment:
     tenant: TenantScope
     granted_at: datetime
     grant_proof: str
+    tightened_envelope: DelegateConstraintEnvelope | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.cascade_id, uuid.UUID):
@@ -564,6 +580,14 @@ class GrantMoment:
             expected_len=128,
             field_name="GrantMoment.grant_proof (Ed25519)",
         )
+        if self.tightened_envelope is not None and not isinstance(
+            self.tightened_envelope, DelegateConstraintEnvelope
+        ):
+            raise TypeError(
+                "GrantMoment.tightened_envelope MUST be a "
+                "DelegateConstraintEnvelope or None; got "
+                f"{type(self.tightened_envelope).__name__}"
+            )
 
     def to_signing_dict(self) -> dict[str, Any]:
         """Return the pre-signature canonical dict (F7 — sign/verify split).
@@ -575,14 +599,32 @@ class GrantMoment:
 
         Mirrors the S2.5 :meth:`DelegateGenesisRecord.to_signing_dict`
         shape; same convention for cross-SDK consumers.
+
+        B5 (sec M-3) — cross-SDK byte-canonical contract: callers MUST route
+        the returned dict through
+        :func:`kailash.trust._json.canonical_json_dumps` for signing.
+        Direct ``json.dumps()`` (without ``sort_keys=True`` +
+        ``separators=(",", ":")``) breaks cross-SDK parity per
+        ``cross-sdk-inspection.md`` Rule 4 (helpers claiming byte-shape
+        parity with the sibling SDK MUST pin byte vectors). See
+        :meth:`to_signing_bytes` for a one-call convenience that returns
+        the canonical bytes directly.
         """
-        return {
+        payload: dict[str, Any] = {
             "cascade_id": str(self.cascade_id),
             "parent_delegate_id": str(self.parent_delegate_id),
             "child_delegate_id": str(self.child_delegate_id),
             "tenant": self.tenant.to_dict(),
             "granted_at": self.granted_at.isoformat(),
         }
+        # B3 (analyst H-1): include the tightened envelope when present so
+        # cross-SDK byte-canonical fixtures reflect the post-cascade
+        # envelope state. None → omit the key entirely, preserving the
+        # pre-B3 wire format for GrantMoment instances constructed outside
+        # the cascade pipeline (e.g. replay paths that pre-date the field).
+        if self.tightened_envelope is not None:
+            payload["tightened_envelope"] = self.tightened_envelope.to_dict()
+        return payload
 
     def to_canonical_dict(self) -> dict[str, Any]:
         """Return the canonical-JSON-ready dict for cross-SDK byte parity.
@@ -595,6 +637,21 @@ class GrantMoment:
         payload = self.to_signing_dict()
         payload["grant_proof"] = self.grant_proof
         return payload
+
+    def to_signing_bytes(self) -> bytes:
+        """Return the canonical-JSON bytes ready for Ed25519 signing.
+
+        B5 (sec M-3) — convenience wrapper around
+        :meth:`to_signing_dict` + :func:`kailash.trust._json.canonical_json_dumps`.
+        Returning bytes directly closes the cross-SDK divergence trap where
+        a caller might use ``json.dumps()`` without canonical settings and
+        produce non-canonical bytes that break rs↔py verification.
+        """
+        # Lazy import to avoid a hot-path circular through trust._json if it
+        # ever grows a delegate dep; trust._json is otherwise foundational.
+        from kailash.trust._json import canonical_json_dumps
+
+        return canonical_json_dumps(self.to_signing_dict()).encode("utf-8")
 
 
 # Note: B2 (sec H-3) — the prior module-level _tenant_to_dict /
