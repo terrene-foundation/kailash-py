@@ -37,11 +37,14 @@ verifies under rs verifier)"* from #1035 is anchored on this surface.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 
 from kailash.delegate.types import DelegateIdentity
@@ -129,60 +132,114 @@ class CrossAnchorIntegrityError(ValueError):
 # ---------------------------------------------------------------------------
 
 
-class DelegateEventType:
-    """Delegate-spine event types written to the audit chain.
+class DelegateEventType(str, Enum):
+    """Delegate-spine event kinds written to the audit chain.
 
-    Mirrors rs ``DelegateEventKind`` (M4) — every event the Delegate
-    runtime produces that is audit-visible per C3 (founder-ratified
-    audit-visible boundary): external side-effects, constraint
-    decisions (including blocked checks), grant consumption, posture
-    or sovereign-handover transitions.
+    Mirrors rs ``DelegateEventKind`` (M4-canonical, 5 variants — see
+    ``crates/kailash-delegate-audit/src/anchor.rs::DelegateEventKind``).
+    The five variants cover every audit-visible event the Delegate
+    runtime produces per C3 (founder-ratified audit-visible boundary).
 
-    These are string sentinels (not :class:`enum.Enum`) so the wire
-    format is the bare token rs canonical JSON consumes — a `value`
-    indirection would force a re-encoding step the cross-SDK parity
-    contract does not need.
+    Sub-class of :class:`str` per ``eatp.md`` SDK convention so the
+    on-wire form is the bare string value (cross-SDK canonical JSON
+    consumes the value directly; no re-encoding step).
+    Re-shaped from py's prior 8 string sentinels to rs-canonical 5
+    variants at S4.5 — the lost expressiveness (LIFECYCLE_TRANSITION /
+    CASCADE_EMISSION / DISPATCH_INVOCATION / POSTURE_RATCHET /
+    SOVEREIGN_HANDOVER distinctions) MUST be encoded in
+    ``event_payload["subtype"]`` per the migration map below:
 
-    Reasoning-private scratchpad events (rs ``ReasoningScratchpad``)
-    are NOT emitted here — by design, the audit chain only carries
-    audit-visible events per C3.
+    ============================ ==========================================
+    Discarded py sentinel        rs-canonical variant + subtype
+    ============================ ==========================================
+    LIFECYCLE_TRANSITION         POSTURE_OR_SOVEREIGN_HANDOVER
+                                   + subtype="lifecycle_transition"
+    CASCADE_EMISSION             GRANT_CONSUMPTION
+                                   + subtype="cascade_emission"
+    DISPATCH_INVOCATION          EXTERNAL_SIDE_EFFECT
+                                   + subtype="dispatch_invocation"
+    POSTURE_RATCHET              POSTURE_OR_SOVEREIGN_HANDOVER
+                                   + subtype="posture_ratchet"
+    SOVEREIGN_HANDOVER           POSTURE_OR_SOVEREIGN_HANDOVER
+                                   + subtype="sovereign_handover"
+    CONSTRAINT_DECISION          CONSTRAINT_DECISION
+    GRANT_CONSUMPTION            GRANT_CONSUMPTION
+    EXTERNAL_SIDE_EFFECT         EXTERNAL_SIDE_EFFECT
+    ============================ ==========================================
+
+    The ``REASONING_SCRATCHPAD`` variant is declared here for
+    cross-SDK enum parity but, per C3 (audit-visibility classifier),
+    MUST NOT be emitted onto the audit chain — scratchpad events are
+    reasoning-private and rs ``AuditChainEngine`` explicitly excludes
+    them. :meth:`AuditChainEngine.emit_event` enforces this exclusion.
     """
 
-    LIFECYCLE_TRANSITION = "delegate.lifecycle_transition"
-    """Delegate moved to a new :class:`LifecycleState` (D3 chain edge)."""
+    EXTERNAL_SIDE_EFFECT = "external_side_effect"
+    """A tool call / outbound request / external system write.
 
-    CASCADE_EMISSION = "delegate.cascade_emission"
-    """A :class:`TenantScopedCascade` emitted a new child + grant."""
+    Subtypes: bare external write (no subtype) or
+    ``subtype="dispatch_invocation"`` for a connector dispatch
+    (authenticate / write / read / revocation).
+    """
 
-    POSTURE_RATCHET = "delegate.posture_ratchet"
-    """Posture transitioned monotonically (forward only)."""
+    CONSTRAINT_DECISION = "constraint_decision"
+    """Constraint check ran — visible even when blocked (C3).
 
-    DISPATCH_INVOCATION = "delegate.dispatch_invocation"
-    """A connector dispatch ran (authenticate/write/read/revocation)."""
+    The blocked/allowed disposition lives in ``event_payload``
+    (``payload["blocked"]: bool``) mirroring rs
+    ``ConstraintDecision { blocked: bool }``.
+    """
 
-    CONSTRAINT_DECISION = "delegate.constraint_decision"
-    """Constraint check ran — visible even when blocked (C3)."""
+    GRANT_CONSUMPTION = "grant_consumption"
+    """A granted capability / budget / cascade emission was consumed.
 
-    GRANT_CONSUMPTION = "delegate.grant_consumption"
-    """A granted capability/budget was consumed."""
+    Subtypes: bare grant consumption (no subtype) or
+    ``subtype="cascade_emission"`` for a :class:`TenantScopedCascade`
+    emission of a new child + grant.
+    """
 
-    SOVEREIGN_HANDOVER = "delegate.sovereign_handover"
-    """Trust-posture or sovereign-handover transition."""
+    POSTURE_OR_SOVEREIGN_HANDOVER = "posture_or_sovereign_handover"
+    """Posture transition or sovereign-handover transition.
 
-    EXTERNAL_SIDE_EFFECT = "delegate.external_side_effect"
-    """A tool call / outbound request / external system write."""
+    Subtypes encode py's prior distinctions:
+    ``subtype="lifecycle_transition"`` (a :class:`LifecycleState`
+    D3-chain-edge transition), ``subtype="posture_ratchet"`` (posture
+    transitioned monotonically), ``subtype="sovereign_handover"`` (a
+    sovereign-handover transition), or no subtype for the bare
+    posture/sovereign event.
+    """
+
+    REASONING_SCRATCHPAD = "reasoning_scratchpad"
+    """Private reasoning trace — declared for rs enum parity but
+    NEVER emitted onto the audit chain.
+
+    Per C3 (audit-visibility classifier), scratchpad events are
+    reasoning-private; rs ``AuditChainEngine`` excludes them from
+    chain emission and :meth:`AuditChainEngine.emit_event` raises
+    :class:`AuditChainEmissionError` if this variant is supplied.
+    """
 
 
 _VALID_EVENT_TYPES: frozenset[str] = frozenset(
     {
-        DelegateEventType.LIFECYCLE_TRANSITION,
-        DelegateEventType.CASCADE_EMISSION,
-        DelegateEventType.POSTURE_RATCHET,
-        DelegateEventType.DISPATCH_INVOCATION,
-        DelegateEventType.CONSTRAINT_DECISION,
-        DelegateEventType.GRANT_CONSUMPTION,
-        DelegateEventType.SOVEREIGN_HANDOVER,
-        DelegateEventType.EXTERNAL_SIDE_EFFECT,
+        DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
+        DelegateEventType.CONSTRAINT_DECISION.value,
+        DelegateEventType.GRANT_CONSUMPTION.value,
+        DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value,
+        DelegateEventType.REASONING_SCRATCHPAD.value,
+    }
+)
+
+# Per C3 (founder-ratified audit-visibility classifier) the
+# ReasoningScratchpad variant exists for cross-SDK enum parity but
+# MUST NOT be emitted onto the audit chain — mirrors rs
+# ``DelegateEventKind::is_audit_visible`` excluding the scratchpad arm.
+_AUDIT_VISIBLE_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
+        DelegateEventType.CONSTRAINT_DECISION.value,
+        DelegateEventType.GRANT_CONSUMPTION.value,
+        DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value,
     }
 )
 
@@ -466,6 +523,24 @@ class WitnessedCrossAnchor:
                 f"salt MUST be exactly 32 bytes (256-bit residency-boundary "
                 f"secret); got {len(salt)}"
             )
+        # Structural entropy assertion (Round-1 finding C1 / sec CRIT-1)
+        # — reject obvious low-entropy salts (all-zero, all-one, ≤2
+        # unique bytes including repeating patterns). The docstring
+        # asserts the salt MUST come from a CSPRNG; a caller-supplied
+        # deterministic salt collapses the residency-boundary
+        # guarantee to zero (`compute_anchor_hash` becomes a known
+        # function of the anchor head an attacker can replay).
+        # Verify-side callers re-presenting a real CSPRNG-drawn salt
+        # pass trivially; only adversarial/buggy seal-side callers
+        # supplying a degenerate salt are rejected.
+        if len(set(bytes(salt))) <= 2:
+            raise CrossAnchorIntegrityError(
+                "salt has insufficient entropy (≤2 unique bytes — "
+                "all-zero, all-one, or repeating-byte pattern); MUST "
+                "come from secrets.token_bytes(32) or equivalent "
+                "OS CSPRNG to preserve the residency-boundary "
+                "non-invertibility guarantee"
+            )
         _validate_hex(
             anchor_head_entry_hash,
             expected_len=64,
@@ -489,9 +564,10 @@ class WitnessedCrossAnchor:
         Uses :func:`hmac.compare_digest` for the comparison per
         ``trust-plane-security.md`` § "No `==` to Compare HMAC
         Digests" — preventing timing side-channels on the seam check.
+        ``hmac`` is module-top-imported (Round-1 finding C5 / sec
+        MED-2 — load-bearing constant-time compare for the residency
+        boundary; in-method import deferred the binding to first call).
         """
-        import hmac
-
         recomputed = self.compute_anchor_hash(salt, anchor_head_entry_hash)
         if not hmac.compare_digest(recomputed, self.cross_anchor_hash):
             raise CrossAnchorIntegrityError(
@@ -564,6 +640,13 @@ class AuditChainEngine:
         # payload + previous_hash linkage is greppable from the engine
         # without re-deserialising from the substrate.
         self._entries: list[AuditChainEntry] = []
+        # Serialises the sequence-assign → previous-hash-compute →
+        # AuditChainEntry construct → substrate-anchor append →
+        # self._entries append critical section so concurrent
+        # ``emit_event`` callers cannot allocate duplicate sequence
+        # numbers or interleave previous-hash linkage (Round-1
+        # security finding C3 / sec HIGH-1).
+        self._emit_lock = threading.Lock()
 
     @property
     def chain(self) -> TrustLineageChain:
@@ -629,6 +712,33 @@ class AuditChainEngine:
                 "AuditChainEngine.emit_event(signer_identity) MUST be a "
                 f"DelegateIdentity; got {type(signer_identity).__name__}"
             )
+        # C3 audit-visibility classifier — REASONING_SCRATCHPAD is
+        # declared on DelegateEventType for cross-SDK enum parity but
+        # MUST NOT enter the audit chain (mirrors rs
+        # ``DelegateEventKind::is_audit_visible``). Reject early so the
+        # caller hits an actionable typed error rather than the
+        # downstream ``not in _VALID_EVENT_TYPES`` rejection.
+        if event_type == DelegateEventType.REASONING_SCRATCHPAD.value:
+            raise AuditChainEmissionError(
+                "REASONING_SCRATCHPAD events are reasoning-private (C3 "
+                "audit-visibility classifier) and MUST NOT enter the "
+                "audit chain; the variant exists for cross-SDK enum "
+                "parity only"
+            )
+        # Pre-validate JSON-serializability of event_payload so a
+        # downstream canonical_json_dumps crash inside the locked
+        # critical section cannot stall the engine (Round-1 finding C4
+        # / sec MED-1). Re-raised as AuditChainEmissionError preserves
+        # the error taxonomy and surfaces the unserialisable field.
+        if isinstance(payload, dict):
+            try:
+                canonical_json_dumps(payload)
+            except (TypeError, ValueError) as exc:
+                raise AuditChainEmissionError(
+                    "AuditChainEngine.emit_event(payload) MUST be "
+                    "JSON-serializable for cross-SDK byte-canonical "
+                    f"parity; canonical_json_dumps raised: {exc}"
+                ) from exc
         # Pre-validate the signature surface so an AuditChainSignatureError
         # fires BEFORE the typed entry construction (which would otherwise
         # raise AuditChainEmissionError from the same hex check). The error
@@ -645,42 +755,56 @@ class AuditChainEngine:
         if signed_at is None:
             signed_at = datetime.now(timezone.utc)
 
-        sequence = len(self._entries)
-        previous_hash = self._compute_previous_hash()
-        entry = AuditChainEntry(
-            sequence=sequence,
-            previous_hash=previous_hash,
-            event_type=event_type,
-            event_payload=payload,
-            signer_delegate_id=signer_identity.delegate_id,
-            signed_at=signed_at,
-            signature=signature,
-        )
+        # Lock-scoped critical section: sequence allocation through
+        # both appends MUST be atomic so concurrent emit_event callers
+        # cannot duplicate ``sequence`` or leave the substrate
+        # ``audit_anchors`` list and ``self._entries`` mid-write
+        # (Round-1 finding C3 / sec HIGH-1).
+        with self._emit_lock:
+            sequence = len(self._entries)
+            previous_hash = self._compute_previous_hash()
+            entry = AuditChainEntry(
+                sequence=sequence,
+                previous_hash=previous_hash,
+                event_type=event_type,
+                event_payload=payload,
+                signer_delegate_id=signer_identity.delegate_id,
+                signed_at=signed_at,
+                signature=signature,
+            )
 
-        # Append a substrate AuditAnchor so the engine state stays in
-        # lockstep with the wrapped TrustLineageChain. The anchor's
-        # trust_chain_hash field stores the canonical JSON of the
-        # entry's signing payload — cross-SDK verifiers consume this.
-        # Per §249 the substrate owns the anchor schema; we adapt the
-        # Delegate event into it.
-        anchor_id = f"audit-{self._chain.genesis.agent_id}-{sequence:08d}"
-        canonical_payload = canonical_json_dumps(entry.to_canonical_dict())
-        substrate_anchor = AuditAnchor(
-            id=anchor_id,
-            agent_id=self._chain.genesis.agent_id,
-            action=event_type,
-            timestamp=signed_at,
-            trust_chain_hash=canonical_payload,
-            result=ActionResult.SUCCESS,
-            signature=signature,
-            resource=None,
-            parent_anchor_id=(
-                self._chain.audit_anchors[-1].id if self._chain.audit_anchors else None
-            ),
-            context={"sequence": sequence, "previous_hash": previous_hash},
-        )
-        self._chain.audit_anchors.append(substrate_anchor)
-        self._entries.append(entry)
+            # Append a substrate AuditAnchor so the engine state stays in
+            # lockstep with the wrapped TrustLineageChain. The substrate
+            # field is documented "Hash of trust chain at action time"
+            # (kailash.trust.chain.AuditAnchor:526) — therefore the
+            # SHA-256 hex of the canonical JSON is the correct value
+            # (Round-1 finding C6 / analyst MED-4, outcome (b)). The
+            # full canonical payload is retrievable from
+            # ``self._entries[sequence].to_canonical_dict()`` when
+            # reconstruction is needed.
+            anchor_id = f"audit-{self._chain.genesis.agent_id}-{sequence:08d}"
+            canonical_payload = canonical_json_dumps(entry.to_canonical_dict())
+            canonical_hash = hashlib.sha256(
+                canonical_payload.encode("utf-8")
+            ).hexdigest()
+            substrate_anchor = AuditAnchor(
+                id=anchor_id,
+                agent_id=self._chain.genesis.agent_id,
+                action=event_type,
+                timestamp=signed_at,
+                trust_chain_hash=canonical_hash,
+                result=ActionResult.SUCCESS,
+                signature=signature,
+                resource=None,
+                parent_anchor_id=(
+                    self._chain.audit_anchors[-1].id
+                    if self._chain.audit_anchors
+                    else None
+                ),
+                context={"sequence": sequence, "previous_hash": previous_hash},
+            )
+            self._chain.audit_anchors.append(substrate_anchor)
+            self._entries.append(entry)
 
         logger.info(
             "delegate.audit.emit_event",

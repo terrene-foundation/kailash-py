@@ -16,6 +16,7 @@ PROSE output, not exact-string equality on canonical bytes.
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import secrets
 import uuid
@@ -75,7 +76,7 @@ def test_audit_chain_entry_is_frozen_dataclass() -> None:
     entry = AuditChainEntry(
         sequence=0,
         previous_hash="",
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         event_payload={"from": "proposed", "to": "instantiated"},
         signer_delegate_id=uuid.uuid4(),
         signed_at=datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc),
@@ -92,7 +93,7 @@ def test_audit_chain_entry_genesis_requires_empty_previous_hash() -> None:
         AuditChainEntry(
             sequence=0,
             previous_hash="a" * 64,  # non-empty at genesis
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={},
             signer_delegate_id=uuid.uuid4(),
             signed_at=datetime(2026, 5, 21, tzinfo=timezone.utc),
@@ -107,7 +108,7 @@ def test_audit_chain_entry_non_genesis_requires_previous_hash() -> None:
         AuditChainEntry(
             sequence=1,
             previous_hash="",
-            event_type=DelegateEventType.POSTURE_RATCHET,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={},
             signer_delegate_id=uuid.uuid4(),
             signed_at=datetime(2026, 5, 21, tzinfo=timezone.utc),
@@ -122,7 +123,7 @@ def test_audit_chain_entry_rejects_naive_datetime() -> None:
         AuditChainEntry(
             sequence=0,
             previous_hash="",
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={},
             signer_delegate_id=uuid.uuid4(),
             signed_at=datetime(2026, 5, 21, 12, 0, 0),  # naive
@@ -152,7 +153,7 @@ def test_audit_chain_entry_rejects_non_uuid_signer() -> None:
         AuditChainEntry(
             sequence=0,
             previous_hash="",
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={},
             signer_delegate_id="delegate-string-id",  # type: ignore[arg-type]
             signed_at=datetime(2026, 5, 21, tzinfo=timezone.utc),
@@ -167,7 +168,7 @@ def test_audit_chain_entry_rejects_bad_hex_signature() -> None:
         AuditChainEntry(
             sequence=0,
             previous_hash="",
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={},
             signer_delegate_id=uuid.uuid4(),
             signed_at=datetime(2026, 5, 21, tzinfo=timezone.utc),
@@ -189,7 +190,7 @@ def test_audit_chain_entry_canonical_dict_byte_stable() -> None:
         return AuditChainEntry(
             sequence=0,
             previous_hash="",
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             event_payload={"from": "proposed", "to": "instantiated"},
             signer_delegate_id=sid,
             signed_at=when,
@@ -223,7 +224,7 @@ def test_engine_emit_event_genesis_starts_at_zero() -> None:
     """First emitted event MUST be sequence=0, previous_hash=''."""
     engine = AuditChainEngine(chain=_build_chain())
     entry = engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={"from": "proposed", "to": "instantiated"},
         signer_identity=_build_identity(),
         signature="a" * 128,
@@ -238,19 +239,19 @@ def test_engine_emit_event_monotonic_sequence() -> None:
     engine = AuditChainEngine(chain=_build_chain())
     signer = _build_identity()
     e1 = engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={},
         signer_identity=signer,
         signature="b" * 128,
     )
     e2 = engine.emit_event(
-        event_type=DelegateEventType.POSTURE_RATCHET,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={"from": 1, "to": 2},
         signer_identity=signer,
         signature="c" * 128,
     )
     e3 = engine.emit_event(
-        event_type=DelegateEventType.CASCADE_EMISSION,
+        event_type=DelegateEventType.GRANT_CONSUMPTION,
         payload={"child_id": "child-1"},
         signer_identity=signer,
         signature="d" * 128,
@@ -264,13 +265,13 @@ def test_engine_previous_hash_chains_correctly() -> None:
     engine = AuditChainEngine(chain=_build_chain())
     signer = _build_identity()
     e1 = engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={"step": 1},
         signer_identity=signer,
         signature="e" * 128,
     )
     e2 = engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={"step": 2},
         signer_identity=signer,
         signature="f" * 128,
@@ -290,7 +291,7 @@ def test_engine_emit_event_raises_signature_error_on_bad_hex() -> None:
     engine = AuditChainEngine(chain=_build_chain())
     with pytest.raises(AuditChainSignatureError, match="128 hex chars"):
         engine.emit_event(
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             payload={},
             signer_identity=_build_identity(),
             signature="not-hex",
@@ -303,7 +304,7 @@ def test_engine_emit_event_raises_emission_error_on_non_identity_signer() -> Non
     engine = AuditChainEngine(chain=_build_chain())
     with pytest.raises(AuditChainEmissionError, match="MUST be a DelegateIdentity"):
         engine.emit_event(
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             payload={},
             signer_identity="not-an-identity",  # type: ignore[arg-type]
             signature="0" * 128,
@@ -315,7 +316,7 @@ def test_engine_entries_property_returns_immutable_tuple() -> None:
     """entries MUST be a tuple snapshot, not the internal list."""
     engine = AuditChainEngine(chain=_build_chain())
     engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={},
         signer_identity=_build_identity(),
         signature="9" * 128,
@@ -341,7 +342,7 @@ def test_engine_head_hash_matches_canonical_sha256_of_tail() -> None:
     engine = AuditChainEngine(chain=_build_chain())
     signer = _build_identity()
     engine.emit_event(
-        event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+        event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
         payload={},
         signer_identity=signer,
         signature="1" * 128,
@@ -442,8 +443,13 @@ def test_compute_anchor_hash_rejects_non_32_byte_salt() -> None:
 
 @pytest.mark.unit
 def test_compute_anchor_hash_is_deterministic() -> None:
-    """SHA-256(salt || anchor_head) — pure function, deterministic."""
-    salt = b"\x42" * 32
+    """SHA-256(salt || anchor_head) — pure function, deterministic.
+
+    Salt MUST come from a CSPRNG per S4.5 finding C1 / sec CRIT-1
+    (the entropy guard rejects degenerate repeating-byte salts that
+    would collapse the residency-boundary guarantee).
+    """
+    salt = secrets.token_bytes(32)
     head = "f" * 64
     d1 = WitnessedCrossAnchor.compute_anchor_hash(salt, head)
     d2 = WitnessedCrossAnchor.compute_anchor_hash(salt, head)
@@ -451,6 +457,37 @@ def test_compute_anchor_hash_is_deterministic() -> None:
     # Sanity: it's actually SHA-256(salt || raw_head_bytes).
     expected = hashlib.sha256(salt + bytes.fromhex(head)).hexdigest()
     assert d1 == expected
+
+
+@pytest.mark.unit
+def test_compute_anchor_hash_rejects_all_zero_salt() -> None:
+    """C1 / sec CRIT-1: all-zero salt collapses non-invertibility."""
+    head = "0" * 64
+    with pytest.raises(CrossAnchorIntegrityError, match="insufficient entropy"):
+        WitnessedCrossAnchor.compute_anchor_hash(b"\x00" * 32, head)
+
+
+@pytest.mark.unit
+def test_compute_anchor_hash_rejects_all_one_salt() -> None:
+    """C1 / sec CRIT-1: all-one salt is the same degenerate class."""
+    head = "1" * 64
+    with pytest.raises(CrossAnchorIntegrityError, match="insufficient entropy"):
+        WitnessedCrossAnchor.compute_anchor_hash(b"\xff" * 32, head)
+
+
+@pytest.mark.unit
+def test_compute_anchor_hash_rejects_repeating_byte_salt() -> None:
+    """C1 / sec CRIT-1: any ≤2-unique-bytes salt is degenerate."""
+    head = "2" * 64
+    # Single repeating byte (one unique byte) → reject.
+    with pytest.raises(CrossAnchorIntegrityError, match="insufficient entropy"):
+        WitnessedCrossAnchor.compute_anchor_hash(b"\x42" * 32, head)
+    # Two-byte alternating pattern (two unique bytes) → reject at the
+    # ``len(set(salt)) <= 2`` boundary.
+    two_byte = (b"\x01\x02") * 16
+    assert len(two_byte) == 32
+    with pytest.raises(CrossAnchorIntegrityError, match="insufficient entropy"):
+        WitnessedCrossAnchor.compute_anchor_hash(two_byte, head)
 
 
 @pytest.mark.unit
@@ -561,3 +598,101 @@ def test_audit_chain_cross_sdk_byte_parity() -> None:
     #   py_json = canonical_json_dumps(py_entry.to_canonical_dict())
     #   assert py_json == fixture["rs_canonical_bytes"]
     raise AssertionError("unreachable — see @pytest.mark.skip reason")
+
+
+# ---------------------------------------------------------------------------
+# S4.5 Round-1 findings — REASONING_SCRATCHPAD, JSON-serializability,
+# thread-safety
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_engine_rejects_reasoning_scratchpad_emission() -> None:
+    """REASONING_SCRATCHPAD (rs enum parity) MUST NOT enter the chain.
+
+    Per C3 audit-visibility classifier (S4.5 finding C2): the variant
+    exists on :class:`DelegateEventType` for cross-SDK enum parity but
+    is reasoning-private and MUST raise on emit_event.
+    """
+    engine = AuditChainEngine(chain=_build_chain())
+    with pytest.raises(AuditChainEmissionError, match="reasoning-private"):
+        engine.emit_event(
+            event_type=DelegateEventType.REASONING_SCRATCHPAD,
+            payload={"thought": "private chain-of-thought"},
+            signer_identity=_build_identity(),
+            signature="a" * 128,
+        )
+
+
+@pytest.mark.unit
+def test_engine_rejects_non_json_serializable_payload() -> None:
+    """C4 / sec MED-1: payload MUST be JSON-serializable for byte parity.
+
+    A bare ``datetime`` in the payload defeats canonical_json_dumps
+    (no default serializer); the engine MUST surface this BEFORE the
+    locked critical section so the chain isn't half-written.
+    """
+    engine = AuditChainEngine(chain=_build_chain())
+    bad_payload = {"when": datetime.now(timezone.utc)}  # datetime not JSON
+    with pytest.raises(AuditChainEmissionError, match="JSON-serializable"):
+        engine.emit_event(
+            event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT,
+            payload=bad_payload,
+            signer_identity=_build_identity(),
+            signature="b" * 128,
+        )
+
+
+@pytest.mark.unit
+def test_engine_emit_event_thread_safe_under_concurrent_emit() -> None:
+    """C3 / sec HIGH-1: concurrent emit_event MUST produce unique sequences.
+
+    Without ``self._emit_lock`` two threads can race
+    ``sequence = len(self._entries)`` and assign duplicate sequence
+    numbers, breaking previous-hash linkage. This test fires 64
+    concurrent emits and asserts:
+
+    1. all sequences are unique 0..N-1,
+    2. every entry's previous_hash matches SHA-256(canonical_json of
+       the prior entry by sequence) — replay holds across threads,
+    3. substrate audit_anchors and engine.entries match cardinality.
+    """
+    chain = _build_chain("agent-concurrent")
+    engine = AuditChainEngine(chain=chain)
+    signer = _build_identity()
+    n_events = 64
+
+    def _emit(i: int) -> None:
+        engine.emit_event(
+            event_type=DelegateEventType.GRANT_CONSUMPTION,
+            payload={"grant_id": f"g-{i}"},
+            signer_identity=signer,
+            signature=("%02x" % (i % 256)) * 64,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(_emit, range(n_events)))
+
+    entries = engine.entries
+    assert len(entries) == n_events
+    assert len(chain.audit_anchors) == n_events
+
+    # Sequences unique 0..N-1 (no duplicates from interleaved
+    # `len(self._entries)` reads).
+    sequences = sorted(e.sequence for e in entries)
+    assert sequences == list(range(n_events))
+
+    # Previous-hash linkage holds across threads (every entry's
+    # previous_hash == SHA-256 of the canonical JSON of the entry at
+    # sequence N-1). Sort by sequence before replay because Python
+    # threads can complete in any order.
+    by_seq = sorted(entries, key=lambda e: e.sequence)
+    assert by_seq[0].previous_hash == ""
+    for i in range(1, n_events):
+        prior = by_seq[i - 1]
+        recomputed = hashlib.sha256(
+            canonical_json_dumps(prior.to_canonical_dict()).encode("utf-8")
+        ).hexdigest()
+        assert (
+            by_seq[i].previous_hash == recomputed
+        ), f"thread-safety linkage drift at sequence {i}"

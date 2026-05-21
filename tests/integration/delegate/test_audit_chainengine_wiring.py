@@ -85,7 +85,7 @@ def test_engine_writes_substrate_audit_anchor_per_event() -> None:
     # Emit 5 audit-visible events.
     for i in range(5):
         engine.emit_event(
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
             payload={"step": i, "label": f"transition-{i}"},
             signer_identity=signer,
             signature=("%032x" % i).rjust(128, "f"),
@@ -95,7 +95,7 @@ def test_engine_writes_substrate_audit_anchor_per_event() -> None:
     assert len(chain.audit_anchors) == 5
     # Each substrate anchor was tagged with the Delegate event type.
     for anchor in chain.audit_anchors:
-        assert anchor.action == DelegateEventType.LIFECYCLE_TRANSITION
+        assert anchor.action == DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER
         assert anchor.agent_id == "agent-tier2-wiring"
         # Substrate result is SUCCESS (audit is post-fact; failed audit
         # writes are the substrate's failure-mode, not Delegate's).
@@ -118,11 +118,24 @@ def test_engine_chain_integrity_replay_reproduces_linkage() -> None:
     engine = AuditChainEngine(chain=chain)
     signer = _build_identity(genesis_ref="g-agent-replay")
 
-    # Emit a 4-event chain.
+    # Emit a 4-event chain — S4.5 collapsed py's 8 string sentinels to
+    # 5 rs-canonical variants; the lost py distinctions
+    # (lifecycle_transition / posture_ratchet / cascade_emission) ride
+    # in payload["subtype"] per the migration map in
+    # ``DelegateEventType.__doc__``.
     events = [
-        (DelegateEventType.LIFECYCLE_TRANSITION, {"to": "instantiated"}),
-        (DelegateEventType.POSTURE_RATCHET, {"from": 1, "to": 2}),
-        (DelegateEventType.CASCADE_EMISSION, {"child_id": "child-1"}),
+        (
+            DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
+            {"subtype": "lifecycle_transition", "to": "instantiated"},
+        ),
+        (
+            DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
+            {"subtype": "posture_ratchet", "from": 1, "to": 2},
+        ),
+        (
+            DelegateEventType.GRANT_CONSUMPTION,
+            {"subtype": "cascade_emission", "child_id": "child-1"},
+        ),
         (DelegateEventType.GRANT_CONSUMPTION, {"grant_id": "g-x"}),
     ]
     for i, (event_type, payload) in enumerate(events):
@@ -157,29 +170,27 @@ def test_engine_chain_integrity_replay_reproduces_linkage() -> None:
 
 
 @pytest.mark.integration
-def test_engine_emits_all_known_event_types_through_substrate() -> None:
-    """Every DelegateEventType sentinel can ride the real substrate chain.
+def test_engine_emits_all_audit_visible_event_types_through_substrate() -> None:
+    """Every audit-visible DelegateEventType variant rides the substrate.
 
-    Surfaces a future regression where a new event-type sentinel lands in
-    the source but the engine fails to relay it (e.g., the
-    ``_VALID_EVENT_TYPES`` frozenset drifts from the class attributes).
+    Per S4.5 the variant set collapsed from py's 8 string sentinels to
+    rs-canonical 5 variants — 4 are audit-visible and 1
+    (REASONING_SCRATCHPAD) is reasoning-private (C3 audit-visibility
+    classifier). This test covers the 4 audit-visible variants only;
+    REASONING_SCRATCHPAD rejection has a dedicated unit test.
     """
     chain = _build_chain("agent-type-coverage")
     engine = AuditChainEngine(chain=chain)
     signer = _build_identity(genesis_ref="g-agent-type-coverage")
 
-    all_types = [
-        DelegateEventType.LIFECYCLE_TRANSITION,
-        DelegateEventType.CASCADE_EMISSION,
-        DelegateEventType.POSTURE_RATCHET,
-        DelegateEventType.DISPATCH_INVOCATION,
+    audit_visible_types = [
+        DelegateEventType.EXTERNAL_SIDE_EFFECT,
         DelegateEventType.CONSTRAINT_DECISION,
         DelegateEventType.GRANT_CONSUMPTION,
-        DelegateEventType.SOVEREIGN_HANDOVER,
-        DelegateEventType.EXTERNAL_SIDE_EFFECT,
+        DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER,
     ]
 
-    for i, event_type in enumerate(all_types):
+    for i, event_type in enumerate(audit_visible_types):
         entry = engine.emit_event(
             event_type=event_type,
             payload={"index": i},
@@ -189,9 +200,12 @@ def test_engine_emits_all_known_event_types_through_substrate() -> None:
         assert entry.event_type == event_type
         assert entry.sequence == i
 
-    # Substrate observed every type.
+    # Substrate observed every audit-visible type. Per S4.5 the
+    # ``str``-backed Enum sub-class's ``.value`` IS the wire form;
+    # ``action`` carries the bare string sentinel both forms compare
+    # against ("external_side_effect", etc.).
     actions_seen = {a.action for a in chain.audit_anchors}
-    assert actions_seen == set(all_types)
+    assert actions_seen == {t.value for t in audit_visible_types}
 
 
 @pytest.mark.integration
@@ -207,14 +221,27 @@ def test_engine_substrate_anchor_payload_is_canonical_json() -> None:
     engine = AuditChainEngine(chain=chain)
     signer = _build_identity(genesis_ref="g-agent-canon")
 
+    # DISPATCH_INVOCATION in pre-S4.5 → EXTERNAL_SIDE_EFFECT + subtype.
     entry = engine.emit_event(
-        event_type=DelegateEventType.DISPATCH_INVOCATION,
-        payload={"connector": "test-connector", "op": "write"},
+        event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT,
+        payload={
+            "subtype": "dispatch_invocation",
+            "connector": "test-connector",
+            "op": "write",
+        },
         signer_identity=signer,
         signature="9" * 128,
     )
 
     assert len(chain.audit_anchors) == 1
     anchor = chain.audit_anchors[0]
-    expected_canonical = canonical_json_dumps(entry.to_canonical_dict())
-    assert anchor.trust_chain_hash == expected_canonical
+    # Round-1 finding C6 / analyst MED-4 outcome (b): the substrate
+    # field is documented "Hash of trust chain at action time"
+    # (kailash.trust.chain.AuditAnchor:526), so the substrate stores
+    # the SHA-256 hex of the canonical-JSON, NOT the canonical-JSON
+    # itself. The full canonical payload is still reproducible from
+    # ``engine.entries[0].to_canonical_dict()`` for cross-SDK byte
+    # parity contracts.
+    canonical_payload = canonical_json_dumps(entry.to_canonical_dict())
+    expected_hash = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    assert anchor.trust_chain_hash == expected_hash
