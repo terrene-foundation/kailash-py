@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.1] - 2026-05-22
+
+### Fixed
+
+- **`import kailash.delegate` failed on clean-venv install of 2.24.0 (CRITICAL)** — `kailash.delegate.types:46` eagerly imports `from kailash.trust._locking import validate_id` (the canonical path-traversal guard mandated by `trust-plane-security.md` Rule 2); `kailash.trust._locking:38` has a module-scope `from filelock import FileLock, Timeout`; `filelock` was declared only in the `[trust]` optional extra, not in core dependencies. Result: `pip install kailash==2.24.0` → `from kailash import delegate` → `ModuleNotFoundError: No module named 'filelock'`. Fixed by promoting `filelock>=3.0` to slim-core `[project.dependencies]` (duplicates the `[trust]` declaration so a bare install resolves delegate cleanly). Same failure class as `build-repo-release-discipline.md` Rule 2 "clean-venv installability is the done gate" + `deployment.md` "MUST: Eagerly-Imported Transitive Dependencies Are Declared By The Importing Package".
+
 ## [2.24.0] - 2026-05-22
 
 ### Added
