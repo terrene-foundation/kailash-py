@@ -314,6 +314,74 @@ pytest tests/e2e/ --timeout=10
 
 ---
 
+## Delegate composition primitive (`kailash.delegate`) — Pre-Pledge v0
+
+The Delegate primitive composes `(Connector x Signature x ConstraintEnvelope x Executor)` under EATP audit per the Terrene Delegate Specification v0. Apache 2.0 OSS, zero proprietary dependencies (per [issue #1035](https://github.com/terrene-foundation/kailash-py/issues/1035)).
+
+### What the primitive enforces today (Wave 1-6 shipped)
+
+Structural invariants — re-validated on every dispatch + execute path:
+
+- **F5 monotonic envelope** — the bind-time envelope is the upper bound; runtime widening is BLOCKED, tightening is permitted.
+- **Capability gating** — `connector.requires_capabilities ⊆ role.scope.capabilities`, snapshot at bind AND re-checked at dispatch (S5 C4-1).
+- **Lifecycle gating** — `RoleLifecycleState ∈ {DRAFT, ACTIVE}` permits invocation; `SUSPENDED` and `RETIRED` refuse.
+- **Tenant isolation** — `connector.tenant_id_observed` is cross-validated against the envelope's tenant scope; mismatch raises `CascadeTenantViolationError` and fails closed BEFORE the surface relays connector audit events.
+- **§7 TAOD phase monotonicity** — `DelegateRuntime` is single-shot per receipt; re-execute on a consumed runtime raises `RuntimePhaseError`.
+- **Audit binding** — every TAOD transition emits exactly one signed audit event with `run_id` binding. The signer is required at construction; placeholder signers are BLOCKED (cryptographic forgery defense per S5 C2-1).
+- **Posture rotation audit** — `with_posture()` emits `POSTURE_OR_SOVEREIGN_HANDOVER` on the source runtime's audit engine BEFORE returning the new instance (S6 MED-1); rotations that cannot be audited are refused.
+- **R2 composition** — `(envelope, cascade, dispatch_surface)` triplet identity + signer identity (`is`-check, not `==`) re-validated at every `execute()` start as defense-in-depth on top of the bind-time gate (S5 C4-1 + S6 Invariant 4).
+
+Cross-implementation receipt evidence:
+
+- 5 conformance vectors pinned in `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001).
+- 2 vectors (DV-5-001, DV-10-001) vendored byte-for-byte from kailash-rs canonical per `cross-sdk-inspection.md` Rule 4a.
+- `receipts_agree(rs, py)` cross-impl comparator with default timestamp-exclusion (`terminated_at`, `executed_at`, `started_at`, `signed_at`) and ordered comparison for chained data (`audit_chain_entries`, TAOD `transitions`).
+- Vector tamper-detection on load — `ConformanceVectorIntegrityError` raises on hash-drift between the fixture's stored `digest` and a re-computed digest.
+
+### What's deferred (follow-up issues against the #1035 umbrella)
+
+- **§10 G1 principal-kind discrimination** ([issue #1143](https://github.com/terrene-foundation/kailash-py/issues/1143)): `DelegateIdentity` does not yet carry a `principal_kind` discriminator; `Role` does not carry `permitted_principal_kinds`. The DV-10-001 vector remains `xfail-strict` until this lands. Estimate: 80-150 LOC of load-bearing logic + 30-50 test updates (exceeded the S7 shard budget).
+- **Concurrency contract** (reviewer A1, S6 deferred): concurrent `execute()` on shared substrate. Currently single-shot per `DelegateRuntime` instance (§7), so multi-execute proceeds through fresh runtimes — but `AuditChainEngine` concurrency-safety contract is not yet formally verified. Estimate: requires `AuditChainEngine` review out of delegate-primitive scope.
+- **Posture state-file integration** (S6 deferred): `runtime.Posture` is a constructor parameter; integration with `.claude/learning/posture.json` SessionStart-managed state is operator-tooling scope, not primitive scope.
+
+### What the primitive does NOT promise
+
+- **Identity-cascade grantee registry persistence** — `TenantScopedCascade` is in-process and emits one `GrantMoment` per `cascade_child` call without retaining a grantee set. Durable registration is the caller's responsibility. The S5 dispatch validates against the S3 cascade contract, but the cascade itself is not durable.
+- **Cryptographic nonce validation** — `with_posture(nonce=...)` is **syntactic** (min-length 16 chars). Cryptographic single-use, signed-by-authority, and expiry checks live in SessionStart / S8+ nonce-registry integration — NOT in the primitive.
+- **Connector trust** — the `Connector` ABC is the untrust boundary. The primitive validates structural contracts but does NOT sandbox connector execution. Apache 2.0 OSS does not include a sandbox.
+
+### How to verify on your machine
+
+```python
+from kailash.delegate import (
+    DelegateRuntime, DispatchSurface, Connector, ConnectorInvocationResult,
+    DelegateIdentity, Role, RoleScope, CapabilitySet, RoleLifecycleState,
+    DelegateConstraintEnvelope, TenantScope, TenantScopedCascade, GrantMoment,
+    AuditChainEngine, DelegateEventType, Posture,
+    ConformanceVectorLoader,
+)
+
+# Load the canonical conformance vectors
+vectors = ConformanceVectorLoader.load_canonical()
+print(f"{len(vectors)} vectors: {[v.vector_id for v in vectors]}")
+
+# Full composition example: see tests/e2e/delegate/test_delegate_e2e_flows.py
+# (Flow A through Flow G exercise every invariant in this pre-pledge against
+# real substrate — no mocks of S2-S7 primitives).
+```
+
+### Status: pre-pledge
+
+The primitive is **pre-pledge**: structurally complete, byte-shape-pinned against kailash-rs, deferral set disclosed. Not yet attested to PACT D/T/R compliance or third-party security audit. The post-pledge state requires:
+
+- §10 G1 closure ([issue #1143](https://github.com/terrene-foundation/kailash-py/issues/1143))
+- Independent PACT-class audit
+- ≥1 production deployment with a non-Terrene operator
+
+Until then, treat as "production-ready for non-adversarial workloads; pre-production for high-stakes adversarial workloads."
+
+---
+
 ## Documentation
 
 | Resource                                                                                                      | Description                                         |
