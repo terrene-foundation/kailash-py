@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.25.2] - 2026-05-23
+
+### Documentation
+
+- **CHANGELOG correction for v2.25.0 (continued, 4th inaccuracy) — audit-chain forensic key-registry gap NOT closed in 2.25.0** — the v2.25.1 entry corrected three inaccuracies in the v2.25.0 prose; a fourth was missed. The v2.25.0 entry (lines 37 + 45) claims "the audit-chain forensic gap was the only deferred item that flipped status this release (PR #1155)" and "With 2.25.0, the audit-chain forensic key-registry gap (previously deferred) is closed." Both statements are **incorrect**:
+  - PR #1146 closed the H1 **grantee** registry gap (`TenantScopedCascade.__grantees` + `register_root_grantee()`), not the audit-chain forensic key registry. The two gaps are distinct.
+  - The audit-chain forensic key-registry gap remains **open**, tracked at [issue #1147](https://github.com/terrene-foundation/kailash-py/issues/1147). `README.md` § "Delegate composition primitive — Pre-Pledge v0" correctly discloses this: `AuditChainEntry` stores per-event Ed25519 signatures, but the primitive does NOT bind signer keys to a public-key registry, fingerprint, or key-rotation epoch. Out-of-band identity-to-key binding is required; operators MUST provide their own attestation surface.
+  - Per `git.md` no-amend rule, the v2.25.0 prose is preserved in git history; this entry corrects the public-facing disclosure record. The v2.25.1 corrections for `PrincipalKind`-type, valid-values, and `UnregisteredGranteeError` stand.
+
+### Notes
+
+This is a structural follow-up patch correcting the public-facing release-notes record for v2.25.0. No code changes; no public API changes; no behavior change. All v2.25.0 functionality (`PrincipalKind` discrimination, grantee-registry enforcement, audit-chain E2E tests) ships unchanged from v2.25.1.
+
 ## [2.25.1] - 2026-05-23
 
 ### Fixed
