@@ -184,18 +184,25 @@ class DispatchCascadeViolationError(ValueError):
     Surfaces when the bound :class:`DelegateIdentity` is not a known
     grantee of the bound :class:`TenantScopedCascade`. Distinct from
     :class:`CascadeTenantViolationError` (Invariant 2 runtime tenant
-    mismatch) — this error is the BIND-time check that the principal
-    was actually granted by the cascade.
+    mismatch) — this error is the cascade-grantee check that the
+    principal was actually granted by the cascade.
 
-    Note: the current :class:`TenantScopedCascade` does NOT yet expose
-    a persistent grantee registry (S3 emits one
-    :class:`~kailash.delegate.trust.GrantMoment` per ``cascade_child``
-    call but does not retain the grantee set). The construction-time
-    check here is structural — the identity's ``delegate_id`` is held
-    on the DispatchSurface and the cascade's tenant is cross-checked.
-    A future enhancement (S7+) will surface a grantee registry; this
-    error class is the stable typed surface that registry will plumb
-    into.
+    #1146 H1 — PR #1144 holistic /redteam HIGH finding H1 surfaced that
+    :class:`DispatchSurface.__init__` previously did NOT validate that the
+    supplied ``identity`` was actually granted by ``trust_cascade``. Any
+    caller with ANY :class:`DelegateIdentity` and a tenant-matching
+    cascade could construct a DispatchSurface that audited as that
+    identity — collapsing the cascade-as-authorization invariant.
+
+    The closure: :class:`~kailash.delegate.trust.TenantScopedCascade` now
+    carries a grantee registry (via :attr:`grantees` /
+    :meth:`register_root_grantee` / auto-registration on success in
+    :meth:`cascade_child`). :class:`DispatchSurface.__init__` raises this
+    error when ``identity.delegate_id not in trust_cascade.grantees`` at
+    bind, and :meth:`DispatchSurface.dispatch` re-validates the same
+    invariant at every dispatch-time entry for defense-in-depth (R2
+    composition, against the same ``object.__setattr__`` bypass surface
+    the §10 G1 principal-kind re-check defends).
     """
 
 
@@ -797,9 +804,12 @@ class DispatchSurface:
     Raises:
         DispatchEnvelopeViolationError: connector requires a capability
             the role does not grant, OR role is in a lifecycle that
-            refuses dispatch (RETIRED, SUSPENDED).
-        DispatchCascadeViolationError: the envelope's tenant binding is
-            inconsistent with the cascade's tenant.
+            refuses dispatch (RETIRED, SUSPENDED), OR identity's
+            ``principal_kind`` is not in the role's
+            ``permitted_principal_kinds`` (#1143 §10 G1).
+        DispatchCascadeViolationError: identity's ``delegate_id`` is not
+            in the trust_cascade's grantee registry (#1146 H1
+            cascade-as-authorization gate).
         TypeError: any argument fails its type check.
     """
 
@@ -924,6 +934,59 @@ class DispatchSurface:
                 f"{role.display_name!r} permitted_principal_kinds "
                 f"{sorted(role.permitted_principal_kinds)!r} "
                 "(#1143 §10 G1 — service-account vs sovereign separation)"
+            )
+
+        # #1146 H1 — grantee-registry gate. The bound identity's
+        # ``delegate_id`` MUST be in the cascade's grantee registry. The
+        # registry is populated by
+        # :meth:`TenantScopedCascade.register_root_grantee` (root seed) or
+        # by :meth:`TenantScopedCascade.cascade_child` on success.
+        # Identity NOT in the registry collapses the cascade-as-
+        # authorization invariant (PR #1144 holistic /redteam HIGH H1):
+        # any caller with ANY DelegateIdentity could otherwise construct
+        # a DispatchSurface that audited as that identity.
+        #
+        # Ordering: AFTER principal_kind (structurally more fundamental —
+        # wrong-kind identity should not even be considered for grantee
+        # lookup) and BEFORE capability (the cascade gate is more
+        # fundamental than the connector's capability requirements; an
+        # ungranted identity has no business being capability-checked).
+        #
+        # Defense-in-depth: the same check re-fires at every
+        # :meth:`dispatch` start per the F5 / R2 composition pattern,
+        # in case the cascade's grantee set is mutated (legitimately or
+        # via ``object.__setattr__`` bypass) between bind and dispatch.
+        if identity.delegate_id not in trust_cascade.grantees:
+            # Hash the identity for log-aggregator safety per
+            # observability.md MUST Rule 8 (schema-revealing field names
+            # MUST be DEBUG or hashed). The raw delegate_id remains on
+            # the bound DispatchSurface for in-process debugging; the
+            # error message carries only the 8-char SHA-256 prefix.
+            identity_hash = hashlib.sha256(
+                str(identity.delegate_id).encode("utf-8")
+            ).hexdigest()[:8]
+            logger.debug(
+                "dispatch.cascade_violation",
+                extra={
+                    "axis": "ungranted_identity",
+                    "connector_id": connector.connector_id,
+                    "delegate_id": str(identity.delegate_id),
+                    "cascade_tenant": (
+                        trust_cascade.tenant.tenant_id
+                        if not trust_cascade.tenant.is_global
+                        else "<global>"
+                    ),
+                    "grantee_count": len(trust_cascade.grantees),
+                },
+            )
+            raise DispatchCascadeViolationError(
+                f"DispatchSurface refuses bind: identity "
+                f"[delegate_id_hash={identity_hash}] is not a registered "
+                "grantee of the supplied trust_cascade "
+                "(#1146 H1 — cascade-as-authorization gate; identities "
+                "MUST be registered via TenantScopedCascade."
+                "register_root_grantee or admitted via cascade_child "
+                "before they can construct a DispatchSurface)"
             )
 
         # Invariant 3 — capability gating. Connector's required
@@ -1120,6 +1183,29 @@ class DispatchSurface:
                 f"permitted_principal_kinds {sorted(current_permitted)!r}; "
                 "invocation refused (#1143 §10 G1 — principal-kind "
                 "discriminator runtime re-check)"
+            )
+
+        # Step 0a.2 — #1146 H1 grantee-registry re-check. Pair to the
+        # bind-time gate in __init__. The cascade's grantee registry is
+        # mutable across the bind→dispatch boundary (additional
+        # cascade_child calls between bind and dispatch grow the set,
+        # which is fine — wider is permitted). What we defend against is
+        # the inverse: a caller that bypassed the bind-time gate by
+        # mutating the registry via object.__getattribute__ on the
+        # internal slot, OR a future revocation path that drops grantees.
+        # Defense-in-depth — the registry membership MUST hold at
+        # dispatch entry, not just at bind.
+        if self._identity.delegate_id not in self._trust_cascade.grantees:
+            identity_hash = hashlib.sha256(
+                str(self._identity.delegate_id).encode("utf-8")
+            ).hexdigest()[:8]
+            raise DispatchCascadeViolationError(
+                f"DispatchSurface refuses dispatch: identity "
+                f"[delegate_id_hash={identity_hash}] is no longer a "
+                "registered grantee of the trust_cascade "
+                "(#1146 H1 — cascade-as-authorization runtime re-check; "
+                "the cascade's grantee registry drifted between bind "
+                "and dispatch)"
             )
 
         # Step 0b — C6-1 DoS defense: depth + serialized-size limits

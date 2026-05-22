@@ -176,6 +176,8 @@ def _build_runtime(
     env = envelope or _build_envelope()
     identity = _build_identity()
     role = _build_role()
+    # #1146 H1 — seed the cascade with the root grantee.
+    cascade.register_root_grantee(identity)
     connector = _PassthroughConnector(tenant_id_observed=tenant_id)
     surface = DispatchSurface(
         connector=connector,

@@ -62,7 +62,6 @@ from kailash.delegate.types import (
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
 
-
 # ---------------------------------------------------------------------------
 # Test signer — deterministic 128-char hex (SHA-256 doubled).
 # ---------------------------------------------------------------------------
@@ -209,6 +208,9 @@ def _build_surface(
     envelope = envelope if envelope is not None else _build_envelope()
     identity = identity if identity is not None else _build_identity()
     cascade = cascade if cascade is not None else _build_cascade()
+    # #1146 H1 — seed the cascade with the root grantee so DispatchSurface
+    # bind passes the grantee gate.
+    cascade.register_root_grantee(identity)
     audit_engine = (
         audit_engine
         if audit_engine is not None

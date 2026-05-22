@@ -41,25 +41,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-
-def _test_signer(canonical_bytes: bytes) -> str:
-    """Deterministic 128-char hex signer for integration tests.
-
-    SHA-256 doubled to 128 chars satisfies the audit-engine's
-    _validate_hex(expected_len=128) contract while keeping the test
-    deterministic for cross-SDK byte-vector comparison.
-    """
-    h = hashlib.sha256(canonical_bytes).hexdigest()
-    return h + h
-
-
-from kailash.delegate.audit import (
-    AuditChainEngine,
-    DelegateEventType,
-)
+from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.dispatch import (
     Connector,
     ConnectorInvocationResult,
+    DispatchCascadeViolationError,
     DispatchResult,
     DispatchSurface,
 )
@@ -79,6 +65,17 @@ from kailash.delegate.types import (
 )
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
+
+
+def _test_signer(canonical_bytes: bytes) -> str:
+    """Deterministic 128-char hex signer for integration tests.
+
+    SHA-256 doubled to 128 chars satisfies the audit-engine's
+    _validate_hex(expected_len=128) contract while keeping the test
+    deterministic for cross-SDK byte-vector comparison.
+    """
+    h = hashlib.sha256(canonical_bytes).hexdigest()
+    return h + h
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +218,8 @@ async def test_dispatch_end_to_end_wires_audit_and_tenant() -> None:
     connector = RecordingMockConnector(tenant_id_observed="tenant-wire")
     identity = _build_identity()
     envelope = _build_envelope()
+    # #1146 H1 — seed the cascade with the root grantee.
+    cascade.register_root_grantee(identity)
 
     surface = DispatchSurface(
         connector=connector,
@@ -286,12 +285,15 @@ async def test_dispatch_tenant_isolation_enforced_end_to_end() -> None:
     audit_engine = AuditChainEngine(chain=chain)
     cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-A"))
     connector = RecordingMockConnector(tenant_id_observed="tenant-B")
+    identity = _build_identity()
+    # #1146 H1 — seed the cascade with the root grantee.
+    cascade.register_root_grantee(identity)
 
     surface = DispatchSurface(
         connector=connector,
         signature=WiringSignature(),
         envelope=_build_envelope(),
-        identity=_build_identity(),
+        identity=identity,
         audit_engine=audit_engine,
         trust_cascade=cascade,
         role=_build_role(),
@@ -335,12 +337,15 @@ async def test_dispatch_multiple_events_chain_correctly() -> None:
     chain = _build_chain("agent-multi-event")
     audit_engine = AuditChainEngine(chain=chain)
     cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-multi"))
+    identity = _build_identity()
+    # #1146 H1 — seed the cascade with the root grantee.
+    cascade.register_root_grantee(identity)
 
     surface = DispatchSurface(
         connector=MultiEventConnector(),
         signature=WiringSignature(),
         envelope=_build_envelope(),
-        identity=_build_identity(),
+        identity=identity,
         audit_engine=audit_engine,
         trust_cascade=cascade,
         role=_build_role(),
@@ -365,3 +370,70 @@ async def test_dispatch_multiple_events_chain_correctly() -> None:
     assert (
         audit_engine.entries[2].previous_hash != audit_engine.entries[1].previous_hash
     )
+
+
+# ---------------------------------------------------------------------------
+# #1146 H1 — grantee-registry cascade-as-authorization wiring
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_dispatch_h1_grantee_gate_refuses_ungranted_identity_end_to_end() -> None:
+    """#1146 H1 — Tier-2 wiring: an ungranted identity is refused at bind
+    against a REAL TenantScopedCascade. No audit emission, no connector
+    invocation, no DispatchSurface instance leaks past the gate.
+
+    This closes PR #1144 holistic /redteam HIGH H1 end-to-end:
+    a caller with an arbitrary DelegateIdentity who acquires a
+    tenant-matching cascade reference CANNOT bind a DispatchSurface
+    that audits as that identity.
+    """
+    chain = _build_chain("agent-h1")
+    audit_engine = AuditChainEngine(chain=chain)
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-h1"))
+    # Identity is constructed but NEVER registered as a grantee — the
+    # exact failure mode the H1 finding describes.
+    ungranted_identity = _build_identity()
+    with pytest.raises(
+        DispatchCascadeViolationError, match=r"not a registered grantee"
+    ):
+        DispatchSurface(
+            connector=RecordingMockConnector(tenant_id_observed="tenant-h1"),
+            signature=WiringSignature(),
+            envelope=_build_envelope(),
+            identity=ungranted_identity,
+            audit_engine=audit_engine,
+            trust_cascade=cascade,
+            role=_build_role(),
+            signer=_test_signer,
+        )
+    # Fail-closed: no audit emission, no connector invocation, no
+    # substrate mutation.
+    assert len(audit_engine.entries) == 0
+    assert len(chain.audit_anchors) == 0
+    assert cascade.grantees == frozenset()
+
+
+@pytest.mark.integration
+def test_dispatch_h1_grantee_gate_admits_root_grantee_end_to_end() -> None:
+    """#1146 H1 — happy path: identity explicitly seeded via
+    register_root_grantee binds cleanly against a real cascade."""
+    chain = _build_chain("agent-h1-root")
+    audit_engine = AuditChainEngine(chain=chain)
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-h1"))
+    identity = _build_identity()
+    # Seed the grantee registry.
+    cascade.register_root_grantee(identity)
+    # Bind succeeds.
+    surface = DispatchSurface(
+        connector=RecordingMockConnector(tenant_id_observed="tenant-h1"),
+        signature=WiringSignature(),
+        envelope=_build_envelope(),
+        identity=identity,
+        audit_engine=audit_engine,
+        trust_cascade=cascade,
+        role=_build_role(),
+        signer=_test_signer,
+    )
+    assert surface.identity.delegate_id == identity.delegate_id
+    assert identity.delegate_id in cascade.grantees
