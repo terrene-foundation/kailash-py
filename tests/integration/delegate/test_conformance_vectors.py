@@ -295,41 +295,66 @@ async def _exercise_dv_9_001_audit_chain_replay_round_trip() -> bool:
     return True
 
 
-@pytest.mark.asyncio
-async def _exercise_dv_10_001_g1_service_account_separation() -> bool:
-    """DV-10-001 — Connector service-account principal MUST differ from
-    sovereign principal.
+def _exercise_dv_10_001_g1_service_account_separation() -> bool:
+    """DV-10-001 -- #1143 §10 G1: principal-kind discriminator enforces
+    service-account vs sovereign separation at the dispatch bind gate.
 
-    REJECT iff: constructing a Connector whose tenant_id_observed equals
-    the principal's directory id collapses attribution -- in this py port,
-    the cascade tenant-isolation gate raises when invoked with mismatched
-    tenant context. We assert the *integrity-violation* path: a connector
-    that returns a tenant_id_observed unequal to the cascade's tenant
-    raises a CascadeTenantViolationError on dispatch.
+    REJECT iff: constructing a :class:`DispatchSurface` with a
+    ``service_account``-kind identity bound to a role whose
+    ``permitted_principal_kinds`` is ``frozenset({"sovereign"})`` raises
+    :class:`DispatchEnvelopeViolationError` at __init__.
 
-    The §10 G1 invariant manifests in py as: dispatch with a connector
-    whose tenant_id_observed != cascade.tenant.id MUST raise (the
-    DispatchCascadeViolationError class).
+    The §10 G1 invariant: a Delegate acts through a scoped service-account
+    principal distinct from the sovereign principal the Delegate acts
+    for. A Connector binding where these collapse impersonates the
+    sovereign and breaks the Genesis-to-Delegation attribution chain.
+    The :class:`Role.permitted_principal_kinds` field expresses which
+    kinds may bind; the dispatch gate refuses any mismatch.
     """
-    from kailash.delegate.dispatch import DispatchCascadeViolationError
+    from kailash.delegate.dispatch import DispatchEnvelopeViolationError
 
-    # Build a runtime where the cascade expects "tenant-A" but the
-    # connector reports "principal-conformance" (a sovereign principal
-    # identifier, NOT a tenant id) -- the cascade rejects on dispatch.
-    runtime, _, _, _, _ = _build_runtime(tenant_id="tenant-A")
-    # Patch the connector's observed tenant to the sovereign principal id
-    # to simulate the G1-amendment violation:
-    runtime.dispatch_surface.connector.tenant_id_observed = "principal-conformance"
+    # Build a sovereign-only role -- the role permits the SOVEREIGN
+    # principal-kind to bind, but NOT the service_account kind.
+    sovereign_only_role = Role(
+        role_id=uuid.uuid4(),
+        display_name="sovereign-only-conformance-role",
+        scope=RoleScope(
+            domain="finance",
+            capabilities=CapabilitySet(capabilities=("http.read",)),
+        ),
+        lifecycle=RoleLifecycleState.ACTIVE,
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    # Construct a service-account-kind identity -- the impersonation
+    # collapse the §10 G1 invariant blocks.
+    service_account_identity = DelegateIdentity(
+        delegate_id=uuid.uuid4(),
+        sovereign_ref="sov-conformance",
+        role_binding_ref="rb-conformance",
+        genesis_ref="g-agent-conformance",
+        principal_kind="service_account",
+    )
+    # Substrate dependencies for the bind attempt.
+    chain = _build_chain()
+    audit_engine = AuditChainEngine(chain=chain)
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-A"))
+    env = _build_envelope()
+    connector = _PassthroughConnector(tenant_id_observed="tenant-A")
     try:
-        await runtime.execute({"id": "g1-probe"})
-        return False
-    except DispatchCascadeViolationError:
+        DispatchSurface(
+            connector=connector,
+            signature=_ConformanceSig(),
+            envelope=env,
+            identity=service_account_identity,
+            audit_engine=audit_engine,
+            trust_cascade=cascade,
+            role=sovereign_only_role,
+            signer=_test_signer,
+        )
+    except DispatchEnvelopeViolationError:
         return True
-    except Exception:
-        # Any other rejection class also represents the runtime refusing
-        # the impersonation collapse -- the vector asserts REJECT, not
-        # which specific rejection class.
-        return True
+    # Bind succeeded -- the §10 G1 gate did not fire.
+    return False
 
 
 # Map vector_id -> async exerciser. Sync exercisers wrap to async for uniform dispatch.
@@ -343,7 +368,7 @@ async def _run_vector(vector: ConformanceVector) -> bool:
     if vector.id == "DV-9-001":
         return await _exercise_dv_9_001_audit_chain_replay_round_trip()
     if vector.id == "DV-10-001":
-        return await _exercise_dv_10_001_g1_service_account_separation()
+        return _exercise_dv_10_001_g1_service_account_separation()
     raise ValueError(f"no exerciser registered for vector {vector.id!r}")
 
 
@@ -360,8 +385,8 @@ async def test_dv_3_001_r2_composition_behaviour() -> None:
     assert target.expected is BehaviouralOutcome.REJECT
     exhibited_reject = await _run_vector(target)
     assert exhibited_reject is True, (
-        f"DV-3-001 expected REJECT (per §3 R2 composition); runtime did not "
-        f"exhibit rejection of widening cascade"
+        "DV-3-001 expected REJECT (per §3 R2 composition); runtime did not "
+        "exhibit rejection of widening cascade"
     )
 
 
@@ -373,8 +398,8 @@ async def test_dv_5_001_monotonic_tightening_behaviour() -> None:
     assert target.expected is BehaviouralOutcome.REJECT
     exhibited_reject = await _run_vector(target)
     assert exhibited_reject is True, (
-        f"DV-5-001 expected REJECT (per §5 monotonic-tightening); envelope "
-        f"did not raise EnvelopeWideningError"
+        "DV-5-001 expected REJECT (per §5 monotonic-tightening); envelope "
+        "did not raise EnvelopeWideningError"
     )
 
 
@@ -395,8 +420,8 @@ async def test_dv_7_001_taod_phase_monotonicity_behaviour() -> None:
     assert target.expected is BehaviouralOutcome.REJECT
     exhibited_reject = await _run_vector(target)
     assert exhibited_reject is True, (
-        f"DV-7-001 expected REJECT (per §7 TAOD phase monotonicity); "
-        f"runtime did not raise RuntimePhaseError on re-execute"
+        "DV-7-001 expected REJECT (per §7 TAOD phase monotonicity); "
+        "runtime did not raise RuntimePhaseError on re-execute"
     )
 
 
@@ -408,32 +433,31 @@ async def test_dv_9_001_audit_chain_replay_behaviour() -> None:
     assert target.expected is BehaviouralOutcome.ACCEPT
     accepted = await _run_vector(target)
     assert accepted is True, (
-        f"DV-9-001 expected ACCEPT (per §9 audit chain replay); audit "
-        f"entries did not round-trip byte-identically OR head hash mismatched"
+        "DV-9-001 expected ACCEPT (per §9 audit chain replay); audit "
+        "entries did not round-trip byte-identically OR head hash mismatched"
     )
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "DV-10-001 vector pins §10 G1 service-account separation "
-        "(Connector binding with sovereign principal MUST reject). The S5 "
-        "dispatch path does not yet enforce sovereign-vs-service-account "
-        "distinctness at this surface. The vector is the contract that "
-        "triggers the dispatch fix; XPASS surfaces gap loudly. See #1035 "
-        "follow-up."
-    ),
-)
 async def test_dv_10_001_g1_service_account_separation_behaviour() -> None:
+    """DV-10-001 -- #1143 §10 G1 principal-kind discriminator.
+
+    The DispatchSurface bind gate cross-validates ``identity.principal_kind``
+    against ``role.permitted_principal_kinds`` and raises
+    :class:`DispatchEnvelopeViolationError` on mismatch. Previously
+    xfail-strict pending the dispatch fix; now PASSES per the §10 G1
+    discriminator landing. Mirrors unit-level coverage in
+    ``tests/unit/delegate/test_dispatch.py::
+    test_dispatch_surface_refuses_principal_kind_mismatch``.
+    """
     vectors = ConformanceVectorLoader.load_canonical()
     target = next(v for v in vectors if v.id == "DV-10-001")
     assert target.expected is BehaviouralOutcome.REJECT
     rejected = await _run_vector(target)
     assert rejected is True, (
-        f"DV-10-001 expected REJECT (per §10 G1 service-account separation); "
-        f"runtime did not raise on sovereign-principal collapse"
+        "DV-10-001 expected REJECT (per §10 G1 service-account separation); "
+        "runtime did not raise on sovereign-principal collapse"
     )
 
 
@@ -475,14 +499,13 @@ async def test_full_canonical_set_produces_receipt() -> None:
         vectors_passed=passed,
     )
     assert receipt.vectors_total == 5
-    # Currently 4 of 5 vectors pass (DV-3, DV-5, DV-7, DV-9). DV-10 is
-    # the remaining xfail-tracked behavioral gap (§10 G1 service-account
-    # vs sovereign separation in the dispatch surface); the vector is
-    # the contract, the dispatch surface is the catch-up target. DV-7
-    # graduated from xfail when the runtime §7 single-shot guard landed.
-    assert receipt.vectors_passed == 4
-    assert receipt.conforms() is False  # 4 of 5 -- not yet conforming
-    # Both validation predicates hold on a partial receipt:
+    # All 5 vectors now pass (DV-3, DV-5, DV-7, DV-9, DV-10). DV-10
+    # graduated from xfail when #1143 landed the principal-kind
+    # discriminator gate on DispatchSurface.__init__. DV-7 graduated
+    # earlier when the runtime §7 single-shot guard landed.
+    assert receipt.vectors_passed == 5
+    assert receipt.conforms() is True  # 5 of 5 -- conforming
+    # Both validation predicates hold:
     assert receipt.vectors_passed <= receipt.vectors_total
 
 

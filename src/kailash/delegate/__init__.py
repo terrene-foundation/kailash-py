@@ -45,10 +45,7 @@ from kailash.delegate.dispatch import (
     DispatchSurface,
     DispatchValidationError,
 )
-from kailash.delegate.envelope import (
-    DelegateConstraintEnvelope,
-    EnvelopeWideningError,
-)
+from kailash.delegate.envelope import DelegateConstraintEnvelope, EnvelopeWideningError
 from kailash.delegate.runtime import (
     DelegateRuntime,
     Posture,
@@ -75,6 +72,7 @@ from kailash.delegate.types import (
     LifecycleError,
     LifecycleState,
     PrincipalDirectory,
+    PrincipalKind,
     Role,
     RoleLifecycleState,
     RoleScope,
@@ -87,6 +85,7 @@ __all__ = [
     # Group 2 -- Identity + role substrate (S2.5 F2/F3)
     "DelegateIdentity",
     "PrincipalDirectory",
+    "PrincipalKind",
     "Role",
     "RoleLifecycleState",
     "RoleScope",

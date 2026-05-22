@@ -599,3 +599,129 @@ def test_principal_directory_frozen() -> None:
 def test_principal_directory_coerces_iterable_to_tuple() -> None:
     directory = PrincipalDirectory(identities=[_make_identity()])  # type: ignore[arg-type]
     assert isinstance(directory.identities, tuple)
+
+
+# ---------------------------------------------------------------------------
+# PrincipalKind discriminator (#1143 §10 G1)
+# ---------------------------------------------------------------------------
+
+
+def test_principal_kind_literal_values_are_three_canonical_kinds() -> None:
+    """The PrincipalKind Literal MUST be exactly the three §10 G1 kinds.
+
+    Structural invariant: if the Literal alias is widened or narrowed
+    (e.g. an "operator" kind sneaks in), this test fires and forces a
+    re-audit against the Terrene Delegate Specification §10 G1.
+    """
+    from typing import get_args
+
+    from kailash.delegate.types import PrincipalKind
+
+    assert set(get_args(PrincipalKind)) == {"sovereign", "service_account", "delegate"}
+
+
+def test_delegate_identity_default_principal_kind_is_delegate() -> None:
+    """Backwards-compat default: identities constructed without an
+    explicit principal_kind get "delegate". Existing call sites continue
+    to work without changes.
+    """
+    ident = _make_identity()
+    assert ident.principal_kind == "delegate"
+
+
+def test_delegate_identity_accepts_sovereign_kind() -> None:
+    ident = _make_identity(principal_kind="sovereign")
+    assert ident.principal_kind == "sovereign"
+
+
+def test_delegate_identity_accepts_service_account_kind() -> None:
+    ident = _make_identity(principal_kind="service_account")
+    assert ident.principal_kind == "service_account"
+
+
+def test_delegate_identity_rejects_invalid_principal_kind() -> None:
+    """Runtime validation against the Literal allowlist. A downstream
+    caller passing an arbitrary string MUST raise ValueError."""
+    with pytest.raises(ValueError, match="principal_kind"):
+        _make_identity(principal_kind="operator")  # not a canonical kind
+
+
+def test_delegate_identity_to_dict_includes_principal_kind() -> None:
+    ident = _make_identity(principal_kind="service_account")
+    payload = ident.to_dict()
+    assert payload["principal_kind"] == "service_account"
+
+
+def test_delegate_identity_from_dict_round_trips_principal_kind() -> None:
+    ident = _make_identity(principal_kind="sovereign")
+    rebuilt = DelegateIdentity.from_dict(ident.to_dict())
+    assert rebuilt.principal_kind == "sovereign"
+    assert rebuilt == ident
+
+
+def test_delegate_identity_from_dict_defaults_principal_kind_when_absent() -> None:
+    """Back-compat: payloads emitted BEFORE the discriminator landed
+    omit principal_kind. from_dict MUST default to "delegate"."""
+    payload = {
+        "delegate_id": str(uuid.uuid4()),
+        "sovereign_ref": "sov-1",
+        "role_binding_ref": "rb-1",
+        "genesis_ref": "g-1",
+        # No principal_kind key.
+    }
+    rebuilt = DelegateIdentity.from_dict(payload)
+    assert rebuilt.principal_kind == "delegate"
+
+
+def test_delegate_identity_from_dict_rejects_non_string_principal_kind() -> None:
+    payload = {
+        "delegate_id": str(uuid.uuid4()),
+        "sovereign_ref": "sov-1",
+        "role_binding_ref": "rb-1",
+        "genesis_ref": "g-1",
+        "principal_kind": 42,
+    }
+    with pytest.raises(TypeError, match="principal_kind"):
+        DelegateIdentity.from_dict(payload)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Role.permitted_principal_kinds (#1143 §10 G1)
+# ---------------------------------------------------------------------------
+
+
+def test_role_default_permitted_principal_kinds_is_all_kinds() -> None:
+    """Backwards-compat default: roles defined without an explicit
+    permitted_principal_kinds permit ALL kinds. Existing call sites
+    continue to work without changes."""
+    role = _make_role()
+    assert role.permitted_principal_kinds == frozenset(
+        {"sovereign", "service_account", "delegate"}
+    )
+
+
+def test_role_accepts_explicit_permitted_principal_kinds() -> None:
+    role = _make_role(permitted_principal_kinds=frozenset({"sovereign"}))
+    assert role.permitted_principal_kinds == frozenset({"sovereign"})
+
+
+def test_role_coerces_iterable_permitted_principal_kinds_to_frozenset() -> None:
+    """Ergonomic coercion: a plain set / tuple is accepted and frozen
+    at __post_init__ so the role's permitted set is immutable."""
+    role = _make_role(
+        permitted_principal_kinds={"sovereign", "service_account"},  # plain set
+    )
+    assert isinstance(role.permitted_principal_kinds, frozenset)
+    assert role.permitted_principal_kinds == frozenset({"sovereign", "service_account"})
+
+
+def test_role_rejects_empty_permitted_principal_kinds() -> None:
+    """An empty permitted set is structurally unreachable -- no identity
+    can satisfy it. Reject loudly at construction."""
+    with pytest.raises(ValueError, match="non-empty"):
+        _make_role(permitted_principal_kinds=frozenset())
+
+
+def test_role_rejects_invalid_permitted_principal_kinds() -> None:
+    with pytest.raises(ValueError, match="invalid entries"):
+        _make_role(permitted_principal_kinds=frozenset({"sovereign", "operator"}))

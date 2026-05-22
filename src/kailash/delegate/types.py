@@ -41,12 +41,51 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Literal, get_args
 
 from kailash.trust._locking import validate_id as _validate_id
 from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# PrincipalKind discriminator (#1143 §10 G1)
+# ---------------------------------------------------------------------------
+#
+# A Delegate acts through a scoped service-account principal distinct from
+# the sovereign (human) principal the Delegate acts for. §10 G1 of the
+# Terrene Delegate Specification mandates that the runtime MUST reject any
+# Connector binding where these principals collapse — impersonation breaks
+# the Genesis-to-Delegation attribution chain.
+#
+# ``PrincipalKind`` discriminates the THREE legitimate principal types:
+#
+# - ``"sovereign"`` — the human authority the Delegate ultimately acts for
+#   (the natural-person sovereign at the root of the Genesis chain).
+# - ``"service_account"`` — the scoped, non-human principal a Connector
+#   provisions to mediate a specific external surface (e.g. an HTTP API
+#   service account, a queue producer account).
+# - ``"delegate"`` — the default for a Delegate-bound identity that does
+#   NOT terminate at a Connector. Backwards-compatible default for existing
+#   call sites that construct identities without an explicit kind.
+#
+# The :class:`Role.permitted_principal_kinds` field restricts which kinds
+# may bind to a given Role; the :class:`DispatchSurface.__init__` gate
+# cross-validates the bound identity's ``principal_kind`` against the
+# role's permitted set and raises
+# :class:`kailash.delegate.dispatch.DispatchEnvelopeViolationError` on
+# mismatch. The same check re-fires at every ``execute()`` start per the
+# R2 composition re-validation pattern.
+PrincipalKind = Literal["sovereign", "service_account", "delegate"]
+
+#: Frozenset of every valid :data:`PrincipalKind` literal, derived
+#: structurally from the Literal at module-load. Used at runtime by
+#: :class:`Role.__post_init__` to validate ``permitted_principal_kinds``
+#: entries and by :class:`DelegateIdentity.__post_init__` to validate the
+#: ``principal_kind`` field. ``get_args(PrincipalKind)`` is the canonical
+#: structural enumeration — grep-stable, refactor-safe.
+_ALL_PRINCIPAL_KINDS: frozenset[str] = frozenset(get_args(PrincipalKind))
+
 
 __all__ = [
     "CapabilitySet",
@@ -55,6 +94,7 @@ __all__ = [
     "LifecycleError",
     "LifecycleState",
     "PrincipalDirectory",
+    "PrincipalKind",
     "Role",
     "RoleLifecycleState",
     "RoleScope",
@@ -203,12 +243,21 @@ class DelegateIdentity:
         genesis_ref: Reference to the genesis record that roots this
             Delegate's authority chain. EAGER REQUIRED — empty string
             rejected.
+        principal_kind: The :data:`PrincipalKind` discriminator (#1143 §10
+            G1). One of ``"sovereign"``, ``"service_account"``,
+            ``"delegate"``. Defaults to ``"delegate"`` for backwards
+            compatibility with existing call sites that pre-date the
+            discriminator. :class:`DispatchSurface.__init__` cross-validates
+            this against :attr:`Role.permitted_principal_kinds` and raises
+            :class:`~kailash.delegate.dispatch.DispatchEnvelopeViolationError`
+            on mismatch.
     """
 
     delegate_id: uuid.UUID
     sovereign_ref: str
     role_binding_ref: str
     genesis_ref: str
+    principal_kind: PrincipalKind = "delegate"
 
     def __post_init__(self) -> None:
         if not isinstance(self.delegate_id, uuid.UUID):
@@ -227,6 +276,20 @@ class DelegateIdentity:
             )
         if not self.genesis_ref:
             raise ValueError("DelegateIdentity.genesis_ref MUST be a non-empty string")
+        # #1143 §10 G1 — principal_kind MUST be one of the declared
+        # Literal values. We validate at runtime because Python's static
+        # Literal check is type-checker-only; a downstream caller passing
+        # an arbitrary string would otherwise silently corrupt the
+        # discriminator. Validation against ``_ALL_PRINCIPAL_KINDS``
+        # (derived structurally from ``get_args(PrincipalKind)``) keeps
+        # the source of truth single — the Literal alias.
+        if self.principal_kind not in _ALL_PRINCIPAL_KINDS:
+            raise ValueError(
+                f"DelegateIdentity.principal_kind MUST be one of "
+                f"{sorted(_ALL_PRINCIPAL_KINDS)!r}; got "
+                f"{self.principal_kind!r} (#1143 §10 G1 — principal-kind "
+                "discriminator)"
+            )
         # B3 (Round 2 sec M-1): path-traversal / null-byte / unsafe-char
         # rejection on every externally-sourced ref string. Per
         # trust-plane-security.md MUST Rule 2 the canonical helper is
@@ -263,6 +326,7 @@ class DelegateIdentity:
             "sovereign_ref": self.sovereign_ref,
             "role_binding_ref": self.role_binding_ref,
             "genesis_ref": self.genesis_ref,
+            "principal_kind": self.principal_kind,
         }
 
     @classmethod
@@ -329,11 +393,24 @@ class DelegateIdentity:
                     f"DelegateIdentity.from_dict: {field_name} MUST be a str; "
                     f"got {type(payload[field_name]).__name__}"
                 )
+        # #1143 §10 G1 — principal_kind round-trip. The field is OPTIONAL
+        # in the wire payload (back-compat with payloads emitted before
+        # the discriminator landed); when absent we default to "delegate"
+        # (matching the dataclass default). When present, it MUST be a
+        # str — __post_init__ enforces value validity against the
+        # Literal alias.
+        principal_kind_raw = payload.get("principal_kind", "delegate")
+        if not isinstance(principal_kind_raw, str):
+            raise TypeError(
+                "DelegateIdentity.from_dict: principal_kind MUST be a str; "
+                f"got {type(principal_kind_raw).__name__}"
+            )
         return cls(
             delegate_id=delegate_id,
             sovereign_ref=payload["sovereign_ref"],
             role_binding_ref=payload["role_binding_ref"],
             genesis_ref=payload["genesis_ref"],
+            principal_kind=principal_kind_raw,  # type: ignore[arg-type]
         )
 
 
@@ -438,6 +515,17 @@ class Role:
         display_name: Human-readable display name. Empty string rejected.
         scope: The :class:`RoleScope` — domain + capabilities (both axes).
         lifecycle: The :class:`RoleLifecycleState` this role is in.
+        permitted_principal_kinds: Frozenset of :data:`PrincipalKind`
+            literals this role permits an :class:`DelegateIdentity` to
+            bind under (#1143 §10 G1). Defaults to ALL kinds
+            (``frozenset({"sovereign", "service_account", "delegate"})``)
+            for backwards compatibility with roles defined before the
+            discriminator landed. :class:`DispatchSurface.__init__`
+            cross-validates ``identity.principal_kind in
+            role.permitted_principal_kinds`` at bind, and re-fires the
+            check at every ``execute()`` start per R2 composition
+            re-validation. Empty frozenset is REJECTED — a role that
+            permits no principal-kind is structurally unreachable.
 
     Deferred to S3 (#1035 follow-up): from_dict validating constructor
     closes the direct-dataclass-construction bypass; tracking via
@@ -448,6 +536,9 @@ class Role:
     display_name: str
     scope: RoleScope
     lifecycle: RoleLifecycleState
+    permitted_principal_kinds: frozenset[PrincipalKind] = field(
+        default_factory=lambda: frozenset(_ALL_PRINCIPAL_KINDS)  # type: ignore[arg-type]
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.role_id, uuid.UUID):
@@ -465,6 +556,44 @@ class Role:
             raise TypeError(
                 "Role.lifecycle MUST be a RoleLifecycleState; got "
                 f"{type(self.lifecycle).__name__}"
+            )
+        # #1143 §10 G1 — permitted_principal_kinds discipline. Accept
+        # any iterable for ergonomic callers (a plain ``set`` or ``tuple``
+        # converts cleanly) but coerce to ``frozenset`` for immutability
+        # so the role's permitted set cannot be mutated post-bind.
+        if not isinstance(self.permitted_principal_kinds, frozenset):
+            try:
+                object.__setattr__(
+                    self,
+                    "permitted_principal_kinds",
+                    frozenset(self.permitted_principal_kinds),
+                )
+            except TypeError as exc:
+                raise TypeError(
+                    "Role.permitted_principal_kinds MUST be a frozenset (or "
+                    "iterable coercible to one) of PrincipalKind literals; "
+                    f"got {type(self.permitted_principal_kinds).__name__}"
+                ) from exc
+        # Empty set is structurally unreachable — a role that permits no
+        # principal-kind cannot ever be bound. Reject loudly so the
+        # misconfiguration surfaces at construction, not at dispatch.
+        if not self.permitted_principal_kinds:
+            raise ValueError(
+                "Role.permitted_principal_kinds MUST be non-empty; an empty "
+                "permitted set is structurally unreachable (no identity can "
+                "satisfy it). Use the default (all kinds) for unrestricted "
+                "roles."
+            )
+        # Each entry MUST be a valid PrincipalKind literal — the same
+        # Literal-derived allowlist DelegateIdentity validates against.
+        invalid = {
+            k for k in self.permitted_principal_kinds if k not in _ALL_PRINCIPAL_KINDS
+        }
+        if invalid:
+            raise ValueError(
+                f"Role.permitted_principal_kinds contains invalid entries "
+                f"{sorted(invalid)!r}; valid kinds are "
+                f"{sorted(_ALL_PRINCIPAL_KINDS)!r} (#1143 §10 G1)"
             )
 
 

@@ -46,20 +46,6 @@ from kailash.delegate.dispatch import (
     DispatchValidationError,
     SignatureContract,
 )
-
-
-# ---------------------------------------------------------------------------
-# Deterministic test signer — produces a 128-char lowercase hex string from
-# the canonical-bytes input. SHA-256 doubled to 128 chars satisfies the
-# audit-engine's _validate_hex(expected_len=128) contract.
-# ---------------------------------------------------------------------------
-
-
-def _test_signer(canonical_bytes: bytes) -> str:
-    h = hashlib.sha256(canonical_bytes).hexdigest()
-    return h + h  # 128-char lowercase hex
-
-
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import (
     CascadeTenantViolationError,
@@ -76,6 +62,18 @@ from kailash.delegate.types import (
 )
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
+
+# ---------------------------------------------------------------------------
+# Deterministic test signer — produces a 128-char lowercase hex string from
+# the canonical-bytes input. SHA-256 doubled to 128 chars satisfies the
+# audit-engine's _validate_hex(expected_len=128) contract.
+# ---------------------------------------------------------------------------
+
+
+def _test_signer(canonical_bytes: bytes) -> str:
+    h = hashlib.sha256(canonical_bytes).hexdigest()
+    return h + h  # 128-char lowercase hex
+
 
 # ---------------------------------------------------------------------------
 # Fixture helpers — keep tests focused on behavior under test
@@ -95,12 +93,13 @@ def _build_chain(agent_id: str = "agent-s5") -> TrustLineageChain:
     )
 
 
-def _build_identity() -> DelegateIdentity:
+def _build_identity(*, principal_kind: str = "delegate") -> DelegateIdentity:
     return DelegateIdentity(
         delegate_id=uuid.uuid4(),
         sovereign_ref="sov-s5",
         role_binding_ref="rb-s5",
         genesis_ref="g-agent-s5",
+        principal_kind=principal_kind,  # type: ignore[arg-type]
     )
 
 
@@ -126,16 +125,20 @@ def _build_role(
     *,
     lifecycle: RoleLifecycleState = RoleLifecycleState.ACTIVE,
     capabilities: tuple[str, ...] = ("http.read", "http.write"),
+    permitted_principal_kinds: frozenset[str] | None = None,
 ) -> Role:
-    return Role(
-        role_id=uuid.uuid4(),
-        display_name="test-role",
-        scope=RoleScope(
+    kwargs: dict[str, object] = {
+        "role_id": uuid.uuid4(),
+        "display_name": "test-role",
+        "scope": RoleScope(
             domain="finance",
             capabilities=CapabilitySet(capabilities=capabilities),
         ),
-        lifecycle=lifecycle,
-    )
+        "lifecycle": lifecycle,
+    }
+    if permitted_principal_kinds is not None:
+        kwargs["permitted_principal_kinds"] = permitted_principal_kinds
+    return Role(**kwargs)  # type: ignore[arg-type]
 
 
 def _build_cascade(*, tenant_id: str | None = "tenant-a") -> TenantScopedCascade:
@@ -1053,3 +1056,95 @@ def test_dispatch_signer_error_is_value_error() -> None:
     err = DispatchSignerError("test")
     assert isinstance(err, ValueError)
     assert isinstance(err, DispatchSignerError)
+
+
+# ---------------------------------------------------------------------------
+# #1143 §10 G1 — principal-kind discriminator dispatch gate
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_service_account_on_sovereign_only_role() -> None:
+    """#1143 §10 G1 — DispatchSurface.__init__ MUST refuse a
+    service_account-kind identity binding to a role whose
+    permitted_principal_kinds = frozenset({"sovereign"}).
+    """
+    sovereign_only_role = _build_role(
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    service_account_identity = _build_identity(principal_kind="service_account")
+    with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
+        _make_surface(role=sovereign_only_role, identity=service_account_identity)
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_delegate_on_sovereign_only_role() -> None:
+    """Mirror case: the default delegate kind ALSO refuses against a
+    sovereign-only role. The discriminator is exact; default kinds get
+    no implicit pass."""
+    sovereign_only_role = _build_role(
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    delegate_identity = _build_identity(principal_kind="delegate")
+    with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
+        _make_surface(role=sovereign_only_role, identity=delegate_identity)
+
+
+@pytest.mark.unit
+def test_dispatch_surface_allows_sovereign_on_sovereign_only_role() -> None:
+    """Happy path: a sovereign-kind identity binds to a sovereign-only
+    role without raising."""
+    sovereign_only_role = _build_role(
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    sovereign_identity = _build_identity(principal_kind="sovereign")
+    surface = _make_surface(role=sovereign_only_role, identity=sovereign_identity)
+    assert surface.identity.principal_kind == "sovereign"
+
+
+@pytest.mark.unit
+def test_dispatch_surface_default_permitted_set_allows_all_kinds() -> None:
+    """Backwards-compat: roles defined without explicit
+    permitted_principal_kinds permit every kind, so existing call sites
+    continue to bind cleanly."""
+    default_role = _build_role()  # default permitted = all kinds
+    for kind in ("sovereign", "service_account", "delegate"):
+        ident = _build_identity(principal_kind=kind)
+        surface = _make_surface(role=default_role, identity=ident)
+        assert surface.identity.principal_kind == kind
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_principal_kind_before_capability_check() -> None:
+    """Ordering: principal_kind mismatch fires BEFORE capability
+    mismatch. When a role has neither the right kind nor the right
+    capabilities, the kind error surfaces (the more fundamental refusal).
+    """
+    role = _build_role(
+        capabilities=("unrelated.cap",),  # connector requires http.read
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    service_account_identity = _build_identity(principal_kind="service_account")
+    with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
+        _make_surface(role=role, identity=service_account_identity)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_principal_kind_re_check_at_dispatch_time() -> None:
+    """F5 / R2 defense-in-depth: the principal_kind check re-fires at
+    every dispatch() start. If the role's permitted set were swapped
+    after bind (object.__setattr__ bypass), the re-check refuses the
+    invocation.
+    """
+    # Bind with an all-kinds role (the default), then swap the role's
+    # permitted set to sovereign-only via object.__setattr__ to simulate
+    # post-bind tightening.
+    surface = _make_surface(
+        identity=_build_identity(principal_kind="service_account"),
+    )
+    object.__setattr__(
+        surface.role, "permitted_principal_kinds", frozenset({"sovereign"})
+    )
+    with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
+        await surface.dispatch({"user_id": "u-1"})
