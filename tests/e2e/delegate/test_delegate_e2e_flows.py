@@ -68,10 +68,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from kailash.delegate.audit import (
-    AuditChainEngine,
-    DelegateEventType,
-)
+from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.conformance.schema import (
     ConformanceVectorLoader,
     receipts_agree_dict,
@@ -101,9 +98,9 @@ from kailash.delegate.types import (
     RoleLifecycleState,
     RoleScope,
 )
+from kailash.trust._json import canonical_json_dumps
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
-
 
 # ---------------------------------------------------------------------------
 # Real-substrate builders (no mocks). Protocol-satisfying connectors and
@@ -568,3 +565,97 @@ async def test_e2e_flow_g_receipts_agree_dict_identity_on_runtime_output() -> No
     report = receipts_agree_dict(serialized, serialized)
     assert report.agree is True
     assert report.mismatches == ()
+
+
+# ---------------------------------------------------------------------------
+# D2 (#1149) — Audit chain hash linkage E2E replay
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_audit_chain_replay_verifies_hash_linkage() -> None:
+    """After Flow A executes, walk the audit chain via ``previous_hash`` links
+    and verify each entry's ``previous_hash`` matches
+    ``sha256(canonical_json(prior_entry.to_canonical_dict()))``. Confirms
+    chain integrity end-to-end.
+
+    Acceptance (verbatim from issue #1149):
+
+    * After successful Flow A ``execute()``, retrieve full audit chain from
+      ``audit_engine``.
+    * Walk chain: for each entry at sequence N≥1, verify
+      ``entry.previous_hash == sha256(canonical_json(prior_entry.to_canonical_dict))``.
+    * Verify chain length matches expected TAOD transition count
+      (5 for happy path: THINKING + ACTING + dispatch-side-effect +
+      OBSERVING + COMPLETED).
+
+    Genesis (sequence 0) MUST carry ``previous_hash == ""`` per
+    :class:`AuditChainEntry` post-init contract; this is the chain root
+    invariant.
+    """
+    runtime, _surface, audit_engine, _chain, _connector = _build_stack()
+
+    result = await runtime.execute({"id": "audit-replay-1"})
+    assert result.taod_state.phase == "completed"
+
+    entries = list(audit_engine.entries)
+
+    # Expected chain length matches Flow A happy-path TAOD cardinality:
+    # 4 runtime transitions (THINKING → ACTING → OBSERVING → COMPLETED) +
+    # 1 dispatch-relay side-effect entry = 5 total.
+    assert len(entries) == 5, (
+        f"audit chain length {len(entries)} != expected 5; "
+        f"Flow A happy-path emits 4 runtime transitions + 1 dispatch side-effect"
+    )
+
+    # Genesis (sequence 0) — previous_hash MUST be empty string per the
+    # AuditChainEntry post-init contract; this is the chain root invariant.
+    assert entries[0].sequence == 0
+    assert (
+        entries[0].previous_hash == ""
+    ), "genesis entry previous_hash MUST be empty string (chain root)"
+
+    # Walk the chain: for each entry at sequence N≥1, recompute the expected
+    # previous_hash from the prior entry's canonical-JSON SHA-256 and assert
+    # byte-equality with the stored field. The hashing formula MUST mirror
+    # AuditChainEngine._compute_previous_hash exactly:
+    #   sha256(canonical_json_dumps(prior.to_canonical_dict()).encode("utf-8")).hexdigest()
+    for n in range(1, len(entries)):
+        prior = entries[n - 1]
+        current = entries[n]
+
+        # Monotonic sequence — each entry's sequence is exactly +1 of the
+        # prior. This is a structural-integrity invariant on top of the
+        # hash-linkage check (catches gap-insertion attacks the hash alone
+        # cannot detect at this layer).
+        assert current.sequence == prior.sequence + 1, (
+            f"sequence not monotonic at index {n}: "
+            f"prior.sequence={prior.sequence}, current.sequence={current.sequence}"
+        )
+
+        expected_previous_hash = hashlib.sha256(
+            canonical_json_dumps(prior.to_canonical_dict()).encode("utf-8")
+        ).hexdigest()
+
+        assert current.previous_hash == expected_previous_hash, (
+            f"chain integrity broken at sequence {current.sequence}: "
+            f"stored previous_hash={current.previous_hash!r} != "
+            f"expected={expected_previous_hash!r} "
+            f"(sha256(canonical_json(prior.to_canonical_dict())))"
+        )
+
+    # Cross-check: the engine's head_hash MUST equal SHA-256 of the canonical
+    # JSON of the tail entry. This validates the engine-level hash anchor
+    # cross-SDK verifiers consume aligns with the per-entry chain.
+    tail = entries[-1]
+    expected_head = hashlib.sha256(
+        canonical_json_dumps(tail.to_canonical_dict()).encode("utf-8")
+    ).hexdigest()
+    assert audit_engine.head_hash() == expected_head, (
+        f"audit_engine.head_hash() {audit_engine.head_hash()!r} != "
+        f"sha256(canonical_json(tail.to_canonical_dict())) {expected_head!r}"
+    )
+
+    # The result's audit_head_hash field MUST also match (Flow A invariant 4).
+    assert result.audit_head_hash == expected_head
