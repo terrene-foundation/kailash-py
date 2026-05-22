@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.24.0"
+version = "2.24.1"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -26,18 +26,27 @@ dependencies = [
     # ─────────────────────────────────────────────────────────────
     # Slim core — only the deps required to `import kailash` and use
     # the workflow primitives (Workflow, WorkflowBuilder, LocalRuntime,
-    # Node, NodeMetadata, NodeParameter). Everything else is opt-in via
-    # extras. See `pip install kailash[server,db-postgres,...]`.
+    # Node, NodeMetadata, NodeParameter) PLUS the kailash.delegate
+    # composition primitive (added in 2.24.0). Everything else is
+    # opt-in via extras. See `pip install kailash[server,db-postgres,...]`.
     #
-    # Audit reference: issue #890. Confirmed by AST closure walk from
-    # `src/kailash/__init__.py` (only 4 eager modules: nodes/base.py,
-    # runtime/local.py, workflow/{builder,graph}.py). Every dep below
-    # has at least one module-scope import in that closure.
+    # Audit reference: issue #890 (pre-Delegate slim-core baseline) +
+    # 2.24.1 hotfix (added filelock for delegate.types → trust._locking →
+    # filelock eager chain — `kailash.trust._locking::validate_id` is
+    # the canonical path-traversal guard mandated by
+    # `trust-plane-security.md` Rule 2, so refactoring delegate.types
+    # to bypass _locking is BLOCKED). Every dep below has at least one
+    # module-scope import in that closure.
     # ─────────────────────────────────────────────────────────────
     "jsonschema>=4.24.0",   # workflow/contracts.py:21 (Draft7Validator)
     "pydantic>=2.6",        # nodes/base.py:37, workflow/graph.py:12 (BaseModel)
     "pyyaml>=6.0",          # workflow/graph.py:11 (workflow serialization)
     "click>=8.0",           # backs `[project.scripts] kailash = ...` console entry
+    "filelock>=3.0",        # trust/_locking.py:38 (FileLock, Timeout) — eagerly
+                            # imported by kailash.delegate.types via
+                            # `from kailash.trust._locking import validate_id`
+                            # (2.24.0+). Duplicates declaration in [trust] extra
+                            # so `pip install kailash` resolves delegate cleanly.
 ]
 
 [project.optional-dependencies]
