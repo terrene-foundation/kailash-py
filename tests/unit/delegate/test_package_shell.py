@@ -29,10 +29,10 @@ def test_kailash_delegate_imports_cleanly() -> None:
     mode this assertion catches."""
     import kailash.delegate as pkg
 
-    assert len(pkg.__all__) == 40, (
-        "kailash.delegate.__all__ count drifted; S6 ships 40 symbols "
+    assert len(pkg.__all__) == 47, (
+        "kailash.delegate.__all__ count drifted; S7 ships 47 symbols "
         "(S2: 11 + S3 trust cascade: 5 + S4 audit chain: 7 + S5 dispatch: 7 "
-        "+ S6 runtime spine: 10). "
+        "+ S6 runtime spine: 10 + S7 conformance schema: 7). "
         "If a later shard added a symbol, update this count in the same commit "
         f"per orphan-detection.md Rule 6a. Got: {pkg.__all__!r}"
     )
@@ -43,12 +43,22 @@ def test_kailash_delegate_imports_cleanly() -> None:
 
 
 def test_kailash_delegate_conformance_imports_cleanly() -> None:
+    """S7 (#1035) populates the conformance subpackage with the 15-symbol
+    behavioural-only schema vendored from rs kailash-delegate-conformance
+    per cross-sdk-inspection.md Rule 4a. Empty was the S1 baseline; this
+    assertion locks the S7+ public surface count + eager-import contract."""
     import kailash.delegate.conformance as conformance
 
-    assert conformance.__all__ == [], (
-        "Conformance subpackage public surface is empty in S1. "
-        f"Got: {conformance.__all__!r}"
+    assert len(conformance.__all__) == 15, (
+        "kailash.delegate.conformance.__all__ count drifted; S7 ships 15 "
+        f"symbols. Got {len(conformance.__all__)}: {conformance.__all__!r}"
     )
+    # Every entry MUST resolve to a real attribute on the subpackage
+    # (eager-import contract from orphan-detection.md Rule 6).
+    for name in conformance.__all__:
+        assert hasattr(
+            conformance, name
+        ), f"conformance.__all__ entry {name!r} not on subpackage"
 
 
 def test_lint_script_exists_and_is_executable() -> None:

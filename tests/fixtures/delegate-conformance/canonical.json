@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "digest": "770d539ea2f1bee5922447f7a5c85c3be1e1e7009a04bff30393353223e5a432",
+  "_doc": "Canonical OSS conformance vectors for kailash.delegate (#1035 S7). Vendored from rs kailash-delegate-conformance per cross-sdk-inspection.md Rule 4a. Behavioural-only -- vectors assert spec-section-numbered behaviours from BehaviouralOutcome's CLOSED taxonomy. Edit + regenerate digest via canonical_vector_set_digest() (the loader's integrity check raises ConformanceVectorIntegrityError on stale digest).",
+  "vectors": [
+    {
+      "id": "DV-3-001",
+      "spec_anchor": "3",
+      "given": "Genesis Record G constructs a Delegate with envelope E0; a downstream TenantScopedCascade grant attempts to widen E0's Financial dimension in the same lifecycle",
+      "behaviour": "the runtime MUST reject the cascade -- R2 composition validates that (envelope, cascade, dispatch_surface) form a consistent triplet; widening violates monotonic-tightening in a single lifecycle",
+      "expected": "Reject"
+    },
+    {
+      "id": "DV-5-001",
+      "spec_anchor": "5",
+      "given": "Genesis Record G authorizes a Delegate, and a Delegation D from that Delegate widens the Financial dimension of its constraint envelope relative to G",
+      "behaviour": "the runtime MUST reject Delegation D -- a delegated constraint envelope may only tighten, never widen, a PACT dimension within a single lifecycle; widening requires a new Genesis Record",
+      "expected": "Reject"
+    },
+    {
+      "id": "DV-7-001",
+      "spec_anchor": "7",
+      "given": "A DelegateRuntime executes a happy path through the TAOD lifecycle reaching COMPLETED, then a caller attempts to invoke execute() again on the same terminal runtime",
+      "behaviour": "the runtime MUST reject the second execute() -- TAOD transitions are append-only; once COMPLETED or FAILED, no further phase transitions are accepted (RuntimePhaseError)",
+      "expected": "Reject"
+    },
+    {
+      "id": "DV-9-001",
+      "spec_anchor": "9",
+      "given": "A successful Delegate execution produces an AuditChainEngine head hash; a replay constructed from the persisted audit entries via from_dict() round-trips and re-validates the chain head hash",
+      "behaviour": "the runtime MUST accept the replay -- audit chain entries are deterministic, signature-verified, and the head hash is byte-shape-stable across to_dict()/from_dict() round-trips",
+      "expected": "Accept"
+    },
+    {
+      "id": "DV-10-001",
+      "spec_anchor": "10",
+      "given": "a Connector provisions a service account whose principal is identical to the sovereign (human) principal the Delegate acts for",
+      "behaviour": "the runtime MUST reject the Connector binding -- a Delegate acts through a scoped service-account principal distinct from the sovereign principal; an identical principal is impersonation, which collapses the Genesis-to-Delegation attribution chain",
+      "expected": "Reject"
+    }
+  ]
+}
