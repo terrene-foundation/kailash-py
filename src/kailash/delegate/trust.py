@@ -4,8 +4,7 @@
 """Trust-cascade composition layer for ``kailash.delegate`` (S3 of #1035).
 
 Mirrors the kailash-rs ``kailash-delegate-trust`` crate's M3-01 + M3-02
-shipped surface (see ``workspaces/issue-1035-delegate-py/01-analysis/
-02-kailash-rs-reference-extraction.md`` § trust-cascade):
+shipped surface (issue #1035 § trust-cascade):
 
 - :class:`TenantScope` — typed 2-variant tagged union mirroring rs
   ``TenantScope`` (``cascade.rs:101-149``). Either :class:`TenantScope.global_`
@@ -531,8 +530,8 @@ class GrantMoment:
     CROSS-SDK note (B7): py ``GrantMoment`` is a flat record; rs
     ``GrantMoment::issue`` walks a ``DelegationChain`` substrate that py
     does not yet expose. The py contract is structurally reduced — chain
-    composition lands in a separate workstream (see brief
-    ``workspaces/kailash-trust-chain-crypto-expansion/``).
+    composition lands in a separate workstream tracked against issue
+    #1035.
     """
 
     cascade_id: uuid.UUID
