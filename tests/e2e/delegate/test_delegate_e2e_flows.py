@@ -783,6 +783,38 @@ async def test_dv_5_001_runtime_output_matches_vendored_rs_canonical() -> None:
         f"widening; cross-SDK error parity expects the widening reason"
     )
 
+    # Cascade-layer exercise: per issue #1150 acceptance ("Execute runtime;
+    # capture RuntimeExecutionResult"), the rejection MUST propagate through
+    # the cascade layer the runtime delegates into. TenantScopedCascade.
+    # cascade_child at src/kailash/delegate/trust.py:454-459 invokes the
+    # same F5 monotonicity gate via parent.tighten_with(child); the runtime
+    # propagates EnvelopeWideningError verbatim per the docstring §389. This
+    # closes the reviewer F1 (HIGH) finding: the envelope-method exercise
+    # above + the cascade-layer exercise below jointly cover the layers
+    # DV-5-001's "the runtime MUST reject Delegation D" applies to.
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-e2e"))
+    parent_identity = _build_identity()
+    child_identity = _build_identity()
+    role_scope = RoleScope(
+        domain="finance",
+        capabilities=CapabilitySet(capabilities=("http.read",)),
+    )
+    child_widening_envelope = DelegateConstraintEnvelope(
+        inner=ConstraintEnvelope(financial=FinancialConstraint(budget_limit=5000.0)),
+        genesis_id=parent_envelope.genesis_id,
+    )
+    with pytest.raises(EnvelopeWideningError):
+        cascade.cascade_child(
+            parent_envelope,
+            child_widening_envelope,
+            parent_identity=parent_identity,
+            child_identity=child_identity,
+            parent_scope=role_scope,
+            child_scope=role_scope,
+            child_tenant=TenantScope.for_tenant("tenant-e2e"),
+            grant_proof="a" * 128,
+        )
+
     # XFAIL signal (the reason we cannot complete receipts_agree here):
     # The above structural assertion proves the runtime DOES reject
     # Delegation D as DV-5-001 specifies. What we CANNOT do — and what the
