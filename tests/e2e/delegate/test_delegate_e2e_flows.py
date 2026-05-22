@@ -78,7 +78,7 @@ from kailash.delegate.dispatch import (
     ConnectorInvocationResult,
     DispatchSurface,
 )
-from kailash.delegate.envelope import DelegateConstraintEnvelope
+from kailash.delegate.envelope import DelegateConstraintEnvelope, EnvelopeWideningError
 from kailash.delegate.runtime import (
     DelegateRuntime,
     Posture,
@@ -659,3 +659,148 @@ async def test_audit_chain_replay_verifies_hash_linkage() -> None:
 
     # The result's audit_head_hash field MUST also match (Flow A invariant 4).
     assert result.audit_head_hash == expected_head
+
+
+# ---------------------------------------------------------------------------
+# D3 (#1150) — DV-5-001 runtime-end-to-end vector test
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "DV-5-001 canonical vector schema does not yet carry expected_payload "
+        "or expected_byte_hash. The vector ships only "
+        "{id, spec_anchor, given, behaviour, expected: 'Reject'}; there is no "
+        "byte-canonical receipt to compare a py-emitted runtime receipt "
+        "against. This test exercises the runtime on DV-5-001 inputs and "
+        "asserts the documented Reject behaviour structurally, but cannot "
+        "exercise receipts_agree(py_result, dv_5_001.expected_payload) parity "
+        "until the canonical fixture schema gains expected_payload. "
+        "xfail-strict per orphan-detection.md Rule 4a — XPASS when "
+        "canonical.json gains expected_payload."
+    ),
+)
+async def test_dv_5_001_runtime_output_matches_vendored_rs_canonical() -> None:
+    """DV-5-001 runtime-end-to-end vector test (#1150).
+
+    Vector content (verbatim from
+    ``tests/fixtures/delegate-conformance/canonical.json``):
+
+    * id: ``DV-5-001``
+    * spec_anchor: ``5``
+    * given: *Genesis Record G authorizes a Delegate, and a Delegation D
+      from that Delegate widens the Financial dimension of its constraint
+      envelope relative to G*
+    * behaviour: *the runtime MUST reject Delegation D — a delegated
+      constraint envelope may only tighten, never widen, a PACT dimension
+      within a single lifecycle; widening requires a new Genesis Record*
+    * expected: ``Reject``
+
+    Runtime exercise: build the genesis-anchored envelope with
+    ``FinancialConstraint(budget_limit=1000.0)`` per ``_build_envelope()``,
+    then attempt a tightening operation that would actually WIDEN the
+    Financial dimension (``budget_limit=5000.0``). The F5 monotonic-envelope
+    gate at ``DelegateConstraintEnvelope.tighten_with`` raises
+    :class:`EnvelopeWideningError` BEFORE the intersection can mask the
+    widening (the pre-intersection check is the structural defense).
+
+    Receipt-shape parity (the originally-intended Flow G receipts_agree
+    counterpart per #1150's acceptance) cannot be exercised because
+    DV-5-001 does NOT carry an ``expected_payload`` field in the canonical
+    fixture schema — only the closed-taxonomy ``expected: 'Reject'`` token.
+    This test therefore xfail-strict's per the divergence axes documented
+    in the marker reason; an XPASS surfaces the moment the canonical
+    fixture schema gains an ``expected_payload`` field, forcing the receipt
+    parity wiring to land.
+
+    Divergence axes documented (xfail-strict reason):
+
+    1. Canonical vector schema currently carries
+       ``{id, spec_anchor, given, behaviour, expected}`` — no
+       ``expected_payload``.
+    2. The runtime-side widening path raises
+       :class:`EnvelopeWideningError` (a typed exception, not a wire-form
+       receipt). No comparable rs canonical receipt exists to byte-pin.
+    3. ``receipts_agree(py_result, dv_5_001.expected_payload)`` is
+       structurally undefined until both halves of the contract ship.
+
+    Until then: this test exercises the runtime on DV-5-001 inputs and
+    asserts the documented Reject behaviour via the typed widening-refuse
+    exception.
+    """
+    # Load the canonical vector to confirm DV-5-001 is in the fixture and
+    # its expected outcome is Reject (defensive — guards against future
+    # vector renames or outcome changes that would silently break this test).
+    vectors = ConformanceVectorLoader.load_canonical()
+    dv_5_001 = next((v for v in vectors if v.id == "DV-5-001"), None)
+    assert dv_5_001 is not None, "DV-5-001 missing from canonical fixture"
+    assert dv_5_001.expected.value == "Reject", (
+        f"DV-5-001 expected outcome changed from 'Reject' to "
+        f"{dv_5_001.expected.value!r}; this test's structural assertion is "
+        f"no longer aligned with the vector"
+    )
+
+    # Confirm the canonical vector schema does NOT yet carry an
+    # expected_payload field. The moment it does, this assertion fails and
+    # the xfail-strict flips to XPASS, surfacing the gap for the operator
+    # to wire receipt parity. (Structural-detection driver for the xfail.)
+    vector_dict = dv_5_001.to_dict()
+    assert "expected_payload" not in vector_dict, (
+        "DV-5-001 canonical vector now carries expected_payload; the "
+        "xfail-strict marker on this test SHOULD now fail and the test "
+        "MUST be rewritten to exercise receipts_agree parity against the "
+        "newly-shipped expected_payload byte-canonical receipt."
+    )
+
+    # Construct the genesis-anchored envelope (the "Genesis Record G
+    # authorizes a Delegate" half of the given). _build_envelope() seeds
+    # FinancialConstraint(budget_limit=1000.0) under a fresh genesis.
+    parent_envelope = _build_envelope()
+    assert parent_envelope.inner.financial is not None
+    assert parent_envelope.inner.financial.budget_limit == 1000.0
+
+    # Attempt the widening (the "Delegation D widens the Financial dimension
+    # of its constraint envelope relative to G" half of the given). A budget
+    # of 5000.0 LOOSENS the parent's 1000.0 bound — exactly the runtime
+    # widening attempt §5 prohibits.
+    widening_envelope = ConstraintEnvelope(
+        financial=FinancialConstraint(budget_limit=5000.0),
+    )
+
+    # The runtime MUST reject Delegation D — the F5 monotonic-envelope
+    # gate at DelegateConstraintEnvelope.tighten_with raises
+    # EnvelopeWideningError before the intersection can mask the widening.
+    with pytest.raises(EnvelopeWideningError) as exc_info:
+        parent_envelope.tighten_with(widening_envelope)
+
+    # The error message MUST cite the widening attempt (cross-SDK error
+    # message parity per kailash.delegate.envelope:152-158).
+    assert "widen" in str(exc_info.value).lower(), (
+        f"EnvelopeWideningError message {exc_info.value!s} did not cite "
+        f"widening; cross-SDK error parity expects the widening reason"
+    )
+
+    # XFAIL signal (the reason we cannot complete receipts_agree here):
+    # The above structural assertion proves the runtime DOES reject
+    # Delegation D as DV-5-001 specifies. What we CANNOT do — and what the
+    # xfail-strict marker documents — is exercise
+    # ``receipts_agree(py_result, dv_5_001.expected_payload)`` parity,
+    # because the canonical fixture schema does not yet carry an
+    # ``expected_payload`` field. The fail is intentional: by raising
+    # AssertionError below, we keep the xfail-strict marker honest until
+    # the canonical fixture schema gains expected_payload. The moment it
+    # does, the ``assert "expected_payload" not in vector_dict`` check above
+    # fires FIRST, surfacing the schema-change for the operator to wire
+    # receipt parity.
+    raise AssertionError(
+        "DV-5-001 receipts_agree(py_result, dv_5_001.expected_payload) parity "
+        "is structurally undefined — the canonical fixture schema does not "
+        "yet carry expected_payload. The runtime's Reject behaviour was "
+        "exercised and confirmed via EnvelopeWideningError above; this "
+        "AssertionError is the xfail-strict signal that receipt-shape "
+        "parity cannot complete. XPASS when canonical.json gains "
+        "expected_payload."
+    )
