@@ -323,7 +323,7 @@ The Delegate primitive composes `(Connector x Signature x ConstraintEnvelope x E
 Structural invariants — re-validated on every dispatch + execute path:
 
 - **F5 monotonic envelope** — the bind-time envelope is the upper bound; runtime widening is BLOCKED, tightening is permitted.
-- **Capability gating** — `connector.requires_capabilities ⊆ role.scope.capabilities`, snapshot at bind AND re-checked at dispatch (S5 C4-1).
+- **Capability gating** — `connector.requires_capabilities ⊆ role.scope.capabilities`, snapshot at S5 `DispatchSurface` bind AND re-checked at S5 `dispatch()` entry per S5 C4-1; S6 `DelegateRuntime` delegates to S5.
 - **Lifecycle gating** — `RoleLifecycleState ∈ {DRAFT, ACTIVE}` permits invocation; `SUSPENDED` and `RETIRED` refuse.
 - **Tenant isolation** — `connector.tenant_id_observed` is cross-validated against the envelope's tenant scope; mismatch raises `CascadeTenantViolationError` and fails closed BEFORE the surface relays connector audit events.
 - **§7 TAOD phase monotonicity** — `DelegateRuntime` is single-shot per receipt; re-execute on a consumed runtime raises `RuntimePhaseError`.
@@ -348,6 +348,7 @@ Cross-implementation receipt evidence:
 
 - **Identity-cascade grantee registry persistence** — `TenantScopedCascade` is in-process and emits one `GrantMoment` per `cascade_child` call without retaining a grantee set. Durable registration is the caller's responsibility. The S5 dispatch validates against the S3 cascade contract, but the cascade itself is not durable.
 - **Cryptographic nonce validation** — `with_posture(nonce=...)` is **syntactic** (min-length 16 chars). Cryptographic single-use, signed-by-authority, and expiry checks live in SessionStart / S8+ nonce-registry integration — NOT in the primitive.
+- **Audit chain signature verification (forensic)** — `AuditChainEntry` stores per-event Ed25519 signatures, but the primitive does NOT bind signer keys to a public-key registry, fingerprint, or key-rotation epoch. A forensic investigator with only the chain bytes cannot verify signatures against an external attestation. Out-of-band identity-to-key binding is required; operators MUST provide their own attestation surface ([issue #1147](https://github.com/terrene-foundation/kailash-py/issues/1147)).
 - **Connector trust** — the `Connector` ABC is the untrust boundary. The primitive validates structural contracts but does NOT sandbox connector execution. Apache 2.0 OSS does not include a sandbox.
 
 ### How to verify on your machine
