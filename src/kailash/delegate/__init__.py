@@ -27,6 +27,15 @@ from kailash.delegate.audit import (
     DelegateEventType,
     WitnessedCrossAnchor,
 )
+from kailash.delegate.conformance.schema import (
+    ConformanceVector,
+    ConformanceVectorIntegrityError,
+    ConformanceVectorLoader,
+    ReceiptsAgreementError,
+    ReceiptsAgreeReport,
+    assert_receipts_agree,
+    receipts_agree,
+)
 from kailash.delegate.dispatch import (
     Connector,
     ConnectorInvocationResult,
@@ -120,4 +129,12 @@ __all__ = [
     "RuntimePostureBlockedError",
     "RuntimePhaseError",
     "R2CompositionError",
+    # Group 9 -- Conformance schema (S7 -- cross-SDK byte-shape contract)
+    "ConformanceVector",
+    "ConformanceVectorLoader",
+    "ReceiptsAgreeReport",
+    "receipts_agree",
+    "assert_receipts_agree",
+    "ConformanceVectorIntegrityError",
+    "ReceiptsAgreementError",
 ]
