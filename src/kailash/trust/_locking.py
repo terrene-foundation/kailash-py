@@ -35,8 +35,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Generator
 
-from filelock import FileLock, Timeout
-
+# NOTE: `filelock` is intentionally NOT imported at module scope. It lives in
+# the `[trust]` optional extra (pyproject.toml) and `file_lock()` is the only
+# consumer; importing it lazily inside the function body keeps `kailash.delegate`
+# slim-core installable without `filelock`. See issue #1154 + 2.25.1 release.
+# `validate_id` is the canonical path-traversal guard (`trust-plane-security.md`
+# Rule 2) reached from `kailash.delegate.types`; that import path MUST NOT
+# touch `filelock` at module load.
 from kailash.trust.exceptions import TrustError
 
 logger = logging.getLogger(__name__)
@@ -76,7 +81,18 @@ def file_lock(
         lock_path: Path to the lock file (created if absent)
         timeout: Maximum seconds to wait for the lock. 0 means block
             forever. Raises LockTimeoutError if exceeded.
+
+    Raises:
+        ImportError: If `filelock` is not installed. Install the trust extra:
+            `pip install kailash[trust]`. (Lazy-imported per issue #1154 so
+            slim-core delegate consumers do not pay for filelock.)
     """
+    # Lazy import — see module docstring + issue #1154. The slim-core delegate
+    # path reaches this module via `validate_id` only; importing `filelock` here
+    # (function-scope) ensures `from kailash.trust._locking import validate_id`
+    # does not eagerly load `filelock` on a bare `pip install kailash`.
+    from filelock import FileLock, Timeout
+
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock = FileLock(str(lock_path), timeout=timeout if timeout > 0 else -1)
     try:

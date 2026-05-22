@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.25.1] - 2026-05-23
+
+### Fixed
+
+- **Slim-core install budget — lazy-import `filelock` in `trust/_locking.py` (#1154)** — `kailash.trust._locking::file_lock()` is now the sole filelock consumer and lazy-imports `from filelock import FileLock, Timeout` inside the function body. This breaks the `kailash.delegate.types → kailash.trust._locking → filelock` eager-import chain that the 2.24.1 hotfix worked around by promoting `filelock>=3.0` into slim-core `[project.dependencies]`. With #1154 landed, `filelock>=3.0` is removed from slim-core and returned to the `[trust]` extra. `pip install kailash` (bare) no longer pulls filelock; `pip install kailash[trust]` continues to install it as before. `validate_id` is still the canonical path-traversal guard (`trust-plane-security.md` Rule 2). 3 regression tests pin the invariants: (a) `from kailash.trust._locking import validate_id` does not load filelock into `sys.modules`; (b) `import kailash.delegate.types` does not load filelock; (c) `file_lock(...)` still works end-to-end when filelock is installed.
+
+### Documentation
+
+- **CHANGELOG correction for v2.25.0** — the 2.25.0 entry has three inaccuracies in its prose (the shipped code IS correct; only the release notes mis-described it). For accurate reference:
+  - `PrincipalKind` is a `typing.Literal["sovereign", "service_account", "delegate"]` type alias — NOT a `Python Enum`.
+  - The valid `principal_kind` values are `"sovereign"`, `"service_account"`, `"delegate"` — NOT `"human"`, `"agent"`, `"service"`.
+  - H1 grantee-registry enforcement raises the **pre-existing** `DispatchCascadeViolationError` — no new `UnregisteredGranteeError` class was added. The H1 wave added `TenantScopedCascade.grantees` (property) and `TenantScopedCascade.register_root_grantee()` (method); the error class itself was already part of the public surface in 2.24.0.
+
+### Notes
+
+This is a structural follow-up patch closing #1154 (queued from 2.24.1 hotfix). The slim-core size budget is restored to its pre-2.24.0 baseline. No public API changes; all 2.25.0 functionality (PrincipalKind discrimination, grantee-registry enforcement, audit-chain E2E tests) ships unchanged.
+
 ## [2.25.0] - 2026-05-23
 
 ### Added
