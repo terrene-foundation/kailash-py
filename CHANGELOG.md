@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-05-22
+
+### Added
+
+- **`kailash.delegate` composition primitive — pre-pledge v0 (#1035)** — new public top-level module shipping the (Connector × Signature × ConstraintEnvelope × Executor) composition substrate under EATP audit. 8-shard build (S1-S8 over PRs #1130-#1144 + L1 cleanup #1145):
+  - **S1 fences** — module + `kailash.delegate` namespace, Apache-2.0 license declaration, zero-engine-deps pre-commit fence (#1130).
+  - **S2 + S2.5 canonical types** — substrate dataclasses, F5 type-state monotonic envelope (#1136 + #1131).
+  - **S3 trust cascade** — `TenantScopedCascade`, `GrantMoment`, signed cascade chain (#1137).
+  - **S4 audit chain** — `AuditChainEngine`, `WitnessedCrossAnchor`, signed audit row emission (#1137).
+  - **S5 dispatch + Connector ABC** — `Connector` abstract base, `DispatchSurface`, `DispatchResult`, capability snapshot at construction, strict-type guard, 32-depth + 1MiB payload limits (#1138).
+  - **S6 runtime spine** — `DelegateRuntime`, `TAODState`/`TAODTransition` (Think-Act-Observe-Decide lifecycle), `Posture` enum (L1-L5 + HALT) with rank ladder, `R2Composition` validator with `is`-identity checks, `RuntimeExecutionResult` with lossy `to_dict`/`from_dict` (commits `bdc89a9b4`, `5fcf935db`, `e9626a223` for S6 R1 audit-emit-before-state-advance + no-recurse `_advance_to_failed_no_audit` helper).
+  - **S7 conformance schema** — `ConformanceVector`, `ConformanceVectorLoader.load_canonical()` with SHA-256 integrity check, `ConformanceVectorIntegrityError` tamper detection, `ConformanceReceipt` with `to_dict`/`from_dict`, `receipts_agree(rs, py)` cross-impl comparator with timestamp-exclusion, `assert_receipts_agree()`. 5 canonical vectors at `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001). DV-5-001 + DV-10-001 vendored byte-for-byte from `terrene-foundation/kailash-rs` per cross-SDK fixture-vendoring discipline. §7 TAOD phase monotonicity enforced at runtime via `self._consumed` guard + try/finally (commit `d4ad6a9b3`).
+  - **S8 E2E + cross-impl receipts + pre-pledge README** — 8 end-to-end flows (Flow A happy path, B posture HALT, C tenant violation, C2 surface invariant, D signer failure no-recurse, E §7 single-shot, F ConformanceVectorLoader, G receipts_agree_dict identity); 3 Tier-2 cross-impl tests; README § "Delegate composition primitive — Pre-Pledge v0" disclosure enumerating 8 enforced invariants + 3 deferred items + 3 non-promises + how-to-verify + status.
+- **Holistic post-multi-wave /redteam** across all 8 shards on main caught 1 L1 (workspace-path-leakage scrub in module docstrings, PR #1145) + 5 cross-shard follow-ups filed as #1146-#1150 — none blocking v2.24.0.
+
+### Pre-Pledge v0 status
+
+`kailash.delegate` is shipped at pre-pledge v0 per the README disclosure section. Users may rely on the 8 enforced invariants (signed audit chain, capability snapshot at construction, posture ladder, single-shot §7 phase monotonicity, etc.) at this version. Three items remain explicitly deferred to a future minor: cross-SDK byte-determinism conformance for vectors DV-3/DV-7/DV-9 (py-leads at v2.24.0; rs leadership pending). Three explicit non-promises: no implicit retries, no shadow audit chains, no posture auto-upgrade. See README § "Delegate composition primitive — Pre-Pledge v0" for the full disclosure.
+
+### Notes
+
+This release ships a brand-new public top-level module (`kailash.delegate`), warranting SemVer minor. No breaking changes to existing public surfaces. The 6 holistic-/redteam follow-up issues (#1143, #1146-#1150) are tracked separately and will close as their respective fixes land in v2.24.x patches.
+
 ## [2.23.0] - 2026-05-19
 
 ### Changed
