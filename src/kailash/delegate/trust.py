@@ -304,7 +304,7 @@ class TenantScope:
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class TenantScopedCascade:
     """A delegation cascade scoped to a single :class:`TenantScope`.
 
@@ -323,11 +323,70 @@ class TenantScopedCascade:
        :meth:`DelegateConstraintEnvelope.tighten_with`, which carries the
        S2.5 pre-intersection widening check. Raises
        :class:`EnvelopeWideningError` on any dimension widening.
-    4. **Emit GrantMoment** — on success, return a fully-formed
-       :class:`GrantMoment` chain-of-custody record.
+    4. **Register child + emit GrantMoment** — on success, the child's
+       ``delegate_id`` is appended to the internal grantee registry AND a
+       fully-formed :class:`GrantMoment` chain-of-custody record is
+       returned.
 
     The cascade is bound to a single tenant at construction; cascading a
     cross-tenant child requires a NEW cascade for that tenant.
+
+    Grantee Registry (#1146 H1)
+    ---------------------------
+    The cascade carries an internal mutable set of authorized grantee
+    ``delegate_id``\\s exposed read-only via :attr:`grantees`. The registry
+    is populated by:
+
+    * :meth:`register_root_grantee` — explicit seeding of the root sovereign
+      who anchors the cascade; called by infrastructure at cascade-setup
+      time. The first identity authorized to dispatch under this cascade.
+    * :meth:`cascade_child` — on success (all 3 validation steps pass), both
+      ``parent_identity.delegate_id`` and ``child_identity.delegate_id`` are
+      registered as grantees BEFORE the :class:`GrantMoment` is emitted.
+
+    The registry is the structural anchor :class:`DispatchSurface` checks at
+    bind + dispatch time: a DispatchSurface constructed with an identity
+    whose ``delegate_id`` is not in ``cascade.grantees`` is refused with
+    :class:`DispatchCascadeViolationError`. This closes PR #1144 holistic
+    /redteam HIGH finding H1 — previously any caller with ANY
+    :class:`DelegateIdentity` and a tenant-matching cascade could construct
+    a DispatchSurface that audited as that identity; now only identities
+    that have been registered with this cascade (via
+    :meth:`register_root_grantee` or as a parent/child side-effect of a
+    successful :meth:`cascade_child` call) are admissible. Registration
+    is the structural gate; the cascade reference itself is the trust
+    authority for seeding (see trust-boundary note below + README #1147
+    disclosure for durable-attestation roadmap).
+
+    The internal set is mutable BUT carried via ``object.__setattr__`` so
+    the frozen-dataclass shape (equality, hashability, serialization) is
+    preserved. The :attr:`grantees` property returns a frozenset snapshot
+    suitable for read-only consumption (the snapshot itself cannot be
+    mutated to inject grantees back into the source).
+
+    **Trust boundary.** The cascade reference IS the trust authority. Any
+    caller holding a reference to this ``TenantScopedCascade`` is, by
+    construction, the operator who constructed it (or an heir of that
+    operator's authorization). Operators MUST scope cascade references
+    behind their own authorization gate — see README §"What the primitive
+    does NOT promise" → `issue #1147 <https://github.com/terrene-foundation/kailash-py/issues/1147>`_
+    for the durable-registry roadmap. The internal set is exposed under
+    Python's name-mangled attribute (``_TenantScopedCascade__grantees``)
+    rather than a single-underscore convention; the mangled form means
+    direct attribute access like ``cascade._grantees`` raises
+    ``AttributeError`` rather than silently leaking the mutable set.
+    Determined adversaries holding a cascade reference can still spell
+    the mangled form, but the spelling is loud and intentional — the
+    cascade reference is itself the authorization, so this matches the
+    documented trust boundary.
+
+    Note: this dataclass uses ``frozen=True`` but NOT ``slots=True`` (the
+    sibling S2/S3 dataclasses use both). ``slots=True`` reserves only the
+    declared fields, blocking ``object.__setattr__`` of the internal
+    grantee slot in ``__post_init__``. Dropping ``slots=True`` preserves
+    the frozen-equality contract (the wire-format contract is unchanged —
+    the grantee registry is internal state, not serialized) while
+    permitting the internal mutable set the H1 closure requires.
     """
 
     tenant: TenantScope
@@ -338,6 +397,70 @@ class TenantScopedCascade:
                 "TenantScopedCascade.tenant MUST be a TenantScope; got "
                 f"{type(self.tenant).__name__}"
             )
+        # #1146 H1 — internal mutable grantee registry. Frozen dataclass
+        # bypass via object.__setattr__ keeps the registry isolated from
+        # the frozen-shape contract (equality / hashability / wire format
+        # do not include the registry). The set is populated by
+        # register_root_grantee + cascade_child; external readers see a
+        # frozenset snapshot via the grantees property.
+        object.__setattr__(self, "_TenantScopedCascade__grantees", set())
+
+    @property
+    def grantees(self) -> frozenset[uuid.UUID]:
+        """Borrow the current grantee registry as a read-only frozenset.
+
+        #1146 H1 — the snapshot is frozen, so external code holding a
+        reference cannot mutate the registry. Each property access returns
+        a fresh frozenset reflecting the current registry state at call
+        time; subsequent :meth:`cascade_child` calls do NOT mutate prior
+        snapshots.
+
+        :class:`DispatchSurface.__init__` consumes this property to check
+        ``identity.delegate_id in cascade.grantees`` and raises
+        :class:`DispatchCascadeViolationError` on mismatch (the H1 gate).
+        """
+        # The slot is set in __post_init__; bypass __getattr__ via
+        # __getattribute__ on the slot name for symmetry with __setattr__.
+        return frozenset(
+            object.__getattribute__(self, "_TenantScopedCascade__grantees")
+        )
+
+    def register_root_grantee(self, identity: DelegateIdentity) -> None:
+        """Seed the registry with the root sovereign / origin identity.
+
+        #1146 H1 — the cascade's grantee registry is empty at construction;
+        an identity that anchors the cascade (the root sovereign in EATP
+        terms, the genesis delegate in #1035 terms) MUST be explicitly
+        registered before it can construct a :class:`DispatchSurface`
+        against this cascade.
+
+        Idempotent — calling with the same identity twice is a no-op.
+
+        **Trust boundary.** This method has no access-control gate by
+        design — any caller holding a reference to this cascade is
+        implicitly authorized to seed the registry. The cascade reference
+        IS the trust authority; the operator who constructed the cascade
+        owns its grantee policy. Production operators MUST scope cascade
+        references behind their own authorization layer (see README
+        §"What the primitive does NOT promise" + `issue #1147 <https://github.com/terrene-foundation/kailash-py/issues/1147>`_
+        for the durable-registry roadmap).
+
+        Args:
+            identity: The :class:`DelegateIdentity` whose ``delegate_id``
+                anchors the cascade. Typed at the boundary so the registry
+                cannot accept stray strings / UUIDs.
+
+        Raises:
+            TypeError: if ``identity`` is not a :class:`DelegateIdentity`.
+        """
+        if not isinstance(identity, DelegateIdentity):
+            raise TypeError(
+                "TenantScopedCascade.register_root_grantee identity MUST "
+                f"be a DelegateIdentity; got {type(identity).__name__}"
+            )
+        object.__getattribute__(self, "_TenantScopedCascade__grantees").add(
+            identity.delegate_id
+        )
 
     def cascade_child(
         self,
@@ -465,7 +588,29 @@ class TenantScopedCascade:
         # truth for the F5 tightening result.
         tightened = parent_envelope.tighten_with(child_envelope.inner)
 
-        # Step 4: emit the chain-of-custody GrantMoment.
+        # Step 4 (#1146 H1): register BOTH parent and child as authorized
+        # grantees of this cascade. Registration happens AFTER all three
+        # validation gates pass — a cross-tenant or widening-scope or
+        # widening-envelope attempt does NOT pollute the registry. The
+        # parent is auto-registered idempotently to support multi-edge
+        # cascades that descend from the same root (the root sovereign is
+        # seeded once via register_root_grantee; subsequent grandchildren
+        # observe the parent already in the set).
+        #
+        # Trust-boundary note: cascade_child does NOT require parent_identity
+        # to be pre-registered as a grantee — the cascade reference itself
+        # is the trust authority (see class docstring + register_root_grantee).
+        # Combined with grant_proof being shape-only-validated today (#1147
+        # README disclosure documents this gap), cascade_child operates as a
+        # secondary seeding path equivalent to register_root_grantee; the H1
+        # closure structurally is "identity must be registered with this
+        # cascade", NOT "identity must have transited a signed-and-verified
+        # grant chain". Durable signed attestation is the #1147 roadmap.
+        _grantees = object.__getattribute__(self, "_TenantScopedCascade__grantees")
+        _grantees.add(parent_identity.delegate_id)
+        _grantees.add(child_identity.delegate_id)
+
+        # Step 5: emit the chain-of-custody GrantMoment.
         return GrantMoment(
             cascade_id=uuid.uuid4(),
             parent_delegate_id=parent_identity.delegate_id,

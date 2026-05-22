@@ -339,14 +339,23 @@ def _make_surface(
     envelope: DelegateConstraintEnvelope | None = None,
     identity: DelegateIdentity | None = None,
     signer=None,
+    skip_grantee_registration: bool = False,
 ) -> DispatchSurface:
+    bound_cascade = cascade if cascade is not None else _build_cascade()
+    bound_identity = identity if identity is not None else _build_identity()
+    # #1146 H1 — register the identity as a root grantee BEFORE
+    # DispatchSurface construction so the bind-time grantee check passes.
+    # Tests that want to exercise the H1 refusal path pass
+    # skip_grantee_registration=True.
+    if not skip_grantee_registration:
+        bound_cascade.register_root_grantee(bound_identity)
     return DispatchSurface(
         connector=connector if connector is not None else MockConnector(),
         signature=signature if signature is not None else FakeSignatureHelper(),
         envelope=envelope if envelope is not None else _build_envelope(),
-        identity=identity if identity is not None else _build_identity(),
+        identity=bound_identity,
         audit_engine=AuditChainEngine(chain=_build_chain()),
-        trust_cascade=cascade if cascade is not None else _build_cascade(),
+        trust_cascade=bound_cascade,
         role=role if role is not None else _build_role(),
         signer=signer if signer is not None else _test_signer,
     )
@@ -511,13 +520,16 @@ async def test_dispatch_audit_engine_round_trip() -> None:
             DelegateEventType.GRANT_CONSUMPTION,
         ),
     )
+    cascade = _build_cascade()
+    identity = _build_identity()
+    cascade.register_root_grantee(identity)  # #1146 H1
     surface = DispatchSurface(
         connector=connector,
         signature=FakeSignatureHelper(),
         envelope=_build_envelope(),
-        identity=_build_identity(),
+        identity=identity,
         audit_engine=audit_engine,
-        trust_cascade=_build_cascade(),
+        trust_cascade=cascade,
         role=_build_role(),
         signer=_test_signer,
     )
@@ -556,13 +568,15 @@ async def test_dispatch_connector_invocation_carries_bound_identity_and_envelope
     identity = _build_identity()
     envelope = _build_envelope()
     connector = MockConnector()
+    cascade = _build_cascade()
+    cascade.register_root_grantee(identity)  # #1146 H1
     surface = DispatchSurface(
         connector=connector,
         signature=FakeSignatureHelper(),
         envelope=envelope,
         identity=identity,
         audit_engine=AuditChainEngine(chain=_build_chain()),
-        trust_cascade=_build_cascade(),
+        trust_cascade=cascade,
         role=_build_role(),
         signer=_test_signer,
     )
@@ -676,10 +690,11 @@ def test_dispatch_cascade_violation_error_is_value_error() -> None:
     """DispatchCascadeViolationError is the typed surface for grantee
     refusal; it is a ValueError per the S2.5/S3/S4 convention.
 
-    The runtime grantee-registry check is deferred to S7+ (the current
-    TenantScopedCascade emits GrantMoment but does not retain the grantee
-    set); this test asserts the error class exists and is in the
-    correct base hierarchy so callers can catch it stably.
+    #1146 H1 closure: the grantee-registry check IS wired (see the
+    DispatchSurface H1 tests below). This test pins the typed-error
+    hierarchy so downstream callers can catch on
+    DispatchCascadeViolationError without depending on its concrete
+    message shape.
     """
     err = DispatchCascadeViolationError("test")
     assert isinstance(err, ValueError)
@@ -1148,3 +1163,166 @@ async def test_dispatch_principal_kind_re_check_at_dispatch_time() -> None:
     )
     with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
         await surface.dispatch({"user_id": "u-1"})
+
+
+# ---------------------------------------------------------------------------
+# #1146 H1 — grantee-registry bind + dispatch gate (cascade-as-authorization)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_ungranted_identity_at_bind() -> None:
+    """#1146 H1 — DispatchSurface.__init__ MUST raise
+    DispatchCascadeViolationError when the bound identity's delegate_id
+    is not in the cascade's grantee registry.
+
+    PR #1144 holistic /redteam HIGH H1: previously any caller with ANY
+    DelegateIdentity and a tenant-matching cascade could construct a
+    DispatchSurface that audited as that identity. The grantee check
+    closes this — the identity MUST have transited cascade_child OR
+    been explicitly seeded via register_root_grantee.
+    """
+    with pytest.raises(
+        DispatchCascadeViolationError, match=r"not a registered grantee"
+    ):
+        _make_surface(skip_grantee_registration=True)
+
+
+@pytest.mark.unit
+def test_dispatch_surface_admits_root_grantee_at_bind() -> None:
+    """Identity explicitly registered via register_root_grantee binds
+    cleanly — the canonical bootstrap path."""
+    cascade = _build_cascade()
+    identity = _build_identity()
+    cascade.register_root_grantee(identity)
+    surface = DispatchSurface(
+        connector=MockConnector(),
+        signature=FakeSignatureHelper(),
+        envelope=_build_envelope(),
+        identity=identity,
+        audit_engine=AuditChainEngine(chain=_build_chain()),
+        trust_cascade=cascade,
+        role=_build_role(),
+        signer=_test_signer,
+    )
+    assert surface.identity.delegate_id == identity.delegate_id
+
+
+@pytest.mark.unit
+def test_dispatch_surface_admits_cascade_child_grantee_at_bind() -> None:
+    """An identity admitted as a child via cascade_child binds cleanly
+    — the canonical 'admit-via-cascade' path."""
+    cascade = _build_cascade()
+    parent = _build_identity()
+    child = _build_identity()
+    cascade.register_root_grantee(parent)
+    # Bring child into the registry via a successful cascade_child.
+    parent_env = _build_envelope()
+    cascade.cascade_child(
+        parent_env,
+        parent_env,  # same envelope = no widening
+        parent_identity=parent,
+        child_identity=child,
+        parent_scope=_build_role().scope,
+        child_scope=_build_role().scope,
+        child_tenant=cascade.tenant,
+        grant_proof="a" * 128,
+    )
+    # Now construct a DispatchSurface as the CHILD — admitted by cascade.
+    surface = DispatchSurface(
+        connector=MockConnector(),
+        signature=FakeSignatureHelper(),
+        envelope=parent_env,
+        identity=child,
+        audit_engine=AuditChainEngine(chain=_build_chain()),
+        trust_cascade=cascade,
+        role=_build_role(),
+        signer=_test_signer,
+    )
+    assert surface.identity.delegate_id == child.delegate_id
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_grantee_before_capability_check() -> None:
+    """Ordering: grantee gate fires BEFORE capability gate. When an
+    identity is both ungranted AND the role lacks required caps, the
+    grantee error surfaces (the more fundamental refusal — cascade
+    authorization precedes capability authorization)."""
+    role = _build_role(capabilities=("unrelated.cap",))  # connector wants http.read
+    with pytest.raises(
+        DispatchCascadeViolationError, match=r"not a registered grantee"
+    ):
+        _make_surface(role=role, skip_grantee_registration=True)
+
+
+@pytest.mark.unit
+def test_dispatch_surface_refuses_grantee_after_principal_kind_check() -> None:
+    """Ordering: principal_kind gate fires BEFORE grantee gate. A
+    wrong-kind identity surfaces principal_kind refusal even when also
+    ungranted (principal_kind is structurally more fundamental —
+    wrong-kind identity has no business being grantee-checked)."""
+    sovereign_only_role = _build_role(
+        permitted_principal_kinds=frozenset({"sovereign"}),
+    )
+    service_account_identity = _build_identity(principal_kind="service_account")
+    # Both gates would refuse; ordering says principal_kind wins.
+    with pytest.raises(DispatchEnvelopeViolationError, match=r"principal_kind"):
+        _make_surface(
+            role=sovereign_only_role,
+            identity=service_account_identity,
+            skip_grantee_registration=True,
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_grantee_re_check_at_dispatch_time() -> None:
+    """F5 / R2 defense-in-depth: the grantee check re-fires at every
+    dispatch() start. If the cascade's grantee registry were mutated
+    after bind (via Python's name-mangled internal slot
+    ``_TenantScopedCascade__grantees``), the re-check refuses the
+    invocation.
+
+    The internal slot is name-mangled (double-underscore at class
+    scope) so a single-underscore access like ``cascade._grantees``
+    raises ``AttributeError``. Reaching the mutable set requires
+    spelling the mangled form. Production code MUST NOT do this; this
+    test exercises the mangled form deliberately to simulate a
+    determined post-bind registry mutation and confirm the dispatch-time
+    re-check structurally guards against it.
+    """
+    surface = _make_surface()
+    # Drain the registry via the name-mangled internal slot — simulating
+    # a post-bind registry mutation. The mangled form is the only path
+    # external code can reach the mutable set.
+    object.__getattribute__(
+        surface.trust_cascade, "_TenantScopedCascade__grantees"
+    ).clear()
+    with pytest.raises(
+        DispatchCascadeViolationError, match=r"no longer a registered grantee"
+    ):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+def test_tenant_scoped_cascade_grantees_slot_is_name_mangled() -> None:
+    """Per security-reviewer F1: the grantee registry MUST NOT be reachable
+    via a single-underscore alias. The internal slot is name-mangled
+    (``_TenantScopedCascade__grantees``); ``cascade._grantees`` raises
+    ``AttributeError``. The mangled form is loud and intentional —
+    determined adversaries with a cascade reference can still spell it,
+    but the cascade reference IS itself the trust authority (see class
+    docstring + README #1147 disclosure for the durable-registry
+    roadmap).
+    """
+    from kailash.delegate.trust import TenantScope, TenantScopedCascade
+
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-test"))
+    # Underscore-prefix alias raises AttributeError — single-underscore
+    # convention is NOT the mutation surface.
+    with pytest.raises(AttributeError):
+        cascade._grantees  # noqa: B018
+    # The mangled form IS reachable (Python's name-mangling rule) —
+    # documented and intentional per the trust boundary.
+    mangled = object.__getattribute__(cascade, "_TenantScopedCascade__grantees")
+    assert mangled == set()

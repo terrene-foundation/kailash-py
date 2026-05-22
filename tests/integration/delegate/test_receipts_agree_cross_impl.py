@@ -50,20 +50,14 @@ from datetime import datetime, timezone
 import pytest
 
 from kailash.delegate.audit import AuditChainEngine, DelegateEventType
-from kailash.delegate.conformance.schema import (
-    ReceiptsAgreeReport,
-    receipts_agree_dict,
-)
+from kailash.delegate.conformance.schema import ReceiptsAgreeReport, receipts_agree_dict
 from kailash.delegate.dispatch import (
     Connector,
     ConnectorInvocationResult,
     DispatchSurface,
 )
 from kailash.delegate.envelope import DelegateConstraintEnvelope
-from kailash.delegate.runtime import (
-    DelegateRuntime,
-    Posture,
-)
+from kailash.delegate.runtime import DelegateRuntime, Posture
 from kailash.delegate.trust import TenantScope, TenantScopedCascade
 from kailash.delegate.types import (
     CapabilitySet,
@@ -147,6 +141,8 @@ def _build_runtime() -> DelegateRuntime:
         ),
         lifecycle=RoleLifecycleState.ACTIVE,
     )
+    # #1146 H1 — seed the cascade with the root grantee.
+    cascade.register_root_grantee(identity)
     surface = DispatchSurface(
         connector=_DeterministicConnector(),
         signature=_Signature(),

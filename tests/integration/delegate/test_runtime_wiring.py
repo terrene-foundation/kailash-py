@@ -39,13 +39,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-
-def _test_signer(canonical_bytes: bytes) -> str:
-    """Deterministic 128-char hex signer for integration tests."""
-    h = hashlib.sha256(canonical_bytes).hexdigest()
-    return h + h
-
-
 from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.dispatch import (
     Connector,
@@ -71,6 +64,12 @@ from kailash.delegate.types import (
 )
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
+
+
+def _test_signer(canonical_bytes: bytes) -> str:
+    """Deterministic 128-char hex signer for integration tests."""
+    h = hashlib.sha256(canonical_bytes).hexdigest()
+    return h + h
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +176,9 @@ def _build_runtime_stack(
     envelope = _build_envelope()
     identity = _build_identity()
     role = _build_role()
+    # #1146 H1 — seed the cascade with the root grantee so DispatchSurface
+    # bind passes the grantee gate.
+    cascade.register_root_grantee(identity)
     connector = RecordingConnector(
         tenant_id_observed=connector_tenant_id or tenant_id,
     )

@@ -233,6 +233,12 @@ def _build_stack(
     envelope = _build_envelope()
     identity = _build_identity()
     role = _build_role()
+    # #1146 H1 — register the identity as a root grantee so the
+    # DispatchSurface bind-time grantee gate passes. Without this seed
+    # the cascade-as-authorization invariant refuses bind because the
+    # identity transited no cascade_child path (root identities are
+    # explicitly seeded by infrastructure at cascade-setup time).
+    cascade.register_root_grantee(identity)
     connector = DeterministicConnector(
         tenant_id_observed=connector_tenant_id or tenant_id,
     )

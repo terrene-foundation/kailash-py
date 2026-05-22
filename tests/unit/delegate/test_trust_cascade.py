@@ -917,3 +917,172 @@ def test_grant_moment_to_signing_bytes_returns_canonical_json_bytes() -> None:
     # Round-trip via canonical_json_dumps yields the same bytes.
     expected = canonical_json_dumps(gm.to_signing_dict()).encode("utf-8")
     assert bytes_out == expected
+
+
+# ---------------------------------------------------------------------------
+# #1146 H1 — grantee registry on TenantScopedCascade
+# ---------------------------------------------------------------------------
+
+
+def test_cascade_grantees_initially_empty() -> None:
+    """A freshly-constructed cascade has an empty grantee registry."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    assert casc.grantees == frozenset()
+
+
+def test_cascade_grantees_property_returns_frozenset_snapshot() -> None:
+    """The grantees property returns a frozenset snapshot — external
+    callers cannot mutate the registry through the public surface."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    grantees = casc.grantees
+    assert isinstance(grantees, frozenset)
+    # frozenset has no .add / .remove — the type system enforces immutability
+
+
+def test_register_root_grantee_seeds_registry() -> None:
+    """register_root_grantee adds the identity's delegate_id to the
+    grantees set — the canonical bootstrap path for the cascade."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    root = _identity(suffix="root")
+    casc.register_root_grantee(root)
+    assert root.delegate_id in casc.grantees
+    assert len(casc.grantees) == 1
+
+
+def test_register_root_grantee_is_idempotent() -> None:
+    """Re-registering the same identity is a no-op (idempotent set add)."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    root = _identity(suffix="root")
+    casc.register_root_grantee(root)
+    casc.register_root_grantee(root)  # second call — no-op
+    assert len(casc.grantees) == 1
+
+
+def test_register_root_grantee_rejects_non_identity() -> None:
+    """register_root_grantee MUST reject non-DelegateIdentity arguments
+    (typed at the boundary so the registry cannot accept stray UUIDs)."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    with pytest.raises(TypeError, match="DelegateIdentity"):
+        casc.register_root_grantee("not-an-identity")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="DelegateIdentity"):
+        casc.register_root_grantee(uuid.uuid4())  # type: ignore[arg-type]
+
+
+def test_cascade_child_registers_both_parent_and_child_on_success() -> None:
+    """On successful cascade_child, BOTH parent_identity and
+    child_identity are registered as grantees. The parent is registered
+    idempotently so multi-edge cascades descending from the same root
+    do not require manual re-registration at every hop."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    parent = _identity(suffix="parent")
+    child = _identity(suffix="child")
+    casc.cascade_child(
+        parent_env,
+        child_env,
+        parent_identity=parent,
+        child_identity=child,
+        parent_scope=_scope(),
+        child_scope=_scope(),
+        child_tenant=TenantScope.for_tenant("tenant-a"),
+        grant_proof="a" * 128,
+    )
+    assert parent.delegate_id in casc.grantees
+    assert child.delegate_id in casc.grantees
+    assert len(casc.grantees) == 2
+
+
+def test_cascade_child_does_not_register_on_tenant_violation() -> None:
+    """A cross-tenant cascade attempt MUST NOT pollute the registry —
+    fail-closed at Step 1 leaves the registry empty."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    with pytest.raises(CascadeTenantViolationError):
+        casc.cascade_child(
+            parent_env,
+            child_env,
+            parent_identity=_identity(suffix="parent"),
+            child_identity=_identity(suffix="child"),
+            parent_scope=_scope(),
+            child_scope=_scope(),
+            child_tenant=TenantScope.for_tenant("tenant-b"),  # cross-tenant
+            grant_proof="a" * 128,
+        )
+    assert casc.grantees == frozenset()
+
+
+def test_cascade_child_does_not_register_on_scope_violation() -> None:
+    """Scope-expansion refusal at Step 2 leaves the registry empty —
+    no partial-registration on the failed-validation path."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    with pytest.raises(CascadeScopeExpansionError):
+        casc.cascade_child(
+            parent_env,
+            child_env,
+            parent_identity=_identity(suffix="parent"),
+            child_identity=_identity(suffix="child"),
+            parent_scope=_scope(caps=("read",)),
+            child_scope=_scope(caps=("read", "approve")),  # widens
+            child_tenant=TenantScope.global_(),
+            grant_proof="a" * 128,
+        )
+    assert casc.grantees == frozenset()
+
+
+def test_cascade_child_does_not_register_on_envelope_widening() -> None:
+    """Envelope widening refusal at Step 3 leaves the registry empty."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    parent_env = _envelope_with_budget(50.0)
+    child_env = _envelope_with_budget(100.0)  # widens
+    with pytest.raises(EnvelopeWideningError):
+        casc.cascade_child(
+            parent_env,
+            child_env,
+            parent_identity=_identity(suffix="parent"),
+            child_identity=_identity(suffix="child"),
+            parent_scope=_scope(),
+            child_scope=_scope(),
+            child_tenant=TenantScope.global_(),
+            grant_proof="a" * 128,
+        )
+    assert casc.grantees == frozenset()
+
+
+def test_cascade_grantees_grow_across_multiple_cascade_child_calls() -> None:
+    """Multi-edge cascade: A → B → C registers A, B, and C as grantees
+    on the same cascade instance (the cascade-as-authorization anchor
+    across the full chain)."""
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    parent_env = _envelope_with_budget(100.0)
+    mid_env = _envelope_with_budget(75.0)
+    leaf_env = _envelope_with_budget(50.0)
+    a = _identity(suffix="A")
+    b = _identity(suffix="B")
+    c = _identity(suffix="C")
+
+    casc.cascade_child(
+        parent_env,
+        mid_env,
+        parent_identity=a,
+        child_identity=b,
+        parent_scope=_scope(),
+        child_scope=_scope(),
+        child_tenant=TenantScope.for_tenant("tenant-a"),
+        grant_proof="a" * 128,
+    )
+    casc.cascade_child(
+        mid_env,
+        leaf_env,
+        parent_identity=b,
+        child_identity=c,
+        parent_scope=_scope(),
+        child_scope=_scope(),
+        child_tenant=TenantScope.for_tenant("tenant-a"),
+        grant_proof="b" * 128,
+    )
+    assert {a.delegate_id, b.delegate_id, c.delegate_id} <= casc.grantees
+    assert len(casc.grantees) == 3
