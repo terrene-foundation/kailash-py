@@ -63,21 +63,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
-from kailash.delegate.audit import (
-    AuditChainEngine,
-    DelegateEventType,
-)
+from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import (
     CascadeTenantViolationError,
     TenantScope,
     TenantScopedCascade,
 )
-from kailash.delegate.types import (
-    DelegateIdentity,
-    Role,
-    RoleLifecycleState,
-)
+from kailash.delegate.types import DelegateIdentity, Role, RoleLifecycleState
 from kailash.trust._json import canonical_json_dumps
 
 logger = logging.getLogger(__name__)
@@ -893,6 +886,46 @@ class DispatchSurface:
                 f"RETIRED/SUSPENDED roles cannot dispatch — Invariant 5)"
             )
 
+        # #1143 §10 G1 — principal-kind discriminator gate. The bound
+        # :class:`DelegateIdentity`'s ``principal_kind`` MUST be in the
+        # role's :attr:`permitted_principal_kinds` frozenset. A
+        # service-account identity binding to a sovereign-only role
+        # collapses the Genesis-to-Delegation attribution chain — the
+        # exact §10 G1 invariant.
+        #
+        # Checked AFTER lifecycle so a retired role surfaces the
+        # lifecycle failure first (it's the more fundamental refusal).
+        # Checked BEFORE capability so a principal-kind mismatch
+        # surfaces before downstream capability hashes — the kind
+        # mismatch is the load-bearing signal.
+        #
+        # Defense-in-depth: the same check re-fires at every
+        # :meth:`dispatch` start per the F5 / R2 composition pattern,
+        # in case the Role's ``permitted_principal_kinds`` is mutated
+        # between bind and dispatch (mutation of a frozenset is
+        # impossible, but the Role object itself could be swapped via
+        # an external reference).
+        if identity.principal_kind not in role.permitted_principal_kinds:
+            logger.debug(
+                "dispatch.envelope_violation",
+                extra={
+                    "axis": "principal_kind",
+                    "connector_id": connector.connector_id,
+                    "role_display_name": role.display_name,
+                    "identity_principal_kind": identity.principal_kind,
+                    "role_permitted_principal_kinds": sorted(
+                        role.permitted_principal_kinds
+                    ),
+                },
+            )
+            raise DispatchEnvelopeViolationError(
+                f"DispatchSurface refuses bind: identity principal_kind "
+                f"{identity.principal_kind!r} not in role "
+                f"{role.display_name!r} permitted_principal_kinds "
+                f"{sorted(role.permitted_principal_kinds)!r} "
+                "(#1143 §10 G1 — service-account vs sovereign separation)"
+            )
+
         # Invariant 3 — capability gating. Connector's required
         # capabilities MUST be a subset of the role's capability set.
         # C5-2 error-leakage: hash capability names in the caller-facing
@@ -954,6 +987,15 @@ class DispatchSurface:
             role.scope.capabilities.capabilities
         )
         self._lifecycle_at_bind: RoleLifecycleState = role.lifecycle
+        # #1143 §10 G1 — principal-kind snapshots for the dispatch-time
+        # re-check. ``identity.principal_kind`` is a Literal string
+        # (immutable). ``role.permitted_principal_kinds`` is a frozenset
+        # (immutable by construction). The pair forms the bind-time
+        # contract the F5 re-check at dispatch defends.
+        self._identity_principal_kind: str = identity.principal_kind
+        self._permitted_principal_kinds_at_bind: frozenset[str] = frozenset(
+            role.permitted_principal_kinds
+        )
 
     @property
     def connector(self) -> Connector:
@@ -1060,6 +1102,24 @@ class DispatchSurface:
                 f"from {self._lifecycle_at_bind.value!r} at bind to "
                 f"{current_lifecycle.value!r}; invocation refused (F5 "
                 "monotonicity — Invariant 5 runtime re-check)"
+            )
+        # Step 0a.1 — #1143 §10 G1 principal-kind re-check. Pair to the
+        # bind-time gate in __init__. The identity's principal_kind MUST
+        # still be in the role's permitted_principal_kinds at dispatch
+        # time. Defense-in-depth: if a caller swapped the Role's
+        # permitted set via direct attribute assignment (frozen=True
+        # blocks normal mutation but ``object.__setattr__`` bypasses)
+        # OR mutated the identity's principal_kind via the same
+        # bypass, the dispatch-time check refuses.
+        current_permitted = frozenset(self._role.permitted_principal_kinds)
+        current_kind = self._identity.principal_kind
+        if current_kind not in current_permitted:
+            raise DispatchEnvelopeViolationError(
+                f"DispatchSurface refuses dispatch: principal_kind "
+                f"{current_kind!r} not in current role "
+                f"permitted_principal_kinds {sorted(current_permitted)!r}; "
+                "invocation refused (#1143 §10 G1 — principal-kind "
+                "discriminator runtime re-check)"
             )
 
         # Step 0b — C6-1 DoS defense: depth + serialized-size limits
