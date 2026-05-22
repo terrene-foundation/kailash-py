@@ -3,9 +3,8 @@
 # pyright: reportUnnecessaryIsInstance=false
 """Type-state wrapper around :class:`kailash.trust.envelope.ConstraintEnvelope`.
 
-The F5 invariant from kailash-rs M2-02 (see
-``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-
-extraction.md`` § "F5 type-state — ``DelegateConstraintEnvelope``") is:
+The F5 invariant from kailash-rs M2-02 (issue #1035 § "F5 type-state —
+``DelegateConstraintEnvelope``") is:
 runtime composition is **TIGHTENING-ONLY**. A child envelope may only be
 strictly-tighter (or equal) than its parent; widening requires a new
 :class:`~kailash.delegate.types.GenesisRecord`.
