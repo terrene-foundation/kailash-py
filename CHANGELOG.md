@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-05-23
+
+### Added
+
+- **`kailash.delegate.types.PrincipalKind` — §10 G1 principal-kind discrimination (#1143)** — new `PrincipalKind` enum (`Enum["human", "agent", "service"]`) added to `DelegateIdentity` + `Role` discriminator on the public API. `DispatchSurface.bind()` and `dispatch()` now cross-validate `principal_kind` at construction (capability snapshot) AND at dispatch time (re-check on rebind) per the §10 G1 conformance vector DV-10-001. `PrincipalKind` is exported in `kailash.delegate.__all__` and pinned by count tests. DV-10-001 vector is no longer xfail-strict — it runs natively (PR #1157).
+- **`TenantScopedCascade` grantee registry — H1 forensic key-tracking gap closure (#1146)** — `TenantScopedCascade` now carries a name-mangled `__grantees` registry (accessed via `_TenantScopedCascade__grantees`) of every grantee identity bound through `grant_to(...)`. `DispatchSurface.dispatch()` enforces the registry: a dispatch whose grantee identity was not previously enrolled raises `UnregisteredGranteeError` at gate order position 3 (lifecycle → principal_kind → grantee → capability). Closes the H1 holistic-/redteam follow-up disclosed in v2.24.0 README § "Pre-Pledge v0 status". Trust-boundary documented in class docstring; access is structurally guarded by Python name-mangling so external mutation requires the mangled form, never plain `cascade._grantees` (which raises `AttributeError`) (PR #1158).
+- **D2 audit-chain hash-linkage E2E replay + D3 DV-5-001 runtime-end-to-end vector test (#1149, #1150)** — `tests/e2e/delegate/test_delegate_e2e_flows.py` extended with audit-chain hash-linkage replay assertions (D2: every emitted audit row chains to the prior row's hash byte-identically across replay) and DV-5-001 runtime end-to-end vector test exercising the full TAOD lifecycle through cascade-layer dispatch (D3). E2E flow A (happy path) now asserts cascade-layer redaction firing on widening reads (PR #1156).
+
+### Documentation
+
+- **S5 capability re-check site + audit-chain forensic key registry gap disclosure (#1147, #1148)** — README § "Delegate composition primitive — Pre-Pledge v0" clarified to name the S5 capability re-check site as `DispatchSurface.dispatch()` (the per-call re-check that catches post-construction state mutations) AND disclose the audit-chain forensic key-registry gap as a deferred item (now closed in 2.25.0 via #1146). README's "deferred items" enumeration updated; the audit-chain forensic gap was the only deferred item that flipped status this release (PR #1155).
+
+### Notes
+
+This release closes 6 of the holistic-/redteam follow-up issues filed at v2.24.0 (#1143, #1146, #1147, #1148, #1149, #1150 — six issues across four PRs). Two follow-ups remain tracked for future patches: #1086 (cross-SDK rs parity for `PrincipalKind` + grantee registry — blocked on cross-repo authorization per `repo-scope-discipline.md`) and #1154 (slim-core install budget restoration — lazy-import `filelock` in `trust/_locking.py`). Semver minor because `PrincipalKind` is a new public symbol in `kailash.delegate.__all__` and `UnregisteredGranteeError` extends the public exception surface; no breaking changes to existing public API.
+
+### Pre-Pledge v0 status
+
+`kailash.delegate` remains at pre-pledge v0. With 2.25.0, the audit-chain forensic key-registry gap (previously deferred) is closed; the 8 enforced invariants from 2.24.0 expand to include §10 G1 principal-kind discrimination and H1 grantee-registry enforcement. Two items remain explicitly deferred: cross-SDK byte-determinism conformance for vectors DV-3/DV-7/DV-9 (py-leads through 2.25.0; rs leadership pending), and the slim-core install budget restoration (#1154). Three explicit non-promises continue: no implicit retries, no shadow audit chains, no posture auto-upgrade. See README § "Delegate composition primitive — Pre-Pledge v0" for the full updated disclosure.
+
 ## [2.24.1] - 2026-05-22
 
 ### Fixed
