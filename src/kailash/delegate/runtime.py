@@ -1008,6 +1008,17 @@ class DelegateRuntime:
         self._identity = identity
         self._signer = signer
         self._posture = posture
+        # §7 TAOD phase monotonicity — runtime is single-shot per receipt.
+        # Once execute() returns (success OR failure), the runtime is
+        # consumed and further execute() calls raise RuntimePhaseError.
+        # The receipt-bound run model requires fresh substrate per run:
+        # an attacker that could retry-until-success on a runtime would
+        # silently amplify their audit footprint without leaving a new
+        # run_id-bound chain segment. Marked True in finally block of
+        # execute() — EVERY exit path consumes (including FAILED), no
+        # retry-amplification surface. with_posture() returns a fresh
+        # runtime (un-consumed) per Invariant 5.
+        self._consumed: bool = False
 
     @property
     def posture(self) -> Posture:
@@ -1181,11 +1192,45 @@ class DelegateRuntime:
             audit head hash + termination timestamp + posture.
 
         Raises:
-            No exception propagates from execute() — every failure
-            path returns a :class:`RuntimeExecutionResult` with
-            ``taod_state.phase == "failed"`` and ``dispatch_result is
-            None``. The error class + message live on the FAILED
-            transition's ``reason`` field.
+            RuntimePhaseError: when ``execute()`` is called on an
+                already-consumed runtime (§7 TAOD phase monotonicity —
+                runtime is single-shot per receipt; create a fresh
+                :class:`DelegateRuntime` for additional executions). All
+                OTHER failure paths return a :class:`RuntimeExecutionResult`
+                with ``taod_state.phase == "failed"`` and
+                ``dispatch_result is None``. The error class + message live
+                on the FAILED transition's ``reason`` field.
+        """
+        # §7 TAOD phase monotonicity — single-shot enforcement.
+        # If a prior execute() already ran (success OR failure), refuse
+        # this call. The check fires BEFORE consuming so the consumed
+        # flag remains True from the prior run. Pinned by DV-7-001
+        # conformance vector + test_runtime_re_execute_after_completed_*.
+        if self._consumed:
+            raise RuntimePhaseError(
+                "DelegateRuntime is single-shot per §7 TAOD phase "
+                "monotonicity; create a new runtime instance for "
+                "additional executions (receipt-bound runs MUST not "
+                "share substrate)"
+            )
+
+        try:
+            return await self._execute_impl(input_payload)
+        finally:
+            # Mark consumed on EVERY exit path — success, FAILED return,
+            # AND exceptional bubble-up (R2 re-check could raise TypeError
+            # before being caught; defense-in-depth against
+            # retry-until-success attack on a runtime).
+            self._consumed = True
+
+    async def _execute_impl(
+        self, input_payload: dict[str, Any]
+    ) -> RuntimeExecutionResult:
+        """The actual TAOD lifecycle body — see :meth:`execute`.
+
+        Separated from :meth:`execute` so the §7 single-shot guard
+        + finally-block consumption can wrap every exit path including
+        early-return failure paths.
         """
         run_id = _generate_run_id()
         started_at = datetime.now(timezone.utc)

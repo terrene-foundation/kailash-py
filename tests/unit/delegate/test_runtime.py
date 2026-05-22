@@ -812,10 +812,17 @@ async def test_execute_audit_events_bind_run_id() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_execute_run_id_is_unique_across_invocations() -> None:
-    """Two execute() calls produce distinct run_ids."""
-    runtime, _, _ = _build_runtime()
-    r1 = await runtime.execute({"id": "x-1"})
-    r2 = await runtime.execute({"id": "x-2"})
+    """Two execute() calls on DIFFERENT runtimes produce distinct run_ids.
+
+    Per §7 (single-shot enforcement), a single runtime instance can
+    only execute() ONCE — receipts are bound per-runtime. Run-id
+    uniqueness is therefore verified across two FRESH runtime instances
+    rather than two calls on one runtime.
+    """
+    runtime1, _, _ = _build_runtime()
+    runtime2, _, _ = _build_runtime()
+    r1 = await runtime1.execute({"id": "x-1"})
+    r2 = await runtime2.execute({"id": "x-2"})
     assert r1.run_id != r2.run_id
 
 
@@ -1008,3 +1015,93 @@ async def test_to_dict_does_not_leak_raw_exception_message() -> None:
     # be caught.
     state_dict_str = str(result.taod_state.to_dict())
     assert sensitive_msg not in state_dict_str
+
+
+# ---------------------------------------------------------------------------
+# §7 TAOD phase monotonicity at the runtime level — single-shot enforcement
+# (pins DV-7-001 conformance vector; mirrors rs DelegateRuntime semantics)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_re_execute_after_completed_raises_phase_error() -> None:
+    """§7 TAOD phase monotonicity — re-execute on COMPLETED MUST raise.
+
+    Pins the DV-7-001 conformance vector at the runtime spine. The
+    runtime is single-shot per receipt; a second execute() raises
+    :class:`RuntimePhaseError` with the "single-shot" marker so the
+    caller can distinguish this from other phase-error classes (e.g.
+    TAODState terminal-transition errors).
+    """
+    runtime, _, _ = _build_runtime()
+    result1 = await runtime.execute({"id": "first"})
+    assert result1.taod_state.phase == "completed"
+
+    with pytest.raises(RuntimePhaseError, match="single-shot"):
+        await runtime.execute({"id": "second"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_consumed_even_on_failed_execute() -> None:
+    """§7 enforcement holds on FAILED path — no retry-until-success surface.
+
+    A runtime whose first execute() FAILED (dispatch raised) MUST
+    still be consumed. Otherwise an attacker could retry a failing
+    dispatch until it happened to succeed, silently amplifying their
+    audit footprint without a fresh receipt-bound run_id.
+    """
+    connector = _MockConnector(raise_exc=RuntimeError("boom"))
+    runtime, _, _ = _build_runtime(connector=connector)
+    result1 = await runtime.execute({"id": "first"})
+    assert result1.taod_state.phase == "failed"
+
+    with pytest.raises(RuntimePhaseError, match="single-shot"):
+        await runtime.execute({"id": "second"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_consumed_even_on_posture_halt_refusal() -> None:
+    """§7 enforcement holds on POSTURE-HALT refusal path.
+
+    A HALT-postured runtime refuses execute() at THINKING and returns
+    a FAILED result. That refusal STILL consumes the runtime — a
+    subsequent execute() (e.g. after the operator "thought" the posture
+    flipped back) MUST also refuse.
+    """
+    runtime, _, _ = _build_runtime(posture=Posture.HALT)
+    result1 = await runtime.execute({"id": "first"})
+    assert result1.taod_state.phase == "failed"
+
+    with pytest.raises(RuntimePhaseError, match="single-shot"):
+        await runtime.execute({"id": "second"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runtime_with_posture_returns_fresh_unconsumed_runtime() -> None:
+    """Invariant 5 + §7 interaction — with_posture() returns a fresh runtime.
+
+    A runtime that has been consumed cannot execute() again, but
+    :meth:`with_posture` returns a NEW :class:`DelegateRuntime` instance.
+    That new instance MUST be un-consumed (the consumed flag is per-
+    instance state, NOT shared across the with_posture() seam).
+    """
+    runtime, _, _ = _build_runtime(posture=Posture.L5_DELEGATED)
+    result1 = await runtime.execute({"id": "first"})
+    assert result1.taod_state.phase == "completed"
+
+    # Source runtime is consumed
+    with pytest.raises(RuntimePhaseError, match="single-shot"):
+        await runtime.execute({"id": "second"})
+
+    # Downgrade — no nonce required (rank-decreasing)
+    fresh = runtime.with_posture(Posture.L3_SHARED_PLANNING)
+    assert fresh is not runtime  # new instance
+
+    # Fresh runtime is un-consumed and can execute()
+    result_fresh = await fresh.execute({"id": "fresh"})
+    assert result_fresh.taod_state.phase == "completed"
+    assert result_fresh.posture_at_execute == Posture.L3_SHARED_PLANNING

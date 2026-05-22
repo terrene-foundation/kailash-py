@@ -58,6 +58,7 @@ from kailash.delegate.runtime import (
     Posture,
     R2CompositionError,
     RuntimeExecutionResult,
+    RuntimePhaseError,
 )
 from kailash.delegate.trust import TenantScope, TenantScopedCascade
 from kailash.delegate.types import (
@@ -320,36 +321,46 @@ async def test_runtime_r2_recheck_catches_envelope_swap_between_construct_and_ex
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_runtime_executes_multiple_runs_on_same_substrate() -> None:
-    """Two execute() calls on the same runtime produce two distinct
-    run_id-bound audit-chain segments on the same substrate.
+async def test_runtime_re_execute_after_completed_blocked_at_wiring_layer() -> None:
+    """§7 TAOD phase monotonicity enforced end-to-end through real substrate.
 
-    Validates the runtime can be re-used across multiple TAOD
-    executions without state-leak between runs.
+    Tier-2 evidence that the §7 single-shot enforcement holds at the
+    full wiring layer (not just the unit-level guard). After a clean
+    COMPLETED run, a second execute() on the same runtime raises
+    RuntimePhaseError; the audit chain reflects ONLY the first run's
+    transitions (no second-run audit emission leaked).
+
+    Reconciles the pre-§7 contract (`test_runtime_executes_multiple_
+    runs_on_same_substrate`) which asserted the OPPOSITE behaviour. Per
+    `orphan-detection.md` Rule 4a (stub-implementation MUST sweep
+    deferral tests in same commit), the contradicting wiring test is
+    deleted in the same commit that enforces §7 at the runtime spine.
+    Sibling unit tests: `tests/unit/delegate/test_runtime.py::
+    test_runtime_re_execute_after_completed_raises_phase_error` (+
+    failed-path + posture-halt + with_posture variants).
     """
     runtime, surface, audit_engine, chain, connector = _build_runtime_stack()
 
-    r1 = await runtime.execute({"id": "rt-multi-1"})
-    r2 = await runtime.execute({"id": "rt-multi-2"})
-
-    assert r1.run_id != r2.run_id
+    # First execute: happy path to COMPLETED
+    r1 = await runtime.execute({"id": "rt-single-1"})
     assert r1.taod_state.phase == "completed"
-    assert r2.taod_state.phase == "completed"
+    assert r1.dispatch_result is not None
 
-    # 5 audit entries per successful run = 10 total
-    assert len(audit_engine.entries) == 10
+    # Audit chain reflects exactly the first run: 4 runtime transitions
+    # + 1 dispatch event = 5 entries. Same baseline as the end-to-end
+    # full-lifecycle test above.
+    assert len(audit_engine.entries) == 5
+    assert len(audit_engine.entries) == len(chain.audit_anchors)
+    pre_second_count = len(audit_engine.entries)
 
-    # Each run's run_id appears in 4 runtime-emitted entries (4 phase
-    # transitions through completed).
-    run1_entries = [
-        e
-        for e in audit_engine.entries
-        if e.event_payload.get("run_id") == str(r1.run_id)
-    ]
-    run2_entries = [
-        e
-        for e in audit_engine.entries
-        if e.event_payload.get("run_id") == str(r2.run_id)
-    ]
-    assert len(run1_entries) == 4
-    assert len(run2_entries) == 4
+    # Second execute: MUST raise the §7 single-shot guard
+    with pytest.raises(RuntimePhaseError, match="single-shot"):
+        await runtime.execute({"id": "rt-single-2"})
+
+    # No second-run audit emission leaked: chain cardinality unchanged
+    assert len(audit_engine.entries) == pre_second_count
+    assert len(audit_engine.entries) == len(chain.audit_anchors)
+
+    # Connector NEVER invoked for the second attempt — the guard
+    # fires before any dispatch path
+    assert len(connector.invocations) == 1

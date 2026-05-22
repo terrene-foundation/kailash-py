@@ -380,17 +380,16 @@ async def test_dv_5_001_monotonic_tightening_behaviour() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "DV-7-001 vector pins §7 TAOD phase monotonicity (re-execute after "
-        "COMPLETED MUST raise RuntimePhaseError). The S6 runtime does not "
-        "yet enforce this behavior. The vector is the contract that triggers "
-        "the runtime fix; when the runtime catches up, this xfail flips to "
-        "XPASS and strict=True surfaces the gap loudly. See #1035 follow-up."
-    ),
-)
 async def test_dv_7_001_taod_phase_monotonicity_behaviour() -> None:
+    """DV-7-001 — §7 TAOD phase monotonicity enforced at runtime level.
+
+    The DelegateRuntime is single-shot per receipt: a second execute()
+    on a runtime in any terminal phase (COMPLETED or FAILED) raises
+    RuntimePhaseError. Previously xfail-strict pending the runtime fix;
+    now PASSES per the §7 single-shot guard. Mirrors unit-level coverage
+    in `tests/unit/delegate/test_runtime.py::
+    test_runtime_re_execute_after_completed_raises_phase_error`.
+    """
     vectors = ConformanceVectorLoader.load_canonical()
     target = next(v for v in vectors if v.id == "DV-7-001")
     assert target.expected is BehaviouralOutcome.REJECT
@@ -476,11 +475,13 @@ async def test_full_canonical_set_produces_receipt() -> None:
         vectors_passed=passed,
     )
     assert receipt.vectors_total == 5
-    # Currently 3 of 5 vectors pass (DV-3, DV-5, DV-9). DV-7 + DV-10 are
-    # xfail-tracked behavioral gaps in the runtime + dispatch surfaces; the
-    # vectors are the contract, the runtime is the catch-up target.
-    assert receipt.vectors_passed == 3
-    assert receipt.conforms() is False  # 3 of 5 -- not yet conforming
+    # Currently 4 of 5 vectors pass (DV-3, DV-5, DV-7, DV-9). DV-10 is
+    # the remaining xfail-tracked behavioral gap (§10 G1 service-account
+    # vs sovereign separation in the dispatch surface); the vector is
+    # the contract, the dispatch surface is the catch-up target. DV-7
+    # graduated from xfail when the runtime §7 single-shot guard landed.
+    assert receipt.vectors_passed == 4
+    assert receipt.conforms() is False  # 4 of 5 -- not yet conforming
     # Both validation predicates hold on a partial receipt:
     assert receipt.vectors_passed <= receipt.vectors_total
 
