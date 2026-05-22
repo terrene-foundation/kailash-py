@@ -147,6 +147,375 @@ changes:
       is inherent to the shared SessionEnd hook; the routing contract is
       universal.
 
+  # ==========================================================================
+  # APPENDED 2026-05-22 — Delegate composition primitive arc (issue #1035)
+  # ==========================================================================
+  # 4 patterns generalised from PRs #1130-#1144 (8-shard Delegate build:
+  # Connector x Signature x ConstraintEnvelope x Executor under EATP audit) +
+  # post-merge cleanup #1145 + holistic /redteam follow-ups #1143/#1146-1150.
+  # Appended per artifact-flow.md MUST: Append, Never Overwrite Unprocessed
+  # Proposals. Existing pending_review entries above (issue #1086, candidates
+  # 1/2/4) are preserved unchanged; the loom-side processor handles both
+  # blocks in one batch. Trust Posture Wiring uses the canonical 8-field
+  # template per trust-posture.md MUST Rule 8.
+  #
+  # Pattern 5 ("multi-shard plan execution discipline") was assessed and
+  # WITHDRAWN before drafting: the discipline it would codify is already
+  # covered by autonomous-execution.md Per-Session Capacity Budget rules 1-4
+  # + agents.md MUST: Parallel-Worktree Package Ownership Coordination.
+  # Authoring would create the duplicate-rule failure mode cc-artifacts.md
+  # Rule 10 forbids. Cross-reference suffices.
+
+  - type: rule_update
+    artifact: eatp
+    files:
+      - .claude/rules/eatp.md
+    classification_suggestion: global
+    context: |
+      Delegate arc pattern 1. ADDS one MUST clause:
+      "## MUST: Signed Audit Event Emits BEFORE State Advance; FAILED
+      Path Uses A No-Recurse Helper".
+
+      Lesson: any state-machine transition that emits a signed audit
+      event MUST sign-and-emit the audit row BEFORE advancing the state
+      slot. If signing/emit raises, the transition aborts at the
+      pre-advance position so the next call observes the pre-transition
+      state, NOT a half-advanced state with no audit row. The FAILED
+      path itself emits an audit event — and that emit MUST go through a
+      dedicated `_advance_to_failed_no_audit`-style helper that bypasses
+      the audit-emit step the parent advance used, preventing infinite
+      recursion when the FAILED path's own audit emit raises.
+
+      Generalisation: applies to any system signing audit events
+      alongside state transitions (TrustExecutor, TAOD lifecycle, PACT
+      envelope cascade, dataflow transaction phases). The structural
+      defense is ordering + a no-recurse helper, not catch-all
+      exception handling.
+
+      Evidence: kailash-py PR #1139 commit `e9626a223` — S6 R1 fix-
+      immediately for /redteam findings A3 + D1. The pre-fix code
+      advanced TAODState's `phase` slot before calling
+      `_audit_engine.append`; an emit failure left the runtime in
+      (phase=ACTING, no audit row), next dispatch observed half-state
+      and either re-attempted or raised opaque AttributeError. Post-fix:
+      emit-first, advance-second, fail-closed at the pre-advance
+      position. Same commit added `_advance_to_failed_no_audit` for the
+      FAILED-path emit recursion-prevention.
+
+      Trust Posture Wiring (in-clause, canonical 8-field template):
+        - **Severity:** halt-and-report at /implement gate (reviewer +
+          security-reviewer mechanical sweep on every state-advance +
+          audit-emit call site pair). Structural-signal class per
+          hook-output-discipline.md MUST-2.
+        - **Grace period:** 7 days from rule landing.
+        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
+          posture per trust-posture.md MUST-4 standard window.
+        - **Regression-within-grace:** trigger key
+          `audit_after_state_advance` fires emergency downgrade
+          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
+        - **Receipt requirement:** SessionStart hard-gate
+          `[ack: audit-before-state-advance]` IFF
+          posture.json::pending_verification includes this rule_id AND
+          the most recent journal entry references TrustExecutor / TAOD
+          / envelope-cascade work.
+        - **Detection mechanism:** gate-level reviewer + security-
+          reviewer mechanical sweep at /implement + /redteam — AST
+          walk for `<state>.advance(` followed by `<audit>.append(` in
+          the SAME function; advance-before-emit ordering = HIGH
+          finding. Phase 2 (deferred): hook detector
+          `.claude/hooks/lib/violation-patterns.js::detectStateAdvanceBeforeAuditEmit`
+          with audit fixtures at
+          `.claude/audit-fixtures/violation-patterns/detectStateAdvanceBeforeAuditEmit/`.
+        - **Violation scope:** MUST 1 (ordering) — structural AST
+          sweep; MUST 2 (no-recurse FAILED helper) — structural AST
+          sweep asserting any function named `*_to_failed*` has zero
+          calls to the same module's audit-emit helper used by the
+          parent advance path.
+        - **Origin:** See § Origin (PR #1139 commit e9626a223,
+          2026-05-22).
+
+      Classification rationale: GLOBAL — the failure mode generalises
+      across every state-machine + audit-chain pairing, not specific
+      to Delegate. Applies to trust-executor, PACT envelope cascade,
+      DataFlow transaction phases, kaizen agent lifecycles. eatp.md is
+      the natural home — audit-chain integrity is EATP's core domain.
+
+      Relationship to existing rules: extends zero-tolerance.md Rule 3
+      ("no silent fallbacks") at the state-machine surface — an
+      advance-without-audit IS the silent-fallback failure mode for
+      audit chains. Distinct from Rule 3d (dual-shape return + hasattr
+      guard) which governs API surface, not state-machine ordering.
+
+  - type: rule_update
+    artifact: testing
+    files:
+      - .claude/rules/testing.md
+    classification_suggestion: global
+    context: |
+      Delegate arc pattern 2. ADDS one MUST clause to the existing
+      Regression Testing section:
+      "### MUST: Conformance Vectors Pinning A Contract Implementation
+      Does Not Yet Enforce MUST Use @pytest.mark.xfail(strict=True)".
+
+      Lesson: when a conformance vector (canonical fixture, cross-impl
+      spec test, integration receipt) pins a contract the implementation
+      does NOT yet enforce, the test MUST carry
+      `@pytest.mark.xfail(strict=True, reason="...")` — NOT skip, NOT
+      delete, NOT comment-out. xfail-strict surfaces XPASS on closure:
+      the moment the implementation catches up, the test transitions
+      from xfail to passing AND pytest reports it as a "strict xpass
+      failure" — forcing the author to remove the marker. Skip silently
+      stays skipped after closure; deletion loses the contract pin
+      entirely.
+
+      Generalisation: pattern for any "spec ahead of impl" deferral
+      where the test SHOULD fail today but MUST be the first thing that
+      surfaces when impl catches up. xfail-strict converts honest
+      deferral from a silent ratchet (skip) into a self-clearing
+      tripwire (auto-XPASS on closure). Compiled-language analogues:
+      Rust `#[ignore = "..."]` + `cargo test -- --ignored` with a CI
+      job that asserts ignored tests STILL fail; Go `t.Skip` + explicit
+      "want fail, got pass" marker.
+
+      Evidence: kailash-py PR #1142 + #1144 — S7 conformance vectors
+      DV-3-001 / DV-5-001 / DV-7-001 / DV-9-001 / DV-10-001 at
+      `tests/fixtures/delegate-conformance/canonical.json`. DV-7-001
+      (single-shot §7 phase monotonicity) initially xfailed-strict
+      because the runtime did not enforce single-shot consumption; the
+      xfail-strict reverted to passing automatically when commit
+      `d4ad6a9b3` landed `self._consumed: bool` guard + try/finally —
+      XPASS reported by pytest forced the author to remove the marker
+      same shard. Skip would have left DV-7-001 silently skipped after
+      the fix; deletion would have lost the §7 contract pin.
+
+      Trust Posture Wiring (in-clause, canonical 8-field template):
+        - **Severity:** advisory at gate-review (reviewer mechanical
+          sweep on conformance-vector test files — lexical-regex-only
+          per hook-output-discipline.md MUST-2); halt-and-report at
+          /codify if a vector is added with @pytest.mark.skip instead
+          of xfail-strict for a deferred-impl claim (judgment-bearing
+          gate).
+        - **Grace period:** 7 days from rule landing.
+        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
+          posture per trust-posture.md MUST-4 standard window.
+        - **Regression-within-grace:** trigger key
+          `conformance_skip_instead_of_xfail` fires emergency downgrade
+          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
+        - **Receipt requirement:** SessionStart soft-gate
+          `[ack: xfail-strict-for-deferred-conformance]` IFF
+          posture.json::pending_verification includes this rule_id
+          AND the most recent journal entry references conformance
+          fixtures / cross-impl receipts.
+        - **Detection mechanism:** gate-level reviewer mechanical
+          sweep — `grep -rn '@pytest.mark.skip' tests/**/conformance/`
+          MUST return zero hits where the skip reason cites a
+          deferred implementation; AST walk for any test file under
+          `tests/**/conformance/` or matching `*conformance*` asserts
+          xfail markers are `strict=True`. Phase 2 (deferred): hook
+          detector `.claude/hooks/lib/violation-patterns.js::detectSkipInsteadOfXfailStrictForConformance`
+          with audit fixtures at
+          `.claude/audit-fixtures/violation-patterns/detectSkipInsteadOfXfailStrictForConformance/`.
+        - **Violation scope:** MUST 1 (xfail-strict required for
+          deferred-impl conformance) — structural AST sweep over all
+          tests classified as conformance vectors (path-based +
+          fixture-loader-import-based).
+        - **Origin:** See § Origin (PRs #1142/#1144, 2026-05-22).
+
+      Classification rationale: GLOBAL — xfail-strict-for-deferred is
+      a language/CLI/SDK-invariant testing discipline. pytest naming
+      is Python-specific but the principle (strict failure on XPASS)
+      maps to Rust `#[ignore]` + CI assertion and equivalents in
+      every test runner.
+
+      Relationship to existing rules: pairs with test-skip-discipline.md
+      ("acceptable skip vs masked failure") — that rule governs WHEN
+      tests skip; this rule governs the structural defense for the
+      specific subclass of "skip" that is actually "xfail-strict
+      deferral". Extends probe-driven-verification.md MUST-3 § skip
+      vs lexical-fallback shape pattern.
+
+  - type: rule_update
+    artifact: agents
+    files:
+      - .claude/rules/agents.md
+    classification_suggestion: global
+    context: |
+      Delegate arc pattern 3. ADDS one MUST clause to the existing
+      Quality Gates section:
+      "### MUST: Multi-Wave Plans Require A Holistic Post-Wave /redteam
+      Across All Shards On main".
+
+      Lesson: when a plan executes across N>=3 sharded waves and each
+      shard carries its own per-shard /redteam, the orchestrator MUST
+      run a HOLISTIC post-multi-wave /redteam across ALL merged shards
+      on main BEFORE declaring the plan converged. Per-shard /redteam
+      catches within-shard defects; holistic post-wave /redteam catches
+      cross-shard invariant violations — the failure mode where each
+      shard is locally correct but two shards together break a global
+      invariant (orphaned API surface, missing audit chain link, drift
+      between docs and merged impl, workspace path leakage scrubbed
+      from each shard but not from the combined surface).
+
+      Generalisation: applies to every multi-wave COC plan (multi-shard
+      builds, multi-PR refactors, cross-package releases). The holistic
+      /redteam dispatches a minimum of three parallel agents (reviewer
+      + security-reviewer + closure-parity verifier) per `agents.md`
+      MUST: Audit/Closure-Parity Verification Specialist Has Bash +
+      Read, scoped to "all merged PRs in this plan on main", NOT "the
+      diff of the most recent shard". Same parallel-execution shape
+      as the existing "Parallel Brief-Claim Verification When Issue
+      Count >= 3" rule but applied at the post-implementation
+      convergence gate rather than at /analyze.
+
+      Evidence: kailash-py issue #1035 Delegate arc — after Wave 6
+      (PR #1144) merged, a holistic post-multi-wave /redteam across
+      all 8 shards on main surfaced 1 L1 cleanup gap (PR #1145 —
+      workspace path leakage scrub that NO per-shard /redteam caught
+      because each shard's per-shard /redteam was scoped to its own
+      diff) + 5 follow-up issues filed (#1143, #1146, #1147, #1148,
+      #1149, #1150). Per-shard /redteam caught zero CRIT/HIGH
+      unfixed; holistic /redteam caught one L1 + 5 cross-shard
+      findings.
+
+      Trust Posture Wiring (in-clause, canonical 8-field template):
+        - **Severity:** halt-and-report at the orchestrator's "plan
+          converged" claim (cc-architect mechanical sweep on session
+          notes claiming multi-wave plan completion — judgment-
+          bearing gate per hook-output-discipline.md MUST-2).
+        - **Grace period:** 7 days from rule landing.
+        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
+          posture per trust-posture.md MUST-4 standard window.
+        - **Regression-within-grace:** trigger key
+          `multi_wave_plan_no_holistic_redteam` fires emergency
+          downgrade (1 step) per trust-posture.md MUST-4 emergency-
+          trigger list.
+        - **Receipt requirement:** SessionStart hard-gate
+          `[ack: holistic-post-multi-wave-redteam]` IFF
+          posture.json::pending_verification includes this rule_id
+          AND the most recent journal entry references >=3-shard
+          plan completion.
+        - **Detection mechanism:** gate-level cc-architect mechanical
+          sweep at /codify and at "plan converged" claims — assert a
+          journal entry exists at `workspaces/<id>/journal/` named
+          `holistic-post-wave-redteam-*` AND cites >=3 parallel
+          specialists (reviewer + security-reviewer + closure-parity
+          verifier or equivalent) AND scoped its review to the union
+          of all merged shards on main. Phase 2 (deferred): hook
+          detector
+          `.claude/hooks/lib/violation-patterns.js::detectMultiWavePlanWithoutHolisticRedteam`
+          with audit fixtures at
+          `.claude/audit-fixtures/violation-patterns/detectMultiWavePlanWithoutHolisticRedteam/`.
+        - **Violation scope:** MUST 1 (holistic post-wave /redteam
+          required for N>=3 shard plans) — structural sweep on
+          workspace journal + agent invocation transcripts.
+        - **Origin:** See § Origin (issue #1035, PRs #1130-#1150,
+          2026-05-22).
+
+      Classification rationale: GLOBAL — multi-wave orchestration is
+      CLI/SDK/language-invariant. Applies to every COC workspace
+      crossing >=3 shards regardless of repo.
+
+      Relationship to existing rules: extends agents.md existing
+      Quality Gates section (per-edit + per-gate review pattern)
+      with the post-plan layer. Distinct from existing "Parallel
+      Brief-Claim Verification When Issue Count >= 3" which governs
+      /analyze brief verification, not /redteam post-plan
+      verification. Same structural shape (parallel agents at the
+      gate); different trigger and gate.
+
+  - type: rule_update
+    artifact: deployment
+    files:
+      - .claude/rules/deployment.md
+    classification_suggestion: global
+    context: |
+      Delegate arc pattern 4. ADDS one MUST clause:
+      "## MUST: Pre-Pledge Release Disclosure For Pre-1.0 / Wave-0 New
+      Public APIs".
+
+      Lesson: any /release that ships a NEW public API (new module,
+      new top-level package, new framework primitive) with a pre-1.0
+      / v0 / pre-pledge version anchor MUST include a "Pre-Pledge v0"
+      disclosure section in the package README or top-level docs
+      BEFORE the release tag is cut. The disclosure MUST enumerate
+      five required fields: (a) invariants enforced TODAY (the
+      contract users may rely on now), (b) items DEFERRED for later
+      versions (the contract not yet enforced), (c) explicit
+      NON-PROMISES (what users MUST NOT assume), (d) how-to-verify
+      (commands to run that exercise the enforced invariants),
+      (e) the version status.
+
+      Generalisation: applies to every pre-1.0 release of a new public
+      API — Delegate v0, dataflow new-engine v0, kaizen new lifecycle
+      v0, nexus new transport v0, etc. The disclosure structurally
+      separates "what we pledge" from "what we aspire to" — preventing
+      the silent-pledge failure mode where users adopt v0 assuming
+      all advertised features are enforced today, then break on first
+      upgrade when a previously-aspirational feature ships in v0.1
+      with different semantics.
+
+      Evidence: kailash-py PR #1144 — README "Delegate composition
+      primitive — Pre-Pledge v0" section starting line 317. The
+      section enumerates 8 enforced invariants (signed audit chain,
+      capability snapshot, posture ladder, etc.), 3 deferred items
+      (cross-SDK byte-determinism conformance for vectors DV-3 /
+      DV-7 / DV-9 still py-leads), 3 non-promises (no implicit
+      retries, no shadow audit chains, no posture auto-upgrade), and
+      how-to-verify commands. Pre-merge co-owner assessment of the
+      disclosure caught one "we enforce X" claim that the impl
+      actually deferred — would have shipped as a silent pledge
+      otherwise.
+
+      Trust Posture Wiring (in-clause, canonical 8-field template):
+        - **Severity:** halt-and-report at /release gate (release-
+          specialist mechanical sweep on any new public API with
+          version anchor `0.*` / `v0.*` / `pre-pledge` — judgment-
+          bearing gate per hook-output-discipline.md MUST-2).
+        - **Grace period:** 7 days from rule landing.
+        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
+          posture per trust-posture.md MUST-4 standard window.
+        - **Regression-within-grace:** trigger key
+          `prepledge_release_no_disclosure` fires emergency downgrade
+          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
+        - **Receipt requirement:** SessionStart hard-gate
+          `[ack: pre-pledge-disclosure]` IFF
+          posture.json::pending_verification includes this rule_id
+          AND the impending /release version anchor is `0.*` / `v0.*`
+          AND the release diff adds a NEW public API surface (new
+          top-level module/package).
+        - **Detection mechanism:** gate-level release-specialist
+          mechanical sweep at /release — for every new public
+          module/package shipping at version `0.*`, grep README.md
+          and docs/ for a section titled "Pre-Pledge",
+          "v0 Disclosure", "Pre-1.0 Status", or equivalent, AND
+          assert the section enumerates the 5 required fields
+          (enforced / deferred / non-promises / how-to-verify /
+          status). Phase 2 (deferred): hook detector
+          `.claude/hooks/lib/violation-patterns.js::detectPrePledgeReleaseMissingDisclosure`
+          with audit fixtures at
+          `.claude/audit-fixtures/violation-patterns/detectPrePledgeReleaseMissingDisclosure/`.
+        - **Violation scope:** MUST 1 (5-field disclosure required
+          for new-public-API pre-1.0 releases) — structural grep +
+          structured-section enumeration.
+        - **Origin:** See § Origin (PR #1144 README § Pre-Pledge v0,
+          2026-05-22).
+
+      Classification rationale: GLOBAL — pre-1.0 / v0 disclosure
+      discipline is CLI/SDK/language-invariant. Applies to every
+      Foundation repo's release pipeline.
+
+      Relationship to existing rules: extends deployment.md existing
+      version-consistency rules (atomic version bumps across
+      pyproject.toml + __version__) with the pre-1.0 disclosure
+      requirement. Extends zero-tolerance.md Rule 6 ("implement
+      fully") at the docs surface — a pre-pledge disclosure is
+      structurally the inverse of "if endpoint exists, it returns
+      real data": the README MUST distinguish endpoints that DO
+      return real data today vs endpoints whose docs reserve a
+      contract impl will satisfy later. Co-located with the existing
+      issue #1086 candidate 1 deployment.md clause above; loom-side
+      processor handles both in one merge.
+
 deferred:
   - id: "issue-1086-candidate-3"
     summary: |
@@ -159,3 +528,88 @@ deferred:
       paired contract for the same hook; candidate 3 implements both the
       routing and the dedup.
     disposition: "loom-side change — tracked by issue #1086 acceptance criterion 2"
+
+  - id: "delegate-arc-pattern-5-multi-shard-execution-discipline"
+    summary: |
+      Multi-shard plan execution discipline (sharding cadence + per-shard
+      commit hygiene + parallel-worktree integration). Assessed during
+      this codify and WITHDRAWN before drafting: the discipline it would
+      codify is already structurally covered by autonomous-execution.md
+      Per-Session Capacity Budget rules 1-4 (shard thresholds,
+      complexity-not-LOC sizing, feedback-loop multiplier, fix-
+      immediately within shard budget) + agents.md MUST: Parallel-
+      Worktree Package Ownership Coordination + agents.md MUST: Worktree
+      Agents Commit Incremental Progress. Authoring a new clause would
+      create the duplicate-rule failure mode cc-artifacts.md Rule 10
+      forbids.
+    disposition: "withdrawn — cross-reference to existing rules suffices"
+
+append_session: |
+  Session 2026-05-22 — APPEND /codify covering 4 patterns from the
+  kailash-py Delegate composition primitive arc (issue #1035, PRs
+  #1130-#1144 + post-wave cleanup #1145 + holistic /redteam follow-
+  ups #1143/#1146-1150). Originating evidence: workspaces/issue-1035-
+  delegate-py/journal/ entries 0001-0002 + the 8-shard arc journals
+  + commit `e9626a223` (S6 R1 audit-emit-ordering fix) + commit
+  `d4ad6a9b3` (S7 §7 single-shot consumption with auto-clearing
+  xfail-strict) + PR #1144 README pre-pledge section + PR #1145 L1
+  cleanup.
+
+  Scope decision (user-gated this session): append 4 patterns to the
+  existing pending_review proposal above (issue #1086, candidates
+  1/2/4 unchanged). Pattern 5 ("multi-shard plan execution
+  discipline") withdrawn before drafting per overlap with
+  autonomous-execution.md Per-Session Capacity Budget rules 1-4 +
+  agents.md MUST: Parallel-Worktree Package Ownership Coordination —
+  authoring would have triggered cc-artifacts.md Rule 10 duplicate-
+  rule prevention.
+
+  This codify ADDS one MUST clause each to four EXISTING rule files
+  (eatp.md, testing.md, agents.md, deployment.md). Each carries an
+  in-clause Trust Posture Wiring summary covering all canonical 8
+  fields per trust-posture.md MUST Rule 8 (Severity / Grace period /
+  Cumulative posture impact / Regression-within-grace / Receipt
+  requirement / Detection mechanism / Violation scope / Origin). No
+  new agents/skills. No new rule FILES — clauses added to existing
+  files. status reset is N/A (proposal was already pending_review).
+
+  self-referential-codify.md gate assessment: agents.md IS on the
+  codify-discipline allowlist of self-referential-codify.md MUST
+  Rule 2. eatp.md, testing.md, deployment.md are NOT on the
+  allowlist (testing.md only governs implementation testing; not
+  codify discipline). The self-referential-codify.md MUST Rule 1
+  (multi-agent redteam-with-tests gate) applies to the agents.md
+  clause portion of this codify. The 3 non-self-referential clauses
+  follow posture default (L5_DELEGATED Round 1 OPTIONAL). loom-side
+  processor MUST dispatch parallel reviewer + security-reviewer +
+  cc-architect when classifying the agents.md clause; Phase-1 fail-
+  closed posture applies.
+
+  Distribution discipline: this is a BUILD->loom proposal. The
+  loom-side processor edits the four rule files in loom canonical;
+  no rule files are edited in this kailash-py session.
+
+  Trust Posture Wiring template note: the EXISTING entries above
+  (issue #1086 candidates 1/2/4) use the compact in-line wiring
+  summary common pre-canonical-template-update; the loom-side
+  processor MUST upgrade those to the canonical 8-field template per
+  trust-posture.md MUST Rule 8 grandfather-cutoff clause ("rules
+  landed BEFORE the SHA of this edit are exempt until their next
+  /codify-touched edit") — since both blocks are now /codify-touched
+  in this proposal, the loom-side processor authoring the rule edits
+  MUST emit canonical-template-compliant Wiring for ALL 7 clauses
+  (existing 3 + new 4).
+
+  Receipts:
+    - Issue #1035 (Delegate composition primitive build)
+    - PRs #1130 (S1), #1131 (S2.5), #1136 (S2), #1137 (Wave 2
+      __init__ reconciliation), #1138 (S5), #1139 (S6), #1142 (S7),
+      #1143 (holistic /redteam findings file), #1144 (S8 E2E +
+      cross-impl + pre-pledge README), #1145 (L1 cleanup), #1146-
+      #1150 (5 follow-up issues filed from holistic /redteam)
+    - Commits: `e9626a223` (S6 R1 audit-emit-before-state-advance),
+      `d4ad6a9b3` (S7 §7 single-shot consumption guard)
+    - Workspace journal: `workspaces/issue-1035-delegate-py/journal/`
+      entries 0001 (cross-impl receipts plan) + 0002 (cross-repo-
+      authorized fixture vendoring per repo-scope-discipline.md
+      User-Authorized Exception)
