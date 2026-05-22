@@ -1279,15 +1279,50 @@ def test_dispatch_surface_refuses_grantee_after_principal_kind_check() -> None:
 async def test_dispatch_grantee_re_check_at_dispatch_time() -> None:
     """F5 / R2 defense-in-depth: the grantee check re-fires at every
     dispatch() start. If the cascade's grantee registry were mutated
-    after bind (object.__getattribute__ on the internal slot then
-    .clear()), the re-check refuses the invocation.
+    after bind (via Python's name-mangled internal slot
+    ``_TenantScopedCascade__grantees``), the re-check refuses the
+    invocation.
+
+    The internal slot is name-mangled (double-underscore at class
+    scope) so a single-underscore access like ``cascade._grantees``
+    raises ``AttributeError``. Reaching the mutable set requires
+    spelling the mangled form. Production code MUST NOT do this; this
+    test exercises the mangled form deliberately to simulate a
+    determined post-bind registry mutation and confirm the dispatch-time
+    re-check structurally guards against it.
     """
     surface = _make_surface()
-    # Drain the registry via the internal slot bypass — simulating a
-    # post-bind registry mutation. Production code MUST NOT do this;
-    # the bypass exercises the defense-in-depth gate.
-    object.__getattribute__(surface.trust_cascade, "_grantees").clear()
+    # Drain the registry via the name-mangled internal slot — simulating
+    # a post-bind registry mutation. The mangled form is the only path
+    # external code can reach the mutable set.
+    object.__getattribute__(
+        surface.trust_cascade, "_TenantScopedCascade__grantees"
+    ).clear()
     with pytest.raises(
         DispatchCascadeViolationError, match=r"no longer a registered grantee"
     ):
         await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+def test_tenant_scoped_cascade_grantees_slot_is_name_mangled() -> None:
+    """Per security-reviewer F1: the grantee registry MUST NOT be reachable
+    via a single-underscore alias. The internal slot is name-mangled
+    (``_TenantScopedCascade__grantees``); ``cascade._grantees`` raises
+    ``AttributeError``. The mangled form is loud and intentional —
+    determined adversaries with a cascade reference can still spell it,
+    but the cascade reference IS itself the trust authority (see class
+    docstring + README #1147 disclosure for the durable-registry
+    roadmap).
+    """
+    from kailash.delegate.trust import TenantScope, TenantScopedCascade
+
+    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-test"))
+    # Underscore-prefix alias raises AttributeError — single-underscore
+    # convention is NOT the mutation surface.
+    with pytest.raises(AttributeError):
+        cascade._grantees  # noqa: B018
+    # The mangled form IS reachable (Python's name-mangling rule) —
+    # documented and intentional per the trust boundary.
+    mangled = object.__getattribute__(cascade, "_TenantScopedCascade__grantees")
+    assert mangled == set()
