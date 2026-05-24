@@ -1,0 +1,44 @@
+# Session Notes — 2026-05-24
+
+## Where we are
+
+#1163 tracker (phantom `terrene-foundation/kailash-rs` citations + deferred cross-SDK rs parity) CLOSED `completed` this turn after F5 closure-by-discovery superseded its re-open gate. Scope sweep posted as comment 4528054850 (acceptance criterion #1 ✅); closure-provenance line cites #1162 per `git.md` Discipline. Stale shard plan (claimed 8 pending shards) moved to `todos/completed/` with status header — all S1–S8 delivered weeks ago. #1035 itself remains open pending maintainer close.
+
+## Read first
+
+1. `workspaces/issue-1035-delegate-py/todos/completed/00-shard-plan.md` — status header confirms all S1–S8 delivered; do NOT re-implement
+2. `workspaces/issue-1035-delegate-py/journal/0005-AUTHORIZATION-cross-repo-esperie-enterprise-kailash-rs-f5.md` — F5 closure rationale; LOCAL-UNCOMMITTED, run `git status` first
+3. #1163 (CLOSED) comments — phantom-slug 3-artifact scope (#1143, PR #1142, PR #1152) + full acceptance disposition
+4. `README.md:351` — audit-chain forensic key-registry gap #1147 STILL OPEN (NOT fixed by v2.25.0/.1/.2)
+5. `CHANGELOG.md` § "[2.25.2]" + "[2.25.1]" Documentation — 4 v2.25.0 inaccuracies on record (do NOT amend earlier entries)
+
+## In-flight state
+
+- Working-tree drift persists across packages/kailash-align, kaizen, dataflow, ml per F3 "LEAVE ALONE" — explicit-path staging required for any release-prep PR.
+- journal/0005 + the new comment on #1163 are LOCAL-UNCOMMITTED in this repo's working tree; never auto-committed in BUILD repos.
+
+## Outstanding ledger (forest)
+
+| ID  | Item                                                                       | Value-anchor (MUST-1 source)                                      | Status                                          |
+| --- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| F1  | Loom-side `/sync` Gate-1 of `.claude/.proposals/latest.yaml` (codify queue) | User approval prior session ("approved" on codify recommendation) | BLOCKED on loom session (not this repo's scope) |
+| F3  | Working-tree drift across packages/kaizen/dataflow/ml/align                | User directive 2026-05-22 — verbatim "LEAVE ALONE"                | LEAVE ALONE per user                            |
+| F10 | `.session-notes` split-layout migration per knowledge-convergence MUST-1   | `rules/knowledge-convergence.md` MUST-1                           | BLOCKED on loom-side /codify (not this scope)   |
+
+Closed this session: `F9` → #1163 (closed `completed`, comment 4528054850, closure-provenance #1162). F5 closed earlier 2026-05-24 per journal/0005 (parallel session).
+
+## Traps
+
+- `src/kailash/delegate/` ALREADY EXISTS feature-complete (S1–S8 shipped via #1035 series through commit `e7d2adc86`). Run `git log -- src/kailash/delegate/` before any "implement" recommendation.
+- `gh search issues|prs --state all` is invalid — only `open` or `closed`. Run separately + merge with `jq -s 'add'`. (Bug in #1163 criterion #1 as written; worked around in the sweep comment.)
+- F5 closure receipt (journal/0005) is LOCAL-UNCOMMITTED. The #1163 closure comment references "session journal in this repo" abstractly per `upstream-issue-hygiene.md` MUST-2; user accepted that evidentiary level.
+- Phantom `terrene-foundation/kailash-rs` citations remain in shipped bodies (#1143, PR #1142, PR #1152) per Strategy A immutability. PR #1142's `cross-repo-authorized:` greppable marker is documented as known-phantom in closed #1163.
+- Real rs target is `esperie-enterprise/kailash-rs` (BUILD) or `rrps-mtu/kailash-rs` (seed). Public Foundation-repo comments MUST stay abstract per `upstream-issue-hygiene.md` MUST-2.
+- `PrincipalKind` (py) is `typing.Literal["sovereign","service_account","delegate"]` — NOT Enum. Rs uses type-level Impersonation absence + runtime `assert_service_account_distinct`.
+
+## Open questions for the human
+
+- Execute the bounded `~/repos/loom/kailash-rs` verification read (per existing authorization in journal/0005)? Currently skipped per `repo-scope-discipline.md` default.
+- Surface F10 (knowledge-convergence split-layout migration) to loom via /codify proposal?
+- R1 leftover: `DispatchCascadeViolationError` 3-way split? No user-anchored source per `value-prioritization.md` MUST-1 closed allowlist; design call awaiting brief or `DECISION` journal anchor.
+- F3 working-tree drift: how to resolve eventually (commit / stash / discard)? Currently durably "LEAVE ALONE"; surfaced for awareness.
