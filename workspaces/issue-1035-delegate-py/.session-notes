@@ -1,44 +1,48 @@
-# Session Notes — 2026-05-24
+# Session Notes — 2026-05-25
 
 ## Where we are
 
-#1163 tracker (phantom `terrene-foundation/kailash-rs` citations + deferred cross-SDK rs parity) CLOSED `completed` this turn after F5 closure-by-discovery superseded its re-open gate. Scope sweep posted as comment 4528054850 (acceptance criterion #1 ✅); closure-provenance line cites #1162 per `git.md` Discipline. Stale shard plan (claimed 8 pending shards) moved to `todos/completed/` with status header — all S1–S8 delivered weeks ago. #1035 itself remains open pending maintainer close.
+`kailash.delegate` (#1035): a 3-round `/redteam` (R1: 6 CRIT + 5 HIGH → 3-shard
+parallel fix-wave X/Y/Z → R2+R3 clean = CONVERGED) shipped as **v2.26.0**, which
+had a slim-core release defect (delegate eager-imported cryptography → broke bare
+`pip install kailash`). Corrected in **v2.26.1** (lazy crypto import) — verified
+live on PyPI. Release cycle complete. Heavy multi-operator interleave with the
+parallel #1165 session throughout.
 
 ## Read first
 
-1. `workspaces/issue-1035-delegate-py/todos/completed/00-shard-plan.md` — status header confirms all S1–S8 delivered; do NOT re-implement
-2. `workspaces/issue-1035-delegate-py/journal/0005-AUTHORIZATION-cross-repo-esperie-enterprise-kailash-rs-f5.md` — F5 closure rationale; LOCAL-UNCOMMITTED, run `git status` first
-3. #1163 (CLOSED) comments — phantom-slug 3-artifact scope (#1143, PR #1142, PR #1152) + full acceptance disposition
-4. `README.md:351` — audit-chain forensic key-registry gap #1147 STILL OPEN (NOT fixed by v2.25.0/.1/.2)
-5. `CHANGELOG.md` § "[2.25.2]" + "[2.25.1]" Documentation — 4 v2.25.0 inaccuracies on record (do NOT amend earlier entries)
+1. `workspaces/issue-1035-delegate-py/journal/0008-RISK-slim-core-release-defect-and-correction.md` — the session's headline lesson + /codify candidates
+2. `workspaces/issue-1035-delegate-py/04-validate/08-convergence.md` — redteam convergence receipt (R1→R3)
+3. `workspaces/issue-1035-delegate-py/04-validate/sweep-2026-05-25.md` — full /sweep findings + ranked next items
+4. `src/kailash/delegate/verifier.py` (Ed25519Verifier.__init__ ~L195) — lazy-crypto pattern that defends slim-core
 
 ## In-flight state
 
-- Working-tree drift persists across packages/kailash-align, kaizen, dataflow, ml per F3 "LEAVE ALONE" — explicit-path staging required for any release-prep PR.
-- journal/0005 + the new comment on #1163 are LOCAL-UNCOMMITTED in this repo's working tree; never auto-committed in BUILD repos.
+- All session code merged + released (origin/main `6506a08b4`, v2.26.1). Local == origin/main.
+- Uncommitted: sweep report + journal/0008 + .session-notes (this file) — workspace artifacts, need a chore PR (branch protection; build-repo-release Rule 1a carve-out = no release needed).
+- Parallel notes referenced R2a test WIP at `/tmp/r2a-wip-preserve/` (DISCARD disposition) — not touched this session; state unverified.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                                                       | Value-anchor (MUST-1 source)                                      | Status                                          |
-| --- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
-| F1  | Loom-side `/sync` Gate-1 of `.claude/.proposals/latest.yaml` (codify queue) | User approval prior session ("approved" on codify recommendation) | BLOCKED on loom session (not this repo's scope) |
-| F3  | Working-tree drift across packages/kaizen/dataflow/ml/align                | User directive 2026-05-22 — verbatim "LEAVE ALONE"                | LEAVE ALONE per user                            |
-| F10 | `.session-notes` split-layout migration per knowledge-convergence MUST-1   | `rules/knowledge-convergence.md` MUST-1                           | BLOCKED on loom-side /codify (not this scope)   |
+| ID  | Item | Value-anchor (MUST-1 source) | Status |
+| --- | ---- | ---------------------------- | ------ |
+| F1  | Loom-side `/sync` Gate-1 of codify queue | prior-session user approval on codify rec | BLOCKED on loom session |
+| F3  | Working-tree drift (kaizen/dataflow/ml/align, ~1606 files) | user directive 2026-05-22 verbatim "LEAVE ALONE" | LEAVE ALONE per user |
+| F10 | `.session-notes` split-layout migration | `knowledge-convergence.md` MUST-1 | BLOCKED on loom `/codify` |
+| F11 | Connector-ABC concrete-defaults (drop `__init_subclass__` proxy) to clear the 42 test-pyright errors | parallel-session anchor: "42 test-pyright errors shipped (zero-tolerance static debt)" | redteam-convergence half DELIVERED (v2.26.1); design half NOT done — this session KEPT the proxy. Re-validate pyright state + intent |
+| F12 | loom#350 pre-emit validator (7 emit-discipline findings) | `esperie-enterprise/loom#350` body | BLOCKED — loom-side root-cause |
+| F14 | `/codify` the slim-core import lesson (Pyright-fix-moved-import-to-module-scope → broke bare install; TestPyPI-skip let it reach PyPI) | journal/0008 §Lessons; this session's release-defect incident | queued — HIGH (recurrence-prevention) |
 
-Closed this session: `F9` → #1163 (closed `completed`, comment 4528054850, closure-provenance #1162). F5 closed earlier 2026-05-24 per journal/0005 (parallel session).
+Closed this session: `#1167` → merged (lazy-crypto fix, v2.26.1); `v2.26.0`→`v2.26.1` release cycle → PRs #1164/#1166/#1167/#1168 + tags; `F13-yank` → DEFERRED to maintainer (web-UI, see Open questions).
 
 ## Traps
 
-- `src/kailash/delegate/` ALREADY EXISTS feature-complete (S1–S8 shipped via #1035 series through commit `e7d2adc86`). Run `git log -- src/kailash/delegate/` before any "implement" recommendation.
-- `gh search issues|prs --state all` is invalid — only `open` or `closed`. Run separately + merge with `jq -s 'add'`. (Bug in #1163 criterion #1 as written; worked around in the sweep comment.)
-- F5 closure receipt (journal/0005) is LOCAL-UNCOMMITTED. The #1163 closure comment references "session journal in this repo" abstractly per `upstream-issue-hygiene.md` MUST-2; user accepted that evidentiary level.
-- Phantom `terrene-foundation/kailash-rs` citations remain in shipped bodies (#1143, PR #1142, PR #1152) per Strategy A immutability. PR #1142's `cross-repo-authorized:` greppable marker is documented as known-phantom in closed #1163.
-- Real rs target is `esperie-enterprise/kailash-rs` (BUILD) or `rrps-mtu/kailash-rs` (seed). Public Foundation-repo comments MUST stay abstract per `upstream-issue-hygiene.md` MUST-2.
-- `PrincipalKind` (py) is `typing.Literal["sovereign","service_account","delegate"]` — NOT Enum. Rs uses type-level Impersonation absence + runtime `assert_service_account_distinct`.
+- **Multi-operator interleave**: parallel #1165 session merged + cut releases mid-work; my release commit landed on a leftover branch (`fix/delegate-test-pyright-zero`, now 0-unique-commits, safe to delete). Neither session `/claim`ed. Next session MUST `/claim` delegate paths first.
+- **TestPyPI skip cost is real for slim-core/import-shape changes** — it let the 2.26.0 defect reach PyPI. For a new module in the slim-core import closure, do NOT skip TestPyPI.
+- F11 vs my work: I rebuilt Connector to 4-primitive + KEPT `__init_subclass__` proxy; the F11 plan wanted concrete-defaults to kill the 42 pyright errors. Confirm whether those errors persist before re-opening F11.
 
 ## Open questions for the human
 
-- Execute the bounded `~/repos/loom/kailash-rs` verification read (per existing authorization in journal/0005)? Currently skipped per `repo-scope-discipline.md` default.
-- Surface F10 (knowledge-convergence split-layout migration) to loom via /codify proposal?
-- R1 leftover: `DispatchCascadeViolationError` 3-way split? No user-anchored source per `value-prioritization.md` MUST-1 closed allowlist; design call awaiting brief or `DECISION` journal anchor.
-- F3 working-tree drift: how to resolve eventually (commit / stash / discard)? Currently durably "LEAVE ALONE"; surfaced for awareness.
+- **Yank 2.26.0** (broken slim-core import) — one-click maintainer web-UI: https://pypi.org/manage/project/kailash/release/2.26.0/ → Yank. Low urgency (2.26.1 is resolvable latest).
+- **Close #1035?** Shipped in 2.26.1 (PRs #1164/#1165/#1167); maintainer close-gate. Refs ready in the sweep report.
+- F11 still wanted (concrete-defaults Connector), or does the shipped proxy approach suffice?
