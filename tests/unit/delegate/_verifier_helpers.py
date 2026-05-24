@@ -41,9 +41,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from kailash.delegate.types import DelegateIdentity, PrincipalDirectory
+from kailash.delegate.verifier import NullVerifier
 
 
-class AcceptAnyVerifier:
+class AcceptAnyVerifier(NullVerifier):
     """Deterministic Protocol adapter — accepts every signature as valid.
 
     NOT A MOCK per ``testing.md`` § "Protocol-Satisfying Deterministic
@@ -53,6 +54,15 @@ class AcceptAnyVerifier:
     exists so legacy audit-chain Tier-1 tests that focus on chain
     linkage / sequencing / monotonicity invariants do not need to
     construct an Ed25519 keypair to assert those properties.
+
+    Subclassing :class:`NullVerifier` is intentional: the cascade's H2
+    discriminator (``isinstance(self.verifier, NullVerifier)``) treats
+    NullVerifier subclasses as fail-closed-equivalent for
+    register_root_grantee, so legacy tests that don't supply
+    ``grant_proof`` continue to work. The runtime's exact-class
+    coherence check (``type(x) is type(y)``) is preserved because the
+    audit-engine and cascade both get :class:`AcceptAnyVerifier`
+    instances under the conftest wiring — same class, gate passes.
 
     Tests exercising the cryptographic gate itself MUST use
     :func:`build_real_verifier_pair` + real :class:`Ed25519Verifier`.

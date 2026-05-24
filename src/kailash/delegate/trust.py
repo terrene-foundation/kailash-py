@@ -540,8 +540,13 @@ class TenantScopedCascade:
         # committed to cryptographic gating; an unsigned root-seed on
         # such a cascade is the H2 attack surface. NullVerifier is the
         # transitional default; allow unsigned seeding ONLY when the
-        # verifier itself is the fail-closed default.
-        is_real_verifier = not isinstance(self.verifier, NullVerifier)
+        # verifier itself is the fail-closed default. Reference the
+        # canonical NullVerifier from the verifier module directly so
+        # test-conftest monkeypatching of the trust-module name binding
+        # does not flip the discriminator semantics.
+        from kailash.delegate.verifier import NullVerifier as _CanonicalNullVerifier
+
+        is_real_verifier = not isinstance(self.verifier, _CanonicalNullVerifier)
         if is_real_verifier or grant_proof is not None:
             if grant_proof is None:
                 raise CascadeSignatureError(
