@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-05-25
+
+### Added
+
+- **Delegate signature verification — `kailash.delegate.verifier`** — new `Verifier` Protocol, fail-closed `NullVerifier` (rejects all signatures), and `cryptography`-backed `Ed25519Verifier`. Wired into `AuditChainEngine` (verification inside the `_emit_lock` critical section before substrate-anchor append), `TenantScopedCascade` (`cascade_child` + `register_root_grantee` now require a cryptographically-verified `grant_proof`; new `CascadeSignatureError`), and `DelegateRuntime`. Before this release the substrate stored per-event Ed25519 signatures but validated them for hex-shape only — verification is now real. Goes **beyond** the v2.25.x disclosed limitation (issue #1147, which was closed via README disclosure): `PrincipalDirectory` now carries a `verification_keys` registry + `public_key_for()` accessor binding signer IDs to public keys in-primitive.
+- **`Connector` 4-primitive ABC** — `kailash.delegate.dispatch.Connector` rebuilt from a single `invoke()` to the audit-grade shape: required primitives `authenticate` / `write` / `read` plus required accessors `revocation` / `ledger` / `auth_verifier`. Backwards-compatible: existing `invoke()`-only connectors keep working via the `LegacyInvokeConnector` adapter + an `__init_subclass__` auto-proxy.
+- **`LifecycleState.advance_to`** — enforces the single linear delegate lifecycle chain `PROPOSED → INSTANTIATED → POSTURE_GRADED → ACTIVE → RETIRED → ARCHIVED`; illegal edges (skips, backward transitions, post-`ARCHIVED`) raise `LifecycleError`.
+- **#1035 acceptance-gate aliases** — `Delegate`, `ConstraintEnvelope`, `GenesisRecord`, `PostureState`, `AuditChain` exposed as aliases of the disambiguated canonical names (`DelegateRuntime`, `DelegateConstraintEnvelope`, `DelegateGenesisRecord`, `Posture`, `AuditChainEngine`). The literal #1035 import line `from kailash.delegate import Delegate, ConstraintEnvelope, PrincipalDirectory, GenesisRecord, PostureState, AuditChain, Connector` now resolves. Both forms are the same class object at runtime; new code should prefer the prefixed names to avoid collision with `kaizen_agents.delegate.Delegate`.
+
+### Notes
+
+- **Backwards-compatible (minor).** No existing public import or connector breaks. `DispatchSurface(verifier=...)` defaults to `None` (verification skipped) to preserve existing callers — strict-security deployments MUST bind `NullVerifier` or `Ed25519Verifier` explicitly. A future major may flip the default to fail-closed once callers migrate.
+- **Cross-implementation byte-match receipts vs kailash-rs are DEFERRED** per `cross-sdk-inspection.md` Rule 4 — the rs-side Ed25519 library is unconfirmed in-tree; ≥3 byte-vector test cases will be pinned when rs publishes its canonical. The comparator-behavior contract (`receipts_agree`) is exercised end-to-end today; only the rs-vendored byte canonical is pending.
+- **Known follow-ups (non-blocking, tracked):** `DelegateRuntime.advance_lifecycle` runtime wrapper is defined but unwired pending the `Delegate.compose()` composer (the production hot path uses the separate, fully-wired TAOD `state` axis); `_tenant_id_hash` is unsalted SHA-256; `DispatchSurface._consumed` has a narrow concurrent-execute TOCTOU window.
+- Delivered via PR #1164 (3-shard parallel `/redteam`-to-convergence cycle — Round 1: 6 CRITICAL + 5 HIGH; two consecutive clean verification rounds) plus PR #1165 (R1 reconciliation — docstring accuracy, signer-contract tightening, `verifier.py` import-safety). 487 delegate tests pass (+69 over the v2.25.2 baseline).
+
 ## [2.25.2] - 2026-05-23
 
 ### Documentation
