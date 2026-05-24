@@ -153,6 +153,14 @@ class LifecycleState(str, Enum):
     The wire format is the lowercase string value (cross-SDK canonical) so
     JSON round-trip against rs fixtures is byte-identical — same convention
     as :class:`kailash.trust.envelope.AgentPosture` (``envelope.py:551``).
+
+    State-machine enforcement (#1035 H1 / F-11). The D3 chain is enforced
+    at the :meth:`advance_to` level: callers MUST traverse the chain edge-
+    by-edge; arbitrary transitions raise :class:`LifecycleError`. Mirrors
+    the TAOD state machine pattern at ``runtime.py:441-497`` but on the
+    LifecycleState (Delegate-lifetime) axis instead of the TAOD (per-run)
+    axis. Two complementary state machines run on every Delegate runtime;
+    both are append-only / monotonic.
     """
 
     PROPOSED = "proposed"
@@ -161,6 +169,67 @@ class LifecycleState(str, Enum):
     ACTIVE = "active"
     RETIRED = "retired"
     ARCHIVED = "archived"
+
+    def advance_to(self, target: "LifecycleState") -> "LifecycleState":
+        """Transition to ``target`` state iff legal; raise otherwise.
+
+        Closes #1035 /redteam Round-1 H1 / F-11 (HIGH): the D3 lifecycle
+        chain (Proposed→Instantiated→PostureGraded→Active→Retired→Archived)
+        was declared in the enum, and :class:`LifecycleError` was defined,
+        but no edge-enforcer ever raised it. This method is the structural
+        defense — every Delegate lifecycle transition routes through this
+        gate; arbitrary jumps or backward edges raise loudly.
+
+        Legal transitions form a single linear chain (D3 invariant). No
+        backward edges. No skips. ``Archived`` is terminal (no successor).
+        Mirrors the rs ``LifecycleState::advance_to`` shape; cross-SDK
+        wire-format parity is preserved because the gate only inspects
+        the lowercase string value, identical on both sides.
+
+        Args:
+            target: The desired next :class:`LifecycleState`.
+
+        Returns:
+            ``target`` itself — convenience for the caller pattern
+            ``state = state.advance_to(next_state)``.
+
+        Raises:
+            LifecycleError: ``target`` is not the unique legal successor
+                OR the current state is terminal (``Archived``).
+            TypeError: ``target`` is not a :class:`LifecycleState`.
+        """
+        if not isinstance(target, LifecycleState):
+            raise TypeError(
+                "LifecycleState.advance_to(target) MUST be a LifecycleState; "
+                f"got {type(target).__name__}"
+            )
+        expected = _LEGAL_LIFECYCLE_EDGES[self]
+        if expected is None:
+            # Terminal — no further transitions accepted. Mirror the
+            # TAOD terminal-state guard at runtime.py:473-478.
+            raise LifecycleError(
+                from_state=self,
+                to_state=target,
+                expected=None,
+            )
+        if target is not expected:
+            raise LifecycleError(
+                from_state=self,
+                to_state=target,
+                expected=expected,
+            )
+        return target
+
+    @property
+    def is_terminal(self) -> bool:
+        """Return ``True`` iff this state is the terminal ``Archived`` state.
+
+        Used by callers (runtime hot path) to short-circuit out of the
+        lifecycle loop without invoking :meth:`advance_to` with an
+        invalid target. Mirrors :attr:`TAODState.is_terminal` at
+        ``runtime.py:436``.
+        """
+        return _LEGAL_LIFECYCLE_EDGES[self] is None
 
 
 class LifecycleError(Exception):
@@ -192,6 +261,22 @@ class LifecycleError(Exception):
                 f"{to_state.value}; no legal successor exists"
             )
         super().__init__(msg)
+
+
+# D3 single-linear lifecycle edges (#1035 H1/F-11). The legal-edge map is
+# defined at module scope, AFTER LifecycleState (so the enum members are
+# bound) and BEFORE any class that constructs LifecycleState (so the map
+# is available at first :meth:`advance_to` call). Mirrors the
+# ``_LEGAL_SUCCESSORS`` map for TAODState at runtime.py:218-228 — single
+# source of truth for the legal successor of each state.
+_LEGAL_LIFECYCLE_EDGES: dict[LifecycleState, LifecycleState | None] = {
+    LifecycleState.PROPOSED: LifecycleState.INSTANTIATED,
+    LifecycleState.INSTANTIATED: LifecycleState.POSTURE_GRADED,
+    LifecycleState.POSTURE_GRADED: LifecycleState.ACTIVE,
+    LifecycleState.ACTIVE: LifecycleState.RETIRED,
+    LifecycleState.RETIRED: LifecycleState.ARCHIVED,
+    LifecycleState.ARCHIVED: None,  # terminal — no legal successor
+}
 
 
 class RoleLifecycleState(str, Enum):
@@ -755,12 +840,31 @@ class PrincipalDirectory:
     immutable. To extend the directory, construct a new instance and re-
     anchor a new :class:`DelegateGenesisRecord`.
 
+    Verification-key store (#1035 C1 closure). The directory carries an
+    OPTIONAL ``verification_keys`` mapping from ``delegate_id`` to the
+    32-byte Ed25519 public key bytes for that signer. The mapping is
+    independent of :class:`DelegateIdentity` so the wire-format identity
+    stays stable while the crypto material is wired alongside.
+    :class:`kailash.delegate.verifier.Ed25519Verifier` reads
+    :meth:`public_key_for` to obtain the public key for a given signer.
+    A directory constructed without ``verification_keys`` returns
+    ``None`` from :meth:`public_key_for` for every id; downstream
+    verifiers fall closed on the missing key (a NullVerifier-equivalent
+    posture per the verifier contract).
+
+    Cross-impl note. Ed25519 32-byte public-key form is the rs canonical
+    wire format per
+    ``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-extraction.md:289``.
+    Byte-match cross-SDK verifier receipts are DEFERRED pending
+    rs-library confirmation per ``cross-sdk-inspection.md`` Rule 4.
+
     Deferred to S3 (#1035 follow-up): from_dict validating constructor
     closes the direct-dataclass-construction bypass; tracking via
     workspace todos.
     """
 
     identities: tuple[DelegateIdentity, ...] = ()
+    verification_keys: dict[uuid.UUID, bytes] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Coerce iterable to tuple for frozen immutability.
@@ -777,6 +881,33 @@ class PrincipalDirectory:
                     f"(delegate_id={ident.delegate_id!r})"
                 )
             seen.add(ident.delegate_id)
+        # Validate verification_keys shape (#1035 C1): keys MUST be
+        # uuid.UUID, values MUST be exactly-32-byte bytes (Ed25519
+        # canonical). Wrong shape fails loud at construction so a
+        # mis-wired directory cannot silently fall through to "key not
+        # found" at verify time.
+        if not isinstance(self.verification_keys, dict):
+            raise TypeError(
+                "PrincipalDirectory.verification_keys MUST be a dict; got "
+                f"{type(self.verification_keys).__name__}"
+            )
+        for key_id, key_bytes in self.verification_keys.items():
+            if not isinstance(key_id, uuid.UUID):
+                raise TypeError(
+                    "PrincipalDirectory.verification_keys keys MUST be "
+                    f"uuid.UUID; got {type(key_id).__name__}"
+                )
+            if not isinstance(key_bytes, (bytes, bytearray)):
+                raise TypeError(
+                    f"PrincipalDirectory.verification_keys[{key_id!r}] "
+                    f"MUST be bytes; got {type(key_bytes).__name__}"
+                )
+            if len(key_bytes) != 32:
+                raise ValueError(
+                    f"PrincipalDirectory.verification_keys[{key_id!r}] "
+                    f"MUST be exactly 32 bytes (Ed25519 canonical public-"
+                    f"key form); got {len(key_bytes)}"
+                )
 
     def resolve(self, delegate_id: uuid.UUID) -> DelegateIdentity | None:
         """Return the identity matching ``delegate_id`` or ``None`` on miss.
@@ -794,3 +925,27 @@ class PrincipalDirectory:
             if ident.delegate_id == delegate_id:
                 return ident
         return None
+
+    def public_key_for(self, delegate_id: uuid.UUID) -> bytes | None:
+        """Return the 32-byte Ed25519 public key for ``delegate_id``.
+
+        Returns ``None`` when (a) the directory was constructed without
+        a ``verification_keys`` mapping for that id, OR (b) the id is
+        not in the mapping. Used by
+        :class:`kailash.delegate.verifier.Ed25519Verifier` to obtain
+        the public key; the verifier falls closed on ``None`` so a
+        missing key is structurally indistinguishable from an unknown
+        signer — both are "cannot verify" in the same way.
+
+        Args:
+            delegate_id: The signer's :attr:`DelegateIdentity.delegate_id`.
+
+        Returns:
+            32-byte Ed25519 public key bytes, or ``None`` on miss.
+        """
+        if not isinstance(delegate_id, uuid.UUID):
+            raise TypeError(
+                "PrincipalDirectory.public_key_for requires a uuid.UUID; "
+                f"got {type(delegate_id).__name__}"
+            )
+        return self.verification_keys.get(delegate_id)

@@ -74,10 +74,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from kailash.delegate.audit import (
-    AuditChainEngine,
-    DelegateEventType,
-)
+from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.dispatch import DispatchResult, DispatchSurface
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import TenantScope, TenantScopedCascade
@@ -227,7 +224,7 @@ class R2CompositionError(ValueError):
 
 
 # Literal type pinning the legal phase values. The dataclass field is
-# typed against this so a typo in a phase name surfaces at type-check
+# annotated against this so a typo in a phase name surfaces at static-check
 # time, not at runtime.
 TAODPhase = Literal[
     "initiated",
@@ -1001,6 +998,29 @@ class DelegateRuntime:
                 "swap between bind and execute is BLOCKED."
             )
 
+        # /redteam Round-1 C1 coherence check: the audit-engine and
+        # cascade MUST be gated under the SAME Verifier CLASS so a
+        # runtime whose audit chain is cryptographically gated has its
+        # cascade gated under the same posture (and vice versa). A
+        # split configuration (real Ed25519Verifier on audit +
+        # NullVerifier on cascade) is structurally indistinguishable
+        # from a partial C1 closure that leaves one half "fake
+        # encryption". The check is on CLASS, not instance, because
+        # callers may legitimately construct the two surfaces with
+        # separate verifier instances over the same directory; what
+        # matters is that both surfaces enforce the same gate posture.
+        if type(audit_engine.verifier) is not type(cascade.verifier):  # noqa: E721
+            raise RuntimeCompositionError(
+                "Runtime composition mismatch: audit_engine.verifier "
+                f"({type(audit_engine.verifier).__name__}) and "
+                f"cascade.verifier ({type(cascade.verifier).__name__}) "
+                "MUST be the same Verifier class so the cryptographic "
+                "gate posture is consistent across the audit chain AND "
+                "the cascade grant chain (#1035 C1 closure — partial "
+                "wiring is indistinguishable from fake-encryption per "
+                "zero-tolerance.md Rule 2)."
+            )
+
         self._dispatch_surface = dispatch_surface
         self._audit_engine = audit_engine
         self._cascade = cascade
@@ -1008,6 +1028,17 @@ class DelegateRuntime:
         self._identity = identity
         self._signer = signer
         self._posture = posture
+        # #1035 H1/F-11 closure: every runtime starts at LifecycleState.
+        # PROPOSED. Transitions are driven via :meth:`advance_lifecycle`
+        # which routes through :meth:`LifecycleState.advance_to` — the
+        # D3 single-linear chain (Proposed → Instantiated →
+        # PostureGraded → Active → Retired → Archived). The lifecycle
+        # axis is independent of the TAOD per-run axis: TAOD governs
+        # one execute() invocation; lifecycle governs the Delegate's
+        # lifetime. Both are append-only and monotonic.
+        from kailash.delegate.types import LifecycleState
+
+        self._lifecycle_state: LifecycleState = LifecycleState.PROPOSED
         # §7 TAOD phase monotonicity — runtime is single-shot per receipt.
         # Once execute() returns (success OR failure), the runtime is
         # consumed and further execute() calls raise RuntimePhaseError.
@@ -1049,6 +1080,47 @@ class DelegateRuntime:
     def identity(self) -> DelegateIdentity:
         """Borrow the bound :class:`DelegateIdentity` (read-only)."""
         return self._identity
+
+    @property
+    def lifecycle_state(
+        self,
+    ) -> "LifecycleState":  # noqa: F821 - late-bound by import in __init__
+        """Borrow the current :class:`LifecycleState` (#1035 H1/F-11).
+
+        Returns the D3 lifecycle state — Proposed at construction; the
+        runtime traverses the chain via :meth:`advance_lifecycle`.
+        Read-only; transitions MUST go through :meth:`advance_lifecycle`
+        so each edge is validated by :meth:`LifecycleState.advance_to`.
+        """
+        return self._lifecycle_state
+
+    def advance_lifecycle(
+        self, target: "LifecycleState"  # noqa: F821 - late-bound by import in __init__
+    ) -> "LifecycleState":  # noqa: F821
+        """Advance to ``target`` lifecycle state iff legal (#1035 H1/F-11).
+
+        Routes through :meth:`LifecycleState.advance_to` — the D3
+        single-linear chain (Proposed → Instantiated → PostureGraded →
+        Active → Retired → Archived). Arbitrary jumps, backward edges,
+        and post-Archived transitions raise :class:`LifecycleError`.
+
+        Args:
+            target: The desired next :class:`LifecycleState`.
+
+        Returns:
+            The new :class:`LifecycleState` (== ``target`` on success).
+
+        Raises:
+            LifecycleError: ``target`` is not the unique legal successor.
+            TypeError: ``target`` is not a :class:`LifecycleState`.
+        """
+        # advance_to itself raises LifecycleError on illegal edges +
+        # TypeError on wrong type — both surface here unchanged. The
+        # state mutation happens AFTER the validation, so a failed
+        # transition leaves self._lifecycle_state unchanged (mirrors
+        # the TAOD pattern at TAODState.advance_to).
+        self._lifecycle_state = self._lifecycle_state.advance_to(target)
+        return self._lifecycle_state
 
     def with_posture(
         self,
