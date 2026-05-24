@@ -58,10 +58,10 @@ import abc
 import hashlib
 import logging
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.envelope import DelegateConstraintEnvelope
@@ -73,18 +73,59 @@ from kailash.delegate.trust import (
 from kailash.delegate.types import DelegateIdentity, Role, RoleLifecycleState
 from kailash.trust._json import canonical_json_dumps
 
+# Shard Y owns kailash.delegate.verifier — this import resolves at runtime
+# after merge. For in-worktree development, the import is conditional and
+# a NullVerifier sentinel is provided locally. The Verifier Protocol is a
+# narrow contract: verify(message: bytes, signature: bytes, signer_id: str)
+# -> bool. See workspace plan §C1 (signature verification wiring).
+try:
+    from kailash.delegate.verifier import (  # type: ignore[import-not-found]
+        NullVerifier,
+        Verifier,
+    )
+except ImportError:  # pragma: no cover (Shard Y not yet merged)
+    # In-worktree fallback for Shard X development. Defines the minimal
+    # Protocol surface Shard X needs to wire signature verification into
+    # dispatch. Replaced by the canonical Shard Y impl at merge time.
+
+    @runtime_checkable
+    class Verifier(Protocol):  # type: ignore[no-redef]
+        """Signature-verification protocol — Shard Y owns the canonical impl."""
+
+        def verify(
+            self, message: bytes, signature: bytes, signer_delegate_id: str
+        ) -> bool:  # pragma: no cover (Protocol)
+            ...
+
+    class NullVerifier:  # type: ignore[no-redef]
+        """Fail-closed default verifier — refuses every signature."""
+
+        def verify(
+            self, message: bytes, signature: bytes, signer_delegate_id: str
+        ) -> bool:
+            return False
+
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "AttestedReadReceipt",
+    "AuthVerifier",
     "Connector",
     "ConnectorInvocationResult",
     "DispatchCascadeViolationError",
     "DispatchEnvelopeViolationError",
     "DispatchResult",
+    "DispatchSignatureError",
     "DispatchSignerError",
     "DispatchSurface",
     "DispatchValidationError",
+    "KnowledgeLedger",
+    "LegacyInvokeConnector",
+    "Principal",
+    "RevocationChannel",
     "SignatureContract",
+    "SignedActionEnvelope",
 ]
 
 # ---------------------------------------------------------------------------
@@ -151,6 +192,24 @@ class DispatchSignerError(ValueError):
     validator (128-char lowercase hex for Ed25519); this class surfaces
     the malformed-output failure BEFORE the audit-engine boundary so the
     error attribution is unambiguous (signer fault vs. engine fault).
+    """
+
+
+class DispatchSignatureError(ValueError):
+    """Raised when cryptographic signature verification fails at dispatch time.
+
+    Distinct from :class:`DispatchSignerError` (the SIGNER produced a
+    malformed/missing output) — this error fires when a well-formed
+    signature FAILS verification against the bound :class:`Verifier`.
+
+    Per F-17 + C1 (issue #1035 Round-1 fixes): the dispatch path historically
+    validated signature SHAPE only (hex length). Real cryptographic
+    verification is now wired through Shard Y's :class:`Verifier` Protocol;
+    a verifier that returns ``False`` for the canonical-bytes/signature
+    pair raises this typed error so the audit boundary surfaces forgery
+    attempts unambiguously, distinct from caller-side input faults
+    (:class:`DispatchValidationError`) and gate violations
+    (:class:`DispatchEnvelopeViolationError`).
     """
 
 
@@ -256,38 +315,198 @@ class SignatureContract(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Connector ABC — pure abstract external-surface contract
+# Connector primitive support types — mirror rs DelegateConnector trait shape
+# ---------------------------------------------------------------------------
+#
+# Per workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-
+# extraction.md:332-385 (Round-1 finding F-17), the rs Connector trait ships
+# 3 inherent-method accessors (revocation/ledger/verifier) + 3 required
+# primitives (authenticate/write/read). The Python ABC mirrors this 6-member
+# shape via abc.abstractmethod, with a legacy `invoke()` adapter for the
+# pre-issue-1035 single-method connector contract (preserves backwards
+# compatibility for the 418-test suite per the issue plan).
+#
+# Supporting types are structurally-minimal Protocol classes (revocation,
+# ledger, auth_verifier surfaces) + frozen dataclasses (Principal,
+# SignedActionEnvelope, AttestedReadReceipt) — mirror the rs shapes named
+# in the extraction with the narrowest contract the dispatch surface needs.
+# A future S6+ pass may tighten these as the cross-SDK byte-canonical
+# vectors land.
+
+
+T_Read = TypeVar("T_Read")  # generic read payload type per rs read::<T>
+
+
+@runtime_checkable
+class RevocationChannel(Protocol):
+    """Connector's revocation channel — reachability gate for each dispatch.
+
+    Mirrors rs ``RevocationChannel`` (extraction §332-385). The dispatch
+    surface MAY inspect ``is_revoked(delegate_id)`` to refuse invocations
+    against revoked principals; the Protocol is intentionally narrow so
+    HTTP, in-process, and queue-backed channels all bind structurally.
+    """
+
+    def is_revoked(self, delegate_id: str) -> bool:  # pragma: no cover (Protocol)
+        ...
+
+
+@runtime_checkable
+class KnowledgeLedger(Protocol):
+    """Connector's knowledge ledger — where read/write events are recorded.
+
+    Mirrors rs ``KnowledgeLedger`` (extraction §332-385). The Protocol
+    exposes the narrow audit-append surface the dispatch path needs;
+    storage backend (in-memory, SQLite, Postgres) binds structurally.
+    """
+
+    def record(
+        self, event_type: str, payload: dict[str, Any]
+    ) -> None:  # pragma: no cover (Protocol)
+        ...
+
+
+@runtime_checkable
+class AuthVerifier(Protocol):
+    """Connector's authentication verifier (OIDC/SAML/etc.).
+
+    Mirrors rs ``OidcVerifier`` (extraction §332-385). The Python surface
+    is a Protocol rather than a concrete class so connectors backed by
+    OIDC, SAML, mTLS, signed-JWT, or no-auth can all bind. Distinct from
+    :class:`Verifier` (Shard Y's cryptographic signature verifier) —
+    AuthVerifier authenticates the DISPATCH IDENTITY; Verifier verifies
+    AUDIT-EVENT SIGNATURES.
+    """
+
+    def verify_token(self, token: str) -> bool:  # pragma: no cover (Protocol)
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class Principal:
+    """Authenticated principal returned by :meth:`Connector.authenticate`.
+
+    Mirrors rs ``Principal`` (extraction §332-385). The dispatch surface
+    holds the returned principal for downstream audit correlation; the
+    `delegate_id` MUST match the bound :class:`DelegateIdentity` for the
+    authentication to be accepted.
+
+    Attributes:
+        delegate_id: The principal's delegate identifier (string form of
+            :class:`DelegateIdentity.delegate_id`).
+        tenant_id: The tenant the principal is scoped to. ``None`` for
+            global principals.
+        claims: Opaque claims bag (OIDC/SAML claims, role attributes).
+    """
+
+    delegate_id: str
+    tenant_id: str | None
+    claims: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SignedActionEnvelope:
+    """Signed envelope produced by :meth:`Connector.write` per audited action.
+
+    Mirrors rs ``SignedActionEnvelope`` (extraction §332-385). The
+    envelope IS the post-write audit artifact: the canonical-bytes
+    encoding + the signature over those bytes + the signer's identifier.
+    The dispatch surface verifies the signature via the bound
+    :class:`Verifier` and refuses the action if verification fails.
+
+    Attributes:
+        action_id: UUID identifying this action.
+        canonical_bytes: The canonical-JSON encoding of the action.
+        signature: Detached signature over ``canonical_bytes``.
+        signer_delegate_id: Identifier of the signing principal.
+        payload: The action's payload (kept for downstream consumers).
+    """
+
+    action_id: uuid.UUID
+    canonical_bytes: bytes
+    signature: bytes
+    signer_delegate_id: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class AttestedReadReceipt:
+    """EATP-attested receipt produced by :meth:`Connector.read`.
+
+    Mirrors rs ``AttestedReadReceipt`` (extraction §332-385). The
+    receipt attests that the read happened, against which ledger, with
+    which signing identity — the cross-SDK forensic correlation
+    primitive for read-side dispatches.
+
+    Attributes:
+        read_id: UUID identifying this read.
+        canonical_bytes: The canonical-JSON encoding of the read manifest.
+        attestation: Detached signature/attestation over ``canonical_bytes``.
+        attester_delegate_id: Identifier of the attesting principal.
+        observed_at: tz-aware UTC datetime of the read.
+    """
+
+    read_id: uuid.UUID
+    canonical_bytes: bytes
+    attestation: bytes
+    attester_delegate_id: str
+    observed_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Connector ABC — rs-mirrored 4-primitive shape
 # ---------------------------------------------------------------------------
 
 
 class Connector(abc.ABC):
     """Abstract external endpoint a Delegate invocation connects through.
 
-    Cross-impl parity: Mirrors rs ``DelegateConnector`` trait (S5
-    substrate). The :meth:`invoke` method signature is the byte-shape
-    contract for cross-SDK ``receipts_agree(rs, py)`` verification at
-    S7+ — both SDKs MUST produce byte-identical
-    :class:`ConnectorInvocationResult` payloads for identical input
-    under identical envelopes (per ``cross-sdk-inspection.md`` MUST-3
-    EATP D6 semantic-match).
+    Cross-impl parity: Mirrors the kailash-rs Connector trait shape (3
+    inherent-method accessors + 3 required primitives) per
+    ``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-
+    extraction.md:332-385`` (Round-1 F-17). The rs trait is:
 
-    Subclasses provide the actual external behavior — HTTP request, MCP
-    tool call, Kaizen Signature invocation, queue publish, etc. The ABC
-    defines exactly the surface :class:`DispatchSurface` needs:
+    .. code-block:: rust
 
-    - Class-level ``connector_id``, ``connector_kind``,
-      ``requires_capabilities`` metadata for bind-time gating.
-    - Async :meth:`invoke` returning a
-      :class:`ConnectorInvocationResult` carrying payload + audit events
-      + tenant observation + side-effect flag.
+        #[async_trait]
+        pub trait Connector: Send + Sync {
+            fn revocation(&self) -> &RevocationChannel;
+            fn ledger(&self) -> &dyn KnowledgeLedger;
+            fn verifier(&self) -> &OidcVerifier;
+
+            async fn authenticate(...) -> Result<Principal, ConnectorError>;
+            async fn write<F, Fut>(...) -> Result<SignedActionEnvelope, ConnectorError>;
+            async fn read<T, F, Fut>(...) -> Result<(T, AttestedReadReceipt), ConnectorError>;
+        }
+
+    The Python ABC mirrors this shape via ``@property + @abstractmethod``
+    for the 3 accessors and ``@abstractmethod async def`` for the 3
+    primitives, plus class-level ``connector_id``/``connector_kind``/
+    ``requires_capabilities`` metadata for bind-time gating.
+
+    **Backwards-compat (legacy invoke)**. The single :meth:`invoke`
+    method that pre-dated F-17 remains the dispatch hot path's entry
+    point for legacy Connector subclasses. Subclasses defining
+    ``invoke()`` but not the 6 new primitives are detected by
+    :meth:`__init_subclass__` and the 6 new abstracts are auto-installed
+    as default proxies routing through :meth:`invoke` (most commonly
+    via the ``write`` primitive). Per the issue plan §"Preserve
+    backwards-compat via legacy adapter", the 418-test suite continues
+    to pass while new connectors implement the full 4-primitive shape.
+
+    New connectors SHOULD subclass :class:`Connector` directly and
+    implement all 6 new abstracts (the 3 accessors + 3 primitives).
+    Legacy connectors MAY subclass either :class:`Connector` (auto-
+    adapted via __init_subclass__) or :class:`LegacyInvokeConnector`
+    (explicit adapter wrapping a callable).
 
     The ABC refuses direct instantiation via :class:`abc.ABC` + the
-    abstract :meth:`invoke`. Per ``orphan-detection.md`` MUST Rule 1,
-    this base class lives in the framework hot path:
+    abstract methods. Per ``orphan-detection.md`` MUST Rule 1, this
+    base class lives in the framework hot path:
     :meth:`DispatchSurface.dispatch` calls ``await connector.invoke(...)``
     directly — there is no facade orphan layer.
 
-    Subclass example::
+    Subclass example (legacy single-method shape, auto-adapted)::
 
         class HttpConnector(Connector):
             connector_id = "http-create-user"
@@ -305,9 +524,27 @@ class Connector(abc.ABC):
                 return ConnectorInvocationResult(
                     payload={"user_id": "u-42"},
                     audit_events=(DelegateEventType.EXTERNAL_SIDE_EFFECT,),
-                    tenant_id_observed=envelope.genesis_id,  # or actual tenant
+                    tenant_id_observed=envelope.genesis_id,
                     external_side_effect=True,
                 )
+
+    Subclass example (new 4-primitive shape, full rs parity)::
+
+        class NewShapeConnector(Connector):
+            connector_id = "new-shape-conn"
+            connector_kind = "http"
+            requires_capabilities = frozenset({"http.write"})
+
+            @property
+            def revocation(self): return self._revocation
+            @property
+            def ledger(self): return self._ledger
+            @property
+            def auth_verifier(self): return self._auth_verifier
+
+            async def authenticate(self, identity, envelope): ...
+            async def write(self, action, *, identity, envelope): ...
+            async def read(self, query, *, identity, envelope): ...
     """
 
     # Class-level metadata. Subclasses MUST override these — the bind
@@ -321,33 +558,79 @@ class Connector(abc.ABC):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
+        # F-17 backwards-compat adapter: if the subclass overrides
+        # ``invoke()`` but does NOT override the 6 new primitives
+        # (3 accessors + 3 primitive methods), auto-install default
+        # proxies that route through ``invoke()``. This preserves the
+        # 418-test legacy suite while keeping the abstract-method
+        # contract for new connectors implementing the full rs shape.
+        #
+        # Detection: look in cls.__dict__ for an explicitly-overridden
+        # ``invoke`` (not inherited as abstract). If present AND none of
+        # the new abstracts are overridden in cls.__dict__, install the
+        # default proxies as concrete methods on the subclass.
+        invoke_in_dict = cls.__dict__.get("invoke")
+        legacy_invoke_defined = invoke_in_dict is not None and not getattr(
+            invoke_in_dict, "__isabstractmethod__", False
+        )
+        if legacy_invoke_defined:
+            # Auto-install proxies for any of the 6 new primitives the
+            # subclass did NOT explicitly define. The proxies satisfy
+            # the @abstractmethod requirement so ABCMeta no longer
+            # blocks instantiation; the dispatch hot path still calls
+            # ``invoke()`` for legacy subclasses, so the proxies are
+            # primarily ABC-satisfaction shims with sensible defaults
+            # for callers that DO use the new surface against a legacy
+            # connector.
+            if "revocation" not in cls.__dict__:
+                cls.revocation = _LEGACY_REVOCATION_PROPERTY  # type: ignore[assignment]
+            if "ledger" not in cls.__dict__:
+                cls.ledger = _LEGACY_LEDGER_PROPERTY  # type: ignore[assignment]
+            if "auth_verifier" not in cls.__dict__:
+                cls.auth_verifier = _LEGACY_AUTH_VERIFIER_PROPERTY  # type: ignore[assignment]
+            if "authenticate" not in cls.__dict__:
+                cls.authenticate = _legacy_authenticate  # type: ignore[assignment]
+            if "write" not in cls.__dict__:
+                cls.write = _legacy_write  # type: ignore[assignment]
+            if "read" not in cls.__dict__:
+                cls.read = _legacy_read  # type: ignore[assignment]
+            # Re-compute __abstractmethods__ so ABCMeta sees the
+            # newly-installed proxies as concrete satisfactions of the
+            # abstract surface. ABCMeta populates __abstractmethods__
+            # AFTER __init_subclass__ in some Python versions; guard
+            # with getattr to handle both ordering paths.
+            current_abstracts = getattr(cls, "__abstractmethods__", frozenset())
+            if current_abstracts:
+                cls.__abstractmethods__ = frozenset(
+                    name
+                    for name in current_abstracts
+                    if name
+                    not in {
+                        "revocation",
+                        "ledger",
+                        "auth_verifier",
+                        "authenticate",
+                        "write",
+                        "read",
+                    }
+                )
+
         # Defense-in-depth: every concrete subclass MUST declare a
         # non-empty connector_id at the class level so audit events
         # carry a meaningful identifier. Empty string at the subclass
         # level is BLOCKED (the ABC's empty default cannot satisfy this
         # check).
-        #
-        # __init_subclass__ runs BEFORE ABCMeta computes
-        # __abstractmethods__ on the new class; use getattr with a
-        # default to handle both ordering paths. The subclass is
-        # "concrete" iff it overrode the abstract invoke method (so the
-        # abstract set, when populated, will be empty).
         abstract_methods = getattr(cls, "__abstractmethods__", frozenset())
-        # Detect concrete subclasses: they MUST have overridden invoke
-        # such that it's no longer the ABC's abstract method.
-        invoke = cls.__dict__.get("invoke")
-        is_concrete = invoke is not None and not getattr(
-            invoke, "__isabstractmethod__", False
+        # Detect concrete subclasses: empty __abstractmethods__ AND
+        # either invoke is overridden OR all 6 new abstracts are.
+        is_concrete = abstract_methods == frozenset() and (
+            legacy_invoke_defined
+            or all(
+                name in cls.__dict__
+                or not getattr(getattr(cls, name, None), "__isabstractmethod__", False)
+                for name in ("authenticate", "write", "read")
+            )
         )
-        # Also concrete if abstract_methods is populated and empty
-        # (post-ABCMeta computation path).
-        if not is_concrete and abstract_methods == frozenset():
-            # Check whether invoke was inherited as abstract.
-            inherited_invoke = getattr(cls, "invoke", None)
-            if inherited_invoke is not None and not getattr(
-                inherited_invoke, "__isabstractmethod__", False
-            ):
-                is_concrete = True
         if is_concrete:
             # Concrete subclass — enforce metadata declaration. Abstract
             # intermediate base classes may legitimately defer metadata
@@ -379,7 +662,11 @@ class Connector(abc.ABC):
         identity: DelegateIdentity,
         envelope: DelegateConstraintEnvelope,
     ) -> ConnectorInvocationResult:
-        """Invoke the external endpoint.
+        """Invoke the external endpoint (legacy single-method shape).
+
+        Pre-F-17 entry point — retained for the 418-test backwards-compat
+        suite. New connectors SHOULD implement the 4-primitive shape
+        (:meth:`authenticate` / :meth:`write` / :meth:`read`) instead.
 
         Subclasses MUST implement this as a coroutine returning a
         :class:`ConnectorInvocationResult`. The DispatchSurface awaits
@@ -405,6 +692,257 @@ class Connector(abc.ABC):
             the external-side-effect flag.
         """
         raise NotImplementedError  # pragma: no cover (abstract)
+
+    # ─── Required accessors (3) — mirror rs trait inherent methods ──────
+
+    @property
+    @abc.abstractmethod
+    def revocation(self) -> RevocationChannel:
+        """The connector's revocation channel. Reachable for every dispatch."""
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+    @property
+    @abc.abstractmethod
+    def ledger(self) -> KnowledgeLedger:
+        """The connector's knowledge ledger (where dispatch reads/writes record)."""
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+    @property
+    @abc.abstractmethod
+    def auth_verifier(self) -> AuthVerifier:
+        """The connector's authentication verifier (OIDC/SAML/etc.)."""
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+    # ─── Required primitives (3) — mirror rs trait async fns ────────────
+
+    @abc.abstractmethod
+    async def authenticate(
+        self,
+        identity: DelegateIdentity,
+        envelope: DelegateConstraintEnvelope,
+    ) -> Principal:
+        """Authenticate the dispatch identity; return a :class:`Principal`.
+
+        Raises a connector-defined exception if authentication fails.
+        """
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+    @abc.abstractmethod
+    async def write(
+        self,
+        action: Callable[[], Awaitable[Any]],
+        *,
+        identity: DelegateIdentity,
+        envelope: DelegateConstraintEnvelope,
+    ) -> SignedActionEnvelope:
+        """Execute a write action under audit; return a signed action envelope.
+
+        The signature on the envelope MUST be verifiable via the runtime's
+        :class:`Verifier`.
+        """
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+    @abc.abstractmethod
+    async def read(
+        self,
+        query: Callable[[], Awaitable[T_Read]],
+        *,
+        identity: DelegateIdentity,
+        envelope: DelegateConstraintEnvelope,
+    ) -> tuple[T_Read, AttestedReadReceipt]:
+        """Execute a read query under audit; return (payload, attested-receipt)."""
+        raise NotImplementedError  # pragma: no cover (abstract)
+
+
+# ---------------------------------------------------------------------------
+# Legacy-adapter default proxies — installed by __init_subclass__ when a
+# subclass defines invoke() but not the 6 new primitives. Module-level
+# functions so __init_subclass__ can assign them as method descriptors.
+# ---------------------------------------------------------------------------
+
+
+def _legacy_unsupported(name: str) -> "Any":
+    """Return a sentinel that explains the new-shape primitive is unsupported.
+
+    Legacy ``invoke()``-only connectors do not expose the rs-mirrored
+    primitive surface; callers that reach for ``connector.write(...)``
+    against a legacy connector get a clear refusal rather than a silent
+    AttributeError (per ``zero-tolerance.md`` Rule 3a typed-delegate guards).
+    """
+    raise NotImplementedError(
+        f"Connector primitive {name!r} not implemented by this legacy "
+        f"invoke()-only connector — use connector.invoke(...) or migrate "
+        f"the connector to the 4-primitive shape"
+    )
+
+
+class _LegacyAccessor:
+    """Sentinel accessor: raises on access via __get__ descriptor protocol."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __get__(self, instance: Any, owner: type | None = None) -> Any:
+        if instance is None:
+            return self
+        _legacy_unsupported(self._name)
+
+
+_LEGACY_REVOCATION_PROPERTY = _LegacyAccessor("revocation")
+_LEGACY_LEDGER_PROPERTY = _LegacyAccessor("ledger")
+_LEGACY_AUTH_VERIFIER_PROPERTY = _LegacyAccessor("auth_verifier")
+
+
+async def _legacy_authenticate(
+    self: Any,
+    identity: DelegateIdentity,
+    envelope: DelegateConstraintEnvelope,
+) -> Principal:
+    """Default ``authenticate`` for legacy invoke()-only connectors.
+
+    Returns a trivial Principal scoped to the bound identity. Legacy
+    connectors authenticated implicitly via ``invoke()`` — this proxy
+    keeps that contract surface alive for new-shape callers.
+    """
+    return Principal(
+        delegate_id=str(identity.delegate_id),
+        tenant_id=None,
+        claims={},
+    )
+
+
+async def _legacy_write(
+    self: Any,
+    action: Callable[[], Awaitable[Any]],
+    *,
+    identity: DelegateIdentity,
+    envelope: DelegateConstraintEnvelope,
+) -> SignedActionEnvelope:
+    """Default ``write`` for legacy invoke()-only connectors.
+
+    Executes the action and returns a synthesized SignedActionEnvelope
+    with an EMPTY signature — legacy connectors did not produce
+    cryptographic action signatures. New-shape callers receiving an
+    empty-signature envelope from a legacy connector MUST treat it as
+    unverifiable per F-17 dispatch wiring.
+    """
+    payload_obj = await action()
+    payload_dict: dict[str, Any]
+    if isinstance(payload_obj, dict):
+        payload_dict = payload_obj
+    else:
+        payload_dict = {"value": payload_obj}
+    canonical_bytes = canonical_json_dumps(payload_dict).encode("utf-8")
+    return SignedActionEnvelope(
+        action_id=uuid.uuid4(),
+        canonical_bytes=canonical_bytes,
+        signature=b"",  # legacy connector did not sign
+        signer_delegate_id=str(identity.delegate_id),
+        payload=payload_dict,
+    )
+
+
+async def _legacy_read(
+    self: Any,
+    query: Callable[[], Awaitable[T_Read]],
+    *,
+    identity: DelegateIdentity,
+    envelope: DelegateConstraintEnvelope,
+) -> tuple[T_Read, AttestedReadReceipt]:
+    """Default ``read`` for legacy invoke()-only connectors.
+
+    Executes the query and returns the value plus a synthesized
+    :class:`AttestedReadReceipt` with an EMPTY attestation — legacy
+    connectors did not produce cryptographic read attestations.
+    """
+    value = await query()
+    canonical_bytes = canonical_json_dumps(
+        {
+            "value": (
+                value
+                if isinstance(value, (dict, list, str, int, float, bool, type(None)))
+                else repr(value)
+            )
+        }
+    ).encode("utf-8")
+    receipt = AttestedReadReceipt(
+        read_id=uuid.uuid4(),
+        canonical_bytes=canonical_bytes,
+        attestation=b"",
+        attester_delegate_id=str(identity.delegate_id),
+        observed_at=datetime.now(timezone.utc),
+    )
+    return value, receipt
+
+
+# ---------------------------------------------------------------------------
+# LegacyInvokeConnector — explicit adapter wrapping an async callable
+# ---------------------------------------------------------------------------
+
+
+class LegacyInvokeConnector(Connector):
+    """Adapter exposing a legacy ``async def invoke(...)`` callable as Connector.
+
+    Per the issue plan §"Preserve backwards-compat via legacy adapter":
+    existing legacy connectors that ship as bare ``async def invoke(...)``
+    callables (not as Connector subclasses) can wrap into the new Connector
+    ABC via this adapter. The wrapped callable is invoked from the
+    :meth:`invoke` method; the 6 new abstracts are auto-satisfied via the
+    same default proxies the ``__init_subclass__`` machinery installs for
+    direct Connector subclasses.
+
+    The adapter is most useful for downstream consumers porting legacy
+    connector callables to the new ABC without subclassing. New connectors
+    SHOULD subclass :class:`Connector` directly and implement the full
+    4-primitive shape.
+    """
+
+    connector_id = "legacy-invoke-adapter"
+    connector_kind = "legacy"
+    requires_capabilities: frozenset[str] = frozenset()
+
+    def __init__(
+        self,
+        invoke_callable: Callable[
+            ...,  # signature: (input_payload, *, identity, envelope) -> Awaitable
+            Awaitable[ConnectorInvocationResult],
+        ],
+        *,
+        connector_id: str | None = None,
+        connector_kind: str | None = None,
+        requires_capabilities: frozenset[str] | None = None,
+    ) -> None:
+        if not callable(invoke_callable):
+            raise TypeError(
+                "LegacyInvokeConnector requires a callable; got "
+                f"{type(invoke_callable).__name__}"
+            )
+        self._invoke_callable = invoke_callable
+        # Per-instance override of class-level metadata (the bind check
+        # reads instance attributes when present via attribute lookup).
+        if connector_id is not None:
+            if not isinstance(connector_id, str) or not connector_id:
+                raise TypeError("connector_id MUST be a non-empty string")
+            self.connector_id = connector_id  # type: ignore[misc]
+        if connector_kind is not None:
+            if not isinstance(connector_kind, str) or not connector_kind:
+                raise TypeError("connector_kind MUST be a non-empty string")
+            self.connector_kind = connector_kind  # type: ignore[misc]
+        if requires_capabilities is not None:
+            if not isinstance(requires_capabilities, frozenset):
+                raise TypeError("requires_capabilities MUST be a frozenset")
+            self.requires_capabilities = requires_capabilities  # type: ignore[misc]
+
+    async def invoke(
+        self,
+        input_payload: dict[str, Any],
+        *,
+        identity: DelegateIdentity,
+        envelope: DelegateConstraintEnvelope,
+    ) -> ConnectorInvocationResult:
+        return await self._invoke_callable(
+            input_payload, identity=identity, envelope=envelope
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -824,6 +1362,7 @@ class DispatchSurface:
         trust_cascade: TenantScopedCascade,
         role: Role,
         signer: Callable[[bytes], str],
+        verifier: Verifier | None = None,
     ) -> None:
         # Type discipline at the boundary — defense-in-depth on top of
         # each composed type's own post_init.
@@ -1031,6 +1570,23 @@ class DispatchSurface:
         # authoritative bind-time anchor. The runtime cross-check in
         # dispatch() uses ConnectorInvocationResult.tenant_id_observed.
 
+        # F-17 C1 signature verification wiring: when the caller injects
+        # a Verifier, the dispatch path calls verifier.verify(...) AFTER
+        # the hex-shape sanity check; a return value of False raises
+        # DispatchSignatureError. When verifier is None (legacy default),
+        # the verification step is skipped — preserves backwards-compat
+        # for the 418-test suite that pre-dated F-17. New-shape callers
+        # opt in by passing a real Verifier (production: HSM-backed
+        # Ed25519 verifier; tests: deterministic stub satisfying the
+        # Protocol). NullVerifier (fail-closed) is the explicit
+        # "always-refuse" sentinel — distinct from None (skip).
+        if verifier is not None and not isinstance(verifier, Verifier):  # type: ignore[misc]
+            raise TypeError(
+                "DispatchSurface.verifier MUST satisfy the Verifier Protocol "
+                "(verify(message: bytes, signature: bytes, signer_delegate_id: str) "
+                f"-> bool); got {type(verifier).__name__}"
+            )
+
         self._connector = connector
         self._signature = signature
         self._envelope = envelope
@@ -1039,6 +1595,7 @@ class DispatchSurface:
         self._trust_cascade = trust_cascade
         self._role = role
         self._signer = signer
+        self._verifier: Verifier | None = verifier
 
         # C4-1 F5 monotonicity snapshot: capture the bind-time
         # capability set and lifecycle so :meth:`dispatch` can refuse
@@ -1428,6 +1985,58 @@ class DispatchSurface:
                     "32 characters; production signatures are 128-char "
                     f"lowercase hex (Ed25519); got {len(signature_hex)} chars"
                 )
+
+            # F-17 C1 cryptographic signature verification: the hex-shape
+            # check above proves the signer produced output of the right
+            # SHAPE, but NOT that the bytes are a valid signature over
+            # ``canonical_bytes``. When a Verifier is bound, perform the
+            # real crypto check; verification failure raises
+            # DispatchSignatureError so the audit boundary surfaces
+            # forgery attempts distinctly from input/envelope faults.
+            #
+            # When self._verifier is None (legacy default — pre-F-17
+            # callers) the verification step is skipped to preserve
+            # backwards-compat for the 418-test suite. Production
+            # deployments and new-shape callers inject a real Verifier
+            # (Shard Y's canonical impl); test fixtures may inject a
+            # permissive verifier to exercise success paths or
+            # NullVerifier to exercise the fail-closed default.
+            if self._verifier is not None:
+                try:
+                    signature_bytes = bytes.fromhex(signature_hex)
+                except ValueError:
+                    raise DispatchSignerError(
+                        f"injected signer returned non-hex output for "
+                        f"audit event {event_type.value!r}; production "
+                        "signatures are lowercase-hex Ed25519"
+                    )
+                signer_id = str(self._identity.delegate_id)
+                try:
+                    verify_ok = self._verifier.verify(
+                        canonical_bytes, signature_bytes, signer_id
+                    )
+                except Exception as exc:
+                    # A verifier that raises is treated as a verification
+                    # failure (fail-closed) — re-raise as
+                    # DispatchSignatureError with the underlying
+                    # exception for diagnostic context.
+                    raise DispatchSignatureError(
+                        f"verifier raised while verifying audit event "
+                        f"{event_type.value!r}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
+                if not verify_ok:
+                    signer_id_hash = hashlib.sha256(
+                        signer_id.encode("utf-8")
+                    ).hexdigest()[:8]
+                    raise DispatchSignatureError(
+                        f"audit-event signature verification FAILED for "
+                        f"event {event_type.value!r} signed by "
+                        f"[signer_id_hash={signer_id_hash}] — the bound "
+                        "Verifier refused the canonical_bytes/signature "
+                        "pair (F-17 C1 dispatch-time signature "
+                        "verification gate)"
+                    )
             entry = self._audit_engine.emit_event(
                 event_type=event_type.value,
                 payload=payload,
