@@ -137,19 +137,17 @@ class Ed25519Verifier:
     converts the shape-only hex check (the "fake encryption" pattern)
     into a real cryptographic gate.
 
-    Public-key resolution. The directory's
-    :class:`~kailash.delegate.types.DelegateIdentity` exposes
-    ``delegate_id`` as the lookup key; the public-key bytes are
-    obtained via the directory's :meth:`resolve` method. Where the
-    identity carries a hex-encoded public key
-    (``DelegateIdentity.public_key_hex`` or similar), this verifier
-    hex-decodes it. Where the identity carries raw bytes
-    (``DelegateIdentity.public_key_bytes``), they are used directly.
-    Both shapes are tried per the dual-shape return pattern in
-    `zero-tolerance.md` Rule 3d — discriminator-driven, never
-    structural-hasattr-only. If neither attribute is present, the
-    identity is treated as unverifiable and ``verify()`` returns
-    ``False``.
+    Public-key resolution. The verifier consults the directory's
+    :meth:`~kailash.delegate.types.PrincipalDirectory.public_key_for`
+    method, which returns the 32-byte Ed25519 public key for a given
+    ``delegate_id`` or ``None`` on miss. The verification-key store is
+    a first-class field of :class:`PrincipalDirectory`
+    (``verification_keys: dict[uuid.UUID, bytes]``) — keys live
+    alongside identities but distinct from the wire-format
+    :class:`DelegateIdentity` (which has no public-key field today, to
+    keep the cross-SDK wire format stable). A directory constructed
+    without ``verification_keys`` falls closed on every verify call —
+    structurally equivalent to :class:`NullVerifier`.
 
     Cross-impl note. The kailash-rs substrate uses Ed25519 32-byte
     public keys (verbatim per the in-workspace extraction at
@@ -215,7 +213,7 @@ class Ed25519Verifier:
         import uuid
 
         # Discriminate the signer_delegate_id argument: protocol accepts
-        # str (canonical wire-format) but PrincipalDirectory.resolve
+        # str (canonical wire-format) but PrincipalDirectory.public_key_for
         # requires uuid.UUID. Defensive parsing per the C1 fail-closed
         # contract — a malformed id is just "signer not found".
         try:
@@ -223,52 +221,20 @@ class Ed25519Verifier:
         except (ValueError, TypeError, AttributeError):
             return False
 
-        # Lookup the identity. resolve() returns None on miss.
+        # Lookup the public key. public_key_for() returns None on miss
+        # (signer not registered, OR signer registered but no key wired).
+        # Both miss-shapes collapse to "cannot verify".
         try:
-            identity = self._directory.resolve(delegate_uuid)
+            pk_bytes = self._directory.public_key_for(delegate_uuid)
         except (TypeError, ValueError):
             return False
-        if identity is None:
-            return False
-
-        # Discriminate the public-key attribute shape. The
-        # DelegateIdentity wire format does not (yet) standardise the
-        # public-key field name — try the canonical raw-bytes shape
-        # first, then the hex shape. Per zero-tolerance.md Rule 3d a
-        # dual-shape API MUST dispatch on a discriminator, NEVER a
-        # structural hasattr() that resolves True on one branch and
-        # False on the other; here we use hasattr() as the
-        # discriminator because the alternative (mandating a single
-        # attribute name) would tie this verifier to a specific
-        # DelegateIdentity wire format the substrate has NOT ratified.
-        # On both branches we fail closed if the type is wrong.
-        pk_bytes: bytes | None = None
-        raw_attr = getattr(identity, "public_key_bytes", None)
-        if isinstance(raw_attr, (bytes, bytearray)):
-            pk_bytes = bytes(raw_attr)
-        else:
-            hex_attr = getattr(identity, "public_key_hex", None)
-            if isinstance(hex_attr, str):
-                try:
-                    pk_bytes = bytes.fromhex(hex_attr)
-                except ValueError:
-                    return False
-
         if pk_bytes is None:
-            # Identity carries no usable public-key attribute. This is
-            # the legitimate "deferred attestation" surface called out
-            # in trust.py § "Trust boundary" — until the substrate
-            # ratifies the public-key field on DelegateIdentity, every
-            # verify() against an identity without one falls closed.
-            # The runtime hot path that consumes this False raises its
-            # own typed error (AuditChainSignatureError /
-            # CascadeSignatureError) with full context.
             return False
 
-        # Ed25519 public keys are EXACTLY 32 bytes. Wrong length =
-        # not-an-Ed25519-key = fail closed. The cryptography library
-        # would raise ValueError on from_public_bytes() but we
-        # pre-check to keep the fail-closed contract uniform.
+        # PrincipalDirectory.__post_init__ enforces 32-byte invariant on
+        # construction, so reaching here with non-32-byte is structurally
+        # impossible. Defensive re-check keeps the verifier fail-closed
+        # even if a future directory subclass relaxes the constraint.
         if len(pk_bytes) != 32:
             return False
 
