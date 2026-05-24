@@ -48,12 +48,16 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-# cryptography is a core kailash dependency (the trust stack requires it).
-# Imported at module scope so `except InvalidSignature` always resolves —
-# importing inside the verify() try-block left the name unbound if the
-# import itself failed, masking the real error with a NameError.
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+# cryptography is NOT a core kailash dependency — it lives in the [trust] /
+# [server] extras (slim-core invariant; see pyproject.toml dependencies
+# comment + the #1154 lazy-filelock precedent). Module-scope import here
+# would break `from kailash.delegate import ...` on a bare `pip install
+# kailash`, since the delegate package is inside the slim-core import
+# closure. cryptography is imported lazily in Ed25519Verifier.__init__
+# (loud ImportError at construction if the extra is absent — the
+# established "loud failure at call site" pattern for extras-gated
+# capability), and the resolved symbols are cached on the instance so
+# verify() honours its NEVER-raises contract.
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from kailash.delegate.types import PrincipalDirectory
@@ -189,7 +193,29 @@ class Ed25519Verifier:
                 f"(facade-manager-detection.md MUST Rule 3: explicit "
                 f"framework dependency); got {type(directory).__name__}"
             )
+        # Lazy cryptography import — LOUD failure at construction if the
+        # [trust]/[server] extra is absent (slim-core invariant; bare
+        # `pip install kailash` does not ship cryptography). Resolving the
+        # symbols here (not at module scope) keeps `from kailash.delegate
+        # import ...` working on slim-core, and caching them on the
+        # instance lets verify() reference them while honouring its
+        # NEVER-raises contract. NullVerifier — the default — never
+        # constructs this class, so slim-core callers never hit the import.
+        try:
+            from cryptography.exceptions import InvalidSignature
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+                Ed25519PublicKey,
+            )
+        except ModuleNotFoundError as exc:  # pragma: no cover - extras-gated
+            raise ModuleNotFoundError(
+                "Ed25519Verifier requires the `cryptography` library, which "
+                "ships in the kailash [trust] / [server] extras. Install via "
+                "`pip install kailash[trust]` (or bind NullVerifier instead "
+                "for the fail-closed default). Underlying error: " + str(exc)
+            ) from exc
         self._directory = directory
+        self._Ed25519PublicKey = Ed25519PublicKey
+        self._InvalidSignature = InvalidSignature
 
     @property
     def directory(self) -> "PrincipalDirectory":
@@ -258,10 +284,10 @@ class Ed25519Verifier:
         # is raised on signature mismatch; any other exception (malformed key,
         # internal lib error) also falls closed.
         try:
-            public_key = Ed25519PublicKey.from_public_bytes(pk_bytes)
+            public_key = self._Ed25519PublicKey.from_public_bytes(pk_bytes)
             public_key.verify(bytes(signature), bytes(message))
             return True
-        except InvalidSignature:
+        except self._InvalidSignature:
             return False
         except Exception:  # pragma: no cover - catch-all for fail-closed
             # Per the Verifier protocol: NEVER raises. Any exception
