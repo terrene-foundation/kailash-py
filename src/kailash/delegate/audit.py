@@ -48,6 +48,7 @@ from enum import Enum
 from typing import Any
 
 from kailash.delegate.types import DelegateIdentity
+from kailash.delegate.verifier import NullVerifier, Verifier
 from kailash.trust._json import canonical_json_dumps
 from kailash.trust.chain import ActionResult, AuditAnchor, TrustLineageChain
 
@@ -367,6 +368,17 @@ class AuditChainEntry:
         payload["signature"] = self.signature
         return payload
 
+    def to_signing_bytes(self) -> bytes:
+        """Canonical UTF-8 bytes a signer signed (signature EXCLUDED).
+
+        Convenience helper for :class:`kailash.delegate.verifier.Verifier`
+        callers — routes :meth:`to_signing_dict` through
+        :func:`canonical_json_dumps` and encodes to UTF-8 so the bytes
+        are byte-identical to what a signer would have signed. Cross-SDK
+        verifier parity depends on byte-equality of this representation.
+        """
+        return canonical_json_dumps(self.to_signing_dict()).encode("utf-8")
+
 
 # ---------------------------------------------------------------------------
 # WitnessedCrossAnchor — rs M4-02 cross-tier residency primitive
@@ -612,6 +624,18 @@ class AuditChainEngine:
         chain: The substrate :class:`TrustLineageChain` instance this
             engine emits to. EAGER REQUIRED — the engine cannot be
             constructed without a real chain.
+        verifier: Optional :class:`~kailash.delegate.verifier.Verifier`
+            that cryptographically verifies the supplied signature
+            against the entry's signing bytes BEFORE the append.
+            Defaults to :class:`~kailash.delegate.verifier.NullVerifier`
+            (fail-closed) — a runtime that doesn't wire a real verifier
+            cannot emit ANY audit events because every verify call
+            returns False. Production code MUST inject an
+            :class:`~kailash.delegate.verifier.Ed25519Verifier` with a
+            populated :class:`~kailash.delegate.types.PrincipalDirectory`.
+            This is the structural closure for /redteam Round-1 C1
+            (CRITICAL) — the prior signature-shape check accepted any
+            128-char hex string without verifying anything.
 
     Example::
 
@@ -619,26 +643,47 @@ class AuditChainEngine:
             AuthorityType, GenesisRecord, TrustLineageChain,
         )
         from kailash.delegate.audit import AuditChainEngine
+        from kailash.delegate.verifier import Ed25519Verifier
 
         chain = TrustLineageChain(genesis=GenesisRecord(...))
-        engine = AuditChainEngine(chain=chain)
+        engine = AuditChainEngine(
+            chain=chain,
+            verifier=Ed25519Verifier(directory=principal_directory),
+        )
         entry = engine.emit_event(
-            event_type=DelegateEventType.LIFECYCLE_TRANSITION,
+            event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT,
             payload={"from": "proposed", "to": "instantiated"},
             signer_identity=delegate_identity,
-            signature="ab" * 64,  # Ed25519 hex
+            signature="ab" * 64,  # Ed25519 hex — verifier MUST accept
         )
         assert entry.sequence == 0  # genesis entry
     """
 
-    def __init__(self, chain: TrustLineageChain) -> None:
+    def __init__(
+        self,
+        chain: TrustLineageChain,
+        verifier: Verifier | None = None,
+    ) -> None:
         if not isinstance(chain, TrustLineageChain):
             raise AuditChainEmissionError(
                 "AuditChainEngine.chain MUST be a TrustLineageChain instance "
                 "(facade-manager-detection.md MUST Rule 3: explicit framework "
                 f"dependency); got {type(chain).__name__}"
             )
+        # Per /redteam Round-1 C1 closure: a missing verifier defaults to
+        # NullVerifier (fail-closed). Existing callers that pass no
+        # verifier now CANNOT emit events — the structural defense
+        # against the prior fake-encryption surface. To re-enable emit
+        # the caller MUST wire an Ed25519Verifier explicitly.
+        if verifier is None:
+            verifier = NullVerifier()
+        if not isinstance(verifier, Verifier):
+            raise AuditChainEmissionError(
+                "AuditChainEngine.verifier MUST satisfy the Verifier "
+                f"protocol; got {type(verifier).__name__}"
+            )
         self._chain = chain
+        self._verifier = verifier
         # Cache of the entries this engine has emitted, in order.
         # Substrate AuditAnchor stores the canonical encoding; we keep
         # the typed AuditChainEntry alongside so the per-event signing
@@ -652,6 +697,11 @@ class AuditChainEngine:
         # numbers or interleave previous-hash linkage (Round-1
         # security finding C3 / sec HIGH-1).
         self._emit_lock = threading.Lock()
+
+    @property
+    def verifier(self) -> Verifier:
+        """Borrow the wired :class:`Verifier` (read-only)."""
+        return self._verifier
 
     @property
     def chain(self) -> TrustLineageChain:
@@ -782,6 +832,32 @@ class AuditChainEngine:
                 signed_at=signed_at,
                 signature=signature,
             )
+
+            # /redteam Round-1 C1 (CRITICAL) closure: cryptographically
+            # verify the signature against the entry's canonical signing
+            # bytes BEFORE appending. Prior shape-only hex validation
+            # let any 128-char hex string fall through (fake-encryption
+            # pattern per zero-tolerance.md Rule 2). The verifier is
+            # NullVerifier by default — so a runtime that doesn't wire
+            # an Ed25519Verifier rejects EVERY event, fail-closed.
+            # Inside the lock so concurrent emit_event calls cannot
+            # interleave a verify against a stale entry.
+            sig_bytes = bytes.fromhex(signature)
+            if not self._verifier.verify(
+                entry.to_signing_bytes(),
+                sig_bytes,
+                str(signer_identity.delegate_id),
+            ):
+                raise AuditChainSignatureError(
+                    f"AuditChainEngine.emit_event: signature verification "
+                    f"failed for signer={signer_identity.delegate_id!r} at "
+                    f"sequence={sequence} (verifier={type(self._verifier).__name__}). "
+                    "Either the signature is invalid for the canonical "
+                    "to_signing_bytes() payload, the signer is not "
+                    "registered in the PrincipalDirectory, or the verifier "
+                    "is the fail-closed NullVerifier (wire an Ed25519Verifier "
+                    "with a populated directory)."
+                )
 
             # Append a substrate AuditAnchor so the engine state stays in
             # lockstep with the wrapped TrustLineageChain. The substrate
