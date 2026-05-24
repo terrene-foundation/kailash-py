@@ -781,13 +781,16 @@ async def test_dispatch_signer_returns_non_str_raises() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_dispatch_signer_returns_short_signature_raises() -> None:
-    """C2-1: signer return value <32 chars is structurally invalid."""
+    """C2-1: signer return value that is not exactly 128 lowercase-hex
+    chars is structurally invalid (mirrors the audit engine's _validate_hex
+    Ed25519 contract at the dispatch boundary for unambiguous attribution).
+    """
 
     def short_signer(_canonical_bytes: bytes) -> str:
-        return "0" * 16  # too short
+        return "0" * 16  # not 128 chars
 
     surface = _make_surface(signer=short_signer)
-    with pytest.raises(DispatchSignerError, match="shorter than"):
+    with pytest.raises(DispatchSignerError, match="128-char lowercase-hex"):
         await surface.dispatch({"user_id": "u-1"})
 
 

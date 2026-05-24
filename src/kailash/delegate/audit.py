@@ -26,12 +26,17 @@ provide for the Delegate runtime:
   :class:`AuditChainSignatureError`,
   :class:`CrossAnchorIntegrityError`.
 
-Cross-SDK byte-canonical fixtures emitted by either implementation MUST
-verify under the other via
-:func:`kailash.trust._json.canonical_json_dumps` (already byte-equal to
-rs serde_json per the S2 primitive survey). The acceptance criterion
-*"Cross-language audit-chain verification test green (py-emitted chain
-verifies under rs verifier)"* from #1035 is anchored on this surface.
+Cross-SDK design intent: chains emitted by either implementation are
+serialized via :func:`kailash.trust._json.canonical_json_dumps` so that
+the byte representation is stable and verifier-checkable. Cross-impl
+AGREEMENT is currently verified through the shared conformance-vector
+receipts (``tests/fixtures/delegate-conformance/canonical.json`` +
+``receipts_agree``), NOT through a live rs-verifier round-trip — there is
+no rs byte-vector pinned in this repo yet (see cross-sdk-inspection.md
+Rule 4: byte-equality to rs is an UNVERIFIED design goal until ≥3 rs-emitted
+vectors are vendored here). The #1035 acceptance criterion *"Cross-language
+audit-chain verification test green"* is satisfied by the conformance-receipt
+mechanism; a true byte-for-byte rs round-trip is tracked as future work.
 """
 
 from __future__ import annotations

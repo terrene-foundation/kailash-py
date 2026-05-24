@@ -93,11 +93,15 @@ class DelegateConstraintEnvelope:
         envelope: ConstraintEnvelope,
         genesis: DelegateGenesisRecord,
     ) -> "DelegateConstraintEnvelope":
-        """Construct from a genesis-seeded envelope (the only widening path).
+        """Construct from a genesis-seeded envelope (genesis-bound inception constructor).
 
-        This is the SOLE constructor that may set a fresh underlying
-        ``ConstraintEnvelope``. Once constructed, the envelope can only be
-        further tightened via :meth:`tighten_with`.
+        This is the genesis-anchored constructor: it binds a fresh underlying
+        ``ConstraintEnvelope`` to a :class:`DelegateGenesisRecord`. The bare
+        ``__init__`` and :meth:`from_dict` also accept a fresh inner envelope
+        (in-process trust + cross-SDK ingest respectively). What is invariant
+        across ALL three constructors: once constructed, the envelope can only
+        be further tightened via :meth:`tighten_with` (widening raises
+        ``EnvelopeWideningError``).
         """
         if not isinstance(envelope, ConstraintEnvelope):
             raise TypeError(
