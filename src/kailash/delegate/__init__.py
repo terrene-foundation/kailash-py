@@ -77,6 +77,7 @@ from kailash.delegate.types import (
     RoleLifecycleState,
     RoleScope,
 )
+from kailash.delegate.verifier import Ed25519Verifier, NullVerifier, Verifier
 
 # ─── Issue #1035 acceptance-gate aliases ─────────────────────────────────────
 # The shipped class names (DelegateRuntime, DelegateConstraintEnvelope, etc.)
@@ -163,4 +164,8 @@ __all__ = [
     "GenesisRecord",  # alias of DelegateGenesisRecord
     "PostureState",  # alias of Posture
     "AuditChain",  # alias of AuditChainEngine
+    # Group 11 -- Signature verification (Shard Y C1/H2 closure)
+    "Verifier",  # Protocol — fail-closed signature verification contract
+    "NullVerifier",  # default fail-closed impl (rejects all)
+    "Ed25519Verifier",  # cryptography-backed Ed25519 impl
 ]
