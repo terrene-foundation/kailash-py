@@ -122,6 +122,10 @@ todos/
 .claude/settings.local.json
 **/.claude/learning/
 
+# Operator-local identity cache (multi-operator coordination substrate;
+# per-machine, mode 0600 — never committed)
+.claude/operator-id
+
 # Per-package proposal manifests are local-only; the canonical
 # proposal lives at root .claude/.proposals/latest.yaml.
 packages/*/.claude/.proposals/
@@ -203,6 +207,9 @@ output.txt
 
 # Pending journal entries (session-local; promoted to journal/ on /wrapup)
 **/journal/.pending/
+
+# Journal-skip log (transient; emitted by /journal hook on merge/no-match commits)
+**/.journal-skipped.log
 
 # Build/release artifacts
 test-release/
