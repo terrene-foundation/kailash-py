@@ -45,5 +45,21 @@ def _stub_audit_engine_default_verifier(monkeypatch: pytest.MonkeyPatch) -> None
     in ``test_verifier.py`` + Tier-2 wiring tests.
     """
     import kailash.delegate.audit as audit_mod
+    import kailash.delegate.trust as trust_mod
 
     monkeypatch.setattr(audit_mod, "NullVerifier", AcceptAnyVerifier)
+    monkeypatch.setattr(trust_mod, "NullVerifier", AcceptAnyVerifier)
+    # TenantScopedCascade uses dataclass field(default_factory=NullVerifier)
+    # which compiles the factory reference into the generated __init__ at
+    # class-definition time — patching the module binding or the field
+    # object's default_factory doesn't reach the compiled __init__. Wrap
+    # the generated __init__ so the verifier kwarg defaults to the
+    # adapter when not supplied; explicit verifier= args pass through.
+    _original_init = trust_mod.TenantScopedCascade.__init__
+
+    def _patched_init(self, tenant, verifier=None):
+        if verifier is None:
+            verifier = AcceptAnyVerifier()
+        _original_init(self, tenant=tenant, verifier=verifier)
+
+    monkeypatch.setattr(trust_mod.TenantScopedCascade, "__init__", _patched_init)

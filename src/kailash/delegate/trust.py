@@ -36,7 +36,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -47,11 +47,14 @@ from kailash.delegate.types import (
     RoleScope,
     _validate_hex,
 )
+from kailash.delegate.verifier import NullVerifier, Verifier
+from kailash.trust._json import canonical_json_dumps
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "CascadeScopeExpansionError",
+    "CascadeSignatureError",
     "CascadeTenantViolationError",
     "GrantMoment",
     "TenantScope",
@@ -151,6 +154,42 @@ class CascadeScopeExpansionError(ValueError):
                 f"set (F1 downward-only requires subset; widening blocked)"
             )
         super().__init__(msg)
+
+
+class CascadeSignatureError(ValueError):
+    """Raised when ``grant_proof`` fails cryptographic verification.
+
+    Closes #1035 /redteam Round-1 C1 (CRITICAL) on the cascade surface:
+    prior :meth:`TenantScopedCascade.cascade_child` accepted any
+    128-char hex ``grant_proof`` and validated it as shape-only — the
+    same "fake encryption" failure mode the audit-chain surface
+    carried. Per :class:`kailash.delegate.verifier.Verifier`, the
+    cascade now consults a real Ed25519 verifier against the canonical
+    grant-signing bytes; a verify miss raises this typed error BEFORE
+    any cascade state mutates.
+
+    ``ValueError``-derived, like the sibling cascade errors. The
+    error message names the parent identity whose grant failed
+    verification; the verifier itself never raises (it returns
+    False) so this is the only signal the cascade emits on signature
+    failure.
+    """
+
+    def __init__(
+        self,
+        parent_delegate_id: uuid.UUID,
+        verifier_class: str,
+    ) -> None:
+        self.parent_delegate_id = parent_delegate_id
+        self.verifier_class = verifier_class
+        super().__init__(
+            f"cascade grant signature verification failed for parent "
+            f"delegate_id={parent_delegate_id!r} (verifier={verifier_class}). "
+            f"Either the grant_proof is invalid for the canonical grant-"
+            f"signing bytes, the parent is not registered in the "
+            f"PrincipalDirectory, or the verifier is fail-closed (wire "
+            f"an Ed25519Verifier with a populated directory)."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -390,12 +429,24 @@ class TenantScopedCascade:
     """
 
     tenant: TenantScope
+    # #1035 C1 closure: cascade emits GrantMoments signed with grant_proof;
+    # the verifier cryptographically validates that proof against the
+    # parent's public key. Default NullVerifier (fail-closed) — a cascade
+    # built without an explicit verifier rejects EVERY cascade_child call
+    # at the C1 gate. compare=False keeps frozen-equality / hashability
+    # contract unchanged (verifier is wiring, not identity).
+    verifier: Verifier = field(default_factory=NullVerifier, compare=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.tenant, TenantScope):
             raise TypeError(
                 "TenantScopedCascade.tenant MUST be a TenantScope; got "
                 f"{type(self.tenant).__name__}"
+            )
+        if not isinstance(self.verifier, Verifier):
+            raise TypeError(
+                "TenantScopedCascade.verifier MUST satisfy the Verifier "
+                f"protocol; got {type(self.verifier).__name__}"
             )
         # #1146 H1 — internal mutable grantee registry. Frozen dataclass
         # bypass via object.__setattr__ keeps the registry isolated from
@@ -425,39 +476,100 @@ class TenantScopedCascade:
             object.__getattribute__(self, "_TenantScopedCascade__grantees")
         )
 
-    def register_root_grantee(self, identity: DelegateIdentity) -> None:
+    def register_root_grantee(
+        self,
+        identity: DelegateIdentity,
+        *,
+        grant_proof: str | None = None,
+    ) -> None:
         """Seed the registry with the root sovereign / origin identity.
 
-        #1146 H1 — the cascade's grantee registry is empty at construction;
-        an identity that anchors the cascade (the root sovereign in EATP
-        terms, the genesis delegate in #1035 terms) MUST be explicitly
-        registered before it can construct a :class:`DispatchSurface`
-        against this cascade.
+        #1146 H1 + #1035 C1 closure (H2): the cascade's grantee registry
+        is empty at construction; an identity that anchors the cascade
+        MUST be explicitly registered before it can construct a
+        :class:`DispatchSurface` against this cascade.
+
+        Optional cryptographic gate. When a real
+        :class:`~kailash.delegate.verifier.Ed25519Verifier` is wired
+        AND ``grant_proof`` is supplied, the proof is verified against
+        the canonical root-grant signing bytes (the identity's
+        ``delegate_id`` + the cascade's tenant). When ``grant_proof``
+        is omitted AND the wired verifier is the fail-closed
+        :class:`~kailash.delegate.verifier.NullVerifier`, the
+        registration proceeds without crypto — this is the
+        transitional path for cascades constructed before C1 (no
+        verifier wired). When ``grant_proof`` is omitted AND a real
+        verifier is wired, the registration is REFUSED with
+        :class:`CascadeSignatureError` — a wired verifier signals the
+        caller has committed to cryptographic gating and an unsigned
+        root-seed is the H2 attack surface this gate closes.
 
         Idempotent — calling with the same identity twice is a no-op.
+        The optional grant_proof is verified on EACH call (so a
+        verified root-seed retries are safe; an unsigned retry on a
+        verified-cascade still refuses).
 
-        **Trust boundary.** This method has no access-control gate by
-        design — any caller holding a reference to this cascade is
-        implicitly authorized to seed the registry. The cascade reference
-        IS the trust authority; the operator who constructed the cascade
-        owns its grantee policy. Production operators MUST scope cascade
-        references behind their own authorization layer (see README
-        §"What the primitive does NOT promise" + `issue #1147 <https://github.com/terrene-foundation/kailash-py/issues/1147>`_
-        for the durable-registry roadmap).
+        **Trust boundary.** With a real verifier wired, the cascade is
+        cryptographically gated; with NullVerifier (default), the
+        cascade reference remains the trust authority and the operator
+        scopes references behind their own authorization layer per
+        ``README``.
 
         Args:
             identity: The :class:`DelegateIdentity` whose ``delegate_id``
                 anchors the cascade. Typed at the boundary so the registry
                 cannot accept stray strings / UUIDs.
+            grant_proof: Optional 128-char hex Ed25519 signature over
+                the canonical root-grant bytes. Required when a real
+                verifier is wired; refused (when None) on such
+                cascades. Verified against the canonical
+                ``{"delegate_id": ..., "tenant": ...}`` signing bytes.
 
         Raises:
             TypeError: if ``identity`` is not a :class:`DelegateIdentity`.
+            CascadeSignatureError: a real verifier is wired AND
+                ``grant_proof`` is None, OR ``grant_proof`` fails
+                cryptographic verification.
         """
         if not isinstance(identity, DelegateIdentity):
             raise TypeError(
                 "TenantScopedCascade.register_root_grantee identity MUST "
                 f"be a DelegateIdentity; got {type(identity).__name__}"
             )
+        # C1 closure (H2): a real verifier signals the caller has
+        # committed to cryptographic gating; an unsigned root-seed on
+        # such a cascade is the H2 attack surface. NullVerifier is the
+        # transitional default; allow unsigned seeding ONLY when the
+        # verifier itself is the fail-closed default.
+        is_real_verifier = not isinstance(self.verifier, NullVerifier)
+        if is_real_verifier or grant_proof is not None:
+            if grant_proof is None:
+                raise CascadeSignatureError(
+                    parent_delegate_id=identity.delegate_id,
+                    verifier_class=type(self.verifier).__name__,
+                )
+            grant_canonical = canonical_json_dumps(
+                {
+                    "delegate_id": str(identity.delegate_id),
+                    "tenant": self.tenant.tenant_id,
+                }
+            ).encode("utf-8")
+            try:
+                grant_proof_bytes = bytes.fromhex(grant_proof)
+            except (ValueError, TypeError) as exc:
+                raise CascadeSignatureError(
+                    parent_delegate_id=identity.delegate_id,
+                    verifier_class=type(self.verifier).__name__,
+                ) from exc
+            if not self.verifier.verify(
+                grant_canonical,
+                grant_proof_bytes,
+                str(identity.delegate_id),
+            ):
+                raise CascadeSignatureError(
+                    parent_delegate_id=identity.delegate_id,
+                    verifier_class=type(self.verifier).__name__,
+                )
         object.__getattribute__(self, "_TenantScopedCascade__grantees").add(
             identity.delegate_id
         )
@@ -588,6 +700,50 @@ class TenantScopedCascade:
         # truth for the F5 tightening result.
         tightened = parent_envelope.tighten_with(child_envelope.inner)
 
+        # Step 3.5 (#1035 C1 closure): cryptographically verify
+        # ``grant_proof`` against the canonical grant-signing bytes
+        # using the wired Verifier. Prior shape-only hex check let any
+        # 128-char hex string fall through (fake-encryption pattern per
+        # zero-tolerance.md Rule 2). The verifier consults the
+        # PrincipalDirectory the cascade's verifier was constructed
+        # with; a NullVerifier-defaulted cascade rejects every call.
+        # Fires BEFORE Step 4 registration so a failed verify does NOT
+        # pollute the grantee registry.
+        #
+        # The canonical signing payload mirrors the GrantMoment.
+        # to_signing_dict() shape — same bytes the parent signed when
+        # issuing the grant. The cascade_id field is omitted because it
+        # is allocated below (post-verify); the grant is over the
+        # parent/child/tenant/granted_at/tightened tuple, which is the
+        # auditable chain-of-custody anchor.
+        granted_at_resolved = (
+            granted_at if granted_at is not None else datetime.now(timezone.utc)
+        )
+        grant_canonical = canonical_json_dumps(
+            {
+                "parent_delegate_id": str(parent_identity.delegate_id),
+                "child_delegate_id": str(child_identity.delegate_id),
+                "tenant": self.tenant.tenant_id,
+                "granted_at": granted_at_resolved.isoformat(),
+            }
+        ).encode("utf-8")
+        try:
+            grant_proof_bytes = bytes.fromhex(grant_proof)
+        except (ValueError, TypeError) as exc:
+            raise CascadeSignatureError(
+                parent_delegate_id=parent_identity.delegate_id,
+                verifier_class=type(self.verifier).__name__,
+            ) from exc
+        if not self.verifier.verify(
+            grant_canonical,
+            grant_proof_bytes,
+            str(parent_identity.delegate_id),
+        ):
+            raise CascadeSignatureError(
+                parent_delegate_id=parent_identity.delegate_id,
+                verifier_class=type(self.verifier).__name__,
+            )
+
         # Step 4 (#1146 H1): register BOTH parent and child as authorized
         # grantees of this cascade. Registration happens AFTER all three
         # validation gates pass — a cross-tenant or widening-scope or
@@ -600,25 +756,28 @@ class TenantScopedCascade:
         # Trust-boundary note: cascade_child does NOT require parent_identity
         # to be pre-registered as a grantee — the cascade reference itself
         # is the trust authority (see class docstring + register_root_grantee).
-        # Combined with grant_proof being shape-only-validated today (#1147
-        # README disclosure documents this gap), cascade_child operates as a
-        # secondary seeding path equivalent to register_root_grantee; the H1
-        # closure structurally is "identity must be registered with this
-        # cascade", NOT "identity must have transited a signed-and-verified
-        # grant chain". Durable signed attestation is the #1147 roadmap.
+        # Post-C1 the grant_proof IS verified cryptographically (Step 3.5
+        # above), so cascade_child is no longer "shape-only" — but the
+        # cascade reference still controls the trust authority for seeding
+        # (a caller holding the cascade can call register_root_grantee
+        # directly without a grant_proof). Durable signed attestation
+        # roadmap tracked at #1147.
         _grantees = object.__getattribute__(self, "_TenantScopedCascade__grantees")
         _grantees.add(parent_identity.delegate_id)
         _grantees.add(child_identity.delegate_id)
 
-        # Step 5: emit the chain-of-custody GrantMoment.
+        # Step 5: emit the chain-of-custody GrantMoment. Reuse the
+        # ``granted_at_resolved`` from Step 3.5 so the GrantMoment's
+        # timestamp is BYTE-IDENTICAL to the value the verifier checked
+        # the grant_proof against — any divergence here would let a
+        # caller signed-and-stored two GrantMoments with timestamps the
+        # verifier never inspected.
         return GrantMoment(
             cascade_id=uuid.uuid4(),
             parent_delegate_id=parent_identity.delegate_id,
             child_delegate_id=child_identity.delegate_id,
             tenant=self.tenant,
-            granted_at=(
-                granted_at if granted_at is not None else datetime.now(timezone.utc)
-            ),
+            granted_at=granted_at_resolved,
             grant_proof=grant_proof,
             tightened_envelope=tightened,
         )
