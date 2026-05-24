@@ -48,6 +48,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+# cryptography is a core kailash dependency (the trust stack requires it).
+# Imported at module scope so `except InvalidSignature` always resolves —
+# importing inside the verify() try-block left the name unbound if the
+# import itself failed, masking the real error with a NameError.
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from kailash.delegate.types import PrincipalDirectory
 
@@ -251,11 +258,6 @@ class Ed25519Verifier:
         # is raised on signature mismatch; any other exception (malformed key,
         # internal lib error) also falls closed.
         try:
-            from cryptography.exceptions import InvalidSignature
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-                Ed25519PublicKey,
-            )
-
             public_key = Ed25519PublicKey.from_public_bytes(pk_bytes)
             public_key.verify(bytes(signature), bytes(message))
             return True

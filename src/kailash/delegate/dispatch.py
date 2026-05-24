@@ -71,40 +71,13 @@ from kailash.delegate.trust import (
     TenantScopedCascade,
 )
 from kailash.delegate.types import DelegateIdentity, Role, RoleLifecycleState
+
+# kailash.delegate.verifier is a guaranteed in-tree sibling module (the
+# canonical Verifier Protocol + NullVerifier fail-closed default +
+# Ed25519Verifier). The Verifier contract is narrow:
+# verify(message: bytes, signature: bytes, signer_delegate_id: str) -> bool.
+from kailash.delegate.verifier import NullVerifier, Verifier
 from kailash.trust._json import canonical_json_dumps
-
-# Shard Y owns kailash.delegate.verifier — this import resolves at runtime
-# after merge. For in-worktree development, the import is conditional and
-# a NullVerifier sentinel is provided locally. The Verifier Protocol is a
-# narrow contract: verify(message: bytes, signature: bytes, signer_id: str)
-# -> bool. See workspace plan §C1 (signature verification wiring).
-try:
-    from kailash.delegate.verifier import (  # type: ignore[import-not-found]
-        NullVerifier,
-        Verifier,
-    )
-except ImportError:  # pragma: no cover (Shard Y not yet merged)
-    # In-worktree fallback for Shard X development. Defines the minimal
-    # Protocol surface Shard X needs to wire signature verification into
-    # dispatch. Replaced by the canonical Shard Y impl at merge time.
-
-    @runtime_checkable
-    class Verifier(Protocol):  # type: ignore[no-redef]
-        """Signature-verification protocol — Shard Y owns the canonical impl."""
-
-        def verify(
-            self, message: bytes, signature: bytes, signer_delegate_id: str
-        ) -> bool:  # pragma: no cover (Protocol)
-            ...
-
-    class NullVerifier:  # type: ignore[no-redef]
-        """Fail-closed default verifier — refuses every signature."""
-
-        def verify(
-            self, message: bytes, signature: bytes, signer_delegate_id: str
-        ) -> bool:
-            return False
-
 
 logger = logging.getLogger(__name__)
 
@@ -1973,17 +1946,25 @@ class DispatchSurface:
                     f"injected signer MUST return str; got "
                     f"{type(signature_hex).__name__}"
                 )
-            # Surface-shape sanity check: the audit engine's
-            # _validate_hex requires 128 lowercase-hex chars (Ed25519).
-            # A signer that returns less than 32 chars is structurally
-            # not a real signature; raise before the engine boundary so
-            # the error attribution is unambiguous (signer fault vs.
-            # engine fault).
-            if len(signature_hex) < 32:
+            # Surface-shape sanity check: mirror the audit engine's
+            # _validate_hex contract EXACTLY (128 lowercase-hex chars,
+            # Ed25519) at the signer boundary so the error attribution is
+            # unambiguous (signer fault vs. engine fault). A laxer check
+            # here (e.g. len < 32) would let a 64-char non-signature pass
+            # the dispatch boundary and fail later at the engine, mis-
+            # attributing a signer fault to the engine.
+            if len(signature_hex) != 128 or not all(
+                c in "0123456789abcdef" for c in signature_hex
+            ):
                 raise DispatchSignerError(
-                    f"injected signer returned a signature shorter than "
-                    "32 characters; production signatures are 128-char "
-                    f"lowercase hex (Ed25519); got {len(signature_hex)} chars"
+                    "injected signer MUST return a 128-char lowercase-hex "
+                    "Ed25519 signature; got "
+                    f"{len(signature_hex)} chars"
+                    + (
+                        " (non-hex or uppercase characters present)"
+                        if len(signature_hex) == 128
+                        else ""
+                    )
                 )
 
             # F-17 C1 cryptographic signature verification: the hex-shape

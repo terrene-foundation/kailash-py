@@ -78,7 +78,7 @@ from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.dispatch import DispatchResult, DispatchSurface
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import TenantScope, TenantScopedCascade
-from kailash.delegate.types import DelegateIdentity
+from kailash.delegate.types import DelegateIdentity, LifecycleState
 from kailash.trust._json import canonical_json_dumps
 
 logger = logging.getLogger(__name__)
@@ -901,15 +901,16 @@ class DelegateRuntime:
             identity mismatch).
         TypeError: any argument fails its isinstance check.
 
-    Note on identity/cascade gateability: the current
-    :class:`TenantScopedCascade` (S3) does not yet expose a persistent
-    grantee registry (S3 emits one :class:`GrantMoment` per
-    ``cascade_child`` call but does not retain the grantee set). The
-    bind-time check here re-uses the DispatchSurface's bind-time
-    invariant — DispatchSurface already validated identity-cascade
-    consistency at S5; the runtime trusts that gate. A future S7+
-    enhancement will surface a grantee registry; the runtime's
-    bind-time check will tighten to use it.
+    Note on identity/cascade gateability: :class:`TenantScopedCascade`
+    exposes a persistent grantee registry (``cascade.grantees`` —
+    ``frozenset[UUID]``, populated by ``register_root_grantee`` and
+    ``cascade_child``; #1146 H1). :class:`DispatchSurface` enforces
+    ``identity.delegate_id in cascade.grantees`` at bind
+    (``dispatch.py`` bind path) and re-checks at dispatch
+    (``dispatch.py`` dispatch path). The runtime binds the same cascade
+    object through the R2 composition gate, so the DispatchSurface
+    grantee check IS the runtime's grantee gate by composition — no
+    parallel registry is maintained here.
     """
 
     # Per-phase audit event mapping. Each TAOD transition emits exactly
@@ -1036,8 +1037,6 @@ class DelegateRuntime:
         # axis is independent of the TAOD per-run axis: TAOD governs
         # one execute() invocation; lifecycle governs the Delegate's
         # lifetime. Both are append-only and monotonic.
-        from kailash.delegate.types import LifecycleState
-
         self._lifecycle_state: LifecycleState = LifecycleState.PROPOSED
         # §7 TAOD phase monotonicity — runtime is single-shot per receipt.
         # Once execute() returns (success OR failure), the runtime is
@@ -1084,7 +1083,7 @@ class DelegateRuntime:
     @property
     def lifecycle_state(
         self,
-    ) -> "LifecycleState":  # noqa: F821 - late-bound by import in __init__
+    ) -> LifecycleState:
         """Borrow the current :class:`LifecycleState` (#1035 H1/F-11).
 
         Returns the D3 lifecycle state — Proposed at construction; the
@@ -1094,9 +1093,7 @@ class DelegateRuntime:
         """
         return self._lifecycle_state
 
-    def advance_lifecycle(
-        self, target: "LifecycleState"  # noqa: F821 - late-bound by import in __init__
-    ) -> "LifecycleState":  # noqa: F821
+    def advance_lifecycle(self, target: LifecycleState) -> LifecycleState:
         """Advance to ``target`` lifecycle state iff legal (#1035 H1/F-11).
 
         Routes through :meth:`LifecycleState.advance_to` — the D3
