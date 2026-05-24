@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.1] - 2026-05-25
+
+### Fixed
+
+- **`from kailash.delegate import ...` now works on a bare `pip install kailash`** — 2.26.0 shipped `kailash.delegate.verifier` with a module-scope `from cryptography...` import. Because the delegate package is inside the slim-core import closure and `cryptography` lives in the `[trust]`/`[server]` extras (NOT core dependencies), a bare install raised `ModuleNotFoundError: No module named 'cryptography'` on the documented #1035 import line. The cryptography import is now lazy inside `Ed25519Verifier.__init__` — `NullVerifier` (the default) needs no cryptography; `Ed25519Verifier` raises a clear `ModuleNotFoundError` at construction if the `[trust]`/`[server]` extra is absent (the established "loud failure at call site" pattern; matches the #1154 lazy-`filelock` precedent that defends slim-core). Behavioral regression tests (`tests/regression/test_issue_1035_delegate_slim_core_import.py`) assert the slim-core import invariant via subprocess + `sys.modules` introspection.
+
+### Notes
+
+- Corrective patch for 2.26.0 (yanked from PyPI). All 2.26.0 functionality is unchanged — only the cryptography import timing moved from module-scope to lazy. 489 delegate tests pass (487 + 2 new regression).
+
 ## [2.26.0] - 2026-05-25
 
 ### Added
