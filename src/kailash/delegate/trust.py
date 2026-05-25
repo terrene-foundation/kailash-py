@@ -108,22 +108,27 @@ class CascadeTenantViolationError(ValueError):
 # per interpreter start), never persisted, never exported, never logged —
 # its only purpose is to keep hashes correlatable WITHIN one process while
 # preventing cross-process rainbow correlation by log readers.
-_TENANT_HASH_SALT: bytes | None = None  # initialized lazily on first use
-
-
-def _get_tenant_hash_salt() -> bytes:
-    """Lazy per-process salt — fresh per interpreter start, never persisted.
-
-    The salt makes hash output correlatable WITHIN a single process (audit
-    correlation works) but UNCORRELATABLE across processes (rainbow-table
-    reversibility is closed). Per-process scope matches the threat model:
-    a log-reader cannot pre-compute the rainbow table for THIS process's
-    tenant ID space.
-    """
-    global _TENANT_HASH_SALT
-    if _TENANT_HASH_SALT is None:
-        _TENANT_HASH_SALT = secrets.token_bytes(32)
-    return _TENANT_HASH_SALT
+#
+# R1-followup: initialized EAGERLY at module-import time (not lazily on
+# first use). The lazy form had a check-and-set race window between two
+# concurrent first-callers — both could observe ``_TENANT_HASH_SALT is
+# None`` and call ``secrets.token_bytes(32)`` independently, leaving the
+# racing pair witnessing different salt values for the same tenant_id
+# input on the same first-call boundary. Module-import execution is
+# serialized by Python's import lock, so eager init commits the salt
+# before any caller can observe it. The lazy helper is removed
+# entirely; ``_tenant_id_hash`` uses the module-scope constant directly.
+#
+# Threat-model carve-outs (per-process scope is by design):
+# - ``fork()``-ed children INHERIT the parent's salt (same-deployment
+#   correlation IS in-scope across forked workers; the parent process
+#   is the trust boundary).
+# - ``importlib.reload(kailash.delegate.trust)`` rotates the salt. This
+#   is test-infrastructure only; production services NEVER reload this
+#   module, so the rotation is invisible to the threat model. Any test
+#   that depends on cross-reload correlation MUST snapshot the salt
+#   before reload.
+_TENANT_HASH_SALT: bytes = secrets.token_bytes(32)
 
 
 def _tenant_id_hash(tenant_id: str | None) -> str:
@@ -131,14 +136,17 @@ def _tenant_id_hash(tenant_id: str | None) -> str:
 
     ``None`` returns the literal sentinel ``"<none>"`` (the Global variant has
     no tenant id). Otherwise an 8-char hex prefix of HMAC-SHA-256(salt, id) —
-    the salt is per-process (see :func:`_get_tenant_hash_salt`) so cross-process
+    the salt is per-process (see :data:`_TENANT_HASH_SALT`) so cross-process
     rainbow correlation is closed while within-process audit correlation
     remains intact (per ``observability.md`` MUST Rule 8).
+
+    Threading: the salt is read-only after module import, so this function
+    is safe to call from any thread without further synchronization.
     """
     if tenant_id is None:
         return "<none>"
     return hmac.new(
-        _get_tenant_hash_salt(),
+        _TENANT_HASH_SALT,
         tenant_id.encode("utf-8"),
         "sha256",
     ).hexdigest()[:8]
