@@ -350,3 +350,52 @@ async def test_issue_1035_concurrent_execute_serialized_by_consume_lock() -> Non
         "the finally-block consumption is the defense-in-depth against "
         "retry-until-success on a runtime."
     )
+
+
+# ---------------------------------------------------------------------------
+# R1-followup — with_posture() returns runtime with fresh substrate
+#
+# The §7 phase-monotonicity invariant ("runtime is single-shot per receipt")
+# requires that every posture rotation produces a runtime with a fresh lock
+# and an un-consumed flag. If with_posture() shared the originating
+# runtime's _consume_lock, a consumed runtime could block the rotated one
+# (or vice versa); if it carried over _consumed, the rotated runtime would
+# refuse the first call.
+#
+# The concurrent-execute test above proves the lock SERIALIZES within one
+# runtime instance. This structural test proves the lock ROTATES across
+# with_posture() — both halves of Invariant 5 (per-rotation substrate
+# freshness) are then pinned by the regression suite.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_with_posture_returns_runtime_with_fresh_consume_lock() -> None:
+    """Invariant 5: ``with_posture()`` rotates to a fresh runtime + fresh lock.
+
+    A rotated runtime MUST own a DISTINCT ``asyncio.Lock`` instance —
+    sharing the lock with the originating runtime would let a consumed
+    runtime block the rotated one (or vice versa). Per §7 phase
+    monotonicity, each runtime instance is single-shot per receipt; the
+    lock is the enforcement primitive AND MUST rotate with the runtime.
+
+    Same-posture rotation (no upgrade nonce required) is used here so the
+    test exercises only the substrate-freshness contract, not the upgrade
+    gate. A regression that aliased ``_consume_lock`` across rotation (or
+    that carried over ``_consumed=True``) would fail this test loudly.
+    """
+    runtime = _build_runtime()
+    rotated = runtime.with_posture(runtime.posture)  # rotate to same posture
+
+    assert rotated._consume_lock is not runtime._consume_lock, (
+        "with_posture() returned a runtime sharing the originating "
+        "runtime's _consume_lock — Invariant 5 (per-rotation substrate "
+        "freshness) violated; a consumed runtime could block the rotated "
+        "one (or vice versa) on the shared lock."
+    )
+    assert rotated._consumed is False, (
+        "with_posture() returned a runtime with carried-over _consumed "
+        "state — single-shot guarantee violated; the rotated runtime "
+        "MUST start with a fresh substrate, not inherit the consumed "
+        "flag of its originator."
+    )
