@@ -189,3 +189,106 @@ def test_bytes_is_not_walked_as_sequence() -> None:
     for the same reason as strings."""
     payload = {"big": b"x" * 10_000}
     _check_payload_depth(payload)  # MUST NOT raise
+
+
+# ---------------------------------------------------------------------------
+# Set-ABC bypass surface — R1 followup
+#
+# A frozenset / set / MappingView is a ``collections.abc.Set`` but NOT a
+# ``Sequence``; the prior Mapping + Sequence gate skipped Set recursion
+# entirely. An attacker could craft a payload of
+# ``frozenset({frozenset({frozenset({...})})})`` (frozensets are hashable
+# so they can nest), reach canonical_json_dumps with arbitrary depth, and
+# reopen the C6-1 DoS class. These tests pin the extended Set-ABC branch.
+# ---------------------------------------------------------------------------
+
+
+def _nest_frozenset(depth: int) -> Any:
+    """Build a payload nested ``depth`` frozensets deep.
+
+    Each level wraps the prior payload in a single-element frozenset.
+    Frozensets are hashable so frozenset-of-frozenset nesting is the
+    canonical Set-ABC stress vector. The leaf is the literal string
+    ``"leaf"`` (hashable).
+    """
+    payload: Any = "leaf"
+    for _ in range(depth):
+        payload = frozenset({payload})
+    return payload
+
+
+@pytest.mark.regression
+def test_frozenset_of_sequences_triggers_depth_check() -> None:
+    """Frozenset wrapping a deeply-nested tuple-chain MUST trigger the depth check.
+
+    Pre-fix: ``isinstance(obj, Set)`` was not checked, so the frozenset
+    layer was skipped entirely. The depth count then started from the
+    inner Sequence and the payload silently passed the gate even though
+    the full (frozenset + Sequence chain) exceeded the limit.
+
+    Dicts cannot be frozenset elements (unhashable), so this test uses
+    a nested tuple chain — tuples are hashable Sequences that the depth
+    check walks via the Sequence branch. The test thus exercises the
+    composition: Set branch (frozenset) → Sequence branch (tuple chain).
+    """
+    inner: Any = "leaf"
+    for _ in range(_MAX_PAYLOAD_DEPTH + 5):
+        inner = (inner,)
+    payload = frozenset({inner})
+    with pytest.raises(DispatchValidationError, match="maximum nesting depth"):
+        _check_payload_depth(payload)
+
+
+@pytest.mark.regression
+def test_nested_frozensets_trigger_depth_check() -> None:
+    """Frozenset-of-frozenset-of-... payload MUST be refused.
+
+    Pure Set-ABC chain — no Mapping or Sequence anywhere in the structure.
+    Pre-fix the recursion never entered any layer; depth gate never fired.
+    """
+    payload = _nest_frozenset(_MAX_PAYLOAD_DEPTH + 5)
+    with pytest.raises(DispatchValidationError, match="maximum nesting depth"):
+        _check_payload_depth(payload)
+
+
+@pytest.mark.regression
+def test_plain_set_iterables_walked() -> None:
+    """``set`` (MutableSet) wrapping nested dicts MUST be walked.
+
+    Plain ``set`` is ``collections.abc.MutableSet`` which is a subclass
+    of ``collections.abc.Set``; the extended check MUST handle both
+    immutable (frozenset) and mutable (set) variants identically. The
+    set elements must be hashable, so we wrap a tuple instead of a dict
+    at the leaf level (tuples are hashable; dicts are not).
+    """
+    inner: Any = "leaf"
+    for _ in range(_MAX_PAYLOAD_DEPTH + 5):
+        inner = (inner,)  # tuple = hashable Sequence, walked via Sequence branch
+    payload = {inner}  # outer set wrapping a deeply-nested tuple
+    with pytest.raises(DispatchValidationError, match="maximum nesting depth"):
+        _check_payload_depth(payload)
+
+
+@pytest.mark.regression
+def test_within_limit_frozenset_passes() -> None:
+    """Frozenset chain below the limit MUST pass — proves the extended
+    Set-ABC branch counts levels (it doesn't false-positive every Set)."""
+    payload = _nest_frozenset(_MAX_PAYLOAD_DEPTH - 1)
+    _check_payload_depth(payload)  # MUST NOT raise
+
+
+@pytest.mark.regression
+def test_memoryview_is_not_walked_recursively() -> None:
+    """``memoryview`` is a ``Sequence`` whose iteration yields ints.
+
+    A memoryview over bytes is a Sequence per the ABC, but its elements
+    are int (non-Container) so recursion immediately terminates at the
+    first iteration step regardless of buffer length. This is the same
+    structural property that protects the str/bytes/bytearray exclusion:
+    the Sequence branch only deepens when an element is itself a
+    Container the gate walks again. A 64-byte memoryview does NOT
+    overflow the budget — confirms the gate's depth semantics correctly
+    distinguish "container of containers" from "container of leaves".
+    """
+    payload = {"buf": memoryview(b"\x00" * 64)}
+    _check_payload_depth(payload)  # MUST NOT raise
