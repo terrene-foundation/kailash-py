@@ -8,6 +8,7 @@ into structured outputs that match signature specifications.
 import json
 import logging
 import re
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -143,6 +144,20 @@ class JSONOutputParser(OutputParser):
         field_def = signature.output_fields.get(field_name, {})
         expected_type = field_def.get("type", str)
 
+        # Unwrap subscripted generics (List[X], Dict[K, V], Optional[X],
+        # Union[...]) before any isinstance check. On Python 3.9+,
+        # `isinstance(value, typing.List[...])` raises
+        # `TypeError: Subscripted generics cannot be used with class and
+        # instance checks`. That TypeError previously propagated up to the
+        # JSON-parse caller's `except (json.JSONDecodeError, TypeError)` block,
+        # marking the entire well-formed JSON parse as failed and silently
+        # falling through to KeyValueOutputParser (issue #1141). Reducing the
+        # generic to its runtime origin (`list`, `dict`, `typing.Union`, ...)
+        # makes the membership check safe again.
+        origin = typing.get_origin(expected_type)
+        if origin is not None:
+            return self._convert_generic(value, origin, expected_type, field_name)
+
         # If value is already correct type, return it
         if isinstance(value, expected_type):
             return value
@@ -196,6 +211,103 @@ class JSONOutputParser(OutputParser):
                 return str(value)
             else:
                 return value
+
+    def _convert_generic(
+        self, value: Any, origin: Any, expected_type: Any, field_name: str
+    ) -> Any:
+        """
+        Handle a subscripted generic OutputField type safely.
+
+        `expected_type` is a subscripted generic such as ``List[Dict]``,
+        ``Dict[str, int]``, or ``Optional[List[X]]``. `origin` is its
+        ``typing.get_origin(...)`` result (``list``/``dict``/``typing.Union``/...).
+        These cannot be passed to ``isinstance`` directly, so we type-check
+        against the unwrapped runtime container class and return the value
+        as-is when it matches (complex types are returned as-is, matching the
+        existing ``else`` branch of ``_convert_to_type``).
+        """
+        # Optional[X] / Union[...] — origin is typing.Union.
+        if origin is typing.Union:
+            args = typing.get_args(expected_type)
+            non_none = [a for a in args if a is not type(None)]
+            if value is None:
+                # None is valid iff NoneType is part of the union (Optional[X]).
+                if type(None) in args:
+                    return None
+                # Union without None but value is None — return as-is; the
+                # caller (LLM JSON) did not supply a value to coerce.
+                return value
+            # Dispatch on the single non-None arm when unambiguous.
+            if len(non_none) == 1:
+                arm = non_none[0]
+                arm_origin = typing.get_origin(arm)
+                if arm_origin is not None:
+                    # e.g. Optional[List[Dict]] -> recurse on List[Dict].
+                    return self._convert_generic(value, arm_origin, arm, field_name)
+                # Plain class arm (e.g. Optional[str]) — re-dispatch through
+                # the normal scalar conversion path.
+                return self._convert_scalar(value, arm, field_name)
+            # Ambiguous union (multiple non-None arms) — return as-is.
+            return value
+
+        # Container generics (list, dict, tuple, set, frozenset): type-check
+        # against the unwrapped origin class and return as-is on match.
+        if origin in (list, dict, tuple, set, frozenset):
+            if isinstance(value, origin):
+                return value
+            # Mismatched runtime type for a declared container — return as-is
+            # (complex types are returned as-is per the existing contract).
+            return value
+
+        # Any other generic origin (e.g. typing.Literal, custom generics):
+        # return the value unchanged — these are complex types.
+        return value
+
+    def _convert_scalar(self, value: Any, expected_type: Any, field_name: str) -> Any:
+        """
+        Convert ``value`` to a plain (non-generic) class ``expected_type``.
+
+        Used by ``_convert_generic`` when an ``Optional[X]`` arm is a plain
+        class. Mirrors the scalar branches of ``_convert_to_type``.
+        """
+        try:
+            if isinstance(value, expected_type):
+                return value
+        except TypeError:
+            # expected_type is not a usable isinstance predicate; return as-is.
+            return value
+        # Delegate to the scalar conversion logic by temporarily treating
+        # expected_type as the field's type. Reuse _convert_to_type's coercion
+        # branches via a minimal inline path to avoid re-reading the signature.
+        try:
+            if expected_type == float:
+                if isinstance(value, str):
+                    cleaned = value.strip().lower()
+                    if cleaned in ["", "none", "null", "n/a"]:
+                        return 0.0
+                    number_match = re.search(r"[-+]?\d*\.?\d+", cleaned)
+                    return float(number_match.group()) if number_match else 0.0
+                return float(value)
+            elif expected_type == int:
+                if isinstance(value, str):
+                    cleaned = value.strip().lower()
+                    if cleaned in ["", "none", "null", "n/a"]:
+                        return 0
+                    number_match = re.search(r"[-+]?\d+", cleaned)
+                    return int(number_match.group()) if number_match else 0
+                return int(value)
+            elif expected_type == bool:
+                if isinstance(value, str):
+                    return value.lower() in ["true", "yes", "1", "y"]
+                return bool(value)
+            elif expected_type == str:
+                return str(value)
+            return value
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                f"Type conversion failed for {field_name}: {e}, using fallback"
+            )
+            return value
 
 
 class KeyValueOutputParser(OutputParser):
