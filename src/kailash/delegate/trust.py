@@ -33,8 +33,9 @@ fixed-order check sequence at ``cascade.rs:276-313``.
 
 from __future__ import annotations
 
-import hashlib
+import hmac
 import logging
+import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -101,18 +102,46 @@ class CascadeTenantViolationError(ValueError):
         )
 
 
+# M4 fix: per-process salt for HMAC-SHA-256 tenant-id hashing. Closes the
+# unsalted-SHA-256 rainbow-reversibility class on short tenant IDs (UUIDs,
+# account-ID integers, organization slugs). The salt is per-process (fresh
+# per interpreter start), never persisted, never exported, never logged —
+# its only purpose is to keep hashes correlatable WITHIN one process while
+# preventing cross-process rainbow correlation by log readers.
+_TENANT_HASH_SALT: bytes | None = None  # initialized lazily on first use
+
+
+def _get_tenant_hash_salt() -> bytes:
+    """Lazy per-process salt — fresh per interpreter start, never persisted.
+
+    The salt makes hash output correlatable WITHIN a single process (audit
+    correlation works) but UNCORRELATABLE across processes (rainbow-table
+    reversibility is closed). Per-process scope matches the threat model:
+    a log-reader cannot pre-compute the rainbow table for THIS process's
+    tenant ID space.
+    """
+    global _TENANT_HASH_SALT
+    if _TENANT_HASH_SALT is None:
+        _TENANT_HASH_SALT = secrets.token_bytes(32)
+    return _TENANT_HASH_SALT
+
+
 def _tenant_id_hash(tenant_id: str | None) -> str:
-    """Return a short SHA-256 prefix of a tenant id for log-safe display.
+    """Return a short HMAC-SHA-256 prefix of a tenant id for log-safe display.
 
     ``None`` returns the literal sentinel ``"<none>"`` (the Global variant has
-    no tenant id). Otherwise the first 8 hex chars of the SHA-256 digest of
-    the UTF-8 bytes — enough to disambiguate ~4×10^9 tenants in audit
-    correlation while not leaking the raw id into log aggregators (per
-    ``observability.md`` MUST Rule 8).
+    no tenant id). Otherwise an 8-char hex prefix of HMAC-SHA-256(salt, id) —
+    the salt is per-process (see :func:`_get_tenant_hash_salt`) so cross-process
+    rainbow correlation is closed while within-process audit correlation
+    remains intact (per ``observability.md`` MUST Rule 8).
     """
     if tenant_id is None:
         return "<none>"
-    return hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()[:8]
+    return hmac.new(
+        _get_tenant_hash_salt(),
+        tenant_id.encode("utf-8"),
+        "sha256",
+    ).hexdigest()[:8]
 
 
 class CascadeScopeExpansionError(ValueError):
