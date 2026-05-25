@@ -1162,7 +1162,21 @@ class DelegateRuntime:
 
         Returns:
             A NEW :class:`DelegateRuntime` with the changed posture,
-            preserving all other bindings.
+            preserving all other bindings. The rotated runtime carries a
+            FRESH :class:`asyncio.Lock` for ``_consumed`` (Invariant 5,
+            single-shot per receipt) AND a FRESH ``_consumed = False``,
+            but it SHARES ``_signer`` / ``_envelope`` / ``_cascade`` /
+            ``_dispatch_surface`` / ``_audit_engine`` with the original.
+            **Shared substrate contract:** these bindings MUST be
+            stateless / thread-safe / nonce-counterless — a sibling
+            caller using the rotated runtime concurrently with the
+            original observes the same shared instances. The Verifier
+            Protocol contract (``verifier.py``) requires signers to be
+            stateless; custom signers carrying counters / nonce-caches /
+            last-signed hashes BREAK this contract and BREAK rotation
+            safety. The rotation is structurally bounded to lock + flag
+            isolation; deeper substrate isolation is the caller's
+            responsibility when constructing the substrate.
 
         Raises:
             RuntimePostureBlockedError: upgrade attempted without a

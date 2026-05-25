@@ -128,6 +128,18 @@ class CascadeTenantViolationError(ValueError):
 #   module, so the rotation is invisible to the threat model. Any test
 #   that depends on cross-reload correlation MUST snapshot the salt
 #   before reload.
+# - **Chroot / jail / sandbox edge case:** ``secrets.token_bytes(32)``
+#   executes at module import. If ``/dev/urandom`` is unavailable
+#   (chrooted container without ``/dev`` mounted, FreeBSD jail with
+#   ``securelevel >= 1`` blocking ``getrandom``, hardened sandbox with
+#   no entropy source), the entire ``kailash.delegate.trust`` module
+#   fails to import → the ``kailash.delegate`` package itself fails →
+#   slim-core import is broken (same class as v2.26.0 lesson). Failure
+#   surface is genuinely narrow: ``secrets.token_bytes`` falls back
+#   through ``getrandom`` (Linux), ``getentropy`` (BSD/macOS), and
+#   ``CryptGenRandom`` (Windows) before raising ``NotImplementedError``.
+#   Deployments running ``kailash.delegate`` in entropy-starved
+#   sandboxes MUST provision ``/dev/urandom`` or equivalent.
 _TENANT_HASH_SALT: bytes = secrets.token_bytes(32)
 
 
