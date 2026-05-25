@@ -58,7 +58,7 @@ import abc
 import hashlib
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
@@ -117,10 +117,16 @@ _MAX_PAYLOAD_SERIALIZED_BYTES = 1 * 1024 * 1024  # 1 MiB
 def _check_payload_depth(obj: Any, current_depth: int = 0) -> None:
     """Recursive depth check used at dispatch entry (C6-1).
 
-    Walks Mapping and Sequence subclasses uniformly so custom container
-    types (UserDict, UserList, ABC-derived types) cannot bypass the DoS
-    defense. Strings are Sequences but their iteration yields characters,
-    which is meaningless for depth; exclude str + bytes explicitly.
+    Walks Mapping, Sequence, AND Set subclasses uniformly so custom
+    container types (UserDict, UserList, ABC-derived Mapping/Sequence/Set,
+    frozenset, set, MappingView) cannot bypass the DoS defense. Strings,
+    bytes, and bytearray are Sequences but their iteration yields
+    characters/ints, which is meaningless for depth; exclude explicitly.
+    Sets are unordered iterables of hashable values; nested
+    Sets-of-Mappings/Sequences (or Sets-of-Sets) ARE reachable through
+    the canonical-JSON encoder once serialized as arrays, so they MUST
+    be walked as part of the same DoS-defense surface as Mapping +
+    Sequence.
     """
     if current_depth > _MAX_PAYLOAD_DEPTH:
         raise DispatchValidationError(
@@ -132,6 +138,9 @@ def _check_payload_depth(obj: Any, current_depth: int = 0) -> None:
         for v in obj.values():
             _check_payload_depth(v, current_depth + 1)
     elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+        for v in obj:
+            _check_payload_depth(v, current_depth + 1)
+    elif isinstance(obj, Set):
         for v in obj:
             _check_payload_depth(v, current_depth + 1)
 
