@@ -65,6 +65,7 @@ area bounded to the spine itself.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import uuid
@@ -1049,6 +1050,19 @@ class DelegateRuntime:
         # retry-amplification surface. with_posture() returns a fresh
         # runtime (un-consumed) per Invariant 5.
         self._consumed: bool = False
+        # #1035 M1 closure: serialize the check-and-set of _consumed so
+        # two concurrent execute() calls on the same runtime instance
+        # cannot both pass the single-shot guard, race past, and both
+        # attempt the TAOD lifecycle on the same substrate. The lock is
+        # per-runtime-instance (no cross-runtime contention) and
+        # with_posture() returns a fresh runtime with a fresh lock —
+        # Invariant 5 preserved. Without the lock, the §7 phase
+        # monotonicity invariant is silently violated under concurrency:
+        # both callers see _consumed=False, both proceed, the second
+        # call's audit chain segment writes against state the first
+        # call is mid-mutating. Closes the M1 TOCTOU window surfaced by
+        # the prior session's R1 security review.
+        self._consume_lock: asyncio.Lock = asyncio.Lock()
 
     @property
     def posture(self) -> Posture:
@@ -1275,22 +1289,30 @@ class DelegateRuntime:
         # this call. The check fires BEFORE consuming so the consumed
         # flag remains True from the prior run. Pinned by DV-7-001
         # conformance vector + test_runtime_re_execute_after_completed_*.
-        if self._consumed:
-            raise RuntimePhaseError(
-                "DelegateRuntime is single-shot per §7 TAOD phase "
-                "monotonicity; create a new runtime instance for "
-                "additional executions (receipt-bound runs MUST not "
-                "share substrate)"
-            )
+        # #1035 M1 closure: acquire _consume_lock across the check AND
+        # the finally-block set so concurrent execute() callers cannot
+        # both observe _consumed=False before either commits to True.
+        # The lock makes check-and-set atomic; without it the TOCTOU
+        # window between line "if self._consumed" and finally
+        # "self._consumed = True" admits the §7 phase-monotonicity
+        # violation surfaced by the prior session's R1 security review.
+        async with self._consume_lock:
+            if self._consumed:
+                raise RuntimePhaseError(
+                    "DelegateRuntime is single-shot per §7 TAOD phase "
+                    "monotonicity; create a new runtime instance for "
+                    "additional executions (receipt-bound runs MUST not "
+                    "share substrate)"
+                )
 
-        try:
-            return await self._execute_impl(input_payload)
-        finally:
-            # Mark consumed on EVERY exit path — success, FAILED return,
-            # AND exceptional bubble-up (R2 re-check could raise TypeError
-            # before being caught; defense-in-depth against
-            # retry-until-success attack on a runtime).
-            self._consumed = True
+            try:
+                return await self._execute_impl(input_payload)
+            finally:
+                # Mark consumed on EVERY exit path — success, FAILED return,
+                # AND exceptional bubble-up (R2 re-check could raise TypeError
+                # before being caught; defense-in-depth against
+                # retry-until-success attack on a runtime).
+                self._consumed = True
 
     async def _execute_impl(
         self, input_payload: dict[str, Any]
