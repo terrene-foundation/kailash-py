@@ -33,8 +33,9 @@ fixed-order check sequence at ``cascade.rs:276-313``.
 
 from __future__ import annotations
 
-import hashlib
+import hmac
 import logging
+import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -101,18 +102,66 @@ class CascadeTenantViolationError(ValueError):
         )
 
 
+# M4 fix: per-process salt for HMAC-SHA-256 tenant-id hashing. Closes the
+# unsalted-SHA-256 rainbow-reversibility class on short tenant IDs (UUIDs,
+# account-ID integers, organization slugs). The salt is per-process (fresh
+# per interpreter start), never persisted, never exported, never logged —
+# its only purpose is to keep hashes correlatable WITHIN one process while
+# preventing cross-process rainbow correlation by log readers.
+#
+# R1-followup: initialized EAGERLY at module-import time (not lazily on
+# first use). The lazy form had a check-and-set race window between two
+# concurrent first-callers — both could observe ``_TENANT_HASH_SALT is
+# None`` and call ``secrets.token_bytes(32)`` independently, leaving the
+# racing pair witnessing different salt values for the same tenant_id
+# input on the same first-call boundary. Module-import execution is
+# serialized by Python's import lock, so eager init commits the salt
+# before any caller can observe it. The lazy helper is removed
+# entirely; ``_tenant_id_hash`` uses the module-scope constant directly.
+#
+# Threat-model carve-outs (per-process scope is by design):
+# - ``fork()``-ed children INHERIT the parent's salt (same-deployment
+#   correlation IS in-scope across forked workers; the parent process
+#   is the trust boundary).
+# - ``importlib.reload(kailash.delegate.trust)`` rotates the salt. This
+#   is test-infrastructure only; production services NEVER reload this
+#   module, so the rotation is invisible to the threat model. Any test
+#   that depends on cross-reload correlation MUST snapshot the salt
+#   before reload.
+# - **Chroot / jail / sandbox edge case:** ``secrets.token_bytes(32)``
+#   executes at module import. If ``/dev/urandom`` is unavailable
+#   (chrooted container without ``/dev`` mounted, FreeBSD jail with
+#   ``securelevel >= 1`` blocking ``getrandom``, hardened sandbox with
+#   no entropy source), the entire ``kailash.delegate.trust`` module
+#   fails to import → the ``kailash.delegate`` package itself fails →
+#   slim-core import is broken (same class as v2.26.0 lesson). Failure
+#   surface is genuinely narrow: ``secrets.token_bytes`` falls back
+#   through ``getrandom`` (Linux), ``getentropy`` (BSD/macOS), and
+#   ``CryptGenRandom`` (Windows) before raising ``NotImplementedError``.
+#   Deployments running ``kailash.delegate`` in entropy-starved
+#   sandboxes MUST provision ``/dev/urandom`` or equivalent.
+_TENANT_HASH_SALT: bytes = secrets.token_bytes(32)
+
+
 def _tenant_id_hash(tenant_id: str | None) -> str:
-    """Return a short SHA-256 prefix of a tenant id for log-safe display.
+    """Return a short HMAC-SHA-256 prefix of a tenant id for log-safe display.
 
     ``None`` returns the literal sentinel ``"<none>"`` (the Global variant has
-    no tenant id). Otherwise the first 8 hex chars of the SHA-256 digest of
-    the UTF-8 bytes — enough to disambiguate ~4×10^9 tenants in audit
-    correlation while not leaking the raw id into log aggregators (per
-    ``observability.md`` MUST Rule 8).
+    no tenant id). Otherwise an 8-char hex prefix of HMAC-SHA-256(salt, id) —
+    the salt is per-process (see :data:`_TENANT_HASH_SALT`) so cross-process
+    rainbow correlation is closed while within-process audit correlation
+    remains intact (per ``observability.md`` MUST Rule 8).
+
+    Threading: the salt is read-only after module import, so this function
+    is safe to call from any thread without further synchronization.
     """
     if tenant_id is None:
         return "<none>"
-    return hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()[:8]
+    return hmac.new(
+        _TENANT_HASH_SALT,
+        tenant_id.encode("utf-8"),
+        "sha256",
+    ).hexdigest()[:8]
 
 
 class CascadeScopeExpansionError(ValueError):

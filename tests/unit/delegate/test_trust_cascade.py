@@ -302,9 +302,12 @@ def test_cascade_tenant_violation_message_does_not_leak_raw_tenant_ids() -> None
     Raw tenant IDs remain on the exception attributes (.parent_tenant /
     .child_tenant) for in-process handling; the str(exc) form that may bleed
     into logs / cross-tenant API error responses / aggregator surfaces carries
-    only the first 8 hex chars of the SHA-256 digest.
+    only an 8-char prefix of the HMAC-SHA-256 digest under a per-process salt
+    (M4 fix: salted hash closes the rainbow-reversibility class on short
+    tenant IDs; specific byte values are non-deterministic across processes
+    by design — assert shape + inequality, NOT specific bytes).
     """
-    import hashlib
+    import re
 
     casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
     parent_env = _envelope_with_budget(100.0)
@@ -326,11 +329,14 @@ def test_cascade_tenant_violation_message_does_not_leak_raw_tenant_ids() -> None
     # Raw tenant strings MUST NOT appear in str(exc).
     assert "tenant-a" not in msg
     assert "tenant-b" not in msg
-    # The 8-char SHA-256 prefixes MUST appear in str(exc).
-    a_hash = hashlib.sha256(b"tenant-a").hexdigest()[:8]
-    b_hash = hashlib.sha256(b"tenant-b").hexdigest()[:8]
-    assert a_hash in msg
-    assert b_hash in msg
+    # Shape: each hash MUST be exactly 8 lowercase hex chars.
+    parent_match = re.search(r"parent_tenant_hash=([0-9a-f]{8})\b", msg)
+    child_match = re.search(r"child_tenant_hash=([0-9a-f]{8})\b", msg)
+    assert parent_match is not None, f"parent_tenant_hash shape missing: {msg}"
+    assert child_match is not None, f"child_tenant_hash shape missing: {msg}"
+    # Distinct tenant IDs MUST produce distinct hashes (the disambiguation
+    # property the docstring of _tenant_id_hash claims).
+    assert parent_match.group(1) != child_match.group(1)
     # Raw tenant IDs MUST still be accessible via the exception attributes
     # (in-process handling — these never reach log aggregators by themselves).
     assert exc_info.value.parent_tenant == "tenant-a"
