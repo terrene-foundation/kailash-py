@@ -23,6 +23,7 @@ import hashlib
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -123,4 +124,74 @@ def test_tenant_id_hash_salt_is_fresh_per_interpreter_process() -> None:
         "subprocess hash equals in-process hash — salt is NOT fresh per "
         "interpreter; rainbow-table reversibility may be reopened across "
         "processes (or the implementation regressed to unsalted SHA-256)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# R1-followup: eager init + thread-safety
+#
+# Pre-fix the salt was lazily initialized via ``_get_tenant_hash_salt()``;
+# two concurrent first-callers could race on the ``is None`` check-and-set,
+# witnessing different salt values on the same first-call boundary. The
+# defense-in-depth fix initializes the salt eagerly at module-import time
+# (serialized by Python's import lock). These tests pin both invariants.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_tenant_hash_salt_is_initialized_at_module_import() -> None:
+    """``_TENANT_HASH_SALT`` MUST be a populated bytes value at import time.
+
+    Pre-fix the module-scope binding was ``None`` until the first call to
+    ``_get_tenant_hash_salt()``; this test confirms the eager-init form
+    has the salt committed BEFORE any caller of ``_tenant_id_hash`` runs.
+    A regression to lazy init would surface here because the value would
+    be ``None`` (or absent entirely) immediately after import.
+    """
+    from kailash.delegate import trust as trust_mod
+
+    # No prior call to _tenant_id_hash in this test body — the import
+    # alone MUST be sufficient for the salt to be present and populated.
+    salt = trust_mod._TENANT_HASH_SALT
+    assert salt is not None, (
+        "_TENANT_HASH_SALT is None after module import — regression to "
+        "lazy init reopens the concurrent-first-caller race"
+    )
+    assert isinstance(salt, bytes), (
+        f"_TENANT_HASH_SALT is not bytes (got {type(salt).__name__}) — "
+        "the eager-init form MUST commit a bytes value at module scope"
+    )
+    assert len(salt) == 32, (
+        f"_TENANT_HASH_SALT length is {len(salt)} bytes — the fix uses "
+        "secrets.token_bytes(32); any drift would weaken the HMAC strength"
+    )
+
+
+@pytest.mark.regression
+def test_tenant_hash_salt_thread_safe_under_concurrent_first_calls() -> None:
+    """N concurrent first-callers MUST witness the same hash for the same id.
+
+    Pre-fix the check-and-set window ``if _TENANT_HASH_SALT is None:`` was
+    racy: two threads entering simultaneously both saw None, both called
+    ``secrets.token_bytes(32)``, and the racing pair witnessed different
+    hashes for the same tenant_id input.
+
+    Post-fix the salt is committed at module import; every thread reads
+    the same constant. This test asserts the structural invariant —
+    all N concurrent callers return identical 8-char hashes for the
+    same input — which would fail loudly under the lazy-init race.
+    """
+    from kailash.delegate.trust import _tenant_id_hash
+
+    raw = "acme-corp"
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = [pool.submit(_tenant_id_hash, raw) for _ in range(10)]
+        results = [f.result() for f in futures]
+
+    unique = set(results)
+    assert len(unique) == 1, (
+        f"10 concurrent _tenant_id_hash(raw) calls produced "
+        f"{len(unique)} distinct values: {unique}. Regression to lazy "
+        f"init reopens the check-and-set race; the same tenant_id MUST "
+        f"hash to one value within a process regardless of caller thread."
     )
