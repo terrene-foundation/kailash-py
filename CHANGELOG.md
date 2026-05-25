@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.2] - 2026-05-25
+
+### Fixed
+
+- **`kailash.delegate` security-hardening sweep — three follow-ups from the 2.26.0 known-issues list** — closes the M1/M3/M4 defense-in-depth gaps the v2.26.0 entry flagged as non-blocking:
+  - **M1 — `DelegateRuntime._consumed` TOCTOU window.** Concurrent `execute()` calls on the same runtime instance both observed `_consumed=False` before either set it, silently violating the §7 TAOD phase monotonicity ("runtime is single-shot per receipt"). Fix: `async with self._consume_lock: asyncio.Lock()` wraps both the check and the set; lock is per-instance, freshly created in `__init__`, and `with_posture()` returns a fresh runtime with a fresh lock (Invariant 5 preserved). Regression test exercises N=10 concurrent `execute()` under `asyncio.gather` and asserts exactly one success; revert-probe verified.
+  - **M3 — `_check_payload_depth` only enumerated `dict` / `list` / `tuple`.** Custom container subclasses (`UserDict`, `UserList`, classes deriving from `collections.abc.Mapping`/`Sequence`/`Set`, frozenset-of-frozensets) bypassed the C6-1 DoS recursion-depth defense — an attacker-crafted payload triggered O(depth) recursion in `canonical_json_dumps` downstream. Fix: replace concrete `isinstance` with `collections.abc.Mapping` + `Sequence` (excluding `str`/`bytes`/`bytearray`) + `Set` (covers `frozenset`, `set`, `dict_keys`, `MappingView`). Regression tests cover UserDict, UserList, abstract Mapping, frozenset, plain set, memoryview exclusion, plain-dict/list regression guards (14 tests total).
+  - **M4 — `_tenant_id_hash` used unsalted SHA-256.** Short tenant IDs (UUIDs, account-ID integers, organization slugs) were rainbow-reversible by log-readers who knew the tenant ID space; the hash leaked into `CascadeTenantIsolationError` messages that surface to cross-tenant error returns and log aggregators. Fix: HMAC-SHA-256 keyed by a per-process salt (`_TENANT_HASH_SALT = secrets.token_bytes(32)`, eager module-init so the import-lock guarantees thread-safety). Salt is per-process (cross-process correlation broken by design, per-process audit correlation preserved); `fork()` workers inherit the parent salt (same-deployment correlation in-scope); `importlib.reload()` rotates (test-infrastructure only); chroot/jail entropy-starved deployments must provision `/dev/urandom` or equivalent (documented). Regression tests include subprocess cross-process unpredictability + `ThreadPoolExecutor(10)` concurrent first-call witness (7 tests total).
+
+### Notes
+
+- Test count: 487 baseline → 512 passed + 1 skipped (+25 new regression tests). Pyright `src/kailash/delegate/ --level error` = 0 errors. `pytest -W error` clean (no DeprecationWarning / ResourceWarning / RuntimeWarning).
+- Convergence: 3-round `/redteam` across 6 parallel agent verdicts (reviewer + security-reviewer + closure-parity in Round 1, security-reviewer + closure-parity in Round 2, security-reviewer + reviewer in Round 3); 2 consecutive clean rounds achieved (R2 + R3). Full receipt: `workspaces/issue-1035-delegate-py/04-validate/10-cycle2-convergence.md`.
+- All three fixes are non-breaking. `DelegateRuntime.execute()` semantics unchanged for single-shot use (the lock only contests concurrent callers). `_check_payload_depth` still raises the same `DispatchValidationError`; coverage now strictly broader. `_tenant_id_hash` still returns an 8-char hex prefix; the value is now non-deterministic across processes by design.
+- Delivered via PR #1170 (cycle-2 hardening + R1 MED follow-ups, 18 commits) — closes the "Known follow-ups" called out in the 2.26.0 release notes for M1 (`_consumed` TOCTOU), M3 (payload-depth subclass coverage), and M4 (unsalted tenant hash).
+
 ## [2.26.1] - 2026-05-25
 
 ### Fixed
