@@ -291,3 +291,31 @@ def test_scrub_brief_masks_password_with_question_mark():
     scrubbed = scrub_brief(brief)
     assert "s3cret?val" not in scrubbed
     assert "***@db" in scrubbed
+
+
+# ---------------------------------------------------------------------------
+# SEC-7 — brief length cap regression
+# ---------------------------------------------------------------------------
+
+
+def test_scrub_brief_rejects_oversized_brief():
+    """SEC-7: a brief exceeding MAX_BRIEF_LENGTH raises typed
+    BriefInterpretationError(malformed=True) BEFORE any regex / LLM
+    runs. Per workspaces/from-brief-1125/04-validate/round-02-security.md:168-175.
+    """
+    from kailash._from_brief.exceptions import BriefInterpretationError
+    from kailash._from_brief.scrubber import MAX_BRIEF_LENGTH
+
+    oversized = "x" * (MAX_BRIEF_LENGTH + 100)
+    with pytest.raises(BriefInterpretationError) as exc:
+        scrub_brief(oversized)
+    assert exc.value.malformed
+
+
+def test_scrub_brief_accepts_under_cap_brief():
+    """Regression guard: a brief just under the cap MUST pass."""
+    from kailash._from_brief.scrubber import MAX_BRIEF_LENGTH
+
+    under_cap = "x" * (MAX_BRIEF_LENGTH - 1000)
+    out = scrub_brief(under_cap)
+    assert out == under_cap  # no credentials, idempotent passthrough

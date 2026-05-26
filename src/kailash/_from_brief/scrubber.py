@@ -116,6 +116,16 @@ _KV_SECRET = re.compile(
 
 _REDACTED = "[REDACTED]"
 
+# SEC-7: maximum brief length before scrubbing. Applied at every
+# `from_brief()` entry point (all 5 surfaces compose `scrub_brief`
+# as Pass 0). The cap protects against (a) cost amplification on
+# the LLM round-trip, (b) regex pathological-backtrack risk on a
+# megabyte input, (c) DoS on any future MCP-exposed surface. The
+# 64 KiB ceiling leaves room for prose + structured context;
+# user-pasted briefs are typically <2 KiB. See
+# workspaces/from-brief-1125/04-validate/round-02-security.md:168-175.
+MAX_BRIEF_LENGTH: int = 64_000
+
 
 def _mask_url_credentials(url: str) -> str:
     """Return ``url`` with the userinfo portion replaced by ``***``.
@@ -173,6 +183,18 @@ def scrub_brief(brief: str) -> str:
     """
     if not brief:
         return brief
+
+    # SEC-7 length cap: fail loud BEFORE any regex / LLM call so a
+    # 1 MB brief cannot exhaust cost / runtime budgets. Lazy import to
+    # avoid a circular import (exceptions imports the validator which
+    # imports the scrubber indirectly).
+    if len(brief) > MAX_BRIEF_LENGTH:
+        from kailash._from_brief.exceptions import BriefInterpretationError
+
+        raise BriefInterpretationError(
+            f"brief exceeds {MAX_BRIEF_LENGTH}-byte cap " f"(got {len(brief)} bytes)",
+            malformed=True,
+        )
 
     # SEC-4 Pass 0: pre-encode raw ``#$@?`` in passwords for every URL
     # candidate in the brief. The helper handles one URL at a time, so
