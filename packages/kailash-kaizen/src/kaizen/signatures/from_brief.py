@@ -56,7 +56,9 @@ Origin: issue #1125 AC 3 + AC 8; architecture plan §3.3.
 
 from __future__ import annotations
 
+import keyword
 import logging
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, cast
 
 from kailash._from_brief import (
@@ -122,6 +124,46 @@ FIELD_TYPE_MAP: Dict[str, type] = {
 
 ALLOWED_FIELD_TYPES: Set[str] = set(FIELD_TYPE_MAP.keys())
 """The closed set of type identifiers the LLM may emit."""
+
+
+# Strict identifier patterns for LLM-emitted names. ``str.isidentifier()``
+# alone accepts Python keywords AND dunder names, both of which subvert
+# ``SignatureMeta`` when passed to ``type(name, bases, namespace)``. Per
+# SEC-2 in workspaces/from-brief-1125/04-validate/round-02-security.md,
+# names MUST match these regexes AND NOT be Python keywords AND NOT be
+# dunder. ASCII-only is intentional — unicode-collision attacks
+# (``Modèl`` vs ``Modèl`` with combining mark) are blocked by the regex.
+_CLASS_NAME_RE: re.Pattern[str] = re.compile(r"^[A-Z][a-zA-Z0-9_]{0,62}$")
+_FIELD_NAME_RE: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+# Dunder denylist — defense in depth on top of the regex; a leading
+# underscore name MUST NOT collide with Python data-model slots that
+# ``SignatureMeta`` reads during class construction.
+_DUNDER_DENYLIST: frozenset[str] = frozenset(
+    {
+        "__init__",
+        "__new__",
+        "__init_subclass__",
+        "__class__",
+        "__class_getitem__",
+        "__set_name__",
+        "__instancecheck__",
+        "__subclasscheck__",
+        "__subclasshook__",
+        "__prepare__",
+        "__mro_entries__",
+        "__getattr__",
+        "__getattribute__",
+        "__setattr__",
+        "__delattr__",
+        "__dict__",
+        "__slots__",
+        "__module__",
+        "__qualname__",
+        "__doc__",
+        "__annotations__",
+    }
+)
 
 
 # =========================================================================
@@ -281,23 +323,39 @@ class SignaturePlan(BriefPlan):
 
 
 def _validate_class_name(name: str) -> None:
-    """Raise if ``name`` is not a valid Python class identifier.
+    """Raise if ``name`` is not a valid Python class identifier under the
+    strict SEC-2 contract.
 
     A LLM-emitted class name is used as the first argument to
     ``type(name, bases, ns)``; Python silently accepts an invalid
     identifier here (the class is constructed but cannot be referenced
-    by that name). Guard the realizer's input so a malformed name
-    fails loudly at the validation gate.
+    by that name). ``str.isidentifier()`` ALSO accepts Python keywords
+    (``"class"``, ``"True"``) AND dunder names (``"__init_subclass__"``)
+    AND unicode identifiers (``"Modèl"``) — each of which subverts
+    ``SignatureMeta`` when consumed by ``type()``. Per SEC-2 the gate
+    is regex + keyword check + dunder denylist.
     """
     if not name:
         raise BriefInterpretationError(
             "class_name is empty; the LLM did not emit a Signature " "class name",
             malformed=True,
         )
-    if not name.isidentifier():
+    if not _CLASS_NAME_RE.match(name):
         raise BriefInterpretationError(
-            f"class_name={name!r} is not a valid Python identifier; "
-            f"the LLM emitted a malformed class name",
+            f"class_name={name!r} fails the strict class-name regex "
+            f"(ASCII, starts with uppercase letter, ≤63 chars)",
+            malformed=True,
+        )
+    if keyword.iskeyword(name):
+        raise BriefInterpretationError(
+            f"class_name={name!r} is a Python keyword and cannot be "
+            f"used as a Signature class name",
+            malformed=True,
+        )
+    if name in _DUNDER_DENYLIST:
+        raise BriefInterpretationError(
+            f"class_name={name!r} is in the dunder denylist "
+            f"(collides with Python data-model slots)",
             malformed=True,
         )
 
@@ -335,10 +393,27 @@ def _validate_triples(
                 malformed=True,
             )
         name, type_str, description = triple
-        if not isinstance(name, str) or not name.isidentifier():
+        # SEC-2 strict gate: regex (ASCII, lowercase-leading, ≤63 chars)
+        # + Python-keyword denylist + dunder denylist. Same shape as
+        # `_validate_class_name` above — see that function's docstring
+        # for full rationale.
+        if not isinstance(name, str) or not _FIELD_NAME_RE.match(name):
             raise BriefInterpretationError(
-                f"{field_kind}_fields[{index}].name={name!r} is not a "
-                f"valid Python identifier",
+                f"{field_kind}_fields[{index}].name={name!r} fails the "
+                f"strict field-name regex (ASCII, starts with lowercase "
+                f"letter or underscore, ≤63 chars)",
+                malformed=True,
+            )
+        if keyword.iskeyword(name):
+            raise BriefInterpretationError(
+                f"{field_kind}_fields[{index}].name={name!r} is a "
+                f"Python keyword and cannot be used as a field name",
+                malformed=True,
+            )
+        if name in _DUNDER_DENYLIST:
+            raise BriefInterpretationError(
+                f"{field_kind}_fields[{index}].name={name!r} is in the "
+                f"dunder denylist (collides with Python data-model slots)",
                 malformed=True,
             )
         if not isinstance(type_str, str):
