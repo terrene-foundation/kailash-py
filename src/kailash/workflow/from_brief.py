@@ -68,6 +68,22 @@ __all__ = [
     "workflow_from_brief",
 ]
 
+
+# Code-execution nodes that MUST NOT be reachable from an LLM-generated
+# workflow. PythonCodeNode + AsyncPythonCodeNode both call exec() on
+# LLM-emitted code; a brief like "use PythonCodeNode with code that
+# imports os and runs os.system(...)" would realize attacker code if
+# the allowlist accepted those types. Per the SEC-1 finding at
+# workspaces/from-brief-1125/04-validate/round-02-security.md, this
+# denylist runs BEFORE the allowlist gate (i.e. these node types are
+# NEVER in the LLM's allowed surface, regardless of NodeRegistry state).
+_DANGEROUS_NODE_TYPES: frozenset[str] = frozenset(
+    {
+        "PythonCodeNode",
+        "AsyncPythonCodeNode",
+    }
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -195,8 +211,8 @@ def _signature_cls() -> type:
                 "Ordered list of node specs that realize the user's "
                 "intent. Each entry MUST be a dict with these keys: "
                 "'node_type' (str — the registered Kailash node type "
-                "name, e.g. 'CSVReaderNode', 'PythonCodeNode', "
-                "'MergeNode'); 'node_id' (str — a unique identifier "
+                "name, e.g. 'CSVReaderNode', 'MergeNode', "
+                "'FilterNode'); 'node_id' (str — a unique identifier "
                 "within this plan, e.g. 'reader', 'transform_1'); "
                 "'config' (dict — parameters for the node, may be "
                 "empty {}). Use ONLY node types from the allowed list "
@@ -303,7 +319,14 @@ def _registered_node_types() -> Set[str]:
 
     from kailash.nodes.base import NodeRegistry
 
-    return set(NodeRegistry.list_nodes().keys())
+    # SEC-1 denylist: subtract dangerous code-execution nodes BEFORE
+    # returning. Per workspaces/from-brief-1125/04-validate/round-02-security.md
+    # finding SEC-1, PythonCodeNode + AsyncPythonCodeNode call exec() on
+    # LLM-emitted strings; gating them at the allowlist source ensures the
+    # augmented brief (`AVAILABLE NODE TYPES`) never enumerates them and the
+    # realizer's `validate_node_type` gate rejects them as unknown_value if
+    # the LLM hallucinates them anyway.
+    return set(NodeRegistry.list_nodes().keys()) - _DANGEROUS_NODE_TYPES
 
 
 # --------------------------------------------------------------------------- #

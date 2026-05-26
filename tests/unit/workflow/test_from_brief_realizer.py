@@ -304,11 +304,38 @@ def test_realize_duplicate_node_id_raises():
 
 
 def test_registered_node_types_returns_non_empty_set():
-    """`_registered_node_types()` returns the populated NodeRegistry."""
+    """`_registered_node_types()` returns the populated NodeRegistry,
+    minus the SEC-1 denylist of code-execution nodes.
+    """
     from kailash.workflow.from_brief import _registered_node_types
 
     types = _registered_node_types()
     assert isinstance(types, set)
     assert len(types) > 0
-    # PythonCodeNode is a canonical Kailash node registered at import time.
-    assert "PythonCodeNode" in types
+    # A canonical Kailash data-reader node is registered at import time.
+    assert "CSVReaderNode" in types
+
+
+@pytest.mark.regression
+def test_workflow_from_brief_rejects_dangerous_code_execution_nodes():
+    """SEC-1 regression: PythonCodeNode + AsyncPythonCodeNode MUST be
+    rejected by the allowlist gate even though they are registered in
+    `NodeRegistry`. A brief that asks the LLM to emit a `PythonCodeNode`
+    with attacker-controlled `config.code` must NOT reach `builder.add_node`.
+    See workspaces/from-brief-1125/04-validate/round-02-security.md SEC-1.
+    """
+    from kailash.workflow.from_brief import (
+        _DANGEROUS_NODE_TYPES,
+        _registered_node_types,
+    )
+
+    allowed = _registered_node_types()
+    assert (
+        "PythonCodeNode" not in allowed
+    ), "SEC-1: PythonCodeNode MUST be in the denylist"
+    assert (
+        "AsyncPythonCodeNode" not in allowed
+    ), "SEC-1: AsyncPythonCodeNode MUST be in the denylist"
+    # Denylist constant itself MUST cover both names.
+    assert "PythonCodeNode" in _DANGEROUS_NODE_TYPES
+    assert "AsyncPythonCodeNode" in _DANGEROUS_NODE_TYPES
