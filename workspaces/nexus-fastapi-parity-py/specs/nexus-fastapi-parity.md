@@ -37,6 +37,18 @@ New file `packages/kailash-nexus/src/nexus/extractors/__init__.py`. MUST NOT imp
 
 `__all__` enumerates ALL of the above. PEP 562 not required — no callable-module shape here.
 
+#### Multipart / UploadFile — input-validation MUSTs
+
+The HTTP-transport multipart resolver MUST enforce the following input-validation contract before any handler body sees an `UploadFile` / `Multipart` value. Per `rules/security.md` § Input Validation:
+
+1. **Total-body cap.** Default `Nexus(max_request_body_bytes=10_485_760)` (10 MiB). When the inbound `Content-Length` (or accumulated streaming-decoded bytes) exceeds the cap, the resolver MUST reject with HTTP **413 Payload Too Large** carrying `{"error": "request body exceeds configured cap", "code": "BODY_TOO_LARGE"}` per `rules/nexus-http-status-convention.md` MUST Rule 2 shape. Configurable per `Nexus` instance.
+2. **Per-file size cap.** Default `Nexus(max_upload_file_bytes=10_485_760)` (10 MiB). Each individual file in the multipart form MUST be size-checked at parse time; the first file exceeding the cap rejects the entire request with HTTP **413** (no partial acceptance). Configurable per `Nexus` instance.
+3. **`UploadFile.filename` is UNTRUSTED client input.** The resolver MUST treat the client-provided `filename` as untrusted bytes and sanitize before any filesystem use via `pathlib.PurePosixPath(name).name` — this strips path-traversal sequences (`../`, leading `/`), Windows-style separators (`\\`), and reserved directory names. Handlers receiving an `UploadFile` see the sanitized `.filename`; the original raw client value is dropped at the resolver boundary, NOT preserved as a sibling attribute. Per `rules/security.md` § Input Validation — path-traversal attacks (`../../../etc/passwd`) are the canonical exploit and MUST be structurally blocked at the resolver, not deferred to handler code.
+4. **MIME-type derivation.** The resolver MUST derive `UploadFile.content_type` from a libmagic-style content-sniff of the first 4 KiB of the file body, NOT from the client-provided `Content-Type` header alone. The client header is captured as `UploadFile.client_declared_content_type` for audit but MUST NOT be the value handlers see in `.content_type`. Per `rules/security.md` § Input Validation — client-declared MIME is an attacker-controllable string and trusting it for dispatch (e.g., extension-based virus scanner routing) opens a known bypass class.
+5. **Tempfile lifecycle.** The resolver MUST use Starlette's spooled-to-disk threshold (1 MiB default; tunable via `Nexus(multipart_spool_threshold=...)`). Cleanup is mandatory in BOTH branches: (a) on successful request completion, the resolver MUST call `await upload_file.close()` for every parsed file in a `finally` block keyed to the request lifecycle; (b) on exception (handler raise, transport disconnect, timeout), the same `finally` block MUST fire — silent leak of spooled tempfiles is BLOCKED. Per `rules/testing.md` § "Fixtures Yield + Cleanup, Never Return" — the cleanup contract is symmetric with the test-fixture rule.
+
+Tier-2 regression test contract for the path-traversal defense: `packages/kailash-nexus/tests/integration/nexus/test_multipart_path_traversal.py` POSTs a multipart body with `filename="../../../etc/passwd"`; asserts the handler sees `filename == "passwd"` (sanitized) AND that the resolver did not invoke any filesystem `open()` call against the unsanitized value (subprocess-level audit). Per `rules/testing.md` § Regression Testing.
+
 ### `Nexus.handler_extract`
 
 ```python
@@ -74,6 +86,16 @@ The resolver builds at registration time and runs at every invocation. The handl
 
 Dependency-resolution cache: per-invocation, each `Depends(callable)` is resolved once. If two handler parameters reference the same dependency callable, the result is memoized for the duration of the invocation.
 
+#### Resolver error-path discipline — no PII / internals leakage
+
+When a callable wrapped by `Depends(...)` raises during resolution, the resolver MUST split client-visible vs server-visible information:
+
+1. **Server-side logging.** The resolver MUST log the full exception context server-side: exception type, full traceback, the resolved request correlation ID (`X-Request-ID` or a server-minted UUID), the handler name, the dependency callable's `__qualname__`, AND the request-context fields per `rules/observability.md`. This log entry is the operator's only audit trail when an end-user reports an error.
+2. **Client-visible response.** The resolver MUST surface to the client ONLY: HTTP **500 Internal Server Error** (or the typed status if the raised exception is a `NexusHandlerError` per `rules/nexus-http-status-convention.md` MUST Rule 4) AND the request correlation ID. The response body shape: `{"error": "internal error", "code": "INTERNAL_ERROR", "correlation_id": "<uuid>"}`. Per `rules/nexus-http-status-convention.md` MUST Rule 2 — every 4xx/5xx body MUST carry the canonical shape.
+3. **BLOCKED in client-visible response.** The resolver MUST NOT include in the HTTP response body: `str(exception)`, the exception's `__class__.__name__`, traceback fields, request-data echoes (header values, body fragments, query parameters), file paths from the traceback, environment-variable values, OR any other server-internal context. Per `rules/security.md` MUST NOT § "No secrets in logs" — the inverse applies to client surfaces: no internals leak BACK to clients. The correlation ID is the operator's lookup key in the server log; the client receives no other detail.
+
+Per `rules/zero-tolerance.md` Rule 3 — silent swallow of dependency errors is BLOCKED; the server-side log is mandatory. The split-visibility contract converts a resolver failure from "client sees stack trace with internal class names" (the FastAPI default failure mode) into "client sees correlation ID, operator looks up the full context server-side".
+
 ### `Nexus.dependency_overrides`
 
 ```python
@@ -95,7 +117,13 @@ class Nexus:
     dependency_overrides: DependencyOverrideMap  # attribute, initialized in __init__
 ```
 
-Thread-safety: `DependencyOverrideMap` is protected by a per-instance lock. Per `rules/python-environment.md` Rule 5, the lock is constructed via `threading.Lock()` factory and the captured type is used for any `isinstance` checks (no direct `isinstance(x, threading.Lock)` — TypeError on 3.11+).
+Concurrency contract: `DependencyOverrideMap` is a **TEST-ONLY** surface. Production code paths MUST NOT mutate it during request processing. Test fixtures mutate it at setup/teardown only.
+
+- **Production read path.** During request processing, the `Depends` resolver reads the override map. Reads are safe under concurrent in-flight requests because the map is never written during a request — Python's GIL guarantees dict-read atomicity, no extra locking required for the read path. Per `rules/zero-tolerance.md` Rule 3 — adding production-time mutation hooks is BLOCKED; this is the structural defense against tests-as-production-config drift.
+- **Test setup/teardown.** The map is mutated in test fixtures BETWEEN requests (not during). The rare cross-thread test-setup pattern (e.g., `pytest-xdist`) uses `threading.Lock` for atomicity of multi-step setup; per `rules/python-environment.md` Rule 5, the lock is constructed via `threading.Lock()` factory and the captured type is used for any `isinstance` checks (no direct `isinstance(x, threading.Lock)` — TypeError on 3.11+).
+- **Production-time mutation guard.** Any call to `DependencyOverrideMap.override()` / `.set()` / `.clear()` / `.clear_all()` DURING an active request (detected via the request-context registry) MUST raise `DependencyOverrideRuntimeMutationError` with a clear message naming the BLOCKED case. Per `rules/zero-tolerance.md` Rule 3 — converting silent override-during-request into a typed error closes the test-config-as-production-injection vector.
+
+The dependency-overrides surface IS the test-injection mechanism; treating it as a production-time DI container is BLOCKED.
 
 ### `Nexus.register_sse`
 
@@ -126,6 +154,32 @@ async def register_sse(
 ```
 
 Implementation mirrors `sse.py:_sse_generator` (lines 35-85) but parameterizes the source. The existing `register_sse_endpoint(nexus)` (`sse.py:88`) is refactored to call `register_sse("/events/stream", on_subscribe=_eventbus_subscribe)` — internally collapsed into one implementation, no behavior change for existing consumers.
+
+#### register_sse — auth + rate-limit + backpressure MUSTs
+
+Per `rules/security.md` § Input Validation + DoS prevention, `register_sse` is a long-lived streaming endpoint and MUST carry the same authn/authz + rate-limit + resource-bound posture as a plain HTTP handler. The signature is extended:
+
+```python
+async def register_sse(
+    self,
+    path: str,
+    on_subscribe: Callable[[Request], AsyncIterator[dict]],
+    *,
+    keepalive_interval: int = 15,
+    dependencies: list[Depends] = [],
+    max_queue_depth: int = 1000,
+    max_event_bytes: int = 65_536,
+    slow_consumer_timeout: float = 30.0,
+) -> None: ...
+```
+
+MUST clauses:
+
+1. **Auth delegation through the resolver chain.** SSE endpoints MUST accept `dependencies: list[Depends] = []` parameter — every `Depends` in the list resolves on subscribe through the SAME resolver chain as HTTP `handler_extract` (Shard 1). A `Depends(get_current_user)` that raises `Unauthorized` MUST close the stream with HTTP **401** BEFORE the SSE handshake completes — never emit a partial `event-stream` body to an unauthenticated client. Test contract: a subscriber missing the bearer token receives 401 + JSON body per `rules/nexus-http-status-convention.md` MUST Rule 2, NOT an empty `text/event-stream` response.
+2. **Bounded queue depth.** Default 1000 events; configurable. The resolver MUST maintain a per-subscription `asyncio.Queue(maxsize=max_queue_depth)`. When `on_subscribe` yields faster than the client consumes, the queue fills; on overflow the resolver MUST close the stream with SSE `event: error\ndata: {"code": "QUEUE_OVERFLOW"}\n\n` then EOF — silent drop of events is BLOCKED per `rules/zero-tolerance.md` Rule 3.
+3. **Max event size.** Default 65 536 bytes (64 KiB) per event after JSON serialization; configurable. An event exceeding the cap MUST be dropped with a structured server-side log (correlation ID + size + cap) and the stream MUST emit an SSE `event: error\ndata: {"code": "EVENT_TOO_LARGE"}\n\n` to the subscriber, then continue with the next event (NOT close the stream — a single oversized event is recoverable). Per `rules/security.md` § Input Validation.
+4. **Slow-consumer disconnect.** Default 30 seconds; configurable via `slow_consumer_timeout`. When the resolver cannot flush the next event to the underlying transport within the timeout (TCP window full, client unreachable), the resolver MUST close the stream with code 1011 (server error) and release all per-subscription state (queue, on_subscribe iterator, auth context). Per `rules/security.md` — slow-consumer DoS is the canonical SSE exhaustion vector.
+5. **Rate-limit integration.** The SSE endpoint MUST honor `nexus.auth.rate_limit` hooks on the SUBSCRIBE event (NOT per emitted event — rate-limiting per-event would defeat the streaming primitive). The hook fires once at handshake; rate-limit refusal MUST close the connection with HTTP **429 Too Many Requests** per `rules/nexus-http-status-convention.md` MUST Rule 2 shape BEFORE the SSE upgrade. Per `rules/security.md` Kailash-Specific Security § Nexus — "Rate limiting" applies symmetrically to streaming endpoints.
 
 ### `Nexus.register_websocket` (callback overload)
 
@@ -160,6 +214,17 @@ def register_websocket(
 ```
 
 The class-based code path at `core.py:705-775` stays as-is for the class shape. The new dispatch logic is added at the top; the callback path synthesizes a class internally via `type("_CallbackHandler", (MessageHandler,), {...})` and routes through the same `_ws_message_handlers.register` call.
+
+#### register_websocket callback — origin allowlist + WS security MUSTs
+
+The callback overload synthesizes an internal `MessageHandler` subclass that MUST register through the SAME `_ws_message_handlers.register` invocation as the class path AND carry identical security posture. Per `rules/security.md` Kailash-Specific Security § Nexus + the existing DNS-rebinding defense at `packages/kailash-nexus/src/nexus/websocket_origin.py` (issue #673):
+
+1. **Origin allowlist parity.** The synthesized handler MUST enforce `allowed_origins` through the SAME `validate_origin_allowlist` + `origin_matches_allowlist` call sites in `packages/kailash-nexus/src/nexus/websocket_origin.py` that the class path uses. The callback path MUST NOT introduce a parallel codepath bypassing the existing origin validation — every handshake routes through one validator. Mismatched origins close with WebSocket code 1008 (policy violation) and a fingerprinted reason (sha256(origin)[:8] per `rules/observability.md` Rule 6 + Rule 8) that does NOT echo the raw Origin back to the client.
+2. **Subprotocol allowlist.** New parameter `subprotocols: list[str] = []` on both class and callback shapes. The handshake MUST default-reject any client-offered subprotocol not in the list. When `subprotocols=[]` (the default) AND the client offers a subprotocol, the handshake closes with code 1002 (protocol error). Per `rules/security.md` § Input Validation — accepting an arbitrary client-offered subprotocol opens a known fingerprint-evasion vector.
+3. **Max message size.** Default 1 MiB per inbound frame after decode; configurable via `Nexus(max_websocket_message_bytes=...)`. Frames exceeding the cap MUST close the connection with code 1009 (message too big). Per `rules/security.md` — unbounded message size is a DoS vector.
+4. **Auth at handshake.** The callback overload MUST accept `dependencies: list[Depends] = []` symmetric to `register_sse` HIGH-S2 above; `Depends` resolves at handshake (BEFORE the WebSocket upgrade completes) and a raising dependency closes with HTTP **401** or **403** per `rules/nexus-http-status-convention.md` MUST Rule 2 — NEVER complete the upgrade then close mid-stream.
+
+Tier-2 regression test contract: `packages/kailash-nexus/tests/integration/nexus/test_register_websocket_callback_origin.py` asserts that `register_websocket(path, on_message=..., allowed_origins=["https://app.example.com"])` rejects a handshake from `Origin: https://attacker.example.com` with close code 1008 + fingerprinted reason — IDENTICAL behavior to the class path's existing test at `tests/integration/test_websocket_origin_allowlist.py`. Per `rules/testing.md` § "One Direct Test Per Variant In Every Delegating Pair".
 
 ## PEP 563 incompatibility — typed error at registration time
 
