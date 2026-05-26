@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking, delegate substrate)
+
+- **`Connector.authenticate` / `.write` / `.read` default implementations now raise `NotImplementedError`** via `_legacy_unsupported(name)` instead of returning empty-crypto envelopes / `Principal(tenant_id=None)`. Closes GH #1177 (empty-crypto orphan defaults on write/read — downstream verifiers that did not explicitly check `len(signature) > 0` / `len(attestation) > 0` would treat the prior defaults as authenticated/attested) + GH #1178 (`Principal(tenant_id=None)` from the prior `authenticate` default silently slipped through tenant-scoped authorization checks in multi-tenant deployments). The inline defaults were a transitional convenience carried over from the pre-2.26.0 `__init_subclass__` proxy era and were never part of the documented audit-grade contract — `LegacyInvokeConnector` and direct legacy `invoke()`-only subclasses MUST use `.invoke()` for all dispatch; reaching for `.authenticate()` / `.write()` / `.read()` now gets a clear refusal rather than a silent unverifiable envelope. The 3 newer ACCESSOR defaults (`.revocation` / `.ledger` / `.auth_verifier`) already raised via `_legacy_unsupported` since 2.26.0; this change extends the same defense-in-depth pattern to the 3 primitives.
+
+### Migration
+
+- Connector subclasses that need `.authenticate()` / `.write()` / `.read()` MUST implement them explicitly (override with the real cryptographic exchange). The prior inline-default behavior (empty signature / empty attestation / `Principal(tenant_id=None)`) was security-defense-in-depth unsafe and is removed without a deprecation shim — the prior return values were structurally indistinguishable from a real authenticated/attested envelope at the type level, so a `DeprecationWarning` shim would have continued to ship the same defense-in-depth gap during the deprecation window. New-shape connectors that already override the 3 primitives are unaffected.
+- Consumers calling the 3 primitives on a `LegacyInvokeConnector` (or any subclass that does not override them) will now receive `NotImplementedError: Connector primitive 'write' not implemented by this legacy invoke()-only connector — use connector.invoke(...) or migrate the connector to the 4-primitive shape`. Route those call sites through `.invoke(...)`.
+
 ## [2.26.2] - 2026-05-25
 
 ### Fixed

@@ -653,9 +653,14 @@ class Connector(abc.ABC):
 
     # ─── Default primitives (3) — mirror rs trait async fns ─────────────
     #
-    # Concrete defaults provide the legacy-adapter behavior so an
-    # invoke()-only connector is fully concrete. New-shape connectors
-    # OVERRIDE these with real cryptographic implementations.
+    # Concrete defaults raise via ``_legacy_unsupported``: legacy
+    # ``invoke()``-only connectors do NOT expose the rs-mirrored
+    # primitive surface, so a caller reaching for ``.authenticate()`` /
+    # ``.write()`` / ``.read()`` against a legacy connector gets a clear
+    # refusal rather than a silent empty-crypto envelope or
+    # ``Principal(tenant_id=None)`` (closes the defense-in-depth gaps
+    # from GH #1177 + #1178). New-shape connectors OVERRIDE these with
+    # real cryptographic implementations.
 
     async def authenticate(
         self,
@@ -664,17 +669,17 @@ class Connector(abc.ABC):
     ) -> Principal:
         """Authenticate the dispatch identity; return a :class:`Principal`.
 
-        Default (legacy invoke()-only connectors): returns a trivial
-        Principal scoped to the bound identity — legacy connectors
-        authenticated implicitly via ``invoke()``. New-shape connectors
-        override with a real authentication exchange (and may raise a
-        connector-defined exception on failure).
+        Default (legacy invoke()-only connectors): raises a typed
+        ``_legacy_unsupported`` guard — legacy connectors authenticated
+        implicitly via ``invoke()`` and do NOT expose a separate
+        authentication exchange. The prior default returned
+        ``Principal(tenant_id=None)`` which silently slipped through
+        tenant-scoped authorization checks in multi-tenant deployments
+        (GH #1178); refusing structurally is the defense-in-depth fix.
+        New-shape connectors override with a real authentication exchange
+        (and may raise a connector-defined exception on failure).
         """
-        return Principal(
-            delegate_id=str(identity.delegate_id),
-            tenant_id=None,
-            claims={},
-        )
+        _legacy_unsupported("authenticate")
 
     async def write(
         self,
@@ -685,28 +690,18 @@ class Connector(abc.ABC):
     ) -> SignedActionEnvelope:
         """Execute a write action under audit; return a signed action envelope.
 
-        Default (legacy invoke()-only connectors): executes the action and
-        synthesizes a :class:`SignedActionEnvelope` with an EMPTY signature
-        — legacy connectors did not produce cryptographic action
-        signatures, so new-shape callers receiving an empty-signature
-        envelope MUST treat it as unverifiable per F-17 dispatch wiring.
-        New-shape connectors override with a real signing exchange whose
-        signature is verifiable via the runtime's :class:`Verifier`.
+        Default (legacy invoke()-only connectors): raises a typed
+        ``_legacy_unsupported`` guard — legacy connectors do NOT produce
+        cryptographic action signatures. The prior default executed the
+        action and returned a :class:`SignedActionEnvelope` with an EMPTY
+        signature, which any downstream verifier that did not explicitly
+        check ``len(signature) > 0`` would treat as authenticated (GH
+        #1177); refusing structurally is the defense-in-depth fix.
+        Legacy connectors execute through ``invoke()`` only. New-shape
+        connectors override with a real signing exchange whose signature
+        is verifiable via the runtime's :class:`Verifier`.
         """
-        payload_obj = await action()
-        payload_dict: dict[str, Any]
-        if isinstance(payload_obj, dict):
-            payload_dict = payload_obj
-        else:
-            payload_dict = {"value": payload_obj}
-        canonical_bytes = canonical_json_dumps(payload_dict).encode("utf-8")
-        return SignedActionEnvelope(
-            action_id=uuid.uuid4(),
-            canonical_bytes=canonical_bytes,
-            signature=b"",  # legacy connector did not sign
-            signer_delegate_id=str(identity.delegate_id),
-            payload=payload_dict,
-        )
+        _legacy_unsupported("write")
 
     async def read(
         self,
@@ -717,55 +712,45 @@ class Connector(abc.ABC):
     ) -> tuple[T_Read, AttestedReadReceipt]:
         """Execute a read query under audit; return (payload, attested-receipt).
 
-        Default (legacy invoke()-only connectors): executes the query and
-        synthesizes an :class:`AttestedReadReceipt` with an EMPTY
-        attestation — legacy connectors did not produce cryptographic read
-        attestations. New-shape connectors override with a real attestation
-        exchange.
+        Default (legacy invoke()-only connectors): raises a typed
+        ``_legacy_unsupported`` guard — legacy connectors do NOT produce
+        cryptographic read attestations. The prior default executed the
+        query and returned an :class:`AttestedReadReceipt` with an EMPTY
+        attestation, which downstream consumers that did not explicitly
+        check ``len(attestation) > 0`` would treat as attested (GH
+        #1177); refusing structurally is the defense-in-depth fix.
+        New-shape connectors override with a real attestation exchange.
         """
-        value = await query()
-        canonical_bytes = canonical_json_dumps(
-            {
-                "value": (
-                    value
-                    if isinstance(
-                        value, (dict, list, str, int, float, bool, type(None))
-                    )
-                    else repr(value)
-                )
-            }
-        ).encode("utf-8")
-        receipt = AttestedReadReceipt(
-            read_id=uuid.uuid4(),
-            canonical_bytes=canonical_bytes,
-            attestation=b"",
-            attester_delegate_id=str(identity.delegate_id),
-            observed_at=datetime.now(timezone.utc),
-        )
-        return value, receipt
+        _legacy_unsupported("read")
 
 
 # ---------------------------------------------------------------------------
-# Typed guard for accessor surface unsupported by legacy connectors.
-# The 3 accessor defaults on Connector call this so a caller reaching for
-# ``connector.revocation`` against a legacy invoke()-only connector gets a
-# clear refusal rather than a silent AttributeError. The legacy default
-# behavior for the 3 primitives (authenticate / write / read) is inlined
-# directly into the Connector base class concrete defaults above — there is
-# no longer any __init_subclass__ proxy-installation machinery.
+# Typed guard for the 6 newer Connector members (3 accessors + 3 primitives)
+# unsupported by legacy invoke()-only connectors.
+# All 6 newer Connector members raise via _legacy_unsupported on their
+# concrete defaults — legacy ``invoke()``-only connectors do not expose any
+# of these surfaces; new-shape connectors override each with their real
+# implementation. The prior default behavior for the 3 primitives
+# (authenticate / write / read) inlined empty-crypto envelopes /
+# ``Principal(tenant_id=None)`` directly, which silently slipped through
+# downstream verifier + tenant-authorization checks (GH #1177 + #1178);
+# refusing structurally closes that defense-in-depth gap.
 # ---------------------------------------------------------------------------
 
 
 def _legacy_unsupported(name: str) -> NoReturn:
-    """Raise a typed refusal for a primitive a legacy connector does not expose.
+    """Raise a typed refusal for a member a legacy connector does not expose.
 
     Legacy ``invoke()``-only connectors do not expose the rs-mirrored
-    accessor surface; callers that reach for ``connector.revocation`` /
-    ``.ledger`` / ``.auth_verifier`` against a legacy connector get a clear
-    refusal rather than a silent AttributeError (per ``zero-tolerance.md``
-    Rule 3a typed-delegate guards). The ``NoReturn`` annotation lets the
-    accessor properties declare their real return types without a
-    fall-through-to-None type error.
+    accessor surface (``revocation`` / ``ledger`` / ``auth_verifier``)
+    OR the rs-mirrored primitive surface (``authenticate`` / ``write`` /
+    ``read``); callers that reach for any of those against a legacy
+    connector get a clear refusal rather than a silent
+    ``AttributeError`` (accessors) or silent empty-crypto envelope /
+    ``Principal(tenant_id=None)`` (primitives, per ``zero-tolerance.md``
+    Rule 3a typed-delegate guards + GH #1177 + #1178). The ``NoReturn``
+    annotation lets the accessor properties + primitive methods declare
+    their real return types without a fall-through-to-None type error.
     """
     raise NotImplementedError(
         f"Connector primitive {name!r} not implemented by this legacy "
@@ -786,10 +771,15 @@ class LegacyInvokeConnector(Connector):
     existing legacy connectors that ship as bare ``async def invoke(...)``
     callables (not as Connector subclasses) can wrap into the new Connector
     ABC via this adapter. The wrapped callable is invoked from the
-    :meth:`invoke` method; the 6 newer members (3 accessors + 3 primitives)
-    are satisfied by the concrete defaults inherited from
-    :class:`Connector` (accessors raise the typed legacy guard; the
-    primitives provide the legacy-adapter behavior).
+    :meth:`invoke` method; all 6 newer members (3 accessors + 3 primitives)
+    raise the typed ``_legacy_unsupported`` guard via the concrete defaults
+    inherited from :class:`Connector` — legacy adapters MUST use
+    ``.invoke()`` for all dispatch; consumers reaching for
+    ``.authenticate()`` / ``.write()`` / ``.read()`` / ``.revocation`` /
+    ``.ledger`` / ``.auth_verifier`` get a clear refusal rather than a
+    silent empty-crypto envelope or ``Principal(tenant_id=None)``
+    (closes the orphan-defaults defense-in-depth gap from GH #1177 +
+    #1178).
 
     The adapter is most useful for downstream consumers porting legacy
     connector callables to the new ABC without subclassing. New connectors
