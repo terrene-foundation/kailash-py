@@ -61,6 +61,35 @@ LEAK_PATTERNS: List[Tuple[str, re.Pattern[str]]] = [
         "AWS access key",
         re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
     ),
+    # SEC-3: mirror the extended corpus added to scrubber.py. See
+    # workspaces/from-brief-1125/04-validate/round-02-security.md:78-103.
+    (
+        "github personal access token",
+        re.compile(
+            r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b"
+            r"|\bgithub_pat_[A-Za-z0-9_]{20,}\b"
+        ),
+    ),
+    (
+        "google api key",
+        re.compile(r"\bAIza[A-Za-z0-9_\-]{35}\b"),
+    ),
+    (
+        "slack token",
+        re.compile(r"\bxox[bopars]-[A-Za-z0-9\-]{10,}\b"),
+    ),
+    (
+        "jwt token",
+        re.compile(r"\bey[A-Za-z0-9_\-]+\.ey[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\b"),
+    ),
+    (
+        "stripe api key",
+        re.compile(r"\b(?:sk|pk|rk)_(?:test|live)_[A-Za-z0-9]{20,}\b"),
+    ),
+    (
+        "twilio token",
+        re.compile(r"\bSK[a-f0-9]{32}\b"),
+    ),
 ]
 
 

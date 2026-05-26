@@ -149,3 +149,114 @@ class TestIdempotency:
         once = scrub_brief(brief)
         twice = scrub_brief(once)
         assert once == twice
+
+
+# ---------------------------------------------------------------------------
+# SEC-3 — extended credential corpus regression tests
+# ---------------------------------------------------------------------------
+#
+# Closes the credential-corpus gap surfaced at
+# workspaces/from-brief-1125/04-validate/round-02-security.md:78-103.
+# Each test asserts (a) the matched substring is replaced by [REDACTED]
+# AND (b) the raw token does NOT survive in the scrubbed output.
+
+# SEC-3 sample tokens — synthetic-looking, intentionally shaped to match
+# the published vendor patterns so the test exercises the real regex
+# alternation, NOT a tame "abc123" placeholder. None of these are valid
+# upstream credentials.
+GITHUB_PAT_CLASSIC = "ghp_" + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+GITHUB_PAT_FINEGRAINED = "github_pat_" + "11ABCDEFG0aaaaaaaaaaaa_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+GOOGLE_API_KEY = "AIza" + "SyA-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # 4+35=39
+SLACK_BOT_TOKEN = "xoxb" + "-1234567890-abcdef"
+JWT_SAMPLE = (
+    "ey" + "JhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0."
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJK"
+)
+STRIPE_SECRET = "sk_" + "test_abcdefghijklmnopqrstuvwxyz0123"
+TWILIO_TOKEN = "SK" + "0123456789abcdef0123456789abcdef"
+
+
+class TestSec3GithubToken:
+    def test_github_classic_pat_redacted(self):
+        brief = f"my token is {GITHUB_PAT_CLASSIC}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert GITHUB_PAT_CLASSIC not in out
+
+    def test_github_finegrained_pat_redacted(self):
+        brief = f"export GH_TOKEN={GITHUB_PAT_FINEGRAINED}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert GITHUB_PAT_FINEGRAINED not in out
+
+
+class TestSec3GoogleApiKey:
+    def test_google_api_key_redacted(self):
+        brief = f"use {GOOGLE_API_KEY} for Maps API"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert GOOGLE_API_KEY not in out
+
+
+class TestSec3SlackToken:
+    def test_slack_bot_token_redacted(self):
+        brief = f"slack hook uses {SLACK_BOT_TOKEN}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert SLACK_BOT_TOKEN not in out
+
+
+class TestSec3JwtToken:
+    def test_jwt_redacted(self):
+        brief = f"Authorization header value: {JWT_SAMPLE}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert JWT_SAMPLE not in out
+
+
+class TestSec3StripeKey:
+    def test_stripe_secret_redacted(self):
+        brief = f"STRIPE_SECRET_KEY={STRIPE_SECRET}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert STRIPE_SECRET not in out
+
+
+class TestSec3TwilioToken:
+    def test_twilio_token_redacted(self):
+        brief = f"twilio auth token {TWILIO_TOKEN}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert TWILIO_TOKEN not in out
+
+
+class TestSec3LegacyCorpusUnregressed:
+    """Pre-SEC-3 credential corpus continues to scrub after extension."""
+
+    def test_openai_key_still_scrubbed(self):
+        brief = f"openai key {SECRET_API_KEY}"
+        out = scrub_brief(brief)
+        assert "[REDACTED]" in out
+        assert SECRET_API_KEY not in out
+
+    def test_aws_key_still_scrubbed(self):
+        brief = f"AWS_ACCESS_KEY_ID={SECRET_AWS_KEY}"
+        out = scrub_brief(brief)
+        assert SECRET_AWS_KEY not in out
+
+
+def test_fixture_scanner_flags_slack_token_in_temp_fixture(tmp_path, monkeypatch):
+    """SEC-3 fixture-scanner mirror: a temp fixture file with a new
+    pattern MUST be flagged by the regression scanner.
+
+    Uses ``tmp_path`` so no real fixture is touched; the temp directory
+    is monkey-patched onto FIXTURE_DIR for the duration of the test.
+    """
+    from tests.regression.from_brief import test_fixtures_no_secrets as mod
+
+    monkeypatch.setattr(mod, "FIXTURE_DIR", tmp_path)
+    leak_file = tmp_path / "test_temp_leak.yaml"
+    leak_file.write_text("token: xoxb-12345-fakebut-shaped-like-slack")
+    with pytest.raises(mod.BriefFixtureLeakError) as exc:
+        mod.test_from_brief_fixtures_contain_no_credentials()
+    assert "slack" in str(exc.value).lower()

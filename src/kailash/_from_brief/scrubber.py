@@ -56,6 +56,39 @@ _BEARER_TOKEN = re.compile(r"\b(Bearer)\s+[A-Za-z0-9._\-]{20,}\b")
 # AWS access-key shape: 20-char string starting with ``AKIA``.
 _AWS_ACCESS_KEY = re.compile(r"\bAKIA[A-Z0-9]{16}\b")
 
+# SEC-3: extended credential corpus. Each pattern uses tight word
+# boundaries to avoid false positives. Sources: GitHub Docs (PAT
+# shapes), Google API key shape, Slack API tokens, RFC 7519 JWT
+# compact serialization, Stripe API key documentation, Twilio
+# access-token format. See
+# workspaces/from-brief-1125/04-validate/round-02-security.md:78-103
+# for the full threat model + corpus citation.
+
+# GitHub tokens — legacy short prefixes (ghp_, gho_, ghu_, ghs_, ghr_)
+# AND the new fine-grained ``github_pat_<11chars>_<59chars>`` form.
+# Both are still issued by GitHub as of the 2026 PAT cohort.
+_GITHUB_TOKEN = re.compile(
+    r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b" r"|\bgithub_pat_[A-Za-z0-9_]{20,}\b"
+)
+
+# Google API key shape (39 chars total, ``AIza`` + 35 base64-ish).
+_GOOGLE_API_KEY = re.compile(r"\bAIza[A-Za-z0-9_\-]{35}\b")
+
+# Slack tokens — workspace bot/oauth/personal/refresh.
+_SLACK_TOKEN = re.compile(r"\bxox[bopars]-[A-Za-z0-9\-]{10,}\b")
+
+# JWT compact serialization — three base64url segments separated by
+# dots. First two segments start with ``ey`` because JSON header /
+# payload always begin with ``{"``. The third (signature) is opaque.
+_JWT_TOKEN = re.compile(r"\bey[A-Za-z0-9_\-]+\.ey[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\b")
+
+# Stripe API keys — live + test, publishable (pk_), secret (sk_),
+# restricted (rk_) variants.
+_STRIPE_KEY = re.compile(r"\b(?:sk|pk|rk)_(?:test|live)_[A-Za-z0-9]{20,}\b")
+
+# Twilio account/auth tokens — start with ``SK`` then 32 hex chars.
+_TWILIO_KEY = re.compile(r"\bSK[a-f0-9]{32}\b")
+
 # Standalone ``password=<value>`` or ``api_key=<value>`` kv-pair shapes.
 # Captures the prefix so the kv-key is preserved; the value is replaced.
 _KV_SECRET = re.compile(
@@ -138,6 +171,16 @@ def scrub_brief(brief: str) -> str:
 
     # Pass 4: AWS access keys.
     scrubbed = _AWS_ACCESS_KEY.sub(_REDACTED, scrubbed)
+
+    # SEC-3 passes 4a–4f: extended credential corpus. Each replaces
+    # the matched substring with the canonical sentinel. Order between
+    # these is irrelevant — the shapes do not overlap.
+    scrubbed = _GITHUB_TOKEN.sub(_REDACTED, scrubbed)
+    scrubbed = _GOOGLE_API_KEY.sub(_REDACTED, scrubbed)
+    scrubbed = _SLACK_TOKEN.sub(_REDACTED, scrubbed)
+    scrubbed = _JWT_TOKEN.sub(_REDACTED, scrubbed)
+    scrubbed = _STRIPE_KEY.sub(_REDACTED, scrubbed)
+    scrubbed = _TWILIO_KEY.sub(_REDACTED, scrubbed)
 
     # Pass 5: kv-pair secrets — preserve the key.
     scrubbed = _KV_SECRET.sub(lambda m: f"{m.group(1)}={_REDACTED}", scrubbed)
