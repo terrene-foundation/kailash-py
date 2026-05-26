@@ -39,19 +39,47 @@ class CreateUser(BaseModel):
 async def create_user(body: CreateUser) -> dict: ...
 ```
 
-**Nexus shape (immediate path with `Body[dict]`).**
+**Nexus shape (Pydantic via canonical decoder — NEW-LOW-1, strict-mode mandatory).**
 
 ```python
+from pydantic import BaseModel, ConfigDict
 from kailash.nexus.extractors import Body
+from kailash.nexus import register_decoder
+
+class CreateUser(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # MUST — registration fails loud otherwise
+    name: str
+    email: str
+
+# Canonical pydantic decoder — strict=True is MANDATORY in this example
+register_decoder(CreateUser, lambda data, T: T.model_validate(data, strict=True))
+
 @app.handler("create_user")
-async def create_user(body: Body[dict]) -> dict: ...  # body is a dict
+async def create_user(body: Body[CreateUser]) -> dict:
+    return {"id": body.name}
 ```
 
-**Nexus shape (Pydantic — deferred, link to follow-up issue).**
+**Nexus shape (dataclass — no decoder registration; introspection-based).**
 
-The Pydantic body-parsing path is tracked at `<follow-up-issue-link>`. Until it ships, use `Body[dict]` and validate inside the handler.
+```python
+from dataclasses import dataclass
+from kailash.nexus.extractors import Body
 
-**Mapping prose.** Pydantic body parsing is deferred (Risk 3 in `01-analysis/03-risks-and-cross-cutting.md`). The immediate `Body[dict]` path covers all dict-shaped bodies; structural validation moves to the handler body. The deferred Pydantic path will restore the FastAPI-shape exactly.
+@dataclass
+class CreateUser:
+    name: str
+    email: str
+
+# No register_decoder call needed; the resolver introspects __init__ params.
+# Extra keys (e.g., {"name": "x", "email": "y", "is_admin": true}) raise
+# BodyExtraKeysError → HTTP 400 + {"code": "BODY_UNKNOWN_FIELDS", "unknown_fields": ["is_admin"]}.
+@app.handler("create_user")
+async def create_user(body: Body[CreateUser]) -> dict: ...
+```
+
+**Mapping prose.** `Body[T]` accepts a typed model `T`. Two paths are supported by default — registered decoder OR `inspect.signature(T.__init__).parameters` introspection. Both reject unknown keys structurally (mass-assignment / OWASP A04:2021 defense per `specs/nexus-fastapi-parity.md` § "Body[T] — mass-assignment policy"). The canonical Pydantic example above uses `model_validate(data, strict=True)` — strict mode is MANDATORY for the canonical shape because non-strict validation silently coerces types (e.g. `"true"` → `True`), which downstream sessions cannot distinguish from intentional input. Strict mode + `extra='forbid'` together close the silent-drop failure mode per `rules/zero-tolerance.md` Rule 3 (silent fallback BLOCKED). The migration guide's earlier `Body[dict]` immediate-path framing is superseded by this Q1 closure — typed-bodies ship with the canonical decoder example, not as a deferred-to-follow-up.
+
+**Footgun:** if you forget `model_config = ConfigDict(extra="forbid")` on a Pydantic `T`, Nexus refuses to start with `BodyExtraPolicyError` naming the handler and the offending model. Declaring `extra='forbid'` is the structural defense against accidentally absorbing attacker-supplied fields into your model.
 
 ## Section 3 — File uploads (single)
 

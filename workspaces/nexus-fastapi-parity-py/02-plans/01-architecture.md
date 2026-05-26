@@ -46,8 +46,21 @@ Multipart = list[UploadFile]
 class NexusHandlerError(Exception):
     def __init__(self, status_code: int, body: dict | str) -> None: ...
 
+# Body[T] policy errors (NEW-HIGH-1, OWASP A04:2021)
+# Pydantic models without ConfigDict(extra="forbid") fail loud at registration
+class BodyExtraPolicyError(NexusError):
+    """Raised at handler_extract registration when Body[T]'s Pydantic T
+    does not declare extra='forbid'. Server-launch-fails-loud per
+    rules/security.md § Input Validation."""
+class BodyExtraKeysError(NexusError):
+    """Raised at request time when a Body[T] dataclass/plain-class T receives
+    keys not in inspect.signature(T.__init__).parameters. Surfaces HTTP 400
+    + {"code": "BODY_UNKNOWN_FIELDS", "unknown_fields": [...]} envelope."""
+
 # Optional extractors for completeness (NOT all required by AC):
-# Bytes, Headers, Query, Body — scope decision at /todos
+# Query — scope decision at /todos. Bytes/Headers/Body land in Shard 1
+# per Q3 closure (rules/nexus-http-status-convention.md MUST Rule 4 +
+# NEW-MED-1 below).
 ```
 
 `__all__` enumerates: `Depends`, `Request`, `UploadFile`, `Multipart`, `NexusHandlerError`. Bytes/Headers/Query/Body are RECOMMENDED additions for completeness but not load-bearing for the AC; final scope decision at `/todos`.
@@ -249,10 +262,10 @@ The ~870 LOC of load-bearing logic exceeds one session's per-shard budget if lan
 
 Q1 and Q3 below are CLOSED (resolved with named primary recommendation); Q2 and Q4 are RETAINED as yes/no confirmations; Q5 is converted to a USER-ACTION-REQUIRED gate per HIGH-R3 of the R1 amendments.
 
-1. **Pydantic body parsing — Q1 CLOSED, recommendation:** ship `Body[T]` extractor accepting any object with `model_validate(...)` classmethod OR `__init__(**dict)` shape, matching the existing `Decoder` protocol pattern at `packages/kailash-nexus/src/nexus/typed_service_client.py:284` (the `Decoder = Callable[[Any, Type[Any]], Any]` alias) and the per-instance `register_decoder` mechanism (`typed_service_client.py:330`). Pydantic remains OPTIONAL — SDK users can use dataclasses, attrs, msgspec, OR Pydantic. The `Body[T]` extractor invokes the registered decoder OR falls back to `T(**dict)` for dataclass-shape models. **Confirm Pydantic-optional via Decoder protocol (y/n)?**
+1. **Pydantic body parsing — Q1 CLOSED, recommendation:** ship `Body[T]` extractor accepting any object with `model_validate(...)` classmethod OR `__init__`-introspectable dataclass-shape model, matching the existing `Decoder` protocol pattern at `packages/kailash-nexus/src/nexus/typed_service_client.py:284` (the `Decoder = Callable[[Any, Type[Any]], Any]` alias) and the per-instance `register_decoder` mechanism (`typed_service_client.py:330`). Pydantic remains OPTIONAL — SDK users can use dataclasses, attrs, msgspec, OR Pydantic. The `Body[T]` extractor invokes the registered decoder when one is registered; otherwise it uses an `inspect.signature(T.__init__).parameters` introspection path that rejects unknown keys via `BodyExtraKeysError` (HTTP 400). NEVER a naive `T(**dict)` fallback — naive `**dict` is exactly the OWASP A04:2021 mass-assignment failure mode the policy in `specs/nexus-fastapi-parity.md` § "Body[T] — mass-assignment policy" closes. Pydantic models additionally MUST declare `model_config = ConfigDict(extra="forbid")`; the resolver checks this at registration time and raises `BodyExtraPolicyError` (server-launch-fails-loud) when the policy is not declared. **Confirm Pydantic-optional via Decoder protocol + mass-assignment policy (y/n)?**
 
-   - Pro: keeps the extractor surface lean and library-agnostic; mirrors an existing Nexus convention so SDK users learn one decoder model.
-   - Con: SDK users on Pydantic ship two lines per model to register the decoder; library-agnostic comes with library-specific glue per model.
+   - Pro: keeps the extractor surface lean and library-agnostic; mirrors an existing Nexus convention so SDK users learn one decoder model; structurally closes OWASP A04:2021 mass-assignment regardless of which model library the user picks (the policy gate fires at the resolver, not inside the library).
+   - Con: SDK users on Pydantic ship two lines per model to register the decoder AND declare `extra='forbid'`; SDK users on dataclasses cannot rely on `**kwargs`-accepting constructors without registering a custom decoder (the introspection-based fallback rejects them by design). Library-agnostic comes with policy-specific glue per model.
 
 2. **`NexusRequest` cross-transport context.** RETAINED as real two-layer decision. Recommendation: ship HTTP-only Starlette `Request` re-export in `nexus.extractors` for this shard; introduce a `NexusRequest` cross-transport context object in a follow-up issue WHEN WebSocket / SSE / CLI handler-extract surfaces land. The current shard does not need cross-transport unification — `register_websocket` callback handlers receive `Connection` (not `Request`), and `register_sse`'s `on_subscribe(request)` is HTTP-bound by definition. **Confirm two-layer staging — HTTP-only `Request` now, `NexusRequest` follow-up later (y/n)?**
 
