@@ -238,8 +238,12 @@ def candidate_source_files(symbol: str) -> list[Path]:
     return deduped
 
 
-def find_symbol_in_ast(tree: ast.AST, tail_name: str) -> ast.AST | None:
-    """Walk an AST for a class/function/assignment matching tail_name."""
+def find_symbol_in_ast(tree: ast.AST, tail_name: str) -> ast.stmt | None:
+    """Walk an AST for a class/function/assignment matching tail_name.
+
+    Returns the matching statement node (ast.stmt) so callers can rely
+    on .lineno / .end_lineno being present.
+    """
     for node in ast.walk(tree):
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name == tail_name:
@@ -251,7 +255,7 @@ def find_symbol_in_ast(tree: ast.AST, tail_name: str) -> ast.AST | None:
     return None
 
 
-def is_stub_body(node: ast.AST, source: str) -> tuple[bool, str]:
+def is_stub_body(node: ast.stmt, source: str) -> tuple[bool, str]:
     """Detect stub body: NotImplementedError raise, bare pass, or TODO comment.
 
     Returns (is_stub, evidence). Only applies to function/method definitions —
@@ -344,7 +348,7 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
             )
         ]
 
-    found_at: tuple[Path, ast.AST, str] | None = None
+    found_at: tuple[Path, ast.stmt, str] | None = None
     for cand in candidates:
         try:
             src = cand.read_text(encoding="utf-8")
