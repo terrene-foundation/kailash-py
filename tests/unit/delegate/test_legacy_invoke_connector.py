@@ -181,15 +181,29 @@ async def test_legacy_invoke_connector_routes_invoke_through_callable() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. New-shape primitive surfaces work via auto-installed proxies
+# 4. The 6 newer surfaces (3 accessors + 3 primitives) refuse on legacy
+#    invoke()-only connectors via the typed _legacy_unsupported guard.
+#    Closes GH #1177 (empty-crypto orphan defaults on authenticate/write/
+#    read) + GH #1178 (Principal(tenant_id=None) multi-tenant footgun
+#    on authenticate). The prior default-behavior tests are rewritten to
+#    assert the typed refusal; the new acceptance tests below repro the
+#    issue bodies verbatim.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_legacy_invoke_connector_authenticate_proxy_returns_principal() -> None:
-    """Auto-installed authenticate() proxy returns a Principal scoped to the identity."""
-    from kailash.delegate.dispatch import Principal
+async def test_legacy_invoke_connector_authenticate_default_raises_unsupported() -> (
+    None
+):
+    """Default authenticate() on a legacy invoke()-only connector refuses with typed error.
+
+    Closes GH #1178 — the prior default returned
+    ``Principal(tenant_id=None)`` which silently slipped through
+    tenant-scoped authorization checks. The typed refusal is the
+    defense-in-depth fix; legacy connectors MUST authenticate
+    implicitly via ``invoke()``.
+    """
 
     async def _invoke(input_payload, *, identity, envelope):
         return ConnectorInvocationResult(
@@ -201,16 +215,21 @@ async def test_legacy_invoke_connector_authenticate_proxy_returns_principal() ->
 
     adapter = LegacyInvokeConnector(_invoke)
     identity = _build_identity()
-    p = await adapter.authenticate(identity, None)  # type: ignore[arg-type]
-    assert isinstance(p, Principal)
-    assert p.delegate_id == str(identity.delegate_id)
+    with pytest.raises(NotImplementedError, match="authenticate"):
+        await adapter.authenticate(identity, None)  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_legacy_invoke_connector_write_proxy_synthesizes_envelope() -> None:
-    """Auto-installed write() proxy executes the action and synthesizes an envelope."""
-    from kailash.delegate.dispatch import SignedActionEnvelope
+async def test_legacy_invoke_connector_write_default_raises_unsupported() -> None:
+    """Default write() on a legacy invoke()-only connector refuses with typed error.
+
+    Closes GH #1177 (write half) — the prior default executed the
+    action and returned a ``SignedActionEnvelope`` with an EMPTY
+    signature that any verifier not explicitly length-checking would
+    treat as authenticated. The typed refusal is the defense-in-depth
+    fix; legacy connectors MUST dispatch through ``invoke()``.
+    """
 
     async def _invoke(input_payload, *, identity, envelope):
         return ConnectorInvocationResult(
@@ -226,14 +245,40 @@ async def test_legacy_invoke_connector_write_proxy_synthesizes_envelope() -> Non
     async def _action() -> dict:
         return {"written": True, "value": 42}
 
-    env = await adapter.write(
-        _action, identity=identity, envelope=None  # type: ignore[arg-type]
-    )
-    assert isinstance(env, SignedActionEnvelope)
-    assert env.payload == {"written": True, "value": 42}
-    # Legacy proxy produces empty signature — callers MUST treat as unverifiable
-    assert env.signature == b""
-    assert env.signer_delegate_id == str(identity.delegate_id)
+    with pytest.raises(NotImplementedError, match="write"):
+        await adapter.write(
+            _action, identity=identity, envelope=None  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_legacy_invoke_connector_read_default_raises_unsupported() -> None:
+    """Default read() on a legacy invoke()-only connector refuses with typed error.
+
+    Closes GH #1177 (read half) — the prior default executed the
+    query and returned an ``AttestedReadReceipt`` with an EMPTY
+    attestation. The typed refusal is the defense-in-depth fix.
+    """
+
+    async def _invoke(input_payload, *, identity, envelope):
+        return ConnectorInvocationResult(
+            payload={},
+            audit_events=(),
+            tenant_id_observed=None,
+            external_side_effect=False,
+        )
+
+    adapter = LegacyInvokeConnector(_invoke)
+    identity = _build_identity()
+
+    async def _query() -> str:
+        return "read-value"
+
+    with pytest.raises(NotImplementedError, match="read"):
+        await adapter.read(
+            _query, identity=identity, envelope=None  # type: ignore[arg-type]
+        )
 
 
 @pytest.mark.unit
@@ -255,3 +300,145 @@ def test_legacy_invoke_connector_accessor_raises_unsupported() -> None:
         _ = adapter.ledger
     with pytest.raises(NotImplementedError, match="auth_verifier"):
         _ = adapter.auth_verifier
+
+
+# ---------------------------------------------------------------------------
+# 5. Acceptance tests for GH #1177 + #1178 — verbatim repros from the
+#    issue bodies. A direct LegacyInvokeConnector subclass with its own
+#    invoke() must STILL refuse the 3 primitive surfaces (the bug was
+#    that the inline defaults handled them with empty-crypto / null
+#    tenant); a Connector subclass that OVERRIDES write/read/authenticate
+#    must continue to dispatch the override (the contract works for
+#    new-shape connectors).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_issue_1177_legacy_only_write_raises_unsupported() -> None:
+    """GH #1177 acceptance — legacy subclass with own invoke() refuses .write()."""
+
+    class LegacyOnly(LegacyInvokeConnector):
+        connector_id = "legacy"
+        connector_kind = "test"
+        requires_capabilities: frozenset[str] = frozenset()
+
+        async def invoke(self, action, *, identity=None, envelope=None):
+            return ConnectorInvocationResult(
+                payload={"ok": True},
+                audit_events=(),
+                tenant_id_observed=None,
+                external_side_effect=False,
+            )
+
+    # Direct construction (no wrapped callable) — exercise the subclass shape.
+    c = LegacyOnly.__new__(LegacyOnly)
+    identity = _build_identity()
+
+    async def _action() -> dict:
+        return {}
+
+    with pytest.raises(NotImplementedError, match="write"):
+        await c.write(_action, identity=identity, envelope=None)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_issue_1177_legacy_only_read_raises_unsupported() -> None:
+    """GH #1177 acceptance — legacy subclass with own invoke() refuses .read()."""
+
+    class LegacyOnly(LegacyInvokeConnector):
+        connector_id = "legacy"
+        connector_kind = "test"
+        requires_capabilities: frozenset[str] = frozenset()
+
+        async def invoke(self, action, *, identity=None, envelope=None):
+            return ConnectorInvocationResult(
+                payload={"ok": True},
+                audit_events=(),
+                tenant_id_observed=None,
+                external_side_effect=False,
+            )
+
+    c = LegacyOnly.__new__(LegacyOnly)
+    identity = _build_identity()
+
+    async def _query() -> str:
+        return "v"
+
+    with pytest.raises(NotImplementedError, match="read"):
+        await c.read(_query, identity=identity, envelope=None)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_issue_1178_legacy_only_authenticate_raises_unsupported() -> None:
+    """GH #1178 acceptance — legacy subclass with own invoke() refuses .authenticate().
+
+    The prior default returned ``Principal(tenant_id=None)``; the
+    refusal closes the multi-tenant footgun the issue called out.
+    """
+
+    class LegacyOnly(LegacyInvokeConnector):
+        connector_id = "legacy"
+        connector_kind = "test"
+        requires_capabilities: frozenset[str] = frozenset()
+
+        async def invoke(self, action, *, identity=None, envelope=None):
+            return ConnectorInvocationResult(
+                payload={"ok": True},
+                audit_events=(),
+                tenant_id_observed=None,
+                external_side_effect=False,
+            )
+
+    c = LegacyOnly.__new__(LegacyOnly)
+    identity = _build_identity()
+    with pytest.raises(NotImplementedError, match="authenticate"):
+        await c.authenticate(identity, None)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_new_shape_subclass_override_returns_real_value() -> None:
+    """New-shape sanity — a Connector that OVERRIDES write returns the override.
+
+    The typed-refusal default is only the LEGACY behavior; new-shape
+    connectors that implement their own .write() continue to dispatch
+    the override (the contract still works for them).
+    """
+    from kailash.delegate.dispatch import Connector, SignedActionEnvelope
+
+    class NewShape(Connector):
+        connector_id = "new-shape"
+        connector_kind = "test"
+        requires_capabilities: frozenset[str] = frozenset()
+
+        async def invoke(self, input_payload, *, identity, envelope):
+            return ConnectorInvocationResult(
+                payload={},
+                audit_events=(),
+                tenant_id_observed=None,
+                external_side_effect=False,
+            )
+
+        async def write(self, action, *, identity, envelope):
+            payload = await action()
+            return SignedActionEnvelope(
+                action_id=uuid.uuid4(),
+                canonical_bytes=b"canon",
+                signature=b"real-sig-bytes",
+                signer_delegate_id=str(identity.delegate_id),
+                payload=payload if isinstance(payload, dict) else {"value": payload},
+            )
+
+    conn = NewShape()
+    identity = _build_identity()
+
+    async def _action() -> dict:
+        return {"written": True}
+
+    env = await conn.write(_action, identity=identity, envelope=None)  # type: ignore[arg-type]
+    assert isinstance(env, SignedActionEnvelope)
+    assert env.signature == b"real-sig-bytes"
+    assert env.payload == {"written": True}
