@@ -26,7 +26,24 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit, urlunsplit
 
+from kailash.utils.url_credentials import preencode_password_special_chars
+
 __all__ = ["scrub_brief"]
+
+
+# SEC-4: pre-encoder pre-pass. The URL regex below assumes the password
+# is ``[^\s@]+`` — i.e. the @ character is the userinfo/host separator
+# and CANNOT appear in the password. A raw ``@`` in the password
+# (``postgres://admin:hunt@er#1@db/app``) defeats the regex's
+# non-greedy non-@ class and the credential leaks. The shared helper
+# at ``kailash.utils.url_credentials.preencode_password_special_chars``
+# percent-encodes ``#$@?`` in the password portion BEFORE any regex
+# runs, so the URL becomes well-formed and the existing mask path
+# can redact it. Per
+# workspaces/from-brief-1125/04-validate/round-02-security.md:108-124
+# AND rules/security.md § "Credential Decode Helpers" rule 2
+# (encode + decode in one helper module).
+_URL_CANDIDATE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://\S+")
 
 
 # Compile-once patterns. Order matters: URL with credentials is checked
@@ -156,6 +173,18 @@ def scrub_brief(brief: str) -> str:
     """
     if not brief:
         return brief
+
+    # SEC-4 Pass 0: pre-encode raw ``#$@?`` in passwords for every URL
+    # candidate in the brief. The helper handles one URL at a time, so
+    # we find URL-shaped substrings, route each through the helper,
+    # and reassemble. This makes a brief containing
+    # ``postgres://admin:hunt@er#1@db/app`` become
+    # ``postgres://admin:hunt%40er%231@db/app`` BEFORE the URL regex
+    # runs, so the regex's ``[^\s@]+`` password class matches cleanly.
+    def _preencode(match: re.Match[str]) -> str:
+        return preencode_password_special_chars(match.group(0))
+
+    brief = _URL_CANDIDATE.sub(_preencode, brief)
 
     # Pass 1: URL with credentials.
     def _url_sub(match: re.Match[str]) -> str:

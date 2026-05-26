@@ -260,3 +260,34 @@ def test_fixture_scanner_flags_slack_token_in_temp_fixture(tmp_path, monkeypatch
     with pytest.raises(mod.BriefFixtureLeakError) as exc:
         mod.test_from_brief_fixtures_contain_no_credentials()
     assert "slack" in str(exc.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# SEC-4 — URL password pre-encoding regression
+# ---------------------------------------------------------------------------
+
+
+def test_scrub_brief_masks_password_with_at_sign():
+    """SEC-4: a raw ``@`` in the password (``hunt@er#1``) used to defeat
+    the URL regex; the pre-encoder pass converts ``@``/``#`` to percent
+    encodings before the regex runs, so the URL is now well-formed and
+    the masker hides the credential. Per
+    workspaces/from-brief-1125/04-validate/round-02-security.md:108-124.
+    """
+    brief = "connect to postgres://admin:hunt@er#1@db.example.com/app"
+    scrubbed = scrub_brief(brief)
+    # The raw password substring MUST NOT survive in the scrubbed output.
+    assert "hunt@er#1" not in scrubbed
+    assert "hunter" not in scrubbed  # noqa: SIM118 — substring check
+    # The mask form is preserved (***@host:port/path) and the database
+    # host survives so the LLM can still reason about intent.
+    assert "***@db.example.com" in scrubbed
+
+
+def test_scrub_brief_masks_password_with_question_mark():
+    """SEC-4: ``?`` inside a password used to terminate URL prematurely
+    (urlparse interprets it as start-of-query)."""
+    brief = "url postgres://admin:s3cret?val@db/app for ops"
+    scrubbed = scrub_brief(brief)
+    assert "s3cret?val" not in scrubbed
+    assert "***@db" in scrubbed
