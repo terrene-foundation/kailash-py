@@ -151,6 +151,25 @@ def test_from_brief_linear_plan_builds_executable_workflow():
         f"plan has {node_count} nodes; expected <= " f"{fixture['expected_max_nodes']}"
     )
 
+    # Probe 4 (F-AC-1) — AC 1 verbatim contract: ``wf.build().execute()``
+    # runs end-to-end on the synthesized graph. See
+    # workspaces/from-brief-1125/04-validate/round-02-analyst.md:37-51
+    # for the gap this probe closes. Without this probe, AC 1 was
+    # VERIFIED-partial — the test stopped at .build().
+    from kailash.runtime.local import LocalRuntime
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow)
+    assert isinstance(results, dict), (
+        f"LocalRuntime.execute MUST return a dict of results, got "
+        f"{type(results).__name__}"
+    )
+    assert len(results) >= 1, (
+        "executed workflow returned no node results; the brief asked "
+        "for at least one node to emit a deterministic output"
+    )
+    assert run_id, "LocalRuntime.execute MUST return a non-empty run_id"
+
 
 # --------------------------------------------------------------------------- #
 # Test 2 — branching plan: multi-node + connection realization                #

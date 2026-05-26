@@ -1,20 +1,28 @@
-# Linear workflow brief — issue #1125 AC 6 fixture.
+# Linear workflow brief — issue #1125 AC 1 / AC 6 fixture.
 #
 # Tier-2 regression fixture exercising the simplest from_brief() shape:
 # one node, no connections. This is the smallest plan that proves the
 # pipeline (scrub → LLM → validate → realize → build → execute) works
 # end-to-end against a real LLM endpoint.
 #
+# Per SEC-1 (workspaces/from-brief-1125/04-validate/round-02-security.md),
+# PythonCodeNode / AsyncPythonCodeNode are denylisted from the
+# Workflow.from_brief allowlist; the brief asks the LLM to use a
+# data-flow node instead so the plan is realizable AND
+# end-to-end executable for the F-AC-1 coverage gap.
+#
 # No credentials in this file (tests/regression/from_brief/test_fixtures_no_secrets.py
 # verifies this mechanically at collection time).
 brief: |
-  Build a workflow with a single Python code node that takes a list of
-  integers as input and returns the sum. Use PythonCodeNode with
-  configuration that defines a 'code' string parameter computing the sum.
+  Build a workflow with a single node that produces a constant numeric
+  result. Use ConstantNode or MergeNode or any node type that takes
+  configured inputs and emits a deterministic output — do NOT use
+  PythonCodeNode. The workflow must build AND execute end-to-end
+  against LocalRuntime, returning at least one named result.
 
 expected_min_nodes: 1
 expected_max_nodes: 3
 expected_invariants:
   - "result is a WorkflowBuilder instance"
   - "builder.build() returns a Workflow without raising"
-  - "at least one node is a PythonCodeNode"
+  - "LocalRuntime().execute(workflow) returns (results, run_id) with results non-empty"
