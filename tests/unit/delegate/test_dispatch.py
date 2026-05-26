@@ -255,8 +255,10 @@ def test_connector_subclass_missing_connector_id_rejected() -> None:
             # connector_id intentionally not overridden (empty default)
             connector_kind = "http"
 
-            async def invoke(self, input_payload, *, identity, envelope):
-                pass  # pragma: no cover
+            async def invoke(
+                self, input_payload, *, identity, envelope
+            ) -> ConnectorInvocationResult:
+                raise NotImplementedError  # pragma: no cover
 
 
 @pytest.mark.unit
@@ -268,8 +270,10 @@ def test_connector_subclass_missing_connector_kind_rejected() -> None:
             connector_id = "x"
             # connector_kind intentionally not overridden
 
-            async def invoke(self, input_payload, *, identity, envelope):
-                pass  # pragma: no cover
+            async def invoke(
+                self, input_payload, *, identity, envelope
+            ) -> ConnectorInvocationResult:
+                raise NotImplementedError  # pragma: no cover
 
 
 @pytest.mark.unit
@@ -282,8 +286,10 @@ def test_connector_subclass_capabilities_must_be_frozenset() -> None:
             connector_kind = "http"
             requires_capabilities = ["http.read"]  # type: ignore[assignment]
 
-            async def invoke(self, input_payload, *, identity, envelope):
-                pass  # pragma: no cover
+            async def invoke(
+                self, input_payload, *, identity, envelope
+            ) -> ConnectorInvocationResult:
+                raise NotImplementedError  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
