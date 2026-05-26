@@ -148,6 +148,8 @@ New file `packages/kailash-nexus/docs/migration-fastapi.md` (Sphinx-rendered). O
 
 Each section: ~30-line FastAPI snippet, ~30-line Nexus equivalent, prose explaining the mapping. ~300-400 lines total.
 
+**LOC budget rationale (LOW-R2).** The ~300-400 lines of migration-guide prose are non-load-bearing documentation, not rule content. Per `rules/rule-authoring.md`, the 200-line length cap applies to RULES (load-bearing structural prose that loads in every session's context); the cap does NOT apply to GUIDES (which load on-demand when a specific session opens the file). The migration guide IS a guide, not a rule. Cited here for completeness so a downstream `/codify` cc-architect review does not surface a false-positive length-cap finding against the migration guide.
+
 ## Sharding (per `rules/autonomous-execution.md` § Per-Session Capacity Budget)
 
 Five shards. Dependency arrows below; the version-owner shard (Shard 1) bumps `pyproject.toml` + `__version__` + CHANGELOG once at the end (release-prep PR per `rules/git.md` § Release-Prep PRs).

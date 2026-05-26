@@ -69,13 +69,18 @@ async def upload(file: UploadFile = File(...)) -> dict:
 
 ```python
 from kailash.nexus.extractors import UploadFile
+
+MAX_SIZE = 10 * 1024 * 1024  # 10 MiB; bounded ceiling on read — never unbounded
+
 @app.handler("upload")
 async def upload(file: UploadFile) -> dict:
-    contents = await file.read()
+    contents = await file.read(MAX_SIZE)  # MAX_SIZE = bounded ceiling; never `await file.read()` unbounded
     return {"filename": file.filename, "size": len(contents)}
 ```
 
 **Mapping prose.** Nexus's `UploadFile` is Starlette's `UploadFile` re-exported. The annotation IS the extractor (no `= File(...)` sentinel needed because `UploadFile` is unambiguous as a typed parameter). Read API (`filename`, `content_type`, `read()`, `aread()`) is byte-identical to FastAPI.
+
+**Secure-defaults note (LOW-S2).** Handler code MUST cap the read with an explicit `MAX_SIZE` ceiling — unbounded `await file.read()` is a memory-DoS vector. The Nexus resolver already enforces a body-level cap (`Nexus(max_upload_file_bytes=...)`, default 10 MiB per HIGH-S1), but per `rules/zero-tolerance.md` Rule 6 ("Implement Fully") + `rules/security.md` § Input Validation, defense-in-depth: handlers cap reads symmetrically. The migration guide showcases the explicit-MAX_SIZE pattern as the canonical shape so SDK users learn the secure default on the first read.
 
 ## Section 4 — File uploads (multiple)
 

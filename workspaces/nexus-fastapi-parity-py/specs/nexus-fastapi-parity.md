@@ -262,7 +262,9 @@ class ExtractorPEP563Error(TypeError):
     """
 ```
 
-Detection: at registration, the resolver attempts `typing.get_type_hints(func, globalns=func.__globals__)`. If the resolved hints are strings (not types), raise `ExtractorPEP563Error` with the file path and line number of the handler.
+Detection: at registration, the resolver attempts `typing.get_type_hints(func, globalns=func.__globals__)`. If the resolved hints are strings (not types), raise `ExtractorPEP563Error` with the WORKSPACE-RELATIVE file path and line number of the handler.
+
+**Error message PII hygiene (LOW-S1).** The `ExtractorPEP563Error` message MUST cite a workspace-relative path (e.g., `packages/my-app/src/handlers/users.py:42`), NEVER an absolute path that leaks user-system tenant identifiers (e.g., `/Users/<operator>/repos/<consumer-app>/src/handlers/users.py:42`). Per `rules/security.md` MUST NOT § "No secrets in logs" extended to error-message content — exception messages reach client error-tracking SaaS (Sentry, Rollbar, Bugsnag) and the absolute path leaks the operator's home directory layout. The relative path is sufficient for the operator to locate the file from their repo root.
 
 ## Test contract
 
