@@ -257,6 +257,20 @@ Per `rules/testing.md` Tier 2 (real infrastructure, no mocking) — every AC shi
 
 Per `rules/facade-manager-detection.md` MUST Rule 2 — every manager-shape class (`DependencyOverrideMap`, `ResolverChain` if it qualifies) gets a Tier 2 wiring test named `test_<lowercase_manager_name>_wiring.py`.
 
+## Sibling spec impact
+
+Per `rules/specs-authority.md` MUST Rule 5b, every spec edit triggers full sibling-spec re-derivation. The Nexus FastAPI parity surface touches three loom-side sibling specs whose mandates depend on the surfaces this workspace spec defines. At /implement time, each MUST be amended in the same PR that lands the corresponding code shard:
+
+| Sibling spec | Current state (cited at HEAD) | Required amendment at /implement |
+| --- | --- | --- |
+| `specs/nexus-channels.md` §4.4.1 (lines 159, 173, 185, 422) | Documents `register_websocket(path, handler_cls, *, allowed_origins=None)` as canonical surface; allowlist enforcement at `nexus.websocket_origin` (issue #673); cross-SDK kailash-rs parity row | ADD callback-overload section after the class-based path. Document the synthesized `MessageHandler` subclass, the `allowed_origins` / `subprotocols` / `max_websocket_message_bytes` / handshake-`Depends` parameters, and the regression test asserting parity with the class path's existing origin-rejection test. |
+| `specs/nexus-core.md` §"Enterprise preset usage" (lines 652, 677) | Documents `register_sse_endpoint(app)` as the canonical SSE wiring under the enterprise preset | REFACTOR the example to delegate to `Nexus.register_sse(path, on_subscribe, dependencies=[...])` as the lower-level primitive; document `register_sse_endpoint(app)` as the higher-level shim that calls `register_sse` with an EventBus-backed `on_subscribe`. Surface the new `dependencies` / `max_queue_depth` / `max_event_bytes` / `slow_consumer_timeout` parameters in the example. |
+| `specs/nexus-channels.md` §"Cross-SDK parity" (line 185 vicinity) | Asserts kailash-rs is expected to ship semantic parity for the WebSocket surface per EATP D6 | EXTEND the parity row to cover the callback overload AND the new SSE primitive AND the extractor surface. The kailash-rs sibling tracker is gated at /todos per HIGH-R3 below. |
+
+The mechanical sweep for /implement Shard 1 + Shard 4 reviewers MUST include `grep -n "register_websocket\|register_sse_endpoint\|allowed_origins" specs/nexus-channels.md specs/nexus-core.md` to surface every callsite that needs updating in the same PR. Per `rules/specs-authority.md` MUST Rule 5 — spec edits land at first instance, NOT batched.
+
+The workspace-local `specs/_index.md` carries a sibling-specs cross-reference table pointing to the loom-side specs above.
+
 ## Cross-SDK marker
 
 Per `rules/cross-sdk-inspection.md` Rule 2, the implementation PR MUST cross-reference the rs sibling tracker (user-provided link, per Q5 in `02-plans/01-architecture.md`). PR body includes:

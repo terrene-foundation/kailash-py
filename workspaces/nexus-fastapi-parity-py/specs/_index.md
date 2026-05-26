@@ -6,6 +6,17 @@ This index lists the workspace-local specs that govern the Nexus FastAPI parity 
 
 - `nexus-fastapi-parity.md` — Canonical surface contract for `kailash.nexus.extractors`, `Nexus.handler_extract`, `Nexus.dependency_overrides`, `Nexus.register_sse`, and the `register_websocket` callback overload. Authority for the implementation phase.
 
+## Sibling specs (loom-side)
+
+The workspace spec amends three loom-side sibling specs at /implement time per `rules/specs-authority.md` MUST Rule 5b (full-sibling re-derivation). Citations are at HEAD of `main` at the time of the analysis pass:
+
+| Loom-side spec | Section / line | What the workspace spec amends |
+| --- | --- | --- |
+| `specs/nexus-channels.md` | §4.4.1 (lines 159, 173, 185, 422) | Add `register_websocket` callback-overload section + extend cross-SDK parity row |
+| `specs/nexus-core.md` | §"Enterprise preset usage" (lines 652, 677) | Refactor `register_sse_endpoint(app)` example to delegate to `Nexus.register_sse(path, on_subscribe)` primitive |
+
+Each amendment lands in the SAME PR as the corresponding code shard (Shard 1 + Shard 4 per `02-plans/01-architecture.md` § Sharding). The /implement reviewer mechanical sweep MUST grep both sibling specs to confirm no parallel callsite drifts.
+
 ## Cross-references
 
 The spec cites baseline rules by path (per `rules/cross-cli-artifact-hygiene.md`):
