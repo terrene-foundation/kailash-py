@@ -1,6 +1,6 @@
 # Architecture Plan — Issue #1125 `from_brief()` primitives
 
-**Status:** Draft v1 (pre-redteam). Gated for human approval at `/todos`.
+**Status:** v2 (post-Round 1, pre-Round 2). Folds in 6 HIGH + 3 MEDIUM amendments from `04-validate/round-01.md`. Gated for human approval at `/todos` after `/redteam` convergence.
 **Workspace:** `workspaces/from-brief-1125/`
 **Brief:** `briefs/00-brief.md` (verbatim issue body)
 **Verification:** `01-analysis/01-brief-verification.md` (4 corrections recorded; core HIGH-severity claim verified TRUE)
@@ -49,7 +49,19 @@ The same LLM-mediation pattern applies to all 5 surfaces:
 brief (prose)
     │
     ▼
+[scrub_brief()]                                   ← strip credentials (B2a per round-01.md)
+    │
+    ▼
 [Kaizen Signature: brief → structured plan]   ← LLM reasoning (per agent-reasoning.md)
+                                                  (Signature output always includes
+                                                  `interpretation_confidence: float` — C1a)
+    │
+    ▼
+[typed plan validator]                            ← Pydantic-or-dataclass (B3a)
+                                                  Raises BriefInterpretationError on:
+                                                  - confidence < 0.6 (C1a)
+                                                  - unknown node-type / field-type / config-value (B1a)
+                                                  - malformed structure (B3a)
     │
     ▼
 plan (typed dataclass)
@@ -61,7 +73,7 @@ plan (typed dataclass)
 framework primitive (WorkflowBuilder | DataFlow | Signature | BootstrapConfig | tuple)
 ```
 
-The split: the LLM produces a TYPED plan; the framework module deterministically realizes that plan into a runtime object. No conditional routing in the agent decision path; no keyword matching on the brief. Realization is structural (loop over plan.nodes; call `workflow.add_node(...)`).
+The split: the LLM produces a TYPED plan; the framework module validates and deterministically realizes that plan into a runtime object. No conditional routing in the agent decision path; no keyword matching on the brief. Realization is structural (loop over plan.nodes; call `workflow.add_node(...)`). Three structural defenses live between LLM output and realizer: (1) brief scrubbing prevents credentials in test logs (B2a, security.md); (2) typed-plan validation gates malformed LLM output (B3a, zero-tolerance.md Rule 3a); (3) allowlist validation gates LLM-hallucinated symbols (B1a — node types validated against `core.list_node_types`, field types validated against Signature's known type set, config-value enums validated against declared enum sets).
 
 ### 3.1 `kailash.Workflow.from_brief(brief: str) -> WorkflowBuilder`
 
@@ -88,7 +100,7 @@ The split: the LLM produces a TYPED plan; the framework module deterministically
 ### 3.4 `kailash.bootstrap(brief: str, profile: str = "dev") -> BootstrapConfig`
 
 - **New module:** `src/kailash/bootstrap.py` (top-level entry point exposed via `kailash.bootstrap`).
-- **New dataclass:** `BootstrapConfig` with fields `db_url: str`, `llm_model: str`, `runtime: str` (one of `local`, `async`, `nexus`), `deployment_target: str` (one of `dev`, `prod`, `containerized`).
+- **New dataclass:** `BootstrapConfig` with fields `db_url: str`, `llm_model: str`, `runtime: str` (PROPOSED enum: `local`, `async`, `nexus` — awaiting human approval per §6 Q6), `deployment_target: str` (PROPOSED enum: `dev`, `prod`, `containerized` — awaiting human approval per §6 Q6). Enum values NOT in the issue body; synthesized by architecture, not load-bearing for AC 4. C4 note.
 - **Signature:** `BootstrapPlanSignature` — `brief: str`; `profile: str`; `resolved_config: BootstrapConfig = OutputField(...)`. The Signature's instructions tell the LLM to honor the profile (e.g. `dev` → SQLite + small local LLM; `prod` → Postgres + production LLM) AND consult environment variables for any concrete values the user already set.
 - **Agent:** Kaizen `ReActAgent` with an `env_lookup` tool (deterministic; reads `os.environ.get(...)` per `rules/env-models.md`) so the LLM can ground its config decisions in the user's existing `.env`.
 - **Realizer:** `BootstrapConfig(**dict_from_signature_output)`.
@@ -133,16 +145,25 @@ Acceptance criteria 6–10 enumerate ≥10 Tier-2 tests (3 + 2 + 2 + 2 + 2 = 11 
 4. Where the brief implies executability (AC 1: `.build().execute()`), runs end-to-end against real infrastructure (Postgres container for DataFlow tests, local LLM service for Kaizen tests).
 5. Does NOT assert exact field/node names (brief-to-output is LLM-mediated and non-deterministic at the byte level); asserts COUNT, TYPE, RELATIONSHIP-SHAPE instead.
 
+**No-secrets-in-fixtures discipline (B2b per round-01.md).** Tier-2 fixtures (brief strings + expected-shape YAML) MUST contain NO secret-shape tokens. S1 foundation includes a regex scan over `tests/regression/from_brief/fixtures/` matching `rules/security.md` § "No hardcoded secrets" patterns (api keys starting with `sk-`, password-bearing URLs, etc.); scan runs as a pre-commit hook AND as a CI step. Any match fails the build with a typed `BriefFixtureLeakError`.
+
 **CI cost surfacing for human gate.** Per `rules/testing.md` § "End-to-End Pipeline Regression Above Unit + Integration" — these tests must run on every PR touching the 5 surfaces. The human gate at `/todos` must explicitly approve the recurring LLM-API spend (best ballpark: ~$0.05-0.30 per PR run depending on model, at gpt-4-class pricing, for the full suite). Recommend documenting in the PR's `Tier-2 LLM cost note` section per `rules/feedback_no_resource_planning.md` discipline — surface the cost, do NOT estimate effort in human-days.
 
 ## 6. Open questions for human gate (BEFORE `/todos`)
 
-1. **`FeatureSchema` choice for `kailash_ml.from_brief` return.** Pick (a) `kailash_ml/types.py:157` (mutable, ML-Kaizen interop type) or (b) `kailash_ml/features/schema.py:175` (frozen, content-addressed, registry-consumed). Recommend (b); cons of (b) — interop tests with Kaizen MCP-tool surface may need an adapter from frozen → mutable.
+1. **`FeatureSchema` choice for `kailash_ml.from_brief` return** (strengthened per C2a). Pick (a) `kailash_ml/types.py:157` (mutable, ML-Kaizen interop type) or (b) `kailash_ml/features/schema.py:175` (frozen, content-addressed, registry-consumed).
+   - **Pros of (a):** end-user-friendly. After `kailash_ml.from_brief(...)`, a user can `schema.features.append(...)` to refine without constructing a new object. No adapter pattern needed for downstream Kaizen MCP interop (the type used in `kailash_ml/types.py` is the one Kaizen MCP consumes per its module docstring).
+   - **Pros of (b):** registry-safe. Content-addressed schemas have invariant content_hash; accidental mutation cannot corrupt registry rows that pin a (name, version, content_hash) tuple. Field-name SQL-identifier validation runs at construction.
+   - **Cons of (a):** the registry-pinning invariant becomes a runtime-policy contract instead of a compile-time/dataclass-enforced one — drift surface.
+   - **Cons of (b):** end users have to learn the `with_features(new_features)` adapter pattern to refine a schema. S6's docs MUST teach this pattern.
+   - **Recommendation:** (b) frozen+content-addressed. S6 documents the `with_features` adapter. Concrete decision needed at /todos — not deferrable to /implement.
 2. **Bootstrap profile coverage.** AC 4 names `dev` and `prod`. Should the architecture also support `test`, `staging`, `containerized` as recognized profiles, or leave them as caller-extensible strings? Recommend: enumerate `dev`/`prod` only in the first cycle (matches AC), leave room for extension.
 3. **MCP-tool exposure.** Should the 5 `from_brief` surfaces ALSO register themselves as MCP tools (per `specs/mcp-server.md` §3.4 — there's a Tier 2 "scaffold" category they'd fit into)? Recommend: defer to a follow-up issue. This issue's brief does not require MCP exposure (AC 1–11); adding it would expand scope beyond what's verified.
 4. **`scaffold_*` MCP tools deprecation?** If `from_brief` lands and is the recommended entry point, do the existing `scaffold_*` MCP tools (with typed parameters) get deprecated? Recommend: NO. They serve a different audience (operators building from typed scaffolds, e.g. IDE-driven code gen). Both can coexist.
 5. **Specs to add.** Need to author specs for the 5 surfaces. Recommend co-locating with their existing framework specs: extend `specs/core-workflows.md`, `specs/dataflow-core.md`, `specs/ml-engines-v2.md`, write new `specs/kaizen-signatures.md` § from_brief, write new `specs/bootstrap.md`. Confirm placement with human.
-6. **Tier-2 test fixtures.** Need ≥11 brief-shape fixtures across 5 surfaces, each landing a real LLM-API call. Recommend `tests/regression/from_brief/fixtures/` with one YAML per fixture (brief + expected shape + asserted invariants). Confirm directory placement.
+6. **Bootstrap enum values.** AC 4 names 4 fields but no enum values. Plan §3.4 proposes `runtime ∈ {local, async, nexus}` and `deployment_target ∈ {dev, prod, containerized}`. These are NOT in the issue body. Should the architecture lock these enums or leave them as `str` accepting any value? Recommend: lock them — open enum is silent-fallback-class (zero-tolerance.md Rule 3) when LLM emits a typo'd value. Confirm enum membership with human.
+7. **Tier-2 test fixtures directory.** Need ≥11 brief-shape fixtures across 5 surfaces, each landing a real LLM-API call. Recommend `tests/regression/from_brief/fixtures/` with one YAML per fixture (brief + expected shape + asserted invariants). Confirm directory placement.
+8. **Cross-surface composition (chained briefs)** — surfaced from B5a/C6a. A user MIGHT chain `Workflow.from_brief("read from my customers table")` after `DataFlow.from_brief("Customers...")`. The Workflow brief asks about a table the LLM has no knowledge of. Current architecture: 5 surfaces are INDEPENDENT (no shared state across calls). Should v1 ship with an optional `context: dict[str, Any]` kwarg on each `from_brief` that future composition can populate? Recommend: NO — out of scope for AC 1–11; file a follow-up issue for v2. The DEFERRAL is documented HERE so future sessions don't re-derive the question.
 
 ## 7. Shard plan (per `rules/autonomous-execution.md` Per-Session Capacity Budget)
 
@@ -150,12 +171,12 @@ Value-anchor per `rules/value-prioritization.md` MUST-2: the user's brief on iss
 
 | Shard | Scope | Invariants | Value-anchor (cites issue #1125 brief) |
 |---|---|---|---|
-| **S1** Foundation | New module `src/kailash/_from_brief/` (private LLM-mediation helpers); Kaizen `Signature` boilerplate shared across surfaces; `.env` resolver discipline; deterministic schema extraction helpers. ~400 LOC. | LLM-first reasoning (no conditional logic on brief content); `.env`-sourced model; output shape contract for downstream realizers. | Enables AC 1–5 by providing the shared LLM-mediation layer all 5 surfaces compose. |
+| **S1** Foundation | New module `src/kailash/_from_brief/` (private LLM-mediation helpers); Kaizen `Signature` boilerplate shared across surfaces; `.env` resolver discipline; deterministic schema extraction helpers; `scrub_brief()` credential scrubber routed via `kailash.utils.url_credentials` (B2a); typed `BriefInterpretationError` exception (B3a); Pydantic-or-dataclass plan validator (B3a); allowlist-validation helpers for node-type/field-type/config-value (B1a); `interpretation_confidence` field contract + threshold-check (C1a); branching-connection realizer helpers (A2a); no-secrets fixtures regex scan (B2b). ~550 LOC (overspills the 500 nominal ceiling but stays within boilerplate-class scaling per autonomous-execution.md MUST-2 — most additions are dataclass/exception boilerplate, not load-bearing logic). | LLM-first reasoning (no conditional logic on brief content); `.env`-sourced model; output shape contract for downstream realizers; typed validation gate; allowlist gate; confidence gate; credential scrub gate. | Enables AC 1–5 by providing the shared LLM-mediation layer + 4-line structural defense (scrub → LLM → validate → allowlist) all 5 surfaces compose. |
 | **S2** Workflow surface | `Workflow.from_brief` classmethod + `WorkflowPlanSignature` + realizer + Tier-2 tests at `tests/integration/kailash/test_workflow_from_brief.py` (3 brief shapes). ~450 LOC. | LLM-mediated graph synthesis; deterministic realization via `WorkflowBuilder.add_node/add_connection`; round-trip `wf.build().execute()`. | AC 1 (Workflow.from_brief returns WorkflowBuilder whose .build().execute() runs end-to-end) + AC 6 (3-brief-shape Tier-2 test). |
 | **S3** DataFlow surface | `DataFlow.from_brief` classmethod + `SchemaPlanSignature` + realizer + Tier-2 tests at `tests/integration/dataflow/test_dataflow_from_brief.py` (2 brief shapes). ~450 LOC. | LLM-mediated schema synthesis; deterministic `@db.model` registration; round-trip `create()` → `get()` against real Postgres container. | AC 2 (DataFlow.from_brief returns DataFlow with round-trip-clean models) + AC 7 (2-brief-shape Tier-2 test). |
 | **S4** Kaizen surface | `Kaizen.signature_from_brief` classmethod + `SignaturePlanSignature` + meta-Signature realizer + Tier-2 tests at `tests/integration/kaizen/test_signature_from_brief.py` (2 brief shapes). ~400 LOC. | LLM-mediated Signature synthesis; deterministic realization via `SignatureMeta`; usability as `signature=` arg to Kaizen agent constructor. | AC 3 (Kaizen.signature_from_brief returns usable Signature subclass) + AC 8 (2-brief-shape Tier-2 test). |
 | **S5** Bootstrap surface | New `src/kailash/bootstrap.py` module + `BootstrapConfig` dataclass + `BootstrapPlanSignature` + env-aware ReActAgent + Tier-2 tests at `tests/integration/kailash/test_bootstrap.py` (2 profiles). ~450 LOC. | `.env`-grounded config resolution; profile-honoring; env-aware ReAct grounding. | AC 4 (kailash.bootstrap returns BootstrapConfig resolving db_url/llm_model/runtime/deployment_target) + AC 9 (dev/prod profile Tier-2 test). |
-| **S6** ML surface + docs | `kailash_ml.from_brief` + `MLPlanSignature` + realizer + Tier-2 tests at `tests/integration/ml/test_ml_from_brief.py` (classification + regression) + README Quick Start update. ~500 LOC. | Dataframe-schema → FeatureSchema realization; ModelSpec.task matches brief intent; docs rewrite uses `from_brief()` entry points. | AC 5 (kailash_ml.from_brief returns (FeatureSchema, ModelSpec, EvalSpec) triple) + AC 10 (classification/regression Tier-2 test) + AC 11 (README Quick Start update). |
+| **S6** ML surface + docs | `kailash_ml.from_brief` + `MLPlanSignature` + realizer + Tier-2 tests at `tests/integration/ml/test_ml_from_brief.py` (classification + regression) + README Quick Start update including the **5-surface comparison table** (C3a — which surface uses classmethod vs module function and WHY) + `with_features` adapter docs example (C2a). ~500 LOC. | Dataframe-schema → FeatureSchema realization; ModelSpec.task matches brief intent; docs rewrite uses `from_brief()` entry points; comparison table makes naming inconsistencies feel principled. | AC 5 (kailash_ml.from_brief returns (FeatureSchema, ModelSpec, EvalSpec) triple) + AC 10 (classification/regression Tier-2 test) + AC 11 (README Quick Start update). |
 
 Each shard ≤500 LOC of load-bearing logic; each holds ≤5 invariants (within `rules/autonomous-execution.md` MUST-1 ceiling). Total: 6 shards × ~1 autonomous-execution cycle each = 6 sessions (or 2-3 days if parallelized into waves of 3 per `rules/worktree-isolation.md` Rule 4). Greenfield adjustment per `rules/autonomous-execution.md` § Conversion: first 1-2 shards run at ~2-3x multiplier (no prior Kailash precedent for LLM-mediated `from_brief` patterns); remaining 4 shards inherit the foundation pattern from S1 and run at standard ~10x.
 
@@ -164,15 +185,15 @@ Each shard ≤500 LOC of load-bearing logic; each holds ≤5 invariants (within 
 - S1 MUST land before S2-S6 (provides the shared LLM-mediation layer).
 - S2-S6 are independent of each other AFTER S1 lands; they can run as a parallel wave of 3 + a follow-up wave of 2 (per `rules/worktree-isolation.md` Rule 4 cap), with S6's README update synthesizing all 5 surfaces at the end.
 
-## 8. Risks (named for `/redteam`)
+## 8. Risks (named & disposition per Round 1)
 
-These are surfaced for the redteam round (next phase, separate from this plan):
+These were named for `/redteam`; Round 1 (see `04-validate/round-01.md`) closed them as structural defenses in the design (now reflected in §3 pipeline diagram + §7 S1 invariants):
 
-- **Prompt injection on the brief.** `brief` is a user-controlled string; the Kaizen Signatures pass it directly to the LLM. A malicious brief could attempt to extract API keys from the runtime context or coerce the LLM into emitting Python source code that imports unintended modules. The realizer must validate the structured plan, not eval the brief.
-- **Secrets-in-brief.** A user might write `kailash.bootstrap("connect to my-prod-db at postgres://user:p@ssword@...", profile="dev")` — the brief is then logged in Tier-2 test outputs, journal entries, and PR descriptions. Per `rules/security.md` § "No secrets in logs", the architecture must scrub the brief BEFORE logging (e.g. via `kailash.utils.url_credentials` for URL-encoded passwords).
-- **Output validation.** Every Signature's output is LLM-generated; the realizer MUST type-check (and where possible AST-validate) before passing into framework constructors. A malicious or malformed plan could crash the realizer; the realizer must raise a typed `BriefInterpretationError` (or similar), not propagate raw `KeyError`/`AttributeError`.
-- **Composition.** A user might `Workflow.from_brief("use the data in my customers table")` after `DataFlow.from_brief("Customers have name, email")`. Does the Workflow brief have visibility into the DataFlow registration? The architecture as-drafted treats the 5 surfaces as INDEPENDENT (each takes its own brief, no cross-surface state inheritance); a separate "kailash.from_brief()" omnibus is out of scope per §4.
-- **Ambiguous briefs.** "Make a customer model" — what fields? The architecture's realizer raises a typed error when the LLM-produced plan has zero fields; it does not auto-fill defaults (per `rules/zero-tolerance.md` Rule 2 — no fake data, no `MOCK_*` defaults).
+- **Prompt injection on the brief** (B1a). Realizers validate every LLM-emitted node-type / field-type / config-value string against allowlists BEFORE construction. Unknown values raise `BriefInterpretationError`. Source-of-truth allowlists: `core.list_node_types` (existing AST-scanned per `specs/mcp-server.md` §3.4) for Workflow; field-type enum for Kaizen; enum members for Bootstrap; declared dataframe columns for ML.
+- **Secrets-in-brief** (B2a). S1 includes `scrub_brief()` routed via `kailash.utils.url_credentials.preencode_password_special_chars` + URL-pattern regex; runs BEFORE any logging path. Tier-2 fixtures additionally scanned (B2b) for no-secrets-in-fixtures.
+- **Output validation** (B3a). Typed `BriefInterpretationError` exception + Pydantic-or-dataclass plan validator between every Signature output and realizer input. Realizer accepts ONLY validated typed objects.
+- **Composition** (B5a / C6a). Cross-surface state inheritance OUT OF SCOPE for v1; documented as §6 Q8 deferral so future sessions don't re-derive the question.
+- **Ambiguous briefs** (C1a). Every Signature outputs `interpretation_confidence: float`; realizer raises `BriefInterpretationError(low_confidence=True)` on confidence < 0.6. No fake-default auto-fill (per `rules/zero-tolerance.md` Rule 2).
 
 ## 9. Verification status
 
