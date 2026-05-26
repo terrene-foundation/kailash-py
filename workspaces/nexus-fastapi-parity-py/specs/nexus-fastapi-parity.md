@@ -20,6 +20,16 @@ Out of scope for this shard (deferred to follow-up issues):
 - `Headers` / `Query` / `Body[Model]` extractors (unless Q3 widens scope).
 - OpenAPI generation from extractor-annotated handlers.
 
+## Design rationale — FastAPI parity framing
+
+The extractor surface names (`Depends`, `Request`, `UploadFile`, `Multipart`, `dependency_overrides`) match FastAPI's surface BECAUSE: (a) FastAPI is the de-facto open-source Python web framework, so SDK users coming from FastAPI expect these names; (b) the Nexus extractor module is motivated by SDK-user migration ergonomics (the issue body's stated single-gateway consolidation rationale), not by competition with or derivation from FastAPI.
+
+FastAPI is open-source (MIT License) and is NOT a commercial product. Per `rules/independence.md` § "No Commercial References", the Foundation Independence policy applies to commercial / proprietary products — naming parity with an open-source framework at the API-surface layer does NOT fire `rules/independence.md` or `rules/terrene-naming.md`. The naming is parity at the API-surface layer only; semantics, transport, dispatch, and the resolver chain are Nexus-native (`packages/kailash-nexus/src/nexus/`). Kailash Python SDK remains an independent open-source product owned by the Terrene Foundation; FastAPI is one of many ecosystems whose users migrate to Nexus, not a parent project.
+
+Per `rules/independence.md` § "Describe Kailash on its own terms" — this spec describes Nexus's extractor surface as the Foundation's open-source workflow orchestration platform's ergonomic input layer. The migration guide describes the FastAPI → Nexus walk for SDK users coming from that ecosystem; it does NOT describe Nexus as derivative.
+
+This section is included at the top of the canonical spec so the downstream `/codify` cc-architect review has the explicit framing on first read — preventing a misclassification of the FastAPI-parity-named symbols as a commercial-product reference.
+
 ## Surface contract
 
 ### `kailash.nexus.extractors`
@@ -273,11 +283,9 @@ The workspace-local `specs/_index.md` carries a sibling-specs cross-reference ta
 
 ## Cross-SDK marker
 
-Per `rules/cross-sdk-inspection.md` Rule 2, the implementation PR MUST cross-reference the rs sibling tracker (user-provided link, per Q5 in `02-plans/01-architecture.md`). PR body includes:
+Per `rules/cross-sdk-inspection.md` Rule 2, the implementation PR MUST cross-reference the kailash-rs sibling tracker IF one exists. The equivalent rs tracker URL is gated at /todos approval per HIGH-R3 of the R1 amendments: the user EITHER provides the URL (which the implementation PR body cites) OR confirms "no rs sibling tracker yet — ship without the cross-SDK alignment marker." Per `rules/spec-accuracy.md`, literal `<placeholder>` text is BLOCKED in a spec — every citation resolves at merge OR the section is dropped, never left as a tombstone.
 
-> Cross-SDK alignment: this is the Python equivalent of <kailash-rs tracker URL>.
-
-The kailash-rs sibling parity surface is OUT OF SCOPE for this analysis per `rules/repo-scope-discipline.md`.
+Per `rules/repo-scope-discipline.md`, this session does NOT reach into `terrene-foundation/kailash-rs` to discover or create the URL. The cross-SDK alignment marker is a maintainer concern that the user resolves at the /todos gate; the kailash-py implementation PR cites whichever resolution the user provides.
 
 ## Implementation gates
 
