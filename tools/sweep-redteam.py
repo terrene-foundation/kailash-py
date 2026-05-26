@@ -49,8 +49,8 @@ sensitive) AND a backticked identifier of the shape:
 
 The heuristic is conservative — false negatives (missed symbols) are
 acceptable; false positives (spurious MUST citations) are not. The
-canonical entry shape is `MUST ... \`Module.Symbol\` ...` per the
-spec-compliance SKILL example tables.
+canonical entry shape is "MUST ... Module.Symbol ..." (the symbol
+wrapped in backticks) per the spec-compliance SKILL example tables.
 
 # Verification per symbol
 
@@ -87,7 +87,9 @@ ROOT = Path(__file__).resolve().parent.parent
 # Per probe-driven-verification.md MUST-3: structural lex over structured
 # markers is acceptable; this is NOT regex-over-semantic-claims.
 _MUST_LINE = re.compile(r"\bMUST\b")
-_BACKTICK_SYMBOL = re.compile(r"`([A-Z][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
+_BACKTICK_SYMBOL = re.compile(
+    r"`([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`"
+)
 _BACKTICK_FILELINE = re.compile(r"`([A-Za-z0-9_./-]+\.py):(\d+)`")
 
 # Stub heuristics (AST-walked, not source-grepped)
@@ -176,35 +178,46 @@ def extract_symbols(spec_path: Path) -> list[SpecSymbol]:
 def candidate_source_files(symbol: str) -> list[Path]:
     """Map a dotted symbol path to likely source files.
 
-    "kailash.foo.bar.Baz" → tries (in order):
-      * src/kailash/foo/bar.py
-      * src/kailash/foo/bar/__init__.py
-      * packages/*/src/kailash/foo/bar.py
-      * packages/*/src/kailash_foo/bar.py (sub-package convention)
+    "kailash.foo.bar.Baz" → tries (in order), every progressively-shorter
+    module-prefix because the symbol's last 1-N parts may be a
+    class.method.nested chain inside a single module file:
 
-    Returns ALL candidate paths that exist on disk. The tool does NOT
-    guess one — every candidate is parsed; first hit wins for evidence.
+      * src/kailash/foo/bar.py       (module = kailash.foo.bar, tail = Baz)
+      * src/kailash/foo/bar/__init__.py
+      * src/kailash/foo.py           (module = kailash.foo, tail = bar.Baz)
+      * src/kailash/foo/__init__.py
+      * packages/*/src/<module>.py   (mirrored for every prefix)
+      * packages/*/src/kailash_<sub>/<rest>.py (sub-package convention)
+
+    The tail-symbol AST walk in `find_symbol_in_ast` uses `parts[-1]`
+    only — so every candidate file is parsed and walked for the tail.
+    Returns ALL candidate paths that exist on disk in priority order
+    (longest module prefix first, shortest last). Deduplicated.
     """
     parts = symbol.split(".")
     if len(parts) < 2:
         return []
-    module_parts = parts[:-1]
+
     candidates: list[Path] = []
-
-    # Try src/<module>.py and src/<module>/__init__.py
-    base = ROOT / "src" / Path(*module_parts)
-    candidates.append(base.with_suffix(".py"))
-    candidates.append(base / "__init__.py")
-
-    # Try packages/*/src/<module>.py
     pkg_dir = ROOT / "packages"
+    pkg_srcs: list[Path] = []
     if pkg_dir.is_dir():
-        for pkg in pkg_dir.iterdir():
-            if not pkg.is_dir():
-                continue
-            pkg_src = pkg / "src"
-            if not pkg_src.is_dir():
-                continue
+        for pkg in sorted(pkg_dir.iterdir()):
+            if pkg.is_dir() and (pkg / "src").is_dir():
+                pkg_srcs.append(pkg / "src")
+
+    # Iterate module-prefix lengths from longest (parts[:-1]) down to 1,
+    # so the most-specific file is tried first. AST walk is cheap and
+    # first-hit semantics protect against name shadowing per
+    # find_symbol_in_ast's documented contract.
+    for prefix_len in range(len(parts) - 1, 0, -1):
+        module_parts = parts[:prefix_len]
+        # src/<module>.py and src/<module>/__init__.py
+        base = ROOT / "src" / Path(*module_parts)
+        candidates.append(base.with_suffix(".py"))
+        candidates.append(base / "__init__.py")
+        # packages/*/src/<module>.py
+        for pkg_src in pkg_srcs:
             candidates.append(pkg_src / Path(*module_parts).with_suffix(".py"))
             candidates.append(pkg_src / Path(*module_parts) / "__init__.py")
             # sub-package convention: "kailash_align" instead of "kailash.align"
@@ -215,7 +228,14 @@ def candidate_source_files(symbol: str) -> list[Path]:
                     candidates.append(pkg_src / Path(*alt_parts).with_suffix(".py"))
                     candidates.append(pkg_src / Path(*alt_parts) / "__init__.py")
 
-    return [c for c in candidates if c.is_file()]
+    # Deduplicate while preserving priority order
+    seen: set[Path] = set()
+    deduped: list[Path] = []
+    for c in candidates:
+        if c not in seen and c.is_file():
+            seen.add(c)
+            deduped.append(c)
+    return deduped
 
 
 def find_symbol_in_ast(tree: ast.AST, tail_name: str) -> ast.AST | None:
