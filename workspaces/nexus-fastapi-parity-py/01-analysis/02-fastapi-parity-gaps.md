@@ -14,7 +14,7 @@ Each subsection covers one of the seven acceptance criteria in issue #1174: curr
 
 ## AC-2: `Request`-equivalent context extractor
 
-**Current state — PARTIAL.** Starlette's `Request` is re-exported from `nexus` (`__init__.py:71` import, line 176 in `__all__`). It is not yet a handler EXTRACTOR — a handler today cannot declare `async def h(request: Request)` and receive the Starlette Request object on every transport. On the HTTP transport, FastAPI-style injection works because the gateway is FastAPI-backed, but the typed-extractor surface across transports is missing.
+**Current state — PARTIAL.** Starlette's `Request` is re-exported from `nexus` (`__init__.py:70` import, line 174 in `__all__`). It is not yet a handler EXTRACTOR — a handler today cannot declare `async def h(request: Request)` and receive the Starlette Request object on every transport. On the HTTP transport, FastAPI-style injection works because the gateway is FastAPI-backed, but the typed-extractor surface across transports is missing.
 
 **Gap.** A `Request` extractor that, when annotated on a handler parameter, populates that parameter with a transport-agnostic request context. Per `auth/dependencies.py:6-9` docstring: "Do NOT use `from __future__ import annotations` in this module. FastAPI inspects parameter annotations at runtime to recognize special types like Request. PEP 563 deferred annotations turn them into strings, which prevents FastAPI from injecting the Request object". The same constraint propagates to the Nexus extractor surface.
 
@@ -40,7 +40,7 @@ Each subsection covers one of the seven acceptance criteria in issue #1174: curr
 
 ## AC-4: `Multipart` + `UploadFile` body extractors
 
-**Current state — ABSENT (primitive present).** `NexusFile` (`files.py:18`) is the transport-agnostic file dataclass; `NexusFile.from_upload_file(starlette_upload_file)` (line 45) converts a Starlette `UploadFile` into Nexus shape. What is missing is the EXTRACTOR layer that binds a multipart-encoded HTTP body to a handler parameter typed `Multipart` (a list of files) or `UploadFile` (a single file).
+**Current state — ABSENT (primitive present).** `NexusFile` (`files.py:19` class definition; line 18 is the `@dataclass` decorator) is the transport-agnostic file dataclass; `NexusFile.from_upload_file(starlette_upload_file)` (line 45) converts a Starlette `UploadFile` into Nexus shape. What is missing is the EXTRACTOR layer that binds a multipart-encoded HTTP body to a handler parameter typed `Multipart` (a list of files) or `UploadFile` (a single file).
 
 **Gap.** Two extractor type aliases / classes in `kailash.nexus.extractors`:
 

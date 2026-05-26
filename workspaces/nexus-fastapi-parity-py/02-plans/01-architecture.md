@@ -245,18 +245,43 @@ The ~870 LOC of load-bearing logic exceeds one session's per-shard budget if lan
 
 ## Open questions for the user (gate before /todos)
 
-These need user direction before `/todos` ships:
+Q1 and Q3 below are CLOSED (resolved with named primary recommendation); Q2 and Q4 are RETAINED as yes/no confirmations; Q5 is converted to a USER-ACTION-REQUIRED gate per HIGH-R3 of the R1 amendments.
 
-1. **Pydantic body parsing.** In scope for this issue, or deferred to a follow-up? Recommendation: defer; migration guide ships with `Body[dict]` as the immediate path. (Pro: keeps this shard bounded. Con: FastAPI users migrating immediately want Pydantic; deferring leaves one section of the guide as TBD.)
+1. **Pydantic body parsing — Q1 CLOSED, recommendation:** ship `Body[T]` extractor accepting any object with `model_validate(...)` classmethod OR `__init__(**dict)` shape, matching the existing `Decoder` protocol pattern at `packages/kailash-nexus/src/nexus/typed_service_client.py:284` (the `Decoder = Callable[[Any, Type[Any]], Any]` alias) and the per-instance `register_decoder` mechanism (`typed_service_client.py:330`). Pydantic remains OPTIONAL — SDK users can use dataclasses, attrs, msgspec, OR Pydantic. The `Body[T]` extractor invokes the registered decoder OR falls back to `T(**dict)` for dataclass-shape models. **Confirm Pydantic-optional via Decoder protocol (y/n)?**
 
-2. **`NexusRequest` cross-transport context.** Is a cross-transport `NexusRequest` object in scope (binds to HTTP + MCP + CLI + WebSocket uniformly), or is HTTP-only `Request` sufficient for this shard? Recommendation: HTTP-only `Request` first; `NexusRequest` is a follow-up issue. (Pro: simpler resolver. Con: the migration guide can't promise cross-channel handler portability until `NexusRequest` ships.)
+   - Pro: keeps the extractor surface lean and library-agnostic; mirrors an existing Nexus convention so SDK users learn one decoder model.
+   - Con: SDK users on Pydantic ship two lines per model to register the decoder; library-agnostic comes with library-specific glue per model.
 
-3. **`Bytes` / `Headers` / `Query` / `Body` extractors.** The issue's illustrative imports include `Bytes`. Are `Headers` / `Query` / `Body` in scope (would round out the extractor surface), or are only the 5 named extractors (`Depends`, `Request`, `Multipart`, `UploadFile`, plus `Bytes` if explicit) required? Recommendation: ship `Bytes` (named in issue body), defer `Headers` / `Query` / `Body` to a follow-up issue. (Pro: keeps scope to issue acceptance; Con: the migration guide will note these extractors as forthcoming.)
+2. **`NexusRequest` cross-transport context.** RETAINED as real two-layer decision. Recommendation: ship HTTP-only Starlette `Request` re-export in `nexus.extractors` for this shard; introduce a `NexusRequest` cross-transport context object in a follow-up issue WHEN WebSocket / SSE / CLI handler-extract surfaces land. The current shard does not need cross-transport unification — `register_websocket` callback handlers receive `Connection` (not `Request`), and `register_sse`'s `on_subscribe(request)` is HTTP-bound by definition. **Confirm two-layer staging — HTTP-only `Request` now, `NexusRequest` follow-up later (y/n)?**
 
-4. **`register_websocket` overload signature stability.** Option A (single-method overload) vs Option B (sibling method `register_websocket_callback`)? Option A is the recommendation in `01-analysis/02-fastapi-parity-gaps.md` AC-6; Option B is a one-line API change that would surface the dispatch ambiguity less subtly. (Pro of A: API doesn't grow. Con of A: dispatch logic carries the `rules/zero-tolerance.md` Rule 3d failure mode if not implemented carefully.)
+   - Pro: simpler resolver in Shard 1; the cross-transport context only matters when handlers cross channels, which the current AC set does not require.
+   - Con: the migration guide cannot promise "the same handler signature works on every channel" until `NexusRequest` ships.
 
-5. **Cross-SDK marker.** Per `rules/cross-sdk-inspection.md` Rule 2, the implementation MUST file a cross-SDK alignment marker. The brief implies the rs sibling has this on its roadmap; the user should confirm the existing rs tracker URL so the kailash-py implementation cross-references it. The analysis worktree is scoped to kailash-py per `rules/repo-scope-discipline.md` — the user provides the cross-reference link, the agent does not reach into the sibling repo.
+3. **Extractor surface scope — Q3 CLOSED, recommendation:** ship `Headers` + `Bytes` + `NexusHandlerError` alongside `Depends` + `Request` + `Multipart` + `UploadFile` in Shard 1. Per `rules/nexus-http-status-convention.md` MUST Rule 4 (canonical extractor surface), `Headers`, `Bytes`, and `NexusHandlerError` are NAMED as committed surface symbols — they are not optional. `Query` and `Body` are additional and out of scope for this shard; defer to a follow-up issue if not in the 7 ACs of issue #1174. **Confirm Headers + Bytes + NexusHandlerError land in Shard 1 per rules/nexus-http-status-convention.md MUST-4; Query + Body deferred to follow-up (y/n)?**
+
+   - Pro: closes the surface contract the typed-status convention already commits to; SDK users get one ergonomic shape on day one.
+   - Con: Shard 1 is closer to its budget ceiling — consider splitting per MED-R1 below.
+
+4. **`register_websocket` overload signature stability.** RETAINED as A vs B confirm. Recommendation: Option A (single-method overload with discriminator dispatch per `rules/zero-tolerance.md` Rule 3d — `isinstance(arg2, type) and issubclass(arg2, MessageHandler)` for the class path; `on_message is not None and arg2 is None` for the callback path; both / neither raises `ValueError`). **Confirm Option A — single-method overload (y/n)?**
+
+   - Pro: API surface doesn't grow (one method, two shapes); existing callers' import line is unchanged; FastAPI-parity ergonomics for new callers.
+   - Con: dispatch logic carries failure-mode risk if implemented carelessly — both branches MUST have direct Tier-2 tests per `rules/testing.md` § "One Direct Test Per Variant In Every Delegating Pair" (BLOCKED to ship only the class-path test and assume callback is covered by delegation).
+
+5. **Cross-SDK marker — USER-ACTION-REQUIRED gate at /todos.** Per HIGH-R3 of the R1 amendments + `rules/repo-scope-discipline.md`, this session does NOT reach into `terrene-foundation/kailash-rs` to discover or create the tracker URL. At /todos approval, the user EITHER provides the existing rs tracker URL (which the implementation PR will cite) OR confirms "no rs sibling tracker yet, ship without the cross-SDK marker." Per `rules/spec-accuracy.md`, literal `<placeholder>` text is BLOCKED in a spec — Q5 is resolved when the user provides the URL or the no-tracker confirmation, NOT by the agent inferring it.
 
 ## /todos disposition
 
-This analysis ships an architecture plan; it does NOT mark the workspace as ready-for-todos. The five open questions above need user direction before `/todos` runs. Recommendation: schedule a `/todos` gate after the user resolves at least Q1 (Pydantic scope), Q2 (`NexusRequest` scope), and Q3 (extractor completeness scope).
+This analysis ships an architecture plan; it does NOT mark the workspace as ready-for-todos. Q1 and Q3 are CLOSED in this R1 amendment pass; Q2, Q4, and Q5 retain yes/no confirms or the USER-ACTION-REQUIRED gate for cross-SDK. Recommendation: schedule a `/todos` gate after the user resolves Q2, Q4, and Q5.
+
+## Brief verification cycle
+
+Per `rules/agents.md` § Parallel Brief-Claim Verification, this session ran parallel deep-dive verification against all 7 ACs in the brief. Results were recorded in the R1 reviewer pass: analyst confirmed all 7 ACs TRUE against the audited Nexus surface with minor cosmetic line-number drift in `01-analysis/02-fastapi-parity-gaps.md` (`__init__.py:71` → `:70`, `:176` → `:174`, `files.py:18` → `:19`). All drift amended in this R1 pass.
+
+## Shard 1 split note (MED-R1)
+
+Consider splitting Shard 1 into:
+
+- **Shard 1a (~80 LOC).** Extractor module skeleton (`packages/kailash-nexus/src/nexus/extractors/__init__.py`) + `Request` re-export + `Headers` + `Bytes` + `NexusHandlerError`. These are committed names per `rules/nexus-http-status-convention.md` MUST Rule 4 and ship without the resolver chain.
+- **Shard 1b (~350 LOC).** `Depends` resolver + per-handler `ResolverChain` + `handler_extract` registration path. Depends on Shard 1a's `Headers` and `Bytes` symbols.
+
+Decision deferred to /todos. Per `rules/autonomous-execution.md` MUST Rule 1, the split MUST be made before /implement if any of the per-shard budget thresholds (≤500 LOC load-bearing, ≤5–10 invariants, ≤3–4 call-graph hops) would otherwise be exceeded.
