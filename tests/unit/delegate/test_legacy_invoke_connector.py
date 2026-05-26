@@ -323,7 +323,7 @@ async def test_issue_1177_legacy_only_write_raises_unsupported() -> None:
         connector_kind = "test"
         requires_capabilities: frozenset[str] = frozenset()
 
-        async def invoke(self, action, *, identity=None, envelope=None):
+        async def invoke(self, input_payload, *, identity, envelope):
             return ConnectorInvocationResult(
                 payload={"ok": True},
                 audit_events=(),
@@ -352,7 +352,7 @@ async def test_issue_1177_legacy_only_read_raises_unsupported() -> None:
         connector_kind = "test"
         requires_capabilities: frozenset[str] = frozenset()
 
-        async def invoke(self, action, *, identity=None, envelope=None):
+        async def invoke(self, input_payload, *, identity, envelope):
             return ConnectorInvocationResult(
                 payload={"ok": True},
                 audit_events=(),
@@ -384,7 +384,7 @@ async def test_issue_1178_legacy_only_authenticate_raises_unsupported() -> None:
         connector_kind = "test"
         requires_capabilities: frozenset[str] = frozenset()
 
-        async def invoke(self, action, *, identity=None, envelope=None):
+        async def invoke(self, input_payload, *, identity, envelope):
             return ConnectorInvocationResult(
                 payload={"ok": True},
                 audit_events=(),
