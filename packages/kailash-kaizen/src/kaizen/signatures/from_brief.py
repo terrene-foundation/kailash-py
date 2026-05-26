@@ -57,7 +57,7 @@ Origin: issue #1125 AC 3 + AC 8; architecture plan §3.3.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, cast
 
 from kailash._from_brief import (
     BriefInterpretationError,
@@ -176,6 +176,16 @@ class SignaturePlanSignature(BriefPlanSignature):
     # creation; they never hold the raw ``OutputField`` instance at
     # runtime. The shape ``: <type> = OutputField(...)`` is canonical
     # across every existing Kaizen Signature subclass.
+    #
+    # FIELD NAMING NOTE: the plan-emitted OutputField names below
+    # MUST NOT collide with reserved property names on the Signature
+    # base class (``input_fields``, ``output_fields``, ``instructions``,
+    # ``intent``, ``guidelines``, ``inputs``, ``outputs`` — see
+    # ``kaizen/signatures/core.py:407-485``). The ``_specs`` suffix on
+    # the field-list outputs + ``signature_`` prefix on the instructions
+    # output keep this Signature compatible with the base class's
+    # property surface while preserving the semantic shape the realizer
+    # consumes.
     class_name: str = OutputField(  # pyright: ignore[reportAssignmentType]
         description=(
             "A PascalCase identifier for the synthesized Signature "
@@ -185,7 +195,7 @@ class SignaturePlanSignature(BriefPlanSignature):
             "messages and logs."
         )
     )
-    input_fields: list = OutputField(  # pyright: ignore[reportAssignmentType]
+    input_field_specs: list = OutputField(  # pyright: ignore[reportAssignmentType]
         description=(
             "List of [name, type, description] triples describing "
             "each InputField the synthesized Signature exposes. "
@@ -198,17 +208,17 @@ class SignaturePlanSignature(BriefPlanSignature):
             "context']]."
         )
     )
-    output_fields: list = OutputField(  # pyright: ignore[reportAssignmentType]
+    output_field_specs: list = OutputField(  # pyright: ignore[reportAssignmentType]
         description=(
             "List of [name, type, description] triples describing "
             "each OutputField the synthesized Signature exposes. "
-            "Same shape and type allowlist as input_fields. Example: "
+            "Same shape and type allowlist as input_field_specs. Example: "
             "[['answer', 'str', 'A clear, accurate answer'], "
             "['confidence', 'float', 'A 0.0-1.0 self-rated confidence "
             "score']]."
         )
     )
-    instructions: str = OutputField(  # pyright: ignore[reportAssignmentType]
+    signature_instructions: str = OutputField(  # pyright: ignore[reportAssignmentType]
         description=(
             "The docstring/instructions block for the synthesized "
             "Signature class. This text becomes the Signature's "
@@ -241,9 +251,9 @@ class SignaturePlan(BriefPlan):
     """
 
     class_name: str
-    input_fields: List[List[Any]]
-    output_fields: List[List[Any]]
-    instructions: str
+    input_field_specs: List[List[Any]]
+    output_field_specs: List[List[Any]]
+    signature_instructions: str
 
     @property
     def field_types(self) -> List[str]:
@@ -256,10 +266,10 @@ class SignaturePlan(BriefPlan):
         a non-string type identifier).
         """
         types: List[str] = []
-        for triple in self.input_fields:
+        for triple in self.input_field_specs:
             if len(triple) >= 2 and isinstance(triple[1], str):
                 types.append(triple[1])
-        for triple in self.output_fields:
+        for triple in self.output_field_specs:
             if len(triple) >= 2 and isinstance(triple[1], str):
                 types.append(triple[1])
         return types
@@ -376,8 +386,8 @@ def _realize_signature(plan: SignaturePlan) -> Type[Signature]:
     Returns:
         A new :class:`Signature` subclass.
     """
-    input_triples = _validate_triples(plan.input_fields, field_kind="input")
-    output_triples = _validate_triples(plan.output_fields, field_kind="output")
+    input_triples = _validate_triples(plan.input_field_specs, field_kind="input")
+    output_triples = _validate_triples(plan.output_field_specs, field_kind="output")
 
     # Build the class namespace the metaclass consumes. The shape
     # mirrors a hand-authored Signature subclass:
@@ -391,7 +401,7 @@ def _realize_signature(plan: SignaturePlan) -> Type[Signature]:
     # annotation types and pairs each one with its InputField/OutputField
     # default.
     namespace: Dict[str, Any] = {
-        "__doc__": plan.instructions,
+        "__doc__": plan.signature_instructions,
         "__annotations__": {},
     }
     for name, type_str, description in input_triples:
@@ -496,7 +506,13 @@ def signature_from_brief(
 
     # Step 4 — typed plan coercion. Translates Pydantic
     # ValidationError into BriefInterpretationError(malformed=True).
-    plan = coerce_plan(raw_output, SignaturePlan)
+    # ``coerce_plan`` returns ``BriefPlan`` (the typed base) at the
+    # signature level; the runtime instance IS the ``plan_cls`` we
+    # passed (``SignaturePlan``). The cast narrows the static type so
+    # the SignaturePlan-specific fields (class_name, input_field_specs,
+    # output_field_specs, signature_instructions, field_types) resolve
+    # against the static analyzer.
+    plan = cast(SignaturePlan, coerce_plan(raw_output, SignaturePlan))
 
     # Step 5 — confidence gate (raises on miss).
     check_confidence(plan.interpretation_confidence, threshold=confidence_threshold)
