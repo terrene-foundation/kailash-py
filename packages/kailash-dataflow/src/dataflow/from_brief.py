@@ -48,10 +48,11 @@ Invariants:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Optional, Set, Type, cast
 
+from kailash._from_brief import BriefInterpretationError
+from kailash._from_brief import BriefPlan as _BasePlan
 from kailash._from_brief import (
-    BriefInterpretationError,
     BriefPlanSignature,
     coerce_plan,
     get_default_llm_model,
@@ -579,7 +580,11 @@ def from_brief(
         "interpretation_confidence": raw_output.get("interpretation_confidence"),
         "models": raw_output.get("models", []),
     }
-    plan = coerce_plan(raw_plan, _SchemaPlan)
+    # ``coerce_plan`` is typed to return ``BriefPlan``; the concrete
+    # value here is a ``_SchemaPlan`` (the subclass we passed). Cast
+    # the local binding so the ``plan.models`` access below is
+    # statically typed against the subclass surface.
+    plan = cast(_SchemaPlan, coerce_plan(raw_plan, _SchemaPlan))
 
     # Invariants 2 + 4 — confidence + allowlist gates. The validator
     # surfaces both via :class:`BriefInterpretationError` with
@@ -608,7 +613,8 @@ def from_brief(
 
 # Pydantic plan model the validator constructs from the Signature's
 # raw output. Lives at module scope so the type is reusable in tests.
-from kailash._from_brief import BriefPlan as _BasePlan  # noqa: E402
+# The ``_BasePlan`` import is hoisted to the top of the module so the
+# class definition below resolves at module-load time.
 
 
 class _SchemaPlan(_BasePlan):

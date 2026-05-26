@@ -1,0 +1,45 @@
+# Regression fixture for ``DataFlow.from_brief()`` — multi-model brief
+# with a relationship.
+#
+# Issue #1125 AC 2 + AC 7. Exercises the realizer's relationship-FK
+# splicing logic (``realize_models`` pass 2) — User → one_to_many → Post
+# means the child model ``Post`` MUST grow a ``user_id: int`` column.
+#
+# Fixture schema: see ``dataflow_single_model.yaml`` header.
+
+brief: |
+  Design a database for a small personal blog. There are two tables:
+  a User table and a Post table. Each user has an id (integer primary
+  key), a username string, and an email string. Each post has an id
+  (integer primary key), a title string, a body string, and a
+  created_at timestamp. A user can write many posts; each post belongs
+  to one user. Wire the relationship as User has many Posts using a
+  user_id foreign key on the Post table.
+
+expected:
+  model_count: 2
+  models:
+    - name: User
+      fields:
+        - {name: id, type: int}
+        - {name: username, type: str}
+        - {name: email, type: str}
+      relationships:
+        - target_model: Post
+          rel_type: one_to_many
+          fk_column: user_id
+    - name: Post
+      fields:
+        - {name: id, type: int}
+        - {name: title, type: str}
+        - {name: body, type: str}
+        - {name: created_at, type: datetime}
+        # ``user_id: int`` is added by the realizer's pass-2 FK splice;
+        # do NOT include it in the expected fields list — the test
+        # asserts the spliced column via a separate
+        # ``expected_fk_columns`` lookup so the brief and the realizer
+        # contract stay distinct.
+      relationships: []
+expected_fk_columns:
+  Post:
+    - user_id
