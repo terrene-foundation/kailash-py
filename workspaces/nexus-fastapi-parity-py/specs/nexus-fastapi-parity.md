@@ -39,9 +39,9 @@ New file `packages/kailash-nexus/src/nexus/extractors/__init__.py`. MUST NOT imp
 | Symbol | Kind | Source | Purpose |
 | --- | --- | --- | --- |
 | `Depends` | Class | New (this module) | Marker for dependency-injection. `x = Depends(callable)`. |
-| `Request` | Re-export | `starlette.requests.Request` | Handler annotation; bound to the originating HTTP request. |
+| `Request` | Re-export | `starlette.requests.Request` | Handler annotation; bound to the originating HTTP request. Untrusted proxy headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Real-IP`) are NOT trusted by default. (MED-S1: see "Trusted proxy posture" below.) |
 | `UploadFile` | Re-export | `starlette.datastructures.UploadFile` | Single-file upload extractor. |
-| `Multipart` | Type alias | `list[UploadFile]` | Multi-file upload extractor. |
+| `Multipart` | Type alias | `list[UploadFile]` | Multi-file upload extractor. Default list-length cap 100 files per `Nexus(max_multipart_files=100)`; configurable. (MED-S2) |
 | `NexusHandlerError` | Class | New (this module) | Typed status return per `rules/nexus-http-status-convention.md` MUST Rule 4. Carries `status_code: int` + `body: dict \| str`. |
 | `Bytes` | Class | New (this module) | Raw-bytes body extractor (named in issue body). |
 
@@ -190,6 +190,9 @@ MUST clauses:
 3. **Max event size.** Default 65 536 bytes (64 KiB) per event after JSON serialization; configurable. An event exceeding the cap MUST be dropped with a structured server-side log (correlation ID + size + cap) and the stream MUST emit an SSE `event: error\ndata: {"code": "EVENT_TOO_LARGE"}\n\n` to the subscriber, then continue with the next event (NOT close the stream — a single oversized event is recoverable). Per `rules/security.md` § Input Validation.
 4. **Slow-consumer disconnect.** Default 30 seconds; configurable via `slow_consumer_timeout`. When the resolver cannot flush the next event to the underlying transport within the timeout (TCP window full, client unreachable), the resolver MUST close the stream with code 1011 (server error) and release all per-subscription state (queue, on_subscribe iterator, auth context). Per `rules/security.md` — slow-consumer DoS is the canonical SSE exhaustion vector.
 5. **Rate-limit integration.** The SSE endpoint MUST honor `nexus.auth.rate_limit` hooks on the SUBSCRIBE event (NOT per emitted event — rate-limiting per-event would defeat the streaming primitive). The hook fires once at handshake; rate-limit refusal MUST close the connection with HTTP **429 Too Many Requests** per `rules/nexus-http-status-convention.md` MUST Rule 2 shape BEFORE the SSE upgrade. Per `rules/security.md` Kailash-Specific Security § Nexus — "Rate limiting" applies symmetrically to streaming endpoints.
+6. **`on_subscribe` exception handling (MED-S4).** Per `rules/zero-tolerance.md` Rule 3, silent swallow of `on_subscribe` exceptions is BLOCKED. The resolver MUST distinguish:
+   - `asyncio.CancelledError` (client disconnect / server shutdown): expected; release per-subscription resources and exit silently.
+   - Any other exception: log the full exception context server-side (correlation ID + traceback + handler name) AND close the stream with an explicit SSE `event: error\ndata: {"code": "INTERNAL_ERROR", "correlation_id": "<uuid>"}\n\n` frame, then EOF. The client MUST receive an explicit error event — silent close ("the stream just stopped") is BLOCKED because clients cannot distinguish server crash from normal completion.
 
 ### `Nexus.register_websocket` (callback overload)
 
@@ -236,6 +239,15 @@ The callback overload synthesizes an internal `MessageHandler` subclass that MUS
 
 Tier-2 regression test contract: `packages/kailash-nexus/tests/integration/nexus/test_register_websocket_callback_origin.py` asserts that `register_websocket(path, on_message=..., allowed_origins=["https://app.example.com"])` rejects a handshake from `Origin: https://attacker.example.com` with close code 1008 + fingerprinted reason — IDENTICAL behavior to the class path's existing test at `tests/integration/test_websocket_origin_allowlist.py`. Per `rules/testing.md` § "One Direct Test Per Variant In Every Delegating Pair".
 
+## Trusted proxy posture (MED-S1)
+
+Per `rules/security.md` § Input Validation, Nexus does NOT trust client-controllable proxy headers by default. Specifically:
+
+- `Request.client.host` MUST be the immediate TCP peer's IP address — NEVER an `X-Forwarded-For` / `X-Real-IP` derivation.
+- `Request.url.scheme` MUST be derived from the TLS termination state of the immediate connection — NEVER from `X-Forwarded-Proto`.
+
+When Nexus is deployed behind a trusted reverse proxy (Caddy, nginx, ALB), the operator opts in via `Nexus(trusted_proxy_cidrs=["10.0.0.0/8", "192.168.0.0/16"])`. The resolver verifies the immediate peer IP is within one of the listed CIDRs BEFORE consulting forwarded headers; if not within the CIDR, forwarded headers are dropped silently. The default `trusted_proxy_cidrs=[]` (empty list) means no forwarded headers are honored. Per `rules/security.md` MUST NOT § "No eval() on user input" — by extension, no trust of client-attacker-controllable header strings for security-sensitive decisions (rate-limit key, audit subject, geofencing) without an explicit operator opt-in.
+
 ## PEP 563 incompatibility — typed error at registration time
 
 When `handler_extract` inspects a handler's signature and the handler's module uses `from __future__ import annotations`, the annotation values are strings, not types. The resolver MUST detect this and raise a typed error:
@@ -266,6 +278,10 @@ Per `rules/testing.md` Tier 2 (real infrastructure, no mocking) — every AC shi
 | 6 (`register_websocket` callback) | `test_register_websocket_callback_wiring.py` | Callback registration; client connects, sends message, asserts echo; lifecycle callbacks (`on_connect` / `on_disconnect`) fire. Dispatch ambiguity test: both `handler_cls` and `on_message` raises ValueError. |
 
 Per `rules/facade-manager-detection.md` MUST Rule 2 — every manager-shape class (`DependencyOverrideMap`, `ResolverChain` if it qualifies) gets a Tier 2 wiring test named `test_<lowercase_manager_name>_wiring.py`.
+
+**PEP 563 test coverage clarification (MED-R2).** The PEP 563 rejection test fires at FIRST registration of ANY extractor-using handler from a PEP-563-affected module — the detection path is shared across ALL extractor types (`Depends` / `Request` / `Multipart` / `UploadFile` / `Bytes` / `Headers` / `NexusHandlerError`). ONE Tier-2 test covering the detection contract (typically asserting `pytest.raises(ExtractorPEP563Error)` from a fixture module that uses `from __future__ import annotations`) covers all extractors. Per `rules/testing.md` § "Test-Once Protocol" — duplicating the test per extractor type is overhead with no marginal coverage benefit; one shared test against the resolver's PEP-563 gate is sufficient.
+
+**Probe-driven verification posture (MED-R3).** Per `rules/probe-driven-verification.md` Rule 3, all assertions in this spec's test contract are STRUCTURAL (HTTP transport behavior, status codes, response shape, exception types, fixture file existence, byte-equality on file uploads); no LLM-judge probes are required. Structural assertions keep regex / direct equality per Rule 3. The Tier-2 tests for `Depends` (recursive resolution), `Multipart` (path-traversal sanitization), `register_sse` (queue overflow), and `register_websocket` (origin rejection) ALL have deterministic structural oracles (status code, response body shape, log lines via `caplog`).
 
 ## Sibling spec impact
 
