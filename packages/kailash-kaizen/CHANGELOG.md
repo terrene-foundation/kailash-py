@@ -4,6 +4,30 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.1] — 2026-05-25 — LLM-path crash fixes (#1140, #1141)
+
+### Fixed
+
+- **`GoogleGeminiProvider._extract_response` no longer crashes on `parts=None`
+  candidates (#1140).** Gemini returns candidates whose `.content` is populated
+  but `.content.parts` is `None` on SAFETY / MAX_TOKENS / tool-call-only
+  finishes. The guard now checks `.parts` before iterating, so these routine
+  production responses return a well-formed dict (empty content, empty
+  tool_calls) instead of raising `TypeError: 'NoneType' object is not
+iterable`. `finish_reason` still surfaces (`content_filter` / `length`) so
+  callers can detect the filter fired. The sibling `_format_tool_calls` path
+  carried the same None-deref and is fixed in the same change.
+- **`JSONOutputParser._convert_to_type` no longer silently corrupts results for
+  subscripted-generic OutputField types (#1141).** A `Signature` OutputField
+  typed `Optional[List[Dict]]` / `List[X]` / `Dict[K, V]` triggered
+  `TypeError: Subscripted generics cannot be used with class and instance
+checks` on Python 3.9+, which was swallowed and fell through to regex
+  key-value extraction — returning malformed strings while reporting success.
+  The parser now unwraps subscripted generics via `typing.get_origin` /
+  `get_args` before the `isinstance` check, so well-formed JSON parses into the
+  documented `list` / `dict` runtime shapes. Genuine malformed JSON still
+  surfaces as a parse failure.
+
 ## [2.24.0] — 2026-05-20 — kaizen.nodes.rag provably correct + F9 cleanup (F8 R1)
 
 ### Added

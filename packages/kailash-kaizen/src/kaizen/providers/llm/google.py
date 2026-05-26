@@ -287,6 +287,8 @@ class GoogleGeminiProvider(UnifiedAIProvider):
         candidate = response.candidates[0]
         if not hasattr(candidate, "content") or not candidate.content:
             return tool_calls
+        if not candidate.content.parts:
+            return tool_calls
 
         for part in candidate.content.parts:
             if hasattr(part, "function_call") and part.function_call:
@@ -337,7 +339,11 @@ class GoogleGeminiProvider(UnifiedAIProvider):
 
     def _extract_response(self, response: Any, model: str) -> dict[str, Any]:
         content_text = ""
-        if response.candidates and response.candidates[0].content:
+        if (
+            response.candidates
+            and response.candidates[0].content
+            and response.candidates[0].content.parts
+        ):
             for part in response.candidates[0].content.parts:
                 if hasattr(part, "text") and part.text:
                     content_text += part.text
