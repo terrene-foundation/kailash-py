@@ -1,0 +1,6 @@
+# Anchor file. Fixture YAML/JSON files for from_brief() regression tests
+# live in this directory. The companion test
+# ``tests/regression/from_brief/test_fixtures_no_secrets.py`` MUST pass
+# against every file in this tree — credential-shaped substrings are
+# BLOCKED (per rules/security.md § "No secrets in logs" and B2b of the
+# issue #1125 brief).
