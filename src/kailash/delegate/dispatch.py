@@ -61,7 +61,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import Any, Generic, NoReturn, Protocol, TypeVar, runtime_checkable
 
 from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.envelope import DelegateConstraintEnvelope
@@ -472,25 +472,31 @@ class Connector(abc.ABC):
     primitives, plus class-level ``connector_id``/``connector_kind``/
     ``requires_capabilities`` metadata for bind-time gating.
 
-    **Backwards-compat (legacy invoke)**. The single :meth:`invoke`
-    method that pre-dated F-17 remains the dispatch hot path's entry
-    point for legacy Connector subclasses. Subclasses defining
-    ``invoke()`` but not the 6 new primitives are detected by
-    :meth:`__init_subclass__` and the 6 new abstracts are auto-installed
-    as default proxies routing through :meth:`invoke` (most commonly
-    via the ``write`` primitive). Per the issue plan §"Preserve
-    backwards-compat via legacy adapter", the 418-test suite continues
-    to pass while new connectors implement the full 4-primitive shape.
+    **Backwards-compat (legacy invoke)**. :meth:`invoke` is the sole
+    abstract method and the dispatch hot path's universal entry point —
+    :meth:`DispatchSurface.dispatch` always calls
+    ``await connector.invoke(...)``. The 6 newer members (3 accessors +
+    3 primitives) ship as **concrete defaults on this base class**: the
+    accessors raise a typed "not supported by a legacy connector" error,
+    and ``authenticate``/``write``/``read`` provide the legacy-adapter
+    behavior (trivial Principal; execute-and-synthesize-an-empty-signature
+    envelope/receipt). A subclass that implements only ``invoke()`` is
+    therefore fully concrete — it inherits the 6 defaults — with no
+    ``__init_subclass__`` runtime adaptation. Per the issue plan
+    §"Preserve backwards-compat via legacy adapter", the 418-test suite
+    continues to pass while new connectors implement the full
+    4-primitive shape.
 
-    New connectors SHOULD subclass :class:`Connector` directly and
-    implement all 6 new abstracts (the 3 accessors + 3 primitives).
-    Legacy connectors MAY subclass either :class:`Connector` (auto-
-    adapted via __init_subclass__) or :class:`LegacyInvokeConnector`
-    (explicit adapter wrapping a callable).
+    New connectors SHOULD subclass :class:`Connector`, implement
+    ``invoke()`` for the hot path, and OVERRIDE the 6 default members
+    (the 3 accessors + 3 primitives) with real implementations. Legacy
+    connectors MAY subclass either :class:`Connector` (inheriting the
+    defaults) or :class:`LegacyInvokeConnector` (explicit adapter
+    wrapping a callable).
 
-    The ABC refuses direct instantiation via :class:`abc.ABC` + the
-    abstract methods. Per ``orphan-detection.md`` MUST Rule 1, this
-    base class lives in the framework hot path:
+    The ABC refuses direct instantiation via :class:`abc.ABC` + the sole
+    abstract :meth:`invoke`. Per ``orphan-detection.md`` MUST Rule 1,
+    this base class lives in the framework hot path:
     :meth:`DispatchSurface.dispatch` calls ``await connector.invoke(...)``
     directly — there is no facade orphan layer.
 
@@ -546,83 +552,24 @@ class Connector(abc.ABC):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        # F-17 backwards-compat adapter: if the subclass overrides
-        # ``invoke()`` but does NOT override the 6 new primitives
-        # (3 accessors + 3 primitive methods), auto-install default
-        # proxies that route through ``invoke()``. This preserves the
-        # 418-test legacy suite while keeping the abstract-method
-        # contract for new connectors implementing the full rs shape.
-        #
-        # Detection: look in cls.__dict__ for an explicitly-overridden
-        # ``invoke`` (not inherited as abstract). If present AND none of
-        # the new abstracts are overridden in cls.__dict__, install the
-        # default proxies as concrete methods on the subclass.
-        invoke_in_dict = cls.__dict__.get("invoke")
-        legacy_invoke_defined = invoke_in_dict is not None and not getattr(
-            invoke_in_dict, "__isabstractmethod__", False
-        )
-        if legacy_invoke_defined:
-            # Auto-install proxies for any of the 6 new primitives the
-            # subclass did NOT explicitly define. The proxies satisfy
-            # the @abstractmethod requirement so ABCMeta no longer
-            # blocks instantiation; the dispatch hot path still calls
-            # ``invoke()`` for legacy subclasses, so the proxies are
-            # primarily ABC-satisfaction shims with sensible defaults
-            # for callers that DO use the new surface against a legacy
-            # connector.
-            if "revocation" not in cls.__dict__:
-                cls.revocation = _LEGACY_REVOCATION_PROPERTY  # type: ignore[assignment]
-            if "ledger" not in cls.__dict__:
-                cls.ledger = _LEGACY_LEDGER_PROPERTY  # type: ignore[assignment]
-            if "auth_verifier" not in cls.__dict__:
-                cls.auth_verifier = _LEGACY_AUTH_VERIFIER_PROPERTY  # type: ignore[assignment]
-            if "authenticate" not in cls.__dict__:
-                cls.authenticate = _legacy_authenticate  # type: ignore[assignment]
-            if "write" not in cls.__dict__:
-                cls.write = _legacy_write  # type: ignore[assignment]
-            if "read" not in cls.__dict__:
-                cls.read = _legacy_read  # type: ignore[assignment]
-            # Re-compute __abstractmethods__ so ABCMeta sees the
-            # newly-installed proxies as concrete satisfactions of the
-            # abstract surface. ABCMeta populates __abstractmethods__
-            # AFTER __init_subclass__ in some Python versions; guard
-            # with getattr to handle both ordering paths.
-            current_abstracts = getattr(cls, "__abstractmethods__", frozenset())
-            if current_abstracts:
-                cls.__abstractmethods__ = frozenset(
-                    name
-                    for name in current_abstracts
-                    if name
-                    not in {
-                        "revocation",
-                        "ledger",
-                        "auth_verifier",
-                        "authenticate",
-                        "write",
-                        "read",
-                    }
-                )
-
-        # Defense-in-depth: every concrete subclass MUST declare a
-        # non-empty connector_id at the class level so audit events
-        # carry a meaningful identifier. Empty string at the subclass
-        # level is BLOCKED (the ABC's empty default cannot satisfy this
-        # check).
-        abstract_methods = getattr(cls, "__abstractmethods__", frozenset())
-        # Detect concrete subclasses: empty __abstractmethods__ AND
-        # either invoke is overridden OR all 6 new abstracts are.
-        is_concrete = abstract_methods == frozenset() and (
-            legacy_invoke_defined
-            or all(
-                name in cls.__dict__
-                or not getattr(getattr(cls, name, None), "__isabstractmethod__", False)
-                for name in ("authenticate", "write", "read")
-            )
+        # Concrete-defaults design: :meth:`invoke` is the sole abstract
+        # method; the 6 newer members (3 accessors + 3 primitives) ship
+        # as concrete defaults on this base class. A subclass is concrete
+        # exactly when it implements ``invoke()`` (overrides the abstract).
+        # No runtime proxy installation and no ``__abstractmethods__``
+        # mutation — ABCMeta resolves abstractness from the inherited
+        # concrete defaults, so pyright models legacy invoke()-only
+        # subclasses as concrete (no spurious reportAbstractUsage).
+        invoke_attr = getattr(cls, "invoke", None)
+        is_concrete = invoke_attr is not None and not getattr(
+            invoke_attr, "__isabstractmethod__", False
         )
         if is_concrete:
-            # Concrete subclass — enforce metadata declaration. Abstract
-            # intermediate base classes may legitimately defer metadata
-            # to their own concrete subclasses.
+            # Defense-in-depth: every concrete subclass MUST declare
+            # non-empty connector metadata so audit events carry a
+            # meaningful identifier. Abstract intermediate base classes
+            # (invoke still abstract) legitimately defer metadata to
+            # their own concrete subclasses.
             if not isinstance(cls.connector_id, str) or not cls.connector_id:
                 raise TypeError(
                     f"Connector subclass {cls.__name__!r} MUST declare a "
@@ -681,29 +628,35 @@ class Connector(abc.ABC):
         """
         raise NotImplementedError  # pragma: no cover (abstract)
 
-    # ─── Required accessors (3) — mirror rs trait inherent methods ──────
+    # ─── Default accessors (3) — mirror rs trait inherent methods ───────
+    #
+    # Concrete defaults: legacy invoke()-only connectors do not expose the
+    # rs-mirrored accessor surface, so accessing one raises a typed guard
+    # (per ``zero-tolerance.md`` Rule 3a) rather than a silent
+    # AttributeError. New-shape connectors OVERRIDE these with real
+    # ``@property`` accessors.
 
     @property
-    @abc.abstractmethod
     def revocation(self) -> RevocationChannel:
-        """The connector's revocation channel. Reachable for every dispatch."""
-        raise NotImplementedError  # pragma: no cover (abstract)
+        """The connector's revocation channel (default: unsupported by legacy connectors)."""
+        _legacy_unsupported("revocation")
 
     @property
-    @abc.abstractmethod
     def ledger(self) -> KnowledgeLedger:
-        """The connector's knowledge ledger (where dispatch reads/writes record)."""
-        raise NotImplementedError  # pragma: no cover (abstract)
+        """The connector's knowledge ledger (default: unsupported by legacy connectors)."""
+        _legacy_unsupported("ledger")
 
     @property
-    @abc.abstractmethod
     def auth_verifier(self) -> AuthVerifier:
-        """The connector's authentication verifier (OIDC/SAML/etc.)."""
-        raise NotImplementedError  # pragma: no cover (abstract)
+        """The connector's authentication verifier (default: unsupported by legacy connectors)."""
+        _legacy_unsupported("auth_verifier")
 
-    # ─── Required primitives (3) — mirror rs trait async fns ────────────
+    # ─── Default primitives (3) — mirror rs trait async fns ─────────────
+    #
+    # Concrete defaults provide the legacy-adapter behavior so an
+    # invoke()-only connector is fully concrete. New-shape connectors
+    # OVERRIDE these with real cryptographic implementations.
 
-    @abc.abstractmethod
     async def authenticate(
         self,
         identity: DelegateIdentity,
@@ -711,11 +664,18 @@ class Connector(abc.ABC):
     ) -> Principal:
         """Authenticate the dispatch identity; return a :class:`Principal`.
 
-        Raises a connector-defined exception if authentication fails.
+        Default (legacy invoke()-only connectors): returns a trivial
+        Principal scoped to the bound identity — legacy connectors
+        authenticated implicitly via ``invoke()``. New-shape connectors
+        override with a real authentication exchange (and may raise a
+        connector-defined exception on failure).
         """
-        raise NotImplementedError  # pragma: no cover (abstract)
+        return Principal(
+            delegate_id=str(identity.delegate_id),
+            tenant_id=None,
+            claims={},
+        )
 
-    @abc.abstractmethod
     async def write(
         self,
         action: Callable[[], Awaitable[Any]],
@@ -725,12 +685,29 @@ class Connector(abc.ABC):
     ) -> SignedActionEnvelope:
         """Execute a write action under audit; return a signed action envelope.
 
-        The signature on the envelope MUST be verifiable via the runtime's
-        :class:`Verifier`.
+        Default (legacy invoke()-only connectors): executes the action and
+        synthesizes a :class:`SignedActionEnvelope` with an EMPTY signature
+        — legacy connectors did not produce cryptographic action
+        signatures, so new-shape callers receiving an empty-signature
+        envelope MUST treat it as unverifiable per F-17 dispatch wiring.
+        New-shape connectors override with a real signing exchange whose
+        signature is verifiable via the runtime's :class:`Verifier`.
         """
-        raise NotImplementedError  # pragma: no cover (abstract)
+        payload_obj = await action()
+        payload_dict: dict[str, Any]
+        if isinstance(payload_obj, dict):
+            payload_dict = payload_obj
+        else:
+            payload_dict = {"value": payload_obj}
+        canonical_bytes = canonical_json_dumps(payload_dict).encode("utf-8")
+        return SignedActionEnvelope(
+            action_id=uuid.uuid4(),
+            canonical_bytes=canonical_bytes,
+            signature=b"",  # legacy connector did not sign
+            signer_delegate_id=str(identity.delegate_id),
+            payload=payload_dict,
+        )
 
-    @abc.abstractmethod
     async def read(
         self,
         query: Callable[[], Awaitable[T_Read]],
@@ -738,129 +715,63 @@ class Connector(abc.ABC):
         identity: DelegateIdentity,
         envelope: DelegateConstraintEnvelope,
     ) -> tuple[T_Read, AttestedReadReceipt]:
-        """Execute a read query under audit; return (payload, attested-receipt)."""
-        raise NotImplementedError  # pragma: no cover (abstract)
+        """Execute a read query under audit; return (payload, attested-receipt).
+
+        Default (legacy invoke()-only connectors): executes the query and
+        synthesizes an :class:`AttestedReadReceipt` with an EMPTY
+        attestation — legacy connectors did not produce cryptographic read
+        attestations. New-shape connectors override with a real attestation
+        exchange.
+        """
+        value = await query()
+        canonical_bytes = canonical_json_dumps(
+            {
+                "value": (
+                    value
+                    if isinstance(
+                        value, (dict, list, str, int, float, bool, type(None))
+                    )
+                    else repr(value)
+                )
+            }
+        ).encode("utf-8")
+        receipt = AttestedReadReceipt(
+            read_id=uuid.uuid4(),
+            canonical_bytes=canonical_bytes,
+            attestation=b"",
+            attester_delegate_id=str(identity.delegate_id),
+            observed_at=datetime.now(timezone.utc),
+        )
+        return value, receipt
 
 
 # ---------------------------------------------------------------------------
-# Legacy-adapter default proxies — installed by __init_subclass__ when a
-# subclass defines invoke() but not the 6 new primitives. Module-level
-# functions so __init_subclass__ can assign them as method descriptors.
+# Typed guard for accessor surface unsupported by legacy connectors.
+# The 3 accessor defaults on Connector call this so a caller reaching for
+# ``connector.revocation`` against a legacy invoke()-only connector gets a
+# clear refusal rather than a silent AttributeError. The legacy default
+# behavior for the 3 primitives (authenticate / write / read) is inlined
+# directly into the Connector base class concrete defaults above — there is
+# no longer any __init_subclass__ proxy-installation machinery.
 # ---------------------------------------------------------------------------
 
 
-def _legacy_unsupported(name: str) -> "Any":
-    """Return a sentinel that explains the new-shape primitive is unsupported.
+def _legacy_unsupported(name: str) -> NoReturn:
+    """Raise a typed refusal for a primitive a legacy connector does not expose.
 
     Legacy ``invoke()``-only connectors do not expose the rs-mirrored
-    primitive surface; callers that reach for ``connector.write(...)``
-    against a legacy connector get a clear refusal rather than a silent
-    AttributeError (per ``zero-tolerance.md`` Rule 3a typed-delegate guards).
+    accessor surface; callers that reach for ``connector.revocation`` /
+    ``.ledger`` / ``.auth_verifier`` against a legacy connector get a clear
+    refusal rather than a silent AttributeError (per ``zero-tolerance.md``
+    Rule 3a typed-delegate guards). The ``NoReturn`` annotation lets the
+    accessor properties declare their real return types without a
+    fall-through-to-None type error.
     """
     raise NotImplementedError(
         f"Connector primitive {name!r} not implemented by this legacy "
         f"invoke()-only connector — use connector.invoke(...) or migrate "
         f"the connector to the 4-primitive shape"
     )
-
-
-class _LegacyAccessor:
-    """Sentinel accessor: raises on access via __get__ descriptor protocol."""
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-    def __get__(self, instance: Any, owner: type | None = None) -> Any:
-        if instance is None:
-            return self
-        _legacy_unsupported(self._name)
-
-
-_LEGACY_REVOCATION_PROPERTY = _LegacyAccessor("revocation")
-_LEGACY_LEDGER_PROPERTY = _LegacyAccessor("ledger")
-_LEGACY_AUTH_VERIFIER_PROPERTY = _LegacyAccessor("auth_verifier")
-
-
-async def _legacy_authenticate(
-    self: Any,
-    identity: DelegateIdentity,
-    envelope: DelegateConstraintEnvelope,
-) -> Principal:
-    """Default ``authenticate`` for legacy invoke()-only connectors.
-
-    Returns a trivial Principal scoped to the bound identity. Legacy
-    connectors authenticated implicitly via ``invoke()`` — this proxy
-    keeps that contract surface alive for new-shape callers.
-    """
-    return Principal(
-        delegate_id=str(identity.delegate_id),
-        tenant_id=None,
-        claims={},
-    )
-
-
-async def _legacy_write(
-    self: Any,
-    action: Callable[[], Awaitable[Any]],
-    *,
-    identity: DelegateIdentity,
-    envelope: DelegateConstraintEnvelope,
-) -> SignedActionEnvelope:
-    """Default ``write`` for legacy invoke()-only connectors.
-
-    Executes the action and returns a synthesized SignedActionEnvelope
-    with an EMPTY signature — legacy connectors did not produce
-    cryptographic action signatures. New-shape callers receiving an
-    empty-signature envelope from a legacy connector MUST treat it as
-    unverifiable per F-17 dispatch wiring.
-    """
-    payload_obj = await action()
-    payload_dict: dict[str, Any]
-    if isinstance(payload_obj, dict):
-        payload_dict = payload_obj
-    else:
-        payload_dict = {"value": payload_obj}
-    canonical_bytes = canonical_json_dumps(payload_dict).encode("utf-8")
-    return SignedActionEnvelope(
-        action_id=uuid.uuid4(),
-        canonical_bytes=canonical_bytes,
-        signature=b"",  # legacy connector did not sign
-        signer_delegate_id=str(identity.delegate_id),
-        payload=payload_dict,
-    )
-
-
-async def _legacy_read(
-    self: Any,
-    query: Callable[[], Awaitable[T_Read]],
-    *,
-    identity: DelegateIdentity,
-    envelope: DelegateConstraintEnvelope,
-) -> tuple[T_Read, AttestedReadReceipt]:
-    """Default ``read`` for legacy invoke()-only connectors.
-
-    Executes the query and returns the value plus a synthesized
-    :class:`AttestedReadReceipt` with an EMPTY attestation — legacy
-    connectors did not produce cryptographic read attestations.
-    """
-    value = await query()
-    canonical_bytes = canonical_json_dumps(
-        {
-            "value": (
-                value
-                if isinstance(value, (dict, list, str, int, float, bool, type(None)))
-                else repr(value)
-            )
-        }
-    ).encode("utf-8")
-    receipt = AttestedReadReceipt(
-        read_id=uuid.uuid4(),
-        canonical_bytes=canonical_bytes,
-        attestation=b"",
-        attester_delegate_id=str(identity.delegate_id),
-        observed_at=datetime.now(timezone.utc),
-    )
-    return value, receipt
 
 
 # ---------------------------------------------------------------------------
@@ -875,9 +786,10 @@ class LegacyInvokeConnector(Connector):
     existing legacy connectors that ship as bare ``async def invoke(...)``
     callables (not as Connector subclasses) can wrap into the new Connector
     ABC via this adapter. The wrapped callable is invoked from the
-    :meth:`invoke` method; the 6 new abstracts are auto-satisfied via the
-    same default proxies the ``__init_subclass__`` machinery installs for
-    direct Connector subclasses.
+    :meth:`invoke` method; the 6 newer members (3 accessors + 3 primitives)
+    are satisfied by the concrete defaults inherited from
+    :class:`Connector` (accessors raise the typed legacy guard; the
+    primitives provide the legacy-adapter behavior).
 
     The adapter is most useful for downstream consumers porting legacy
     connector callables to the new ABC without subclassing. New connectors

@@ -1,6 +1,6 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Connector ABC shape — verify the 6 rs-mirrored abstract members (F-17).
+"""Connector ABC shape — verify the rs-mirrored member surface (F-17).
 
 Per ``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-
 extraction.md:332-385`` (Round-1 F-17), the Python :class:`Connector` ABC
@@ -9,17 +9,26 @@ accessors (revocation/ledger/auth_verifier) + 3 required primitives
 (authenticate/write/read). The legacy ``invoke()`` method is preserved
 for backwards-compat.
 
+**Concrete-defaults design (option c).** ``invoke()`` is the sole
+``@abstractmethod``; the 6 newer members (3 accessors + 3 primitives)
+ship as concrete defaults on the base class (accessors raise a typed
+legacy guard; the primitives provide the legacy-adapter behavior).
+A subclass implementing only ``invoke()`` is therefore fully concrete
+by inheritance — there is no ``__init_subclass__`` runtime proxy
+installation and no ``__abstractmethods__`` mutation, so static type
+checkers model legacy invoke()-only subclasses as concrete (no spurious
+``reportAbstractUsage``).
+
 This file verifies the structural ABC contract:
 
 1. Connector is abc.ABC; direct instantiation refused.
-2. Connector.__abstractmethods__ contains all 7 abstracts (legacy invoke
-   + 3 accessors + 3 primitives).
-3. A subclass implementing only invoke() instantiates successfully via
-   the __init_subclass__ legacy-adapter auto-installation.
-4. A subclass implementing only invoke() exposes the 6 new primitive
-   surfaces (auto-installed proxies) without AttributeError.
-5. A subclass implementing all 6 new primitives directly (no invoke
-   override) also constructs successfully.
+2. Connector.__abstractmethods__ == {"invoke"} — the sole abstract member.
+3. The 6 newer members are concrete defaults (NOT abstract).
+4. A subclass implementing only invoke() instantiates successfully by
+   inheriting the concrete defaults.
+5. A subclass implementing only invoke() exposes the 6 new primitive
+   surfaces (accessors raise the typed guard; primitives run the default).
+6. A subclass implementing all 6 new primitives directly also constructs.
 """
 
 from __future__ import annotations
@@ -50,40 +59,36 @@ def test_connector_abc_refuses_direct_instantiation() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. __abstractmethods__ has the 7 expected members
+# 2. __abstractmethods__ == {"invoke"} — invoke is the SOLE abstract member
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 def test_connector_abc_has_expected_abstract_members() -> None:
-    """Connector.__abstractmethods__ MUST contain the 7 rs-mirrored abstracts.
+    """Connector.__abstractmethods__ MUST be exactly {"invoke"} (option c).
 
-    7 = 1 legacy (invoke) + 3 accessors (revocation, ledger, auth_verifier)
-    + 3 primitives (authenticate, write, read). Per F-17, the rs trait
-    shape is the byte-canonical contract; deviating from this set breaks
-    cross-SDK parity.
+    ``invoke()`` is the sole abstract member; the 6 newer rs-mirrored
+    members (3 accessors + 3 primitives) ship as concrete defaults on the
+    base class. Per F-17 the rs trait shape is still mirrored as the member
+    surface (see ``test_connector_abc_six_new_members_are_concrete``); only
+    the abstractness lives on ``invoke`` so legacy invoke()-only subclasses
+    are concrete by inheritance.
     """
-    expected = {
-        # legacy entry point (preserved for backwards-compat)
-        "invoke",
-        # 3 required accessors
-        "revocation",
-        "ledger",
-        "auth_verifier",
-        # 3 required primitives
-        "authenticate",
-        "write",
-        "read",
-    }
-    assert Connector.__abstractmethods__ == expected, (
-        f"Connector ABC drift: expected {sorted(expected)}, "
+    assert Connector.__abstractmethods__ == frozenset({"invoke"}), (
+        f"Connector ABC drift: expected {{'invoke'}}, "
         f"got {sorted(Connector.__abstractmethods__)}"
     )
 
 
 @pytest.mark.unit
-def test_connector_abc_six_new_members_distinct_from_invoke() -> None:
-    """The 6 new abstract members (3 accessors + 3 primitives) MUST be distinct from invoke."""
+def test_connector_abc_six_new_members_are_concrete() -> None:
+    """The 6 rs-mirrored members exist as CONCRETE defaults, distinct from invoke.
+
+    Option (c): the 3 accessors (revocation/ledger/auth_verifier) + 3
+    primitives (authenticate/write/read) are present on the base class but
+    are NOT abstract — a legacy invoke()-only subclass inherits them and is
+    fully concrete. ``invoke`` remains the sole abstract member.
+    """
     new_members = {
         "revocation",
         "ledger",
@@ -94,7 +99,17 @@ def test_connector_abc_six_new_members_distinct_from_invoke() -> None:
     }
     assert len(new_members) == 6
     assert "invoke" not in new_members
-    assert new_members <= Connector.__abstractmethods__
+    # Present on the base class …
+    assert new_members <= set(dir(Connector))
+    # … but NONE of them is abstract (only invoke is).
+    assert new_members.isdisjoint(Connector.__abstractmethods__)
+    for name in new_members:
+        member = inspect.getattr_static(Connector, name)
+        # Resolve property fget so the abstractness check sees the callable.
+        target = member.fget if isinstance(member, property) else member
+        assert not getattr(
+            target, "__isabstractmethod__", False
+        ), f"{name} MUST be a concrete default, not abstract"
 
 
 # ---------------------------------------------------------------------------
@@ -310,19 +325,25 @@ async def test_new_shape_authenticate_returns_principal() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6. Subclass missing ALL primitives but ALSO missing invoke is fully abstract
+# 6. Subclass missing invoke() is abstract — instantiation refused
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
-def test_subclass_missing_invoke_and_primitives_is_abstract() -> None:
-    """Empty subclass (no overrides) MUST be abstract — instantiation refused."""
+def test_subclass_missing_invoke_is_abstract() -> None:
+    """Subclass not overriding invoke() MUST be abstract — instantiation refused.
+
+    Option (c): invoke is the sole abstract member, so a subclass that does
+    not implement it inherits exactly one unsatisfied abstract ({"invoke"})
+    and cannot be instantiated. The 6 newer members are concrete defaults
+    and never block instantiation.
+    """
 
     class _Empty(Connector):
         connector_id = "empty"
         connector_kind = "test"
 
-    # All 7 abstracts remain unsatisfied.
-    assert len(_Empty.__abstractmethods__) == 7
+    # invoke is the sole unsatisfied abstract.
+    assert _Empty.__abstractmethods__ == frozenset({"invoke"})
     with pytest.raises(TypeError, match="abstract"):
         _Empty()  # type: ignore[abstract]
