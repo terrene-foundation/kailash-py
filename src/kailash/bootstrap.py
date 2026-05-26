@@ -648,9 +648,12 @@ def bootstrap(
     signature = _signature_cls()()
     agent = _build_agent(resolved_model, signature)
     raw = agent.run(brief=scrubbed, profile=profile)
-    logger.info(
+    # SEC-6: schema-revealing field names (the keys of the LLM-emitted
+    # plan dict) stay at DEBUG with a count-only surface per
+    # rules/observability.md Rule 8.
+    logger.debug(
         "bootstrap.llm_returned",
-        extra={"raw_keys": sorted(raw.keys()) if isinstance(raw, dict) else []},
+        extra={"field_count": len(raw) if isinstance(raw, dict) else 0},
     )
 
     # Step 6 — typed validation. coerce_plan wraps pydantic.ValidationError

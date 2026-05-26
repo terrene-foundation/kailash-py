@@ -625,9 +625,14 @@ def workflow_from_brief(
     signature = _signature_cls()()
     agent = _build_agent(resolved_model, signature)
     raw = agent.run(brief=augmented_brief)
-    logger.info(
+    # SEC-6: per rules/observability.md Rule 8, schema-revealing field
+    # names (the keys of the LLM-emitted plan dict) stay at DEBUG with
+    # a count-only surface so future Signature fields cannot leak via
+    # raw_keys to log aggregators. The operational signal — "LLM
+    # returned a dict" — survives via field_count.
+    logger.debug(
         "workflow_from_brief.llm_returned",
-        extra={"raw_keys": sorted(raw.keys()) if isinstance(raw, dict) else []},
+        extra={"field_count": len(raw) if isinstance(raw, dict) else 0},
     )
 
     # Step 5 — typed validation. coerce_plan wraps pydantic.ValidationError
