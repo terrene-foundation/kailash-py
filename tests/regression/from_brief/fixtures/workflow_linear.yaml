@@ -1,0 +1,20 @@
+# Linear workflow brief — issue #1125 AC 6 fixture.
+#
+# Tier-2 regression fixture exercising the simplest from_brief() shape:
+# one node, no connections. This is the smallest plan that proves the
+# pipeline (scrub → LLM → validate → realize → build → execute) works
+# end-to-end against a real LLM endpoint.
+#
+# No credentials in this file (tests/regression/from_brief/test_fixtures_no_secrets.py
+# verifies this mechanically at collection time).
+brief: |
+  Build a workflow with a single Python code node that takes a list of
+  integers as input and returns the sum. Use PythonCodeNode with
+  configuration that defines a 'code' string parameter computing the sum.
+
+expected_min_nodes: 1
+expected_max_nodes: 3
+expected_invariants:
+  - "result is a WorkflowBuilder instance"
+  - "builder.build() returns a Workflow without raising"
+  - "at least one node is a PythonCodeNode"

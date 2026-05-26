@@ -108,6 +108,29 @@ from .validation import (
 # ----------------------------------------------------------------------
 install_dataflow_logger_mask()
 
+# ---------------------------------------------------------------------------
+# Issue #1125 — bind ``DataFlow.from_brief()`` as a classmethod.
+#
+# The body of ``from_brief`` lives in ``dataflow/from_brief.py`` so the
+# realizer + Signature stay co-located with the LLM-mediation
+# pipeline. The classmethod binding lands here at module import time
+# because:
+#
+# 1. Importing ``dataflow.from_brief`` at engine-module load time
+#    would create a circular dependency (engine.py imports happen
+#    before the from_brief module is ready to reference DataFlow).
+#    Binding from __init__.py — which imports DataFlow first — avoids
+#    the cycle.
+# 2. Every consumer of ``from dataflow import DataFlow`` sees the
+#    classmethod immediately, with no late-bind / lazy-import seam.
+#
+# See ``rules/orphan-detection.md`` § 1 — this binding IS the
+# production call site that keeps the realizer from being orphaned.
+# ---------------------------------------------------------------------------
+from dataflow.from_brief import from_brief as _from_brief_impl  # noqa: E402
+
+DataFlow.from_brief = classmethod(_from_brief_impl)  # type: ignore[attr-defined]
+
 # Legacy compatibility - maintain the original imports
 __version__ = "2.10.0"
 

@@ -1,0 +1,28 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fixture for Kaizen.signature_from_brief — issue #1125 AC 3 + AC 8.
+#
+# Brief shape: single-input single-output.
+#
+# This fixture is consumed by tests/integration/kaizen/test_signature_from_brief.py.
+# The fixture deliberately uses NO credential-shaped tokens — the
+# no-secrets scanner at tests/regression/from_brief/test_fixtures_no_secrets.py
+# scans every file in this directory per issue #1125 brief item B2b.
+#
+# Tests assert SHAPE not exact byte content (LLM is non-deterministic):
+# - The synthesized class IS a Signature subclass.
+# - It has exactly 1 input field and exactly 1 output field.
+# - The instructions docstring is structurally non-empty (semantic
+#   quality of the docstring is a probe-class assertion deferred per
+#   rules/probe-driven-verification.md MUST-1).
+brief: |
+  Build a Signature for a question-answering agent. The agent takes
+  one input — a question string — and produces one output: the answer
+  string. Instructions: answer accurately and concisely.
+
+expected:
+  # Expected SHAPE properties. LLM-emitted field names are
+  # non-deterministic; tests assert counts only.
+  input_field_count: 1
+  output_field_count: 1

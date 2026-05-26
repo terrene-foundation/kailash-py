@@ -1,0 +1,42 @@
+# Regression fixture for ``DataFlow.from_brief()`` — single-model brief.
+#
+# Issue #1125 AC 2 + AC 7. This fixture pins the canonical single-model
+# brief shape the realizer (``packages/kailash-dataflow/src/dataflow/
+# from_brief.py``) MUST handle: one model, four field types (str / int /
+# datetime / bool), no relationships.
+#
+# Fixture schema:
+#   brief: <natural-language prose, no credentials per B2b>
+#   expected:
+#     models:
+#       - name: <Python class name the realizer MUST produce>
+#         fields:
+#           - {name: <identifier>, type: <one of DEFAULT_DATAFLOW_FIELD_TYPES>}
+#         relationships: []
+#     model_count: <int>
+#
+# The Tier-2 round-trip test reads ``brief``, calls
+# ``DataFlow.from_brief(brief, conn_str=<test_db>)``, and verifies the
+# realizer produced the expected models + that ``db.express.create() →
+# db.express.read()`` round-trips against the real database.
+
+brief: |
+  Create a database for a small support-ticket system. There is one
+  table called Ticket. Each ticket has an id (integer primary key),
+  a subject string, a body string, a status string (open or closed),
+  a created_at timestamp, and a resolved boolean that defaults to
+  false. The system tracks support tickets opened by customers; no
+  other tables yet.
+
+expected:
+  model_count: 1
+  models:
+    - name: Ticket
+      fields:
+        - {name: id, type: int}
+        - {name: subject, type: str}
+        - {name: body, type: str}
+        - {name: status, type: str}
+        - {name: created_at, type: datetime}
+        - {name: resolved, type: bool}
+      relationships: []
