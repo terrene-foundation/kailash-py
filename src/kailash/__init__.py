@@ -36,22 +36,6 @@ from kailash.nodes.events import EventPublishNode  # noqa: E402,F401
 
 def __getattr__(name):
     """Lazy imports for optional dependencies and deprecation warnings."""
-    # Lazy bootstrap symbols (issue #1125 AC 4 + AC 9). The bootstrap
-    # module imports kaizen at call-time only, but its top-level import
-    # would still trigger ``kailash._from_brief`` → ``kaizen.signatures``
-    # → ``kailash.trust.posture`` → ``kailash.__version__`` (BOOM:
-    # circular at package-load before __init__.py:98 binds __version__).
-    # The lazy access pattern below mirrors the workflow.from_brief
-    # fence so ``kailash.bootstrap(...)`` and ``kailash.BootstrapConfig``
-    # both resolve at call-time, when the package is fully initialized.
-    if name == "bootstrap":
-        from kailash.bootstrap import bootstrap
-
-        return bootstrap
-    if name == "BootstrapConfig":
-        from kailash.bootstrap import BootstrapConfig
-
-        return BootstrapConfig
     if name == "WorkflowVisualizer":
         from kailash.workflow.visualization import WorkflowVisualizer
 
@@ -140,3 +124,20 @@ __all__ = [
     "bootstrap",
     "BootstrapConfig",
 ]
+
+# Eager bind of the bootstrap callable + BootstrapConfig (issue #1125 AC 4 + AC 9).
+# `kailash.bootstrap` is BOTH a submodule name AND the callable name within it; if
+# either symbol resolved through PEP 562 `__getattr__`, the lazy resolver's own
+# `from kailash.bootstrap import bootstrap` import would auto-register the
+# SUBMODULE as `kailash.bootstrap`, shadowing the callable on subsequent access.
+# Eagerly binding here makes `kailash.bootstrap` the CALLABLE (the explicit
+# attribute assignment wins over the submodule's auto-set), while
+# `kailash.bootstrap.bootstrap` (the dotted submodule form) is also still
+# reachable for users who prefer that import path.
+#
+# Safety check: the bootstrap module's top-level imports are pure-Python
+# (dataclasses, typing, logging, os) — NO kaizen at module-import time. Kaizen
+# imports are deferred to call-time inside `_build_agent` and `bootstrap()`.
+# Importing `kailash.bootstrap` here does NOT trigger the kaizen circular-load
+# fence the workflow.from_brief module needs.
+from kailash.bootstrap import BootstrapConfig, bootstrap  # noqa: E402, F401
