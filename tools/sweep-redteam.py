@@ -76,7 +76,7 @@ import ast
 import json
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -316,8 +316,24 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
     """
     # File-line ref shape — verify file exists and has ≥ that many lines
     if ":" in symbol.name and not symbol.name.split(".")[0].isidentifier():
-        path_str, line_str = symbol.name.rsplit(":", 1)
-        target = ROOT / path_str
+        path_str, _line_str = symbol.name.rsplit(":", 1)
+        target = (ROOT / path_str).resolve()
+        # Defense-in-depth: refuse path-collapse escapes even though the
+        # backtick-filerule regex bounds path chars. Per R1 security review
+        # LOW finding (R1-security-09).
+        try:
+            target.relative_to(ROOT.resolve())
+        except ValueError:
+            return [
+                Finding(
+                    category="orphan",
+                    symbol=symbol.name,
+                    spec=str(symbol.spec_path.relative_to(ROOT)),
+                    spec_line=symbol.spec_line,
+                    source=None,
+                    evidence=f"file-line ref escapes repo root: {path_str}",
+                )
+            ]
         if not target.is_file():
             return [
                 Finding(
@@ -539,9 +555,18 @@ def main(argv: list[str] | None = None) -> int:
         scope = Path(args.spec)
         if not scope.is_absolute():
             scope = ROOT / scope
-        if not scope.exists():
+        # Defense-in-depth: refuse paths outside ROOT even when the operator
+        # supplied an absolute path. Bounds the blast radius of an attacker
+        # who can influence argv (CI invocation with attacker-influenced
+        # parameters). Per R1 security review LOW finding (R1-security-01).
+        resolved = scope.resolve()
+        try:
+            resolved.relative_to(ROOT.resolve())
+        except ValueError:
+            parser.error(f"spec path escapes repo root: {scope}")
+        if not resolved.exists():
             parser.error(f"spec path does not exist: {scope}")
-        specs = list(iter_spec_files(scope))
+        specs = list(iter_spec_files(resolved))
 
     return run(specs, sys.stdout)
 
