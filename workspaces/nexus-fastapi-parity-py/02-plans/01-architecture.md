@@ -153,7 +153,7 @@ Dispatch logic at the top:
 New file `packages/kailash-nexus/docs/migration-fastapi.md` (Sphinx-rendered). One section per surface:
 
 1. **Auth** — FastAPI `Depends(get_current_user)` → Nexus `Depends(get_current_user)` re-imported from `nexus.extractors`.
-2. **Typed bodies** — `Body[dict]` immediate path; Pydantic `Model` deferred to follow-up.
+2. **Typed bodies** — `Body[T]` canonical shape via registered decoder (`T.model_validate(data, strict=True)` for Pydantic with `extra='forbid'`) OR `__init__`-introspection fallback for dataclass-shape models (rejects unknown keys via `BodyExtraKeysError` → HTTP 400). Naive `T(**dict)` is BLOCKED per `specs/nexus-fastapi-parity.md` § "Body[T] — mass-assignment policy" (OWASP A04:2021). Strict-mode `model_validate` is MANDATORY for the canonical Pydantic decoder example — non-strict silently coerces types and re-introduces the silent-fallback failure mode `rules/zero-tolerance.md` Rule 3 closes.
 3. **File uploads** — FastAPI `UploadFile = File(...)` → Nexus `file: UploadFile`. FastAPI `List[UploadFile]` → Nexus `files: Multipart`.
 4. **SSE** — FastAPI `EventSourceResponse` from `sse-starlette` → Nexus `register_sse(path, on_subscribe)`.
 5. **WebSocket** — FastAPI `@app.websocket("/ws")` + `WebSocket` parameter → Nexus `register_websocket(path, on_message=...)` callback OR existing `@app.websocket(path)` class-based.

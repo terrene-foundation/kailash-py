@@ -75,6 +75,23 @@ The HTTP-transport multipart resolver MUST enforce the following input-validatio
 
 Tier-2 regression test contract for the path-traversal defense: `packages/kailash-nexus/tests/integration/nexus/test_multipart_path_traversal.py` POSTs a multipart body with `filename="../../../etc/passwd"`; asserts the handler sees `filename == "passwd"` (sanitized) AND that the resolver did not invoke any filesystem `open()` call against the unsanitized value (subprocess-level audit). Per `rules/testing.md` § Regression Testing.
 
+#### Headers extractor contract (NEW-MED-1)
+
+The `Headers` extractor surfaces the inbound HTTP headers as a case-insensitive, read-only mapping. Per RFC 7230 §3.2 (HTTP/1.1 message syntax) and `rules/security.md` § Input Validation:
+
+1. **Case-insensitive access.** `Headers["X-Foo"]`, `Headers["x-foo"]`, `Headers["X-FOO"]`, and `Headers.get("x-Foo")` MUST return the same value. The mapping internally normalizes keys to lowercase ASCII per RFC 7230 §3.2 (header field names are case-insensitive).
+2. **Duplicate-value handling per RFC 7230 §3.2.2.** HTTP headers MAY appear multiple times in a single message. The `Headers` extractor MUST provide BOTH access shapes: (a) `Headers["X-Foo"]` returns the values joined by `, ` (per RFC 7230 §3.2.2 — "a recipient MAY combine multiple header fields with the same field name into one"); (b) `Headers.getlist("X-Foo")` returns the list of raw values in insertion order. The scalar form covers the common case; the list form serves SDK users who need the structured shape (e.g., parsing a comma-bearing `Set-Cookie` correctly).
+3. **Insertion-order preservation.** `iter(Headers)`, `Headers.keys()`, and `Headers.items()` MUST preserve the insertion order from the original request — NOT re-sort alphabetically. This preserves debuggability of header-order-sensitive client behaviors.
+4. **Read-only at the handler boundary.** `Headers.__setitem__`, `Headers.__delitem__`, and any mutation method MUST raise `TypeError` with a clear message. The handler MUST NOT mutate request headers; the response-construction path is a separate surface.
+
+#### Bytes extractor contract (NEW-MED-1)
+
+The `Bytes` extractor surfaces the full inbound request body as raw bytes. Per `rules/security.md` § Input Validation:
+
+1. **Inbound size cap inheritance.** `Bytes` inherits `Nexus(max_request_body_bytes=10_485_760)` (10 MiB default, configurable per HIGH-S1 above). The resolver MUST short-circuit BEFORE reading the body fully: if `Content-Length` declares > cap, reject with HTTP **413** + `BODY_TOO_LARGE` envelope immediately (no body read); if the body streams without `Content-Length` and the accumulator exceeds the cap mid-stream, reject with HTTP **413** AND close the stream connection.
+2. **Full-body delivery (not a generator).** A handler signature `async def f(body: Bytes) -> ...` receives the FULL (capped) body as `bytes` — NOT a generator or stream object. The resolver buffers the body up to the cap, then delivers the `bytes` value to the handler. SDK users needing streaming access use a different surface (out of scope for this shard).
+3. **Log hygiene per HIGH-S4 split-visibility contract.** The resolver MUST NOT echo the body bytes into server logs (the body MAY contain credentials, PII, attack payloads). Per `rules/security.md` MUST NOT § "No secrets in logs" — only the body LENGTH is logged for observability; never the bytes.
+
 ### `Nexus.handler_extract`
 
 ```python
