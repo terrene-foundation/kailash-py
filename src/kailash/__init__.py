@@ -120,4 +120,24 @@ __all__ = [
     "create_enterprise_gateway",
     "create_durable_gateway",
     "create_basic_gateway",
+    # from_brief() family — Sg-Bootstrap surface (issue #1125 AC 4 + AC 9)
+    "bootstrap",
+    "BootstrapConfig",
 ]
+
+# Eager bind of the bootstrap callable + BootstrapConfig (issue #1125 AC 4 + AC 9).
+# `kailash.bootstrap` is BOTH a submodule name AND the callable name within it; if
+# either symbol resolved through PEP 562 `__getattr__`, the lazy resolver's own
+# `from kailash.bootstrap import bootstrap` import would auto-register the
+# SUBMODULE as `kailash.bootstrap`, shadowing the callable on subsequent access.
+# Eagerly binding here makes `kailash.bootstrap` the CALLABLE (the explicit
+# attribute assignment wins over the submodule's auto-set), while
+# `kailash.bootstrap.bootstrap` (the dotted submodule form) is also still
+# reachable for users who prefer that import path.
+#
+# Safety check: the bootstrap module's top-level imports are pure-Python
+# (dataclasses, typing, logging, os) — NO kaizen at module-import time. Kaizen
+# imports are deferred to call-time inside `_build_agent` and `bootstrap()`.
+# Importing `kailash.bootstrap` here does NOT trigger the kaizen circular-load
+# fence the workflow.from_brief module needs.
+from kailash.bootstrap import BootstrapConfig, bootstrap  # noqa: E402, F401

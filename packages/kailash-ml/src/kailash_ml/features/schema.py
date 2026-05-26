@@ -17,7 +17,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field as _dc_field
+from dataclasses import dataclass
+from dataclasses import field as _dc_field
 from typing import Any
 
 __all__ = [
@@ -277,4 +278,54 @@ class FeatureSchema:
             fields=tuple(FeatureField.from_dict(f) for f in data["fields"]),
             entity_id_column=data.get("entity_id_column", "entity_id"),
             timestamp_column=data.get("timestamp_column"),
+        )
+
+    def with_features(
+        self,
+        new_features: list[FeatureField] | tuple[FeatureField, ...],
+        *,
+        bump_version: bool = True,
+    ) -> FeatureSchema:
+        """Return a NEW FeatureSchema with `new_features` replacing the fields list.
+
+        The frozen + content-addressed contract means refinement cannot
+        mutate the schema in place. Use this adapter to derive a fresh
+        schema (e.g. after adding an engineered feature column) — the
+        result has a new ``content_hash`` and (by default) a bumped
+        ``version`` so the registry treats it as a new row.
+
+        Args:
+            new_features: The replacement field list. Validated by
+                :meth:`__post_init__` exactly like a fresh construction
+                (unique names, dtype allowlist, non-empty).
+            bump_version: When True (default), the returned schema has
+                ``version = self.version + 1``. Set False when the
+                refinement preserves semantic identity (e.g. a
+                description edit) so the registry can deduplicate by
+                content hash without consuming a version slot.
+
+        Returns:
+            A NEW :class:`FeatureSchema` with the same ``name`` /
+            ``entity_id_column`` / ``timestamp_column`` and the
+            replacement fields.
+
+        Example:
+            >>> schema = FeatureSchema(name="user_churn", fields=(
+            ...     FeatureField(name="age", dtype="int"),
+            ... ))
+            >>> refined = schema.with_features([
+            ...     FeatureField(name="age", dtype="int"),
+            ...     FeatureField(name="tenure_months", dtype="int"),
+            ... ])
+            >>> refined.version == schema.version + 1
+            True
+            >>> refined.content_hash != schema.content_hash
+            True
+        """
+        return FeatureSchema(
+            name=self.name,
+            version=self.version + 1 if bump_version else self.version,
+            fields=tuple(new_features),
+            entity_id_column=self.entity_id_column,
+            timestamp_column=self.timestamp_column,
         )
