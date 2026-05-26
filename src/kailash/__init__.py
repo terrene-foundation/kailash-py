@@ -36,6 +36,22 @@ from kailash.nodes.events import EventPublishNode  # noqa: E402,F401
 
 def __getattr__(name):
     """Lazy imports for optional dependencies and deprecation warnings."""
+    # Lazy bootstrap symbols (issue #1125 AC 4 + AC 9). The bootstrap
+    # module imports kaizen at call-time only, but its top-level import
+    # would still trigger ``kailash._from_brief`` → ``kaizen.signatures``
+    # → ``kailash.trust.posture`` → ``kailash.__version__`` (BOOM:
+    # circular at package-load before __init__.py:98 binds __version__).
+    # The lazy access pattern below mirrors the workflow.from_brief
+    # fence so ``kailash.bootstrap(...)`` and ``kailash.BootstrapConfig``
+    # both resolve at call-time, when the package is fully initialized.
+    if name == "bootstrap":
+        from kailash.bootstrap import bootstrap
+
+        return bootstrap
+    if name == "BootstrapConfig":
+        from kailash.bootstrap import BootstrapConfig
+
+        return BootstrapConfig
     if name == "WorkflowVisualizer":
         from kailash.workflow.visualization import WorkflowVisualizer
 
@@ -120,4 +136,7 @@ __all__ = [
     "create_enterprise_gateway",
     "create_durable_gateway",
     "create_basic_gateway",
+    # from_brief() family — Sg-Bootstrap surface (issue #1125 AC 4 + AC 9)
+    "bootstrap",
+    "BootstrapConfig",
 ]
