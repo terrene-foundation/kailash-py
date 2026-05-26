@@ -295,10 +295,11 @@ def _registered_node_types() -> Set[str]:
         import kailash.nodes.code  # noqa: F401
     except ImportError:
         pass
-    try:
-        import kailash.nodes.ai  # noqa: F401
-    except ImportError:
-        pass
+    # Note: `kailash.nodes.ai` is intentionally NOT warmed here — that
+    # submodule does not exist in the current SDK layout (verified via
+    # `ls src/kailash/nodes/ai`). Adding the import would create a static
+    # analyzer warning (pyright reportMissingImports). The allowlist still
+    # picks up any AI nodes registered through other warmed submodules.
 
     from kailash.nodes.base import NodeRegistry
 
@@ -607,8 +608,12 @@ def workflow_from_brief(
     )
 
     # Step 5 — typed validation. coerce_plan wraps pydantic.ValidationError
-    # in BriefInterpretationError(malformed=True).
-    plan = coerce_plan(raw, _workflow_plan_cls())
+    # in BriefInterpretationError(malformed=True). The runtime type is the
+    # lazy WorkflowPlan subclass (extra fields `nodes` + `connections`);
+    # pyright sees the BriefPlan static return. The Any cast below tells
+    # pyright the dynamic shape is intentional — `_realize` accepts Any
+    # for the same reason and consumes the extra fields safely.
+    plan: Any = coerce_plan(raw, _workflow_plan_cls())
     validate_plan(
         plan,
         allowed_node_types=allowed_node_types,
