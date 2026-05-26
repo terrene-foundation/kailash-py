@@ -107,17 +107,30 @@ class BriefPlanSignature(Signature):
     alongside the plan-specific fields the subclass adds.
     """
 
-    brief: str = InputField(
+    # The two pyright suppressions below cite the Kaizen-wide
+    # reportAssignmentType pattern tracked in #73 (the unified-ci type-check
+    # is ``continue-on-error: true`` per .github/workflows/unified-ci.yml for
+    # that reason). Runtime safety: ``Signature`` uses ``SignatureMeta`` as
+    # its metaclass; the metaclass rebinds these class attributes at class
+    # creation so ``brief`` and ``interpretation_confidence`` never hold the
+    # raw ``InputField`` / ``OutputField`` instances at runtime. The
+    # ``: str = InputField(...)`` / ``: float = OutputField(...)`` shape is
+    # canonical across every existing Kaizen Signature subclass — see the
+    # ``QASignature`` example at ``kaizen/signatures/core.py:96``
+    # (``confidence: float = OutputField(desc="Confidence score 0-1")``).
+    brief: str = InputField(  # pyright: ignore[reportAssignmentType]
         description=(
             "Natural-language intent describing the primitive to "
             "realize. Already credential-scrubbed."
         )
     )
-    interpretation_confidence: float = OutputField(
-        description=(
-            "Your self-rated 0.0-1.0 confidence that the emitted plan "
-            "faithfully captures the user's intent. 1.0 means the "
-            "plan is a precise translation; below 0.6 the realizer "
-            "will refuse to proceed. Calibrate honestly."
+    interpretation_confidence: float = (
+        OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "Your self-rated 0.0-1.0 confidence that the emitted plan "
+                "faithfully captures the user's intent. 1.0 means the "
+                "plan is a precise translation; below 0.6 the realizer "
+                "will refuse to proceed. Calibrate honestly."
+            )
         )
     )
