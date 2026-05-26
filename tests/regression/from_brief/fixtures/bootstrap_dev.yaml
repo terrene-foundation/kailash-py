@@ -1,0 +1,41 @@
+# Bootstrap brief — dev profile — issue #1125 AC 4 + AC 9 fixture.
+#
+# Tier-2 regression fixture exercising the dev-profile path through
+# kailash.bootstrap(). The brief describes a local-development scenario;
+# the LLM is expected to emit a config consistent with profile='dev'.
+#
+# The expected_* fields below are STRUCTURAL probe constraints (allowlist
+# membership, env-vs-suggestion source) — NOT exact-byte expectations.
+# The LLM is non-deterministic at byte level per
+# rules/probe-driven-verification.md Rule 3; the probe asserts SHAPE.
+#
+# No credentials in this file (tests/regression/from_brief/test_fixtures_no_secrets.py
+# verifies this mechanically at collection time).
+brief: |
+  Build a small local-development application that reads CSV files,
+  enriches them with simple data transforms, and writes the result
+  back to a local SQLite database. The app runs as a one-shot script
+  on a developer's laptop. No production-grade dependencies needed.
+
+profile: "dev"
+
+# Closed-allowlist enums the resolved fields MUST belong to. The probe
+# asserts membership, NOT exact value — the LLM may legitimately pick
+# any allowed value depending on how it reads the brief.
+allowed_runtimes:
+  - local
+  - async
+  - nexus
+
+allowed_deployment_targets:
+  - dev
+  - prod
+  - containerized
+
+expected_invariants:
+  - "result is a BootstrapConfig dataclass instance"
+  - "result.runtime in allowed_runtimes"
+  - "result.deployment_target in allowed_deployment_targets"
+  - "result.db_url is a non-empty string"
+  - "result.llm_model is a non-empty string"
+  - "when DEFAULT_LLM_MODEL or OPENAI_PROD_MODEL is set, result.llm_model equals the env value"

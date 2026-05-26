@@ -1,0 +1,41 @@
+# Bootstrap brief — prod profile — issue #1125 AC 4 + AC 9 fixture.
+#
+# Tier-2 regression fixture exercising the prod-profile path through
+# kailash.bootstrap(). The brief describes a production-grade scenario;
+# the LLM is expected to emit a config consistent with profile='prod'
+# (Postgres-class db_url; runtime + deployment_target reflecting a
+# production deployment).
+#
+# The expected_* fields below are STRUCTURAL probe constraints — NOT
+# exact-byte expectations — per rules/probe-driven-verification.md
+# Rule 3.
+#
+# No credentials in this file (tests/regression/from_brief/test_fixtures_no_secrets.py
+# verifies this mechanically at collection time).
+brief: |
+  Build a production-grade customer-facing API that serves real-time
+  recommendations. It needs a PostgreSQL database for persistence,
+  must handle concurrent web requests, and will be deployed to a
+  Kubernetes cluster as a containerized service. High-quality
+  language-model responses are critical to the user experience.
+
+profile: "prod"
+
+# Closed-allowlist enums the resolved fields MUST belong to.
+allowed_runtimes:
+  - local
+  - async
+  - nexus
+
+allowed_deployment_targets:
+  - dev
+  - prod
+  - containerized
+
+expected_invariants:
+  - "result is a BootstrapConfig dataclass instance"
+  - "result.runtime in allowed_runtimes"
+  - "result.deployment_target in allowed_deployment_targets"
+  - "result.db_url is a non-empty string"
+  - "result.llm_model is a non-empty string"
+  - "when DEFAULT_LLM_MODEL or OPENAI_PROD_MODEL is set, result.llm_model equals the env value"
