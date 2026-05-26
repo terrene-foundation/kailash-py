@@ -1,0 +1,36 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fixture for Kaizen.signature_from_brief — issue #1125 AC 3 + AC 8.
+#
+# Brief shape: multi-field — multiple inputs AND multiple outputs of
+# distinct types.
+#
+# This fixture is consumed by tests/integration/kaizen/test_signature_from_brief.py.
+# Credential-free per issue #1125 brief item B2b (scanner at
+# tests/regression/from_brief/test_fixtures_no_secrets.py enforces).
+#
+# Tests assert SHAPE properties (≥2 inputs, ≥2 outputs, at least one
+# non-string typed output, non-empty instructions) rather than exact
+# field names — the LLM is non-deterministic at the byte level.
+brief: |
+  Build a Signature for a customer support ticket triage agent. The
+  agent takes the ticket text and the customer's prior interaction
+  history (both strings) as inputs. The agent produces these outputs:
+  a priority level (one of urgent, high, normal, low), a category
+  (one of billing, technical, account, general), a suggested next
+  action (a string), and a confidence score between 0.0 and 1.0
+  reflecting the agent's certainty in its triage.
+
+  Instructions: be empathetic toward the customer, escalate when in
+  doubt, and explain your reasoning in plain language.
+
+expected:
+  # Expected SHAPE properties.
+  input_field_count_min: 2
+  output_field_count_min: 3
+  # At least one output field SHOULD be a non-string type (the
+  # confidence score is a float per the brief). Tests assert presence
+  # of any non-string output type — exact field name + position is
+  # LLM-non-deterministic.
+  has_non_string_output: true
