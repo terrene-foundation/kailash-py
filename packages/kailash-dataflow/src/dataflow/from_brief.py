@@ -47,7 +47,9 @@ Invariants:
 
 from __future__ import annotations
 
+import keyword
 import logging
+import re
 from typing import Any, Dict, List, Optional, Set, Type, cast
 
 from kailash._from_brief import BriefInterpretationError
@@ -134,6 +136,16 @@ _FIELD_TYPE_TO_PYTHON: Dict[str, type] = {
 }
 
 
+# SEC-5: dialect identifier regex (ASCII-only) + 63-char length limit
+# (PostgreSQL identifier max). Applied at realizer input time per
+# rules/dataflow-identifier-safety.md Rule 1+2, BEFORE the LLM-emitted
+# name reaches type(name, bases, ns) and downstream DDL. This keeps the
+# loud failure at the validation gate (BriefInterpretationError with
+# unknown_value), not 30 frames deep in the DDL stack. See
+# workspaces/from-brief-1125/04-validate/round-02-security.md:127-142.
+_SQL_IDENTIFIER_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
 class SchemaPlanSignature(BriefPlanSignature):
     """Kaizen Signature emitting a DataFlow schema plan from a brief.
 
@@ -218,11 +230,20 @@ def _validate_model_spec(spec: Any) -> Dict[str, Any]:
             malformed=True,
         )
     name = spec.get("name")
-    if not isinstance(name, str) or not name.isidentifier():
+    # SEC-5 three-layer gate: regex (ASCII, 63-char limit) + keyword check.
+    # `str.isidentifier()` alone accepts unicode and Python keywords,
+    # both of which break at DDL time deeper in the call stack. Per
+    # rules/dataflow-identifier-safety.md Rule 1+2, validation fires here.
+    if (
+        not isinstance(name, str)
+        or not _SQL_IDENTIFIER_RE.match(name)
+        or keyword.iskeyword(name)
+    ):
         raise BriefInterpretationError(
-            f"model name {name!r} is not a valid Python identifier; "
-            f"the LLM emitted a malformed plan entry",
-            malformed=True,
+            f"model name {name!r} fails the dialect identifier gate "
+            f"(ASCII-only ^[A-Za-z_][A-Za-z0-9_]{{0,62}}$ AND not a "
+            f"Python keyword)",
+            unknown_value=f"identifier={name!r}",
         )
     fields = spec.get("fields") or []
     if not isinstance(fields, list) or not fields:
@@ -272,12 +293,20 @@ def _build_annotations(
             )
         fname = entry.get("name")
         ftype = entry.get("type")
-        if not isinstance(fname, str) or not fname.isidentifier():
+        # SEC-5: same dialect identifier gate as the model-name check.
+        # Field names become column names in DDL; the same
+        # ASCII-regex + keyword constraint applies.
+        if (
+            not isinstance(fname, str)
+            or not _SQL_IDENTIFIER_RE.match(fname)
+            or keyword.iskeyword(fname)
+        ):
             raise BriefInterpretationError(
-                f"model {model_name!r} has an invalid field name "
-                f"{fname!r}; field names MUST be valid Python "
-                f"identifiers",
-                malformed=True,
+                f"model {model_name!r} field name {fname!r} fails the "
+                f"dialect identifier gate (ASCII-only "
+                f"^[A-Za-z_][A-Za-z0-9_]{{0,62}}$ AND not a Python "
+                f"keyword)",
+                unknown_value=f"identifier={fname!r}",
             )
         if fname in seen:
             raise BriefInterpretationError(
