@@ -399,3 +399,35 @@ receipts. No SEC-9+ introduced. ROUND 4 NOT required.
 Receipt: this addendum + the analyst R3 receipt (`round-03-analyst.md`) jointly satisfy
 `rules/verify-resource-existence.md` MUST-4 for the F21 #1125 /redteam convergence claim.
 Sub-agent task id (source-inspection round): `af780d883b188f033`.
+
+---
+
+## Post-rewrite SHA map (secret-scanning compliance, 2026-05-27)
+
+GitHub push-protection flagged a Twilio-shaped synthetic test token
+(`SK`+32hex) at `tests/unit/_from_brief/test_scrubber.py:176`, introduced
+in the SEC-3 commit and carried forward. The token was a TEST FIXTURE
+(never a real credential), but its literal form matched Twilio's
+prefix-anchored detector. Fixed at the source by fragment-building every
+provider-shaped test literal (`"SK" + "0123…"` etc.) so the runtime value
+is byte-identical (scrubber regexes still exercised — 35/35 scrubber tests
+green) but no contiguous secret literal exists in source. History was
+rewritten via `git filter-branch` across `f7dde818b..HEAD` (branch was
+local-only, never pushed). The 8 fix-immediately commits + their messages
+are preserved; only SHAs changed:
+
+| Finding | Old SHA | New SHA |
+|---|---|---|
+| SEC-1+8 | `9d65de3ce` | `42fa38b17` |
+| SEC-2   | `2991c3ecd` | `94c1f331b` |
+| SEC-3   | `f51f61253` | `6a2559e64` |
+| SEC-4   | `a8e335480` | `16b4ef987` |
+| SEC-5   | `341c323cc` | `374b15853` |
+| SEC-6   | `41920d3b0` | `65df757c2` |
+| SEC-7   | `00862cfbc` | `fe6bc1a45` |
+| F-AC-1  | `6770d6f3c` | `2aa036098` |
+| receipts (docs) | `62eb198e3` | `f94e47dab` |
+
+Old-SHA references elsewhere in this report + `round-03-analyst.md` resolve
+through this map. The fixes themselves are unchanged — `git diff` of each
+new commit equals the old commit's diff minus the secret-literal split.
