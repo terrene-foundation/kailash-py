@@ -1,0 +1,52 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fixture for kailash_ml.from_brief — issue #1125 AC 5 + AC 10.
+#
+# Brief shape: regression (house price prediction).
+#
+# Fixture rationale: AC 10 mandates >= 2 brief shapes. This fixture
+# pairs with ml_classification.yaml to cover the regression branch
+# of the realizer's task allowlist + DEFAULT_MODEL_CLASS_BY_TASK +
+# default-metric expansion.
+#
+# Tests assert SHAPE not exact byte content (LLM is non-deterministic):
+# - The returned FeatureSchema has at least 2 fields drawn from the
+#   dataframe's columns.
+# - The target column is "price" (the only continuous target in the
+#   schema with a wide value range).
+# - ModelSpec.task is regression (the model_class resolves to a
+#   Regressor via DEFAULT_MODEL_CLASS_BY_TASK).
+# - EvalSpec.metrics contains a regression metric.
+brief: |
+  Predict the sale price of a house from its physical and location
+  features. The data includes square footage, number of bedrooms,
+  number of bathrooms, distance to the nearest school, and the sale
+  price in dollars. The goal is to estimate price for a new listing
+  before it goes on the market.
+
+dataframe:
+  columns:
+    - {name: listing_id, dtype: Int64}
+    - {name: area_sqft, dtype: Float64}
+    - {name: bedrooms, dtype: Int64}
+    - {name: bathrooms, dtype: Float64}
+    - {name: school_distance_km, dtype: Float64}
+    - {name: price, dtype: Float64}
+  rows:
+    - [101, 1200.0, 2, 1.0, 0.5, 320000.0]
+    - [102, 1800.0, 3, 2.0, 1.2, 475000.0]
+    - [103, 2400.0, 4, 2.5, 0.8, 620000.0]
+    - [104, 950.0, 2, 1.0, 2.5, 245000.0]
+    - [105, 3200.0, 5, 3.0, 0.3, 890000.0]
+
+expected:
+  min_feature_count: 2
+  target_column: price
+  allowed_tasks:
+    - regression
+  regression_metrics:
+    - mse
+    - rmse
+    - mae
+    - r2

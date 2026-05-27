@@ -7,13 +7,17 @@ MUST be organised into 7 groups in the exact order documented there.
 Group 0 (W6 round-3 MED-1 addition, 2026-04-27) is package metadata
 (``__version__``). Group 1 is the 13 lifecycle verbs per §15.9
 (``track, autolog, train, diagnose, register, serve, watch, dashboard,
-seed, reproduce, resume, lineage, rl_train``) plus ``erase_subject``
-per W15 FP-MED-2.
+seed, reproduce, resume, lineage, rl_train``) plus ``from_brief``
+(issue #1125 AC 5 — the prose-to-ML-plan surface; spec §15.9 extension
+canonicalizing it as a lifecycle verb is the post-merge follow-up PR per
+the Q5 disposition, ``rules/spec-accuracy.md`` Rule 5) plus
+``erase_subject`` per W15 FP-MED-2.
 
 Group lengths (load-bearing — locked by the per-group tests below):
 
 * Group 0 — package metadata: 1 (``__version__``)
-* Group 1 — lifecycle verbs: 14 (13 §15.9 verbs + W15 ``erase_subject``)
+* Group 1 — lifecycle verbs: 15 (13 §15.9 verbs + ``from_brief`` + W15
+  ``erase_subject``)
 * Group 2 — primitives + 8 Phase-1 Trainable adapters (incl.
   ``CatBoostTrainable`` per F-3 family-count invariant 7→8) +
   ``MultiModelAdapter`` (GH #700 InferenceServer back-compat) +
@@ -23,7 +27,7 @@ Group lengths (load-bearing — locked by the per-group tests below):
 * Group 5 — tracker primitives: 3
 * Group 6 — discovery: 2
 
-Total: 1 + 14 + 24 + 5 + 2 + 3 + 2 = 51.
+Total: 1 + 15 + 24 + 5 + 2 + 3 + 2 = 52.
 
 This test locks the ordering so a future refactor that silently
 reorders the list — or drops one of the canonical verbs — fails
@@ -50,6 +54,7 @@ EXPECTED_GROUP_1 = (
     "resume",
     "lineage",
     "rl_train",
+    "from_brief",  # Issue #1125 AC 5 — natural-language → (FeatureSchema, ModelSpec, EvalSpec)
     "erase_subject",  # W15 FP-MED-2
 )
 EXPECTED_GROUP_2 = (
@@ -102,14 +107,14 @@ EXPECTED_ALL = (
 
 
 def test_all_has_expected_total_symbol_count() -> None:
-    """``__all__`` MUST have exactly 51 symbols.
+    """``__all__`` MUST have exactly 52 symbols.
 
     Sum of canonical group lengths (locked by the per-group tests below):
-    1 (Group 0) + 14 (Group 1) + 24 (Group 2) + 5 (Group 3) + 2 (Group 4)
-    + 3 (Group 5) + 2 (Group 6) = 51.
+    1 (Group 0) + 15 (Group 1) + 24 (Group 2) + 5 (Group 3) + 2 (Group 4)
+    + 3 (Group 5) + 2 (Group 6) = 52.
     """
-    assert len(kailash_ml.__all__) == 51, (
-        f"expected 51 symbols (1 + 14 + 24 + 5 + 2 + 3 + 2 per §15.9 group "
+    assert len(kailash_ml.__all__) == 52, (
+        f"expected 52 symbols (1 + 15 + 24 + 5 + 2 + 3 + 2 per §15.9 group "
         f"lengths), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
@@ -134,7 +139,7 @@ def test_group_0_metadata_comes_first() -> None:
 
 
 def test_group_1_lifecycle_verbs_follow_metadata() -> None:
-    """Verbs Group 1 MUST occupy positions 1..14 (after Group 0 metadata per §15.9)."""
+    """Verbs Group 1 MUST occupy positions 1..15 (after Group 0 metadata per §15.9)."""
     start = len(EXPECTED_GROUP_0)
     for offset, name in enumerate(EXPECTED_GROUP_1):
         idx = start + offset

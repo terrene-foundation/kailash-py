@@ -1220,6 +1220,77 @@ class Kaizen:
         logger.info(f"Created signature: {signature.name}")
         return signature
 
+    @classmethod
+    def signature_from_brief(
+        cls,
+        brief: str,
+        *,
+        model: Optional[str] = None,
+        confidence_threshold: float = 0.6,
+    ) -> type:
+        """Build a :class:`Signature` subclass from a natural-language brief.
+
+        Closes issue #1125 acceptance criterion 3. The returned object is a
+        Signature SUBCLASS (a Python class), NOT a Kaizen instance — the verb
+        ``signature_from_brief`` reflects that distinction. Instantiate the
+        returned class and pass it as ``signature=MySig()`` to any Kaizen
+        agent constructor (``BaseAgent``, ``Delegate``, etc.).
+
+        The pipeline composes :mod:`kailash._from_brief` (credential
+        scrubbing, confidence gating, field-type allowlisting, typed
+        exceptions). LLM-mediated per ``rules/agent-reasoning.md`` — no
+        ``if``/``elif`` on the brief content.
+
+        Args:
+            brief: The user's natural-language description of the
+                Signature to synthesize. Credentials are scrubbed at
+                intake; the raw brief is never logged.
+            model: Optional LLM model identifier. Defaults to the value
+                of ``DEFAULT_LLM_MODEL`` in the environment (per
+                ``rules/env-models.md``).
+            confidence_threshold: Minimum interpretation confidence
+                required to realize the plan (default 0.6).
+
+        Returns:
+            A :class:`Signature` subclass usable as ``signature=MySig()``
+            to any Kaizen agent constructor.
+
+        Raises:
+            BriefInterpretationError: When the LLM's plan fails the
+                confidence gate, the field-type allowlist gate, or the
+                structural shape check.
+            MissingDefaultLLMModelError: When ``model`` is None AND
+                ``DEFAULT_LLM_MODEL`` is unset.
+
+        Example:
+            >>> from kailash import Kaizen
+            >>> from kaizen.core.base_agent import BaseAgent
+            >>> MySig = Kaizen.signature_from_brief(
+            ...     "Build a Signature that classifies a customer "
+            ...     "support ticket into priority levels and suggests "
+            ...     "the next action."
+            ... )
+            >>> agent = BaseAgent(config={"model": "..."}, signature=MySig())
+            >>> result = agent.run(ticket="Cannot log in for 3 days")
+
+        Lazy import: ``signature_from_brief`` is imported inside the
+        method body to avoid loading the LLM-mediation pipeline at every
+        Kaizen import (it pulls in :mod:`pydantic` + the Signature
+        layer), keeping the <100 ms import target.
+        """
+        # Lazy import — see method docstring for the import-cost
+        # rationale. Per rules/agent-reasoning.md, the binding here is
+        # purely structural plumbing (no brief-content branching).
+        from kaizen.signatures.from_brief import (
+            signature_from_brief as _signature_from_brief,
+        )
+
+        return _signature_from_brief(
+            brief,
+            model=model,
+            confidence_threshold=confidence_threshold,
+        )
+
     def get_agent(self, agent_id: str) -> Optional["Agent"]:
         """
         Get an existing agent by ID.

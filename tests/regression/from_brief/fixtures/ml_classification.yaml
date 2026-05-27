@@ -1,0 +1,57 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fixture for kailash_ml.from_brief — issue #1125 AC 5 + AC 10.
+#
+# Brief shape: binary classification (customer churn).
+#
+# This fixture is consumed by
+# packages/kailash-ml/tests/integration/test_ml_from_brief.py.
+# The fixture deliberately uses NO credential-shaped tokens — the
+# no-secrets scanner at tests/regression/from_brief/test_fixtures_no_secrets.py
+# scans every file in this directory per issue #1125 brief item B2b.
+#
+# Tests assert SHAPE not exact byte content (LLM is non-deterministic):
+# - The returned FeatureSchema has at least 2 fields drawn from the
+#   dataframe's columns.
+# - The target column is "churned" (the only binary column).
+# - ModelSpec.task corresponds to classification (the model_class
+#   resolves to a Classifier via DEFAULT_MODEL_CLASS_BY_TASK).
+# - EvalSpec.metrics contains a classification metric.
+brief: |
+  Predict whether a customer will churn based on their account history.
+  The data includes customer age, tenure in months, monthly spend in
+  dollars, and a churned flag indicating whether they cancelled the
+  service. The goal is binary classification: which customers are at
+  risk of leaving so the retention team can reach out.
+
+# Dataframe schema the test will construct via pl.DataFrame(...).
+dataframe:
+  columns:
+    - {name: customer_id, dtype: Int64}
+    - {name: age, dtype: Int64}
+    - {name: tenure_months, dtype: Int64}
+    - {name: monthly_spend, dtype: Float64}
+    - {name: churned, dtype: Int64}
+  rows:
+    - [1, 25, 12, 45.99, 0]
+    - [2, 47, 60, 120.50, 1]
+    - [3, 33, 24, 75.00, 0]
+    - [4, 55, 6, 30.00, 1]
+    - [5, 29, 36, 95.75, 0]
+
+expected:
+  # The LLM is non-deterministic in column selection; we assert
+  # only the structural shape the realizer guarantees.
+  min_feature_count: 2          # at least 2 features selected
+  target_column: churned        # only binary target in the schema
+  allowed_tasks:                # any of these is acceptable
+    - classification
+    - binary_classification
+    - multiclass_classification
+  classification_metrics:       # at least one of these in EvalSpec
+    - accuracy
+    - f1
+    - precision
+    - recall
+    - auc

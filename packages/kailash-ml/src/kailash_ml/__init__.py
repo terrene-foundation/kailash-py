@@ -86,13 +86,6 @@ from kailash_ml.engines.data_explorer import AlertConfig
 from kailash_ml.engines.lineage import LineageEdge, LineageGraph, LineageNode
 from kailash_ml.engines.model_registry import ModelRegistry
 
-# 1.1.x back-compat shim — issue #700. Eager-import so
-# ``from kailash_ml import MultiModelAdapter`` resolves without a
-# lazy ``__getattr__`` hop and the symbol satisfies
-# ``rules/orphan-detection.md`` Rule 6 (every ``__all__`` entry
-# imported at module scope).
-from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
-
 # Group 6 — Engine Discovery.
 from kailash_ml.engines.registry import (
     ClearanceRequirement,
@@ -198,10 +191,30 @@ from kailash_ml.estimators import (
     unregister_estimator,
 )
 
+# Issue #1125 AC 5 — ``kailash_ml.from_brief(brief, df)`` returns a
+# ``(FeatureSchema, ModelSpec, EvalSpec)`` triple. The function is
+# module-level (not a classmethod) because the result type is a tuple of
+# three independent dataclasses, none of which is ``kailash_ml`` itself.
+# See ``packages/kailash-ml/src/kailash_ml/from_brief.py`` for the
+# verb-choice rationale and the full pipeline.
+#
+# Per ``rules/orphan-detection.md`` § 1, this import IS the production
+# call site that keeps the realizer from being orphaned — the realizer
+# is invoked from the public surface and reachable via
+# ``import kailash_ml; kailash_ml.from_brief(...)``.
+from kailash_ml.from_brief import from_brief
+
 # W30 cross-SDK RL bridge surface.
 from kailash_ml.rl._lineage import RLLineage
 from kailash_ml.rl.align_adapter import FeatureNotAvailableError
 from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
+
+# 1.1.x back-compat shim — issue #700. Eager-import so
+# ``from kailash_ml import MultiModelAdapter`` resolves without a
+# lazy ``__getattr__`` hop and the symbol satisfies
+# ``rules/orphan-detection.md`` Rule 6 (every ``__all__`` entry
+# imported at module scope).
+from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
 from kailash_ml.tracking import erase_subject  # W15 GDPR surface (Group 1)
 from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.tracker import ExperimentTracker
@@ -718,6 +731,7 @@ __all__ = [
     "resume",
     "lineage",
     "rl_train",
+    "from_brief",  # Issue #1125 AC 5 — natural-language → (FeatureSchema, ModelSpec, EvalSpec)
     "erase_subject",  # W15 FP-MED-2 — appended per todo invariant 1
     # Group 2 — Engine primitives + MLError hierarchy
     "Engine",

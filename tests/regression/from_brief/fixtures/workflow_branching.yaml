@@ -1,0 +1,25 @@
+# Branching workflow brief — issue #1125 AC 6 fixture.
+#
+# Tier-2 regression fixture exercising the connection-realization path:
+# multiple nodes wired through one or more edges. The S1 realizer
+# (kailash._from_brief.branching.realize_connections) supports the
+# branching shape (one source → many targets); a multi-node plan
+# proves the connection-emission path works against a real LLM.
+#
+# Fixture stays loose on the EXACT node types because the LLM is
+# non-deterministic at byte level — the test asserts the SHAPE
+# (multiple nodes + at least one connection), not the brand names.
+brief: |
+  Build a workflow with two Python code nodes connected in sequence.
+  The first node generates a list of integers from 1 to 10. The second
+  node receives that list as input and returns the sum. Use
+  PythonCodeNode for both, and connect them so the first node's output
+  flows into the second node's input.
+
+expected_min_nodes: 2
+expected_max_nodes: 4
+expected_invariants:
+  - "result is a WorkflowBuilder instance"
+  - "builder.build() returns a Workflow without raising"
+  - "at least 2 nodes are present"
+  - "at least 1 connection wires nodes together"

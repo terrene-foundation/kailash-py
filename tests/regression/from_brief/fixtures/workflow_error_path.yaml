@@ -1,0 +1,28 @@
+# Error-path workflow brief — issue #1125 AC 6 fixture.
+#
+# Tier-2 regression fixture exercising the unknown_value rejection path:
+# the brief explicitly asks for a node type that is NOT in the Kailash
+# NodeRegistry. The LLM should either (a) refuse via low confidence
+# (interpretation_confidence < 0.6) or (b) emit the hallucinated node
+# type, which the allowlist gate (validate_node_type) catches.
+#
+# Either disposition raises BriefInterpretationError, which is the
+# correct behavior. The test asserts the exception type + that the
+# discriminator (low_confidence or unknown_value) is set per S1's
+# typed-exception contract.
+#
+# Note: per `rules/agent-reasoning.md`, the brief content is NOT
+# pre-filtered before the LLM — the LLM decides whether to emit a
+# made-up node type. The structural gate (allowlist) is the safety
+# net, not a content-based code path.
+brief: |
+  Build a workflow that uses a HyperQuantumFluxCapacitorNode to predict
+  the future. Connect it to a TimeMachineReverseNode for output. Both
+  node types are exotic experimental nodes unique to this project.
+
+expected_min_nodes: 0
+expected_max_nodes: 5
+expected_raises: "BriefInterpretationError"
+expected_invariants:
+  - "BriefInterpretationError is raised"
+  - "exception has either low_confidence=True or unknown_value set"

@@ -79,13 +79,124 @@ pip install kailash-kaizen     # AI agents with trust
 pip install kailash-nexus      # Multi-channel platform (API + CLI + MCP)
 pip install kailash-dataflow   # Zero-config database operations
 pip install kailash-pact       # Organizational governance (D/T/R)
+pip install kailash-ml         # Classical + deep learning lifecycle
 ```
 
-### Workflow Orchestration
+### `from_brief()` — natural language to running primitive
 
-The Core SDK provides `WorkflowBuilder` and `LocalRuntime` for building and executing DAG-based workflows with 140+ built-in nodes.
+Every framework in the Kailash family exposes a `from_brief()` entry point that turns a natural-language description into a ready-to-use primitive instance. The brief is the user's intent in plain prose; the framework's Kaizen Signature does ALL the reasoning, and a validated typed plan is materialized into the primitive's canonical shape.
+
+Five surfaces, one consistent pipeline (credential scrub → typed plan → confidence + allowlist gates → realize):
 
 ```python
+# 1. Workflow.from_brief — synthesize a DAG of nodes from a brief
+from kailash.workflow import Workflow
+
+wf = Workflow.from_brief(
+    "Summarize uploaded emails and route negative-sentiment ones to support."
+)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(wf.build())
+```
+
+```python
+# 2. DataFlow.from_brief — synthesize @db.model classes from a brief
+from dataflow import DataFlow
+
+db = DataFlow.from_brief(
+    "Customers have a name, email, and signup date. Tickets belong to a customer.",
+    conn_str="sqlite:///app.db",
+)
+await db.initialize_deferred_migrations()
+await db.express.create("Customer", {"id": 1, "name": "Alice", "email": "alice@example.com"})
+```
+
+```python
+# 3. Kaizen.signature_from_brief — synthesize a Kaizen Signature subclass
+from kaizen import Kaizen
+from kaizen.core import BaseAgent
+
+Sig = Kaizen.signature_from_brief(
+    "Input: a customer support email. Output: a one-sentence summary and a "
+    "priority label (urgent, high, normal, low)."
+)
+agent = BaseAgent(signature=Sig(), config={"model": os.environ["DEFAULT_LLM_MODEL"]})
+```
+
+```python
+# 4. kailash.bootstrap — synthesize a Config object for the whole runtime
+import kailash
+
+cfg = kailash.bootstrap(
+    "Use Postgres at localhost for storage and a local LLM via Ollama for summarization.",
+    profile="dev",
+)
+# cfg.database_url, cfg.llm_model — all derived from the brief
+```
+
+```python
+# 5. kailash_ml.from_brief — synthesize an ML training plan from brief + dataframe
+import polars as pl
+import kailash_ml
+
+df = pl.DataFrame({
+    "age": [25, 47, 33, 55, 29],
+    "tenure_months": [12, 60, 24, 6, 36],
+    "monthly_spend": [45.99, 120.50, 75.00, 30.00, 95.75],
+    "churned": [0, 1, 0, 1, 0],
+})
+schema, model_spec, eval_spec = kailash_ml.from_brief(
+    "Predict customer churn from account history.", df
+)
+# schema.field_names → feature columns the LLM picked from df.columns
+# model_spec.model_class → classifier matching the prediction goal
+# eval_spec.metrics → metrics matching the task type
+```
+
+#### Five-surface comparison — why some are `classmethod`, others module-level
+
+The five `from_brief()` surfaces are NOT named inconsistently by accident. The verb form reflects what each call returns:
+
+| Surface       | Entry point                          | Returns                                | Verb form         | Why                                                                |
+| ------------- | ------------------------------------ | -------------------------------------- | ----------------- | ------------------------------------------------------------------ |
+| Workflow      | `Workflow.from_brief(brief)`         | `Workflow` instance                    | classmethod       | result IS a Workflow — `cls(...)` is the natural constructor       |
+| DataFlow      | `DataFlow.from_brief(brief, conn)`   | `DataFlow` instance                    | classmethod       | result IS a DataFlow — same naming convention                      |
+| Kaizen        | `Kaizen.signature_from_brief(brief)` | `Signature` SUBCLASS (not a Kaizen)    | classmethod (suffix verb) | result is a Signature, NOT a Kaizen — the `signature_` suffix tells you what you got back |
+| Bootstrap     | `kailash.bootstrap(brief, profile)`  | `Config` dataclass                     | module-level      | result is a Config, NOT a kailash module — module-level is the honest verb         |
+| ML            | `kailash_ml.from_brief(brief, df)`   | `(FeatureSchema, ModelSpec, EvalSpec)` | module-level      | result is a triple of three independent dataclasses — module-level for the same reason |
+
+Rule of thumb: if the call returns an instance of the host class, it's a classmethod. If the call returns something else, the verb lives at module level so callers don't import-then-call something whose name lies about its return type.
+
+#### Refining the ML schema — the `with_features` adapter
+
+`kailash_ml.from_brief()` returns a **frozen + content-addressed** `FeatureSchema` (registry-keyable by content hash). End-users refining the schema MUST go through the `with_features()` adapter — direct mutation raises `FrozenInstanceError`:
+
+```python
+from kailash_ml.features.schema import FeatureField
+
+# Add an engineered feature; with_features returns a NEW schema with
+# version bumped + a fresh content hash.
+refined = schema.with_features(
+    list(schema.fields) + [
+        FeatureField(
+            name="monthly_spend",
+            dtype="float64",
+            description="Average monthly spend in dollars",
+        )
+    ]
+)
+# refined.version == schema.version + 1
+# refined.content_hash != schema.content_hash  → registry treats it as a new row
+```
+
+The frozen-then-adapt pattern keeps the registry deterministic: two byte-identical schemas at the same version resolve to the same `content_hash`, so the registry deduplicates automatically. Mutable refinement would defeat this; the `with_features()` adapter is the structural alternative.
+
+### Class-authoring entry points (still supported)
+
+The class-authoring entry points are still supported for callers who already know their schema and want full control. The `from_brief()` surface is built on top of these — same primitives, different entry path.
+
+```python
+# Workflow — direct node wiring
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
 
@@ -96,10 +207,32 @@ workflow.add_node("PythonCodeNode", "process", {
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(results["process"]["result"])  # {'message': 'Hello from Kailash!'}
 ```
 
-Async runtime for Docker/FastAPI deployments:
+```python
+# DataFlow — @db.model decorator
+from dataflow import DataFlow
+
+db = DataFlow("sqlite:///app.db")
+
+@db.model
+class User:
+    id: int
+    name: str
+    email: str
+```
+
+```python
+# Kaizen — Signature subclassing
+from kaizen.core import Signature, InputField, OutputField
+
+class SummarizeSignature(Signature):
+    """Summarize a piece of text into one sentence."""
+    text: str = InputField(description="The text to summarize")
+    summary: str = OutputField(description="One-sentence summary")
+```
+
+### Async runtime (Docker / FastAPI deployments)
 
 ```python
 import asyncio
