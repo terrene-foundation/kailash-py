@@ -62,7 +62,11 @@ class BriefPlan(BaseModel):
     silently-ignored extra.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # ``allow_inf_nan=False`` rejects NaN/±inf at Pydantic construction —
+    # defense-in-depth for the confidence gate (the LLM cannot smuggle a
+    # NaN confidence past the float field). ``check_confidence`` enforces
+    # the same floor with ``math.isfinite`` at the gate.
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     interpretation_confidence: float
     """The LLM's self-rated 0.0-1.0 confidence in the plan."""

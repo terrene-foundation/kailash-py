@@ -131,9 +131,12 @@ __all__ = [
 # `from kailash.bootstrap import bootstrap` import would auto-register the
 # SUBMODULE as `kailash.bootstrap`, shadowing the callable on subsequent access.
 # Eagerly binding here makes `kailash.bootstrap` the CALLABLE (the explicit
-# attribute assignment wins over the submodule's auto-set), while
-# `kailash.bootstrap.bootstrap` (the dotted submodule form) is also still
-# reachable for users who prefer that import path.
+# attribute assignment wins over the submodule's auto-set). The supported
+# import paths are therefore `kailash.bootstrap(...)` (the callable) and
+# `from kailash.bootstrap import bootstrap` (resolves the submodule via
+# sys.modules). The dotted-attribute form `kailash.bootstrap.bootstrap` is
+# NOT reachable — `kailash.bootstrap` is the function after this bind, so
+# attribute access raises AttributeError.
 #
 # Safety check: the bootstrap module's top-level imports are pure-Python
 # (dataclasses, typing, logging, os) — NO kaizen at module-import time. Kaizen

@@ -122,11 +122,13 @@ def _check_payload_depth(obj: Any, current_depth: int = 0) -> None:
     frozenset, set, MappingView) cannot bypass the DoS defense. Strings,
     bytes, and bytearray are Sequences but their iteration yields
     characters/ints, which is meaningless for depth; exclude explicitly.
-    Sets are unordered iterables of hashable values; nested
-    Sets-of-Mappings/Sequences (or Sets-of-Sets) ARE reachable through
-    the canonical-JSON encoder once serialized as arrays, so they MUST
-    be walked as part of the same DoS-defense surface as Mapping +
-    Sequence.
+    Sets are unordered iterables of hashable values. A ``set`` cannot
+    directly contain a ``dict`` or ``list`` (unhashable), so a literal
+    Set-of-Mapping is not constructible; the constructible nested case is
+    ``frozenset``-of-``frozenset`` (and ABC-registered hashable
+    containers). The Set branch is walked so those nested-frozenset
+    payloads cannot bypass the depth bound — same DoS-defense surface as
+    Mapping + Sequence.
     """
     if current_depth > _MAX_PAYLOAD_DEPTH:
         raise DispatchValidationError(

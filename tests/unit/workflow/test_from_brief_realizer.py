@@ -239,24 +239,33 @@ def test_coerce_connection_spec_rejects_missing_target():
 
 
 def test_realize_single_node_builds_workflow():
-    """A single-node plan realizes into a buildable WorkflowBuilder."""
+    """A single-node plan realizes into a buildable WorkflowBuilder.
+
+    Uses a legitimate registered node (CSVReaderNode) — PythonCodeNode is
+    denylisted at realization (#1125 R1 CRITICAL-1) and can no longer be a
+    realizer fixture.
+    """
     from kailash.workflow.builder import WorkflowBuilder
-    from kailash.workflow.from_brief import _realize, _workflow_plan_cls
+    from kailash.workflow.from_brief import (
+        _realize,
+        _safe_node_types,
+        _workflow_plan_cls,
+    )
 
     plan_cls = _workflow_plan_cls()
     plan = plan_cls(
         nodes=[
             {
-                "node_type": "PythonCodeNode",
+                "node_type": "CSVReaderNode",
                 "node_id": "n1",
-                "config": {"code": "result = 42"},
+                "config": {},
             }
         ],
         connections=[],
         interpretation_confidence=0.9,
     )
 
-    builder = _realize(plan)
+    builder = _realize(plan, _safe_node_types())
     assert isinstance(builder, WorkflowBuilder)
     workflow = builder.build()
     assert "n1" in workflow.nodes
@@ -264,20 +273,24 @@ def test_realize_single_node_builds_workflow():
 
 def test_realize_two_nodes_with_connection_wires_them():
     """A two-node plan with one connection produces a wired workflow."""
-    from kailash.workflow.from_brief import _realize, _workflow_plan_cls
+    from kailash.workflow.from_brief import (
+        _realize,
+        _safe_node_types,
+        _workflow_plan_cls,
+    )
 
     plan_cls = _workflow_plan_cls()
     plan = plan_cls(
         nodes=[
             {
-                "node_type": "PythonCodeNode",
+                "node_type": "CSVReaderNode",
                 "node_id": "src",
-                "config": {"code": "result = [1, 2, 3]"},
+                "config": {},
             },
             {
-                "node_type": "PythonCodeNode",
+                "node_type": "CSVReaderNode",
                 "node_id": "dst",
-                "config": {"code": "result = sum(input)"},
+                "config": {},
             },
         ],
         connections=[
@@ -286,7 +299,7 @@ def test_realize_two_nodes_with_connection_wires_them():
         interpretation_confidence=0.9,
     )
 
-    builder = _realize(plan)
+    builder = _realize(plan, _safe_node_types())
     workflow = builder.build()
     assert len(workflow.nodes) == 2
     assert len(workflow.connections) == 1
@@ -294,20 +307,24 @@ def test_realize_two_nodes_with_connection_wires_them():
 
 def test_realize_duplicate_node_id_raises():
     """A plan with duplicate node_ids raises malformed=True."""
-    from kailash.workflow.from_brief import _realize, _workflow_plan_cls
+    from kailash.workflow.from_brief import (
+        _realize,
+        _safe_node_types,
+        _workflow_plan_cls,
+    )
 
     plan_cls = _workflow_plan_cls()
     plan = plan_cls(
         nodes=[
-            {"node_type": "PythonCodeNode", "node_id": "dup", "config": {}},
-            {"node_type": "PythonCodeNode", "node_id": "dup", "config": {}},
+            {"node_type": "CSVReaderNode", "node_id": "dup", "config": {}},
+            {"node_type": "CSVReaderNode", "node_id": "dup", "config": {}},
         ],
         connections=[],
         interpretation_confidence=0.9,
     )
 
     with pytest.raises(BriefInterpretationError) as exc_info:
-        _realize(plan)
+        _realize(plan, _safe_node_types())
     assert exc_info.value.malformed
     assert "dup" in str(exc_info.value)
 
@@ -317,39 +334,127 @@ def test_realize_duplicate_node_id_raises():
 # --------------------------------------------------------------------------- #
 
 
-def test_registered_node_types_returns_non_empty_set():
-    """`_registered_node_types()` returns the populated NodeRegistry,
-    minus the SEC-1 denylist of code-execution nodes.
-    """
-    from kailash.workflow.from_brief import _registered_node_types
+def test_safe_node_types_returns_curated_allowlist():
+    """#1125 R2: `_safe_node_types()` returns the DEFAULT-DENY positive
+    allowlist intersected with the registry — a non-empty set of vetted
+    safe nodes that includes common data-shaping nodes and excludes every
+    code-execution / composition node."""
+    from kailash.workflow.from_brief import _safe_node_types
 
-    types = _registered_node_types()
+    types = _safe_node_types()
     assert isinstance(types, set)
     assert len(types) > 0
-    # A canonical Kailash data-reader node is registered at import time.
-    assert "CSVReaderNode" in types
+    # Common safe nodes are present (useful brief surface).
+    for safe in ("CSVReaderNode", "JSONReaderNode", "FilterNode", "MergeNode"):
+        assert safe in types
+    # No code-execution / composition node is brief-reachable.
+    for danger in (
+        "PythonCodeNode",
+        "AsyncPythonCodeNode",
+        "DataTransformer",
+        "ConvergenceCheckerNode",
+        "MultiCriteriaConvergenceNode",
+        "WorkflowNode",
+    ):
+        assert danger not in types
 
 
 @pytest.mark.regression
-def test_workflow_from_brief_rejects_dangerous_code_execution_nodes():
-    """SEC-1 regression: PythonCodeNode + AsyncPythonCodeNode MUST be
-    rejected by the allowlist gate even though they are registered in
-    `NodeRegistry`. A brief that asks the LLM to emit a `PythonCodeNode`
-    with attacker-controlled `config.code` must NOT reach `builder.add_node`.
-    See workspaces/from-brief-1125/04-validate/round-02-security.md SEC-1.
+def test_default_deny_allowlist_excludes_code_exec_nodes():
+    """#1125 R2 CRITICAL-2: the safe allowlist is default-deny — only the
+    vetted `_SAFE_NODE_TYPES` are brief-reachable; the denylist FLOOR is
+    disjoint from it. (Behavioral enforcement asserted by the realizer
+    tests above; this pins the data-structure invariant.)
     """
     from kailash.workflow.from_brief import (
         _DANGEROUS_NODE_TYPES,
-        _registered_node_types,
+        _SAFE_NODE_TYPES,
+        _safe_node_types,
     )
 
-    allowed = _registered_node_types()
-    assert (
-        "PythonCodeNode" not in allowed
-    ), "SEC-1: PythonCodeNode MUST be in the denylist"
-    assert (
-        "AsyncPythonCodeNode" not in allowed
-    ), "SEC-1: AsyncPythonCodeNode MUST be in the denylist"
-    # Denylist constant itself MUST cover both names.
-    assert "PythonCodeNode" in _DANGEROUS_NODE_TYPES
-    assert "AsyncPythonCodeNode" in _DANGEROUS_NODE_TYPES
+    allowed = _safe_node_types()
+    # Default-deny: resolved allowlist is a subset of the vetted positive set.
+    assert allowed <= _SAFE_NODE_TYPES
+    # The defense-in-depth floor never overlaps the safe set.
+    assert _SAFE_NODE_TYPES.isdisjoint(_DANGEROUS_NODE_TYPES)
+    # Known code-exec nodes are in the floor (caller-override defense).
+    for danger in ("PythonCodeNode", "AsyncPythonCodeNode", "DataTransformer"):
+        assert danger in _DANGEROUS_NODE_TYPES
+        assert danger not in allowed
+
+
+def _workflow_plan_with(node_type: str):
+    """Build a WorkflowPlan whose single node is `node_type` (confidence 0.99)."""
+    import kailash.workflow.from_brief as fb
+    from kailash._from_brief.validator import coerce_plan
+
+    return coerce_plan(
+        {
+            "interpretation_confidence": 0.99,
+            "nodes": [{"node_type": node_type, "node_id": "n", "config": {}}],
+            "connections": [],
+        },
+        fb._workflow_plan_cls(),
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("dangerous", ["PythonCodeNode", "AsyncPythonCodeNode"])
+def test_realize_rejects_denylisted_code_execution_node(dangerous):
+    """SEC-1 / CRITICAL-1 (#1125 R1): a WorkflowPlan whose `plan.nodes`
+    contains a code-execution node MUST be rejected at realization — the
+    node type must NOT reach `builder.add_node`. Behavioral guard replacing
+    the prior constant-only assertion: `validate_plan`'s top-level node_type
+    gate is a no-op for WorkflowPlan (node types are nested in plan.nodes),
+    so `_realize` is the enforcement choke point.
+    """
+    from kailash._from_brief.exceptions import BriefInterpretationError
+    from kailash.workflow.from_brief import _realize, _safe_node_types
+
+    plan = _workflow_plan_with(dangerous)
+    with pytest.raises(BriefInterpretationError) as exc:
+        _realize(plan, _safe_node_types())
+    assert exc.value.unknown_value == dangerous
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("dangerous", ["PythonCodeNode", "AsyncPythonCodeNode"])
+def test_realize_denylist_is_a_floor_caller_override_cannot_readmit(dangerous):
+    """MEDIUM-2 (#1125 R1): a caller-supplied `allowed_node_types` that
+    includes a denylisted node MUST still be rejected — the denylist is an
+    absolute floor enforced unconditionally at realization.
+    """
+    from kailash._from_brief.exceptions import BriefInterpretationError
+    from kailash.workflow.from_brief import _realize
+
+    plan = _workflow_plan_with(dangerous)
+    with pytest.raises(BriefInterpretationError) as exc:
+        _realize(plan, {dangerous})  # caller tries to re-admit it
+    assert exc.value.unknown_value == dangerous
+
+
+@pytest.mark.regression
+def test_realize_rejects_hallucinated_unknown_node():
+    """CRITICAL-1 (#1125 R1): a node type not in the allowlist (LLM
+    hallucination or prompt injection) MUST be rejected at realization.
+    """
+    from kailash._from_brief.exceptions import BriefInterpretationError
+    from kailash.workflow.from_brief import _realize, _safe_node_types
+
+    plan = _workflow_plan_with("TotallyFakeInjectedNode")
+    with pytest.raises(BriefInterpretationError) as exc:
+        _realize(plan, _safe_node_types())
+    assert exc.value.unknown_value == "TotallyFakeInjectedNode"
+
+
+@pytest.mark.regression
+def test_realize_accepts_legitimate_registered_node():
+    """Positive control: a legitimate registered node realizes successfully
+    (the allowlist/denylist gate does not over-reject)."""
+    from kailash.workflow.from_brief import _realize, _safe_node_types
+
+    allowed = _safe_node_types()
+    assert "CSVReaderNode" in allowed
+    plan = _workflow_plan_with("CSVReaderNode")
+    builder = _realize(plan, allowed)
+    assert builder.build() is not None
