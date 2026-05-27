@@ -48,7 +48,6 @@ import pytest
 
 from kailash._from_brief.exceptions import BriefInterpretationError
 
-
 # --------------------------------------------------------------------------- #
 # BootstrapConfig dataclass contract                                          #
 # --------------------------------------------------------------------------- #
@@ -158,6 +157,13 @@ def test_bootstrap_plan_cls_caches_result():
 
 def test_signature_cls_builds_kaizen_signature():
     """`_signature_cls()` returns a Kaizen Signature subclass with fields."""
+    # Class B (kaizen-dependent): `_signature_cls()` builds a real Kaizen
+    # Signature, which `from kaizen.signatures import ...` requires. kaizen
+    # is a downstream optional package absent in the core "Test"/"Base" CI
+    # jobs. Per `rules/test-skip-discipline.md` this is an ACCEPTABLE skip
+    # (cannot execute without the optional dep), NOT a masked failure — the
+    # skip reason names kaizen.
+    pytest.importorskip("kaizen")
     from kailash._from_brief.signatures import BriefPlanSignature
     from kailash.bootstrap import _signature_cls
 
@@ -171,6 +177,9 @@ def test_signature_cls_builds_kaizen_signature():
 
 def test_signature_cls_caches_result():
     """`_signature_cls()` returns the same class on repeated calls."""
+    # Class B (kaizen-dependent): `_signature_cls()` builds a real Kaizen
+    # Signature. Skip without kaizen per `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     from kailash.bootstrap import _signature_cls
 
     assert _signature_cls() is _signature_cls()
@@ -178,6 +187,11 @@ def test_signature_cls_caches_result():
 
 def test_bootstrap_module_getattr_resolves_lazy_classes():
     """`from kailash.bootstrap import BootstrapPlanSignature` resolves at call-time."""
+    # Class B (kaizen-dependent): resolving `BootstrapPlanSignature` calls
+    # `_signature_cls()`, which builds a real Kaizen Signature. Skip without
+    # kaizen per `rules/test-skip-discipline.md` (`BootstrapPlan` alone is
+    # kaizen-free, but this test asserts the Signature resolution too).
+    pytest.importorskip("kaizen")
     from kailash.bootstrap import (
         BootstrapPlan,
         BootstrapPlanSignature,
@@ -213,7 +227,6 @@ def test_kailash_top_level_binds_bootstrap_callable():
     import sys
 
     import kailash
-
     from kailash.bootstrap import BootstrapConfig
     from kailash.bootstrap import bootstrap as module_bootstrap
 
@@ -443,6 +456,15 @@ def _install_stub_agent(monkeypatch, raw: dict[str, Any]) -> None:
 
 def test_bootstrap_rejects_unknown_runtime_value(monkeypatch):
     """An LLM-emitted `resolved_runtime` outside the allowlist raises."""
+    # Class B (kaizen-dependent): the enum gate runs AFTER the LLM call, so
+    # `bootstrap()` reaches `_signature_cls()` (builds a real Kaizen
+    # Signature) and `_install_stub_agent` imports `kailash._from_brief.
+    # signatures` (which `from kaizen.signatures import ...` requires)
+    # BEFORE the gate fires. kaizen is a downstream optional package absent
+    # in the core CI jobs. Skip without it per `rules/test-skip-discipline.md`
+    # (acceptable skip — the enum gate cannot be exercised through the full
+    # pipeline without the LLM-mediation surface kaizen provides).
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
@@ -471,6 +493,10 @@ def test_bootstrap_rejects_unknown_runtime_value(monkeypatch):
 
 def test_bootstrap_rejects_unknown_deployment_target_value(monkeypatch):
     """An LLM-emitted `resolved_deployment_target` outside the allowlist raises."""
+    # Class B (kaizen-dependent): same as the runtime-enum test — the gate
+    # runs after `_signature_cls()`/`_install_stub_agent` reach kaizen.
+    # Skip without kaizen per `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
@@ -494,6 +520,14 @@ def test_bootstrap_rejects_unknown_deployment_target_value(monkeypatch):
 
 def test_bootstrap_rejects_low_confidence(monkeypatch):
     """A confidence below the threshold raises low_confidence=True."""
+    # Class B (kaizen-dependent): this exercises the LLM-PRODUCED plan
+    # through the full `bootstrap()` pipeline via the stub agent — it does
+    # NOT construct a plan object and call the validator directly. The
+    # pipeline reaches `_signature_cls()` (real Kaizen Signature) and
+    # `_install_stub_agent` imports `kailash._from_brief.signatures` before
+    # the confidence gate fires. Skip without kaizen per
+    # `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
@@ -517,6 +551,12 @@ def test_bootstrap_rejects_low_confidence(monkeypatch):
 
 def test_bootstrap_rejects_malformed_plan(monkeypatch):
     """A plan missing required fields raises malformed=True."""
+    # Class B (kaizen-dependent): exercises the LLM-PRODUCED plan through
+    # the full `bootstrap()` pipeline via the stub agent (not a direct
+    # validator call). Reaches `_signature_cls()` + the `signatures` import
+    # before the malformed-plan gate fires. Skip without kaizen per
+    # `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
@@ -545,6 +585,11 @@ def test_bootstrap_rejects_malformed_plan(monkeypatch):
 
 def test_bootstrap_returns_config_with_env_model_override(monkeypatch):
     """End-to-end through stub: env-resolved model wins over LLM suggestion."""
+    # Class B (kaizen-dependent): full `bootstrap()` happy path through the
+    # stub agent reaches `_signature_cls()` (real Kaizen Signature) +
+    # `_install_stub_agent`'s `signatures` import. Skip without kaizen per
+    # `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
@@ -570,6 +615,10 @@ def test_bootstrap_returns_config_with_env_model_override(monkeypatch):
 
 def test_bootstrap_returns_config_honoring_llm_suggestion_when_env_clear(monkeypatch):
     """When env is clear, the LLM-emitted model suggestion populates llm_model."""
+    # Class B (kaizen-dependent): full `bootstrap()` happy path through the
+    # stub agent reaches `_signature_cls()` + the `signatures` import. Skip
+    # without kaizen per `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     _install_stub_agent(
         monkeypatch,
         {
