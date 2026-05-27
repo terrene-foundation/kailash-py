@@ -516,6 +516,136 @@ changes:
       issue #1086 candidate 1 deployment.md clause above; loom-side
       processor handles both in one merge.
 
+  - type: rule_update
+    artifact: verify-claims-before-durable-write
+    files:
+      - .claude/rules/git.md
+    classification_suggestion: global
+    context: |
+      2026-05-27 release-cycle pattern (kailash 2.27.0 release-drive).
+      Candidate: extend git.md § "Commit-message claim accuracy" — OR
+      author a small new baseline rule — with a clause:
+
+      "## MUST: Verify Code-Claims Against Ground Truth Before Durable
+      Write". Any claim about code written into a DURABLE artifact
+      (CHANGELOG, commit body, PR description, docs, a codified rule) —
+      public API names, signatures, set/list counts, class names,
+      allowlist/denylist contents — MUST be verified against ground
+      truth (import the symbol, read the source/wheel, print the FULL
+      collection) BEFORE the write. Trusting (a) a claim reconstructed
+      across a context boundary (compaction summary, .session-notes,
+      prior-session framing), or (b) truncated command output
+      (`tail -N` / `head -N` / `... | head` over the line carrying the
+      cited value) is BLOCKED.
+
+      Originating evidence (this session, both caught before consumer
+      impact but each cost an extra correction PR):
+        1. The 2.27.0 CHANGELOG Added section (commit b9b0a71ed) listed
+           5 kailash.workflow functions — from_brief / afrom_brief /
+           from_brief_validate / from_brief_analyze / from_brief_realize
+           — carried verbatim from a compaction-summary "5 entrypoints"
+           framing. Four of those names do not exist anywhere in the
+           package; the real surface is Workflow.from_brief +
+           kailash.bootstrap + workflow_from_brief. The "5 surfaces" of
+           PR #1181 are 5 distinct FRAMEWORKS, not 5 functions. Caught
+           by TestPyPI-rehearsal clean-venv import
+           (`ImportError: cannot import name 'afrom_brief'`). Corrected
+           in PR #1187 (commit ec2c99163).
+        2. The PR-#1187 correction then documented _DANGEROUS_NODE_TYPES
+           as "8 types" (and stated AsyncPythonCodeNode is NOT in it)
+           because a `tail -8` silently dropped the count line + first 4
+           alphabetical entries. Real floor is 12; AsyncPythonCodeNode IS
+           in it. Caught at post-publish production verify. Corrected in
+           PR #1188 (commit 1a3dab318).
+
+      BLOCKED rationalizations: "the summary said so" / "the prior
+      session established this surface" / "tail is enough to see the
+      shape" / "I'll verify if something breaks" / "the count is
+      approximate anyway".
+
+      Relationship to existing rules: extends git.md § "Commit-message
+      claim accuracy" (commit bodies describe ONLY diff-present changes)
+      from the commit surface to the CHANGELOG/docs/rule surface. Same
+      epistemic family as zero-tolerance.md Rule 1c ("pre-existing is
+      unprovable after a context boundary") — a carried-forward API
+      claim is structurally unfalsifiable until re-verified. Sibling of
+      user-flow-validation.md (walk before declaring done) — the
+      durable-write verification is the artifact-claim analogue of the
+      user-flow walk. Pairs with the auto-memory
+      feedback_verify_claims_before_durable_write.md landed this session
+      as the immediate in-repo stopgap.
+
+      Self-referential-codify note: IF loom authors this as a NEW rule
+      FILE on the self-referential surface (a baseline rule governing
+      agent write-discipline), loom MUST run the multi-agent
+      redteam-with-tests gate per self-referential-codify.md MUST Rule 1.
+      IF loom extends git.md (already on no special gate), posture
+      default applies. cc-architect MUST emit canonical 8-field Trust
+      Posture Wiring per trust-posture.md MUST Rule 8 either way.
+
+  - type: skill_update
+    artifact: from-brief-default-deny-security-pattern
+    files:
+      - .claude/skills/18-security-patterns/SKILL.md
+    classification_suggestion: global
+    context: |
+      2026-05-27 — from_brief #1125 security model (shipped in kailash
+      2.27.0). Candidate: capture the reusable security pattern
+      "untrusted-input-selects-which-primitive-to-instantiate MUST
+      default-deny" as a security-patterns skill entry (cross-SDK — the
+      same surface exists in kailash-rs from_brief equivalents).
+
+      Pattern (verified against the shipped 2.27.0 wheel):
+        - When untrusted input (an LLM-emitted plan from a natural-
+          language brief) selects WHICH node type to realize, the node-
+          type surface IS a code-execution boundary. The sound model is
+          a POSITIVE allowlist (a vetted `_SAFE_NODE_TYPES` frozenset of
+          43 entries) intersected with the live registry — NOT "all
+          registered nodes minus a denylist". Denylist-subtraction is
+          unsound by construction: every new SDK node added between
+          releases is implicitly trusted, and code-exec helpers
+          (PythonCodeNode execs via the CodeExecutor helper) are
+          invisible to a class-scope denylist scan.
+        - Enforce at the CHOKE POINT (`_realize()` at add_node time), not
+          only at a higher validate_plan() gate — a typed plan whose
+          shape differs from what validate_plan inspects (node_type
+          nested in plan.nodes[i]) bypassed the higher gate.
+        - Keep a hardcoded denylist FLOOR (12 explicitly-dangerous types)
+          subtracted BEFORE the allowlist applies, so a future allowlist
+          expansion cannot re-admit code-exec / SSRF surfaces.
+        - Ship an INVERSE-COMPLETENESS test that walks the MRO of every
+          allowlisted type and AST-scans every source path for exec /
+          eval / compile / import_module / __import__ / unsafe-
+          deserialization (pickle|marshal|dill|cloudpickle.loads,
+          yaml.load) / CodeExecutor references — so a future code-
+          executing node added under a familiar name fails the allowlist
+          TEST, not production.
+        - Reject NaN/inf/out-of-range at the confidence-gate
+          construction boundary (pydantic ConfigDict(extra="forbid",
+          allow_inf_nan=False) + math.isfinite check), closing a
+          confidence-bypass class.
+
+      Reference implementation:
+        src/kailash/workflow/from_brief.py (_SAFE_NODE_TYPES,
+        _DANGEROUS_NODE_TYPES, _realize), kailash/_from_brief/
+        {validator,confidence}.py, tests/unit/workflow/
+        test_from_brief_safe_allowlist.py (inverse-completeness test).
+
+      Cross-SDK: kailash-rs has equivalent from_brief / brief-to-
+      primitive surfaces; the default-deny + choke-point + inverse-
+      completeness triad is language-invariant (EATP D6 semantic
+      parity). loom should classify whether this is a global skill
+      entry + a cross-SDK inspection issue on kailash-rs.
+
+      Convergence receipt: workspaces/from-brief-1125/04-validate/
+      (round-01 through round-03 + 00-convergence.md); 2 CRITICAL +
+      SharePoint MEDIUM + confidence-gate-bypass closed across the
+      redteam cycle. Cross-agent CRIT/HIGH disagreement (security-
+      reviewer static "closed" vs reviewer Bash-proved "denylist
+      incomplete") resolved BY CONSTRUCTION (probe: DataTransformer
+      realized through the gate) per self-referential-codify.md MUST-1
+      + redteam-integration.md — NOT by averaging severities.
+
 deferred:
   - id: "issue-1086-candidate-3"
     summary: |
@@ -544,7 +674,85 @@ deferred:
       forbids.
     disposition: "withdrawn — cross-reference to existing rules suffices"
 
+  - id: "from-brief-redteam-cross-agent-disagreement-resolution"
+    summary: |
+      Redteam cross-agent CRIT/HIGH disagreement resolution (static
+      security-reviewer says "code-exec closed" while Bash-equipped
+      reviewer proves "denylist incomplete" → resolve by construction,
+      not by averaging severities). Assessed during the 2026-05-27
+      from_brief codify and WITHDRAWN before drafting: already covered by
+      self-referential-codify.md MUST Rule 1 (resolve by construction) +
+      agents.md MUST "Audit/Closure-Parity Verification Specialist Has
+      Bash + Read" (read-only specialist gives false-closed; Bash-
+      equipped re-verifies) + skills/32-trust-posture/redteam-
+      integration.md § Cross-Agent CRIT/HIGH Disagreement Resolution.
+      Authoring a new clause would trip cc-artifacts.md Rule 10
+      duplicate-rule prevention. The from_brief incident is logged as a
+      confirming instance of the existing rules, not a new rule.
+    disposition: "withdrawn — already covered by self-referential-codify.md MUST-1 + agents.md closure-parity + redteam-integration.md"
+
 append_session: |
+  Session 2026-05-27 — APPEND /codify covering 2 patterns from the
+  kailash 2.27.0 release-drive (from_brief #1125 + delegate #1035
+  security fixes → redteam convergence → release 2.27.0). Originating
+  evidence: workspaces/from-brief-1125/ (brief + 01-analysis +
+  04-validate round-01..03 + 00-convergence) + this session's release
+  cycle (PRs #1184 security fixes, #1186 release prep, #1187 + #1188
+  CHANGELOG corrections; tag v2.27.0; production PyPI publish +
+  clean-venv install/import-shape verify).
+
+  Two candidates appended to changes[] (preserving the existing #1086
+  candidates 1/2/4 + the 4 delegate-arc patterns; status stays
+  pending_review — no reset needed, already pending):
+    1. verify-claims-before-durable-write (rule_update, git.md
+       extension OR new baseline rule) — verify code-claims against
+       ground truth before writing to CHANGELOG/commit/docs/rule;
+       never trust a context-boundary-reconstructed claim or
+       truncated output. Caused 2 correction PRs (#1187, #1188) this
+       session — both caught before consumer impact (TestPyPI
+       rehearsal + post-publish verify). Paired with auto-memory
+       feedback_verify_claims_before_durable_write.md (immediate
+       in-repo stopgap until this syncs back).
+    2. from-brief-default-deny-security-pattern (skill_update,
+       skills/18-security-patterns) — positive-allowlist ∩ registry +
+       choke-point enforcement + inverse-completeness AST/MRO test +
+       NaN/inf confidence-gate rejection. Reusable cross-SDK
+       (kailash-rs equivalent surfaces); loom should classify global
+       skill + cross-SDK inspection issue.
+
+  One candidate WITHDRAWN (added to deferred[]):
+    - from-brief-redteam-cross-agent-disagreement-resolution —
+      already covered by self-referential-codify.md MUST-1 +
+      agents.md closure-parity + redteam-integration.md;
+      cc-artifacts.md Rule 10 duplicate-rule prevention.
+
+  No new rule FILES authored in this BUILD-repo session (candidates
+  are descriptions for loom to author/classify). loom-side processor
+  MUST emit canonical 8-field Trust Posture Wiring (trust-posture.md
+  MUST Rule 8) for candidate 1, AND — IF it authors candidate 1 as a
+  NEW baseline rule file on the self-referential surface — run the
+  multi-agent redteam-with-tests gate per self-referential-codify.md
+  MUST Rule 1 (git.md extension path needs no special gate).
+
+  Distribution discipline: BUILD->loom proposal. No rule/skill files
+  edited in this kailash-py session; loom edits canonical + classifies
+  global vs variant at Gate-1.
+
+  Receipts:
+    - Issue #1125 (from_brief primitives) — feature shipped in 2.27.0
+    - PRs #1184 (security fixes: default-deny + NaN/inf gate),
+      #1186 (release prep), #1187 + #1188 (CHANGELOG accuracy
+      corrections)
+    - Tag v2.27.0; production PyPI publish (run 26511132751) +
+      clean-venv install/import-shape verify (allowlist=43,
+      denylist-floor=12, disjoint, NaN/inf gate)
+    - Commits: 5abc806f8 (default-deny + tests), b9b0a71ed (release
+      prep + initial CHANGELOG), ec2c99163 (CHANGELOG surface fix),
+      1a3dab318 (CHANGELOG denylist-count fix)
+    - Workspace: workspaces/from-brief-1125/journal/
+    - Auto-memory: feedback_verify_claims_before_durable_write.md
+
+  --- prior append below ---
   Session 2026-05-22 — APPEND /codify covering 4 patterns from the
   kailash-py Delegate composition primitive arc (issue #1035, PRs
   #1130-#1144 + post-wave cleanup #1145 + holistic /redteam follow-
