@@ -90,7 +90,7 @@ matches the brief's stated prediction goal."
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
 import polars as pl
 from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec
@@ -98,16 +98,26 @@ from kailash_ml.features.schema import FeatureField, FeatureSchema
 
 from kailash._from_brief import (
     BriefInterpretationError,
-    BriefPlanSignature,
     coerce_plan,
-    get_default_llm_model,
     scrub_brief,
     validate_plan,
 )
 from kailash._from_brief.confidence import DEFAULT_CONFIDENCE_THRESHOLD
 from kailash._from_brief.validator import BriefPlan as _BasePlan
-from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.signatures import OutputField
+
+# kaizen-dependent imports (`BriefPlanSignature` / `get_default_llm_model` from
+# kailash._from_brief, `OutputField` / `BaseAgent` from kaizen) are LAZY —
+# deferred into function bodies + the lazy `_ml_plan_signature_cls()` factory
+# below. kaizen is a SEPARATE downstream package (kailash-kaizen); kailash-ml
+# MUST NOT import it at module scope (rules/dependencies.md "Declared =
+# Imported"; rules/framework-first.md layering). Importing it eagerly here would
+# make `import kailash_ml` (which re-exports `from_brief`) require kaizen,
+# breaking every kailash-ml CI test at collection time when kaizen is absent.
+# `get_default_llm_model` lives in `kailash._from_brief.signatures` which imports
+# kaizen at module scope, so it is lazy too. Pattern mirrors
+# `kailash/workflow/from_brief.py::_signature_cls`.
+if TYPE_CHECKING:
+    from kailash._from_brief import BriefPlanSignature  # noqa: F401
 
 __all__ = [
     "ALLOWED_TASKS",
@@ -188,115 +198,177 @@ _DEFAULT_METRICS_BY_TASK: Dict[str, List[str]] = {
 
 
 # =========================================================================
-# Meta-Signature (Kaizen Signature that emits an ML plan)
+# Meta-Signature (Kaizen Signature that emits an ML plan) — LAZY
 # =========================================================================
+#
+# `MLPlanSignature(BriefPlanSignature)` was a module-scope class; both its base
+# (`BriefPlanSignature` from `kailash._from_brief`) and `OutputField` (from
+# `kaizen.signatures`) carry the kaizen dependency. Defining it at module scope
+# made `import kailash_ml` (which re-exports `from_brief`) require kaizen,
+# breaking every kailash-ml CI test at collection time when kaizen is absent.
+# The class is now built LAZILY via `_ml_plan_signature_cls()` and exposed at
+# module scope through `__getattr__` (PEP 562) — mirroring
+# `kailash/workflow/from_brief.py::_signature_cls`.
+
+_ML_PLAN_SIGNATURE_CLS_CACHE: Optional[type] = None
 
 
-class MLPlanSignature(BriefPlanSignature):
-    """Meta-Signature: parse a brief + dataframe schema into an ML plan.
+def _ml_plan_signature_cls() -> type:
+    """Return the :class:`MLPlanSignature` class, constructed lazily.
 
-    Per the architecture plan §3.5, this Signature is the LLM-mediation
-    surface for :func:`kailash_ml.from_brief`. The realizer feeds the
-    dataframe's structural metadata (column names + dtypes) into the
-    Signature alongside the brief so the LLM can ground its column
-    selections in real data.
+    Defers the ``kailash._from_brief.BriefPlanSignature`` +
+    ``kaizen.signatures.OutputField`` imports to call time so importing this
+    module — and thus ``import kailash_ml`` (which re-exports ``from_brief``) —
+    does not require kaizen.
 
-    Per ``rules/agent-reasoning.md`` § "Permitted Deterministic Logic"
-    exception 1 (input validation — presence/type), extracting
-    ``df.dtypes`` + ``df.columns`` in Python BEFORE the LLM call is
-    permitted structural plumbing — the LLM still does ALL reasoning
-    about which columns to USE; the realizer only hands it the catalog.
-
-    Plan-emitted fields:
-
-    - ``feature_columns``: list of column-name strings the LLM selected
-      as features. Validated against ``df.columns`` before realization;
-      unknown columns raise
-      :class:`BriefInterpretationError(unknown_value=<name>)`.
-    - ``target_column``: column-name string the LLM identified as the
-      supervised-learning target. Validated against ``df.columns``.
-    - ``model_task``: task identifier from :data:`ALLOWED_TASKS`. The
-      LLM is instructed to pick the task that matches the brief's
-      stated prediction goal (AC 5).
-    - ``eval_metric``: metric identifier from
-      :data:`ALLOWED_EVAL_METRICS`. The LLM picks ONE primary metric;
-      the realizer expands to a sensible default list per task.
-    - ``schema_name``: identifier-safe name for the resulting
-      :class:`FeatureSchema`. Per the FeatureSchema name regex
-      (``^[a-zA-Z_][a-zA-Z0-9_]*$``), the realizer rejects malformed
-      names.
-
-    See :class:`BriefPlanSignature` for the inherited ``brief`` +
-    ``interpretation_confidence`` floor contract.
+    Returns:
+        The lazily-constructed :class:`MLPlanSignature` subclass, cached after
+        first invocation.
     """
+    global _ML_PLAN_SIGNATURE_CLS_CACHE
+    if _ML_PLAN_SIGNATURE_CLS_CACHE is not None:
+        return _ML_PLAN_SIGNATURE_CLS_CACHE
 
-    # FIELD NAMING NOTE: the OutputField names below do not collide
-    # with reserved property names on the Signature base class. The
-    # pyright suppressions cite the same pattern as the S1 base — see
-    # ``src/kailash/_from_brief/signatures.py:110-138`` for the full
-    # rationale + #73 citation.
-    dataframe_schema: dict = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "ECHO BACK the dataframe schema you were given. This "
-            "is a structural verification field — copy the input "
-            "dataframe_schema dict verbatim. The realizer uses "
-            "this to detect LLM dropouts where the model ignored "
-            "the data context."
+    from kailash._from_brief import BriefPlanSignature
+    from kaizen.signatures import OutputField
+
+    class MLPlanSignature(BriefPlanSignature):
+        """Meta-Signature: parse a brief + dataframe schema into an ML plan.
+
+        Per the architecture plan §3.5, this Signature is the LLM-mediation
+        surface for :func:`kailash_ml.from_brief`. The realizer feeds the
+        dataframe's structural metadata (column names + dtypes) into the
+        Signature alongside the brief so the LLM can ground its column
+        selections in real data.
+
+        Per ``rules/agent-reasoning.md`` § "Permitted Deterministic Logic"
+        exception 1 (input validation — presence/type), extracting
+        ``df.dtypes`` + ``df.columns`` in Python BEFORE the LLM call is
+        permitted structural plumbing — the LLM still does ALL reasoning
+        about which columns to USE; the realizer only hands it the catalog.
+
+        Plan-emitted fields:
+
+        - ``feature_columns``: list of column-name strings the LLM selected
+          as features. Validated against ``df.columns`` before realization;
+          unknown columns raise
+          :class:`BriefInterpretationError(unknown_value=<name>)`.
+        - ``target_column``: column-name string the LLM identified as the
+          supervised-learning target. Validated against ``df.columns``.
+        - ``model_task``: task identifier from :data:`ALLOWED_TASKS`. The
+          LLM is instructed to pick the task that matches the brief's
+          stated prediction goal (AC 5).
+        - ``eval_metric``: metric identifier from
+          :data:`ALLOWED_EVAL_METRICS`. The LLM picks ONE primary metric;
+          the realizer expands to a sensible default list per task.
+        - ``schema_name``: identifier-safe name for the resulting
+          :class:`FeatureSchema`. Per the FeatureSchema name regex
+          (``^[a-zA-Z_][a-zA-Z0-9_]*$``), the realizer rejects malformed
+          names.
+
+        See :class:`BriefPlanSignature` for the inherited ``brief`` +
+        ``interpretation_confidence`` floor contract.
+        """
+
+        # FIELD NAMING NOTE: the OutputField names below do not collide
+        # with reserved property names on the Signature base class. The
+        # pyright suppressions cite the same pattern as the S1 base — see
+        # ``src/kailash/_from_brief/signatures.py:110-138`` for the full
+        # rationale + #73 citation.
+        dataframe_schema: dict = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "ECHO BACK the dataframe schema you were given. This "
+                "is a structural verification field — copy the input "
+                "dataframe_schema dict verbatim. The realizer uses "
+                "this to detect LLM dropouts where the model ignored "
+                "the data context."
+            )
         )
-    )
-    feature_columns: list = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "List of column-name strings to use as model features. "
-            "Each entry MUST be a column name from the input dataframe "
-            "(see dataframe_schema). Do NOT invent column names — only "
-            "select from what the dataframe actually contains. Pick "
-            "the columns the brief implies are predictive of the "
-            "target; exclude identifier columns (e.g. 'id', 'uuid') "
-            "and the target column itself."
+        feature_columns: list = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "List of column-name strings to use as model features. "
+                "Each entry MUST be a column name from the input dataframe "
+                "(see dataframe_schema). Do NOT invent column names — only "
+                "select from what the dataframe actually contains. Pick "
+                "the columns the brief implies are predictive of the "
+                "target; exclude identifier columns (e.g. 'id', 'uuid') "
+                "and the target column itself."
+            )
         )
-    )
-    target_column: str = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "The single column name that represents the supervised-"
-            "learning target the brief asks to predict. MUST be a "
-            "column from the input dataframe. For a brief like "
-            "'predict churn from customer behavior', the target column "
-            "is typically named 'churn', 'churned', 'is_active', or "
-            "similar — pick the one that exists in the dataframe."
+        target_column: str = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "The single column name that represents the supervised-"
+                "learning target the brief asks to predict. MUST be a "
+                "column from the input dataframe. For a brief like "
+                "'predict churn from customer behavior', the target column "
+                "is typically named 'churn', 'churned', 'is_active', or "
+                "similar — pick the one that exists in the dataframe."
+            )
         )
-    )
-    model_task: str = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "The supervised-learning task type. MUST be one of: "
-            "'classification', 'binary_classification', "
-            "'multiclass_classification', 'multilabel_classification', "
-            "'regression'. Pick the task that matches the brief's "
-            "stated prediction goal: 'predict X' where X is "
-            "categorical → classification; 'predict X' where X is "
-            "numeric → regression. If the target column has exactly "
-            "two distinct values, prefer 'binary_classification'."
+        model_task: str = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "The supervised-learning task type. MUST be one of: "
+                "'classification', 'binary_classification', "
+                "'multiclass_classification', 'multilabel_classification', "
+                "'regression'. Pick the task that matches the brief's "
+                "stated prediction goal: 'predict X' where X is "
+                "categorical → classification; 'predict X' where X is "
+                "numeric → regression. If the target column has exactly "
+                "two distinct values, prefer 'binary_classification'."
+            )
         )
-    )
-    eval_metric: str = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "Primary evaluation metric. MUST be one of: 'accuracy', "
-            "'f1', 'precision', 'recall', 'auc' (classification) or "
-            "'mse', 'rmse', 'mae', 'r2' (regression). Pick the metric "
-            "that best reflects the brief's success criterion. Default "
-            "to 'accuracy' for classification, 'rmse' for regression "
-            "when the brief is silent."
+        eval_metric: str = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "Primary evaluation metric. MUST be one of: 'accuracy', "
+                "'f1', 'precision', 'recall', 'auc' (classification) or "
+                "'mse', 'rmse', 'mae', 'r2' (regression). Pick the metric "
+                "that best reflects the brief's success criterion. Default "
+                "to 'accuracy' for classification, 'rmse' for regression "
+                "when the brief is silent."
+            )
         )
-    )
-    schema_name: str = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "A snake_case identifier for the resulting FeatureSchema "
-            "(e.g. 'customer_churn', 'house_prices'). MUST match the "
-            "regex ^[a-zA-Z_][a-zA-Z0-9_]*$ — letters, digits, "
-            "underscores, starting with a letter or underscore. Pick a "
-            "name that reflects the brief's domain; the name appears "
-            "in registry rows and error messages."
+        schema_name: str = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "A snake_case identifier for the resulting FeatureSchema "
+                "(e.g. 'customer_churn', 'house_prices'). MUST match the "
+                "regex ^[a-zA-Z_][a-zA-Z0-9_]*$ — letters, digits, "
+                "underscores, starting with a letter or underscore. Pick a "
+                "name that reflects the brief's domain; the name appears "
+                "in registry rows and error messages."
+            )
         )
-    )
+
+    _ML_PLAN_SIGNATURE_CLS_CACHE = MLPlanSignature
+    return MLPlanSignature
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562 module-level ``__getattr__`` for lazy class resolution.
+
+    Per ``rules/orphan-detection.md`` § 6b, lazy-loaded symbols MUST stay
+    discoverable through the module's public surface. This hook resolves
+    ``from kailash_ml.from_brief import MLPlanSignature`` at call-time (the
+    symbol is in ``__all__``, has a lazy resolver, and has a ``TYPE_CHECKING``
+    stub below).
+    """
+    if name == "MLPlanSignature":
+        return _ml_plan_signature_cls()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+if TYPE_CHECKING:
+    # Surface the lazy class to static analyzers (CodeQL py/undefined-export,
+    # pyright, mypy) per `rules/orphan-detection.md` § 6b. Runtime body lives
+    # inside `_ml_plan_signature_cls`.
+    class MLPlanSignature:  # type: ignore[no-redef]
+        """Static-analyzer stub; runtime body in :func:`_ml_plan_signature_cls`."""
+
+        dataframe_schema: dict
+        feature_columns: list
+        target_column: str
+        model_task: str
+        eval_metric: str
+        schema_name: str
 
 
 # =========================================================================
@@ -596,6 +668,15 @@ def from_brief(
         >>> model_spec.framework  # doctest: +SKIP
         'sklearn'
     """
+    # Lazy kaizen imports — deferred to call time so importing this module
+    # (and thus `import kailash_ml`, which re-exports `from_brief`) does not
+    # require kaizen. A caller invoking from_brief() IS in an execution path
+    # where kaizen is present. `get_default_llm_model` lives in
+    # `kailash._from_brief.signatures` which imports kaizen at module scope,
+    # so it is lazy too.
+    from kailash._from_brief import get_default_llm_model
+    from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+
     # Input validation (permitted per agent-reasoning.md item 1 —
     # presence/type checks, NOT content classification).
     if not isinstance(df, pl.DataFrame):
@@ -647,7 +728,7 @@ def from_brief(
     )
     agent = BaseAgent(
         config=agent_config,
-        signature=MLPlanSignature(),
+        signature=_ml_plan_signature_cls()(),
         mcp_servers=[],
     )
     # The Signature consumes `brief` (inherited InputField) AND
