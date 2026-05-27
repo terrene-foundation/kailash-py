@@ -16,6 +16,8 @@ calibration baselines and is overridable per call.
 
 from __future__ import annotations
 
+import math
+
 from kailash._from_brief.exceptions import BriefInterpretationError
 
 __all__ = ["DEFAULT_CONFIDENCE_THRESHOLD", "check_confidence"]
@@ -50,10 +52,13 @@ def check_confidence(
     Returns:
         ``None`` when the value is at or above the threshold.
     """
-    if value < 0.0 or value > 1.0:
+    # IEEE-754 NaN comparisons are always False, so a NaN confidence
+    # would slip past both the range gate AND the threshold gate below;
+    # ``math.isfinite`` rejects NaN and ±inf as malformed (P5 threat).
+    if not math.isfinite(value) or value < 0.0 or value > 1.0:
         raise BriefInterpretationError(
-            f"interpretation_confidence={value!r} is outside the 0.0-1.0 "
-            f"range; the LLM emitted a malformed confidence score",
+            f"interpretation_confidence={value!r} is not a finite value in "
+            f"the 0.0-1.0 range; the LLM emitted a malformed confidence score",
             malformed=True,
         )
     if value < threshold:

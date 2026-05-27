@@ -72,6 +72,38 @@ class TestConfidenceGate:
             validate_plan(plan)
         assert excinfo.value.malformed is True
 
+    def test_nan_confidence_raises_malformed_at_gate(self):
+        """#1125 R1 MEDIUM-1: IEEE-754 NaN comparisons are always False, so
+        NaN slipped past both the range gate AND the threshold gate. The
+        gate MUST reject it via math.isfinite (P5 threat). Asserted at the
+        gate function because BriefPlan construction now rejects NaN earlier
+        (see test_nonfinite_confidence_rejected_at_plan_construction)."""
+        from kailash._from_brief.confidence import check_confidence
+
+        with pytest.raises(BriefInterpretationError) as excinfo:
+            check_confidence(float("nan"))
+        assert excinfo.value.malformed is True
+
+    def test_inf_confidence_raises_malformed_at_gate(self):
+        """#1125 R1 MEDIUM-1: +inf/-inf are non-finite and MUST be rejected
+        as malformed at the gate."""
+        from kailash._from_brief.confidence import check_confidence
+
+        for value in (float("inf"), float("-inf")):
+            with pytest.raises(BriefInterpretationError) as excinfo:
+                check_confidence(value)
+            assert excinfo.value.malformed is True
+
+    def test_nonfinite_confidence_rejected_at_plan_construction(self):
+        """#1125 R1 MEDIUM-1 (defense in depth): BriefPlan sets
+        allow_inf_nan=False so NaN/±inf are rejected by Pydantic before
+        validate_plan ever runs."""
+        from pydantic import ValidationError
+
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with pytest.raises(ValidationError):
+                WorkflowLikePlan(interpretation_confidence=value)
+
 
 class TestAllowlistGate:
     def test_unknown_node_type_raises_with_name(self):

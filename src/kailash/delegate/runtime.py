@@ -1062,6 +1062,17 @@ class DelegateRuntime:
         # call's audit chain segment writes against state the first
         # call is mid-mutating. Closes the M1 TOCTOU window surfaced by
         # the prior session's R1 security review.
+        #
+        # Scope caveat (R1 2026-05-27, MEDIUM): asyncio.Lock serializes
+        # concurrent execute() coroutines on ONE event loop — the
+        # documented and supported usage. It is NOT thread-safe, so it does
+        # not serialize two OS threads each running their own event loop
+        # against the SAME runtime instance. Sharing one DelegateRuntime
+        # across OS threads is outside the async contract (with_posture()
+        # returns a fresh runtime+lock per Invariant 5, so the natural
+        # pattern never shares instances cross-thread). If cross-thread
+        # sharing ever becomes supported, wrap acquisition in a
+        # threading.Lock; until then it is an undocumented-usage residual.
         self._consume_lock: asyncio.Lock = asyncio.Lock()
 
     @property

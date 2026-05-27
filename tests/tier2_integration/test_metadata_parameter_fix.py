@@ -30,6 +30,8 @@ from kailash.workflow.builder import WorkflowBuilder
 class TestNodeWithMetadataParam(Node):
     """Test node that uses 'metadata' as a parameter name."""
 
+    __test__ = False  # helper Node, not a pytest test class (Test* prefix)
+
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "id": NodeParameter(
@@ -56,6 +58,8 @@ class TestNodeWithMetadataParam(Node):
 class TestNodeWithoutMetadataParam(Node):
     """Test node that does NOT use 'metadata' as parameter."""
 
+    __test__ = False  # helper Node, not a pytest test class (Test* prefix)
+
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
             "id": NodeParameter(
@@ -69,6 +73,8 @@ class TestNodeWithoutMetadataParam(Node):
 
 class TestTypedNodeWithMetadataPort(TypedNode):
     """TypedNode with output port named 'metadata'."""
+
+    __test__ = False  # helper TypedNode, not a pytest test class (Test* prefix)
 
     # Input ports
     text_input = InputPort[str]("text_input", description="Text to process")

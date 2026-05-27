@@ -11,7 +11,7 @@ The pipeline composes the foundation laid by :mod:`kailash._from_brief`::
     brief (prose)
       → scrub_brief()                # credential scrub (S1)
       → WorkflowPlanSignature        # LLM emits typed plan
-      → coerce_plan / validate_plan  # typed + confidence + allowlist (S1)
+      → coerce_plan / validate_plan  # schema + confidence + allowlist (S1)
       → WorkflowBuilder loop         # deterministic structural plumbing
       → WorkflowBuilder (returned)
 
@@ -69,18 +69,120 @@ __all__ = [
 ]
 
 
-# Code-execution nodes that MUST NOT be reachable from an LLM-generated
-# workflow. PythonCodeNode + AsyncPythonCodeNode both call exec() on
-# LLM-emitted code; a brief like "use PythonCodeNode with code that
-# imports os and runs os.system(...)" would realize attacker code if
-# the allowlist accepted those types. Per the SEC-1 finding at
-# workspaces/from-brief-1125/04-validate/round-02-security.md, this
-# denylist runs BEFORE the allowlist gate (i.e. these node types are
-# NEVER in the LLM's allowed surface, regardless of NodeRegistry state).
+# --------------------------------------------------------------------------- #
+# Node-type security model — DEFAULT-DENY positive allowlist (issue #1125 R2)  #
+# --------------------------------------------------------------------------- #
+#
+# The brief is UNTRUSTED input. `from_brief` realizes whatever node types the
+# LLM emits, so the node-type surface IS a code-execution boundary. The prior
+# model — "all registered nodes MINUS a denylist of code-exec nodes" — was
+# proven unsound (R2 2026-05-27): the dangerous set cannot be reliably
+# enumerated (e.g. PythonCodeNode execs via the CodeExecutor helper, invisible
+# to a class-scope scan; DataTransformer/Convergence nodes exec/eval config),
+# and every new code-running node added to the SDK would silently re-open the
+# bypass.
+#
+# `_SAFE_NODE_TYPES` inverts to DEFAULT-DENY (positive allowlist per
+# `rules/cc-artifacts.md` Rule 10): `from_brief` realizes ONLY these explicitly
+# vetted node types — data I/O, declarative transform/filter/sort, flow
+# control, DB/vector/streaming connectors — every one verified to take
+# DECLARATIVE config (field/operator/path), never config-supplied code or
+# expressions. A new SDK node is NOT brief-reachable until a human adds it here
+# AFTER review. The `tests/.../test_from_brief_safe_allowlist.py` inverse-
+# completeness test asserts no member is code-exec-capable, so a future
+# mis-curation is caught mechanically.
+#
+# Excluded by design (code execution or composition bypass): PythonCodeNode,
+# AsyncPythonCodeNode (exec), DataTransformer (exec config transformations),
+# ConvergenceCheckerNode, MultiCriteriaConvergenceNode (eval config
+# expression), WorkflowNode (nests an arbitrary sub-workflow that could embed
+# any of the above).
+_SAFE_NODE_TYPES: frozenset[str] = frozenset(
+    {
+        # Data readers / sources
+        "CSVReaderNode",
+        "JSONReaderNode",
+        "TextReaderNode",
+        "DocumentProcessorNode",
+        "DocumentSourceNode",
+        "DirectoryReaderNode",
+        "FileDiscoveryNode",
+        "QuerySourceNode",
+        # Data writers
+        "CSVWriterNode",
+        "JSONWriterNode",
+        "TextWriterNode",
+        # Declarative transforms (no config-code; field/operator/path config)
+        "FilterNode",
+        "Map",
+        "Sort",
+        "ChunkTextExtractorNode",
+        "ContextFormatterNode",
+        "ContextualCompressorNode",
+        "QueryTextWrapperNode",
+        "HierarchicalChunkerNode",
+        "SemanticChunkerNode",
+        "StatisticalChunkerNode",
+        "TextSplitterNode",
+        # Flow control
+        "MergeNode",
+        "AsyncMergeNode",
+        "SwitchNode",
+        "AsyncSwitchNode",
+        "SignalWaitNode",
+        # Database / cache / routing
+        "SQLDatabaseNode",
+        "AsyncSQLDatabaseNode",
+        "RedisNode",
+        "QueryRouterNode",
+        "OptimisticLockingNode",
+        "WorkflowConnectionPool",
+        # Vector / retrieval
+        "EmbeddingNode",
+        "VectorDatabaseNode",
+        "AsyncPostgreSQLVectorNode",
+        "HybridRetrieverNode",
+        "RelevanceScorerNode",
+        # Streaming / events
+        "EventGeneratorNode",
+        "EventStreamNode",
+        "KafkaConsumerNode",
+        "StreamPublisherNode",
+        "WebSocketNode",
+        # NOTE: SharePoint connectors (SharePointGraphReader/Writer) are
+        # EXCLUDED — `SharePointGraphReader` routes a config `device_code_callback`
+        # string to `importlib.import_module(...) + getattr + call` (a dynamic-
+        # import code-exec vector, #1125 R4 MEDIUM); the Writer shares that
+        # device-code-flow auth module. Both are denylisted below.
+    }
+)
+
+
+# Defense-in-depth FLOOR (secondary to the positive allowlist above). With the
+# default-deny allowlist, anything not in `_SAFE_NODE_TYPES` is already
+# rejected; this denylist is an UNCONDITIONAL floor at the realizer + the
+# caller-override path (`workflow_from_brief(allowed_node_types=...)`), so a
+# caller that supplies a custom allowlist still cannot re-admit a known
+# code-execution node. Enumerates the confirmed config-code-exec registered
+# nodes across all submodules (not only those `from_brief` warms), because the
+# NodeRegistry is process-global and these may be registered by other imports.
 _DANGEROUS_NODE_TYPES: frozenset[str] = frozenset(
     {
         "PythonCodeNode",
         "AsyncPythonCodeNode",
+        "DataTransformer",
+        "ConvergenceCheckerNode",
+        "MultiCriteriaConvergenceNode",
+        "BatchProcessorNode",
+        "CodeValidationNode",
+        "WorkflowValidationNode",
+        "ValidationTestSuiteExecutorNode",
+        "WorkflowNode",
+        # SharePoint connectors — dynamic-import code-exec vector via the
+        # config `device_code_callback` → `importlib.import_module` path
+        # (#1125 R4 MEDIUM); both share the device-code-flow auth module.
+        "SharePointGraphReader",
+        "SharePointGraphWriter",
     }
 )
 
@@ -182,9 +284,8 @@ def _signature_cls() -> type:
     if _SIGNATURE_CLS_CACHE is not None:
         return _SIGNATURE_CLS_CACHE
 
-    from kaizen.signatures import OutputField  # type: ignore[import-not-found]
-
     from kailash._from_brief.signatures import BriefPlanSignature
+    from kaizen.signatures import OutputField  # type: ignore[import-not-found]
 
     class WorkflowPlanSignature(BriefPlanSignature):
         """Kaizen Signature for Sg-Workflow plan emission.
@@ -277,56 +378,63 @@ if TYPE_CHECKING:
 # --------------------------------------------------------------------------- #
 
 
-def _registered_node_types() -> Set[str]:
-    """Return the set of registered Kailash node type names.
+def _safe_node_types() -> Set[str]:
+    """Return the DEFAULT-DENY safe node-type allowlist for `from_brief`.
 
-    Reads :meth:`kailash.nodes.base.NodeRegistry.list_nodes` at call
-    time so newly-registered node types are visible without a process
-    restart. This is the allowlist :func:`workflow_from_brief` passes
-    to :func:`validate_plan` per ``rules/agent-reasoning.md`` Rule 1
-    (the LLM may freely propose node types; the allowlist gate is the
-    structural check that rejects hallucinations).
+    Returns ``_SAFE_NODE_TYPES`` intersected with the nodes actually
+    registered in :class:`kailash.nodes.base.NodeRegistry` at call time —
+    so the allowlist never advertises a vetted node type whose submodule
+    is not installed, and never admits a node type that is not on the
+    explicit positive allowlist. This is the surface
+    :func:`workflow_from_brief` passes to the realizer per
+    ``rules/agent-reasoning.md`` Rule 1 (the LLM freely proposes node
+    types; this allowlist is the structural gate that rejects both
+    hallucinations AND any node type not vetted as safe).
+
+    DEFAULT-DENY (issue #1125 R2): a node type the LLM emits is realized
+    ONLY if it is BOTH registered AND in ``_SAFE_NODE_TYPES``. A new SDK
+    node is excluded until a human adds it to ``_SAFE_NODE_TYPES`` after
+    confirming it takes no config-supplied code (see the module-level
+    rationale + the inverse-completeness test).
 
     Returns:
-        A set of node type names registered at import time.
+        The safe node-type names that are registered in this process.
     """
     # Warm the common node-type submodules so the registry is populated
     # against the canonical Kailash node surface (data, logic, transform,
-    # code, AI). Wrapped in try/except per `rules/dependencies.md` —
-    # except branch is bounded to ImportError so non-import errors
-    # propagate loudly (NOT the silent-fallback anti-pattern).
-    try:
-        import kailash.nodes.data  # noqa: F401
-    except ImportError:
-        pass
-    try:
-        import kailash.nodes.transform  # noqa: F401
-    except ImportError:
-        pass
-    try:
-        import kailash.nodes.logic  # noqa: F401
-    except ImportError:
-        pass
-    try:
-        import kailash.nodes.code  # noqa: F401
-    except ImportError:
-        pass
-    # Note: `kailash.nodes.ai` is intentionally NOT warmed here — that
-    # submodule does not exist in the current SDK layout (verified via
-    # `ls src/kailash/nodes/ai`). Adding the import would create a static
-    # analyzer warning (pyright reportMissingImports). The allowlist still
-    # picks up any AI nodes registered through other warmed submodules.
+    # code). These are core `pip install kailash` submodules — a genuine
+    # ImportError here is a real breakage, NOT an expected-absent optional
+    # dep, so it is surfaced at WARN (per `rules/observability.md` Rule 5 +
+    # `rules/zero-tolerance.md` Rule 3) rather than silently swallowed. The
+    # guard is retained (a missing submodule must not crash the allowlist
+    # build) but the failure is now loud.
+    # (`kailash.nodes.ai` is intentionally absent — that submodule does not
+    # exist in the current SDK layout; warming it would raise a
+    # static-analyzer reportMissingImports.)
+    import importlib
+
+    for _submodule in (
+        "kailash.nodes.data",
+        "kailash.nodes.transform",
+        "kailash.nodes.logic",
+        "kailash.nodes.code",
+    ):
+        try:
+            importlib.import_module(_submodule)
+        except ImportError as exc:
+            logger.warning(
+                "workflow_from_brief.registry_warm_failed",
+                extra={"submodule": _submodule, "error": str(exc)},
+            )
 
     from kailash.nodes.base import NodeRegistry
 
-    # SEC-1 denylist: subtract dangerous code-execution nodes BEFORE
-    # returning. Per workspaces/from-brief-1125/04-validate/round-02-security.md
-    # finding SEC-1, PythonCodeNode + AsyncPythonCodeNode call exec() on
-    # LLM-emitted strings; gating them at the allowlist source ensures the
-    # augmented brief (`AVAILABLE NODE TYPES`) never enumerates them and the
-    # realizer's `validate_node_type` gate rejects them as unknown_value if
-    # the LLM hallucinates them anyway.
-    return set(NodeRegistry.list_nodes().keys()) - _DANGEROUS_NODE_TYPES
+    # DEFAULT-DENY: intersect the vetted positive allowlist with what is
+    # actually registered. Anything not in `_SAFE_NODE_TYPES` (including
+    # every code-execution node and any new/unvetted SDK node) is excluded
+    # by construction — there is no "all registered minus denylist" path
+    # that a newly-added dangerous node could slip through.
+    return set(_SAFE_NODE_TYPES) & set(NodeRegistry.list_nodes().keys())
 
 
 # --------------------------------------------------------------------------- #
@@ -489,26 +597,40 @@ def _coerce_connection_spec(raw: Dict[str, Any]) -> "ConnectionSpec":
     )
 
 
-def _realize(plan: Any) -> "WorkflowBuilder":
+def _realize(plan: Any, allowed_node_types: Set[str]) -> "WorkflowBuilder":
     """Realize a validated workflow plan into a WorkflowBuilder.
 
-    Pure structural plumbing per ``rules/agent-reasoning.md`` §
-    "Permitted Deterministic Logic" (exception 6, tool-result parsing).
-    The function does NOT inspect brief CONTENT — it only iterates the
-    LLM-validated plan and calls the framework's builder API.
+    Structural plumbing per ``rules/agent-reasoning.md`` § "Permitted
+    Deterministic Logic" (exception 6, tool-result parsing) — it does NOT
+    reason about brief CONTENT. It DOES enforce the node-type allowlist
+    and the SEC-1 code-execution denylist at the realization choke point:
+    ``validate_plan``'s top-level ``node_type`` gate is a structural no-op
+    for :class:`WorkflowPlan` because the per-node types live inside
+    ``plan.nodes[i]["node_type"]``, not at a top-level attribute. This
+    loop is therefore the boundary where an LLM-emitted ``node_type``
+    reaches ``builder.add_node``, so the allowlist + denylist MUST be
+    enforced here. The denylist is re-applied UNCONDITIONALLY (independent
+    of ``allowed_node_types``) so a caller-supplied allowlist cannot
+    re-admit a code-execution node.
 
     Args:
         plan: A :class:`WorkflowPlan` already validated by
-            :func:`validate_plan` (typed + confidence + allowlist).
+            :func:`validate_plan` (typed + confidence).
+        allowed_node_types: The registered-node allowlist (with the SEC-1
+            denylist already subtracted). Every realized ``node_type``
+            MUST be a member; ``_DANGEROUS_NODE_TYPES`` is additionally
+            enforced as an absolute floor regardless of this set.
 
     Returns:
         A :class:`~kailash.workflow.builder.WorkflowBuilder` populated
         with the plan's nodes and connections.
 
     Raises:
-        BriefInterpretationError: When a node spec or connection spec
-            is structurally malformed.
+        BriefInterpretationError: When a node spec or connection spec is
+            structurally malformed (``malformed=True``), or when a node
+            type is denylisted / not in the allowlist (``unknown_value``).
     """
+    from kailash._from_brief.allowlist import validate_node_type
     from kailash._from_brief.branching import realize_connections
     from kailash._from_brief.exceptions import BriefInterpretationError
     from kailash.workflow.builder import WorkflowBuilder
@@ -517,6 +639,21 @@ def _realize(plan: Any) -> "WorkflowBuilder":
     seen_ids: Set[str] = set()
     for raw_node in plan.nodes:
         spec = _coerce_node_spec(raw_node)
+        # SEC-1 denylist floor — enforced FIRST and unconditionally, so a
+        # custom allowed_node_types cannot re-admit a code-execution node
+        # (MEDIUM-2). PythonCodeNode/AsyncPythonCodeNode call exec() on
+        # LLM-emitted strings.
+        if spec["node_type"] in _DANGEROUS_NODE_TYPES:
+            raise BriefInterpretationError(
+                f"node_type={spec['node_type']!r} is denylisted because it "
+                f"executes arbitrary code (exec); a natural-language brief "
+                f"cannot realize it regardless of the allowlist",
+                unknown_value=spec["node_type"],
+            )
+        # Allowlist gate at the realization choke point — validate_plan's
+        # top-level node_type gate does not reach plan.nodes[i]["node_type"]
+        # (CRITICAL-1). Rejects hallucinated / prompt-injected node types.
+        validate_node_type(spec["node_type"], allowed_node_types)
         if spec["node_id"] in seen_ids:
             raise BriefInterpretationError(
                 f"plan contains duplicate node_id: {spec['node_id']!r}",
@@ -604,7 +741,13 @@ def workflow_from_brief(
     # Step 2 — derive model + allowlist.
     resolved_model = model if model is not None else get_default_llm_model()
     if allowed_node_types is None:
-        allowed_node_types = _registered_node_types()
+        allowed_node_types = _safe_node_types()
+    else:
+        # SEC-1: the denylist is a FLOOR, not a default. Subtract it even
+        # from a caller-supplied allowlist so a custom set cannot re-admit
+        # a code-execution node (MEDIUM-2). The realizer re-checks the
+        # denylist unconditionally too (defense in depth).
+        allowed_node_types = set(allowed_node_types) - _DANGEROUS_NODE_TYPES
 
     # Step 3 — augment the brief with the allowlist so the LLM has the
     # full vocabulary inline. The agent runs against a structured-output
@@ -648,8 +791,10 @@ def workflow_from_brief(
         confidence_threshold=confidence_threshold,
     )
 
-    # Step 6 — realize into a WorkflowBuilder.
-    builder = _realize(plan)
+    # Step 6 — realize into a WorkflowBuilder. The realizer enforces the
+    # node-type allowlist + SEC-1 denylist at the add_node choke point
+    # (validate_plan's top-level node_type gate does not reach plan.nodes).
+    builder = _realize(plan, allowed_node_types)
     logger.info(
         "workflow_from_brief.ok",
         extra={
