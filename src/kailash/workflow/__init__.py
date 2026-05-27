@@ -1,6 +1,6 @@
 """Workflow system for the Kailash SDK."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kailash.workflow.async_builder import AsyncWorkflowBuilder, ErrorHandler
 from kailash.workflow.async_builder import RetryPolicy as AsyncRetryPolicy
@@ -34,6 +34,20 @@ from kailash.workflow.resilience import (
 from kailash.workflow.templates import BusinessWorkflowTemplates
 from kailash.workflow.templates import CycleTemplates as WorkflowCycleTemplates
 from kailash.workflow.visualization import WorkflowVisualizer
+
+if TYPE_CHECKING:
+    # Surface the lazy ``WorkflowPlan`` / ``WorkflowPlanSignature`` exports to
+    # static analyzers (CodeQL ``py/undefined-export``, pyright, mypy --strict,
+    # Sphinx autodoc) per ``rules/orphan-detection.md`` § 6b. Both symbols are
+    # resolved at runtime via ``__getattr__`` below (their bodies live behind
+    # ``from_brief.py``'s own lazy factories — the kaizen-import circular-load
+    # fence). Without this analyzer-only import, CodeQL flags both ``__all__``
+    # entries as "exported but not defined" because the lazy ``__getattr__``
+    # binding is invisible to module-scope static analysis.
+    from kailash.workflow.from_brief import (  # noqa: F401
+        WorkflowPlan,
+        WorkflowPlanSignature,
+    )
 
 __all__ = [
     "Workflow",
