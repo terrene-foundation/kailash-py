@@ -50,19 +50,22 @@ from __future__ import annotations
 import keyword
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Type, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, cast
 
 from kailash._from_brief import BriefInterpretationError
 from kailash._from_brief import BriefPlan as _BasePlan
-from kailash._from_brief import (
-    BriefPlanSignature,
-    coerce_plan,
-    get_default_llm_model,
-    scrub_brief,
-    validate_plan,
-)
-from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.signatures import OutputField
+from kailash._from_brief import coerce_plan, scrub_brief, validate_plan
+
+# kaizen-dependent imports (`BriefPlanSignature` from kailash._from_brief,
+# `OutputField` / `BaseAgent` from kaizen) are LAZY — deferred into function
+# bodies + the lazy `_schema_plan_signature_cls()` factory below. kaizen is a
+# SEPARATE downstream package (kailash-kaizen); importing it at module scope
+# would make `import dataflow.from_brief` require kaizen, breaking the DataFlow
+# conftest at collection time in any CI job where kaizen is absent. See
+# `rules/dependencies.md` § "Declared = Imported" + `rules/framework-first.md`
+# layering. Pattern mirrors `kailash/workflow/from_brief.py::_workflow_plan_cls`.
+if TYPE_CHECKING:
+    from kailash._from_brief import BriefPlanSignature  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -146,66 +149,129 @@ _FIELD_TYPE_TO_PYTHON: Dict[str, type] = {
 _SQL_IDENTIFIER_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 
 
-class SchemaPlanSignature(BriefPlanSignature):
-    """Kaizen Signature emitting a DataFlow schema plan from a brief.
+# ---------------------------------------------------------------------------
+# Lazy Signature class (defers kaizen + _from_brief.signatures import past
+# module load so `import dataflow.from_brief` does not require kaizen).
+# ---------------------------------------------------------------------------
+#
+# `SchemaPlanSignature(BriefPlanSignature)` was a module-scope class; both its
+# base (`BriefPlanSignature` from `kailash._from_brief`) and `OutputField`
+# (from `kaizen.signatures`) carry the kaizen dependency. Defining the class at
+# module scope therefore made `import dataflow.from_brief` require kaizen,
+# breaking the DataFlow conftest at collection time in kaizen-absent CI jobs.
+# The class is now built LAZILY via `_schema_plan_signature_cls()` and exposed
+# at module scope through `__getattr__` (PEP 562) — mirroring
+# `kailash/workflow/from_brief.py::_signature_cls`.
 
-    The Signature is invoked once per brief; the LLM emits a list of
-    :class:`ModelSpec`-shaped dicts the realizer then materializes into
-    actual ``@db.model``-equivalent classes. Per
-    ``rules/agent-reasoning.md`` MUST Rule 3, the OutputField
-    description below describes the reasoning the LLM is to perform —
-    it does NOT pre-filter the brief in Python.
+_SCHEMA_PLAN_SIGNATURE_CLS_CACHE: Optional[type] = None
 
-    Plan-shape contract (what the LLM emits in ``models``):
 
-    .. code-block:: python
+def _schema_plan_signature_cls() -> type:
+    """Return the :class:`SchemaPlanSignature` class, constructed lazily.
 
-        [
-            {
-                "name": "User",                       # Python class name
-                "fields": [
-                    {"name": "id", "type": "int"},
-                    {"name": "email", "type": "str"},
-                    {"name": "created_at", "type": "datetime"},
-                ],
-                "relationships": [
-                    {
-                        "target_model": "Post",
-                        "rel_type": "one_to_many",
-                        "fk_column": "user_id",
-                    }
-                ],
-            },
-            ...
-        ]
+    Defers the ``kailash._from_brief.BriefPlanSignature`` +
+    ``kaizen.signatures.OutputField`` imports to call time so importing this
+    module (and thus the DataFlow conftest's ``import kailash._from_brief``
+    chain + ``import dataflow``) does not require kaizen.
 
-    The ``fields`` list MUST include an ``id`` field per the DataFlow
-    primary-key invariant (see ``rules/patterns.md`` § DataFlow Models
-    & Workflows: "PK MUST be named 'id'"). The realizer surfaces a
-    typed error if ``id`` is absent so the failure mode is loud, not
-    silent.
+    Returns:
+        The lazily-constructed :class:`SchemaPlanSignature` subclass, cached
+        after first invocation.
     """
+    global _SCHEMA_PLAN_SIGNATURE_CLS_CACHE
+    if _SCHEMA_PLAN_SIGNATURE_CLS_CACHE is not None:
+        return _SCHEMA_PLAN_SIGNATURE_CLS_CACHE
 
-    # See the pyright suppressions in BriefPlanSignature for the
-    # Signature metaclass-rebinding rationale.
-    models: list = OutputField(  # pyright: ignore[reportAssignmentType]
-        description=(
-            "List of ModelSpec dicts, one per database table the user "
-            "asked for. Each dict has: 'name' (Python class name, "
-            "CamelCase, valid Python identifier); 'fields' (list of "
-            "{'name', 'type'} dicts, type drawn from "
-            "{str, int, float, bool, bytes, datetime, date, time, "
-            "timedelta, dict, list}); 'relationships' (list of "
-            "{'target_model', 'rel_type', 'fk_column'} dicts, "
-            "rel_type drawn from {one_to_many, many_to_one, "
-            "one_to_one}). Every model MUST have an 'id' field. "
-            "Field names MUST be valid Python identifiers. Do NOT "
-            "emit columns the brief did not ask for (no inferred "
-            "audit columns, no inferred timestamps unless the brief "
-            "mentions them); DataFlow manages created_at/updated_at "
-            "automatically when annotated."
+    from kailash._from_brief import BriefPlanSignature
+    from kaizen.signatures import OutputField
+
+    class SchemaPlanSignature(BriefPlanSignature):
+        """Kaizen Signature emitting a DataFlow schema plan from a brief.
+
+        The Signature is invoked once per brief; the LLM emits a list of
+        :class:`ModelSpec`-shaped dicts the realizer then materializes into
+        actual ``@db.model``-equivalent classes. Per
+        ``rules/agent-reasoning.md`` MUST Rule 3, the OutputField
+        description below describes the reasoning the LLM is to perform —
+        it does NOT pre-filter the brief in Python.
+
+        Plan-shape contract (what the LLM emits in ``models``):
+
+        .. code-block:: python
+
+            [
+                {
+                    "name": "User",                       # Python class name
+                    "fields": [
+                        {"name": "id", "type": "int"},
+                        {"name": "email", "type": "str"},
+                        {"name": "created_at", "type": "datetime"},
+                    ],
+                    "relationships": [
+                        {
+                            "target_model": "Post",
+                            "rel_type": "one_to_many",
+                            "fk_column": "user_id",
+                        }
+                    ],
+                },
+                ...
+            ]
+
+        The ``fields`` list MUST include an ``id`` field per the DataFlow
+        primary-key invariant (see ``rules/patterns.md`` § DataFlow Models
+        & Workflows: "PK MUST be named 'id'"). The realizer surfaces a
+        typed error if ``id`` is absent so the failure mode is loud, not
+        silent.
+        """
+
+        # See the pyright suppressions in BriefPlanSignature for the
+        # Signature metaclass-rebinding rationale.
+        models: list = OutputField(  # pyright: ignore[reportAssignmentType]
+            description=(
+                "List of ModelSpec dicts, one per database table the user "
+                "asked for. Each dict has: 'name' (Python class name, "
+                "CamelCase, valid Python identifier); 'fields' (list of "
+                "{'name', 'type'} dicts, type drawn from "
+                "{str, int, float, bool, bytes, datetime, date, time, "
+                "timedelta, dict, list}); 'relationships' (list of "
+                "{'target_model', 'rel_type', 'fk_column'} dicts, "
+                "rel_type drawn from {one_to_many, many_to_one, "
+                "one_to_one}). Every model MUST have an 'id' field. "
+                "Field names MUST be valid Python identifiers. Do NOT "
+                "emit columns the brief did not ask for (no inferred "
+                "audit columns, no inferred timestamps unless the brief "
+                "mentions them); DataFlow manages created_at/updated_at "
+                "automatically when annotated."
+            )
         )
-    )
+
+    _SCHEMA_PLAN_SIGNATURE_CLS_CACHE = SchemaPlanSignature
+    return SchemaPlanSignature
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562 module-level ``__getattr__`` for lazy class resolution.
+
+    Per ``rules/orphan-detection.md`` § 6b, lazy-loaded symbols MUST stay
+    discoverable through the module's public surface. This hook resolves
+    ``from dataflow.from_brief import SchemaPlanSignature`` at call-time (the
+    symbol is in ``__all__``, has a lazy resolver, and has a ``TYPE_CHECKING``
+    stub below).
+    """
+    if name == "SchemaPlanSignature":
+        return _schema_plan_signature_cls()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+if TYPE_CHECKING:
+    # Surface the lazy class to static analyzers (CodeQL py/undefined-export,
+    # pyright, mypy) per `rules/orphan-detection.md` § 6b. Runtime body lives
+    # inside `_schema_plan_signature_cls`.
+    class SchemaPlanSignature:  # type: ignore[no-redef]
+        """Static-analyzer stub; runtime body in :func:`_schema_plan_signature_cls`."""
+
+        models: list
 
 
 # ---------------------------------------------------------------------------
@@ -567,6 +633,14 @@ def from_brief(
         MissingDefaultLLMModelError: When ``llm_model`` is None and
             ``DEFAULT_LLM_MODEL`` is unset.
     """
+    # Lazy kaizen imports — deferred to call time so importing this module
+    # does not require kaizen (the DataFlow conftest collection path). A
+    # caller invoking from_brief() IS in an execution path where kaizen is
+    # present. `get_default_llm_model` lives in `kailash._from_brief.signatures`
+    # which imports kaizen at module scope, so it is lazy too.
+    from kailash._from_brief import get_default_llm_model
+    from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+
     # Invariant 3 — scrub credentials before any logging or LLM call.
     # The Kaizen agent dispatch logs the input prompt; the brief MUST
     # be scrubbed before it reaches that surface.
@@ -592,7 +666,7 @@ def from_brief(
     )
     agent = BaseAgent(
         config=agent_config,
-        signature=SchemaPlanSignature(),
+        signature=_schema_plan_signature_cls()(),
         # Pass an empty mcp_servers list so the default MCP
         # auto-discovery doesn't try to launch the builtin server
         # for what is a one-shot inference call.
