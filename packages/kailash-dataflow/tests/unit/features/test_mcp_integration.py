@@ -46,14 +46,13 @@ def _make_product(
     depends_on: List[str] | None = None,
 ) -> ProductRegistration:
     """Create a minimal ProductRegistration for testing."""
-    if fn is None:
 
-        async def fn(ctx: Any) -> dict:
-            return {}
+    async def default_fn(ctx: Any) -> dict:
+        return {}
 
     return ProductRegistration(
         name=name,
-        fn=fn,
+        fn=fn if fn is not None else default_fn,
         mode=ProductMode(mode),
         depends_on=depends_on or [],
         staleness=StalenessPolicy(),
