@@ -1550,6 +1550,56 @@ class AsyncLocalRuntime(LocalRuntime):
 
         return inputs
 
+    async def _w1_resume_short_circuit(
+        self,
+        node_id: str,
+        tracker: AsyncExecutionTracker,
+        context: ExecutionContext,
+    ) -> bool:
+        """Replay a node's checkpointed output instead of re-executing it.
+
+        This is the async-runtime sibling of the sync LocalRuntime
+        resume short-circuit (``local.py``: "Skipping node '%s'
+        (restored from checkpoint)").  On a durable resume the W1
+        ``ExecutionTracker`` stashed on ``context._w1_execution_tracker``
+        is rehydrated from the prior checkpoint blob in
+        ``execute_workflow_async``; any node whose output is already in
+        that tracker has provably completed on the prior run and MUST
+        NOT be re-executed — re-execution fires side effects twice and
+        breaks the "exactly once on resume" guarantee that
+        DurableExecutionEngine documents.
+
+        When the node is already complete this method:
+
+        * feeds the cached output into the per-run
+          ``AsyncExecutionTracker`` via ``record_result`` so dependents
+          receive the restored output through the exact same
+          ``node_outputs`` path a fresh execution would populate (see
+          ``_prepare_async_node_inputs``);
+        * re-records completion into the W1 tracker (idempotent) so the
+          checkpoint stays consistent if a later node triggers a save;
+        * returns ``True`` so the caller skips ``execute_async`` and the
+          ``_w1_emit_node_completion`` re-save/re-dispatch.
+
+        Returns ``False`` (no short-circuit) when there is no W1 tracker
+        or the node is not yet completed — the normal execution path.
+        """
+        w1_tracker: Optional[ExecutionTracker] = getattr(
+            context, "_w1_execution_tracker", None
+        )
+        if w1_tracker is None or not w1_tracker.is_completed(node_id):
+            return False
+
+        cached_output = w1_tracker.get_output(node_id)
+        # Mirror the sync runtime: dependents must receive the restored
+        # output exactly as a fresh execution would have produced it.
+        await tracker.record_result(node_id, cached_output, 0.0)
+        # Idempotent re-record keeps the W1 tracker (and any checkpoint
+        # save triggered by a later, not-yet-completed node) consistent.
+        w1_tracker.record_completion(node_id, cached_output)
+        logger.info("Skipping node '%s' (restored from checkpoint)", node_id)
+        return True
+
     async def _execute_node_async(
         self,
         workflow,
@@ -1564,6 +1614,13 @@ class AsyncLocalRuntime(LocalRuntime):
 
         async with self.execution_semaphore:
             try:
+                # === W1: resume short-circuit ===
+                # On a durable resume, skip nodes already completed on the
+                # prior run and replay their checkpointed output.  Mirrors
+                # the sync LocalRuntime gate.
+                if await self._w1_resume_short_circuit(node_id, tracker, context):
+                    return
+
                 node_instance = workflow._node_instances.get(node_id)
                 if not node_instance:
                     raise WorkflowExecutionError(f"Node instance '{node_id}' not found")
@@ -1666,6 +1723,13 @@ class AsyncLocalRuntime(LocalRuntime):
 
         async with self.execution_semaphore:
             try:
+                # === W1: resume short-circuit ===
+                # On a durable resume, skip nodes already completed on the
+                # prior run and replay their checkpointed output.  Mirrors
+                # the sync LocalRuntime gate.
+                if await self._w1_resume_short_circuit(node_id, tracker, context):
+                    return
+
                 node_instance = workflow._node_instances.get(node_id)
                 if not node_instance:
                     raise WorkflowExecutionError(f"Node instance '{node_id}' not found")
