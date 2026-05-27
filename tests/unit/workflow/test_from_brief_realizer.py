@@ -30,7 +30,6 @@ import pytest
 
 from kailash._from_brief.exceptions import BriefInterpretationError
 
-
 # --------------------------------------------------------------------------- #
 # Lazy class resolution                                                       #
 # --------------------------------------------------------------------------- #
@@ -59,6 +58,13 @@ def test_workflow_plan_cls_caches_result():
 
 def test_signature_cls_builds_kaizen_signature():
     """`_signature_cls()` returns a Kaizen Signature subclass with fields."""
+    # Class B (kaizen-dependent): `_signature_cls()` builds a real Kaizen
+    # Signature, which `from kaizen.signatures import ...` requires. kaizen
+    # is a downstream optional package absent in the core "Test"/"Base" CI
+    # jobs. Per `rules/test-skip-discipline.md` this is an ACCEPTABLE skip
+    # (cannot execute without the optional dep), NOT a masked failure — the
+    # skip reason names kaizen.
+    pytest.importorskip("kaizen")
     from kailash._from_brief.signatures import BriefPlanSignature
     from kailash.workflow.from_brief import _signature_cls
 
@@ -72,6 +78,9 @@ def test_signature_cls_builds_kaizen_signature():
 
 def test_signature_cls_caches_result():
     """`_signature_cls()` returns the same class on repeated calls."""
+    # Class B (kaizen-dependent): `_signature_cls()` builds a real Kaizen
+    # Signature. Skip without kaizen per `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     from kailash.workflow.from_brief import _signature_cls
 
     assert _signature_cls() is _signature_cls()
@@ -79,6 +88,11 @@ def test_signature_cls_caches_result():
 
 def test_workflow_module_getattr_resolves_lazy_classes():
     """`kailash.workflow.WorkflowPlan` / `WorkflowPlanSignature` resolve."""
+    # Class B (kaizen-dependent): resolving `WorkflowPlanSignature` calls
+    # `_signature_cls()`, which builds a real Kaizen Signature (`WorkflowPlan`
+    # alone is kaizen-free, but this test asserts the Signature resolution
+    # too). Skip without kaizen per `rules/test-skip-discipline.md`.
+    pytest.importorskip("kaizen")
     from kailash.workflow import WorkflowPlan, WorkflowPlanSignature
     from kailash.workflow.from_brief import _signature_cls, _workflow_plan_cls
 
