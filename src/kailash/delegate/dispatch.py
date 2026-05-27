@@ -63,7 +63,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Generic, NoReturn, Protocol, TypeVar, runtime_checkable
 
-from kailash.delegate.audit import AuditChainEngine, DelegateEventType
+from kailash.delegate.audit import (
+    AuditChainEngine,
+    DelegateEventType,
+    content_signing_bytes,
+)
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import (
     CascadeTenantViolationError,
@@ -1847,12 +1851,24 @@ class DispatchSurface:
                 "external_side_effect": result.external_side_effect,
             }
             # C2-1 zero-tolerance fix: call the injected signer with the
-            # canonical-bytes encoding of the audit payload. A signer
+            # canonical-bytes encoding of the audit event. A signer
             # fault re-raises as DispatchSignerError so the error
             # taxonomy distinguishes signer faults from
             # AuditChainEmissionError (signature surface-shape) and
             # DispatchValidationError (input-shape).
-            canonical_bytes = canonical_json_dumps(payload).encode("utf-8")
+            #
+            # #1182: the signed (and verified) byte-string is the CONTENT
+            # pre-image — event_type + payload + signer_delegate_id — via
+            # content_signing_bytes, the SAME helper AuditChainEngine.
+            # emit_event verifies against. Pre-#1182 this signed the bare
+            # payload (canonical_json_dumps(payload)), which the engine's
+            # verify-site could never reproduce once it included the
+            # engine-assigned sequence/previous_hash/signed_at. The
+            # event_type is part of the pre-image, so it is rebuilt per
+            # iteration (each event_type in result.audit_events).
+            canonical_bytes = content_signing_bytes(
+                event_type.value, payload, self._identity.delegate_id
+            )
             try:
                 signature_hex = self._signer(canonical_bytes)
             except Exception as exc:

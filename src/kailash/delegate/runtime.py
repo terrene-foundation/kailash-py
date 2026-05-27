@@ -75,12 +75,15 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from kailash.delegate.audit import AuditChainEngine, DelegateEventType
+from kailash.delegate.audit import (
+    AuditChainEngine,
+    DelegateEventType,
+    content_signing_bytes,
+)
 from kailash.delegate.dispatch import DispatchResult, DispatchSurface
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import TenantScope, TenantScopedCascade
 from kailash.delegate.types import DelegateIdentity, LifecycleState
-from kailash.trust._json import canonical_json_dumps
 
 logger = logging.getLogger(__name__)
 
@@ -1241,7 +1244,16 @@ class DelegateRuntime:
             "nonce_present": bool(human_acknowledged_nonce),
         }
         try:
-            canonical_bytes = canonical_json_dumps(rotation_payload).encode("utf-8")
+            # #1182: sign the content pre-image the engine verifies against
+            # (event_type + payload + signer_delegate_id), NOT the bare
+            # rotation_payload. Signing the payload alone produced a
+            # signature emit_event could never verify — same root cause as
+            # the _emit_phase_audit path.
+            canonical_bytes = content_signing_bytes(
+                DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value,
+                rotation_payload,
+                self._identity.delegate_id,
+            )
             signature = self._signer(canonical_bytes)
             self._audit_engine.emit_event(
                 event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value,
@@ -1707,8 +1719,14 @@ class DelegateRuntime:
 
         The event type per phase is fixed by
         :attr:`_PHASE_EVENT_TYPES`. The signature is computed via the
-        bound :attr:`_signer` over the canonical-JSON bytes of the
-        payload (mirrors the S5 dispatch path).
+        bound :attr:`_signer` over the CONTENT pre-image — event_type +
+        payload + signer_delegate_id — produced by
+        :func:`kailash.delegate.audit.content_signing_bytes`. The engine
+        verifies the supplied signature against the SAME pre-image (#1182);
+        signing the bare payload alone (the pre-#1182 behaviour) produced a
+        signature the engine could never verify, because emit_event verifies
+        against bytes the caller cannot reproduce — the engine-assigned
+        sequence / previous_hash / signed_at are unknown at signing time.
         """
         event_type = self._PHASE_EVENT_TYPES[phase]
         payload: dict[str, Any] = {
@@ -1717,7 +1735,12 @@ class DelegateRuntime:
         }
         if extra_payload:
             payload.update(extra_payload)
-        canonical_bytes = canonical_json_dumps(payload).encode("utf-8")
+        # #1182: sign the content pre-image the engine verifies against,
+        # NOT the bare payload. content_signing_bytes is the single shared
+        # source so sign-site and verify-site agree byte-for-byte.
+        canonical_bytes = content_signing_bytes(
+            event_type.value, payload, self._identity.delegate_id
+        )
         signature = self._signer(canonical_bytes)
         self._audit_engine.emit_event(
             event_type=event_type.value,
