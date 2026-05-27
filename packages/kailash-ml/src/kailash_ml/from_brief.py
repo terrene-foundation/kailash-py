@@ -668,17 +668,17 @@ def from_brief(
         >>> model_spec.framework  # doctest: +SKIP
         'sklearn'
     """
-    # Lazy kaizen imports — deferred to call time so importing this module
-    # (and thus `import kailash_ml`, which re-exports `from_brief`) does not
-    # require kaizen. A caller invoking from_brief() IS in an execution path
-    # where kaizen is present. `get_default_llm_model` lives in
-    # `kailash._from_brief.signatures` which imports kaizen at module scope,
-    # so it is lazy too.
-    from kailash._from_brief import get_default_llm_model
-    from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-
-    # Input validation (permitted per agent-reasoning.md item 1 —
-    # presence/type checks, NOT content classification).
+    # Input validation FIRST (permitted per agent-reasoning.md item 1 —
+    # presence/type checks, NOT content classification). These deterministic
+    # guards use ONLY polars (imported at module scope, line 95) + the
+    # kaizen-free `kailash._from_brief` exceptions, so a bad-input rejection
+    # MUST fire BEFORE the lazy kaizen imports below. In a kaizen-absent env
+    # (the Base CI matrix runs the kailash-ml unit suite without kaizen),
+    # the Tier-1 rejection tests pass deliberately-bad input and assert the
+    # validation error (TypeError / ValueError) — hoisting these guards above
+    # the kaizen import ensures they raise the expected error, NOT a
+    # ModuleNotFoundError. Per `rules/zero-tolerance.md` Rule 3, the rejection
+    # is a loud, explicit error that fires without requiring kaizen.
     if not isinstance(df, pl.DataFrame):
         raise TypeError(
             f"df must be a polars.DataFrame, got {type(df).__name__}; "
@@ -690,6 +690,17 @@ def from_brief(
             "from an empty schema. Pass a DataFrame whose columns "
             "match the brief's described data"
         )
+
+    # Lazy kaizen imports — deferred to call time (AND below the deterministic
+    # input guards above) so importing this module (and thus `import
+    # kailash_ml`, which re-exports `from_brief`) does not require kaizen, AND
+    # so a bad-input caller gets the typed rejection rather than a kaizen
+    # ModuleNotFoundError. A caller passing VALID input IS in an execution
+    # path where kaizen is present. `get_default_llm_model` lives in
+    # `kailash._from_brief.signatures` which imports kaizen at module scope,
+    # so it is lazy too.
+    from kailash._from_brief import get_default_llm_model
+    from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 
     # Step 1 — extract dataframe schema BEFORE the LLM call. This is
     # the structural plumbing the LLM uses to ground its column
