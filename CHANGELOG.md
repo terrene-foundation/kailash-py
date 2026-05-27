@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.27.0] - 2026-05-27
+
+### Added
+
+- **`from_brief()` family — natural-language brief → runnable workflow** via LLM-emitted typed plan. New surface across 5 entrypoints (closes #1125):
+  - `kailash.workflow.from_brief(brief, *, model=None, lazy_kaizen=True)` — sync builder; returns a built `Workflow` ready for `LocalRuntime`.
+  - `kailash.workflow.afrom_brief(brief, *, model=None, lazy_kaizen=True)` — async variant for `AsyncLocalRuntime` callers.
+  - `kailash.workflow.from_brief_validate(brief, *, model=None)` — dry-run that returns the typed plan + validation report without building a workflow.
+  - `kailash.workflow.from_brief_analyze(brief, *, model=None)` — confidence / coverage / risk report on the brief without committing to a plan.
+  - `kailash.workflow.from_brief_realize(plan, *, allowed_node_types=None)` — realize a pre-validated plan into a workflow (used by the higher-level helpers; exposed for advanced callers that emit plans directly).
+  - All five entrypoints share a single typed `WorkflowPlan` contract; LLM calls flow through Kaizen via a **lazy import contract** — kaizen is imported only when an LLM is actually needed, so `from kailash.workflow import from_brief` does not pay for kaizen at import time.
+  - **Bootstrap profile gate**: when the runtime is in slim/bootstrap mode, `from_brief*` raises a typed error BEFORE touching kaizen, so slim-core consumers get a clear refusal rather than an opaque import failure.
+
+### Security
+
+- **`from_brief()` defaults to a positive safe-node allowlist** (default-deny). Replaces the prior "all registered nodes minus a denylist" model, which was unsound by construction — any new node type registered between releases was implicitly trusted. The new model:
+  - **Allowlist**: 43 vetted node types (CSV/JSON/SQL readers + writers, HTTP request/response, validation primitives, transform, filter, merge, switch, etc. — explicitly excluding `PythonCodeNode`, `AsyncPythonCodeNode`, `CodeExecutor`, `WorkflowNode`, `SharePointGraphReader/Writer`, and 6 other code-execution / SSRF / arbitrary-import surfaces). `kailash.workflow.from_brief._SAFE_NODE_TYPES` is the canonical list.
+  - **Enforcement at the choke point**: `_realize()` now enforces the allowlist at `add_node` time — `validate_plan()` is no longer the sole gate, closing the prior bypass where a `WorkflowPlan` (which nests `node_type` inside `plan.nodes[i]` instead of the top-level shape `validate_plan` expected) could realize disallowed nodes.
+  - **Denylist floor**: a hardcoded denylist of explicitly dangerous types runs BEFORE the allowlist; any future allowlist expansion still cannot accidentally re-admit code-execution surfaces.
+  - **Inverse-completeness test**: `tests/unit/workflow/test_from_brief_safe_allowlist.py` walks the MRO of every allowlisted node type and AST-scans every source path for `exec` / `eval` / `compile` / `import_module` / `__import__` / unsafe-deserialization (`pickle.loads`, `marshal.loads`, `dill.loads`, `cloudpickle.loads`, `yaml.load`) / `CodeExecutor` references — so a future code-executing node added under a familiar-looking name fails the allowlist test, not production.
+  - **NaN/inf rejection at plan-construction**: `BriefConfidence` now uses `model_config = ConfigDict(extra="forbid", allow_inf_nan=False)` AND `check_confidence` rejects non-finite values with `BriefInterpretationError(..., malformed=True)`. Closes a class of confidence-bypass attacks where a brief could ship a `NaN`/`inf` confidence to pass downstream thresholds.
+  - Together these close the 2 CRITICAL findings + 1 MEDIUM (SharePoint SSRF class) + 1 confidence-gate-bypass finding surfaced across 6 redteam rounds during the #1125 review cycle.
+
 ### Changed (breaking, delegate substrate)
 
 - **`Connector.authenticate` / `.write` / `.read` default implementations now raise `NotImplementedError`** via `_legacy_unsupported(name)` instead of returning empty-crypto envelopes / `Principal(tenant_id=None)`. Closes GH #1177 (empty-crypto orphan defaults on write/read — downstream verifiers that did not explicitly check `len(signature) > 0` / `len(attestation) > 0` would treat the prior defaults as authenticated/attested) + GH #1178 (`Principal(tenant_id=None)` from the prior `authenticate` default silently slipped through tenant-scoped authorization checks in multi-tenant deployments). The inline defaults were a transitional convenience carried over from the pre-2.26.0 `__init_subclass__` proxy era and were never part of the documented audit-grade contract — `LegacyInvokeConnector` and direct legacy `invoke()`-only subclasses MUST use `.invoke()` for all dispatch; reaching for `.authenticate()` / `.write()` / `.read()` now gets a clear refusal rather than a silent unverifiable envelope. The 3 newer ACCESSOR defaults (`.revocation` / `.ledger` / `.auth_verifier`) already raised via `_legacy_unsupported` since 2.26.0; this change extends the same defense-in-depth pattern to the 3 primitives.
