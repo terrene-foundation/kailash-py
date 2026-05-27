@@ -63,6 +63,8 @@ class TestCycleRuntime(BaseRuntime, CycleExecutionMixin):
     Note: GREEN phase - Now inherits CycleExecutionMixin for testing.
     """
 
+    __test__ = False  # helper runtime, not a pytest test class (Test* prefix)
+
     def __init__(self, enable_cycles=True, **kwargs):
         """Initialize test runtime with tracking capabilities."""
         # Filter out unknown kwargs to prevent super().__init__() errors
