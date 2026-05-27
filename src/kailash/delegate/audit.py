@@ -67,7 +67,73 @@ __all__ = [
     "CrossAnchorIntegrityError",
     "DelegateEventType",
     "WitnessedCrossAnchor",
+    "content_signing_bytes",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Content-signing pre-image (#1182 root-cause fix)
+# ---------------------------------------------------------------------------
+
+
+def content_signing_bytes(
+    event_type: str,
+    event_payload: dict[str, Any],
+    signer_delegate_id: uuid.UUID,
+) -> bytes:
+    """Canonical UTF-8 bytes a delegate signs to attest event AUTHORSHIP.
+
+    This is the SINGLE source of the signed byte-string shared by both the
+    sign-site (a runtime / delegate with key access, BEFORE the engine has
+    assigned the chain-link fields) AND the verify-site
+    (:meth:`AuditChainEngine.emit_event`, which verifies against the SAME
+    bytes after constructing the entry). Both halves MUST call this helper
+    so the pre-image is byte-identical at both ends — the #1182 contract.
+
+    The pre-image deliberately covers ONLY the delegate-authored content:
+
+    - ``event_type`` — the kind of audit-visible event.
+    - ``event_payload`` — the event's domain-specific fields.
+    - ``signer_delegate_id`` — binds the signature to the signer, defeating
+      same-key cross-event substitution (an attacker cannot lift a valid
+      signature off one signer's event and replay it under another id).
+
+    It deliberately EXCLUDES the engine-assigned fields ``sequence`` /
+    ``previous_hash`` / ``signed_at``. Those are assigned by the engine
+    AFTER it receives the signature (the caller cannot know them at signing
+    time), so requiring the signature to cover them is structurally
+    unsatisfiable (#1182). Tamper-evidence of ordering — reorder / insert /
+    delete — is NOT carried by the signature; it is carried INDEPENDENTLY by
+    the substrate hash-chain: each emitted entry's ``previous_hash`` is the
+    SHA-256 of the prior entry's full canonical dict (which includes
+    ``sequence`` + ``previous_hash`` + the prior ``signature``), and the
+    substrate :class:`AuditAnchor` records that entry-hash + ``parent_anchor_id``
+    linkage. Mutating a committed entry's payload, sequence, or previous_hash
+    breaks the recomputed-hash linkage of every subsequent entry. Signature
+    attests authorship of content; hash-chain attests ordering. The two
+    layers are orthogonal and both load-bearing.
+
+    Mirrors the rs M4 substrate model where ``record(content) ->
+    AuditChainRecord`` signs the content and the ``eatp::ledger::LedgerEntry``
+    holds the ``prev_entry_hash`` / ``entry_hash`` linkage as-is (see
+    ``workspaces/issue-1035-delegate-py/01-analysis/02-kailash-rs-reference-extraction.md:55``).
+
+    Args:
+        event_type: One of :class:`DelegateEventType` string sentinels.
+        event_payload: The event's JSON-serializable payload dict.
+        signer_delegate_id: UUID of the signing :class:`DelegateIdentity`.
+
+    Returns:
+        Canonical UTF-8 bytes routed through
+        :func:`kailash.trust._json.canonical_json_dumps`.
+    """
+    return canonical_json_dumps(
+        {
+            "event_type": event_type,
+            "event_payload": event_payload,
+            "signer_delegate_id": str(signer_delegate_id),
+        }
+    ).encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -279,8 +345,14 @@ class AuditChainEntry:
         signer_delegate_id: UUID of the :class:`DelegateIdentity`
             that signed this entry.
         signed_at: Tz-aware UTC datetime the signature was produced.
-        signature: 128-char lowercase-hex Ed25519 signature over
-            :meth:`to_signing_dict`'s canonical-JSON encoding.
+        signature: 128-char lowercase-hex Ed25519 signature over the
+            content pre-image produced by :meth:`to_content_signing_bytes`
+            (event_type + event_payload + signer_delegate_id). The signature
+            attests delegate authorship of the event content; it does NOT
+            cover the engine-assigned ``sequence`` / ``previous_hash`` /
+            ``signed_at`` fields (those are assigned after signing — #1182).
+            Ordering tamper-evidence is carried by the hash-chain, not the
+            signature.
     """
 
     sequence: int
@@ -374,15 +446,39 @@ class AuditChainEntry:
         return payload
 
     def to_signing_bytes(self) -> bytes:
-        """Canonical UTF-8 bytes a signer signed (signature EXCLUDED).
+        """Canonical UTF-8 bytes of the FULL pre-signature dict (signature EXCLUDED).
 
-        Convenience helper for :class:`kailash.delegate.verifier.Verifier`
-        callers — routes :meth:`to_signing_dict` through
-        :func:`canonical_json_dumps` and encodes to UTF-8 so the bytes
-        are byte-identical to what a signer would have signed. Cross-SDK
-        verifier parity depends on byte-equality of this representation.
+        Routes :meth:`to_signing_dict` (which includes the engine-assigned
+        ``sequence`` / ``previous_hash`` / ``signed_at`` fields) through
+        :func:`canonical_json_dumps`. This is the cross-SDK byte-canonical
+        FULL-entry representation pinned by the conformance receipts.
+
+        NOTE (#1182): this is NOT the byte-string the Ed25519 signature is
+        verified against. The signature attests delegate AUTHORSHIP of the
+        event CONTENT via :meth:`to_content_signing_bytes` — a pre-image that
+        excludes the engine-assigned fields, because the signer cannot know
+        them at signing time. Use :meth:`to_content_signing_bytes` for the
+        sign/verify byte-string; this method remains for the full-entry
+        canonical-shape contract (conformance vectors, cross-SDK parity).
         """
         return canonical_json_dumps(self.to_signing_dict()).encode("utf-8")
+
+    def to_content_signing_bytes(self) -> bytes:
+        """Canonical UTF-8 bytes the Ed25519 signature attests (#1182).
+
+        The delegate signs this content-only pre-image — ``event_type`` +
+        ``event_payload`` + ``signer_delegate_id`` — BEFORE the engine
+        assigns ``sequence`` / ``previous_hash`` / ``signed_at``. The engine
+        verifies the supplied signature against THESE bytes. Both halves
+        route through the module-level :func:`content_signing_bytes` helper,
+        guaranteeing the sign-site and verify-site agree byte-for-byte. See
+        :func:`content_signing_bytes` for the full security rationale (why
+        engine-assigned fields are excluded and how the hash-chain carries
+        ordering tamper-evidence independently of the signature).
+        """
+        return content_signing_bytes(
+            self.event_type, self.event_payload, self.signer_delegate_id
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -749,11 +845,18 @@ class AuditChainEngine:
             signer_identity: :class:`DelegateIdentity` that signed
                 the entry; ``delegate_id`` flows into
                 :attr:`AuditChainEntry.signer_delegate_id`.
-            signature: 128-char lowercase-hex Ed25519 signature
-                over :meth:`AuditChainEntry.to_signing_dict`'s
-                canonical-JSON. The engine does not compute the
-                signature itself — the caller (a delegate runtime
-                with key access) provides it.
+            signature: 128-char lowercase-hex Ed25519 signature over
+                the content pre-image (event_type + payload +
+                signer_delegate_id) produced by
+                :func:`content_signing_bytes` / the entry's
+                :meth:`AuditChainEntry.to_content_signing_bytes`. The
+                engine does not compute the signature itself — the caller
+                (a delegate runtime with key access) signs the SAME content
+                pre-image via :func:`content_signing_bytes` and passes the
+                hex here (#1182). The signature deliberately does NOT cover
+                the engine-assigned ``sequence`` / ``previous_hash`` /
+                ``signed_at`` fields (the caller cannot know them at signing
+                time); ordering tamper-evidence is the hash-chain's job.
             signed_at: Optional tz-aware datetime; defaults to
                 ``datetime.now(timezone.utc)`` at call time.
 
@@ -838,18 +941,29 @@ class AuditChainEngine:
                 signature=signature,
             )
 
-            # /redteam Round-1 C1 (CRITICAL) closure: cryptographically
-            # verify the signature against the entry's canonical signing
-            # bytes BEFORE appending. Prior shape-only hex validation
-            # let any 128-char hex string fall through (fake-encryption
-            # pattern per zero-tolerance.md Rule 2). The verifier is
-            # NullVerifier by default — so a runtime that doesn't wire
-            # an Ed25519Verifier rejects EVERY event, fail-closed.
-            # Inside the lock so concurrent emit_event calls cannot
-            # interleave a verify against a stale entry.
+            # /redteam Round-1 C1 (CRITICAL) closure + #1182 root-cause fix:
+            # cryptographically verify the signature against the entry's
+            # CONTENT-signing bytes BEFORE appending. Prior shape-only hex
+            # validation let any 128-char hex string fall through
+            # (fake-encryption pattern per zero-tolerance.md Rule 2). The
+            # verifier is NullVerifier by default — so a runtime that
+            # doesn't wire an Ed25519Verifier rejects EVERY event,
+            # fail-closed. Inside the lock so concurrent emit_event calls
+            # cannot interleave a verify against a stale entry.
+            #
+            # #1182: the verified byte-string is the CONTENT pre-image
+            # (event_type + event_payload + signer_delegate_id) via
+            # entry.to_content_signing_bytes(), NOT the full-entry
+            # to_signing_bytes(). The signer produced the signature BEFORE
+            # the engine assigned sequence / previous_hash / signed_at, so
+            # those engine-assigned fields cannot be in the signed pre-image
+            # — requiring them was structurally unsatisfiable (every caller
+            # raised AuditChainSignatureError at sequence=0). Ordering
+            # tamper-evidence stays with the hash-chain (previous_hash
+            # linkage + substrate entry-hash), independent of the signature.
             sig_bytes = bytes.fromhex(signature)
             if not self._verifier.verify(
-                entry.to_signing_bytes(),
+                entry.to_content_signing_bytes(),
                 sig_bytes,
                 str(signer_identity.delegate_id),
             ):
@@ -858,7 +972,8 @@ class AuditChainEngine:
                     f"failed for signer={signer_identity.delegate_id!r} at "
                     f"sequence={sequence} (verifier={type(self._verifier).__name__}). "
                     "Either the signature is invalid for the canonical "
-                    "to_signing_bytes() payload, the signer is not "
+                    "to_content_signing_bytes() payload (event_type + "
+                    "event_payload + signer_delegate_id), the signer is not "
                     "registered in the PrincipalDirectory, or the verifier "
                     "is the fail-closed NullVerifier (wire an Ed25519Verifier "
                     "with a populated directory)."

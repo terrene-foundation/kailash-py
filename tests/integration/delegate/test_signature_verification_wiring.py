@@ -29,9 +29,9 @@ import pytest
 
 from kailash.delegate.audit import (
     AuditChainEngine,
-    AuditChainEntry,
     AuditChainSignatureError,
     DelegateEventType,
+    content_signing_bytes,
 )
 from kailash.delegate.trust import (
     CascadeSignatureError,
@@ -102,19 +102,18 @@ def test_audit_engine_with_ed25519_verifier_accepts_valid_signature() -> None:
         verifier=Ed25519Verifier(directory=directory),
     )
 
-    # Compute the canonical signing bytes for the entry we're about to
-    # emit, then sign them — same shape the verifier checks.
+    # #1182: sign the CONTENT pre-image the engine verifies against —
+    # event_type + payload + signer_delegate_id — NOT the full-entry
+    # to_signing_bytes() (which includes engine-assigned sequence /
+    # previous_hash / signed_at the caller cannot know at signing time).
     now = datetime(2026, 5, 24, 12, 0, 0, tzinfo=timezone.utc)
-    proto = AuditChainEntry(
-        sequence=0,
-        previous_hash="",
-        event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
-        event_payload={"foo": "bar"},
-        signer_delegate_id=ident.delegate_id,
-        signed_at=now,
-        signature="ab" * 64,  # placeholder — engine ignores; uses real sig
+    sig_hex = signer(
+        content_signing_bytes(
+            DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
+            {"foo": "bar"},
+            ident.delegate_id,
+        )
     )
-    sig_hex = signer(proto.to_signing_bytes())
 
     entry = engine.emit_event(
         event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
@@ -182,18 +181,16 @@ def test_audit_engine_with_ed25519_verifier_rejects_unknown_signer() -> None:
         genesis_ref="gen-stranger",
     )
     now = datetime(2026, 5, 24, 12, 0, 0, tzinfo=timezone.utc)
-    proto = AuditChainEntry(
-        sequence=0,
-        previous_hash="",
-        event_type=DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
-        event_payload={"foo": "bar"},
-        signer_delegate_id=stranger.delegate_id,
-        signed_at=now,
-        signature="ab" * 64,
-    )
     # signer is keyed to a DIFFERENT identity — its signature is real but
-    # the directory has no key for `stranger`, so verification fails.
-    sig_hex = signer(proto.to_signing_bytes())
+    # the directory has no key for `stranger`, so verification fails. Sign
+    # the #1182 content pre-image (the bytes emit_event verifies against).
+    sig_hex = signer(
+        content_signing_bytes(
+            DelegateEventType.EXTERNAL_SIDE_EFFECT.value,
+            {"foo": "bar"},
+            stranger.delegate_id,
+        )
+    )
 
     with pytest.raises(AuditChainSignatureError):
         engine.emit_event(

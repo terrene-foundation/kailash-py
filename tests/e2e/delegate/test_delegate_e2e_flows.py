@@ -67,6 +67,8 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from kailash.delegate.audit import AuditChainEngine, DelegateEventType
 from kailash.delegate.conformance.schema import (
@@ -94,10 +96,12 @@ from kailash.delegate.types import (
     CapabilitySet,
     DelegateGenesisRecord,
     DelegateIdentity,
+    PrincipalDirectory,
     Role,
     RoleLifecycleState,
     RoleScope,
 )
+from kailash.delegate.verifier import Ed25519Verifier
 from kailash.trust._json import canonical_json_dumps
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
@@ -109,16 +113,32 @@ from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
 # ---------------------------------------------------------------------------
 
 
-def _deterministic_signer(canonical_bytes: bytes) -> str:
-    """Deterministic 128-char hex signer for E2E flows (NOT a mock)."""
-    digest = hashlib.sha256(canonical_bytes).hexdigest()
-    return digest + digest
+def _make_ed25519_signer(priv: Ed25519PrivateKey):
+    """Real Ed25519 signer callable over whatever canonical bytes it is handed.
+
+    NOT a mock — a real cryptographic signer. The runtime / dispatch hand
+    this the #1182 content pre-image; the cascade hands it the grant-signing
+    bytes. A real Ed25519 signer signs ANY bytes correctly, so one signer
+    keyed to the stack identity satisfies every sign-site, and the wired
+    :class:`Ed25519Verifier` verifies each against the registered public key.
+    """
+
+    def signer(canonical_bytes: bytes) -> str:
+        return priv.sign(canonical_bytes).hex()
+
+    return signer
 
 
 class _CountingSigner:
-    """Signer that fails on the Nth call. Used for Flow D."""
+    """Real Ed25519 signer that RAISES on the Nth call. Used for Flow D.
 
-    def __init__(self, fail_on_call: int) -> None:
+    On every non-failing call it produces a REAL Ed25519 signature (so the
+    THINKING-phase audit entry actually verifies and lands), then raises a
+    RuntimeError on the configured call to exercise the signer-fault path.
+    """
+
+    def __init__(self, priv: Ed25519PrivateKey, fail_on_call: int) -> None:
+        self._priv = priv
         self.fail_on_call = fail_on_call
         self.calls = 0
 
@@ -126,8 +146,7 @@ class _CountingSigner:
         self.calls += 1
         if self.calls == self.fail_on_call:
             raise RuntimeError(f"signer fault on call {self.calls}")
-        digest = hashlib.sha256(canonical_bytes).hexdigest()
-        return digest + digest
+        return self._priv.sign(canonical_bytes).hex()
 
 
 def _build_chain(agent_id: str = "agent-e2e") -> TrustLineageChain:
@@ -150,6 +169,11 @@ def _build_identity() -> DelegateIdentity:
         role_binding_ref="rb-e2e",
         genesis_ref="g-agent-e2e",
     )
+
+
+def _build_keyed_identity() -> tuple[DelegateIdentity, Ed25519PrivateKey]:
+    """Build an identity + a real Ed25519 keypair for it (#1182 real-crypto e2e)."""
+    return _build_identity(), Ed25519PrivateKey.generate()
 
 
 def _build_envelope() -> DelegateConstraintEnvelope:
@@ -224,25 +248,68 @@ def _build_stack(
     posture: Posture = Posture.L5_DELEGATED,
     tenant_id: str = "tenant-e2e",
     connector_tenant_id: str | None = None,
-    signer=None,
+    signer_factory=None,
 ):
-    """Real-substrate stack — every dependency is a REAL primitive instance."""
+    """Real-substrate stack — every dependency is a REAL primitive instance.
+
+    #1182: wires a REAL :class:`Ed25519Verifier` (NOT NullVerifier) into both
+    the audit engine and the cascade, and a REAL Ed25519 signer keyed to the
+    stack identity. ``DelegateRuntime.execute()`` therefore exercises the
+    full sign→verify→append audit path under real cryptography — the exact
+    end-to-end path the #1182 contract mismatch was blocking. The signer is
+    keyed to the identity registered in the directory, so every audit emit's
+    content-pre-image signature verifies and the chain advances to COMPLETED.
+
+    ``signer_factory`` (Flow D) takes the stack's private key and returns a
+    custom signer callable (e.g. one that raises mid-execute); it shares the
+    SAME key so its non-failing calls still verify.
+    """
     chain = _build_chain()
-    audit_engine = AuditChainEngine(chain=chain)
-    cascade = TenantScopedCascade(tenant=TenantScope.for_tenant(tenant_id))
+    identity, priv = _build_keyed_identity()
+    pub_bytes = priv.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    directory = PrincipalDirectory(
+        identities=(identity,),
+        verification_keys={identity.delegate_id: pub_bytes},
+    )
+    # Same verifier CLASS on both audit engine and cascade — the runtime's
+    # R2 coherence gate requires type(audit.verifier) is type(cascade.verifier).
+    audit_engine = AuditChainEngine(
+        chain=chain, verifier=Ed25519Verifier(directory=directory)
+    )
+    cascade = TenantScopedCascade(
+        tenant=TenantScope.for_tenant(tenant_id),
+        verifier=Ed25519Verifier(directory=directory),
+    )
     envelope = _build_envelope()
-    identity = _build_identity()
     role = _build_role()
+    bound_signer = (
+        signer_factory(priv)
+        if signer_factory is not None
+        else _make_ed25519_signer(priv)
+    )
     # #1146 H1 — register the identity as a root grantee so the
-    # DispatchSurface bind-time grantee gate passes. Without this seed
-    # the cascade-as-authorization invariant refuses bind because the
-    # identity transited no cascade_child path (root identities are
-    # explicitly seeded by infrastructure at cascade-setup time).
-    cascade.register_root_grantee(identity)
+    # DispatchSurface bind-time grantee gate passes. With a real cascade
+    # verifier wired, the seed MUST carry a real grant_proof: the cascade
+    # verifies SHA-over {"delegate_id", "tenant"} against the registered key.
+    # The seed is signed with a SEPARATE plain real signer (NOT bound_signer)
+    # so a custom signer_factory's call-counting (Flow D) starts clean at the
+    # runtime's first emit — the build-time seed does not consume its budget.
+    seed_signer = _make_ed25519_signer(priv)
+    grant_proof = seed_signer(
+        canonical_json_dumps(
+            {
+                "delegate_id": str(identity.delegate_id),
+                "tenant": cascade.tenant.tenant_id,
+            }
+        ).encode("utf-8")
+    )
+    cascade.register_root_grantee(identity, grant_proof=grant_proof)
     connector = DeterministicConnector(
         tenant_id_observed=connector_tenant_id or tenant_id,
     )
-    bound_signer = signer if signer is not None else _deterministic_signer
     surface = DispatchSurface(
         connector=connector,
         signature=_Signature(),
@@ -465,9 +532,13 @@ async def test_e2e_flow_d_signer_failure_mid_execute_lands_failed_no_recurse() -
     attempting another signed audit emit (which would recurse into the
     same broken signer).
     """
-    failing_signer = _CountingSigner(fail_on_call=2)
+    # signer_factory receives the stack's real private key; the counting
+    # signer produces a REAL Ed25519 signature on call #1 (THINKING lands +
+    # verifies) and RAISES on call #2 (ACTING). The build-time grant_proof
+    # seed uses a SEPARATE signer (see _build_stack), so this counter starts
+    # clean at the runtime's first emit: #1 = THINKING, #2 = ACTING (raises).
     runtime, surface, audit_engine, chain, connector = _build_stack(
-        signer=failing_signer,
+        signer_factory=lambda priv: _CountingSigner(priv, fail_on_call=2),
     )
 
     result = await runtime.execute({"id": "flow-d-signer"})
