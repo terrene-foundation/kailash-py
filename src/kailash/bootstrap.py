@@ -248,9 +248,11 @@ def _signature_cls() -> type:
     if _SIGNATURE_CLS_CACHE is not None:
         return _SIGNATURE_CLS_CACHE
 
-    from kaizen.signatures import InputField, OutputField  # type: ignore[import-not-found]
-
     from kailash._from_brief.signatures import BriefPlanSignature
+    from kaizen.signatures import (  # type: ignore[import-not-found]
+        InputField,
+        OutputField,
+    )
 
     class BootstrapPlanSignature(BriefPlanSignature):
         """Kaizen Signature for Sg-Bootstrap configuration emission.
@@ -600,20 +602,30 @@ def bootstrap(
             emits an enum value outside the allowlist. With
             ``malformed=True`` when the plan is structurally invalid.
     """
-    # Lazy imports — all `_from_brief` submodules load via
-    # `kailash._from_brief.__init__` which transitively imports kaizen
-    # (see module docstring). Deferring to call-time fences the circular
-    # load against the kailash package-init order.
-    from kailash._from_brief.exceptions import BriefInterpretationError
-    from kailash._from_brief.scrubber import scrub_brief
-    from kailash._from_brief.signatures import get_default_llm_model
-    from kailash._from_brief.validator import coerce_plan, validate_plan
-
     # Step 1 — profile allowlist gate. Structural input validation per
     # agent-reasoning.md § "Permitted Deterministic Logic" exception 1
     # (input validation, NOT content-based decision). Raised BEFORE
     # the LLM call so an invalid profile never reaches the LLM
     # provider AND never incurs an LLM token cost.
+    #
+    # The exception import + this gate are hoisted to the TOP of the
+    # function — ABOVE the ``signatures`` import below — so the
+    # profile-allowlist rejection fires kaizen-free. ``exceptions`` is a
+    # kaizen-free ``_from_brief`` submodule (it imports nothing from
+    # kaizen), whereas ``signatures.py:33`` does ``from kaizen.signatures
+    # import ...`` at module scope. kaizen is a downstream optional package
+    # (kailash-kaizen) absent in the core "Test"/"Base" CI jobs; an invalid
+    # profile (``test_bootstrap_rejects_unknown_profile_before_llm_call``
+    # and siblings) MUST raise its typed error WITHOUT requiring kaizen —
+    # the test name encodes "before LLM call", and the LLM path is the only
+    # thing that needs kaizen. Per ``rules/zero-tolerance.md`` Rule 3 (a loud
+    # fail-fast with a typed exception, before the optional import) + the
+    # wave-2 ml precedent (``kailash_ml/from_brief.py`` hoisted polars-only
+    # guards above the kaizen import) + ``rules/dependencies.md`` § "Declared
+    # = Imported" (core imports optional kaizen lazily; the kaizen-free input
+    # gate runs without it).
+    from kailash._from_brief.exceptions import BriefInterpretationError
+
     if profile not in ALLOWED_PROFILES:
         raise BriefInterpretationError(
             f"profile={profile!r} is not in the allowlist "
@@ -622,6 +634,16 @@ def bootstrap(
             f"production deployment",
             unknown_value=f"profile={profile}",
         )
+
+    # Lazy imports — the remaining `_from_brief` submodules. ``scrubber`` +
+    # ``validator`` are kaizen-free; ``signatures`` transitively imports
+    # kaizen (see module docstring). Deferring to call-time fences the
+    # circular load against the kailash package-init order AND keeps the
+    # profile gate above kaizen-free (the LLM path below is the only part
+    # that needs kaizen installed).
+    from kailash._from_brief.scrubber import scrub_brief
+    from kailash._from_brief.signatures import get_default_llm_model
+    from kailash._from_brief.validator import coerce_plan, validate_plan
 
     # Step 2 — credential scrub (pre-LLM, pre-logging).
     scrubbed = scrub_brief(brief)
