@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.6.4] — 2026-05-28 — eliminate `@app.handler` instance-API UserWarning (#1012)
+
+Patch release fixing a startup-log noise issue that fired N `UserWarning("Instance-based API usage detected...")` lines on `@app.handler` registration. No public API change; the warning is now correctly scoped to genuine consumer misuse only.
+
+### Fixed
+
+- **`@app.handler` registration no longer emits `UserWarning` (#1012 → PR #1194)** — `make_handler_workflow` in `src/kailash/nodes/handler.py` builds a `HandlerNode` instance and registers it via `builder.add_node_instance()`. Pre-fix, the call omitted `_internal=True`, causing the workflow builder to emit a `UserWarning("Instance-based API usage detected...")` for every `@app.handler` registration — N handlers = N warnings polluting startup logs and pytest output. Fix: pass `_internal=True` to `add_node_instance()` at `src/kailash/nodes/handler.py:295`. The `_internal` flag narrows the advisory to genuine consumer misuse only. Consumers calling `add_node_instance` directly without `_internal=True` still receive the warning — the flag does NOT suppress the warning globally. Why not `warnings.filterwarnings`: suppression hides genuine consumer misuse elsewhere in the codebase, defeating the purpose of the advisory. Why not string-based `add_node("HandlerNode", id, config)`: `HandlerNode` wraps a Python callable that cannot be expressed as a JSON-serialisable config dict; instance-based registration is the only structurally correct path here. Regression test (4 cases): single `@app.handler` emits zero instance-API warnings; N `@app.handler` registrations emit zero instance-API warnings; handler with optional params emits no warning; direct consumer `add_node_instance` (without `_internal=True`) still warns.
+
+### Dependencies
+
+- `kailash>=2.28.0` (was `kailash>=2.16.0`) — pins the floor to the companion `kailash 2.28.0` release that ships the #1182 audit-chain fix + #1185 async durable resume fix.
+
+### Notes
+
+- The Nexus diff is `src/kailash/nodes/handler.py:295` + new regression test + `pyproject.toml` version + `src/nexus/__init__.py::__version__` + this CHANGELOG entry. No behavior change to the Nexus public API; consumer startup logs are now clean of the spurious instance-API advisory.
+- Companion `kailash 2.28.0` release ships #1182 (delegate audit-chain HIGH) and #1185 (async durable resume HIGH).
+
 ## [2.6.3] — 2026-05-09 — slim-core decoupling + PyPI install resolvability (#890)
 
 Patch release shipping the kailash-nexus side of the kailash 2.18.0 slim-core decoupling. No behavior change to the Nexus public API; only the dependency manifest is updated so `pip install kailash-nexus` resolves cleanly against the published kailash 2.18.0 wheel.
