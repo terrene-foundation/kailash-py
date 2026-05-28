@@ -141,23 +141,22 @@ class _DeterministicLLMAgent(Node):
         },
         # QueryDecompositionNode.query_decomposer → dependency_resolver expects
         # `decomposition_result` with `sub_questions[{...}]` +
-        # `composition_strategy`. The resolver's topological-sort key is
-        # `dependencies` (NOT `depends_on` — the system_prompt advertises
-        # the latter but the resolver reads the former; an SDK-side
-        # mismatch the test isolates from). Use `dependencies` so the
-        # resolver's dep graph reflects the actual contract.
+        # `composition_strategy`. F25 Shard E aligned the resolver + LLM
+        # prompt on `depends_on` (matching MultiHopQueryPlannerNode's
+        # hop_planner convention). The substitute output uses `depends_on`
+        # so the resolver's dep graph reflects the corrected contract.
         "query_decomposer": {
             "sub_questions": [
                 {
                     "question": "What is BERT?",
                     "type": "factual",
-                    "dependencies": [],
+                    "depends_on": [],
                     "contribution": "definition",
                 },
                 {
                     "question": "How does it work?",
                     "type": "analytical",
-                    "dependencies": [0],
+                    "depends_on": [0],
                     "contribution": "mechanism",
                 },
             ],

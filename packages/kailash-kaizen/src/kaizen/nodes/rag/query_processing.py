@@ -362,7 +362,8 @@ class QueryDecompositionNode(Node):
                 For each sub-question, indicate:
                 1. The question itself
                 2. Its type (factual, analytical, comparative, etc.)
-                3. Dependencies on other sub-questions
+                3. Dependencies on other sub-questions (use the `depends_on` field;
+                   list the integer indices of preceding sub-questions this one depends on)
                 4. How it contributes to the main question
 
                 Return as JSON: {
@@ -370,7 +371,7 @@ class QueryDecompositionNode(Node):
                         {
                             "question": "...",
                             "type": "...",
-                            "dependencies": [],
+                            "depends_on": [],
                             "contribution": "..."
                         }
                     ],
@@ -387,13 +388,18 @@ class QueryDecompositionNode(Node):
             config={
                 "code": """
 # Resolve dependencies and create execution order
+# F25 Shard E: the LLM system_prompt for query_decomposer advertises
+# `depends_on` as the per-sub-question dependency field (aligning with
+# MultiHopQueryPlannerNode's hop_planner convention). The resolver MUST
+# read the same key the prompt advertises — reading a different key
+# silently produces an empty dependency graph regardless of LLM output.
 decomposition = decomposition_result
 sub_questions = decomposition.get("sub_questions", [])
 
 # Build dependency graph
 dependency_graph = {}
 for i, sq in enumerate(sub_questions):
-    deps = sq.get("dependencies", [])
+    deps = sq.get("depends_on", [])
     dependency_graph[i] = deps
 
 # Topological sort for execution order
