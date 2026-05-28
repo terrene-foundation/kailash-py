@@ -11,16 +11,25 @@ Implements sophisticated query enhancement techniques:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union  # noqa: F401
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+# Module-scope import retained as the monkeypatch target for the
+# integration test fixture `deterministic_llm` at
+# tests/integration/rag/test_query_processing_nodes.py — the fixture
+# uses `monkeypatch.setattr(<this module>, "LLMAgentNode", <stub>)` to
+# substitute a deterministic adapter. Runtime code references
+# "LLMAgentNode" only as a node-type string passed to
+# WorkflowBuilder.add_node; the class import itself is unused at runtime
+# but required for the test's setattr rebinding to land on this module's
+# namespace. The static-analyzer "unused import" finding is a known
+# false-positive for monkeypatch-target imports.
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -867,7 +876,17 @@ class QueryIntentClassifierNode(Node):
             }
 
         except Exception as e:
-            logger.error(f"Query intent classification failed: {e}")
+            # Security round-1 (M1): log the full exception detail to the
+            # framework logger (access-controlled), but do NOT echo str(e)
+            # into the runtime return dict. The dict flows back to Nexus
+            # channels / LLM prompts / public surfaces with broader read
+            # access than the framework log (rules/security.md § "No secrets
+            # in logs"); raw exception text may include filesystem paths,
+            # stack-trace fragments, or upstream-provider error bodies. The
+            # routing_decision contract surfaces a stable strategy fallback
+            # + a public error_class discriminator; full diagnostic stays in
+            # the logger.
+            logger.exception("Query intent classification failed")
             fallback_routing = {
                 "intent_analysis": {
                     "query_type": "factual",
@@ -879,7 +898,7 @@ class QueryIntentClassifierNode(Node):
                 "recommended_strategy": "hybrid",
                 "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
                 "confidence": 0.0,
-                "reasoning": f"Classification failed: {e}; defaulted to hybrid",
+                "reasoning": "Classification failed; defaulted to hybrid",
             }
             return {
                 "query_type": "factual",
@@ -888,7 +907,7 @@ class QueryIntentClassifierNode(Node):
                 "requirements": [],
                 "recommended_strategy": "hybrid",
                 "routing_decision": fallback_routing,
-                "error": str(e),
+                "error_class": type(e).__name__,
             }
 
     def _create_workflow(self) -> Workflow:

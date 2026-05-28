@@ -33,18 +33,31 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ### Fixed (Shard D — `kaizen.nodes.rag.workflows`)
 
-- **`AdvancedRAGWorkflowNode` accepts a `text` input.** The advanced
-  workflow node's inner graph previously had an unwired chunker input,
-  so the workflow could not be executed by users following the public
-  surface contract. The chunker's `text` parameter now flows through the
-  workflow facade so `node.execute(text="document body...")` succeeds.
-  Mirrors the 2.24.2 fix for `SimpleRAGWorkflowNode`.
-- **`AdaptiveRAGWorkflowNode` accepts a `text` input.** Same class of
-  defect as above — the adaptive variant of the workflow node had the
-  same unwired chunker input. Now executable end-to-end.
-- **`RAGPipelineWorkflowNode` accepts a `text` input.** Same class of
-  defect — the pipeline variant's inner graph also required `text` that
-  nothing supplied. Now executable end-to-end.
+- **`AdvancedRAGWorkflowNode` now exposes a public `documents` parameter
+  (required, `list`-typed).** Previously the facade auto-derived
+  `quality_analyzer_documents` from the inner-graph node ID, forcing
+  callers to know the inner-graph layout. `node.execute(documents=[...])`
+  now works directly. Same defect class as the 2.24.2 fix for
+  `SimpleRAGWorkflowNode`, applied at the WorkflowNode-facade
+  `input_mapping` layer.
+- **`AdaptiveRAGWorkflowNode` now exposes public `documents` (required,
+  `list`-typed) + `query` (optional `str`, default `""`) parameters.**
+  Previously these leaked as `document_preprocessor_documents` /
+  `document_preprocessor_query`. Same defect class as above.
+- **`RAGPipelineWorkflowNode` now exposes public `documents` (required,
+  `list`-typed) + `query` (optional `str`, default `""`) + `strategy`
+  (optional `str`, default = `self.default_strategy`) parameters.**
+  Previously these leaked as `config_processor_documents` /
+  `config_processor_query` / `config_processor_strategy`.
+- **`RAGPipelineWorkflowNode` no longer crashes at the entry node on
+  first invocation.** The `config_processor` PythonCodeNode codegen
+  referenced an undefined `**kwargs` dict (PythonCodeNode binds explicit
+  inputs as locals, not a kwargs dict), so every invocation raised
+  `NameError: name 'kwargs' is not defined` at the entry node. The
+  codegen now constructs the processed_config dict directly from the
+  bound input parameters, with `RAGConfig` values safely embedded
+  (numeric coercion + `repr()` for string literals — no untrusted-value
+  interpolation surface).
 
 ### Notes
 
