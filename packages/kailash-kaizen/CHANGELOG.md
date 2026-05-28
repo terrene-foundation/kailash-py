@@ -4,6 +4,24 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.2] — 2026-05-28 — `SimpleRAGWorkflowNode` runnable end-to-end (F25)
+
+### Fixed
+
+- **`SimpleRAGWorkflowNode` now accepts a `text` input.** The Quick Start
+  RAG workflow node previously could not be executed: the inner-graph
+  `semantic_chunker` required a `text` input that nothing supplied, so
+  every call to `runtime.execute(...)` raised
+  `WorkflowValidationError: Node 'semantic_chunker' missing required
+  inputs: ['text']`. The fix wires the chunker's `text` parameter
+  through the workflow facade so users can now invoke
+  `node.execute(text="document body...")` and the inner chunker
+  receives the input as expected. Surfaced by the F25 RAG audit.
+  Downstream nodes (`embedder` / `vector_db`) still require real
+  embedding-provider + vector-store configuration to complete the full
+  pipeline end-to-end; that broader inner-graph wiring is tracked as a
+  separate scope.
+
 ## [2.24.1] — 2026-05-25 — LLM-path crash fixes (#1140, #1141)
 
 ### Fixed
