@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.0] - 2026-05-28
+
+### Fixed
+
+- **`delegate` audit-chain sign/verify contract is now satisfiable (HIGH, #1182)** — `AuditChainEngine.emit_event`'s prior signature contract was structurally unsatisfiable, blocking `DelegateRuntime.execute()` end-to-end under any real (non-`NullVerifier`) verifier. The sign-site signed the payload alone while the verify-site verified against the full pre-signature dict (`sequence` + `previous_hash` + `event_type` + `event_payload` + `signer_delegate_id` + `signed_at`), and the engine assigns `sequence` / `previous_hash` / `signed_at` AFTER receiving the signature — so no caller could ever produce a matching signature; `AuditChainSignatureError` raised at `sequence=0`. The `NullVerifier` masked the bug. The fix introduces a single shared `content_signing_bytes(event_type, event_payload, signer_delegate_id)` helper routed through `canonical_json_dumps`; both sign-sites (`runtime._emit_phase_audit`, `runtime`'s `with_posture` rotation emit, `dispatch` audit-event emit) AND the engine verify-site now produce the identical byte-string via this single helper. `AuditChainEntry` gains `to_content_signing_bytes()` delegating to it; `to_signing_bytes()` is unchanged (the cross-SDK full-entry canonical-shape contract + conformance vectors still depend on it). **Tamper-evidence is preserved, not weakened:** authorship (Ed25519 over `event_type` + `event_payload` + `signer_delegate_id`, defeating cross-signer substitution) and ordering (hash-chain via `previous_hash` = SHA-256 of prior entry's full canonical dict including sequence + prior signature, anchored by the substrate `AuditAnchor`) remain orthogonal defenses; excluding engine-assigned fields from the signature does not open a tamper hole because those fields were never the signature's job. Regression coverage: `tests/regression/` modules tagged `test_issue_1182_*` (real Ed25519, no mocking, no `NullVerifier`) — sign/verify byte-equality, `emit_event` accepts a content-pre-image signature, `DelegateRuntime.execute()` reaches `COMPLETED` under `Ed25519Verifier` with a real no-op connector, hash-chain detects payload/sequence tampering; payload-only signature (pre-fix behavior) is rejected.
+
+- **Async durable resume short-circuits completed nodes (HIGH, #1185)** — `AsyncLocalRuntime._execute_node_async` / `_execute_sync_node_async` previously invoked `node.execute_async()` / `execute()` unconditionally, so resuming a durable workflow with the same `idempotency_key` re-executed every node already completed and checkpointed on the prior run — firing side effects twice and breaking the "exactly once on resume" guarantee the sync `LocalRuntime` already honors. The fix adds `_w1_resume_short_circuit`, the async sibling of the sync gate: it reads the W1 `ExecutionTracker` that `execute_workflow_async` rehydrates from the prior checkpoint blob onto `context._w1_execution_tracker`; when a node is already completed it feeds the cached output into the per-run `AsyncExecutionTracker` via `record_result` (so dependents receive the restored output through the same `node_outputs` path a fresh execution populates), re-records completion into the W1 tracker (idempotent, keeps the checkpoint consistent), and returns `True` so the caller skips `execute_async` and the re-save/re-dispatch. Wired at the top of both per-node entry points. Reuses the inherited `LocalRuntime` checkpoint machinery (same `ExecutionTracker.is_completed` / `get_output` / `record_completion`) — no parallel notion of "completed". The sync runtime path is unchanged.
+
+### Changed
+
+- **CI: `python-no-eval` pre-commit hook now excludes 18 false-positive paths (#972 → PR #1190)** — extends the `python-no-eval` regex hook's exclude list to clear 18 documented false-positive matches across `src/kailash/`, `packages/kailash-dataflow/`, and tests. The hook continues to flag genuine `eval()` / `exec()` usage on user input per `rules/security.md` § "No eval() on user input"; this commit narrows the regex scope to test scaffolding that calls `model_validator(...)` / `eval_metric=...` / `.evaluate(...)` (none of which are the dangerous `eval` builtin). No behavior change at runtime; pre-commit CI is now clean across all repository paths.
+
+- **DataFlow test helper rename — eliminate shadowed inner-function on `pyright` (#1131 → PR #1193)** — `tests/integration/dataflow/test_mcp_integration.py` renamed an inner helper that shadowed a module-scope identifier, restoring `pyright --level error` to zero diagnostics across the dataflow integration suite. No production source change.
+
+- **Codify proposal landing — three pending sessions appended atomically (#1189)** — `.claude/.proposals/latest.yaml` codify-cycle proposal landing per `rules/artifact-flow.md` § "Append, Never Overwrite Unprocessed Proposals". Internal artifact-flow only; no consumer-visible API change.
+
+### Migration
+
+- No breaking changes. `pip install --upgrade kailash` from 2.27.x → 2.28.0 is drop-in. The audit-chain contract fix in #1182 changes signed-bytes content, but the prior contract was structurally unsatisfiable under real verifiers — no working downstream caller can have depended on it. The async durable resume fix in #1185 is purely additive: behavior changes only when the same `idempotency_key` is replayed against an already-completed node, which previously double-fired and now correctly short-circuits.
+
+### Notes
+
+- Six PRs land in this release: #1189 (codify proposal), #1190 (CI `python-no-eval` exclude), #1191 (#1185 async durable resume fix), #1192 (#1182 delegate audit-chain fix), #1193 (#1131 pyright rename), #1194 (#1012 nexus instance-API warning — shipped via `kailash-nexus 2.6.4`).
+- Companion `kailash-nexus 2.6.4` release ships the #1012 nexus instance-API `UserWarning` elimination (`@app.handler` registration no longer pollutes startup logs).
+- Framework SDK pins in `packages/kailash-{dataflow,nexus,kaizen}/pyproject.toml` advanced to `kailash>=2.28.0`. Existing framework wheels on PyPI keep their prior pins (admit 2.28.0 via minor backward-compat); the new pins ship with the next respective framework release.
+
 ## [2.27.0] - 2026-05-27
 
 ### Added
