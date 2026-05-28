@@ -39,6 +39,16 @@ class SimpleRAGWorkflowNode(WorkflowNode):
 
     Basic chunk → embed → store → retrieve pipeline using semantic chunking.
     Perfect for getting started with RAG or simple document Q&A.
+
+    Inputs
+    ------
+    text : str
+        Document text to chunk + embed + store. Routed to the inner-graph
+        ``semantic_chunker`` via ``input_mapping`` (see __init__).
+
+    The mapping makes the workflow self-sufficient at the public API surface:
+    callers invoke ``node.execute(text="...")`` and the inner-graph chunker
+    receives ``text`` without the caller having to know inner-graph node IDs.
     """
 
     def __init__(
@@ -56,10 +66,27 @@ class SimpleRAGWorkflowNode(WorkflowNode):
         # read-only WorkflowNode property (added by shard A3) and resolves at
         # runtime. (Known Core SDK type-erasure gap; B1-B6 worked around it the
         # same way at the call site.)
+        #
+        # ``input_mapping`` routes the public ``text`` parameter to the
+        # inner-graph ``semantic_chunker`` node's ``text`` parameter. Without
+        # this mapping the inner graph's chunker has no source for ``text`` —
+        # ``LocalRuntime`` raises ``WorkflowValidationError`` on execute. The
+        # entry-node parameter MUST be exposed via the WorkflowNode facade so
+        # users don't have to learn inner-graph node IDs to invoke the
+        # workflow.
         super().__init__(
             workflow=workflow_node.workflow,  # type: ignore[attr-defined]
             name=name,
             description="Simple RAG workflow with semantic chunking and dense retrieval",
+            input_mapping={
+                "text": {
+                    "node": "semantic_chunker",
+                    "parameter": "text",
+                    "type": str,
+                    "required": True,
+                    "description": "Document text to chunk + embed + store",
+                }
+            },
         )
 
 
