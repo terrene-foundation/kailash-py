@@ -11,16 +11,25 @@ Implements sophisticated query enhancement techniques:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union  # noqa: F401
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+# Module-scope import retained as the monkeypatch target for the
+# integration test fixture `deterministic_llm` at
+# tests/integration/rag/test_query_processing_nodes.py — the fixture
+# uses `monkeypatch.setattr(<this module>, "LLMAgentNode", <stub>)` to
+# substitute a deterministic adapter. Runtime code references
+# "LLMAgentNode" only as a node-type string passed to
+# WorkflowBuilder.add_node; the class import itself is unused at runtime
+# but required for the test's setattr rebinding to land on this module's
+# namespace. The static-analyzer "unused import" finding is a known
+# false-positive for monkeypatch-target imports.
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +371,8 @@ class QueryDecompositionNode(Node):
                 For each sub-question, indicate:
                 1. The question itself
                 2. Its type (factual, analytical, comparative, etc.)
-                3. Dependencies on other sub-questions
+                3. Dependencies on other sub-questions (use the `depends_on` field;
+                   list the integer indices of preceding sub-questions this one depends on)
                 4. How it contributes to the main question
 
                 Return as JSON: {
@@ -370,7 +380,7 @@ class QueryDecompositionNode(Node):
                         {
                             "question": "...",
                             "type": "...",
-                            "dependencies": [],
+                            "depends_on": [],
                             "contribution": "..."
                         }
                     ],
@@ -387,13 +397,18 @@ class QueryDecompositionNode(Node):
             config={
                 "code": """
 # Resolve dependencies and create execution order
+# F25 Shard E: the LLM system_prompt for query_decomposer advertises
+# `depends_on` as the per-sub-question dependency field (aligning with
+# MultiHopQueryPlannerNode's hop_planner convention). The resolver MUST
+# read the same key the prompt advertises — reading a different key
+# silently produces an empty dependency graph regardless of LLM output.
 decomposition = decomposition_result
 sub_questions = decomposition.get("sub_questions", [])
 
 # Build dependency graph
 dependency_graph = {}
 for i, sq in enumerate(sub_questions):
-    deps = sq.get("dependencies", [])
+    deps = sq.get("depends_on", [])
     dependency_graph[i] = deps
 
 # Topological sort for execution order
@@ -824,6 +839,32 @@ class QueryIntentClassifierNode(Node):
             else:
                 strategy = "hybrid"
 
+            # F25 Shard E: `routing_decision` is part of the documented public
+            # contract for QueryIntentClassifierNode — both the strategy_mapper
+            # PythonCodeNode inside _create_workflow() (line ~931) AND any
+            # downstream composer (e.g. AdaptiveQueryProcessorNode) consume
+            # this field on the same shape. Returning it from run() keeps the
+            # contract symmetric: the deterministic run() path and the
+            # LLM-driven inner-workflow path both expose `routing_decision`.
+            # Without this field, composing this node as a single Node inside
+            # another workflow raises NameError at codegen time.
+            routing_decision = {
+                "intent_analysis": {
+                    "query_type": query_type,
+                    "domain": domain,
+                    "complexity": complexity,
+                    "requirements": requirements,
+                    "suggested_strategy": strategy,
+                },
+                "recommended_strategy": strategy,
+                "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
+                "confidence": 0.8,
+                "reasoning": (
+                    f"Query type '{query_type}' with '{complexity}' complexity "
+                    f"suggests '{strategy}' strategy"
+                ),
+            }
+
             return {
                 "query_type": query_type,
                 "domain": domain,
@@ -831,17 +872,42 @@ class QueryIntentClassifierNode(Node):
                 "requirements": requirements,
                 "recommended_strategy": strategy,
                 "confidence": 0.8,
+                "routing_decision": routing_decision,
             }
 
         except Exception as e:
-            logger.error(f"Query intent classification failed: {e}")
+            # Security round-1 (M1): log the full exception detail to the
+            # framework logger (access-controlled), but do NOT echo str(e)
+            # into the runtime return dict. The dict flows back to Nexus
+            # channels / LLM prompts / public surfaces with broader read
+            # access than the framework log (rules/security.md § "No secrets
+            # in logs"); raw exception text may include filesystem paths,
+            # stack-trace fragments, or upstream-provider error bodies. The
+            # routing_decision contract surfaces a stable strategy fallback
+            # + a public error_class discriminator; full diagnostic stays in
+            # the logger.
+            logger.exception("Query intent classification failed")
+            fallback_routing = {
+                "intent_analysis": {
+                    "query_type": "factual",
+                    "domain": "general",
+                    "complexity": "simple",
+                    "requirements": [],
+                    "suggested_strategy": "hybrid",
+                },
+                "recommended_strategy": "hybrid",
+                "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
+                "confidence": 0.0,
+                "reasoning": "Classification failed; defaulted to hybrid",
+            }
             return {
                 "query_type": "factual",
                 "domain": "general",
                 "complexity": "simple",
                 "requirements": [],
                 "recommended_strategy": "hybrid",
-                "error": str(e),
+                "routing_decision": fallback_routing,
+                "error_class": type(e).__name__,
             }
 
     def _create_workflow(self) -> Workflow:
