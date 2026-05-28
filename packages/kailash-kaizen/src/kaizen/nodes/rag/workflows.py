@@ -97,6 +97,18 @@ class AdvancedRAGWorkflowNode(WorkflowNode):
 
     Multi-stage RAG pipeline with quality checks, multiple retrieval strategies,
     and result validation. Includes monitoring and performance optimization.
+
+    Inputs
+    ------
+    documents : list
+        Document list to analyze + route through the quality-driven RAG
+        strategy. Routed to the inner-graph ``quality_analyzer`` via
+        ``input_mapping`` (see __init__).
+
+    The mapping makes the workflow self-sufficient at the public API
+    surface: callers invoke ``node.execute(documents=[...])`` and the
+    inner-graph quality analyzer receives ``documents`` without the
+    caller having to know inner-graph node IDs.
     """
 
     def __init__(
@@ -107,10 +119,27 @@ class AdvancedRAGWorkflowNode(WorkflowNode):
         # Build advanced workflow
         workflow = self._create_advanced_workflow()
 
+        # ``input_mapping`` routes the public ``documents`` parameter to the
+        # inner-graph ``quality_analyzer`` node's ``documents`` parameter.
+        # Without this mapping the facade auto-derives ``quality_analyzer_
+        # documents`` (node_id + ``_`` + param_name) — users would have to
+        # know the inner-graph node ID to invoke the workflow. Per F25 Shard D
+        # (same defect class as SimpleRAGWorkflowNode F25 Shard C): the entry
+        # parameter MUST be exposed via the WorkflowNode facade so users
+        # don't have to learn inner-graph node IDs to invoke the workflow.
         super().__init__(
             workflow=workflow,
             name=name,
             description="Advanced RAG with quality checks and multi-stage processing",
+            input_mapping={
+                "documents": {
+                    "node": "quality_analyzer",
+                    "parameter": "documents",
+                    "type": list,
+                    "required": True,
+                    "description": "Documents to analyze + route through quality-driven RAG strategy",
+                }
+            },
         )
 
     def _create_advanced_workflow(self):
@@ -262,6 +291,21 @@ class AdaptiveRAGWorkflowNode(WorkflowNode):
 
     AI-driven strategy selection that uses LLM to analyze documents and queries
     to automatically choose the optimal RAG approach for each use case.
+
+    Inputs
+    ------
+    documents : list
+        Document list to analyze for adaptive strategy selection. Routed
+        to the inner-graph ``document_preprocessor`` via ``input_mapping``.
+    query : str, optional
+        Query text passed alongside ``documents`` for LLM-driven strategy
+        selection. Defaults to ``""`` (matches preprocessor codegen
+        default). Also routed via ``input_mapping``.
+
+    The mapping makes the workflow self-sufficient at the public API
+    surface: callers invoke ``node.execute(documents=[...], query="...")``
+    and the inner-graph preprocessor receives both without the caller
+    having to know inner-graph node IDs.
     """
 
     def __init__(
@@ -276,10 +320,34 @@ class AdaptiveRAGWorkflowNode(WorkflowNode):
         # Build adaptive workflow
         workflow = self._create_adaptive_workflow()
 
+        # ``input_mapping`` routes the public ``documents`` + ``query``
+        # parameters to the inner-graph ``document_preprocessor`` node's
+        # ``documents`` / ``query`` parameters. Without this mapping the
+        # facade auto-derives ``document_preprocessor_documents`` /
+        # ``document_preprocessor_query`` — users would have to know the
+        # inner-graph node ID to invoke the workflow. Per F25 Shard D
+        # (same defect class as SimpleRAGWorkflowNode F25 Shard C).
         super().__init__(
             workflow=workflow,
             name=name,
             description="AI-driven adaptive RAG with intelligent strategy selection",
+            input_mapping={
+                "documents": {
+                    "node": "document_preprocessor",
+                    "parameter": "documents",
+                    "type": list,
+                    "required": True,
+                    "description": "Documents to analyze for adaptive strategy selection",
+                },
+                "query": {
+                    "node": "document_preprocessor",
+                    "parameter": "query",
+                    "type": str,
+                    "required": False,
+                    "default": "",
+                    "description": "Query text for LLM-driven strategy selection",
+                },
+            },
         )
 
     def _create_adaptive_workflow(self):
@@ -517,6 +585,24 @@ class RAGPipelineWorkflowNode(WorkflowNode):
 
     Flexible RAG workflow that can be configured for different use cases
     without code changes. Supports all strategies and custom configurations.
+
+    Inputs
+    ------
+    documents : list
+        Document list to process through the configurable RAG pipeline.
+        Routed to the inner-graph ``config_processor`` via ``input_mapping``.
+    query : str, optional
+        Query text for retrieval. Defaults to ``""`` (matches the
+        processor codegen default). Routed via ``input_mapping``.
+    strategy : str, optional
+        Strategy selection (``semantic`` / ``statistical`` / ``hybrid`` /
+        ``hierarchical``). Defaults to the class's ``default_strategy``
+        argument. Routed via ``input_mapping``.
+
+    The mapping makes the workflow self-sufficient at the public API
+    surface: callers invoke ``node.execute(documents=[...])`` and the
+    inner-graph processor receives the inputs without the caller having
+    to know inner-graph node IDs.
     """
 
     def __init__(
@@ -531,37 +617,86 @@ class RAGPipelineWorkflowNode(WorkflowNode):
         # Build configurable workflow
         workflow = self._create_configurable_workflow()
 
+        # ``input_mapping`` routes the public ``documents`` + ``query`` +
+        # ``strategy`` parameters to the inner-graph ``config_processor``
+        # node's ``documents`` / ``query`` / ``strategy`` parameters.
+        # Without this mapping the facade auto-derives ``config_processor_
+        # documents`` / ``config_processor_query`` / ``config_processor_
+        # strategy`` — users would have to know the inner-graph node ID to
+        # invoke the workflow. Per F25 Shard D (same defect class as
+        # SimpleRAGWorkflowNode F25 Shard C).
         super().__init__(
             workflow=workflow,
             name=name,
             description=f"Configurable RAG pipeline with {default_strategy} as default strategy",
+            input_mapping={
+                "documents": {
+                    "node": "config_processor",
+                    "parameter": "documents",
+                    "type": list,
+                    "required": True,
+                    "description": "Documents to process through the configurable RAG pipeline",
+                },
+                "query": {
+                    "node": "config_processor",
+                    "parameter": "query",
+                    "type": str,
+                    "required": False,
+                    "default": "",
+                    "description": "Query text for retrieval",
+                },
+                "strategy": {
+                    "node": "config_processor",
+                    "parameter": "strategy",
+                    "type": str,
+                    "required": False,
+                    "default": default_strategy,
+                    "description": "Strategy selection: semantic / statistical / hybrid / hierarchical",
+                },
+            },
         )
 
     def _create_configurable_workflow(self):
         """Create configurable RAG workflow"""
         builder = WorkflowBuilder()
 
-        # Configuration processor
+        # Configuration processor.
+        #
+        # F25 Shard D sibling-sweep fix (autonomous-execution.md MUST Rule 4
+        # — same-bug-class fix surfaced during the entry-wiring sweep):
+        # the prior codegen ended with ``result = process_config(documents,
+        # **kwargs)`` but ``kwargs`` is NOT defined in the PythonCodeNode
+        # exec scope (PythonCodeNode binds explicit input parameters as
+        # locals — ``documents``, ``query``, ``strategy`` — not a kwargs
+        # dict). Every invocation raised ``NameError: name 'kwargs' is
+        # not defined`` at the entry node.
+        #
+        # The fix constructs the config dict directly without the wrapper
+        # function + undefined ``**kwargs`` unpacking. The default values
+        # (chunk_size / overlap / embedding_model / retrieval_k) are
+        # interpolated from ``self.rag_config`` at workflow-build time,
+        # matching the original codegen's behavior when no override is
+        # supplied. PythonCodeNode does not expose a kwargs dict, so the
+        # original codegen's "user can override chunk_size at runtime"
+        # contract was never reachable through this PythonCodeNode anyway
+        # — the override path is via ``config: RAGConfig`` at construction
+        # time, which IS preserved.
         config_processor_id = builder.add_node(
             "PythonCodeNode",
             node_id="config_processor",
             config={
                 "code": f"""
-def process_config(documents, query="", strategy="{self.default_strategy}", **kwargs):
-    # Merge user config with defaults
-    processed_config = {{
-        "strategy": strategy,
-        "documents": documents,
-        "query": query,
-        "chunk_size": kwargs.get("chunk_size", {self.rag_config.chunk_size}),
-        "chunk_overlap": kwargs.get("chunk_overlap", {self.rag_config.chunk_overlap}),
-        "embedding_model": kwargs.get("embedding_model", "{self.rag_config.embedding_model}"),
-        "retrieval_k": kwargs.get("retrieval_k", {self.rag_config.retrieval_k})
-    }}
+processed_config = {{
+    "strategy": strategy if strategy else "{self.default_strategy}",
+    "documents": documents,
+    "query": query if query else "",
+    "chunk_size": {self.rag_config.chunk_size},
+    "chunk_overlap": {self.rag_config.chunk_overlap},
+    "embedding_model": "{self.rag_config.embedding_model}",
+    "retrieval_k": {self.rag_config.retrieval_k},
+}}
 
-    return processed_config
-
-result = process_config(documents, **kwargs)
+result = processed_config
 """
             },
         )
