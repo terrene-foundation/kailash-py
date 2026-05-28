@@ -348,3 +348,214 @@ class TestSimpleRAGWorkflowEntryWiring:
             assert (
                 "semantic_chunker" not in msg or "text" not in msg
             ), f"chunker.text still unwired post-fix: {msg!r}"
+
+
+# ==========================================================================
+# Advanced / Adaptive / RAGPipeline WorkflowNode entry-wiring contracts
+# (F25 Shard D — sibling sweep against SimpleRAG's entry-wiring fix)
+# ==========================================================================
+#
+# F25 audit (`workspaces/kaizen-rag-node-coverage/04-validate/05-audit-gap-2026-05-28.md`
+# § 7) flagged that the SimpleRAGWorkflowNode entry-wiring fix has sibling
+# defects in the other three documented public WorkflowNode pipelines —
+# their facade ``get_parameters()`` does NOT surface the user-visible
+# entry inputs (``documents``, ``query``, ``strategy``) and instead leaks
+# the inner-graph-node-id-prefixed auto-derived names
+# (``quality_analyzer_documents``, ``document_preprocessor_documents``,
+# ``config_processor_documents``). Same defect class as the SimpleRAG
+# ``chunker.text`` un-wired entry — closed identically via
+# ``input_mapping`` on the WorkflowNode super-init.
+#
+# Per the F25 value-anchor (briefs/00-brief.md line 9-18, archived source
+# `workspaces/_archive/kaizen-rag-resurrection-superseded-2026-05-26/
+# kaizen-rag-resurrection/briefs/00-brief.md` § "Out of scope"): "the RAG
+# capability the user chose to preserve is provably correct, not merely
+# importable." A public Quick Start WorkflowNode whose facade hides the
+# user-visible parameter behind an auto-derived inner-graph name is
+# importable but NOT invocable without spelunking the inner graph —
+# exactly the failure mode the anchor closes.
+
+
+class TestAdvancedRAGWorkflowEntryWiring:
+    """``AdvancedRAGWorkflowNode`` exposes ``documents`` on the facade.
+
+    The inner graph's entry node is ``quality_analyzer`` (PythonCodeNode);
+    it requires ``documents``. Without ``input_mapping`` the facade
+    auto-derives ``quality_analyzer_documents`` — callers MUST know the
+    inner-graph node id to invoke the workflow.
+    """
+
+    def test_advanced_pipeline_facade_surfaces_documents_parameter(self):
+        node = AdvancedRAGWorkflowNode()
+        params = node.get_parameters()
+        assert (
+            "documents" in params
+        ), f"documents parameter missing from facade; got {list(params.keys())}"
+        documents_param = params["documents"]
+        assert (
+            documents_param.required is True
+        ), "documents MUST be a required parameter"
+        assert (
+            documents_param.type is list
+        ), "documents MUST be typed as list (per QualityAnalyzer codegen contract)"
+
+    def test_advanced_pipeline_routes_documents_to_quality_analyzer(self):
+        """Inner-graph ``quality_analyzer`` receives ``documents`` at runtime.
+
+        Pre-fix: ``runtime.execute(wf, parameters={'quality_analyzer':
+        {'documents': ...}})`` worked via the auto-derived path BUT the
+        facade exposed no clean ``documents`` parameter. Post-fix: the
+        facade's ``documents`` routes through ``input_mapping`` and any
+        runtime failure (if any) is DOWNSTREAM of ``quality_analyzer``
+        (e.g. ``doc_vector_db`` missing required configuration —
+        documented in F25 audit as an out-of-shard concern in
+        ``strategies.py``-owned sub-workflows).
+        """
+        wf = _wf(AdvancedRAGWorkflowNode())
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(wf, parameters={"quality_analyzer": {"documents": _CORPUS}})
+        except Exception as exc:  # noqa: BLE001 — see assertion below
+            msg = str(exc)
+            assert (
+                "quality_analyzer" not in msg or "documents" not in msg
+            ), f"quality_analyzer.documents still unwired post-fix: {msg!r}"
+
+
+class TestAdaptiveRAGWorkflowEntryWiring:
+    """``AdaptiveRAGWorkflowNode`` exposes ``documents`` + ``query`` on the facade.
+
+    The inner graph's entry node is ``document_preprocessor`` (PythonCodeNode);
+    it requires ``documents`` and accepts an optional ``query``. Without
+    ``input_mapping`` the facade auto-derives
+    ``document_preprocessor_documents`` / ``document_preprocessor_query``.
+    """
+
+    def test_adaptive_pipeline_facade_surfaces_documents_parameter(self):
+        node = AdaptiveRAGWorkflowNode()
+        params = node.get_parameters()
+        assert (
+            "documents" in params
+        ), f"documents parameter missing from facade; got {list(params.keys())}"
+        assert params["documents"].required is True
+        assert params["documents"].type is list
+
+    def test_adaptive_pipeline_facade_surfaces_query_parameter(self):
+        """``query`` is exposed as an optional public parameter (default '').
+
+        The preprocessor codegen accepts ``query`` with a default of ``""``;
+        the facade MUST mirror that (required=False, default='') so callers
+        can invoke ``node.execute(documents=...)`` without supplying a query
+        AND can override it without learning the inner-graph node ID.
+        """
+        node = AdaptiveRAGWorkflowNode()
+        params = node.get_parameters()
+        assert (
+            "query" in params
+        ), f"query parameter missing from facade; got {list(params.keys())}"
+        assert params["query"].required is False
+        assert params["query"].type is str
+
+    def test_adaptive_pipeline_routes_documents_to_preprocessor(self):
+        wf = _wf(AdaptiveRAGWorkflowNode())
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(
+                wf,
+                parameters={
+                    "document_preprocessor": {
+                        "documents": _CORPUS,
+                        "query": "test query",
+                    }
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — see assertion below
+            msg = str(exc)
+            assert (
+                "document_preprocessor" not in msg or "documents" not in msg
+            ), f"document_preprocessor.documents still unwired post-fix: {msg!r}"
+
+
+class TestRAGPipelineWorkflowEntryWiring:
+    """``RAGPipelineWorkflowNode`` exposes ``documents``/``query``/``strategy``.
+
+    The inner graph's entry node is ``config_processor`` (PythonCodeNode);
+    it requires ``documents`` and accepts optional ``query`` + ``strategy``.
+    """
+
+    def test_pipeline_facade_surfaces_documents_parameter(self):
+        node = RAGPipelineWorkflowNode()
+        params = node.get_parameters()
+        assert (
+            "documents" in params
+        ), f"documents parameter missing from facade; got {list(params.keys())}"
+        assert params["documents"].required is True
+        assert params["documents"].type is list
+
+    def test_pipeline_facade_surfaces_query_and_strategy_parameters(self):
+        """``query`` (default '') and ``strategy`` (default from class config).
+
+        Without ``input_mapping`` the facade would surface
+        ``config_processor_query`` / ``config_processor_strategy`` —
+        leaking the inner-graph node ID and forcing callers to know it.
+        """
+        node = RAGPipelineWorkflowNode()
+        params = node.get_parameters()
+        assert "query" in params, f"query missing; got {list(params.keys())}"
+        assert "strategy" in params, f"strategy missing; got {list(params.keys())}"
+        assert params["query"].required is False
+        assert params["query"].type is str
+        assert params["strategy"].required is False
+        assert params["strategy"].type is str
+
+    def test_pipeline_routes_documents_to_config_processor(self):
+        wf = _wf(RAGPipelineWorkflowNode())
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(
+                wf,
+                parameters={"config_processor": {"documents": _CORPUS}},
+            )
+        except Exception as exc:  # noqa: BLE001 — see assertion below
+            msg = str(exc)
+            assert (
+                "config_processor" not in msg or "documents" not in msg
+            ), f"config_processor.documents still unwired post-fix: {msg!r}"
+
+    def test_pipeline_config_processor_codegen_runs_without_kwargs_nameerror(self):
+        """The ``config_processor`` codegen body MUST execute without ``NameError``.
+
+        Defect (separate bug class from the input-mapping defect, surfaced
+        during sibling-sweep work — fix applied in same PR per
+        ``rules/autonomous-execution.md`` MUST Rule 4):
+
+        Pre-fix line 564 of ``workflows.py`` reads:
+
+            result = process_config(documents, **kwargs)
+
+        ``kwargs`` is not defined in the PythonCodeNode exec scope —
+        PythonCodeNode binds explicit input parameters as locals
+        (``documents``, ``query``, ``strategy``), NOT a ``kwargs`` dict.
+        Result: a ``NameError: name 'kwargs' is not defined`` at first
+        runtime invocation of the pipeline.
+
+        Post-fix: codegen body is rewritten to construct the config dict
+        directly without the wrapper function + undefined ``**kwargs``
+        unpacking, eliminating the NameError.
+        """
+        wf = _wf(RAGPipelineWorkflowNode())
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(
+                wf,
+                parameters={"config_processor": {"documents": _CORPUS}},
+            )
+        except Exception as exc:  # noqa: BLE001 — see assertion below
+            msg = str(exc)
+            # Defect is closed iff the message does NOT contain the
+            # NameError signature for the undefined ``kwargs`` symbol.
+            # Downstream failures (dispatcher routing, VectorDatabaseNode
+            # unwired config in sub-workflows) are out of shard scope.
+            assert (
+                "kwargs" not in msg or "NameError" not in msg
+            ), f"config_processor codegen still references undefined kwargs: {msg!r}"
