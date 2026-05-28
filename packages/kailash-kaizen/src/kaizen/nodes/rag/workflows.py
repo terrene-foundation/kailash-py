@@ -681,19 +681,49 @@ class RAGPipelineWorkflowNode(WorkflowNode):
         # contract was never reachable through this PythonCodeNode anyway
         # — the override path is via ``config: RAGConfig`` at construction
         # time, which IS preserved.
+        # Security round-1 (H1, M2): RAGConfig values + default_strategy
+        # are interpolated into a PythonCodeNode `code` string at workflow
+        # build time. To prevent code injection if RAGConfig is ever
+        # constructed from untrusted bytes (e.g. a Nexus endpoint that
+        # accepts RAGConfig kwargs), every interpolated value is forced
+        # through a typed coercion + `repr()` (which emits a syntactically
+        # safe Python literal — any embedded quotes / backslashes are
+        # escaped, control characters are encoded, and arbitrary
+        # subclass-`__str__`-override attacks are neutralized because the
+        # repr is computed on the coerced value).
+        #
+        # Strategy enum validation (M2): `default_strategy` MUST be one of
+        # the SwitchNode's declared cases. An unknown strategy would silently
+        # fall through to no case match — converting that into a typed
+        # ValueError surfaces misuse at construction instead of producing a
+        # confusing empty workflow output at runtime.
+        _ALLOWED_STRATEGIES = ("semantic", "statistical", "hybrid", "hierarchical")
+        if self.default_strategy not in _ALLOWED_STRATEGIES:
+            raise ValueError(
+                f"RAGPipelineWorkflowNode.default_strategy={self.default_strategy!r} "
+                f"is not in the allowed set {_ALLOWED_STRATEGIES}; "
+                f"SwitchNode would never dispatch to a matching case."
+            )
+
+        _default_strategy_lit = repr(self.default_strategy)
+        _chunk_size_lit = repr(int(self.rag_config.chunk_size))
+        _chunk_overlap_lit = repr(int(self.rag_config.chunk_overlap))
+        _embedding_model_lit = repr(str(self.rag_config.embedding_model))
+        _retrieval_k_lit = repr(int(self.rag_config.retrieval_k))
+
         config_processor_id = builder.add_node(
             "PythonCodeNode",
             node_id="config_processor",
             config={
                 "code": f"""
 processed_config = {{
-    "strategy": strategy if strategy else "{self.default_strategy}",
+    "strategy": strategy if strategy else {_default_strategy_lit},
     "documents": documents,
     "query": query if query else "",
-    "chunk_size": {self.rag_config.chunk_size},
-    "chunk_overlap": {self.rag_config.chunk_overlap},
-    "embedding_model": "{self.rag_config.embedding_model}",
-    "retrieval_k": {self.rag_config.retrieval_k},
+    "chunk_size": {_chunk_size_lit},
+    "chunk_overlap": {_chunk_overlap_lit},
+    "embedding_model": {_embedding_model_lit},
+    "retrieval_k": {_retrieval_k_lit},
 }}
 
 result = processed_config
