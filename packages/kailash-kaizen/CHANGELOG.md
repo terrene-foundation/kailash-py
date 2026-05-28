@@ -4,6 +4,56 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.3] — 2026-05-28 — RAG query_processing + workflows defect close-out (F25 Shards D + E)
+
+### Fixed (Shard E — `kaizen.nodes.rag.query_processing`)
+
+- **`AdaptiveQueryProcessorNode` now executes end-to-end (CRITICAL).** The
+  adaptive workflow embeds `QueryIntentClassifierNode` as a node-type
+  string and wires `intent_analyzer.routing_decision` →
+  `adaptive_processor.routing_decision`. Pre-fix the classifier's `run()`
+  returned a flat classification dict WITHOUT the `routing_decision`
+  field — that field existed only as the strategy_mapper output of the
+  classifier's own inner workflow, which is NOT exercised when the node
+  is composed as a single Node inside another workflow. Every end-to-end
+  call to the adaptive workflow crashed at codegen with
+  `NameError: name 'routing_decision' is not defined`. The fix returns
+  `routing_decision` from `QueryIntentClassifierNode.run()` as part of
+  the documented public contract, so the deterministic `run()` path and
+  the LLM-driven inner-workflow path both expose the same field shape.
+  Surfaced by the F25 RAG audit.
+- **`QueryDecompositionNode` resolver + LLM prompt aligned on
+  `depends_on`.** The dependency_resolver PythonCodeNode and the
+  `query_decomposer` LLM `system_prompt` now both use `depends_on` as the
+  per-sub-question dependency-list field name. This matches the broader
+  kaizen RAG convention used by `MultiHopQueryPlannerNode`'s hop_planner.
+  The change prevents future LLM outputs trained on the kaizen
+  `system_prompt` patterns from silently producing an empty dependency
+  graph through field-name drift.
+
+### Fixed (Shard D — `kaizen.nodes.rag.workflows`)
+
+- **`AdvancedRAGWorkflowNode` accepts a `text` input.** The advanced
+  workflow node's inner graph previously had an unwired chunker input,
+  so the workflow could not be executed by users following the public
+  surface contract. The chunker's `text` parameter now flows through the
+  workflow facade so `node.execute(text="document body...")` succeeds.
+  Mirrors the 2.24.2 fix for `SimpleRAGWorkflowNode`.
+- **`AdaptiveRAGWorkflowNode` accepts a `text` input.** Same class of
+  defect as above — the adaptive variant of the workflow node had the
+  same unwired chunker input. Now executable end-to-end.
+- **`RAGPipelineWorkflowNode` accepts a `text` input.** Same class of
+  defect — the pipeline variant's inner graph also required `text` that
+  nothing supplied. Now executable end-to-end.
+
+### Notes
+
+- Both Shard D (`workflows.py`) and Shard E (`query_processing.py`)
+  landed in the same release. Downstream nodes (`embedder` / `vector_db`)
+  in the workflow-node variants still require real embedding-provider +
+  vector-store configuration to complete the full pipeline end-to-end;
+  that broader inner-graph wiring is tracked as a separate scope.
+
 ## [2.24.2] — 2026-05-28 — `SimpleRAGWorkflowNode` runnable end-to-end (F25)
 
 ### Fixed
