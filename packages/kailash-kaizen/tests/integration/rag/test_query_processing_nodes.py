@@ -53,28 +53,23 @@ classes ship both a deterministic ``run()`` and an LLM-based
 via the deterministic substitute — they do NOT bless the deterministic
 ``run()`` fallback as the LLM-first authority.
 
-RUNTIME-DEFECT BOUNDARY (reported, NOT fixed in this shard — see the per-test
-findings inline): two SDK-side wiring/contract mismatches surfaced during
-end-to-end execution and are documented for the F25 owner:
+RUNTIME-DEFECT CLOSURE (F25 Shard E, 2026-05-28): the two wiring/contract
+mismatches the original Shard A documented are now FIXED in
+``packages/kailash-kaizen/src/kaizen/nodes/rag/query_processing.py``:
 
-1. ``QueryDecompositionNode``'s dependency_resolver reads the
-   ``dependencies`` key from each sub_question, but the system_prompt
-   advertises ``depends_on`` as the field name. Cosmetic — the tests use
-   ``dependencies`` to match the resolver's actual contract.
+1. ``QueryDecompositionNode`` — the LLM ``system_prompt`` and the
+   dependency_resolver codegen are now aligned on the ``depends_on``
+   field name (matching ``MultiHopQueryPlannerNode``'s hop_planner
+   convention). The fixture below uses ``depends_on`` to match the
+   corrected contract.
 
-2. ``AdaptiveQueryProcessorNode._create_workflow`` wires
-   ``intent_analyzer.routing_decision`` → ``adaptive_processor.routing_decision``
-   but ``QueryIntentClassifierNode.run()`` returns a flat classification
-   dict with NO ``routing_decision`` field (that field exists only on the
-   inner strategy_mapper of the QueryIntentClassifierNode's own workflow,
-   which is NOT exercised when the node is composed as a single Node in
-   the adaptive workflow). End-to-end execution surfaces a NameError; the
-   test brackets the defect by exercising what RUNS (the intent_analyzer
-   half) and documenting the gap.
-
-Both findings are pre-existing SDK defects out-of-scope for this Tier-2
-coverage shard; the integration tests surface them clearly so the F25 owner
-has a precise reproducer.
+2. ``AdaptiveQueryProcessorNode`` — ``QueryIntentClassifierNode.run()``
+   now returns the ``routing_decision`` field as part of its public
+   contract, so composing the classifier as a Node inside the adaptive
+   workflow (and wiring ``intent_analyzer.routing_decision`` →
+   ``adaptive_processor.routing_decision``) succeeds end-to-end. The
+   ``AdaptiveQueryProcessorNodeIntegration`` end-to-end test asserts the
+   full ``adaptive_plan`` output.
 """
 
 from __future__ import annotations
@@ -678,69 +673,55 @@ class TestAdaptiveQueryProcessorNodeIntegration:
         assert type(analyzer).__name__ == "QueryIntentClassifierNode"
         assert type(processor).__name__ == "PythonCodeNode"
 
-    def test_create_workflow_intent_analyzer_executes_via_local_runtime(
+    def test_create_workflow_executes_end_to_end_via_local_runtime(
         self, deterministic_llm
     ):
-        """The intent_analyzer (a real QueryIntentClassifierNode) runs
-        end-to-end through LocalRuntime against the deterministic
-        ``query`` input.
+        """End-to-end LocalRuntime execution of the adaptive workflow.
 
-        RUNTIME-DEFECT BOUNDARY (reported, NOT fixed in this shard — see
-        the module-level finding below): the adaptive_processor's
-        PythonCodeNode references a `routing_decision` variable that the
-        graph wiring sources from `intent_analyzer.routing_decision`, but
-        the embedded ``QueryIntentClassifierNode.run()`` directly returns
-        a FLAT dict (query_type/domain/complexity/...) with NO
-        ``routing_decision`` field — that field is only produced by the
-        inner strategy_mapper of the QueryIntentClassifierNode's OWN
-        workflow, which is NOT exercised when the node is composed as a
-        single Node in the adaptive workflow. Result: the
-        adaptive_processor raises ``NameError: name 'routing_decision' is
-        not defined`` at the codegen body. This shard exercises what
-        currently RUNS — the intent_analyzer's real execution — and
-        documents the wiring gap for the F25 owner; fixing the wiring
-        exceeds the shard scope per the dispatch brief's "do not pad
-        scope" clause.
+        F25 Shard E fix: ``QueryIntentClassifierNode.run()`` now returns
+        the ``routing_decision`` field as part of its public contract
+        (alongside the flat classification dict). The adaptive_processor's
+        PythonCodeNode receives that field via the graph wiring
+        ``intent_analyzer.routing_decision`` →
+        ``adaptive_processor.routing_decision`` and uses it to compute
+        the processing plan.
 
-        FINDING (separate, for the F25 owner): ``AdaptiveQueryProcessorNode
-        ._create_workflow`` wires ``intent_analyzer.routing_decision`` →
-        ``adaptive_processor.routing_decision`` but
-        ``QueryIntentClassifierNode.run()`` returns a flat classification
-        dict with NO ``routing_decision`` field. The field exists only on
-        the inner strategy_mapper of the QueryIntentClassifierNode's own
-        workflow; embedding the node in another workflow bypasses that
-        inner mapper. Either (a) the adaptive workflow's intent_analyzer
-        edge should source ``recommended_strategy`` (which IS in the flat
-        output) and the codegen body should be updated, OR (b) the
-        adaptive workflow should embed the QueryIntentClassifierNode's
-        inner workflow (not the node itself) and pull the strategy_mapper
-        output. The runtime defect is bracketed by this test.
+        This test exercises the full composition: real
+        ``QueryIntentClassifierNode.run()`` produces routing_decision +
+        flat output; the wired edge passes routing_decision to the real
+        ``PythonCodeNode`` (adaptive_processor) which computes
+        processing_steps from the intent_analysis fields.
         """
         wf = _build(AdaptiveQueryProcessorNode(name="it_aqp_run"))
-        # Execute through LocalRuntime; the intent_analyzer node MUST
-        # produce its flat classification output even though the
-        # downstream adaptive_processor cannot consume it cleanly.
-        runtime = LocalRuntime()
-        # Use raise_on_error=False so the adaptive_processor's NameError
-        # does not abort the test — we are asserting what RUNS, not
-        # what's broken (the broken part is the documented finding).
-        try:
-            results, _ = runtime.execute(wf, parameters={"query": "Compare X vs Y"})
-        except Exception:
-            # Defensive: LocalRuntime may propagate or collect the error;
-            # if collected, results below; if raised, we still exercised
-            # the intent_analyzer and the runtime DID resolve the
-            # node-type strings — both gains the integration test exists
-            # to verify.
-            return
-        # If execution didn't raise, both nodes ran AND intent_analyzer
-        # output is well-formed.
+        results = _execute_workflow(wf, query="Compare X vs Y")
+
+        # Both nodes ran successfully; intent_analyzer is a real
+        # QueryIntentClassifierNode whose run() codepath produced the
+        # documented flat shape plus the routing_decision field.
         assert "intent_analyzer" in results
         ia_out = results["intent_analyzer"]
-        # The real QueryIntentClassifierNode.run() returns the documented
-        # flat shape; the deterministic substitute affects only the inner
-        # workflow which `run()` does NOT exercise.
         assert "query_type" in ia_out
+        assert "routing_decision" in ia_out, (
+            "QueryIntentClassifierNode.run() MUST return routing_decision "
+            "for composition compatibility (F25 Shard E fix)"
+        )
+        # routing_decision MUST carry the documented structure so
+        # downstream consumers (PythonCodeNode in adaptive_processor) can
+        # extract intent_analysis + recommended_strategy.
+        rd = ia_out["routing_decision"]
+        assert "intent_analysis" in rd
+        assert "recommended_strategy" in rd
+
+        # adaptive_processor ran end-to-end and produced the documented
+        # adaptive_plan output shape.
+        assert "adaptive_processor" in results
+        plan = results["adaptive_processor"]["result"]["adaptive_plan"]
+        assert plan["original_query"] == "Compare X vs Y"
+        assert "intent" in plan
+        assert "recommended_strategy" in plan
+        assert "processing_steps" in plan
+        # "rewrite" is always appended by the adaptive_processor codegen.
+        assert "rewrite" in plan["processing_steps"]
 
 
 # ==========================================================================

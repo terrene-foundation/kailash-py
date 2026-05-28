@@ -824,6 +824,32 @@ class QueryIntentClassifierNode(Node):
             else:
                 strategy = "hybrid"
 
+            # F25 Shard E: `routing_decision` is part of the documented public
+            # contract for QueryIntentClassifierNode — both the strategy_mapper
+            # PythonCodeNode inside _create_workflow() (line ~931) AND any
+            # downstream composer (e.g. AdaptiveQueryProcessorNode) consume
+            # this field on the same shape. Returning it from run() keeps the
+            # contract symmetric: the deterministic run() path and the
+            # LLM-driven inner-workflow path both expose `routing_decision`.
+            # Without this field, composing this node as a single Node inside
+            # another workflow raises NameError at codegen time.
+            routing_decision = {
+                "intent_analysis": {
+                    "query_type": query_type,
+                    "domain": domain,
+                    "complexity": complexity,
+                    "requirements": requirements,
+                    "suggested_strategy": strategy,
+                },
+                "recommended_strategy": strategy,
+                "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
+                "confidence": 0.8,
+                "reasoning": (
+                    f"Query type '{query_type}' with '{complexity}' complexity "
+                    f"suggests '{strategy}' strategy"
+                ),
+            }
+
             return {
                 "query_type": query_type,
                 "domain": domain,
@@ -831,16 +857,31 @@ class QueryIntentClassifierNode(Node):
                 "requirements": requirements,
                 "recommended_strategy": strategy,
                 "confidence": 0.8,
+                "routing_decision": routing_decision,
             }
 
         except Exception as e:
             logger.error(f"Query intent classification failed: {e}")
+            fallback_routing = {
+                "intent_analysis": {
+                    "query_type": "factual",
+                    "domain": "general",
+                    "complexity": "simple",
+                    "requirements": [],
+                    "suggested_strategy": "hybrid",
+                },
+                "recommended_strategy": "hybrid",
+                "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
+                "confidence": 0.0,
+                "reasoning": f"Classification failed: {e}; defaulted to hybrid",
+            }
             return {
                 "query_type": "factual",
                 "domain": "general",
                 "complexity": "simple",
                 "requirements": [],
                 "recommended_strategy": "hybrid",
+                "routing_decision": fallback_routing,
                 "error": str(e),
             }
 
