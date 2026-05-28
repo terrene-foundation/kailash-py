@@ -46,6 +46,7 @@
   "reportUnusedVariable": "none",
   "reportUnusedFunction": "none",
   "reportUnusedClass": "none",
+  "reportUnusedParameter": "none",
   "reportUnreachable": "none",
   "reportArgumentType": "warning"
 }

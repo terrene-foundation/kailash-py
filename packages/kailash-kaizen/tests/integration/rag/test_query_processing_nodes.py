@@ -260,7 +260,7 @@ class _DeterministicLLMAgent(Node):
             ),
         }
 
-    def run(self, **kwargs: Any) -> Dict[str, Any]:
+    def run(self, **_kwargs: Any) -> Dict[str, Any]:
         # The downstream PythonCodeNode consumer reads the source's
         # `response` field directly via `expansion_response.get(...)` /
         # `decomposition_result.get(...)` / etc. — i.e. it expects the
