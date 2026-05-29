@@ -102,7 +102,7 @@ from .service_client import (
 )
 from .typed_service_client import Decoder, TypedServiceClient
 
-__version__ = "2.6.4"
+__version__ = "2.7.0"
 __all__ = [
     # Core
     "Nexus",

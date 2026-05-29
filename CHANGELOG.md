@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.1] - 2026-05-29
+
 ### Fixed
 
 - **Durable gateway no longer serves stale cached GETs (#937)** — the request deduplicator cached responses for ALL HTTP methods with a 1-hour TTL, so a second identical GET returned a stale body (e.g. a schedule still showing `enabled` after a disable). Deduplication is meaningful only for mutating methods (idempotent retry of POST/PUT/PATCH/DELETE); GET/HEAD/OPTIONS are safe reads that must reflect current state. Both `DurableWorkflowServer` and `DurableAPIGateway` now gate the dedup cache check + response store on a `_should_deduplicate(request)` predicate (`request.method not in {GET, HEAD, OPTIONS}`). Durability tracking (audit events, checkpoints) still applies to all methods — only the dedup cache is skipped for safe reads. Regression: `tests/regression/test_issue_937_safe_method_dedup.py`.
