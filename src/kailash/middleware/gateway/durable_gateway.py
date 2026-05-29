@@ -117,10 +117,13 @@ class DurableAPIGateway(WorkflowAPIGateway):
             # Extract request metadata
             metadata = await self._extract_metadata(request)
 
-            # Check for duplicate request
-            duplicate_response = await self._check_duplicate(request, metadata)
-            if duplicate_response:
-                return duplicate_response
+            # Check for duplicate request — only for mutating methods. Safe
+            # reads (GET/HEAD/OPTIONS) must reflect current state and are never
+            # served from the dedup cache (#937).
+            if self._should_deduplicate(request):
+                duplicate_response = await self._check_duplicate(request, metadata)
+                if duplicate_response:
+                    return duplicate_response
 
             # Create durable request
             durable_request = DurableRequest(
@@ -150,14 +153,32 @@ class DurableAPIGateway(WorkflowAPIGateway):
                     call_next,
                 )
 
-                # Cache response for deduplication
-                await self._cache_response(request, metadata, response)
+                # Cache response for deduplication — mutating methods only;
+                # safe reads are never cached so they stay fresh (#937).
+                if self._should_deduplicate(request):
+                    await self._cache_response(request, metadata, response)
 
                 return response
 
             finally:
                 # Clean up active request
                 del self.active_requests[durable_request.id]
+
+    # HTTP methods that are safe (non-mutating) per RFC 7231 §4.2.1.
+    _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+    def _should_deduplicate(self, request: Request) -> bool:
+        """Whether request deduplication / response caching applies.
+
+        Deduplication is meaningful only for mutating methods (idempotent
+        retry of POST/PUT/PATCH). Safe HTTP methods (GET/HEAD/OPTIONS) are
+        non-mutating reads: there is no side effect to deduplicate, and
+        caching their response for the dedup TTL window (default 1h) would
+        serve stale data after an unrelated state change. Durability tracking
+        (audit events, checkpoints) still applies to reads; only the dedup
+        cache check/store is skipped. See issue #937.
+        """
+        return request.method not in self._SAFE_METHODS
 
     def _should_use_durability(self, request: Request) -> bool:
         """Check if durability should be used for this request."""

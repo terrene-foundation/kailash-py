@@ -188,18 +188,21 @@ class DurableWorkflowServer(WorkflowServer):
             )
 
             try:
-                # Check for duplicate request
-                cached_response = await self.deduplicator.check_duplicate(
-                    method=request.method,
-                    path=str(request.url.path),
-                    query_params=dict(request.query_params),
-                    body=metadata.body,
-                    headers=dict(request.headers),
-                    idempotency_key=metadata.idempotency_key,
-                )
-                if cached_response:
-                    logger.info(f"Duplicate request detected: {request_id}")
-                    return JSONResponse(content=cached_response)
+                # Check for duplicate request — only for mutating methods.
+                # Safe reads (GET/HEAD/OPTIONS) must reflect current state and
+                # are never served from the dedup cache (#937).
+                if self._should_deduplicate(request):
+                    cached_response = await self.deduplicator.check_duplicate(
+                        method=request.method,
+                        path=str(request.url.path),
+                        query_params=dict(request.query_params),
+                        body=metadata.body,
+                        headers=dict(request.headers),
+                        idempotency_key=metadata.idempotency_key,
+                    )
+                    if cached_response:
+                        logger.info(f"Duplicate request detected: {request_id}")
+                        return JSONResponse(content=cached_response)
 
                 # Create durable request
                 durable_request = DurableRequest(
@@ -277,8 +280,9 @@ class DurableWorkflowServer(WorkflowServer):
                     return response
 
                 # Cache response for deduplication
-                if response.status_code < 400:
-                    # Only cache successful responses
+                if response.status_code < 400 and self._should_deduplicate(request):
+                    # Cache only successful responses to mutating methods; safe
+                    # reads are never cached for dedup so they stay fresh (#937).
                     response_body = b"".join(
                         [chunk async for chunk in response.body_iterator]
                     )
@@ -341,6 +345,23 @@ class DurableWorkflowServer(WorkflowServer):
                 # Clean up active request
                 if request_id in self.active_requests:
                     del self.active_requests[request_id]
+
+    # HTTP methods that are safe (non-mutating) per RFC 7231 §4.2.1.
+    _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+    def _should_deduplicate(self, request: Request) -> bool:
+        """Whether request deduplication / response caching applies.
+
+        Deduplication is meaningful only for mutating methods (idempotent
+        retry of POST/PUT/PATCH). Safe HTTP methods (GET/HEAD/OPTIONS) are
+        non-mutating reads: there is no side effect to deduplicate, and
+        caching their response for the dedup TTL window (default 1h) would
+        serve stale data after an unrelated state change — e.g. a schedule
+        still showing enabled after a disable. Durability tracking
+        (audit events, checkpoints) still applies to reads; only the dedup
+        cache check/store is skipped. See issue #937.
+        """
+        return request.method not in self._SAFE_METHODS
 
     def _should_use_durability(self, request: Request) -> bool:
         """Determine if request should use durability features."""
