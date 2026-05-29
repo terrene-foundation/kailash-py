@@ -78,6 +78,16 @@ def register_scheduler_admin(
 
     Error mapping (via the transport's NexusError handler):
         ``ScheduleNotFound`` -> 404, ``ValueError`` -> 400.
+
+    Operator notes:
+        - ``JWTMiddleware`` MUST be installed on the app for the role guard to
+          resolve an authenticated user. If it is absent, every route fails
+          CLOSED (401 "Not authenticated") rather than open — but the panel is
+          then unusable, so install the auth middleware before registering.
+        - These routes are privileged but not rate-limited here. For
+          internet-exposed deployments, mount a rate-limit middleware in front
+          of the admin router (the role gate already bounds exposure to
+          authenticated ``scheduler-admin`` operators; this is defense-in-depth).
     """
     guard = RequireRole(role)
 
