@@ -1,6 +1,6 @@
 # Nexus Changelog
 
-## [Unreleased] — scheduler admin HTTP panel + typed-error wiring (#937)
+## [2.7.0] — 2026-05-29 — scheduler admin HTTP panel + typed-error wiring (#937)
 
 ### Added
 
