@@ -1,7 +1,7 @@
 ---
 name: analyst
 description: "Analysis specialist. Use for failure point analysis, risk assessment, requirements breakdown, or ADRs."
-tools: Read, Write, Edit, Grep, Glob, Task
+tools: Read, Grep, Glob
 model: opus
 ---
 

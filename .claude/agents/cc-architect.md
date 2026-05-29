@@ -64,7 +64,7 @@ Expert in Claude Code's architecture, configuration system, and the CO/COC five-
 2. **Completeness** — Are edge cases handled? Cross-references for handoff?
 3. **Effectiveness** — Output format specified? Does it actually get used?
 4. **Token Efficiency** — Redundancies? Path-scoping used? Waste is waste.
-5. **Trust Posture Wiring (rules only, ENFORCED)** — Per `rules/trust-posture.md` MUST 7 + `commands/codify.md` Step 6b: every NEW rule file (post-trust-posture grandfather cutoff) MUST end with `## Trust Posture Wiring` containing all 7 fields. Audit step:
+5. **Trust Posture Wiring (rules only, ENFORCED)** — Per `rules/trust-posture.md` MUST 7 + MUST 8 + `commands/codify.md` Step 6b: every NEW rule file (post-trust-posture grandfather cutoff) MUST end with `## Trust Posture Wiring` containing all 8 canonical fields (per `trust-posture.md` MUST 8). Audit step:
 
    ```bash
    # Mechanical sweep — emit FAIL on any new rule lacking the section
@@ -72,16 +72,35 @@ Expert in Claude Code's architecture, configuration system, and the CO/COC five-
      if ! grep -q '^## Trust Posture Wiring' "$f"; then
        echo "FAIL: $f missing Trust Posture Wiring"
      fi
-     # Verify all 7 fields present (severity, grace, cumulative, regression-within-grace, receipt, detection, origin)
-     for field in '\*\*Severity:' '\*\*Grace period:' '\*\*Cumulative threshold:' \
-                   '\*\*Regression-within-grace policy:' '\*\*Receipt requirement:' \
-                   '\*\*Detection mechanism:' '\*\*Origin evidence date:'; do
+     # Verify all 8 canonical fields present per trust-posture.md MUST-8
+     for field in '\*\*Severity:' '\*\*Grace period:' '\*\*Cumulative posture impact:' \
+                   '\*\*Regression-within-grace:' '\*\*Receipt requirement:' \
+                   '\*\*Detection mechanism:' '\*\*Violation scope:' '\*\*Origin:'; do
        grep -q "$field" "$f" || echo "FAIL: $f wiring missing field $field"
      done
    done
    ```
 
    Missing or incomplete → audit FAIL → /codify halts. Grandfathered rules (those pre-dating `rules/trust-posture.md`) are exempt — recognized by `git log --diff-filter=A` showing creation date before trust-posture commit SHA.
+
+6. **Canonical 8-Field Wiring Template Sweep (per `trust-posture.md` MUST 8)** — Every Trust-Posture-Wired rule landed AT or AFTER the SHA introducing `trust-posture.md` MUST 8 MUST carry the literal token `**Violation scope:**` after its detection-mechanism field. The token is the canonical-template grep anchor. Run the sweep across ALL rules in `.claude/rules/*.md`; flag any rule that has a `## Trust Posture Wiring` section but lacks `**Violation scope:**`. Grandfather cutoff is the SHA of the commit that introduced MUST 8 — rules landed before that SHA are exempt until their next `/codify`-touched edit; rules landed at or after MUST shift to canonical form.
+
+   ```bash
+   # Mechanical sweep — flag Wiring-bearing rules missing the canonical-template marker
+   grandfather_sha="6e33d92"  # commit introducing trust-posture.md MUST-8 (Shard F-3, 2026-05-22)
+   for f in .claude/rules/*.md; do
+     grep -q '^## Trust Posture Wiring' "$f" || continue  # rule has no Wiring; skip
+     # Determine creation SHA of this rule file
+     create_sha=$(git log --diff-filter=A --format='%H' -- "$f" | tail -1)
+     # If created at or after grandfather cutoff, require canonical-template marker
+     if git merge-base --is-ancestor "$grandfather_sha" "$create_sha"; then
+       grep -q '\*\*Violation scope:\*\*' "$f" || \
+         echo "FAIL: $f post-MUST-8 rule missing **Violation scope:** canonical-template marker"
+     fi
+   done
+   ```
+
+   The sweep is 4 seconds. It catches Wiring sections that look complete on visual inspection but drift on the canonical-template contract. Surface findings as audit FAIL → /codify halts until the rule is brought to canonical-template compliance OR a follow-up `/codify` explicitly grandfathers the rule with named rationale.
 
 ## Related Agents
 

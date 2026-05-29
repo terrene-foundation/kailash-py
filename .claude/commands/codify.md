@@ -22,6 +22,16 @@ This phase executes under the **autonomous execution model** (see `rules/autonom
 
 ## Workflow
 
+### 0. Acquire codify lease (multi-operator concurrency gate)
+
+Per `workspaces/multi-operator-coc/02-plans/01-architecture.md` §7.1: two concurrent `/codify` invocations clobber the rule corpus. Acquire the lease BEFORE any step below.
+
+Call `acquireCodifyLease({ scopeFiles, displayId })` from `.claude/hooks/lib/codify-lease.js`. The helper unions `.claude/learning/learning-codified.json` + `.claude/.proposals/latest.yaml` into the scope automatically. `displayId` comes from `operator-id.js::resolveIdentity()`.
+
+On `{ ok: false, reason: "conflict" }`: STOP, surface the conflicting `display_id` + acquired_at + scope overlap to the user verbatim. Silent proceed is BLOCKED (`rules/zero-tolerance.md` Rule 3).
+
+On `{ ok: true, lease, branch }`: create/switch to `codify/<display_id>-<date>`; all edits this session lands there; end-of-session opens a PR + admin-merge per `coc-sync-landing.md` MUST-3; then `releaseCodifyLease({ repoDir, displayId })` (the helper derives the leasePath from `repoDir` internally per Sec-MED-3 — callers cannot misroute the release write). For MUST-clause rule changes the orchestrator additionally requires a signed `[ack: <rule-id>]` from the user before merge (consumed by `multi-operator-sessionstart.js`).
+
 ### 1. Consume learning digest
 
 Before extracting new knowledge, integrate what the learning system has captured:
@@ -46,22 +56,7 @@ For each finding, either:
 - Skip (not worth codifying — explain why)
 - **Re-validate deferred items** (per `rules/value-prioritization.md` MUST-3): inherited items lacking a value-anchor MUST surface "lacks value-anchor — current value?" rather than re-list on faith. Items ≥2 sessions stale → "still wanted?" gate. Silent inheritance across `/clear` is BLOCKED.
 
-After processing, write `.claude/learning/learning-codified.json` to record what was analyzed:
-
-```json
-{
-  "last_codified": "2026-04-07T12:00:00Z",
-  "digest_hash": "<sha256 of digest at time of processing>",
-  "actions_taken": [
-    { "type": "rule_update", "file": "rules/patterns.md", "reason": "..." },
-    {
-      "type": "skill_update",
-      "file": "skills/03-nexus/SKILL.md",
-      "reason": "..."
-    }
-  ]
-}
-```
+After processing, write `.claude/learning/learning-codified.json` recording `last_codified` (ISO ts), `digest_hash` (sha256 of digest), and `actions_taken[]` (each entry: `{type, file, reason}` — types include `rule_update`, `skill_update`, `agent_update`, `team_memory_promote`).
 
 This closes the feedback loop: observe → digest → **codify into real artifacts**.
 
@@ -93,13 +88,17 @@ Improve skills in their canonical locations.
 - Update the directory's `SKILL.md` entry point to reference new files
 - Skills must be detailed enough for agents to achieve situational awareness from them alone
 
+### 4b. Promote team-memory facts (multi-operator repos)
+
+If the digest surfaced a team-stable, non-secret fact ≥2 operators benefit from (shared convention, terminology binding, cross-repo path), draft a `.claude/team-memory/<topic-slug>.md` per `.claude/team-memory/README.md` (split rule: one file per fact). The frontmatter's signed-attribution fields (`promoted_by`, `signed`, `body_anchor`) are populated by `.claude/hooks/lib/coc-append.js` at merge time — leave them `pending`/`false` in the draft. The file lands on the codify lease branch alongside the other Step 3/4 edits and is validated by `integrity-guard.js` on every read.
+
 ### 5. Update README.md and documentation (MANDATORY)
 
 Ensure user-facing documentation reflects new capabilities. Verify README.md, docstrings, and docs build.
 
 ### 6. Red team the agents and skills
 
-Validate that generated agents and skills are correct, complete, and secure. **cc-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
+Validate that generated agents and skills are correct, complete, and secure. **cc-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure). **Self-referential gate (MANDATORY, posture-independent):** before drafting convergence, match every file the proposal touches against `rules/self-referential-codify.md` Rule 2's allowlist; ANY match → the multi-agent redteam-with-tests round (that rule's Rule 1: reviewer + security-reviewer + structural-validator, parallel) is MANDATORY regardless of trust posture. Run this check from here — `self-referential-codify.md` is `scope: path-scoped` and may not be in context at framing time; this always-loaded command body is the structural guarantee the gate is evaluated before convergence is decided.
 
 ### 6b. Trust Posture Wiring (MANDATORY for new rules — ENFORCED)
 
@@ -109,11 +108,11 @@ For each NEW rule authored in this codify cycle (grandfathered rules pre-dating 
 
 1. **Read** `.claude/learning/violations.jsonl` (last 30 days). Find self-reported / detected violations whose `addressed_by` is null AND whose root cause matches the candidate rule.
 2. **Link** the rule to those violations: update `addressed_by: "rules/<file>.md@<sha>"` for each.
-3. **Author** a "Trust Posture Wiring" section per `skills/32-trust-posture/rule-authoring-checklist.md` (severity, grace days, cumulative threshold, regression-within-grace policy, receipt requirement, detection mechanism, first-violation id, origin date).
+3. **Author** a "Trust Posture Wiring" section per the canonical 8-field template at `rules/trust-posture.md` MUST Rule 8 (Severity, Grace period, Cumulative posture impact, Regression-within-grace, Receipt requirement, Detection mechanism, Violation scope, Origin). Fields MUST appear in that order; the literal token `**Violation scope:**` is the cc-architect mechanical-sweep anchor.
 4. **Append** to `.claude/learning/posture.json::pending_verification` (via `state-io.js::writePosture`) — never via direct Edit/Write (denied by `permissions.deny`).
 5. **Verify** via cc-architect: every new rule file ends with `## Trust Posture Wiring`. Missing → audit FAIL → /codify halts and reports.
 
-**ENFORCEMENT**: this step is FAIL-on-missing for any rule authored after `rules/trust-posture.md` was committed. cc-architect MUST grep each new rule file for the literal `## Trust Posture Wiring` header AND verify all 7 fields present in the section body (severity / grace / cumulative / regression-within-grace / receipt / detection / first-violation / origin). Missing or incomplete → audit FAIL → /codify halts.
+**ENFORCEMENT**: this step is FAIL-on-missing for any rule authored after `rules/trust-posture.md` was committed. cc-architect MUST grep each new rule file for the literal `## Trust Posture Wiring` header AND verify all 8 canonical fields present in the section body in this order (Severity / Grace period / Cumulative posture impact / Regression-within-grace / Receipt requirement / Detection mechanism / Violation scope / Origin). Missing or incomplete → audit FAIL → /codify halts. The mechanical anchor is `grep -L 'Violation scope:'` per `rules/trust-posture.md` MUST Rule 8.
 
 The trust-posture rule itself is the only grandfather exception. Every other rule authored from this point forward MUST include the wiring section.
 

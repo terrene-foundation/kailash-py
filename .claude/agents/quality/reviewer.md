@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: "Quality reviewer. Use for code review, doc consistency, cross-reference accuracy, or code example validation."
-tools: Read, Write, Edit, Bash, Grep, Glob, Task
+tools: Read, Bash, Grep, Glob, Task
 model: opus
 ---
 

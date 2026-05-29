@@ -13,11 +13,12 @@
  *
  *   <dir>/codex/
  *     prompts/<cmd>.md                    one per non-excluded .claude/commands/<cmd>.md
- *     prompts/specialist-<name>.md        per non-excluded .claude/agents (recursive)
- *                                         deterministic delegation shim — Codex has no
- *                                         native specialist-by-name dispatch; the prompt
- *                                         loads the operating spec into context via
- *                                         /prompts:specialist-<name>
+ *     prompts/specialist-<name>.md        per non-excluded .claude/agents (recursive).
+ *                                         Operating-spec content surface; inlined into
+ *                                         the agent context via inline-cat injection
+ *                                         `"$(cat .codex/prompts/specialist-<name>.md)"`.
+ *                                         See `bin/coc` dispatcher + bin/README.md for
+ *                                         the canonical Codex invocation path (F79).
  *     skills/<nn-name>/SKILL.md  per non-excluded .claude/skills/<nn-name>/SKILL.md
  *
  *   <dir>/gemini/
@@ -790,18 +791,20 @@ const CODEX_AGENT_STRUCTURAL_EXCLUSIONS = [
 // specialists (per .claude/guides/codex/README.md "Known limitations
 // 2026-04-22/23" — only `default/explorer/worker` roles exist). This
 // emitter materializes each eligible `.claude/agents/<group>/<name>.md`
-// into `.codex/prompts/specialist-<name>.md` so the specialist becomes
-// reachable as `/prompts:specialist-<name>` — a deterministic shim
-// that closes acceptance criteria 1 + 2 from the 2026-05-15 Codex
-// follow-up (specialist-by-name dispatch + reviewer/security-reviewer/
+// into `.codex/prompts/specialist-<name>.md` as the operating-spec
+// content surface; the file is consumed via inline-cat injection
+// `"$(cat .codex/prompts/specialist-<name>.md)"` per F79 (see `bin/coc`
+// dispatcher + bin/README.md for the canonical Codex invocation path).
+// Closes acceptance criteria 1 + 2 from the 2026-05-15 Codex follow-up
+// (specialist-by-name dispatch + reviewer/security-reviewer/
 // gold-standards-validator gate launchability).
 //
 // The emitted prompt wraps the specialist's operating spec with a
 // preamble describing three invocation patterns: (a) inline persona
 // (most reliable; works headless), (b) worker subagent delegation
-// (interactive only), (c) headless fallback (use pattern a). Codex
-// loads `.codex/prompts/<name>.md` on demand via /prompts:<name> —
-// no baseline-context cap pressure.
+// (interactive only), (c) headless fallback (use pattern a). The file
+// is loaded into context on demand via inline-cat injection — no
+// baseline-context cap pressure.
 function emitCodexAgentPrompts({ outDir, exclusions, tierFilter, lang, verbose }) {
   const srcDir = path.join(REPO, ".claude", "agents");
   if (!fs.existsSync(srcDir)) return { codex: 0, skipped: 0 };
@@ -833,7 +836,7 @@ function emitCodexAgentPrompts({ outDir, exclusions, tierFilter, lang, verbose }
     const source = composedResult ? composedResult.body : fs.readFileSync(absPath, "utf8");
     const { frontmatter, body } = parseFrontmatter(source);
     const baseName = frontmatter.name || path.basename(relPath, ".md");
-    // Strip redundant trailing "-specialist" for cleaner /prompts:specialist-<x>
+    // Strip redundant trailing "-specialist" for cleaner specialist-<x> filename
     // UX (e.g. `dataflow-specialist` → `specialist-dataflow`, not
     // `specialist-dataflow-specialist`). Agents whose name lacks the suffix
     // (analyst, reviewer, build-fix, value-auditor, …) pass through as-is.

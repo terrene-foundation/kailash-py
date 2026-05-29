@@ -1,3 +1,8 @@
+---
+name: i-polish
+description: "Visual refinement workflow for frontend artifacts — typography, spacing, motion."
+---
+
 # /i-polish - Visual Refinement Workflow
 
 ## Purpose

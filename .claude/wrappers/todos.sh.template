@@ -7,7 +7,6 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd
 set -euo pipefail
 
 SCHEMA_PATH="${PROJECT_ROOT}/.claude/wrappers/schemas/todos.schema.json"
-INSTRUCTIONS_PATH="${PROJECT_ROOT}/.codex/developer-instructions/todos.md"
 
 if [[ ! -f "$SCHEMA_PATH" ]]; then
   echo "ERROR: schema file $SCHEMA_PATH not found" >&2
@@ -29,5 +28,4 @@ exec codex exec \
   --json \
   --output-schema="$SCHEMA_PATH" \
   -c project_doc_max_bytes=65536 \
-  -c developer_instructions_file="$INSTRUCTIONS_PATH" \
   -- "$PROMPT"

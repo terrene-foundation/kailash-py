@@ -32,6 +32,9 @@ tokens are invented synthetics.
 | `r2-exclusion-scoping/`         | `rules/journaling-guide.md` (synthetic leak) + genuine `journal/0001-note.md`                     | exit 1 + 2 findings | R2 must-fix #5 — `journaling-guide.md` IS scanned; `journal/` dir stays excluded (both halves)                     |
 | `r3-variant-surface/`           | committed `variants/rs/rules/leakrule.md` + `*.operator.local.md` companion                       | exit 1 + 2 findings | R3 #B — variants/ ARE synced (overlay leak flags); operator.local stays excluded via suffix                        |
 | `r3-smuggle-closed/`            | `chore/<org>/loom` + `<scheme>://<org>/loom` smuggle + 9 flood vectors                            | exit 1 + 4 findings | R3 #D — branch/scheme-prefixed org smuggle CLOSED; closed-set anchor does NOT flood prose                          |
+| `f77-settings-good/`            | synced `.claude/settings.json` w/ `$CLAUDE_PROJECT_DIR`-rooted matchers only                       | exit 0              | F77 (#386) — clean settings.json passes (settings.json is now in walk surface; relative-path matchers are clean)   |
+| `f77-settings-bad/`             | synced `.claude/settings.json` w/ `Edit/Write/Read(/Users/fakeuser/...)` + `Bash(/home/...)`        | exit 1              | F77 (#386) — new settings-permission-absolute-path SHAPE fires on every tool-call matcher with an absolute path    |
+| `f77-settings-own-coords-still-flagged/` | synced `.claude/settings.json` w/ `Edit(/Users/esperie/...)` (own dev path)              | exit 1              | F77 (#386) — new SHAPE skips Option-1 allowlist for tool-call matchers (own/foreign distinction does not apply)    |
 
 ## Per-fixture detail
 

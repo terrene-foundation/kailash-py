@@ -5,11 +5,11 @@ paths:
   - "**/*.py"
   - "**/*.ts"
   - "**/*.js"
+  - "**/*.rs"
   - ".env*"
 ---
 
 # Environment Variables & Model Rules
-
 
 <!-- slot:neutral-body -->
 

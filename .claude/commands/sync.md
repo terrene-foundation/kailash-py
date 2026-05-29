@@ -20,6 +20,41 @@ Read `.claude/VERSION` → `type` field:
 - `coc-use-template` / `coc-build` → **MUST verify** the repo is the actual template/BUILD repo before routing to loom. Check `basename $(pwd)` + `git remote get-url origin` (normalize SSH `git@host:owner/repo.git` → `owner/repo`) against known repos: `kailash-coc-claude-{py,rs,rb,prism}`, `kailash-{py,rs,prism}`. If match → "receives artifacts from loom/, run `/sync` at loom/". If no match → treat as `coc-project` and auto-correct VERSION in-place (type → `coc-project`, upstream → `{template, template_repo, template_version, synced_at, sdk_packages}` per `.claude/hooks/lib/version-utils.js::correctTemplateDerivedVersion`), then Downstream Sync.
 - Missing → ask user what type this repo is
 
+## Step 0a: Pre-Emit Validation (coc-source — loom/ only)
+
+For `coc-source`, **before Gate 1**, run the rule-corpus mechanical sweep:
+
+```bash
+node .claude/bin/validate-emit.mjs \
+  --allow=command-line-cap:.claude/commands/sync-to-build.md \
+  --allow=command-line-cap:.claude/commands/test-harness-probe.md
+```
+
+Exit 1 → HALT /sync; surface the report. The validator (issue #350 Stage 2) gates 7 structural invariants: frontmatter, line cap, read-only-specialist tools, tool canonicality, mirror+exclusion (skills), paths-glob ↔ annotation consistency, audit-fixture coverage (per `rules/cc-artifacts.md` Rule 9). Each `--allow=<check>:<path>` override MUST be recorded in the /sync commit message with a tracking issue (the two `command-line-cap` overrides above are tracked by issue #356 — `sync-to-build` + `test-harness-probe` extractions).
+
+**New-rule discipline**: every new rule landed at loom MUST also land either a corresponding validator check OR a `no-check: <reason>` annotation in the same PR. Fixtures + structural probes: `.claude/audit-fixtures/validate-emit/`.
+
+## Step 0b: Pre-Sync Remote Freshness Check (coc-source — loom/ only)
+
+For `coc-source`, **before Gate 1, after Step 0a**, verify loom's local `main` matches `origin/main` AND each declared sync target's local `main` matches its `origin/main`. Stale-local distribution is the failure mode this gate blocks (F62, journal/0163 / 0164 — Q3b-approved hybrid remote/local pre-flight).
+
+**Why 0b after 0a (not before):** 0a is local-only AST/structural validation (~seconds, no network); 0b makes ~200ms × N network calls. Running the cheap deterministic gate first means a malformed local artifact halts before network round-trips. Operators with a stale-AND-malformed local pay the local cost once vs the network cost first.
+
+```bash
+# Target slugs MUST match sync-manifest.yaml::repos.<lang>.templates[].repo
+# per sync-completeness.md MUST-1 (enumerate from manifest, not memory).
+# Example below is the cc-only-legacy set for /sync all; multi-CLI targets
+# (use-template.py / .rs / .rb) MUST be added when subscribed.
+node .claude/bin/check-sync-freshness.mjs --loom \
+  --target use-template.claude-py \
+  --target use-template.claude-rs \
+  --target use-template.claude-rb
+```
+
+Exit 1 → HALT /sync; the helper emits the verbatim local-vs-remote SHA pair AND remediation (`git fetch origin main && git reset --keep origin/main` per `git.md` — `--keep` over `--hard` to refuse on dirty tree). Read-only check — no fetch side-effects. When `target` is a single language (`/sync py`), pass only that language's USE-template slug; when `target=all`, probe every subscribed template.
+
+**Rationale**: `/sync` distributing from a stale local main ships outdated artifacts to every USE template; `/sync` writing onto a stale target clone risks force-push-over-teammate's-work. `git ls-remote` is the live runtime evidence per `rules/verify-resource-existence.md` MUST-2; operator memory of "I just fetched" is the hearsay this gate replaces. Symmetric pre-sync counterpart to `sync-completeness.md` MUST-2's post-sync verification table.
+
 ## Two Gates (coc-source — loom/ only)
 
 **loom is the central splitter, not an author.** loom does NOT originate artifact changes — it ingests proposals from TWO upstream streams (BUILD repos for SDK code; USE-template repos for COC-artifact improvements per `guides/co-setup/09-proposal-protocol.md` Step 7b), splits global vs variant at Gate 1, then dual-distributes: `/sync-to-build` pushes canonical back to BUILD repos, `/sync` distributes to USE templates (which downstream repos pull via their own `/sync`).

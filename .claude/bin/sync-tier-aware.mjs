@@ -54,6 +54,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolveRepo, LinkError } from "./lib/loom-links.mjs";
 
@@ -106,16 +107,23 @@ function rejectUnsafePurgeEntry(entry) {
 }
 
 /**
- * Symlink-safe copy. fs.copyFileSync follows symlinks at destination
- * by default, opening a TOCTOU race where a planted symlink between
- * mkdir and copy redirects the write outside the template. Mirrors
- * emit.mjs::safeWriteFileSync — O_NOFOLLOW refuses to open a symlink
- * target, closing the window. Asymmetry between the two sync paths
- * (emit.mjs strict; sync-tier-aware lax) would itself be institutional
- * drift per `cross-repo.md` MUST-1.
+ * Symlink-safe single-source write — Buffer (binary copy) or utf8
+ * string (text write) share one open-write-close path. fs.copyFileSync
+ * + fs.writeFileSync-by-path both follow symlinks at destination by
+ * default; this helper refuses via O_NOFOLLOW, raising ELOOP on a
+ * pre-planted symlink at `dest`. Mirrors emit.mjs::safeWriteFileSync;
+ * asymmetry between emit.mjs and sync-tier-aware sync paths would
+ * itself be institutional drift per `cross-repo.md` MUST-1.
+ *
+ * The encoding parameter distinguishes the two callers: Buffer for
+ * safeCopyFile (binary file→file copy); "utf8" for safeWriteTextSync
+ * (manifest-derived text). Collapsing avoids the duplicated-TOCTOU-
+ * defense drift `rules/security.md` § "Pre-Encoder Consolidation"
+ * names for credential decode/encode pairs.
+ *
+ * Reviewer Round-1 MED: helper collapse.
  */
-function safeCopyFile(src, dest) {
-  const srcData = fs.readFileSync(src);
+function safeWriteSync(dest, data, encoding = null) {
   const fd = fs.openSync(
     dest,
     fs.constants.O_CREAT |
@@ -125,10 +133,22 @@ function safeCopyFile(src, dest) {
     0o644,
   );
   try {
-    fs.writeFileSync(fd, srcData);
+    if (encoding === null) {
+      fs.writeFileSync(fd, data);
+    } else {
+      fs.writeFileSync(fd, data, encoding);
+    }
   } finally {
     fs.closeSync(fd);
   }
+}
+
+function safeCopyFile(src, dest) {
+  safeWriteSync(dest, fs.readFileSync(src));
+}
+
+function safeWriteTextSync(dest, content) {
+  safeWriteSync(dest, content, "utf8");
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -159,6 +179,29 @@ const ALWAYS_INCLUDE = [
 // are the committed schemas downstream consumers may copy from. See
 // `bin/lib/loom-links.mjs` § Disclosure discipline.
 const LOOM_LOCAL_PATTERNS = [".claude/bin/*.local.json"];
+
+// ────────────────────────────────────────────────────────────────
+// `.gitignore` apply — managed block markers (GH #368 finding 1)
+// ────────────────────────────────────────────────────────────────
+//
+// `sync-manifest.yaml::gitignore_additions:` declares paths every
+// consumer's `.gitignore` MUST contain. Apply discipline:
+//
+//  1. Read the consumer's existing `.gitignore` (empty if absent).
+//  2. Locate the managed block by literal marker lines (BEGIN/END).
+//  3. If present, REPLACE the block body with the manifest's current
+//     entries (no diff merge — manifest is authoritative INSIDE the
+//     block). If absent, APPEND the block (with a leading blank line
+//     if the file does not already end with one).
+//  4. Lines OUTSIDE the block are NEVER touched — user-managed.
+//  5. Write atomically via `.tmp.<pid>` + `rename()` per
+//     `knowledge-convergence.md` MUST-1 + `coc-append.js` lineage.
+//
+// The block markers are byte-stable: same manifest input produces
+// byte-identical block output across runs (idempotency proof).
+const GITIGNORE_MANAGED_BEGIN =
+  "# >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>";
+const GITIGNORE_MANAGED_END = "# <<< coc:gitignore_additions <<<";
 
 // ────────────────────────────────────────────────────────────────
 // CLI parse
@@ -388,6 +431,250 @@ function matchesAny(relpath, globs) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// gitignore_additions — manifest read + idempotent apply
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Parse `gitignore_additions:` from the manifest. Returns the declared
+ * entries in manifest order (order preservation lets an operator diff
+ * the manifest against the consumer's `.gitignore` line-for-line).
+ */
+function parseGitignoreAdditions(manifestText) {
+  return parseList(sliceBlock(manifestText, "gitignore_additions"));
+}
+
+/**
+ * Validate a single gitignore_additions entry. Defends against
+ * manifest defects that would either escape the consumer's repo
+ * boundary or break the managed-block grammar.
+ *
+ *   - Empty string → defect (would produce a blank ignore line that
+ *     silently ignores nothing).
+ *   - Newline in entry (ASCII \r, \n OR Unicode U+2028 LS,
+ *     U+2029 PS) → defect (would inject extra lines OUTSIDE the
+ *     managed block, evading the marker-block invariant).
+ *   - Entry colliding with the marker strings → defect (would close
+ *     the managed block one line early, leaving "user content
+ *     outside the block" that next-apply preserves verbatim).
+ *     Security-reviewer R1 MED-1 (marker-string-as-entry).
+ *
+ * Returns the defect description (string) or `null` if safe.
+ */
+function rejectUnsafeGitignoreEntry(entry) {
+  if (typeof entry !== "string" || entry.length === 0) {
+    return "empty entry";
+  }
+  // Reject ASCII CR/LF AND Unicode line separators (U+2028 LS, U+2029 PS).
+  // git uses LF-only grammar for .gitignore so the structural-injection
+  // path is ASCII; Unicode separators are rejected so editor / GitHub-UI
+  // previews stay aligned with on-disk semantics.
+  if (/[\r\n\u2028\u2029]/.test(entry)) {
+    return `entry contains line terminator (would break managed-block invariant): '${entry.replace(/[\r\n\u2028\u2029]/g, "\\n")}'`;
+  }
+  // Marker-collision check — reject any entry that contains either
+  // BEGIN or END marker as a substring. Substring (vs equality) check
+  // catches both literal-marker entries AND entries that embed a
+  // marker into a longer string (e.g. `# >>> coc:gitignore_additions
+  // ... # SUFFIX`).
+  if (
+    entry.includes(GITIGNORE_MANAGED_BEGIN) ||
+    entry.includes(GITIGNORE_MANAGED_END)
+  ) {
+    return `entry collides with managed-block marker: '${entry}'`;
+  }
+  return null;
+}
+
+/**
+ * Compose the managed-block body from the manifest's declared
+ * entries. The block is byte-stable: same `additions` input always
+ * produces the same output bytes (no timestamps, no sorting, no
+ * deduping — preserve manifest order verbatim).
+ */
+function composeGitignoreBlock(additions) {
+  const lines = [GITIGNORE_MANAGED_BEGIN, ...additions, GITIGNORE_MANAGED_END];
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * Find the managed block in an existing `.gitignore` body. Returns
+ * `{ start, end }` byte-offsets of the BEGIN line through the END
+ * line's trailing newline (inclusive), or `null` if no block exists.
+ *
+ * Detection is anchored to the literal marker strings — a partial
+ * marker (BEGIN with no matching END, or END before BEGIN) is
+ * treated as `null` (no managed block) and the next apply will
+ * append a fresh block. This preserves user-managed content even
+ * under marker corruption.
+ */
+function findGitignoreBlock(existingBody) {
+  const beginIdx = existingBody.indexOf(GITIGNORE_MANAGED_BEGIN);
+  if (beginIdx === -1) return null;
+  const endIdx = existingBody.indexOf(GITIGNORE_MANAGED_END, beginIdx);
+  if (endIdx === -1) return null;
+  // Extend through the END line's trailing newline (if any).
+  const newlineAfterEnd = existingBody.indexOf(
+    "\n",
+    endIdx + GITIGNORE_MANAGED_END.length,
+  );
+  const end =
+    newlineAfterEnd === -1
+      ? existingBody.length
+      : newlineAfterEnd + 1; // include the newline
+  return { start: beginIdx, end };
+}
+
+/**
+ * Compute the post-apply body without doing any FS write. Pure
+ * function for testability — the FS side-effect lives in
+ * `applyGitignoreAdditions` below.
+ *
+ * Idempotency: applying the same `additions` to the result of a
+ * prior apply produces byte-identical output.
+ */
+function computeGitignoreUpdate(existingBody, additions) {
+  const block = composeGitignoreBlock(additions);
+  const existing = findGitignoreBlock(existingBody);
+  if (existing !== null) {
+    // Replace the block in-place; lines outside untouched.
+    const before = existingBody.slice(0, existing.start);
+    const after = existingBody.slice(existing.end);
+    return { content: before + block + after, action: "replaced" };
+  }
+  // Append. If the file is empty, just write the block. Otherwise
+  // ensure a single blank line separates the user content from the
+  // managed block — both for readability AND so a later re-find
+  // operation always sees BEGIN at column 0.
+  if (existingBody.length === 0) {
+    return { content: block, action: "created" };
+  }
+  const sep = existingBody.endsWith("\n\n")
+    ? ""
+    : existingBody.endsWith("\n")
+      ? "\n"
+      : "\n\n";
+  return { content: existingBody + sep + block, action: "appended" };
+}
+
+/**
+ * Apply manifest-declared gitignore entries to `<dir>/.gitignore`
+ * idempotently. Returns a structured result describing what changed.
+ *
+ *   dir       — absolute path of the target consumer repo (template root).
+ *   additions — list of entries from parseGitignoreAdditions().
+ *   dryRun    — when true, compute the new content but do not write.
+ *
+ * Return shape:
+ *   { action: "replaced" | "appended" | "created" | "noop",
+ *     added: <count of entries declared>,
+ *     entries: <verbatim declared entries>,
+ *     pre_bytes, post_bytes,
+ *     gitignore_path: ".gitignore" }
+ *
+ * `action: "noop"` fires only when (a) the existing block content
+ * exactly matches the about-to-write content (byte-equal), avoiding
+ * a redundant atomic rename. This is what makes re-runs costless.
+ */
+function applyGitignoreAdditions(dir, additions, dryRun) {
+  const gitignorePath = path.join(dir, ".gitignore");
+  let existing = "";
+  let preStat = null;
+  try {
+    // O_NOFOLLOW on the READ side too — a symlinked `.gitignore`
+    // pointing outside the template is the same disclosure class
+    // as the write-side TOCTOU.
+    const fd = fs.openSync(
+      gitignorePath,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW,
+    );
+    try {
+      preStat = fs.fstatSync(fd);
+      existing = fs.readFileSync(fd, "utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      // No existing .gitignore — treat as empty.
+      existing = "";
+    } else if (e.code === "ELOOP") {
+      // Symlink at .gitignore path — refuse rather than rewrite.
+      throw new Error(
+        `.gitignore at ${rel(gitignorePath)} is a symlink; refusing to write ` +
+          `(O_NOFOLLOW). Resolve manually before next /sync.`,
+      );
+    } else {
+      throw e;
+    }
+  }
+
+  const { content, action } = computeGitignoreUpdate(existing, additions);
+
+  // Short-circuit when nothing would change.
+  if (content === existing) {
+    return {
+      action: "noop",
+      added: additions.length,
+      entries: additions.slice(),
+      pre_bytes: existing.length,
+      post_bytes: existing.length,
+      gitignore_path: ".gitignore",
+    };
+  }
+
+  if (!dryRun) {
+    // Atomic write: tmp file + rename. tmp lives next to target so
+    // rename is same-filesystem (POSIX guarantees atomic rename).
+    //
+    // Tmp suffix is `<pid>.<8-hex-random>` per Round-1 cross-agent
+    // consensus (reviewer-MED-3 + security-LOW-2): pid alone collides
+    // on (a) two concurrent invocations from a single Node process if
+    // executePlan ever becomes async, AND (b) cross-process race on
+    // the same out-tree where pid happens to recycle. The random
+    // suffix collapses both to negligible probability without changing
+    // the same-filesystem rename invariant. Same shape as Python
+    // tempfile.NamedTemporaryFile pid+random + os.O_EXCL discipline.
+    const tmpPath = path.join(
+      dir,
+      `.gitignore.tmp.${process.pid}.${crypto.randomBytes(4).toString("hex")}`,
+    );
+    try {
+      safeWriteTextSync(tmpPath, content);
+      // Preserve mode from existing file if any; default 0o644 already
+      // set on open. (chmod intentionally omitted — safeWriteTextSync
+      // creates with 0o644 which matches git's default for tracked files.)
+      fs.renameSync(tmpPath, gitignorePath);
+    } catch (e) {
+      // Best-effort cleanup of the tmp file on failure; never let
+      // a stale tmp block the next apply. Per `rules/observability.md`
+      // Rule 5 (cleanup failures surface as WARN+) — log the unlink
+      // failure to stderr so a stuck-tmp leaves a forensic trail
+      // rather than vanishing into the surrounding error path.
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch (unlinkErr) {
+        if (unlinkErr.code !== "ENOENT") {
+          process.stderr.write(
+            `sync-tier-aware: WARN cleanup of tmp ` +
+              `'${rel(tmpPath)}' failed: ${unlinkErr.code || unlinkErr.message}\n`,
+          );
+        }
+      }
+      throw e;
+    }
+  }
+
+  return {
+    action,
+    added: additions.length,
+    entries: additions.slice(),
+    pre_bytes: existing.length,
+    post_bytes: content.length,
+    gitignore_path: ".gitignore",
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
 // Walk loom/.claude/ — emit every file relative to repo root.
 // ────────────────────────────────────────────────────────────────
 function walkClaudeDir() {
@@ -465,6 +752,7 @@ function buildPlan(manifest, target, templateFilter) {
   const exclude = parseList(sliceBlock(manifest, "exclude"));
   const useExclude = parseList(sliceBlock(manifest, "use_exclude"));
   const useObsoleted = parseList(sliceBlock(manifest, "use_obsoleted"));
+  const gitignoreAdditions = parseGitignoreAdditions(manifest);
 
   // Reject unsafe purge entries at plan-build time (CRIT-1 defense).
   // An absolute / `.` / `..` entry would cause fs.rmSync to escape the
@@ -477,6 +765,20 @@ function buildPlan(manifest, target, templateFilter) {
         `manifest defect: use_obsoleted entry ${defect} ` +
           `— sync-tier-aware refuses to apply this purge list ` +
           `(would escape target dir)`,
+      );
+    }
+  }
+
+  // Reject unsafe gitignore_additions entries at plan-build time.
+  // Same defense shape as use_obsoleted above — surface manifest
+  // defects BEFORE any FS mutation.
+  for (const entry of gitignoreAdditions) {
+    const defect = rejectUnsafeGitignoreEntry(entry);
+    if (defect !== null) {
+      fail(
+        1,
+        `manifest defect: gitignore_additions entry ${defect} ` +
+          `— sync-tier-aware refuses to apply this entry`,
       );
     }
   }
@@ -528,6 +830,7 @@ function buildPlan(manifest, target, templateFilter) {
     templates: templates.map((t) => t.repo),
     files,
     purge: useObsoleted.slice(),
+    gitignore_additions: gitignoreAdditions.slice(),
   };
 }
 
@@ -666,6 +969,19 @@ function executePlan(plan, outOverride, dryRun) {
         result.purged.push({ path: p });
       }
     }
+    // Apply gitignore_additions (GH #368 finding 1). Idempotent —
+    // a re-run on a previously-applied template produces action:"noop".
+    // Failures here halt the whole run rather than leaving partial
+    // state across templates 1..N-1.
+    try {
+      result.gitignore = applyGitignoreAdditions(
+        dir,
+        plan.gitignore_additions,
+        dryRun,
+      );
+    } catch (e) {
+      fail(1, `gitignore apply refused: ${e.message}`);
+    }
     results.push(result);
   }
   return results;
@@ -697,6 +1013,13 @@ function emitText(plan, results, dryRun) {
         `use_exclude=${r.skipped.use_exclude || 0} ` +
         `no_tier_match=${r.skipped.no_tier_match || 0}`,
     );
+    if (r.gitignore) {
+      lines.push(
+        `   .gitignore: ${r.gitignore.action} ` +
+          `(${r.gitignore.added} declared entr${r.gitignore.added === 1 ? "y" : "ies"}, ` +
+          `${r.gitignore.pre_bytes}B → ${r.gitignore.post_bytes}B)`,
+      );
+    }
   }
   return lines.join("\n") + "\n";
 }
@@ -774,6 +1097,14 @@ export {
   buildPlan,
   safeJoinUnder,
   rejectUnsafePurgeEntry,
+  parseGitignoreAdditions,
+  rejectUnsafeGitignoreEntry,
+  composeGitignoreBlock,
+  findGitignoreBlock,
+  computeGitignoreUpdate,
+  applyGitignoreAdditions,
+  GITIGNORE_MANAGED_BEGIN,
+  GITIGNORE_MANAGED_END,
   ALWAYS_INCLUDE,
   LOOM_LOCAL_PATTERNS,
 };

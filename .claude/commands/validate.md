@@ -1,3 +1,8 @@
+---
+name: validate
+description: "Project compliance validation — rule corpus check, marker scrub, frontmatter audit."
+---
+
 # /validate - Project Compliance Validation
 
 ## Purpose
@@ -18,13 +23,13 @@ Report what you detected before proceeding.
 
 These always apply regardless of project type:
 
-| Check          | Rule Source           | What It Validates                                                              |
-| -------------- | --------------------- | ------------------------------------------------------------------------------ |
-| Security       | `rules/security.md`   | No hardcoded secrets, parameterized queries, input validation, output encoding |
-| No Stubs       | `rules/zero-tolerance.md`   | No TODOs, placeholders, NotImplementedError, simulated data in production code |
-| Env Variables  | `rules/env-models.md` | API keys and model names from `.env` only, never hardcoded                     |
-| Testing Policy | `rules/testing.md`    | Real infrastructure recommended in Tier 2-3 tests, real infrastructure required                     |
-| Git Hygiene    | `rules/git.md`        | Conventional commits, no secrets in history, atomic commits                    |
+| Check          | Rule Source               | What It Validates                                                               |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| Security       | `rules/security.md`       | No hardcoded secrets, parameterized queries, input validation, output encoding  |
+| No Stubs       | `rules/zero-tolerance.md` | No TODOs, placeholders, NotImplementedError, simulated data in production code  |
+| Env Variables  | `rules/env-models.md`     | API keys and model names from `.env` only, never hardcoded                      |
+| Testing Policy | `rules/testing.md`        | Real infrastructure recommended in Tier 2-3 tests, real infrastructure required |
+| Git Hygiene    | `rules/git.md`            | Conventional commits, no secrets in history, atomic commits                     |
 
 ### Universal Validation Checklist
 

@@ -1,3 +1,8 @@
+---
+name: i-harden
+description: "Production hardening for frontend — performance, accessibility, observability."
+---
+
 # /i-harden - Production Hardening for Frontend
 
 ## Purpose

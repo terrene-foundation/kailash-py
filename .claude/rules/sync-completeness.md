@@ -16,7 +16,7 @@ See `.claude/guides/rule-extracts/sync-completeness.md` for full incident detail
 
 <!-- slot:neutral-body -->
 
-`/sync` and `/sync-to-build` are loom's outbound paths to USE templates and BUILD repos. When the fanout count is held in human memory rather than enumerated from `sync-manifest.yaml`, templates silently miss cycles. This rule binds every `/sync*` invocation to enumerate ALL declared templates from the manifest, verify each landed at the bumped version + above the per-CLI `headroom_floor_pct`, AND emit a per-template verification table. Pairs with `artifact-flow.md`, `testing.md` MUST "Verified Numerical Claims", and `coc-sync-landing.md`.
+`/sync` and `/sync-to-build` are loom's outbound paths to USE templates and BUILD repos. When the fanout count is held in human memory rather than enumerated from `sync-manifest.yaml`, templates silently miss cycles. This rule binds every `/sync*` invocation to enumerate ALL declared templates from the manifest, verify each landed at the bumped version + above the per-CLI `headroom_floor_pct`, AND emit a per-template verification table. Pairs with `artifact-flow.md`, `testing.md` MUST "Verified Numerical Claims", `coc-sync-landing.md`, AND `commands/sync.md` Step 0b + `bin/check-sync-freshness.mjs` (F62, journal/0163 + 0164 — the symmetric **pre-sync** defense: local-vs-remote SHA-pair check at pre-sync time mirrors this rule's verification-table check at post-sync time).
 
 ## MUST Rules
 

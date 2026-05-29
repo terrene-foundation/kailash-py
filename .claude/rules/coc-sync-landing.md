@@ -9,7 +9,7 @@ See `.claude/guides/rule-extracts/coc-sync-landing.md` for BLOCKED-rationalizati
 
 <!-- slot:neutral-body -->
 
-Loom's `/sync-to-build` delivery MUST land on `main` BEFORE any other session work. Pairs with `.claude/hooks/coc-drift-warn.js` (SessionStart).
+Loom's `/sync-to-build` delivery MUST land on `main` BEFORE any other session work. Pairs with `.claude/hooks/multi-operator-sessionstart.js` (SessionStart).
 
 ## MUST Rules
 

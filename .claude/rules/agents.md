@@ -92,27 +92,13 @@ When delegating IMPLEMENTATION work (file edits, commits, build/test invocation,
 
 ## MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read
 
-When delegating a /redteam round whose mission includes **closure-parity verification** (mapping prior-wave findings to delivered code via `gh pr view`, `pytest --collect-only`, `grep`, `ast.parse()`, `find`), the orchestrator MUST select a specialist whose tool set includes `Bash` AND `Read`. Read-only analyst (`Read, Grep, Glob`) MUST NOT be assigned closure-parity verification — its tool set silently FORWARDS verification rows the next round must redo. Extends § "Verify Specialist Tool Inventory" above from IMPLEMENTATION to AUDIT delegation.
+When delegating a /redteam round whose mission includes **closure-parity verification** (mapping prior-wave findings to delivered code via `gh pr view`, `pytest --collect-only`, `grep`, `ast.parse()`, `find`, `cargo nextest`), the orchestrator MUST select a specialist whose tool set includes `Bash` AND `Read`. Read-only analyst (`Read, Grep, Glob`) MUST NOT be assigned closure-parity verification — its tool set silently FORWARDS verification rows the next round must redo. Extends § "Verify Specialist Tool Inventory" above from IMPLEMENTATION to AUDIT delegation.
 
-(See **Example 4** in the examples slot below for closure-parity dispatch.)
+(See **Example 4** for closure-parity dispatch; **Example 5** for the delegation-time scan pattern.)
 
-**BLOCKED rationalizations:** "Analyst is the audit specialist; closure parity IS audit" / "The reviewer round can pick up the FORWARDED rows" / "I'll instruct the analyst to skip rows it can't verify" / "Read+Grep+Glob covers most verification" / "Analyst can write a recommendation; verification can be done by the next reviewer".
+**BLOCKED (summary):** "analyst is the audit specialist" / "reviewer round picks up the FORWARDED rows" / "agent will figure out it lacks the tool". Full corpus + delegation-time detection signals (verification verbs / Bash-required commands / closure-parity nouns) + BLOCKED auto-promotion rationalizations + multi-incident Origin evidence: see `.claude/skills/30-claude-code-patterns/closure-parity-specialist-discipline.md`.
 
-**Delegation-time detection signals (orchestrator self-check before launch).** Before delegating, the orchestrator MUST scan the prompt-being-drafted for closure-parity mission markers. Presence of ANY of the following in the prompt obligates a Bash+Read specialist (general-purpose, pact-specialist, or framework specialist with full tool inventory) — selecting analyst with these markers present is BLOCKED:
-
-- Verification verbs: "verify closure", "closure parity", "FORWARDED → VERIFIED", "convert FORWARDED rows", "map findings to delivered code"
-- Bash-required commands named in mission: `gh pr view`, `gh pr diff`, `gh issue view`, `pytest --collect-only`, `ast.parse(`, `cargo nextest`, `find -type f`, `grep -c`
-- Closure-parity nouns: "Round N closure parity", "post-merge verification", "wave-N → wave-N+1 audit", "redteam round N convergence check"
-
-The orchestrator MUST run this scan as a pre-flight before EVERY closure-parity-class delegation; surfacing the mismatch at delegation-time is O(1), re-launching after the agent FORWARDS rows is O(N) on row count and burns the round.
-
-(See **Example 5** in the examples slot below for the delegation-time scan pattern.)
-
-**BLOCKED auto-promotion rationalizations:** "I'll let the agent figure out it lacks the tool" / "Analyst handles audit by name, the markers don't override" / "Execution-time error is fine; the agent will surface it" / "Skipping the scan saves the orchestrator one step".
-
-**Why:** Tool-inventory mismatch costs one full audit round; verifying pre-launch is O(1) while re-launch is O(N) on row count. The delegation-time scan converts the Bash+Read specialist mandate from a recall-it-yourself principle into a draft-time check the orchestrator runs every cycle.
-
-Origin: 2026-04-27 /redteam Round 3 — analyst FORWARDED 16 of 22 verification rows; Bash-equipped specialist re-ran Round 3 and converted all 16 to VERIFIED in one shard. Reproduction: 2026-05-09 stale-workspace disposition Round 3 — analyst (Read/Grep/Glob) FORWARDED 5 rows on phantom-citation chain; re-launched as general-purpose caught the HIGH-class phantom in `.session-notes:20`. Per `journal/.pending/0003` § "Tool-inventory matters for closure-parity verification" + `journal/.pending/0004:87`. Compiled-language audit toolkits substitute their own introspection commands (`cargo nextest`, `cargo doc`, `grep` on Rust source) for the Python introspection set.
+**Why:** Tool-inventory mismatch costs one full audit round; verifying pre-launch is O(1) while re-launch is O(N) on row count.
 
 ## MUST: Worktree Isolation for Compiling Agents
 
@@ -195,7 +181,7 @@ When launching ≥2 parallel agents whose worktrees touch the SAME sub-package, 
 - **Sequential when parallel is possible** — wastes the autonomous execution multiplier.
 - **Raw SQL / custom API / custom agents / custom governance** — see `rules/framework-first.md` and guide for per-framework rationale.
 
-Origin: Session 2026-04-19 worktree drift + Session 2026-04-20 parallel-release (PRs #552, #553) + Session 2026-04-27 W6 closure-parity. See guide for full session evidence. Refactor 2026-05-14 (issue #200): partitioned into `slot:neutral-body` + `slot:examples` per `rules/rule-authoring.md` MUST-8 to close cross-CLI drift surfaced by `tools/cli-drift-audit.mjs`.
+Origin: Session 2026-04-19 worktree drift + Session 2026-04-20 parallel-release (PRs #552, #553) + Session 2026-04-27 W6 closure-parity. See guide for full session evidence. Refactor 2026-05-14 (issue #200): partitioned into `slot:neutral-body` + `slot:examples` per `rules/rule-authoring.md` MUST-8 to close cross-CLI drift surfaced by `tools/cli-drift-audit.mjs`. Trim 2026-05-22 (F20 rs lane): procedural depth of the Audit/Closure-Parity MUST extracted to `.claude/skills/30-claude-code-patterns/closure-parity-specialist-discipline.md` per rs Codex/Gemini headroom-floor recovery (journal/0143 → F20).
 
 <!-- /slot:neutral-body -->
 
