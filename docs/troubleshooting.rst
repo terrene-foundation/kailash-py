@@ -50,8 +50,8 @@ Dependency Conflicts
     # Install kailash
     pip install kailash
 
-    # If still having issues, try installing specific versions
-    pip install "networkx>=2.8,<3.0" "pydantic>=1.10,<2.0"
+    # If still having issues, upgrade the slim-core runtime deps
+    pip install --upgrade "pydantic>=2.6" "jsonschema>=4.24" "pyyaml>=6.0"
 
 Missing Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -62,10 +62,15 @@ Missing Optional Dependencies
 
 .. code-block:: bash
 
-    # Base install includes all standard dependencies
-    pip install kailash
+    # Base install is a slim core (workflow primitives only).
+    # Capabilities are opt-in via extras — install the ones you need:
+    pip install "kailash[trust]"        # EATP / trust-plane / signing / encryption
+    pip install "kailash[server]"       # Nexus HTTP gateway
+    pip install "kailash[db-postgres]"  # PostgreSQL (also: redis, and other db extras)
+    pip install "kailash[mcp]"          # MCP server/client
+    pip install "kailash[all]"          # Full pre-slim-core capability set in one install
 
-    # Individual optional packages
+    # Standalone visualization / data helpers (not kailash extras)
     pip install pygraphviz  # Advanced visualization
     pip install matplotlib  # Basic plotting
     pip install pandas      # Data processing
