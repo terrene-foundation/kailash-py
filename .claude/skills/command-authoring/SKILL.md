@@ -20,7 +20,7 @@ Authoring a new slash command. Auditing an existing command for line cap, neutra
 | CLI    | On-disk path                   | Format   | Slash invocation  | Frontmatter shape                                                             |
 | ------ | ------------------------------ | -------- | ----------------- | ----------------------------------------------------------------------------- |
 | CC     | `.claude/commands/<name>.md`   | Markdown | `/<name>`         | YAML: `name:` + `description:` + optional `argument-hint:` / `allowed-tools:` |
-| Codex  | `.codex/prompts/<name>.md`     | Markdown | `/prompts:<name>` | Same YAML, preserved from source                                              |
+| Codex  | `.codex/prompts/<name>.md`     | Markdown | `bin/coc <name> "<prompt>"` (deprecated upstream: `/prompts:<name>` is no longer loaded by Codex CLI 0.128+ — `bin/coc` dispatcher is canonical) | Same YAML, preserved from source                                              |
 | Gemini | `.gemini/commands/<name>.toml` | TOML     | `/<name>`         | `name`, `description`, `prompt = '''…'''`, optional `tools = [...]`           |
 
 | Constraint       | Value                                                                                                                                           |

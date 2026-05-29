@@ -194,15 +194,37 @@ function validateBashCommand(data) {
   // bash redirects, file utils, or interpreter -c/-e/-m bodies. Pattern adopted
   // from a downstream state-file-write-guard (issue #25, c0aeff73).
   //
-  // Protected paths: .claude/learning/posture.json, posture.json.bak,
-  // violations.jsonl, violations.jsonl.*, .initialized
+  // Protected paths:
+  //   .claude/learning/posture.json, posture.json.bak, posture.json.tmp.N
+  //   .claude/learning/violations.jsonl, violations.jsonl.*
+  //   .claude/learning/coordination-log.jsonl   (iter-4 MED-R4-3)
+  //   .claude/learning/.initialized
+  //   .claude/operators.roster.json             (iter-4 MED-R4-3)
+  //
+  // F14 C2 iter-4 MED-R4-3: extended the regex to cover roster + coordination
+  // log. Pre-iter-4 a `cat > .claude/operators.roster.json << EOF ... EOF`
+  // heredoc bypassed BOTH the deny matrix (no cat: entry) AND the Layer-1
+  // redirect detector — same Bash-redirect mutation vector that motivates
+  // the three-layer detection in the first place. Coordination-log writes
+  // are owned exclusively by transport-filesystem.js + sibling-porcelain.js
+  // (signed, sequence-bound, integrity-guarded); direct Bash mutation
+  // bypasses every coordination invariant.
   //
   // Commit-message exception: `git commit -m "..."` or `git commit -F path`
   // bodies are documentation prose, not executable commands. Skip detection
   // entirely for those (segment-anchor isn't sufficient — the body can span
   // many lines containing arbitrary shell-like syntax as documentation).
+  // M5 iter-6 Sec-MED-A2: extended to cover .heartbeat-cache and
+  // .session-end-cache. Pre-iter-6 these two M5-substrate cache files
+  // had no Layer-1 redirect-detector coverage AND no deny-matrix entry,
+  // leaving the cross-operator cache-poisoning vector exposed: a
+  // `cat > .claude/learning/.heartbeat-cache << EOF { "verified_id":
+  // "<attacker>", "last_heartbeat_ms": Date.now(), "seq": 99 } EOF`
+  // would coalesce future heartbeats under the attacker's seq number.
+  // Paired with the readCache identity-guard in adjacency-heartbeat.js
+  // (rejects cache whose verified_id ≠ current operator).
   const STATE_PATH_RX =
-    /\.claude\/learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|\.initialized)\b/;
+    /\.claude\/(?:learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|coordination-log\.jsonl|\.initialized|\.heartbeat-cache(?:[A-Za-z0-9_.-]*)?|\.session-end-cache(?:[A-Za-z0-9_.-]*)?)|operators\.roster\.json)\b/;
   const isGitCommitWithBody = /^\s*git\s+commit\b[^|;]*(?:\s-m\s|\s-F\s)/.test(
     command,
   );

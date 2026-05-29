@@ -233,3 +233,6 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 Origin: warnings sweep + test-skip triage + paired-variant coverage + env-var race + E2E regression + 2026-04-27 AST-counts review. See guide for full session evidence.
 
 <!-- /slot:neutral-body -->
+
+<!-- slot:lang-testing-extensions -->
+<!-- /slot:lang-testing-extensions -->

@@ -83,12 +83,6 @@ done
 # `<!-- sweep-redteam:v1:OK specs=N symbols=M orphans=O coverage_gaps=C stubs=S -->`
 # into the sweep report so readers (and any future enforcement hook)
 # can verify the mandated step actually ran.
-
-# BUILD-mode invocation (run from repo root; emits JSONL findings + sentinel):
-python3 tools/sweep-redteam.py --json --all          # every spec across every workspace
-python3 tools/sweep-redteam.py --json specs/foo.md   # single spec scope
-# Capture the trailing sentinel line into the sweep report verbatim; it is the
-# grep-able evidence the mandated symbol/Tier-2/stub verification actually ran.
 ```
 
 Categorize findings:

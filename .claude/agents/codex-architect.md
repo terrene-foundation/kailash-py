@@ -16,24 +16,51 @@ Peer to cc-architect and gemini-architect. Owns the Codex-facing substrate of ev
 OWNER:
 
 - `.codex/**`, `.codex-plugin/**`, `.claude/codex-mcp-guard/**` — Codex config + MCP guardrail companion
+- `.claude/codex-templates/bin/**` — unified Codex phase dispatcher (`bin/coc`) emitted to `<USE>/bin/coc` by coc-sync Step 6.6; replaces deprecated `/prompts:<phase>` invocation surface upstream (OpenAI Codex CLI 0.128+ per openai/codex#9848 + #385)
 - `.claude/hooks/*.js` (top-level, shim runtime) — Codex-native via `.codex/hooks.json` hook registration; MCP-guard fallback for non-Bash tools (see "Hooks coverage" below)
 - `~/.codex/skills/<name>/SKILL.md` (user-global) or `.codex/skills/<name>/SKILL.md` (repo-local) — native progressive-disclosure skills
-- `~/.codex/prompts/<name>.md` (user-global) or `.codex/prompts/<name>.md` (repo-local) — custom slash commands (invoked `/prompts:<name>`, note the namespace prefix). This is the canonical Codex slash-command surface — bash-wrapper emission to `bin/coc-*` was deferred at Shard C (2026-05-10, journal/0006) and is no longer the architect's responsibility.
+- `~/.codex/prompts/<name>.md` (user-global only — repo-local `.codex/prompts/` is **not discovered** since Codex CLI 0.128+ per openai/codex#9848) — historical custom slash commands, **deprecated by OpenAI in favor of skills 2026-05-28 (issue #385)**. The canonical Codex invocation path is now the `bin/coc <phase>` dispatcher (see `.claude/codex-templates/bin/README.md`); codex-architect still emits `.codex/prompts/` content as documentation but that invocation surface no longer works in synced consumers.
 
 CONSUMER (read-only at emit time):
 
 - `.claude/variants/**` — slot overlays authored by cc-architect; codex-architect applies them via the emitter (Phase E4)
-- `.claude/commands/**` — phase commands (`/analyze`, `/todos`, etc.); codex-architect emits Codex-native prompts at `.codex/prompts/<name>.md`. (Bash-wrapper emission to `bin/coc-*` was deferred at Shard C 2026-05-10; native prompts are the only invocation surface.)
+- `.claude/commands/**` — phase commands (`/analyze`, `/todos`, etc.); codex-architect emits documentation copies at `.codex/prompts/<name>.md`. Invocation in synced consumers is the `bin/coc <phase>` dispatcher (`.claude/codex-templates/bin/coc`), emitted to `<USE>/bin/coc` by coc-sync Step 6.6 — see #385.
 - `.claude/guides/**` — copied to `.codex/docs/` at sync time; no symlinks (USE template tarballs self-contained)
 
 ## Primary Responsibilities
 
 1. **Emit** `AGENTS.md` under the v6 abridgement_protocol from `.claude/sync-manifest.yaml → cli_variants.context/root.md.codex`. Respect warn_cap_bytes (32768) and block_cap_bytes (61440); WARN tier is the expected steady state.
-2. **Native slash-command surface** — emit `.codex/prompts/<name>.md` per Phase J2+ (responsibility 6 below). Bash-wrapper emission to `bin/coc-*` was deferred at Shard C 2026-05-10 (journal/0006-DECISION-wrapper-emission-disposition-strip.md) — the wrappers' runtime dependency `.codex/developer-instructions/` was never authored, the native prompt surface covers all 28 commands, and the manifest emit_to declarations were stubs. Revival path documented in the journal entry if external CLI invocation becomes a documented user need.
+2. **External invocation surface** — emit `.codex/prompts/<name>.md` as documentation per Phase J2+ (responsibility 6 below) AND emit the unified `bin/coc` dispatcher (per coc-sync Step 6.6) for runtime invocation. The slash-command surface that previously served this role was deprecated by OpenAI 2026-05-28 (#385); `bin/coc <phase> "<prompt>"` is now the canonical external Codex invocation path. The legacy per-phase `.claude/wrappers/*.sh.template` files remain emitted for backward compatibility but the unified dispatcher is preferred (N wrappers → 1 + N symlinks).
 3. **Populate** `.claude/codex-mcp-guard/server.js` POLICIES table via AST extraction of `.claude/hooks/*.js` predicate functions (spec v6 §4.4 validator 13). Bijection MUST hold — divergence hard-blocks sync.
 4. **Apply** slot overlays from `.claude/variants/codex/**` and `.claude/variants/<lang>-codex/**` when emitting baseline context + rules. Never edit the global rule; always overlay.
 5. **Validate** TOML-header safety for `agents/**.md` per `cli_variants.agents/**.md.codex.toml_key_safety = iterate_and_classify` (spec v3 §2.2).
 6. **Emit native skills + prompts** — for every `.claude/skills/<nn-name>/SKILL.md` and `.claude/commands/<name>.md`, emit a Codex-native equivalent at `.codex/skills/<nn-name>/SKILL.md` and `.codex/prompts/<name>.md` respectively (Phase J2+).
+
+### Cons of bin/coc as the Codex invocation surface
+
+Per `recommendation-quality.md` MUST-3 (symmetric pros + cons), the
+`bin/coc` dispatcher is not free of trade-offs even though it is the
+canonical replacement for the deprecated `/prompts:<phase>` slash
+invocation. The real cons are:
+
+- **Installation hop.** Every Codex-aware USE template requires `<USE>/bin/`
+  on `$PATH` (or invocation via `./bin/coc`); operators relying on plain
+  `coc analyze "..."` from any cwd must add the directory to their shell
+  rc. The prior slash surface had zero install cost.
+- **Git-repo precondition.** The dispatcher resolves `PROJECT_ROOT` via
+  `git rev-parse --show-toplevel` with `pwd` as fallback; invocations from
+  a non-repo directory silently fall back to `pwd`, which may not contain
+  `.claude/wrappers/schemas/`. Slash commands had no such precondition.
+- **PATH dependency on `codex`.** The dispatcher invokes `codex exec` via
+  `PATH` lookup, so operators on machines without the OpenAI Codex CLI
+  installed see a `codex: command not found` error from the shell, not
+  a structured dispatcher error. The user expectation must be set
+  explicitly in operator onboarding.
+
+These cons are bounded — they are operator-environment friction, not
+runtime correctness gaps — and are accepted because the alternative
+(no Codex external invocation surface at all after the upstream
+deprecation) is structurally worse.
 
 ## Codex-Native Primitives
 
@@ -45,7 +72,7 @@ CONSUMER (read-only at emit time):
 | `Task(...)`                              | `codex exec --json --output-schema=...`                                                                                                                                                                                                                                                                                                                                                                                                                                                     | [developers.openai.com/codex/cli/features]                                               |
 | `/review`                                | `codex review --uncommitted --base main` or `codex review --commit <SHA>` (native; wrapper skipped)                                                                                                                                                                                                                                                                                                                                                                                         | [developers.openai.com/codex/cli/features]                                               |
 | `SKILL.md` progressive disclosure        | Native — `~/.codex/skills/<name>/SKILL.md` (user) or `.codex/skills/<name>/SKILL.md` (repo); metadata loaded upfront, body loads on trigger (Codex 0.46+ / Dec 2025)                                                                                                                                                                                                                                                                                                                        | [developers.openai.com/codex/skills]                                                     |
-| Slash commands `/analyze`, `/todos`      | `/prompts:analyze`, `/prompts:todos` — Markdown prompts at `~/.codex/prompts/<name>.md` or `.codex/prompts/<name>.md` (note `prompts:` namespace prefix)                                                                                                                                                                                                                                                                                                                                    | [developers.openai.com/codex/cli/slash-commands]                                         |
+| Slash commands `/analyze`, `/todos`      | `bin/coc analyze "..."`, `bin/coc todos "..."` — unified Codex dispatcher (`<USE>/bin/coc`, emitted from `.claude/codex-templates/bin/coc`). OpenAI deprecated custom prompts 2026-05-28 (#385); the historical slash surface no longer works in synced consumers (repo-local `.codex/prompts/` is not discovered — openai/codex#9848).                                                                                                                                                       | [developers.openai.com/codex/cli/features] (`codex exec --json --output-schema=…`)        |
 | `paths:` frontmatter (path-scoped rules) | **NOT honored in any form.** Codex uses directory-hierarchy loading ONLY — walks from git root to cwd, concatenates every `AGENTS.md` / `AGENTS.override.md` found along the path. No frontmatter, no glob, no conditional loading by file pattern being touched. Only "scoping" = place `AGENTS.md` in the relevant subdirectory so it auto-loads when CWD is there. **Historical note:** `.github/instructions/*.instructions.md` with `applyTo:` is a GitHub Copilot feature, NOT Codex. | [developers.openai.com/codex/guides/agents-md]                                           |
 | MCP servers                              | Native — `~/.codex/config.toml` `[mcp_servers.*]` blocks                                                                                                                                                                                                                                                                                                                                                                                                                                    | [developers.openai.com/codex/config-advanced]                                            |
 
@@ -129,11 +156,11 @@ Per `rules/cross-cli-parity.md`:
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Edit `.claude/rules/*.md` to add Codex-specific examples | Author `.claude/variants/codex/rules/*.md` slot overlay instead                                                                                                                                                             |
 | MCP guard starts with stub POLICIES                      | Keep `POLICIES_POPULATED=false`; emit bijection failure at startup (exit 2)                                                                                                                                                 |
-| Re-add `wrappers/*.sh.template:` emit_to to manifest     | Wrapper emission is deferred (journal/0006); revival requires authoring `.codex/developer-instructions/` corpus + emitter wiring + Tier-1 regression. Native `.codex/prompts/` surface is the canonical slash-command path. |
+| Re-add `wrappers/*.sh.template:` emit_to to manifest     | Per-phase wrappers remain emitted for backward compat, but the canonical external invocation surface is the unified `bin/coc <phase>` dispatcher per #385 (`.claude/codex-templates/bin/coc` + per-phase symlinks). Avoid re-introducing per-phase wrapper proliferation.                  |
 | Add semantic tokens to `scrub_tokens`                    | Extend `warn_on_drift_in_slots` instead — scrub is for syntax, not semantics                                                                                                                                                |
 | Use `paths:` frontmatter for path-scoped rules on Codex  | Place content in the relevant subdirectory's `AGENTS.md` — CWD-triggered. **Do NOT use `.github/instructions/*.instructions.md` + `applyTo:`** — that's GitHub Copilot, not Codex.                                          |
 | Assume `PreToolUse` fires on `apply_patch`               | It doesn't — file-write enforcement MUST route through the MCP guard                                                                                                                                                        |
-| Emit slash commands as `/analyze.md` flat name           | Codex invokes `/prompts:analyze` — the `prompts:` namespace prefix is mandatory                                                                                                                                             |
+| Assume historical slash-prompt invocation still works    | OpenAI deprecated custom prompts in favor of skills 2026-05-28 (#385); repo-local `.codex/prompts/` is not discovered (openai/codex#9848). Use `bin/coc <phase> "..."` — the unified dispatcher emitted by coc-sync Step 6.6.                                                              |
 
 ## Related Agents
 
@@ -157,7 +184,7 @@ Per `rules/cross-cli-parity.md`:
 - [Codex skills reference](https://developers.openai.com/codex/skills) — SKILL.md progressive disclosure (Dec 2025)
 - [Codex subagents](https://developers.openai.com/codex/subagents) — natural-language spawn, `spawn_agents_on_csv` structured batch
 - [Codex CLI features](https://developers.openai.com/codex/cli/features) — `codex review`, `codex exec`
-- [Codex custom prompts / slash commands](https://developers.openai.com/codex/cli/slash-commands) — `~/.codex/prompts/*.md`, `/prompts:<name>` invocation
+- [Codex custom prompts / slash commands](https://developers.openai.com/codex/cli/slash-commands) — historical reference; **deprecated 2026-05-28** in favor of skills per OpenAI's notice. Repo-local `.codex/prompts/` is not discovered (openai/codex#9848). Use the unified `bin/coc <phase>` dispatcher instead.
 - [Codex config advanced](https://developers.openai.com/codex/config-advanced) — `~/.codex/config.toml`, MCP servers
 - [Codex issue 16732](https://github.com/openai/codex/issues/16732) — `apply_patch` hook gap
 - [Codex issue 14754](https://github.com/openai/codex/issues/14754) — Write tool hook gap

@@ -10,7 +10,9 @@ paths:
 
 # SDK Release Rules
 
+
 <!-- slot:neutral-body -->
+
 
 ## Before Any Release
 
@@ -119,46 +121,6 @@ done
 **Why:** Editable installs see the local working tree, including untracked files. PyPI users get only what's in the wheel, which is built from `git ls-files`. PR #459/#460 merged with `nexus/__init__.py` importing `.auth.guards` and `.errors` — both untracked. Tests passed because the local files existed. The wheel published to PyPI would have failed with `ImportError` on every fresh install. Caught by `/release` audit and fixed in PR #467.
 
 Origin: PR #467 (2026-04-14) — bundled the missing nexus/auth/guards.py and nexus/errors.py files that PR #459/#460 left untracked.
-
-## MUST: Eagerly-Imported Transitive Dependencies Are Declared By The Importing Package
-
-A package whose import graph eagerly pulls in a third-party library — directly, OR transitively through an upstream Kailash package's `__init__.py` re-export — MUST declare that library in its own `[project.dependencies]`. Assuming an upstream package's optional extra will install it is BLOCKED: a downstream consumer that depends on the bare upstream package (not the extra) installs without the transitive library, and the eager import fails at first `import`.
-
-```toml
-# DO — the importing package declares every library its import graph eagerly needs
-[project]
-dependencies = [
-  "kailash>=2.22.1",
-  "aiosqlite>=0.20.0",   # kailash.core.pool.__init__ eagerly imports aiosqlite;
-                         # kailash ships aiosqlite only in the [dataflow] extra
-]
-
-# DO NOT — assume an upstream extra covers the transitive import
-[project]
-dependencies = ["kailash>=2.22.1"]   # bare kailash → no aiosqlite installed →
-                                     # `import kailash_ml` fails in a clean venv
-```
-
-**BLOCKED rationalizations:**
-
-- "kailash already depends on aiosqlite" (it is in an extra, not core dependencies)
-- "Our dev environment installs `kailash[dataflow]`, so it resolves locally"
-- "CI passes" (CI installs the full extra set; clean-venv users do not)
-- "It is a transitive dep — declaring it again is redundant"
-
-**Why:** `pip install <pkg>` installs `<pkg>`'s declared dependencies and THEIR core dependencies — never their optional extras. A library reachable only through an upstream extra is absent the moment a clean-venv user installs the bare package, and an eager `import` of it fails immediately. Every library the import graph touches at module-load time is a real dependency and MUST be declared as one.
-
-Origin: issue #1086 candidate 1 — kailash-ml clean-venv install failed at `import` because `kailash.core.pool.__init__` eagerly re-exported `aiosqlite` (a `kailash` extra, undeclared by ml). The same pattern hit kailash-mcp 0.2.13 → 0.2.14 the same day.
-
-**Trust Posture Wiring:**
-
-- **Severity:** `halt-and-report` at the `/release` gate (release-specialist surfaces the violation during the pre-tag audit). Not `block` — the check is a release-time mechanical sweep, not a PreToolUse structural signal.
-- **Grace period:** 7 days from this clause landing.
-- **Cumulative:** contributes to `trust-posture.md` MUST Rule 4 cumulative math (3× same-rule in 30d → drop one posture).
-- **Regression-within-grace:** a release shipped within 7 days of this clause landing whose package import graph eagerly imports an undeclared transitive library = emergency downgrade per `trust-posture.md` MUST Rule 4.
-- **Receipt requirement:** SessionStart MUST require `[ack: deployment-transitive-deps]` in the agent's first response IF `posture.json::pending_verification` includes this rule_id.
-- **Detection:** mechanical `/release`-time sweep — walk each package's eagerly-imported modules (`__init__.py` + their eager re-exports), collect every third-party `import`, assert each resolves to a name in the package's declared `[project.dependencies]` (or a non-optional dependency thereof). First-violation id: none yet (this clause is the codification of the kailash-ml 1.7.4 / kailash-mcp 0.2.14 incidents).
-- **Origin date:** 2026-05-18.
 
 ## MUST: Multi-Package Release Tags Pushed Individually
 

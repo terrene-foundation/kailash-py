@@ -80,6 +80,50 @@ hardcoded layout at the root is just as operator-fragile as one in a hook —
 the resolver is the single binding everywhere; the orchestration carve-out
 only lifts the scope boundary, never the positional-guess prohibition.
 
+## Canonical Sublayout (Recommended — F61)
+
+The recommended on-disk sublayout for a fresh operator workstation is
+`~/repos/kailash/{build,use}/<slug>`: BUILD repos under
+`~/repos/kailash/build/{py,rs,prism}` and USE templates under
+`~/repos/kailash/use/{py,rs,rb,claude-py,claude-rs,claude-rb}`; `loom` and
+`atelier` remain peer entries at `~/repos/{loom,atelier}`. This is a HINT,
+NOT a MUST clause — the resolver IS the canonical NAME→location binding
+(Rule 1) and the sublayout is operator-portable. Pre-existing operators on
+other layouts (flat `~/repos/<slug>`, nested `~/repos/loom/<slug>`, or any
+declared `loom-links.local.json` mapping) remain fully supported. The
+canonical sublayout's value is institutional: a fresh operator copying the
+example config gets a coherent default and a sibling operator joining the
+same machine finds repos in a predictable place — without changing what the
+resolver, validators, or sync tooling actually do at runtime. The committed
+example at `.claude/bin/loom-links.local.example.json` carries the canonical
+sublayout as synthetic example tokens (`example/build/py`, `example/use/py`,
+etc.) so the disclosure-scrub fence is unaffected.
+
+```text
+# DO — fresh operator workstation uses the canonical sublayout
+~/repos/kailash/build/py         (BUILD: kailash-py)
+~/repos/kailash/build/rs         (BUILD: kailash-rs)
+~/repos/kailash/use/py           (USE-template: kailash-coc-py)
+~/repos/kailash/use/rs           (USE-template: kailash-coc-rs)
+~/repos/loom                     (loom self-checkout)
+~/repos/atelier                  (CC + CO authority)
+
+# DO — pre-existing operators on other layouts proceed unchanged
+~/repos/kailash-py               (flat layout — declare in loom-links.local.json)
+~/repos/loom/kailash-py          (nested layout — declare via absolute path)
+```
+
+**Why:** The canonical sublayout is the suggested on-disk REALIZATION of the
+logical key namespace at `artifact-flow.md` § "Repo Classes Map 1:1 To
+Resolver Logical Keys" — a default that encodes the BUILD-vs-USE class
+distinction directly in the path, with `loom`/`atelier` as peer roots (not
+nested under `kailash/`). Without it, every fresh operator invents an ad-hoc
+layout and sibling operators on the same machine end up grepping each other's
+resolver configs; the hint costs zero structural enforcement, buys consistency
+across fresh workstations, and existing operators on other layouts pay nothing
+(the resolver remains layout-agnostic and any operator-local layout stays
+fully supported via `loom-links.local.json`).
+
 ## MUST NOT
 
 - Embed a repo registry (paths, org slugs, hostnames) inline in any synced
@@ -101,3 +145,9 @@ Origin: 2026-05-17 — user-defined repo-linkage system (Shards 1–3,
 `feat/loom-links-resolver`). Resolver + schema + bootstrap landed Shard 1;
 the one real positional code site (`hooks/lib/template-resolver.js`) migrated
 Shard 2; spec/doc/rule alignment Shard 3. Journal `0086-DECISION-user-defined-repo-linkage-system-2026-05-17.md`.
+Extended 2026-05-28 (F61 wave, journal/0168): § "Canonical Sublayout
+(Recommended — F61)" added as a non-MUST hint encoding the BUILD-vs-USE
+class distinction in `~/repos/kailash/{build,use}/<slug>` for fresh
+operators; mirror clause in `artifact-flow.md` § "Repo Classes Map 1:1 To
+Resolver Logical Keys"; canonical-sublayout block added to the committed
+example schema `.claude/bin/loom-links.local.example.json` `_README`.

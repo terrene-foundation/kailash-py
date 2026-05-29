@@ -31,11 +31,9 @@ Four things nothing else captures:
 
 If content doesn't fit one of those four, it belongs somewhere else. Put it there before running `/wrapup`.
 
-## Where to write
+## Where to write — M6 D split layout
 
-1. If `$ARGUMENTS` names a workspace, write `workspaces/$ARGUMENTS/.session-notes`
-2. Else use the most recently modified directory under `workspaces/` (excluding `instructions/`)
-3. Else write `.session-notes` at the repo root
+Per-operator fragment `<base>/.session-notes.d/<display_id>.md` + forest ledger `<base>/.session-notes.shared.md` (per-row `owner:`, merged by `coc-ledger`). `<base>` = `workspaces/$ARGUMENTS/` if specified, else the most recently modified workspace dir (excluding `instructions/`), else the repo root. Writes go through `.claude/hooks/lib/session-notes-layout.js`. Rows MUST carry a stable single-token `ID` + value-anchor per `rules/value-prioritization.md` MUST-1+2; owner stamps from identity. On journal-file close, emit a signed `journal-body-anchor` record via `.claude/hooks/lib/journal-body-anchor.js::buildAnchorRecord` — pins `{path, sha256_of_content_bytes, slot_record_ref}`; fold-time predicate re-hashes and surfaces tamper on mismatch.
 
 ## Format
 
@@ -143,8 +141,4 @@ anti-vanish claim.
 - **Overwrite** existing `.session-notes`. Only the latest matters.
 - **The "Read first" list is the one section that MUST be present.** Without it, the next session has no entry point. If you can't produce a useful list, point at `CLAUDE.md` as the sole entry and say why.
 
-## Why this is lean
-
-Previous versions forced a tool-call cascade ("the tool call is the verification, not your memory") that consumed 200K+ tokens per run on large workspaces. The cascade existed to catch stale claims. The lean fix is to **not make claims that could go stale**: instead of "27 todos remaining" (must be verified), write "see `todos/active/`" (always current by definition).
-
-`.session-notes` is a pointer file, not a report. Its job is to save the next session's discovery time. That's all.
+`.session-notes` is a pointer file, not a report — its job is to save the next session's discovery time. Don't make claims that could go stale; write "see `todos/active/`" instead of a count.

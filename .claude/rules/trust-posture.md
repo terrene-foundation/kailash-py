@@ -74,6 +74,8 @@ Downgrades fire on detection — no human in the loop, per EATP "downgrade insta
 - 1× `streetlight_selection` (fittability-pick over higher-value candidate without value-anchor / named trade-off per `rules/value-prioritization.md` MUST-1) → drop 1 posture
 - 1× `deferral_without_value_anchor` (deferred shard / "Carried-forward" / "tracked separately" / Phase-N reframing without adjacent value-anchor per `rules/value-prioritization.md` MUST-2) → drop 1 posture
 - 1× `self_referential_codify_without_redteam` (a `/codify` touching the self-referential surface allowlist per `rules/self-referential-codify.md` Rule 2 shipped without multi-agent redteam-with-tests per Rule 1) → drop 1 posture
+- 1× `proximity_band_admission_bypass` (`rules/rule-authoring.md` MUST Rule 10 violation: baseline-priority rule addition within 15% proximity band without paired extraction OR named-rationale exception) → drop 1 posture
+- 1× `recurrent_extraction_escalation_bypass` (`rules/rule-authoring.md` MUST Rule 11 violation: 2nd Rule-10 invocation on same (rule, CLI) lane within 30 days without disposition (a') corpus review or (b') sixth-sub-field named-rationale) → drop 1 posture
 - 1× **critical**: destructive op without confirm (rm -rf, git reset --hard without porcelain check, force-push to main); secret leak; cross-repo write outside scope → drop to L1
 - 1× corrupt-state event (with init marker) → drop to L1
 
@@ -100,9 +102,36 @@ When `/codify` authors a rule that addresses a self-reported or detected violati
 
 ### 7. Trust Posture Wiring Required In Codified Rules
 
-`/codify` MUST attach a "Trust Posture Wiring" section to every new rule proposal: severity tag (`block`/`halt-and-report`/`advisory`), grace-period days, regression-within-grace policy, receipt requirement (whether SessionStart should require `[ack: <rule_id>]`). Proposals without the wiring section are rejected at sync-reviewer Gate 1.
+`/codify` MUST attach a "Trust Posture Wiring" section to every new rule proposal using the canonical 8-field template (Rule 8 below). Proposals without the wiring section, OR with a wiring section that omits any of the 8 canonical fields, are rejected at sync-reviewer Gate 1.
 
 **Why:** A rule without wiring is institutional prose — no automatic enforcement, no detection, no consequences for violation. Wiring is what makes a rule a structural defense rather than a hopeful suggestion.
+
+### 8. Canonical 8-Field Wiring Template (MUST)
+
+Every Trust-Posture-Wired rule MUST use the canonical 8-field template. Fields MUST appear in the order below, each as a `**Field:**` bullet on its own line. Anchoring `**Violation scope:**` AFTER the detection-mechanism field is REQUIRED — the cc-architect mechanical sweep greps for that literal token as the structural marker of canonical-template compliance.
+
+```markdown
+## Trust Posture Wiring
+
+- **Severity:** `block` / `halt-and-report` / `advisory` per `hook-output-discipline.md` MUST-2 carrier rules (structural-signal → `block`; LLM-judgment-bearing → `halt-and-report`; lexical-regex-only → `advisory`).
+- **Grace period:** N days from rule landing (canonical = 7 days; deviations require named rationale).
+- **Cumulative posture impact:** how same-class violations contribute to `trust-posture.md` MUST-4 cumulative-window math (e.g., "3× same-rule in 30d → drop 1 posture"; or "N/A — emergency-only trigger"). Required even when N/A so the reader knows the cumulative path is not silently inherited.
+- **Regression-within-grace:** which named trigger key (`regression_within_grace`, `time_pressure_procedure_drop`, `streetlight_selection`, etc.) fires the emergency downgrade per MUST-4 § Emergency, AND the posture-drop magnitude (1 step / to L1).
+- **Receipt requirement:** SessionStart `[ack: <rule_id>]` requirement IFF `posture.json::pending_verification` includes this rule_id. State explicitly whether ack is hard-gate or soft-gate.
+- **Detection mechanism:** named hook function / mechanical sweep / gate-level reviewer surface that produces the structural signal. Cite the hook path (`.claude/hooks/lib/<file>.js::<function>`), the audit-fixture directory, AND the gate-level surface (`/codify` mechanical sweep at cc-architect / reviewer / analyst). For Phase-1 manual / Phase-2 deferred detection, state both rows.
+- **Violation scope:** which named MUST clauses of THIS rule trigger the Wiring (e.g., "MUST 1+2 lexical detection; MUST 3 structural exit-code"). Anchors the cc-architect sweep — `**Violation scope:**` is the literal grep token.
+- **Origin:** cross-reference back to the rule's own Origin footer (e.g., "See § Origin"). If the rule's Origin section is absent, write the provenance receipt inline here.
+```
+
+**BLOCKED rationalizations:**
+
+- "The rule's existing 4-field Wiring is grandfathered, leave it alone"
+- "Adding `**Violation scope:**` is redundant when MUST clauses already exist"
+- "8 fields is bureaucracy; pick the 4 that matter for this rule"
+- "Cumulative posture impact is implied by the trigger key; no separate field needed"
+- "Origin field duplicates the rule's footer; one or the other suffices"
+
+**Why:** A 4-field Wiring section drifts silently because authors fill in whichever fields they think matter and the reader cannot grep for what is missing. The 8-field template + the `**Violation scope:**` literal-token marker convert "did the author include the full contract?" from an LLM-judgment question into a 4-second `grep -L` sweep. Sweep query: `grep -L 'Violation scope:' .claude/rules/*.md` lists every Trust-Posture-Wired rule that lacks canonical-template compliance. **Grandfather cutoff:** rules landed BEFORE the SHA of this edit are exempt until their next `/codify`-touched edit; rules landed AT or AFTER this SHA MUST ship canonical-template-compliant. New rules authored by F-series shards (M8 onward), including `multi-operator-coordination.md`, `knowledge-convergence.md`, and `user-flow-validation.md`, MUST ship canonical-template-compliant on first land.
 
 ## MUST NOT
 

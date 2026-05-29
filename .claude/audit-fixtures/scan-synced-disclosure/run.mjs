@@ -199,6 +199,93 @@ const CASES = [
     expectShapes: ["nonfoundation-org-slug"],
     expectFindingCount: 2,
   },
+  {
+    // R5 (issue-followup #336): `refs` git-namespace allowlist anchor.
+    // Locks the `refs(?=/)` slash-anchored allowlisting in the
+    // nonfoundation-org-slug SHAPE so that:
+    //  (a) substrate ref names (`refs/coc/coordination-genN`,
+    //      `refs/coc/archive-genN`, `refs/coc/**`, `refs/heads/main`,
+    //      `refs/tags/v1.0`) stay CLEAN.
+    //  (b) smuggle patterns where `refs-` prefixes a non-Foundation org
+    //      slug (`refs-acme-corp/loom`, `chore/refs-customer-corp/coc-x`)
+    //      STILL flag. Without the slash-anchor on `refs`, `refs\b` would
+    //      match `refs` followed by `-` (a word boundary), suppressing
+    //      legitimate smuggle detection.
+    //  (c) bare third-party org slugs (`customer-acme/loom`) STILL flag
+    //      as before — the `refs` allowlist doesn't touch the broader
+    //      4th-alt behavior.
+    // Expected findings: 4 (3 explicit FLAG cases + 1 in the explanatory
+    // prose line 25 that contains a literal `refs-acme-corp/loom`).
+    name: "r5-refs-allowlist",
+    dir: "r5-refs-allowlist",
+    expectExit: 1,
+    expectShapes: ["nonfoundation-org-slug"],
+    expectFindingCount: 4,
+  },
+  {
+    // Issue #352 destination-mode `.local.json` scan-on (R1 security
+    // LOW-S2): the `*.local.json` exclusion in `isExcluded()` now scopes
+    // to `REPO_ROOT_ACTIVE === REPO_ROOT` (loom-source-scan only). When
+    // `--root <dir>` points at a destination, committed `.local.json`
+    // files ARE scanned because their presence at a sync destination IS
+    // the disclosure event. The fixture plants a synthetic
+    // `loom-links.local.json` carrying `/Users/fakeuser/fake-repos`
+    // home-path shapes — these MUST flag at the destination scan. At
+    // loom-source the same predicate path is excluded; the predicate's
+    // destination-mode flip is what this fixture pins.
+    name: "destination-local-json",
+    dir: "destination-local-json",
+    expectExit: 1,
+    expectShapes: ["operator-home-path"],
+  },
+  {
+    // F77 good (#386): a synced .claude/settings.json with NO operator-PII
+    // paths in permissions.allow/deny — every tool-call matcher uses a
+    // relative or $CLAUDE_PROJECT_DIR-rooted path. The new
+    // settings-permission-absolute-path SHAPE MUST NOT fire AND the
+    // existing operator-home-path SHAPE MUST NOT fire (settings.json
+    // is now in the walk surface per the F77 isNeverSynced narrowing).
+    name: "f77-settings-good",
+    dir: "f77-settings-good",
+    expectExit: 0,
+    expectShapes: [],
+  },
+  {
+    // F77 bad (#386): a synced .claude/settings.json carrying SYNTHETIC
+    // operator-PII paths inside permissions.allow tool-call matchers.
+    // The fixture plants 3 Edit/Write/Read(/Users/fakeuser/...) entries
+    // + 1 Bash(/home/fakebuilder/...) entry — 4 settings-permission-
+    // absolute-path findings expected (one per matcher). The /Users/
+    // and /home/ tokens additionally trigger the operator-home-path
+    // shape, but the fixture's count lock is on the new shape only —
+    // a count delta would surface a regression in either the new
+    // shape's regex or the per-line tokenization (settings.json is
+    // single-line-per-matcher JSON, so each matcher is its own line
+    // for the line-by-line scanner).
+    name: "f77-settings-bad",
+    dir: "f77-settings-bad",
+    expectExit: 1,
+    expectShapes: ["settings-permission-absolute-path"],
+  },
+  {
+    // F77 own-coords-still-flagged (#386): proves the new SHAPE skips
+    // the Option-1 allowlist. The maintainer's own /Users/esperie/ path
+    // is allowlisted for PROSE leaks (per the co-owner Option-1 ruling
+    // 2026-05-17 #263); the tool-call matcher form is intrinsically
+    // wrong regardless of which operator's path appears inside. The
+    // fixture plants 2 Edit/Read(/Users/esperie/...) matchers — both
+    // MUST flag as settings-permission-absolute-path. The
+    // operator-home-path SHAPE would have suppressed these via the
+    // /Users/esperie/ allowlist entry, but the new SHAPE's
+    // allowlist-skip carve-out fires here. A 0 finding count = the
+    // allowlist-skip regressed; a 3rd finding = the skip leaked into
+    // the operator-home-path SHAPE (which MUST continue honoring
+    // Option-1 for prose leaks).
+    name: "f77-settings-own-coords-still-flagged",
+    dir: "f77-settings-own-coords-still-flagged",
+    expectExit: 1,
+    expectShapes: ["settings-permission-absolute-path"],
+  },
 ];
 
 function runScanner(root) {

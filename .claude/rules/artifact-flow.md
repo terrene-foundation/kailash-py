@@ -43,6 +43,8 @@ USE-template `/codify` proposal origination is the authoritative target flow for
 
 The four repo classes above bind one-to-one to `bin/lib/loom-links.mjs` logical keys: **BUILD** → `build.{py,rs,prism}`, **USE-template** → `use-template.{py,rs,rb,claude-py,claude-rs,claude-rb}`, **atelier** → `atelier`, **downstream** → `downstream.<slug>`. The resolver is the canonical NAME→location binding (per `cross-repo.md` MUST-1): `sync-manifest.yaml::repos.<target>` still owns the logical NAME and tier membership; the resolver owns NAME→on-disk-path. Cross-repo tooling (`/sync`, `/sync-to-build`, `/inspect`, `/repos`) resolves every target through the resolver — never a positional `~/repos/<name>` / `../<name>` guess. This does not change the flow above; it makes the path side of every class declarative and operator-portable.
 
+**Canonical sublayout hint (recommended for fresh operators — F61).** The recommended on-disk realization of the logical namespace is `~/repos/kailash/{build,use}/<slug>` — BUILD repos under `~/repos/kailash/build/{py,rs,prism}`, USE templates under `~/repos/kailash/use/{py,rs,rb,claude-py,claude-rs,claude-rb}`, peer roots `~/repos/loom` and `~/repos/atelier`. This is a HINT, NOT a MUST clause — see `cross-repo.md` § "Canonical Sublayout (Recommended — F61)" for the full hint and the explicit non-enforcement disposition. Pre-existing operators on any other layout (flat `~/repos/<slug>`, nested `~/repos/loom/<slug>`, or any declared `loom-links.local.json` mapping) remain fully supported. The hint encodes the BUILD-vs-USE class distinction in the path so fresh operators get a coherent default + sibling operators on the same machine find repos in a predictable place — without changing what the resolver, validators, or sync tooling actually do at runtime.
+
 ### Issue Routing By Change Type
 
 Every artifact-or-code issue MUST be routed by the TYPE of change it requests, not by which repo is convenient:
@@ -61,6 +63,37 @@ SDK-code bug filed on the USE-template repo (artifact lane; never reaches the SD
 ```
 
 **Why:** Routing by repo convenience puts a COC-method fix onto a code-only lane (it never becomes an artifact proposal) or an SDK bug onto the artifact lane (it never reaches the code fix); either way the Gate-1 global-vs-variant split is bypassed and the change loses its provenance.
+
+#### Downstream-Consumer Routing (.session-notes shorthand: Route A)
+
+A **downstream consumer** is any repo that pulled COC artifacts FROM a USE template — this includes: end-user project repos, kaizen-cli-py, kz-engage, and every consumer of the canonical USE-template set (`kailash-coc-claude-py`, `kailash-coc-claude-rs`, `kailash-coc-claude-rb`, `kailash-coc-py`, `kailash-coc-rs`; canonical enumeration per `sync-manifest.yaml::repos` + `guides/co-setup/09-proposal-protocol.md` Step 7b). Downstream consumers MUST file COC-method issues against the **USE template they pulled from**, NOT against their own project repo AND NOT against `loom` directly. The USE template's `/codify` originates the proposal per `guides/co-setup/09-proposal-protocol.md` Step 7b; the proposal flows to loom Gate-1; loom distributes on the next `/sync` cycle; downstream consumers pull on their own cadence.
+
+```
+# DO — downstream consumer routes through the USE template
+kaizen-cli-py operator hits a COC-rule issue
+  → files issue on kailash-coc-claude-py (the USE template kaizen-cli-py pulled from)
+  → kailash-coc-claude-py's /codify originates the proposal
+  → proposal flows to loom Gate-1 → /sync redistributes
+
+# DO NOT — file against own repo (orphan proposal; never reaches loom)
+kaizen-cli-py operator files COC-rule issue on kaizen-cli-py
+  → kaizen-cli-py is a downstream consumer; it does NOT originate proposals to loom
+
+# DO NOT — file against loom directly (skips USE-template-side review)
+kaizen-cli-py operator files COC-rule issue on loom/
+  → bypasses USE-template /codify origination; loom is the splitter, not the originator
+  → violates "loom Splits, Never Originates" below
+```
+
+**Why:** Downstream-consumer issues filed against the consumer's own repo produce orphan proposals — the consumer is pull-only by design (no proposal manifest), so the issue documents a problem nobody upstream sees. Issues filed directly against loom bypass the USE-template-side review that catches variant-vs-global misclassification BEFORE it reaches every OTHER consumer of the same template. The USE template is the only repo class that originates proposals to loom (per the manifest contract); routing every downstream-consumer issue through it preserves the Gate-1 audit trail the splitter rule below depends on.
+
+**BLOCKED rationalizations:**
+
+- "But the issue surfaced in MY repo, so I file it here"
+- "Loom is the central authority — filing directly against loom skips a hop"
+- "Filing against own repo is informational; the team will route it later"
+- "The USE template is a thin wrapper; the real fix is in loom anyway"
+- "My project repo IS a USE template" (downstream-consumer projects are NOT USE templates — the canonical USE-template set is enumerated above; if your repo is not in that set, you are a downstream consumer)
 
 ### loom Splits, Never Originates
 
@@ -231,5 +264,11 @@ Origin: 2026-05-17 — #263 forest-closure follow-up (symmetric intake twin of t
 - Auto-classify global vs variant without human approval
 
 **Why:** Automated classification lacks the domain judgment to distinguish a language-specific pattern from a universal one, risking silent overwrites across all targets.
+
+## Origin
+
+Pre-2026-05-28 baseline plus F63 (.session-notes step 3 / Q3c — Route A downstream-consumer routing clarification, receipt journal/0165). Prior receipt-bearing additions: `Co-Owner-Directed Origination` subsection (2026-05-18, journal/0095); `Intake Disclosure Scrub` (2026-05-17, journal/0082-0084); `Repo Classes Map 1:1 To Resolver Logical Keys` (2026-05-17, journal/0086).
+
+**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body is ~272 lines (per `wc -l`), exceeding the 200-line guidance by ~72. Named rationale: **canonical-flow scope**. The rule codifies the complete artifact-distribution surface across 11 distinct sections (Authority Chain, Repo Classes ↔ Resolver, Issue Routing By Change Type [+ Route A], loom Splits Never Originates, Co-Owner-Directed Origination, BUILD Repo Rules, Proposal Lifecycle, /sync as Only Outbound Path, Human Classifies Every Change, Intake Disclosure Scrub, Variant Overlay Semantics) plus the trailing MUST NOT clause block. Each section carries non-overlapping invariants the artifact-flow contract requires holding simultaneously. Splitting into sub-rules would fragment the canonical-flow surface across files and force cross-rule lookups for every routing decision — exactly the load-failure mode `rules/cc-artifacts.md` Rule 6 warns against. Per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines": the cap is guidance; overage is permitted with named rationale anchored at the rule's Origin. Sibling precedent: `multi-operator-coordination.md` Origin + `user-flow-validation.md` Origin carry the same length-rationale shape for the same class of multi-clause structural rule.
 
 <!-- /slot:neutral-body -->

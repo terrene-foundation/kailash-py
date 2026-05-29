@@ -126,6 +126,7 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 - **[SDK Upstream Donation](sdk-upstream-donation.md)** — BUILD repo → loom → USE template flow
 - **[Parallel Merge Workflow](parallel-merge-workflow.md)** — Merging 5+ parallel worktree changes to the same file via specialist delegation
 - **[Worktree Orchestration Protocol](worktree-orchestration.md)** — Extended evidence + post-mortems for `rules/agents.md` worktree MUSTs and `rules/worktree-isolation.md`
+- **[Closure-Parity Specialist Discipline](closure-parity-specialist-discipline.md)** — BLOCKED-rationalization corpus + delegation-time detection signals + Origin evidence for `rules/agents.md` § "MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read"
 
 ## When to Use This Skill
 

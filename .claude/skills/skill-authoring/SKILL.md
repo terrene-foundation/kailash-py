@@ -217,11 +217,16 @@ When auditing an existing skill:
 - [ ] No hook event names in PascalCase (`SessionStart`, `PreToolUse`) as prescriptive identifiers
 - [ ] If skill-embedded rules exist, they're inlined and the rule file carries `scope: skill-embedded`
 
+## Sub-Files
+
+- **[proximity-band-named-rationale-template.md](proximity-band-named-rationale-template.md)** — 5-sub-field template (i)–(v) for `rules/rule-authoring.md` MUST Rule 10 path (b) named-rationale budget exception, plus sub-field (vi) for Rule 11 path (b') 2nd-extraction-escalation named-rationale. Per F23a/F23b paired-extraction + R1 redteam (journals 0146/0147/0148/0149).
+
 ## Related
 
 - `rules/cc-artifacts.md` §1b — description ≤200 chars enforcement + 2026-05-06 evidence
 - `rules/cc-artifacts.md` §2 — progressive disclosure 80/20
 - `rules/rule-authoring.md` §7 — `priority:` + `scope:` for `skill-embedded` rules
+- `rules/rule-authoring.md` §10 + §11 — proximity-band admission gate (Rule 10) + 2nd-extraction escalation (Rule 11); both rules cite this skill's `proximity-band-named-rationale-template.md` sub-file for the path (b) / (b') named-rationale sub-field templates
 - `rules/cross-cli-artifact-hygiene.md` — neutral phrasing in skill bodies
 - `rules/cross-cli-parity.md` — variant overlay semantics for cross-CLI emission
 - `guides/co-setup/05-variant-architecture.md` — single-source + overlay architecture
