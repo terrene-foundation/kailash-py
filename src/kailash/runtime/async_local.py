@@ -24,6 +24,7 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import ModuleType
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from kailash.nodes.base import Node
@@ -2068,7 +2069,7 @@ class AsyncLocalRuntime(LocalRuntime):
         self._workflow_signals.clear()
         self._cleanup_event_loop()
 
-    def __del__(self, _warnings=warnings) -> None:
+    def __del__(self, _warnings: ModuleType = warnings) -> None:
         """Emit ResourceWarning if runtime was not properly closed."""
         if getattr(self, "_ref_count", 0) > 0:
             _warnings.warn(
