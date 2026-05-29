@@ -1,5 +1,15 @@
 # Nexus Changelog
 
+## [Unreleased] — scheduler admin HTTP panel + typed-error wiring (#937)
+
+### Added
+
+- **`nexus.admin.register_scheduler_admin(app, admin, *, role="scheduler-admin")` (#937)** — exposes the existing `kailash.runtime.scheduler_admin.SchedulerAdminAPI` over six HTTP routes: `GET /admin/schedules`, `GET /admin/schedules/{id}`, `PATCH /admin/schedules/{id}/{disable,enable,cron}`, `DELETE /admin/schedules/{id}`. Every route runs behind `RequireRole("scheduler-admin")`; the audit `actor` is the authenticated JWT subject (never a request-body field). `ScheduleNotFound → 404`, `ValueError → 400`. `ScheduleView` Pydantic model documents the OpenAPI response shape. See `specs/scheduling.md` §12.
+
+### Fixed
+
+- **Typed `NexusError` now maps to its declared HTTP status (#937)** — `errors.py` documented that the HTTP transport catches `NexusError` subclasses, but no exception handler was ever installed: raising a typed error from a `register_endpoint` handler produced an unhandled 500. `HTTPTransport` now installs the handler (idempotent, from `_initialize_gateway` so it covers the TestClient path); 4xx return `to_response_dict()`, 5xx log the detail server-side and return a generic body.
+
 ## [2.6.4] — 2026-05-28 — eliminate `@app.handler` instance-API UserWarning (#1012)
 
 Patch release fixing a startup-log noise issue that fired N `UserWarning("Instance-based API usage detected...")` lines on `@app.handler` registration. No public API change; the warning is now correctly scoped to genuine consumer misuse only.

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from nexus.registry import HandlerDef, HandlerRegistry
@@ -152,6 +152,11 @@ class HTTPTransport(Transport):
             )
             self._apply_cors()
 
+        # Install the NexusError -> HTTP exception handler so handlers that
+        # raise typed errors get the documented status + JSON body (errors.py
+        # advertises this; it was never wired). Idempotent.
+        self._install_exception_handlers()
+
         # Apply queued middleware (LIFO order preserved by Starlette)
         for entry in self._middleware_queue:
             self._gateway.app.add_middleware(entry.middleware_class, **entry.kwargs)
@@ -188,6 +193,54 @@ class HTTPTransport(Transport):
 
         self._running = True
         logger.info(f"HTTPTransport started on port {self._port}")
+
+    def _install_exception_handlers(self) -> None:
+        """Install the NexusError -> HTTP exception handler on the gateway app.
+
+        Fulfills the contract documented in ``nexus/errors.py``: typed
+        ``NexusError`` subclasses raised from any handler are translated to
+        their declared ``status_code`` with the canonical
+        ``{"error": <error_code>, "detail": <message>}`` body. For 5xx errors
+        the raw detail is logged server-side and NOT leaked to the client
+        (per the HTTP status convention). Idempotent — safe to call repeatedly.
+        """
+        if getattr(self, "_exc_handlers_installed", False):
+            return
+        if self._gateway is None:
+            return
+
+        from fastapi.responses import JSONResponse
+        from starlette.requests import Request
+
+        from nexus.errors import NexusError
+
+        async def _handle_nexus_error(request: Request, exc: Exception) -> JSONResponse:
+            # Registered for NexusError only; narrow for the type checker.
+            if not isinstance(exc, NexusError):
+                raise exc
+            if exc.status_code >= 500:
+                logger.error(
+                    "NexusError %s on %s: %s",
+                    type(exc).__name__,
+                    getattr(request, "url", "<unknown>"),
+                    exc.detail,
+                    extra={"context": exc.context},
+                )
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content={
+                        "error": exc.error_code,
+                        "detail": "internal server error",
+                    },
+                )
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=exc.to_response_dict(),
+            )
+
+        self._gateway.app.add_exception_handler(NexusError, _handle_nexus_error)
+        self._exc_handlers_installed = True
+        logger.info("Installed NexusError -> HTTP exception handler")
 
     async def stop(self) -> None:
         """Stop the HTTP transport."""
@@ -283,6 +336,8 @@ class HTTPTransport(Transport):
         origins = self._cors_config.get("origins")
         if origins is None:
             return
+        if self._gateway is None:
+            raise RuntimeError("_apply_cors called before gateway creation")
         from starlette.middleware.cors import CORSMiddleware
 
         self._gateway.app.add_middleware(
@@ -299,6 +354,10 @@ class HTTPTransport(Transport):
         self, path: str, methods: List[str], func: Callable, **kwargs
     ) -> None:
         """Register endpoint routes on the live FastAPI app."""
+        if self._gateway is None:
+            raise RuntimeError(
+                "_register_endpoint_internal called before gateway creation"
+            )
         fastapi_app = self._gateway.app
         for method in methods:
             route_func = getattr(fastapi_app, method.lower())

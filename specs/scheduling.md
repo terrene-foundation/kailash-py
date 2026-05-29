@@ -885,3 +885,43 @@ picks up changes on its next event-loop tick (typically immediate,
 since the scheduler holds the just-modified job in memory). No
 explicit `wakeup()` call is required — APScheduler's internal
 listeners refresh `next_run_time` at every fire-cycle boundary.
+
+## 12. Nexus HTTP Admin Surface (Issue #937)
+
+The Nexus package exposes `SchedulerAdminAPI` over HTTP via
+`nexus.admin.register_scheduler_admin(app, admin, *, role="scheduler-admin")`
+(`packages/kailash-nexus/src/nexus/admin/scheduler.py`). The §11 admin class
+performs zero authentication (§11.7); this surface supplies it.
+
+### 12.1 Routes
+
+All six routes register through `Nexus.register_endpoint` (real FastAPI routes
+with path params + HTTP verbs):
+
+| Method + path                           | Admin method       | Body         |
+| --------------------------------------- | ------------------ | ------------ |
+| `GET /admin/schedules`                  | `list_schedules`   | —            |
+| `GET /admin/schedules/{schedule_id}`    | `get_schedule`     | —            |
+| `PATCH /admin/schedules/{id}/disable`   | `disable_schedule` | —            |
+| `PATCH /admin/schedules/{id}/enable`    | `enable_schedule`  | —            |
+| `PATCH /admin/schedules/{id}/cron`      | `update_cron`      | `CronUpdate` |
+| `DELETE /admin/schedules/{schedule_id}` | `delete_schedule`  | — (204)      |
+
+`CronUpdate` is `{cron_expression: str}`. The `ScheduleView` Pydantic response
+model mirrors the §11.4 `ScheduleAdminView` field schema for OpenAPI.
+
+### 12.2 Authentication and authorization
+
+Every route runs behind `Depends(nexus.auth.dependencies.RequireRole(role))`
+(default role `"scheduler-admin"`). No/invalid JWT → 401; authenticated but
+missing the role → 403. The audit `actor` for every mutation is taken from the
+authenticated identity's JWT subject (`AuthenticatedUser.user_id`) — never a
+request-body field.
+
+### 12.3 Error mapping
+
+Exceptions from the §11 admin class are translated by the transport's
+`NexusError` exception handler (`HTTPTransport._install_exception_handlers`):
+`ScheduleNotFound` → `NotFoundError` (404), `ValueError` (non-cron / invalid
+cron / empty actor) → `ValidationError` (400). 4xx bodies carry
+`{"error": <error_code>, "detail": <message>}`; 5xx bodies suppress the detail.

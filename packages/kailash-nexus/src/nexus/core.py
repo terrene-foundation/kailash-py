@@ -888,6 +888,10 @@ class Nexus:
             )
             # Store in HTTPTransport
             self._http_transport._gateway = gateway
+            # Install the NexusError -> HTTP exception handler now that the
+            # gateway app exists, so typed errors map to their declared status
+            # even on the TestClient path (which bypasses transport.start()).
+            self._http_transport._install_exception_handlers()
             logger.info("Enterprise gateway initialized successfully")
 
             # Apply full CORS middleware with all options
