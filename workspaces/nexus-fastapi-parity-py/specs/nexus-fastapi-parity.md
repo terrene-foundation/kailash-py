@@ -347,9 +347,12 @@ The workspace-local `specs/_index.md` carries a sibling-specs cross-reference ta
 
 ## Cross-SDK marker
 
-Per `rules/cross-sdk-inspection.md` Rule 2, the implementation PR MUST cross-reference the kailash-rs sibling tracker IF one exists. The equivalent rs tracker URL is gated at /todos approval per HIGH-R3 of the R1 amendments: the user EITHER provides the URL (which the implementation PR body cites) OR confirms "no rs sibling tracker yet — ship without the cross-SDK alignment marker." Per `rules/spec-accuracy.md`, literal `<placeholder>` text is BLOCKED in a spec — every citation resolves at merge OR the section is dropped, never left as a tombstone.
+Per `rules/cross-sdk-inspection.md` Rule 2 (EATP-D6 alignment). **Resolved 2026-05-30** via a user-authorized read-only check of `esperie-enterprise/kailash-rs` (journaled per `repo-scope-discipline.md` § User-Authorized Exception):
 
-Per `rules/repo-scope-discipline.md`, this session does NOT reach into `terrene-foundation/kailash-rs` to discover or create the URL. The cross-SDK alignment marker is a maintainer concern that the user resolves at the /todos gate; the kailash-py implementation PR cites whichever resolution the user provides.
+- **rs prior art (CLOSED, shipped):** rs#1004 `feat(nexus): host FastAPI-shaped endpoints — Depends()/Request parity for include_router` + rs#941 `public Nexus.include_router(router, prefix, tags) for FastAPI APIRouter mounting`. rs led on the Depends()/Request + APIRouter sub-surface; kailash-py #1174 achieves parity on it.
+- **No rs sibling** exists for the Multipart / SSE / WebSocket / `dependency_overrides` extension this spec adds — a genuine cross-SDK gap. Filing an rs tracker for it is a separate, separately-authorized action (NOT done in the analyze phase; no rs write performed).
+
+Per `rules/repo-scope-discipline.md` + `rules/upstream-issue-hygiene.md`, these rs issue numbers are retained in this **workspace spec only** (internal); the eventual PUBLIC kailash-py #1174 issue/PR MUST NOT leak private-repo specifics. Per `rules/spec-accuracy.md`, the cited rs issues resolve against the rs tracker (no `<placeholder>` tombstone).
 
 ## Implementation gates
 
@@ -362,4 +365,4 @@ Per `rules/agents.md` § Quality Gates — `/implement` is a MUST gate; reviewer
 
 ## Open scope decisions (Q1-Q5 — user gates before /todos)
 
-The five open questions live in `02-plans/01-architecture.md` § "Open questions for the user". The spec assumes the recommended dispositions; if the user widens scope (Q1 → Pydantic in scope; Q3 → Headers / Query / Body in scope), the spec is amended in the same `/todos` round.
+The five open questions live in `02-plans/01-architecture.md` § "Open questions for the user". **ALL RESOLVED at the 2026-05-30 user gate** matching the spec's assumed recommended dispositions (Q2 two-layer staging, Q4 Option-A overload, Q5 cite-rs-prior-art) — no scope widening, so the surface contract above stands unchanged. The workspace is `/todos`-ready.

@@ -262,6 +262,8 @@ The ~870 LOC of load-bearing logic exceeds one session's per-shard budget if lan
 
 Q1 and Q3 below are CLOSED (resolved with named primary recommendation); Q2 and Q4 are RETAINED as yes/no confirmations; Q5 is converted to a USER-ACTION-REQUIRED gate per HIGH-R3 of the R1 amendments.
 
+**ALL RESOLVED 2026-05-30 (user gate):** Q2 → confirmed two-layer staging (HTTP-only `Request` now, `NexusRequest` follow-up later). Q4 → confirmed Option A (single-method overload, discriminator dispatch). Q5 → user-authorized read-only check of `esperie-enterprise/kailash-rs` confirmed rs prior art exists (#1004 + #941, both CLOSED — Depends()/Request + `include_router` FastAPI parity already shipped in rs); NO open rs tracker for the Multipart/SSE/WebSocket/`dependency_overrides` extension. Disposition: cite rs #1004/#941 as EATP-D6 cross-SDK prior art (workspace-spec only, not public surface); no rs issue filed. Workspace is now `/todos`-ready.
+
 1. **Pydantic body parsing — Q1 CLOSED, recommendation:** ship `Body[T]` extractor accepting any object with `model_validate(...)` classmethod OR `__init__`-introspectable dataclass-shape model, matching the existing `Decoder` protocol pattern at `packages/kailash-nexus/src/nexus/typed_service_client.py:284` (the `Decoder = Callable[[Any, Type[Any]], Any]` alias) and the per-instance `register_decoder` mechanism (`typed_service_client.py:330`). Pydantic remains OPTIONAL — SDK users can use dataclasses, attrs, msgspec, OR Pydantic. The `Body[T]` extractor invokes the registered decoder when one is registered; otherwise it uses an `inspect.signature(T.__init__).parameters` introspection path that rejects unknown keys via `BodyExtraKeysError` (HTTP 400). NEVER a naive `T(**dict)` fallback — naive `**dict` is exactly the OWASP A04:2021 mass-assignment failure mode the policy in `specs/nexus-fastapi-parity.md` § "Body[T] — mass-assignment policy" closes. Pydantic models additionally MUST declare `model_config = ConfigDict(extra="forbid")`; the resolver checks this at registration time and raises `BodyExtraPolicyError` (server-launch-fails-loud) when the policy is not declared. **Confirm Pydantic-optional via Decoder protocol + mass-assignment policy (y/n)?**
 
    - Pro: keeps the extractor surface lean and library-agnostic; mirrors an existing Nexus convention so SDK users learn one decoder model; structurally closes OWASP A04:2021 mass-assignment regardless of which model library the user picks (the policy gate fires at the resolver, not inside the library).
@@ -286,7 +288,7 @@ Q1 and Q3 below are CLOSED (resolved with named primary recommendation); Q2 and 
 
 ## /todos disposition
 
-This analysis ships an architecture plan; it does NOT mark the workspace as ready-for-todos. Q1 and Q3 are CLOSED in this R1 amendment pass; Q2, Q4, and Q5 retain yes/no confirms or the USER-ACTION-REQUIRED gate for cross-SDK. Recommendation: schedule a `/todos` gate after the user resolves Q2, Q4, and Q5.
+This analysis ships an architecture plan. As of the 2026-05-30 user gate, Q1–Q5 are ALL resolved (Q1/Q3 closed in R1; Q2/Q4/Q5 resolved 2026-05-30 — see § "Open questions for the user" header). The workspace is now **ready for `/todos`**: schedule the `/todos` gate to decompose `/implement` into the Shard 1a/1b split (MED-R1) + Shards 2–5 per the architecture plan.
 
 ## Brief verification cycle
 
