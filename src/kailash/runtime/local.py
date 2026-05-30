@@ -43,6 +43,7 @@ import time
 import warnings
 from collections import OrderedDict
 from datetime import UTC, datetime
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 if TYPE_CHECKING:
@@ -2023,7 +2024,7 @@ class LocalRuntime(
         """Current reference count (for debugging/testing)."""
         return self._ref_count
 
-    def __del__(self, _warnings=warnings) -> None:
+    def __del__(self, _warnings: ModuleType = warnings) -> None:
         """Emit ResourceWarning if runtime was not properly closed."""
         if getattr(self, "_ref_count", 0) > 0:
             _warnings.warn(
