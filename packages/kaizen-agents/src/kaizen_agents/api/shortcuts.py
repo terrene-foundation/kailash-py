@@ -10,6 +10,7 @@ Shortcut Categories:
 - Tool access shortcuts: "none", "read_only", "constrained", "full"
 """
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Union
 
@@ -17,6 +18,8 @@ from kaizen_agents.api.types import MemoryDepth, ToolAccess
 
 if TYPE_CHECKING:
     from kaizen_agents.api.types import ExecutionMode
+
+logger = logging.getLogger(__name__)
 
 # Type aliases for lazy loading
 MemoryProviderType = Any  # Will be MemoryProvider when imported
@@ -41,31 +44,107 @@ def _create_session_memory(**kwargs) -> "MemoryProviderType":
     return BufferMemoryAdapter(max_turns=max_turns)
 
 
+def _safe_sqlite_dsn(memory_path: str) -> str:
+    """Build a DataFlow-safe 4-slash absolute SQLite DSN from a filesystem path.
+
+    DataFlow requires the 4-slash absolute form (``sqlite:////abs/path``); the
+    3-slash form (``sqlite:///rel/path``) is parsed as a *relative* path and
+    fails with ``DDLFailedError: unable to open database file`` (issue #855).
+
+    ``memory_path`` is treated as a directory (a ``memory.db`` file is created
+    inside it) unless it already ends in ``.db``, in which case it is the file.
+
+    Raises:
+        ValueError: if the path contains ``?``, ``#``, or a null byte, which
+            would corrupt the SQLite connection URI.
+    """
+    from pathlib import Path
+
+    if any(c in memory_path for c in ("?", "#", "\x00")):
+        raise ValueError(
+            f"Invalid memory_path {memory_path!r}: must not contain '?', '#', "
+            "or null bytes (these corrupt the SQLite connection URI)."
+        )
+
+    p = Path(memory_path).expanduser()
+    if p.suffix == ".db":
+        db_file = p.resolve()
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        p.mkdir(parents=True, exist_ok=True)
+        db_file = (p / "memory.db").resolve()
+
+    # 4-slash absolute form: "sqlite:////" + absolute-path-without-leading-slash.
+    return "sqlite:////" + str(db_file).lstrip("/")
+
+
+def _build_dataflow_warm_backend(memory_path: str) -> "MemoryProviderType":
+    """Build a DataFlow-backed warm-tier memory backend for the given path.
+
+    Registers ``MemoryEntryModel`` with a ``tag_list`` column — NOT ``tags``,
+    which collides with the core SDK's reserved ``NodeMetadata.tags`` (``set[str]``)
+    and fails CreateNode validation (issue #855) — then returns a
+    ``DataFlowMemoryBackend``.
+
+    Returns ``None`` (the caller falls back to a hot-tier-only provider) when
+    DataFlow is not installed, so ``store()`` never silently drops writes nor
+    raises on a missing optional dependency.
+    """
+    try:
+        from dataflow import DataFlow
+
+        from kaizen.memory.providers.dataflow_backend import DataFlowMemoryBackend
+    except ImportError:
+        logger.warning(
+            "kaizen_agents.memory: DataFlow is not installed; persistent/learning "
+            "memory degrades to hot-tier-only (no cross-session persistence). "
+            "Install with: pip install kailash-dataflow kailash"
+        )
+        return None
+
+    db = DataFlow(database_url=_safe_sqlite_dsn(memory_path))
+
+    @db.model
+    class MemoryEntryModel:
+        id: str
+        session_id: str
+        content: str
+        role: str
+        timestamp: str
+        source: str
+        importance: float
+        # Column is "tag_list" not "tags" — see issue #855 (reserved-name collision).
+        tag_list: str
+        metadata: str
+        embedding: str = ""
+
+    return DataFlowMemoryBackend(db, model_name="MemoryEntryModel")
+
+
 def _create_persistent_memory(**kwargs) -> "MemoryProviderType":
-    """Create a persistent memory provider with database backend."""
+    """Create a persistent memory provider with a DataFlow warm-tier backend.
+
+    The warm tier persists entries across sessions; when DataFlow is unavailable
+    the provider degrades to hot-tier-only (a logged warning, not a silent drop).
+    """
     from kaizen.memory.providers.hierarchical import HierarchicalMemory
 
-    path = kwargs.get("memory_path", "./data/memory")
-    return HierarchicalMemory(
-        storage_path=path,
-        enable_hot_tier=True,
-        enable_warm_tier=True,
-        enable_cold_tier=False,  # Cold tier for learning only
-    )
+    memory_path = kwargs.get("memory_path", "./data/memory")
+    return HierarchicalMemory(warm_backend=_build_dataflow_warm_backend(memory_path))
 
 
 def _create_learning_memory(**kwargs) -> "MemoryProviderType":
-    """Create a learning memory provider with pattern detection."""
+    """Create a learning memory provider with a DataFlow warm-tier backend.
+
+    Wired identically to ``persistent`` today: ``HierarchicalMemory`` does not
+    yet implement a cold/summarization tier, so learning shares the warm-backed
+    configuration rather than advertising a cold tier that would silently drop
+    writes (issue #855). Cold-tier learning is tracked as follow-up work.
+    """
     from kaizen.memory.providers.hierarchical import HierarchicalMemory
 
-    path = kwargs.get("memory_path", "./data/memory")
-    return HierarchicalMemory(
-        storage_path=path,
-        enable_hot_tier=True,
-        enable_warm_tier=True,
-        enable_cold_tier=True,  # Enable cold tier for long-term learning
-        enable_summarization=True,
-    )
+    memory_path = kwargs.get("memory_path", "./data/memory")
+    return HierarchicalMemory(warm_backend=_build_dataflow_warm_backend(memory_path))
 
 
 # Memory shortcut registry
