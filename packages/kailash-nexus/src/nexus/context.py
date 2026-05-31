@@ -36,15 +36,18 @@ dependency on FastAPI / Starlette / the JWT middleware.
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
-from typing import Optional
+from typing import Any, Optional
 
 __all__ = [
     "_current_tenant_id",
     "_current_actor_id",
+    "_current_request",
     "get_current_tenant_id",
     "set_current_tenant_id",
     "get_current_actor_id",
     "set_current_actor_id",
+    "get_current_request",
+    "set_current_request",
 ]
 
 
@@ -112,3 +115,40 @@ def set_current_actor_id(actor_id: Optional[str]) -> Token[Optional[str]]:
     contract. See `specs/nexus-ml-integration.md` §3.
     """
     return _current_actor_id.set(actor_id)
+
+
+# Request propagation surface for the extractor resolver (issue #1174).
+# A request-capture middleware sets the originating Starlette ``Request`` on
+# every HTTP request; the ``handler_extract`` resolver reads it to bind the
+# ``Request`` / ``Headers`` / ``Bytes`` extractors. Typed ``Any`` so this
+# module takes no hard Starlette dependency.
+_current_request: ContextVar[Optional[Any]] = ContextVar(
+    "kailash_nexus.current_request",
+    default=None,
+)
+
+
+def get_current_request() -> Optional[Any]:
+    """Return the ambient originating HTTP ``Request``, or ``None``.
+
+    Set by the extractor request-capture middleware on every HTTP request and
+    reset in a ``finally:`` block so an exception inside ``call_next`` cannot
+    leak the request into the next request on the same worker. Returns ``None``
+    for non-HTTP transports and out-of-request resolution (background jobs,
+    unit tests).
+    """
+    return _current_request.get()
+
+
+def set_current_request(request: Optional[Any]) -> Token[Optional[Any]]:
+    """Set the ambient originating request; return a ``Token`` for ``reset()``.
+
+    The request-capture middleware owns the reset-in-``finally`` discipline:
+
+        token = set_current_request(request)
+        try:
+            response = await call_next(request)
+        finally:
+            _current_request.reset(token)
+    """
+    return _current_request.set(request)
