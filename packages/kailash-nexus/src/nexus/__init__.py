@@ -47,6 +47,8 @@ from .events import EventBus, NexusEvent, NexusEventType
 # below; the extractor module re-exports the same type.
 from .extractors import (
     Bytes,
+    DependencyOverrideMap,
+    DependencyOverrideRuntimeMutationError,
     Depends,
     Headers,
     Multipart,
@@ -219,4 +221,6 @@ __all__ = [
     "Bytes",
     "Headers",
     "NexusHandlerError",
+    "DependencyOverrideMap",
+    "DependencyOverrideRuntimeMutationError",
 ]
