@@ -181,7 +181,7 @@ def register_sse(
 
     deps = list(dependencies or [])
 
-    async def sse_handler(request: "Request"):
+    async def sse_handler(request: Request):
         # MUST 5 — rate-limit on the SUBSCRIBE event, once at handshake,
         # BEFORE the SSE upgrade. Refusal -> HTTP 429 (NOT a partial stream).
         rate_limit_check = getattr(getattr(nexus, "auth", None), "rate_limit", None)
@@ -355,6 +355,12 @@ async def _sse_stream(
                         exc_info=True,
                     )
 
+    # A non-positive keepalive_interval disables keepalive comments entirely
+    # (block on queue.get() with no timeout) — guards against the
+    # timeout=0 busy-spin where wait_for would return TimeoutError instantly
+    # on every iteration and emit keepalives in a tight loop.
+    keepalive_timeout = keepalive_interval if keepalive_interval > 0 else None
+
     producer = asyncio.ensure_future(_producer())
     try:
         while True:
@@ -363,7 +369,12 @@ async def _sse_stream(
                 # idle window: on keepalive_interval idleness we emit a
                 # comment; the producer drains independently so a stuck
                 # consumer cannot wedge the producer past the queue bound.
-                item = await asyncio.wait_for(queue.get(), timeout=keepalive_interval)
+                if keepalive_timeout is None:
+                    item = await queue.get()
+                else:
+                    item = await asyncio.wait_for(
+                        queue.get(), timeout=keepalive_timeout
+                    )
             except asyncio.TimeoutError:
                 yield ": keepalive\n\n"
                 continue

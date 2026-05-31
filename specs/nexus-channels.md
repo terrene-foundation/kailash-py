@@ -164,7 +164,7 @@ For per-connection state, subscription fanout, or any pattern that exceeds state
 - `path: str` — URL path the client connected on (e.g. `/events`).
 - `state: SimpleNamespace` — handler-owned bookkeeping; the framework never writes to it.
 - `connected_at: float` — monotonic timestamp of connection open.
-- `headers: Mapping[str, str]` — read-only case-insensitive Mapping of HTTP handshake headers (Origin, Host, User-Agent, Sec-WebSocket-*, cookies, custom auth headers). **Captured AT HANDSHAKE; NOT refreshed during the connection lifetime.** Lookups are case-insensitive (`conn.headers["origin"]` and `conn.headers["Origin"]` return the same value). The mapping is structurally immutable — assignment / deletion raise `TypeError`. Consumers needing custom enforcement (signed-token check, per-tenant header validation) beyond the static `allowed_origins` allowlist read from this surface inside `on_connect` (issue #673).
+- `headers: Mapping[str, str]` — read-only case-insensitive Mapping of HTTP handshake headers (Origin, Host, User-Agent, Sec-WebSocket-\*, cookies, custom auth headers). **Captured AT HANDSHAKE; NOT refreshed during the connection lifetime.** Lookups are case-insensitive (`conn.headers["origin"]` and `conn.headers["Origin"]` return the same value). The mapping is structurally immutable — assignment / deletion raise `TypeError`. Consumers needing custom enforcement (signed-token check, per-tenant header validation) beyond the static `allowed_origins` allowlist read from this surface inside `on_connect` (issue #673).
 - `alive: bool` — whether the registry still considers the connection open.
 - `await conn.send_json(payload)`, `await conn.send_text(message)`, `await conn.close(code, reason)` — outbound helpers.
 
@@ -183,6 +183,25 @@ When `allowed_origins` is `None` (the default), the SDK does NOT enforce — the
 Rejection emits a `ws.handler.origin_rejected` WARN log carrying `path`, `handler`, `origin_fingerprint` (sha256(origin)[:8] per `rules/observability.md` Rule 6 + Rule 8), and `reason` (`missing_origin_header` | `origin_not_in_allowlist`). The raw Origin is NEVER echoed to log aggregators.
 
 **Cross-SDK parity:** kailash-rs is expected to ship the same surface semantically (per EATP D6) at the equivalent `register_websocket` surface — the `allowed_origins` parameter, the wildcard-subdomain shape, the fail-closed `"*"` env flag, the close code 1008 + fingerprinted reason, and the `Connection::headers` exposure.
+
+**Callback overload (issue #1174 AC 6):**
+
+`register_websocket` accepts two mutually-exclusive shapes. The class shape passes a `MessageHandler` subclass as `handler_cls`. The callback shape passes `on_message` (required) plus optional `on_connect` / `on_disconnect`:
+
+```python
+async def on_message(conn, msg):
+    return {"echo": msg}   # non-None return auto-replies to the same client
+
+app.register_websocket("/events", on_message=on_message, allowed_origins=["https://app.example.com"])
+```
+
+Dispatch is by discriminator, NOT structural `hasattr` (per `rules/zero-tolerance.md` Rule 3d): `handler_cls is not None and issubclass(handler_cls, MessageHandler)` → class path; `handler_cls is None and on_message is not None` → callback path; both / neither → `ValueError` naming the BLOCKED case. The callback path synthesizes a `MessageHandler` subclass via `type("_CallbackHandler", (MessageHandler,), {...})` and routes through the SAME `_ws_message_handlers.register` call as the class path — so the origin allowlist, subprotocol allowlist, handshake auth, and max-frame enforcement are ONE shared codepath, never a parallel one.
+
+The callback overload also carries three WS-security parameters that apply to BOTH shapes:
+
+- `subprotocols: list[str] | None` (MUST 2) — `Sec-WebSocket-Protocol` allowlist. The default (`None` / `[]`) DEFAULT-REJECTS any client-offered subprotocol with close code 1002 (protocol error); a non-empty list accepts only offered values present in the list.
+- `dependencies: list[Depends] | None` (MUST 4) — `Depends(...)` markers resolved AT HANDSHAKE, BEFORE the upgrade completes, through the Shard-1 resolver chain. A raising dependency closes with code 1008 carrying the HTTP 401/403 status in the reason; `on_connect` / `on_disconnect` do NOT fire.
+- max inbound frame size (MUST 3) — inherited from `Nexus(max_websocket_message_bytes=...)` (default 1 MiB). A frame exceeding the cap closes the connection with code 1009 (message too big).
 
 **Lifecycle hooks (override in subclass, all async):**
 
