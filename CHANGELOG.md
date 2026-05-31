@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.2] - 2026-06-01
+
+### Fixed
+
+- **Node init-param-capture no longer crashes on a typed `self.config`** — `Node.__init_with_capture` merged init params into `self.config` by iterating `name in self.config` and assigning `self.config[name]`, assuming the dict that `Node.__init__` creates. A `Node` subclass that deliberately replaces `self.config` with a typed config object (e.g. kaizen's `BaseAgentConfig`, as many `kaizen_agents` pattern nodes do) raised `TypeError: argument of type '<Config>' is not iterable` at construction, breaking ~93 `kaizen_agents` Pipeline orchestration tests. The capture is a dict-only convenience and now skips (rather than crashes) when `self.config` is not a mapping. Regression: `tests/regression/test_node_init_capture_non_dict_config.py`.
+
 ## [2.28.1] - 2026-05-29
 
 ### Fixed
