@@ -170,3 +170,112 @@ def test_bytes_body_too_large_envelope_shape():
     assert err.status_code == 413
     assert err.body["code"] == "BODY_TOO_LARGE"
     assert err.body["error"] == "request body exceeds configured cap"
+
+
+# --------------------------------------------------------------------------
+# Resolver-path wiring regressions (R1 review fixes)
+# --------------------------------------------------------------------------
+
+
+class _FakeHeaders:
+    def __init__(self, pairs, content_length=None):
+        self._pairs = list(pairs)
+        self._content_length = content_length
+
+    def items(self):
+        return list(self._pairs)
+
+    def get(self, name, default=None):
+        if name.lower() == "content-length":
+            return self._content_length
+        for k, v in self._pairs:
+            if k.lower() == name.lower():
+                return v
+        return default
+
+
+class _FakeRequest:
+    def __init__(
+        self,
+        *,
+        header_pairs=None,
+        header_cap=None,
+        body_chunks=None,
+        body_cap=None,
+        content_length=None,
+    ):
+        self.headers = _FakeHeaders(header_pairs or [], content_length)
+        if header_cap is not None:
+            self._nexus_max_request_header_bytes = header_cap
+        if body_cap is not None:
+            self._nexus_max_request_body_bytes = body_cap
+        self._body_chunks = list(body_chunks or [])
+
+    async def stream(self):
+        for chunk in self._body_chunks:
+            yield chunk
+
+
+@pytest.mark.integration
+def test_headers_from_request_applies_cap_on_live_resolver_path():
+    """R1 HIGH-1 regression — the resolver builds Headers THROUGH the cap.
+
+    Before the fix, ``_headers_from_request`` used the plain ``Headers(items)``
+    constructor and the 431 cap was dead code on the live path. The resolver
+    MUST route through ``Headers.from_pairs`` so the cap fires.
+    """
+    from nexus.extractors.resolver import _headers_from_request
+
+    req = _FakeRequest(header_pairs=[("X-Big", "y" * 100_000)], header_cap=65536)
+    with pytest.raises(NexusHandlerError) as exc_info:
+        _headers_from_request(req)
+    assert exc_info.value.status_code == 431
+    assert exc_info.value.body["code"] == "HEADERS_TOO_LARGE"
+
+
+@pytest.mark.integration
+def test_bytes_from_request_streams_and_caps_without_content_length():
+    """R1 MED-1 regression — chunked body (no Content-Length) rejects mid-stream.
+
+    Before the fix, ``_bytes_from_request`` called ``await request.body()`` and
+    buffered the entire (attacker-controlled) body before the length check.
+    With streaming, the cap bounds memory: rejection fires once the running
+    total exceeds the cap.
+    """
+    import asyncio
+
+    from nexus.extractors import _BodyTooLargeError
+    from nexus.extractors.resolver import _bytes_from_request
+
+    # 3 × 50 = 150 bytes streamed, cap 100 → reject before buffering all chunks.
+    req = _FakeRequest(body_chunks=[b"a" * 50, b"b" * 50, b"c" * 50], body_cap=100)
+    with pytest.raises(_BodyTooLargeError):
+        asyncio.run(_bytes_from_request(req))
+
+
+@pytest.mark.integration
+def test_bytes_from_request_streams_full_body_under_cap():
+    """R1 MED-1 regression — under-cap chunked body is fully delivered."""
+    import asyncio
+
+    from nexus.extractors.resolver import _bytes_from_request
+
+    req = _FakeRequest(body_chunks=[b"hello ", b"world"], body_cap=10_000)
+    body = asyncio.run(_bytes_from_request(req))
+    assert body == b"hello world"
+
+
+@pytest.mark.integration
+def test_bytes_from_request_content_length_short_circuits_before_stream():
+    """R1 MED-1 — declared Content-Length over cap rejects without reading body."""
+    import asyncio
+
+    from nexus.extractors import _BodyTooLargeError
+    from nexus.extractors.resolver import _bytes_from_request
+
+    # Content-Length declares 999 with cap 100 → reject before any stream read.
+    req = _FakeRequest(
+        body_chunks=[b"should-not-be-read"], body_cap=100, content_length="999"
+    )
+    with pytest.raises(_BodyTooLargeError):
+        asyncio.run(_bytes_from_request(req))

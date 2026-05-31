@@ -2894,6 +2894,7 @@ Check the documentation or explore available resources.
         self.add_middleware(
             RequestCaptureMiddleware,
             max_request_body_bytes=self._max_request_body_bytes,
+            max_request_header_bytes=self._max_request_header_bytes,
             trusted_proxy_cidrs=self._trusted_proxy_cidrs,
         )
         self._extractor_middleware_installed = True

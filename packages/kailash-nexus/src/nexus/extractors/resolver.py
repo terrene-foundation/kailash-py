@@ -319,13 +319,21 @@ class ResolverChain:
             # satisfy, leave it out so the callable's own default applies.
             elif spec.kind == _KIND_FLAT and not spec.has_default:
                 # No source for a required flat param on a dependency callable;
-                # surface a clear typed error rather than an opaque TypeError.
-                raise NexusHandlerError(
-                    status_code=500,
-                    body={
-                        "error": "internal error",
-                        "code": "INTERNAL_ERROR",
+                # surface the canonical INTERNAL_ERROR envelope WITH a
+                # correlation id (spec §139) so the operator can look the
+                # failure up in the server log — never an opaque TypeError.
+                logger.error(
+                    "resolver.dependency_flat_param_unsatisfiable",
+                    extra={
+                        "callable": getattr(callable_, "__qualname__", repr(callable_)),
+                        "param": spec.name,
                     },
+                )
+                raise _internal_error_for(
+                    RuntimeError(
+                        f"dependency callable requires flat param "
+                        f"{spec.name!r} with no source"
+                    )
                 )
         return kwargs
 
@@ -381,11 +389,20 @@ def _headers_from_request(request: Optional[Request]) -> Headers:
 
     Returns an empty Headers when no request is bound (non-HTTP transports /
     out-of-request resolution).
+
+    Routes through ``Headers.from_pairs`` with the configured
+    ``max_request_header_bytes`` cap (stamped on the request by
+    ``RequestCaptureMiddleware``) so the 64 KiB early-reject -> HTTP 431 path
+    fires on the live resolver surface (spec §87). The plain ``Headers(items)``
+    constructor bypasses the cap and is reserved for the no-request empty case.
     """
     if request is None:
         return Headers([])
     items = list(request.headers.items())
-    return Headers(items)
+    cap = getattr(request, "_nexus_max_request_header_bytes", None)
+    if cap is None:
+        cap = Headers.DEFAULT_MAX_REQUEST_HEADER_BYTES
+    return Headers.from_pairs(items, max_request_header_bytes=cap)
 
 
 async def _bytes_from_request(request: Optional[Request]) -> Bytes:
@@ -411,9 +428,20 @@ async def _bytes_from_request(request: Optional[Request]) -> Bytes:
         if declared is not None and declared > cap:
             raise _BodyTooLargeError()
 
-    body = await request.body()
-    if len(body) > cap:
-        raise _BodyTooLargeError()
+    # Accumulate via the stream so the cap bounds MEMORY on the chunked /
+    # no-Content-Length path: reject as soon as the running total exceeds the
+    # cap rather than buffering the whole (attacker-controlled) body first.
+    # Peak memory is <= cap + one chunk (spec §93).
+    total = 0
+    chunks: List[bytes] = []
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > cap:
+            raise _BodyTooLargeError()
+        chunks.append(chunk)
+    body = b"".join(chunks)
     logger.debug("bytes_extractor.body_read", extra={"body_length": len(body)})
     return Bytes(body)
 

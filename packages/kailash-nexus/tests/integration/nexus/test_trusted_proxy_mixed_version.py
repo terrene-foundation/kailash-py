@@ -124,8 +124,8 @@ def test_trusted_peer_consults_forwarded_first():
 
 
 @pytest.mark.integration
-def test_trusted_peer_xff_rightmost_when_no_forwarded():
-    """Falls back to X-Forwarded-For rightmost entry when no Forwarded."""
+def test_trusted_peer_xff_rightmost_untrusted_when_no_forwarded():
+    """Falls back to X-Forwarded-For rightmost UNTRUSTED entry when no Forwarded."""
 
     class _Headers:
         def get(self, name, default=None):
@@ -133,8 +133,59 @@ def test_trusted_peer_xff_rightmost_when_no_forwarded():
                 "x-forwarded-for": "203.0.113.9, 198.51.100.7",
             }.get(name.lower(), default)
 
+    # Neither hop is in 10.0.0.0/8, so the rightmost (198.51.100.7) is the
+    # rightmost-untrusted entry.
     host = resolve_client_host("10.0.0.5", _Headers(), ["10.0.0.0/8"])
     assert host == "198.51.100.7"
+
+
+@pytest.mark.integration
+def test_trusted_peer_xff_skips_trusted_hops_returns_real_client():
+    """R1 reviewer F1 regression — XFF walk returns the rightmost UNTRUSTED entry.
+
+    Multi-proxy chain ``client, trusted1, trusted2`` with the trusted hops
+    inside ``trusted_proxy_cidrs``. A literal-rightmost parse would return
+    ``10.0.0.8`` (trusted infra) as the "client" and poison rate-limit /
+    audit / geofencing keys; the chain-walk skips the trusted hops and returns
+    the real client (203.0.113.9).
+    """
+
+    class _Headers:
+        def get(self, name, default=None):
+            return {
+                "x-forwarded-for": "203.0.113.9, 10.0.0.7, 10.0.0.8",
+            }.get(name.lower(), default)
+
+    host = resolve_client_host("10.0.0.9", _Headers(), ["10.0.0.0/8"])
+    assert host == "203.0.113.9"
+
+
+@pytest.mark.integration
+def test_trusted_peer_rfc7239_skips_trusted_hops_returns_real_client():
+    """R1 reviewer F1 regression — RFC 7239 walk returns rightmost UNTRUSTED for=."""
+
+    class _Headers:
+        def get(self, name, default=None):
+            return {
+                "forwarded": "for=203.0.113.9, for=10.0.0.7, for=10.0.0.8",
+            }.get(name.lower(), default)
+
+    host = resolve_client_host("10.0.0.9", _Headers(), ["10.0.0.0/8"])
+    assert host == "203.0.113.9"
+
+
+@pytest.mark.integration
+def test_trusted_peer_xff_all_hops_trusted_returns_leftmost_origin():
+    """R1 reviewer F1 regression — when every hop is trusted, the origin is leftmost."""
+
+    class _Headers:
+        def get(self, name, default=None):
+            return {
+                "x-forwarded-for": "10.0.0.5, 10.0.0.6",
+            }.get(name.lower(), default)
+
+    host = resolve_client_host("10.0.0.9", _Headers(), ["10.0.0.0/8"])
+    assert host == "10.0.0.5"
 
 
 # --------------------------------------------------------------------------

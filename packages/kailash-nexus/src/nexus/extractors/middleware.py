@@ -40,15 +40,18 @@ class RequestCaptureMiddleware(BaseHTTPMiddleware):
         app,
         *,
         max_request_body_bytes: int,
+        max_request_header_bytes: int,
         trusted_proxy_cidrs: Optional[List[str]] = None,
     ) -> None:
         super().__init__(app)
         self._max_request_body_bytes = max_request_body_bytes
+        self._max_request_header_bytes = max_request_header_bytes
         self._trusted_proxy_cidrs = list(trusted_proxy_cidrs or [])
 
     async def dispatch(self, request, call_next):
-        # Stamp the size cap so the Bytes extractor can short-circuit.
+        # Stamp the size caps so the Bytes / Headers extractors can short-circuit.
         request._nexus_max_request_body_bytes = self._max_request_body_bytes
+        request._nexus_max_request_header_bytes = self._max_request_header_bytes
 
         # Trusted-proxy posture: the resolved originating host is computed
         # from the immediate peer + trusted CIDRs; forwarded headers are

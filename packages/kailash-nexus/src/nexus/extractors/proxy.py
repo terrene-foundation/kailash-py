@@ -28,7 +28,7 @@ that needs the structural CIDR check.
 
 import ipaddress
 import logging
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -93,46 +93,77 @@ def peer_is_trusted(peer_ip: Optional[str], trusted_proxy_cidrs: Sequence[str]) 
     return False
 
 
-def _parse_forwarded_for(forwarded_for: str) -> Optional[str]:
-    """Extract the right-most untrusted entry from an X-Forwarded-For value.
+def _rightmost_untrusted(
+    candidates: Sequence[str], trusted_proxy_cidrs: Sequence[str]
+) -> Optional[str]:
+    """Return the right-most entry that is NOT itself a trusted proxy.
+
+    A forwarded chain reads left-to-right as ``client, proxy1, proxy2`` where
+    the right-most is the closest hop to us. The originating client is the
+    right-most entry that is NOT a trusted-infrastructure address, so we walk
+    right-to-left and skip entries inside ``trusted_proxy_cidrs`` (a literal
+    right-most token would resolve to ``proxy2`` — a trusted hop — and poison
+    every security-sensitive decision keyed on the client identity: rate-limit
+    key, audit subject, geofencing, IP-allowlist). The first untrusted entry
+    is the real client for a correctly-configured chain.
+
+    An unparseable entry is treated as UNTRUSTED (it is client- or
+    attacker-supplied, never trusted infrastructure) and returned as-is. When
+    every entry is trusted infrastructure, the left-most (the chain's origin)
+    is returned.
+    """
+    if not candidates:
+        return None
+    for entry in reversed(candidates):
+        if not peer_is_trusted(entry, trusted_proxy_cidrs):
+            return entry
+    return candidates[0]
+
+
+def _parse_forwarded_for(
+    forwarded_for: str, trusted_proxy_cidrs: Sequence[str]
+) -> Optional[str]:
+    """Extract the right-most UNTRUSTED entry from an X-Forwarded-For value.
 
     ``X-Forwarded-For`` is a comma-separated chain ``client, proxy1, proxy2``.
-    The right-most entry is the most recent (closest-to-us) hop. Per the
-    spec's "take the right-most untrusted entry" rule, we return the last
-    non-empty, comma-split token.
+    Per spec §291 ("take the right-most untrusted entry") the originating
+    client is the right-most token whose IP is not itself a trusted proxy.
     """
     parts = [p.strip() for p in forwarded_for.split(",") if p.strip()]
-    if not parts:
-        return None
-    return parts[-1]
+    return _rightmost_untrusted(parts, trusted_proxy_cidrs)
 
 
-def _parse_rfc7239_forwarded(forwarded: str) -> Optional[str]:
-    """Extract the ``for=`` value from the right-most RFC 7239 forwarded hop.
+def _parse_rfc7239_forwarded(
+    forwarded: str, trusted_proxy_cidrs: Sequence[str]
+) -> Optional[str]:
+    """Extract the right-most UNTRUSTED ``for=`` value from RFC 7239 ``Forwarded``.
 
     RFC 7239 ``Forwarded`` is a comma-separated list of hops, each a
     semicolon-separated list of ``key=value`` directives, e.g.
     ``for=192.0.2.60;proto=http, for="[2001:db8::1]"``. The right-most hop is
-    the most recent. IPv6 ``for=`` values are bracket-and-quote wrapped.
+    the most recent. IPv6 ``for=`` values are bracket-and-quote wrapped. We
+    extract every hop's ``for=`` value left-to-right, then apply the same
+    right-most-untrusted walk as X-Forwarded-For (spec §290-291).
     """
     hops = [h.strip() for h in forwarded.split(",") if h.strip()]
-    if not hops:
-        return None
-    rightmost = hops[-1]
-    for directive in rightmost.split(";"):
-        directive = directive.strip()
-        if directive.lower().startswith("for="):
-            value = directive[4:].strip().strip('"')
-            # IPv6 in RFC 7239 is bracketed: [2001:db8::1] (optionally :port)
-            if value.startswith("["):
-                end = value.find("]")
-                if end != -1:
-                    return value[1:end]
-            # IPv4 may carry :port — strip it.
-            if value.count(":") == 1:
-                value = value.split(":", 1)[0]
-            return value or None
-    return None
+    fors: List[str] = []
+    for hop in hops:
+        for directive in hop.split(";"):
+            directive = directive.strip()
+            if directive.lower().startswith("for="):
+                value = directive[4:].strip().strip('"')
+                # IPv6 in RFC 7239 is bracketed: [2001:db8::1] (optionally :port)
+                if value.startswith("["):
+                    end = value.find("]")
+                    if end != -1:
+                        value = value[1:end]
+                # IPv4 may carry :port — strip it (single colon == IPv4:port).
+                elif value.count(":") == 1:
+                    value = value.split(":", 1)[0]
+                if value:
+                    fors.append(value)
+                break
+    return _rightmost_untrusted(fors, trusted_proxy_cidrs)
 
 
 def resolve_client_host(
@@ -161,13 +192,13 @@ def resolve_client_host(
 
     forwarded = get("forwarded")
     if forwarded:
-        host = _parse_rfc7239_forwarded(forwarded)
+        host = _parse_rfc7239_forwarded(forwarded, trusted_proxy_cidrs)
         if host:
             return host
 
     xff = get("x-forwarded-for")
     if xff:
-        host = _parse_forwarded_for(xff)
+        host = _parse_forwarded_for(xff, trusted_proxy_cidrs)
         if host:
             return host
 
