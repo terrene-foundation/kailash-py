@@ -15,7 +15,7 @@ the request so the ``Bytes`` extractor can short-circuit oversized bodies and
 applies the trusted-proxy posture to ``request.client.host``.
 """
 
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -39,16 +39,30 @@ class RequestCaptureMiddleware(BaseHTTPMiddleware):
         max_request_body_bytes: int,
         max_request_header_bytes: int,
         trusted_proxy_cidrs: Optional[List[str]] = None,
+        max_upload_file_bytes: Optional[int] = None,
+        max_multipart_files: Optional[int] = None,
+        mime_sniffer: Optional[Callable[[bytes], str]] = None,
     ) -> None:
         super().__init__(app)
         self._max_request_body_bytes = max_request_body_bytes
         self._max_request_header_bytes = max_request_header_bytes
         self._trusted_proxy_cidrs = list(trusted_proxy_cidrs or [])
+        # Multipart caps (issue #1174 AC 4). Stamped onto the request so the
+        # Multipart / UploadFile resolver can enforce per-file size, file-count,
+        # and total-body limits + sniff MIME without re-reading Nexus config.
+        self._max_upload_file_bytes = max_upload_file_bytes
+        self._max_multipart_files = max_multipart_files
+        self._mime_sniffer = mime_sniffer
 
     async def dispatch(self, request, call_next):
         # Stamp the size caps so the Bytes / Headers extractors can short-circuit.
         request._nexus_max_request_body_bytes = self._max_request_body_bytes
         request._nexus_max_request_header_bytes = self._max_request_header_bytes
+        # Stamp the multipart caps + MIME sniffer for the Multipart / UploadFile
+        # resolver (issue #1174 AC 4).
+        request._nexus_max_upload_file_bytes = self._max_upload_file_bytes
+        request._nexus_max_multipart_files = self._max_multipart_files
+        request._nexus_mime_sniffer = self._mime_sniffer
 
         # Trusted-proxy posture: the resolved originating host is computed
         # from the immediate peer + trusted CIDRs; forwarded headers are

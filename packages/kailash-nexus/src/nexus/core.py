@@ -277,6 +277,10 @@ class Nexus:
         max_request_header_bytes: int = 65536,
         max_websocket_message_bytes: int = 1_048_576,
         trusted_proxy_cidrs: Optional[List[str]] = None,
+        # Multipart body extractors (issue #1174 AC 4)
+        max_upload_file_bytes: int = 10_485_760,
+        max_multipart_files: int = 100,
+        mime_sniffer: Optional[Callable[[bytes], str]] = None,
         # Shared runtime injection (M3-001)
         runtime=None,
     ):
@@ -362,6 +366,28 @@ class Nexus:
         self._trusted_proxy_cidrs: List[str] = validate_trusted_proxy_cidrs(
             trusted_proxy_cidrs or []
         )
+        # Multipart body extractor configuration (issue #1174 AC 4). Validated
+        # fail-fast: a non-positive per-file / file-count cap is an operator
+        # misconfiguration that would silently accept or reject every request,
+        # so raise at construction rather than degrade per-request. The
+        # mime_sniffer override is caller-responsible-for-security (no shell-out
+        # / eval on untrusted bytes — spec §75); default uses puremagic.
+        if max_upload_file_bytes < 1:
+            raise ValueError(
+                f"max_upload_file_bytes must be >= 1, got {max_upload_file_bytes}"
+            )
+        if max_multipart_files < 1:
+            raise ValueError(
+                f"max_multipart_files must be >= 1, got {max_multipart_files}"
+            )
+        if mime_sniffer is not None and not callable(mime_sniffer):
+            raise TypeError(
+                f"mime_sniffer must be callable(bytes) -> str, "
+                f"got {type(mime_sniffer).__name__}"
+            )
+        self._max_upload_file_bytes = max_upload_file_bytes
+        self._max_multipart_files = max_multipart_files
+        self._mime_sniffer = mime_sniffer
         # dependency_overrides (issue #1174 AC 3): the test-injection surface
         # for the handler_extract resolver. ``dependency_overrides`` is the
         # public, user-facing attribute (a DependencyOverrideMap manager);
@@ -3058,6 +3084,9 @@ Check the documentation or explore available resources.
             max_request_body_bytes=self._max_request_body_bytes,
             max_request_header_bytes=self._max_request_header_bytes,
             trusted_proxy_cidrs=self._trusted_proxy_cidrs,
+            max_upload_file_bytes=self._max_upload_file_bytes,
+            max_multipart_files=self._max_multipart_files,
+            mime_sniffer=self._mime_sniffer,
         )
         self._extractor_middleware_installed = True
 

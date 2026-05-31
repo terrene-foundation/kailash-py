@@ -55,6 +55,18 @@ dependencies = [
     "websockets>=12.0",
     "requests>=2.28",
     "janus>=1.0",
+    # Multipart body extractors (issue #1174 AC 4). `python-multipart` backs
+    # Starlette's `request.form()` MultiPartParser (the transport parser the
+    # Multipart / UploadFile resolver dispatches to); `puremagic` is the
+    # pure-Python (no native libmagic) content-sniff MIME deriver — handlers
+    # see a sniffed `content_type`, never the attacker-controllable client
+    # header. Per `dependencies.md` "Declared = Imported", both are declared
+    # as core deps because the resolver imports them on the multipart path
+    # (puremagic degrades to client-declared MIME + WARN when its import
+    # fails, but the import IS attempted; python-multipart has no degrade
+    # path — Starlette raises AssertionError without it).
+    "python-multipart>=0.0.9",
+    "puremagic>=1.0",
 ]
 requires-python = ">=3.11"
 
