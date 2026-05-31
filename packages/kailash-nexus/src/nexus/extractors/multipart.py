@@ -36,7 +36,6 @@ the validation contract; the resolver owns only the list-vs-single shaping +
 the ``finally`` cleanup.
 """
 
-import io
 import logging
 from pathlib import PurePosixPath
 from typing import Callable, List, Optional, Tuple
@@ -134,14 +133,25 @@ def sanitize_upload_filename(raw: Optional[str]) -> str:
     """
     if not raw:
         return "upload"
+    # Strip NUL bytes FIRST — a NUL in a filename truncates at the C / syscall
+    # layer (``open("foo\\x00.txt")`` → ``foo``), a known path-injection vector,
+    # and is never a legitimate filename character.
     # Normalize Windows separators so a POSIX path parser sees the real
     # component boundaries (``..\\..\\system32`` → ``../../system32``).
-    normalized = raw.replace("\\", "/")
+    normalized = raw.replace("\x00", "").replace("\\", "/")
     # PurePosixPath(...).name strips every directory component AND traversal
     # token, returning only the final path element.
     name = PurePosixPath(normalized).name
-    # ``.`` / ``..`` resolve to an empty/dot component; reject to the default.
-    if not name or name in (".", ".."):
+    # Reject empty / dot / traversal-token results, AND any result that still
+    # LEADS with ``..``. A basename beginning with ``..`` is never a legitimate
+    # upload name and is the residue of an encoded-separator payload — e.g.
+    # ``..%2f..%2fetc`` carries no real ``/`` for PurePosixPath to split, so its
+    # ``.name`` is the whole string, but it would traverse if a downstream
+    # consumer URL-decoded it. (Legitimate single-dot names like ``.gitignore``
+    # do NOT start with ``..`` and are preserved.) Defence-in-depth: the
+    # contract is "no real path separators"; callers MUST treat the result as an
+    # opaque single filename and never re-decode it before filesystem use.
+    if not name or name in (".", "..") or name.startswith(".."):
         return "upload"
     return name
 

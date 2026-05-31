@@ -148,6 +148,16 @@ def test_multipart_filename_traversal_is_sanitized(monkeypatch):
         ("../", "upload"),
         ("/", "upload"),
         ("", "upload"),
+        # Defence-in-depth hardening (R1 deterministic-review finding):
+        # an encoded-separator payload whose basename still leads with ".."
+        # (no real "/" for PurePosixPath to split) is rejected to the default,
+        # so a downstream URL-decode cannot resurrect the traversal.
+        ("..%2f..%2fetc", "upload"),
+        ("..foo", "upload"),
+        # A NUL byte truncates at the C/syscall layer — stripped before parsing.
+        ("file\x00.txt", "file.txt"),
+        # Legitimate single-dot names are preserved (NOT over-rejected).
+        (".gitignore", ".gitignore"),
     ],
 )
 def test_filename_sanitization_matrix(raw, expected):
