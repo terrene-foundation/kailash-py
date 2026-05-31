@@ -15,15 +15,12 @@ the request so the ``Bytes`` extractor can short-circuit oversized bodies and
 applies the trusted-proxy posture to ``request.client.host``.
 """
 
-import logging
 from typing import List, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from nexus.context import _current_request, set_current_request
 from nexus.extractors.proxy import resolve_client_host
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["RequestCaptureMiddleware"]
 

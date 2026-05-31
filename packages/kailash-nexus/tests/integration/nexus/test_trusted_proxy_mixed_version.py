@@ -210,3 +210,34 @@ def test_nexus_trusted_proxy_cidrs_stored():
         trusted_proxy_cidrs=["10.0.0.0/8", "192.168.0.0/16"],
     )
     assert app._trusted_proxy_cidrs == ["10.0.0.0/8", "192.168.0.0/16"]
+
+
+@pytest.mark.integration
+def test_nexus_malformed_trusted_proxy_cidr_raises_at_construction():
+    """CodeQL-HIGH fix — a malformed CIDR fails fast (ValueError) at construction.
+
+    Operator config is validated at construction rather than logged per-request
+    (the prior per-request WARN both spammed logs and tripped CodeQL
+    clear-text-logging). The malformed value is surfaced via an exception, not
+    a log sink.
+    """
+    with pytest.raises(ValueError, match="not a valid CIDR"):
+        Nexus(
+            api_port=_free_port(),
+            auto_discovery=False,
+            enable_auth=False,
+            trusted_proxy_cidrs=["10.0.0.0/8", "not-a-cidr"],
+        )
+
+
+@pytest.mark.integration
+def test_validate_trusted_proxy_cidrs_passes_valid_and_raises_malformed():
+    """The validator returns valid CIDRs unchanged and raises naming the bad one."""
+    from nexus.extractors.proxy import validate_trusted_proxy_cidrs
+
+    assert validate_trusted_proxy_cidrs(["10.0.0.0/8", "2001:db8::/32"]) == [
+        "10.0.0.0/8",
+        "2001:db8::/32",
+    ]
+    with pytest.raises(ValueError, match="not a valid CIDR"):
+        validate_trusted_proxy_cidrs(["bad/cidr"])

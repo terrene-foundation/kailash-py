@@ -27,14 +27,12 @@ that needs the structural CIDR check.
 """
 
 import ipaddress
-import logging
 from typing import List, Optional, Sequence
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "peer_is_trusted",
     "resolve_client_host",
+    "validate_trusted_proxy_cidrs",
 ]
 
 
@@ -79,18 +77,38 @@ def peer_is_trusted(peer_ip: Optional[str], trusted_proxy_cidrs: Sequence[str]) 
         try:
             network = ipaddress.ip_network(cidr, strict=False)
         except ValueError:
-            # A malformed CIDR is skipped (fail closed for that entry) — it
-            # cannot match any peer, and silently skipping it never widens
-            # trust beyond the well-formed entries.
-            logger.warning(
-                "trusted_proxy_cidrs entry %r is not a valid CIDR; skipping",
-                cidr,
-            )
+            # Defense-in-depth: a malformed CIDR is skipped SILENTLY (fail
+            # closed) — it cannot match any peer and skipping never widens
+            # trust. Operator config is validated fail-fast at Nexus
+            # construction via validate_trusted_proxy_cidrs(), so on the Nexus
+            # path this branch is unreachable; it only guards direct callers.
             continue
         # `peer in network` is False on mixed IP version — never raises.
         if peer in network:
             return True
     return False
+
+
+def validate_trusted_proxy_cidrs(cidrs: Sequence[str]) -> List[str]:
+    """Validate operator-supplied trusted-proxy CIDRs fail-fast at construction.
+
+    Raises ``ValueError`` naming the first malformed entry so an operator
+    misconfiguration surfaces at Nexus construction time rather than silently
+    degrading every request to "peer not trusted". The malformed value is named
+    in the EXCEPTION (not a logging sink) — CIDR strings are operator config,
+    never request-derived and never a secret, and raising avoids per-request
+    logging of config entirely. Returns the validated list unchanged.
+    """
+    validated: List[str] = []
+    for cidr in cidrs:
+        try:
+            ipaddress.ip_network(cidr, strict=False)
+        except ValueError as exc:
+            raise ValueError(
+                f"trusted_proxy_cidrs entry {cidr!r} is not a valid CIDR"
+            ) from exc
+        validated.append(cidr)
+    return validated
 
 
 def _rightmost_untrusted(

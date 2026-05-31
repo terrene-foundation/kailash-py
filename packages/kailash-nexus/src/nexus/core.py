@@ -353,7 +353,13 @@ class Nexus:
         # forwarded headers are honoured (default [] = no forwarded trust).
         self._max_request_body_bytes = max_request_body_bytes
         self._max_request_header_bytes = max_request_header_bytes
-        self._trusted_proxy_cidrs: List[str] = list(trusted_proxy_cidrs or [])
+        # Validate operator CIDR config fail-fast (raises ValueError naming a
+        # malformed entry) rather than silently degrading every request.
+        from nexus.extractors.proxy import validate_trusted_proxy_cidrs
+
+        self._trusted_proxy_cidrs: List[str] = validate_trusted_proxy_cidrs(
+            trusted_proxy_cidrs or []
+        )
         # dependency_overrides map is wired by Shard 2; the resolver consults
         # this attribute when present. Initialised to None here so the consult
         # site in the resolver is a no-op until Shard 2 lands the map.
