@@ -225,6 +225,135 @@ def test_register_sse_raising_dependency_closes_401_before_handshake():
 
 
 @pytest.mark.integration
+def test_register_sse_rate_limit_exceeded_returns_429_before_handshake():
+    """MUST 5: per-client-IP rate limit on SUBSCRIBE → 429 before the stream.
+
+    Nexus(rate_limit=2) caps the SSE subscribe path at 2 req/min per client IP.
+    The TestClient is a single client IP, so the 3rd subscribe in the same
+    minute MUST return HTTP 429 with the canonical {error,code} envelope BEFORE
+    any text/event-stream handshake (issue #1174 AC 5 MUST 5).
+    """
+    app = Nexus(
+        api_port=_free_port(),
+        auto_discovery=False,
+        enable_auth=False,
+        rate_limit=2,
+    )
+
+    async def on_subscribe(request):
+        yield {"ok": True}
+
+    app.register_sse("/limited", on_subscribe)
+    client = _client_for(app)
+
+    # First two subscribes are allowed (drain each so the stream completes).
+    for _ in range(2):
+        with client.stream("GET", "/limited") as resp:
+            assert resp.status_code == 200, resp.status_code
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            resp.read()
+
+    # Third subscribe in the same minute exceeds rate_limit=2 → 429 before the
+    # handshake, with the canonical envelope, NOT a partial event-stream.
+    resp = client.get("/limited")
+    assert resp.status_code == 429, resp.text
+    assert "text/event-stream" not in resp.headers.get("content-type", "")
+    body = resp.json()
+    assert body.get("code") == "RATE_LIMITED", body
+    assert "error" in body, body
+
+
+@pytest.mark.integration
+def test_register_sse_no_rate_limit_when_unset():
+    """MUST 5 default: rate_limit=None disables the limit (preserves semantics)."""
+    app = Nexus(
+        api_port=_free_port(),
+        auto_discovery=False,
+        enable_auth=False,
+        rate_limit=None,
+    )
+
+    async def on_subscribe(request):
+        yield {"ok": True}
+
+    app.register_sse("/unlimited", on_subscribe)
+    client = _client_for(app)
+
+    # Many subscribes in the same minute — none is rate-limited.
+    for _ in range(5):
+        with client.stream("GET", "/unlimited") as resp:
+            assert resp.status_code == 200, resp.status_code
+            resp.read()
+
+
+@pytest.mark.integration
+async def test_register_sse_slow_consumer_closes_stream_and_releases_producer():
+    """MUST 4: a slow consumer that cannot drain within slow_consumer_timeout
+    closes the stream; the finally cancels the producer + releases state.
+
+    Drives the production stream generator (``nexus.sse._sse_stream``) directly
+    with a SHORT slow_consumer_timeout and a producer that idles forever after
+    its first event. The consumer reads the first frame, then stops pulling
+    (simulating a wedged transport); when no flush succeeds within the timeout
+    the generator returns, and its ``finally`` cancels the producer task so the
+    user ``on_subscribe`` generator's ``finally`` (resource release) runs.
+    """
+    import time
+
+    from nexus.sse import _sse_stream
+
+    cleanup = {"ran": False}
+
+    async def on_subscribe(request):
+        try:
+            yield {"first": True}
+            # Idle forever after the first event: the consumer's slow-consumer
+            # deadline (not a producer event) is what must terminate the stream.
+            await asyncio.sleep(3600)
+        finally:
+            cleanup["ran"] = True
+
+    gen = _sse_stream(
+        request=None,
+        on_subscribe=on_subscribe,
+        keepalive_interval=0,  # disable keepalive so only slow-consumer fires
+        max_queue_depth=1000,
+        max_event_bytes=65_536,
+        slow_consumer_timeout=0.3,
+        path="/slow",
+    )
+
+    started = time.monotonic()
+    frames = []
+    async for frame in gen:
+        if frame.startswith("data:"):
+            frames.append(frame)
+        # Read the first data frame, then stop pulling promptly so the
+        # generator hits its slow-consumer deadline on the next iteration.
+        if frames:
+            break
+
+    assert len(frames) == 1, frames
+
+    # Resume iterating: with no further events and keepalive disabled, the
+    # generator MUST return within ~slow_consumer_timeout (slow-consumer close).
+    async for _ in gen:
+        pass  # drains until the generator returns (terminal)
+    elapsed = time.monotonic() - started
+
+    # The stream closed on the slow-consumer deadline, not after the 3600s idle.
+    assert elapsed < 5.0, f"stream did not close on slow-consumer timeout ({elapsed}s)"
+
+    # The generator's finally cancelled the producer, so on_subscribe's finally
+    # (resource release) ran — producer state is released (MUST 4).
+    for _ in range(200):
+        if cleanup["ran"]:
+            break
+        await asyncio.sleep(0.01)
+    assert cleanup["ran"] is True, "producer not released on slow-consumer close"
+
+
+@pytest.mark.integration
 def test_register_sse_oversized_event_dropped_then_continues():
     """MUST 3: an oversized event yields EVENT_TOO_LARGE then the stream goes on."""
     app = Nexus(api_port=_free_port(), auto_discovery=False, enable_auth=False)
