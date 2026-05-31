@@ -55,8 +55,17 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    # Bind the optional-dependency symbols for static analysis only; the
+    # runtime imports below stay behind try/except so a missing dependency
+    # raises a clear ImportError at __init__ rather than at module import.
+    from dataflow import DataFlow
+
+    from kailash.runtime import AsyncLocalRuntime
+    from kailash.workflow.builder import WorkflowBuilder
 
 
 def _mask_connection_string(connection_string: str) -> str:
@@ -221,10 +230,29 @@ class OrchestrationStateManager:
         # This ensures errors are caught at initialization time, not first use
         self._validate_connection()
 
-        # Initialize AsyncLocalRuntime for async workflow execution
+        # Initialize an async-capable runtime for async workflow execution.
+        # State operations call ``execute_workflow_async``; a sync runtime
+        # (e.g. a LocalRuntime acquired from a pool) lacks that method, so when
+        # one is supplied we warn and fall back to an owned AsyncLocalRuntime
+        # rather than rejecting it (callers passing a sync runtime keep working).
+        self.runtime: "AsyncLocalRuntime"
         if runtime is not None:
-            self.runtime = runtime.acquire()
-            self._owns_runtime = False
+            acquired = runtime.acquire()
+            if hasattr(acquired, "execute_workflow_async"):
+                self.runtime = cast("AsyncLocalRuntime", acquired)
+                self._owns_runtime = False
+            else:
+                logger.warning(
+                    "OrchestrationStateManager: provided runtime %s lacks "
+                    "execute_workflow_async; falling back to an owned "
+                    "AsyncLocalRuntime for async state operations.",
+                    type(acquired).__name__,
+                )
+                self.runtime = AsyncLocalRuntime(
+                    debug=False,
+                    connection_validation="warn",
+                )
+                self._owns_runtime = True
         else:
             self.runtime = AsyncLocalRuntime(
                 debug=False,
@@ -1026,9 +1054,12 @@ class OrchestrationStateManager:
 
     def close(self):
         """Release runtime reference."""
-        if hasattr(self, "runtime") and self.runtime is not None:
+        if getattr(self, "runtime", None) is not None:
             self.runtime.release()
-            self.runtime = None
+            # Drop the attribute (rather than assigning None) so the declared
+            # non-optional ``runtime: AsyncLocalRuntime`` type holds; the
+            # hasattr/getattr guards in close()/__del__ tolerate its absence.
+            del self.runtime
 
     def __del__(self):
         if getattr(self, "runtime", None) is not None:
