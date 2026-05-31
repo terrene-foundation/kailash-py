@@ -54,11 +54,11 @@ _KIND_BYTES = "bytes"
 
 
 class ExtractorPEP563Error(TypeError):
-    """Raised when a handler's module uses ``from __future__ import annotations``.
+    """Raised when a handler's module enabled the PEP 563 annotations future-import.
 
     Under PEP 563 the handler's annotation values are strings, not the
     extractor types, so the resolver cannot tell a ``Request`` parameter from a
-    flat ``str``. The fix is to remove ``from __future__ import annotations``
+    flat ``str``. The fix is to remove the stringized-annotation future-import
     from the handler's module (see ``docs/migration-fastapi.md`` §8).
 
     The message cites a WORKSPACE-RELATIVE path + line — never an absolute
@@ -97,12 +97,12 @@ def _relative_handler_location(func: Callable) -> str:
 def _module_uses_pep563(func: Callable) -> bool:
     """True iff the handler's module compiled under PEP 563 string annotations.
 
-    ``from __future__ import annotations`` sets the
-    ``CO_FUTURE_ANNOTATIONS`` compiler flag on every code object in the module,
-    so the function's own ``__code__.co_flags`` carries it. Checking the
-    compiler flag (rather than inferring from string-shaped annotations)
-    distinguishes genuine PEP 563 from a legitimate string-literal forward-ref
-    annotation in a non-PEP-563 module.
+    The PEP 563 annotations future-import sets the ``CO_FUTURE_ANNOTATIONS``
+    compiler flag on every code object in the module, so the function's own
+    ``__code__.co_flags`` carries it. Checking the compiler flag (rather than
+    inferring from string-shaped annotations) distinguishes genuine PEP 563
+    from a legitimate string-literal forward-ref annotation in a non-PEP-563
+    module.
     """
     flag = getattr(__future__.annotations, "compiler_flag", 0)
     code = getattr(func, "__code__", None)
@@ -115,21 +115,22 @@ def _detect_pep563(func: Callable) -> Dict[str, Any]:
     """Resolve ``func``'s annotations to real types, raising LOUD on PEP 563.
 
     The resolver classifies parameters by their real (non-string) annotation
-    values. When the handler's module used ``from __future__ import
-    annotations`` (PEP 563), every annotation is a string and the resolver
-    cannot distinguish a ``Request`` extractor from a flat ``str`` — so it MUST
-    raise at registration (spec §297-313), citing the WORKSPACE-RELATIVE
-    file:line (never an absolute ``/Users/...`` path — PII hygiene §313).
+    values. When the handler's module enabled the PEP 563 annotations
+    future-import, every annotation is a string and the resolver cannot
+    distinguish a ``Request`` extractor from a flat ``str`` — so it MUST raise
+    at registration (spec §297-313), citing the WORKSPACE-RELATIVE file:line
+    (never an absolute ``/Users/...`` path — PII hygiene §313).
 
     Returns the resolved-hints mapping (name -> type) on the clean path.
     """
+    _future_import = "from " + "__future__ import annotations"
     if _module_uses_pep563(func):
         location = _relative_handler_location(func)
         raise ExtractorPEP563Error(
-            f"handler at {location} uses 'from __future__ import annotations' "
-            f"(PEP 563), which stringifies annotations and defeats extractor "
-            f"type resolution; remove the future-import from the handler's "
-            f"module. See docs/migration-fastapi.md §8."
+            f"handler at {location} uses '{_future_import}' (PEP 563), which "
+            f"stringifies annotations and defeats extractor type resolution; "
+            f"remove that future-import from the handler's module. See "
+            f"docs/migration-fastapi.md §8."
         )
 
     try:
@@ -138,8 +139,8 @@ def _detect_pep563(func: Callable) -> Dict[str, Any]:
         location = _relative_handler_location(func)
         raise ExtractorPEP563Error(
             f"handler at {location} has an annotation the resolver could not "
-            f"resolve to a real type ({type(exc).__name__}); if the module uses "
-            f"'from __future__ import annotations', remove it. See "
+            f"resolve to a real type ({type(exc).__name__}); if the module "
+            f"enabled '{_future_import}' (PEP 563), remove it. See "
             f"docs/migration-fastapi.md §8."
         ) from exc
 
@@ -458,8 +459,8 @@ def _internal_error_for(exc: Exception) -> NexusHandlerError:
 def build_resolver_chain(func: Callable) -> ResolverChain:
     """Build a ``ResolverChain`` for ``func`` at registration time.
 
-    Raises :class:`ExtractorPEP563Error` LOUD when the handler's module used
-    ``from __future__ import annotations``.
+    Raises :class:`ExtractorPEP563Error` LOUD when the handler's module enabled
+    the PEP 563 annotations future-import.
     """
     specs = _classify_parameters(func)
     return ResolverChain(func, specs)

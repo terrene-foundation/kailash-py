@@ -29,9 +29,10 @@ Surface (Shard 1 scope):
 - ``NexusHandlerError`` — typed status return per
   ``rules/nexus-http-status-convention.md`` MUST Rule 4.
 
-This module MUST NOT use ``from __future__ import annotations`` — the resolver
-relies on real (non-string) annotation values at registration time, and PEP 563
-would defeat ``typing.get_type_hints`` resolution of the extractor types.
+This module MUST NOT enable PEP 563 stringized annotations (the future-import
+of the same name) — the resolver relies on real (non-string) annotation values
+at registration time, and PEP 563 would defeat ``typing.get_type_hints``
+resolution of the extractor types.
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple

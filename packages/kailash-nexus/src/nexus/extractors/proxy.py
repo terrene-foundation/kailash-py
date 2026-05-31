@@ -26,11 +26,9 @@ This module has no third-party dependency; it is safe to import from any path
 that needs the structural CIDR check.
 """
 
-from __future__ import annotations
-
 import ipaddress
 import logging
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 logger = logging.getLogger(__name__)
 

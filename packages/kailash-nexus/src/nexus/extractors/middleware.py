@@ -15,8 +15,6 @@ the request so the ``Bytes`` extractor can short-circuit oversized bodies and
 applies the trusted-proxy posture to ``request.client.host``.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import List, Optional
 
