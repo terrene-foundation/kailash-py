@@ -27,7 +27,30 @@ from __future__ import annotations
 import pytest
 
 from kaizen.memory.providers.types import MemoryEntry
-from kaizen_agents.api.shortcuts import resolve_memory_shortcut
+from kaizen_agents.api.shortcuts import _safe_sqlite_dsn, resolve_memory_shortcut
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("bad", ["x?mode=ro", "x#frag", "x\x00y"])
+def test_safe_sqlite_dsn_rejects_uri_metacharacters(tmp_path, bad):
+    """?, #, and null bytes must be rejected (they corrupt the SQLite URI, #855).
+
+    Pins the security invariant so a future refactor that drops the validation —
+    or a switch to SQLite ``file:`` URI mode where ``?mode=ro`` would be honored —
+    fails loudly instead of silently re-opening URI parameter injection.
+    """
+    with pytest.raises(ValueError, match="must not contain"):
+        _safe_sqlite_dsn(str(tmp_path / bad))
+
+
+@pytest.mark.regression
+def test_safe_sqlite_dsn_emits_4slash_absolute_form(tmp_path):
+    """Output is the 4-slash absolute DSN DataFlow requires, free of ?/# (#855)."""
+    dsn = _safe_sqlite_dsn(str(tmp_path / "mem"))
+    assert dsn.startswith("sqlite:////")
+    assert "?" not in dsn and "#" not in dsn
+    # Exactly four leading slashes after the scheme (absolute path, not relative).
+    assert dsn[len("sqlite://") :].startswith("//")
 
 
 @pytest.mark.regression

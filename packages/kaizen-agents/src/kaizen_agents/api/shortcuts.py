@@ -74,8 +74,10 @@ def _safe_sqlite_dsn(memory_path: str) -> str:
         p.mkdir(parents=True, exist_ok=True)
         db_file = (p / "memory.db").resolve()
 
-    # 4-slash absolute form: "sqlite:////" + absolute-path-without-leading-slash.
-    return "sqlite:////" + str(db_file).lstrip("/")
+    # 4-slash absolute form: "sqlite:////" + absolute-path with its single
+    # leading slash removed. removeprefix (not lstrip) strips exactly one slash
+    # so a path that resolves with a leading "//" is not silently collapsed.
+    return "sqlite:////" + str(db_file).removeprefix("/")
 
 
 def _build_dataflow_warm_backend(memory_path: str) -> "MemoryProviderType":
