@@ -646,6 +646,51 @@ changes:
       realized through the gate) per self-referential-codify.md MUST-1
       + redteam-integration.md — NOT by averaging severities.
 
+  - type: command_update
+    artifact: sweep
+    files:
+      - .claude/commands/sweep.md
+    classification_suggestion: global
+    context: |
+      Sweep stale-tag false-positive fix (BUILD->loom, kailash-py 2026-05-30).
+      ADDS "Sweep 8: Release readiness (publishing repos only)"; bumps the
+      workflow count 7->8 and Closure step-1 count 1-7->1-8.
+
+      Root-cause: /sweep had NO mechanical release-readiness step (Sweep 4 is
+      "Open PRs and stale feature branches"). An agent improvised a release
+      check (SWEEP-2026-05-28.md "Sweep 4 / release-readiness") and hand-picked
+      a STALE diff base (v2.27.0) instead of the actual latest tag (v2.28.1),
+      re-flagging already-released fixes (#1182, #1185 — both ancestors of
+      v2.28.1) as "unreleased HIGH" on every sweep. That recurring false
+      positive is what made /sweep feel "neverending" to the operator.
+
+      Fix: Sweep 8 derives the diff base MECHANICALLY from
+      `git tag --sort=-version:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$'`
+      (plain vX.Y.Z stable tags only; the $-anchor excludes prerelease -rc1
+      and package-prefixed dataflow-v* tags so a future v2.29.0-rc1 cannot
+      sort above v2.29.0 and re-introduce the bug). Flags "unreleased" ONLY
+      when `git log "$LATEST"..HEAD -- src/ packages/*/src` is non-empty;
+      docs/.claude/workspace diffs do NOT ship. Verifies any named PR via
+      `git merge-base --is-ancestor <sha> "$LATEST"` before calling it
+      unreleased. Hand-picking a base tag is BLOCKED.
+
+      Self-referential gate (self-referential-codify.md Rule 1+2 — sweep.md is
+      named on the Commands allowlist): multi-agent redteam-with-tests ran in
+      parallel BEFORE this proposal. reviewer APPROVED (1 MED prerelease-sort,
+      fixed same-shard by the $-anchored regex; 2 LOW doc-grade). security-
+      reviewer APPROVED (0 CRIT/HIGH/MED; $LATEST quoted + read-only repo-local
+      => no injection; Sweeps 1-7 byte-unchanged; true-positive detection
+      preserved). cc-architect APPROVED (149 lines <= 150 cap; CLI-neutral;
+      structural fit). The line-141 "1-7"->"1-8" LOW (flagged by 2 agents)
+      fixed same-shard.
+
+      Loom Gate-1 classification suggestion: GLOBAL — the stale-tag bug class
+      is language-agnostic; every publishing BUILD repo (kailash-rs) shares the
+      failure mode. The bash is Python-anchored (pyproject.toml, src/,
+      packages/*/src); the "(publishing repos only)" guard + "no shippable
+      change" disposition degrade safely in non-Python/non-publishing repos.
+      loom may prefer a variant overlay for the rs lane's Cargo.toml anchors.
+
 deferred:
   - id: "issue-1086-candidate-3"
     summary: |

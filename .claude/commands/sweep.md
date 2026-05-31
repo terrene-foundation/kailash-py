@@ -17,7 +17,7 @@ Autonomous — runs every sweep sequentially, accumulates findings into a single
 
 ## Workflow
 
-Run all 7 sweeps. Aggregate findings into a single report at the end with severity (CRIT / HIGH / MED / LOW), disposition, and pointer (file:line, PR#, issue#).
+Run all 8 sweeps. Aggregate findings into a single report at the end with severity (CRIT / HIGH / MED / LOW), disposition, and pointer (file:line, PR#, issue#).
 
 ### Sweep 1: Active todos across all workspaces
 
@@ -117,6 +117,21 @@ grep -rEn 'TODO|FIXME|HACK|XXX|NotImplementedError' \
 
 Surface: uncommitted changes, branch ahead/behind origin/main, new stub markers in production code (BLOCKED per `rules/zero-tolerance.md` Rule 2).
 
+### Sweep 8: Release readiness (publishing repos only)
+
+For repos that publish version anchors (`pyproject.toml` + `__init__.py`), determine what is GENUINELY unreleased. The diff base MUST be derived mechanically from the latest tag — hand-picking a base tag is BLOCKED. A stale base re-flags already-released fixes as "unreleased" on every sweep (the false-positive that makes sweeps feel neverending).
+
+```bash
+# plain vX.Y.Z stable tags ONLY — `$`-anchor excludes prerelease (-rc1) + package-
+# prefixed (dataflow-v*) tags; else a future v2.29.0-rc1 sorts above v2.29.0 (stale-base bug)
+LATEST=$(git tag --sort=-version:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+# shippable code ONLY (docs/.claude/workspace do NOT ship); `packages/*/src` is a repo-root glob
+git log --oneline "$LATEST"..HEAD -- src/ packages/*/src 2>/dev/null
+grep -m1 '^version' pyproject.toml   # anchor must match $LATEST unless mid-release
+```
+
+Flag "unreleased work" ONLY when the shippable-code diff above is non-empty. If the only diff since `$LATEST` is docs / `.claude/` / workspace files → record "no shippable change since `$LATEST`", NOT a release finding. Before naming any merged PR as unreleased, confirm it via `git merge-base --is-ancestor <sha> "$LATEST"` (ancestor = already released).
+
 ## Output
 
 Write findings to `workspaces/<project>/04-validate/sweep-<date>.md` (workspace context active) OR `SWEEP-<date>.md` at root. Each finding: `[SEVERITY] [Sweep N] <title>` + Location + Disposition + Evidence + Why-this-matters + Action-taken-if-FIX-NOW. End with cross-cutting observations and 2-5 ranked recommended next-session items.
@@ -125,7 +140,7 @@ Write findings to `workspaces/<project>/04-validate/sweep-<date>.md` (workspace 
 
 Before reporting `/sweep` complete:
 
-1. ALL Sweep 1-7 outputs accumulated
+1. ALL Sweep 1-8 outputs accumulated
 2. Trivial fixes applied inline (`rules/zero-tolerance.md` Rule 1); reclassified `FIXED` with commit SHA
 3. Non-trivial fixes filed as workspace todos OR GH issues with delivered-code references
 4. Report committed (`git add` + `git commit`)
