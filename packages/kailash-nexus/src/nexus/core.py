@@ -275,6 +275,7 @@ class Nexus:
         # Extractor surface (issue #1174)
         max_request_body_bytes: int = 10_485_760,
         max_request_header_bytes: int = 65536,
+        max_websocket_message_bytes: int = 1_048_576,
         trusted_proxy_cidrs: Optional[List[str]] = None,
         # Shared runtime injection (M3-001)
         runtime=None,
@@ -353,6 +354,7 @@ class Nexus:
         # forwarded headers are honoured (default [] = no forwarded trust).
         self._max_request_body_bytes = max_request_body_bytes
         self._max_request_header_bytes = max_request_header_bytes
+        self._max_websocket_message_bytes = max_websocket_message_bytes
         # Validate operator CIDR config fail-fast (raises ValueError naming a
         # malformed entry) rather than silently degrading every request.
         from nexus.extractors.proxy import validate_trusted_proxy_cidrs
