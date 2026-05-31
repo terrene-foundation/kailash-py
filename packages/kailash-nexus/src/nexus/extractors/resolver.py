@@ -38,10 +38,27 @@ import inspect
 import logging
 import os
 import uuid
-from typing import Any, Callable, Dict, List, Optional, get_type_hints
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from nexus.context import get_current_request
-from nexus.extractors import Bytes, Depends, Headers, NexusHandlerError, Request
+from nexus.extractors import (
+    Bytes,
+    Depends,
+    Headers,
+    Multipart,
+    NexusHandlerError,
+    Request,
+    UploadFile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +68,34 @@ _KIND_REQUEST = "request"
 _KIND_DEPENDS = "depends"
 _KIND_HEADERS = "headers"
 _KIND_BYTES = "bytes"
+# Multipart body extractors (issue #1174 AC 4).
+_KIND_MULTIPART = "multipart"  # ``files: Multipart`` -> list[UploadFile]
+_KIND_UPLOADFILE = "uploadfile"  # ``f: UploadFile`` -> single UploadFile
+
+
+def _is_multipart_annotation(annotation: Any) -> bool:
+    """True iff ``annotation`` is the ``Multipart`` alias (``list[UploadFile]``).
+
+    ``Multipart`` is ``typing.List[UploadFile]`` (a generic alias, NOT a class),
+    so identity / subclass checks do not apply. Two forms resolve to the same
+    binding: the ``Multipart`` alias object itself, and a hand-written
+    ``list[UploadFile]`` / ``List[UploadFile]`` annotation (same ``get_origin``
+    + ``get_args``).
+    """
+    if annotation is Multipart:
+        return True
+    origin = get_origin(annotation)
+    if origin in (list, List):
+        args = get_args(annotation)
+        return len(args) == 1 and _is_uploadfile_annotation(args[0])
+    return False
+
+
+def _is_uploadfile_annotation(annotation: Any) -> bool:
+    """True iff ``annotation`` is the ``UploadFile`` extractor type."""
+    return annotation is UploadFile or (
+        isinstance(annotation, type) and issubclass(annotation, UploadFile)
+    )
 
 
 class ExtractorPEP563Error(TypeError):
@@ -187,6 +232,14 @@ def _classify_parameters(func: Callable) -> "List[_ParamSpec]":
             isinstance(annotation, type) and issubclass(annotation, Bytes)
         ):
             specs.append(_ParamSpec(name=name, kind=_KIND_BYTES))
+            continue
+        # Multipart (list[UploadFile]) must be checked BEFORE the single
+        # UploadFile so the generic-alias form is not mis-classified.
+        if _is_multipart_annotation(annotation):
+            specs.append(_ParamSpec(name=name, kind=_KIND_MULTIPART))
+            continue
+        if _is_uploadfile_annotation(annotation):
+            specs.append(_ParamSpec(name=name, kind=_KIND_UPLOADFILE))
             continue
 
         # Everything else is a flat input — same semantics as register_handler.
@@ -352,36 +405,75 @@ class ResolverChain:
         cache: Dict[Callable, Any] = {}
         call_kwargs: Dict[str, Any] = {}
 
-        for spec in self._specs:
-            if spec.kind == _KIND_FLAT:
-                if spec.name in flat_inputs:
-                    call_kwargs[spec.name] = flat_inputs[spec.name]
-                elif spec.has_default:
-                    call_kwargs[spec.name] = spec.default
-                # else: required flat param missing -> let the handler raise the
-                # normal MissingParam error path (do not synthesise).
-            elif spec.kind == _KIND_REQUEST:
-                call_kwargs[spec.name] = request
-            elif spec.kind == _KIND_HEADERS:
-                call_kwargs[spec.name] = _headers_from_request(request)
-            elif spec.kind == _KIND_BYTES:
-                call_kwargs[spec.name] = await _bytes_from_request(request)
-            elif spec.kind == _KIND_DEPENDS:
-                try:
-                    call_kwargs[spec.name] = await self._resolve_dependency(
-                        spec.depends, request, cache, overrides
-                    )
-                except NexusHandlerError:
-                    # Typed status: surface as-is (the caller maps it).
-                    raise
-                except Exception as exc:
-                    _log_resolver_failure(self._func, spec.depends, exc)
-                    raise _internal_error_for(exc) from exc
+        # Multipart parse-once (issue #1174 AC 4). If the handler declares ANY
+        # Multipart / UploadFile param, parse + validate the form a single time
+        # and reuse for every multipart-class param (Starlette caches the parsed
+        # form, but reading each part's bytes once keeps the binding consistent).
+        # ``files_to_close`` holds EVERY parsed UploadFile so the finally below
+        # closes spooled tempfiles in BOTH the success AND exception branches
+        # (MUST 5 — no spooled-tempfile leak).
+        needs_multipart = any(
+            s.kind in (_KIND_MULTIPART, _KIND_UPLOADFILE) for s in self._specs
+        )
+        uploads: List[Any] = []
+        files_to_close: List[Any] = []
+        if needs_multipart:
+            from nexus.extractors.multipart import parse_multipart_uploads
 
-        result = self._func(**call_kwargs)
-        if inspect.isawaitable(result):
-            result = await result
-        return result
+            # A cap violation raises a typed NexusHandlerError (413 BODY_TOO_LARGE
+            # / 413 TOO_MANY_FILES / 400 INVALID_INPUT) that the caller maps to
+            # the HTTP response — surfaced as-is, NOT collapsed to 500.
+            uploads, files_to_close = await parse_multipart_uploads(request)
+
+        try:
+            for spec in self._specs:
+                if spec.kind == _KIND_FLAT:
+                    if spec.name in flat_inputs:
+                        call_kwargs[spec.name] = flat_inputs[spec.name]
+                    elif spec.has_default:
+                        call_kwargs[spec.name] = spec.default
+                    # else: required flat param missing -> let the handler raise
+                    # the normal MissingParam error path (do not synthesise).
+                elif spec.kind == _KIND_REQUEST:
+                    call_kwargs[spec.name] = request
+                elif spec.kind == _KIND_HEADERS:
+                    call_kwargs[spec.name] = _headers_from_request(request)
+                elif spec.kind == _KIND_BYTES:
+                    call_kwargs[spec.name] = await _bytes_from_request(request)
+                elif spec.kind == _KIND_MULTIPART:
+                    # Multipart -> the full list of validated UploadFiles.
+                    call_kwargs[spec.name] = list(uploads)
+                elif spec.kind == _KIND_UPLOADFILE:
+                    # UploadFile -> the single (first) validated file, or None
+                    # when no file part is present (the handler decides whether
+                    # a missing file is an error).
+                    call_kwargs[spec.name] = uploads[0] if uploads else None
+                elif spec.kind == _KIND_DEPENDS:
+                    try:
+                        call_kwargs[spec.name] = await self._resolve_dependency(
+                            spec.depends, request, cache, overrides
+                        )
+                    except NexusHandlerError:
+                        # Typed status: surface as-is (the caller maps it).
+                        raise
+                    except Exception as exc:
+                        _log_resolver_failure(self._func, spec.depends, exc)
+                        raise _internal_error_for(exc) from exc
+
+            result = self._func(**call_kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+            return result
+        finally:
+            # MUST 5: close every spooled tempfile in BOTH branches (success +
+            # handler-raise + cancellation). Idempotent — Starlette's
+            # UploadFile.close is safe to call twice (the parse helper may have
+            # already closed on a mid-parse validation raise).
+            for f in files_to_close:
+                try:
+                    await f.close()
+                except Exception:  # cleanup best-effort — never mask the result
+                    pass
 
 
 def _headers_from_request(request: Optional[Request]) -> Headers:
