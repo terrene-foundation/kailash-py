@@ -230,18 +230,26 @@ def _rewrap_validated(
 ) -> UploadFile:
     """Produce the handler-visible UploadFile with sanitized/sniffed metadata.
 
-    Starlette's ``UploadFile`` stores ``filename`` / ``content_type`` as plain
-    instance attributes. Per spec §74 the RAW client filename is dropped (NOT
-    preserved as a sibling attribute); per spec §75 the SNIFFED content_type
-    replaces the client header, and the client header is captured as
-    ``client_declared_content_type`` for audit. We mutate the SAME UploadFile
-    object (preserving its spooled file handle + ``read()`` semantics) so the
-    handler reads the original bytes through the validated metadata.
+    Starlette's ``UploadFile.filename`` is a plain mutable attribute, but
+    ``.content_type`` is a READ-ONLY property derived from ``.headers``. Per
+    spec §74 the RAW client filename is dropped (NOT preserved as a sibling
+    attribute); per spec §75 the SNIFFED content_type replaces the client
+    header, and the client header is captured as
+    ``client_declared_content_type`` for audit.
+
+    We mutate the SAME UploadFile object (preserving its spooled file handle +
+    ``read()``/``seek()``/``close()`` semantics so the handler reads the
+    original bytes) — overwriting ``.filename`` directly and rebuilding
+    ``.headers`` so the ``.content_type`` property returns the sniffed value.
     """
+    from starlette.datastructures import Headers as _StarletteHeaders
+
     # Capture the client-declared header BEFORE overwriting (audit, spec §75).
     original.client_declared_content_type = original.content_type
     original.filename = sanitized_filename
-    original.content_type = sniffed_content_type
+    # content_type is a property reading from .headers — rebuild headers with the
+    # sniffed value so handlers see the derived type, never the client header.
+    original.headers = _StarletteHeaders({"content-type": sniffed_content_type})
     return original
 
 
