@@ -61,6 +61,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
+    "unit: fast isolated unit tests (Tier 1)",
     "integration: integration tests against real infrastructure (Tier 2)",
     "regression: regression tests pinning a fixed bug (NEVER delete)",
 ]

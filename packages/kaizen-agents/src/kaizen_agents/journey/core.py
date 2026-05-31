@@ -50,10 +50,11 @@ if TYPE_CHECKING:
     from kaizen.core.base_agent import BaseAgent
     from kaizen.signatures.core import Signature
 
-    try:
-        from kaizen_agents.patterns.pipeline import Pipeline
-    except ImportError:
-        Pipeline = None  # type: ignore[assignment, misc]
+    # Imported unconditionally here (type-checking only — never executed at
+    # runtime). The runtime import stays lazy in ``_build_pipeline``. A
+    # try/except that rebinds ``Pipeline = None`` would turn it into a value and
+    # break every ``Pipeline`` type annotation below (reportInvalidTypeForm).
+    from kaizen_agents.patterns.pipeline import Pipeline
 
 from kaizen_agents.journey.behaviors import ReturnBehavior
 
@@ -293,19 +294,11 @@ class Pathway(metaclass=PathwayMeta):
         if self._signature_instance is None and self._signature is not None:
             sig = self._signature()
 
-            # Merge pathway guidelines with signature guidelines (REQ-INT-001)
+            # Merge pathway guidelines with signature guidelines (REQ-INT-001).
+            # Signature.with_guidelines() is the canonical merge API
+            # (kaizen.signatures.core) and returns a new Signature.
             if self._guidelines:
-                if hasattr(sig, "with_guidelines"):
-                    # Use the signature's with_guidelines method for proper merging
-                    sig = sig.with_guidelines(self._guidelines)
-                else:
-                    # Fallback: manually merge guidelines if method not available
-                    existing_guidelines = getattr(sig, "_guidelines", [])
-                    if hasattr(sig, "__class__") and hasattr(
-                        sig.__class__, "__guidelines__"
-                    ):
-                        existing_guidelines = list(sig.__class__.__guidelines__)
-                    sig._guidelines = existing_guidelines + list(self._guidelines)
+                sig = sig.with_guidelines(self._guidelines)
 
             self._signature_instance = sig
         return self._signature_instance
@@ -442,9 +435,13 @@ class Pathway(metaclass=PathwayMeta):
                     if field_name in context.accumulated_context:
                         inputs[field_name] = context.accumulated_context[field_name]
 
-            # Execute pipeline
-            if hasattr(pipeline, "execute"):
-                result = await pipeline.execute(inputs)
+            # Execute pipeline. The canonical Pipeline exposes a synchronous
+            # run(); some adapters may also offer an async execute() — prefer it
+            # when present (resolved dynamically so the static Pipeline type,
+            # which declares only run(), does not flag the optional method).
+            execute = getattr(pipeline, "execute", None)
+            if callable(execute):
+                result = await execute(inputs)
             elif hasattr(pipeline, "run"):
                 # Synchronous pipeline - wrap in dict if needed
                 result = pipeline.run(**inputs)
