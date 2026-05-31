@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.8.0] — 2026-05-31 — FastAPI-parity handler extractors + SSE/WebSocket callbacks (#1174)
+
+FastAPI-shaped ergonomics for Nexus handlers so SDK users migrating from FastAPI keep the same handler shape. Six surface additions, all backwards-compatible (existing `register_handler` / `@app.handler` / class-based `register_websocket` / `register_sse_endpoint` paths are unchanged). No new top-level `fastapi` dependency — extractor types are Starlette re-exports.
+
+### Added
+
+- **`nexus.extractors` sub-module (#1174 ACs 1-4)** — `Depends`, `Request`, `UploadFile`, `Multipart`, `Bytes`, `Headers`, `NexusHandlerError`. Annotation-driven parameter binding for handlers registered via the new `Nexus.handler_extract(name, func)` method. `Depends(callable)` defaults resolve a dependency-injection chain (recursively); `Request` / `Bytes` / `Headers` annotations bind request data; `Multipart` / `UploadFile` bind file uploads. The extractor module MUST NOT use `from __future__ import annotations` — PEP 563 stringized annotations raise a typed `ExtractorPEP563Error` at registration naming the offending handler module.
+- **`Nexus.handler_extract(name, func, *, description, tags, metadata, guard)` (#1174 ACs 1-2)** — registers a handler whose parameter annotations/defaults drive a per-handler resolver chain. Resolver built once at registration, runs once per invocation. Dependency errors split client-visible (500 + correlation ID) from server-visible (full traceback) per the resolver error-path contract.
+- **`Nexus.dependency_overrides` test-injection map (#1174 AC 3)** — `DependencyOverrideMap` with `override(real, mock)` context manager (auto-restores), plus imperative `set` / `clear` / `clear_all`. Test-only surface; production-time mutation during an active request raises `DependencyOverrideRuntimeMutationError`.
+- **`Nexus.register_sse(path, on_subscribe, *, keepalive_interval=15, dependencies=None, max_queue_depth=1000, max_event_bytes=65536, slow_consumer_timeout=30.0)` (#1174 AC 5)** — SSE endpoint primitive. `on_subscribe(request)` is an async generator yielding dicts; each frames as `data: {json}\n\n`. Auth via `dependencies` resolved on subscribe; bounded queue with `QUEUE_OVERFLOW` close; `EVENT_TOO_LARGE` drop-and-continue; slow-consumer disconnect. The existing `register_sse_endpoint(app)` is now a thin shim over this primitive.
+- **`Nexus.register_websocket` callback overload (#1174 AC 6)** — adds `on_message` / `on_connect` / `on_disconnect` / `subprotocols` / `dependencies` kwargs alongside the existing class-based `handler_cls` path. Discriminator dispatch (not structural). Callback path synthesizes a `MessageHandler` subclass routed through the same origin-allowlist + handshake-auth validation as the class path.
+- **Migration guide** — `packages/kailash-nexus/docs/migration-fastapi.md` walks FastAPI users through auth, typed bodies, file uploads, SSE, WebSocket, and `dependency_overrides`-based tests, with the shipped-surface equivalents.
+
+### Notes
+
+- Typed-body extraction via `Body[T]` and a `Query` extractor are deferred to a follow-up (see migration guide §9). Today, non-extractor handler parameters receive HTTP-body fields via flat-input mapping, and `Bytes` delivers the raw body for manual decode.
+
 ## [2.7.0] — 2026-05-29 — scheduler admin HTTP panel + typed-error wiring (#937)
 
 ### Added
