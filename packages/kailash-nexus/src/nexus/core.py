@@ -272,6 +272,10 @@ class Nexus:
         cors_allow_credentials: bool = False,
         cors_expose_headers: Optional[List[str]] = None,
         cors_max_age: int = 600,
+        # Extractor surface (issue #1174)
+        max_request_body_bytes: int = 10_485_760,
+        max_request_header_bytes: int = 65536,
+        trusted_proxy_cidrs: Optional[List[str]] = None,
         # Shared runtime injection (M3-001)
         runtime=None,
     ):
@@ -343,6 +347,25 @@ class Nexus:
 
         # P0-5: Input validation configuration
         self._max_input_size = 10 * 1024 * 1024  # 10MB default
+
+        # Extractor surface configuration (issue #1174). Caps inherited by the
+        # Bytes / Headers extractors; trusted_proxy_cidrs gates whether
+        # forwarded headers are honoured (default [] = no forwarded trust).
+        self._max_request_body_bytes = max_request_body_bytes
+        self._max_request_header_bytes = max_request_header_bytes
+        # Validate operator CIDR config fail-fast (raises ValueError naming a
+        # malformed entry) rather than silently degrading every request.
+        from nexus.extractors.proxy import validate_trusted_proxy_cidrs
+
+        self._trusted_proxy_cidrs: List[str] = validate_trusted_proxy_cidrs(
+            trusted_proxy_cidrs or []
+        )
+        # dependency_overrides map is wired by Shard 2; the resolver consults
+        # this attribute when present. Initialised to None here so the consult
+        # site in the resolver is a no-op until Shard 2 lands the map.
+        self._dependency_overrides_map: Optional[Dict[Any, Any]] = None
+        # Idempotency flag for the one-time request-capture middleware install.
+        self._extractor_middleware_installed = False
 
         # P0-1: Environment-aware authentication (SECURITY)
         nexus_env = os.getenv("NEXUS_ENV", "development").lower()
@@ -2861,6 +2884,126 @@ Check the documentation or explore available resources.
         self.register(name, workflow, metadata=metadata)
 
         logger.info(f"Handler '{name}' registered (function: {handler_func.__name__})")
+
+    def _ensure_extractor_middleware(self) -> None:
+        """Install the request-capture middleware once (idempotent).
+
+        The middleware captures the originating Starlette ``Request`` into the
+        resolver ContextVar (``nexus.context``) and stamps the configured size
+        cap + trusted-proxy posture onto each request. Installed lazily on the
+        first ``handler_extract`` call so plain Nexus deployments pay nothing.
+        """
+        if self._extractor_middleware_installed:
+            return
+        from nexus.extractors.middleware import RequestCaptureMiddleware
+
+        self.add_middleware(
+            RequestCaptureMiddleware,
+            max_request_body_bytes=self._max_request_body_bytes,
+            max_request_header_bytes=self._max_request_header_bytes,
+            trusted_proxy_cidrs=self._trusted_proxy_cidrs,
+        )
+        self._extractor_middleware_installed = True
+
+    def handler_extract(
+        self,
+        name: str,
+        func: Callable,
+        *,
+        description: str = "",
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        guard: Any = None,
+    ) -> None:
+        """Register ``func`` as a multi-channel handler with extractor support.
+
+        Inspects ``func``'s parameter list and builds a per-handler resolver
+        chain (``nexus.extractors.resolver``):
+
+        - If a parameter's annotation is ``Request`` / ``Headers`` / ``Bytes``
+          — schedule extractor binding at invocation time.
+        - If a parameter's default is ``Depends(callable)`` — schedule
+          dependency resolution (recursive; the callable may itself take
+          extractors). The same ``Depends`` callable referenced twice resolves
+          once per invocation (memoised).
+        - Otherwise — flat input mapping (same semantics as
+          ``register_handler``).
+
+        The resolver wraps ``func`` so the gateway maps HTTP inputs to the
+        FLAT parameters exactly as for a plain handler; the wrapper resolves
+        the extractor parameters before dispatch. ``register_handler`` /
+        ``@app.handler`` continue to work unchanged for non-extractor handlers.
+
+        Args:
+            name: Workflow name for registration.
+            func: The async or sync handler function.
+            description: Optional description.
+            tags: Optional tags for categorization.
+            metadata: Optional structured metadata.
+            guard: Optional AuthGuard for per-handler RBAC.
+
+        Raises:
+            TypeError: ``func`` not callable, or annotation resolution fails —
+                most commonly because the handler's module uses
+                ``from __future__ import annotations`` (PEP 563), which defeats
+                extractor type resolution. The raised
+                ``ExtractorPEP563Error`` (a ``TypeError`` subclass) cites the
+                handler's workspace-relative file:line — see
+                ``docs/migration-fastapi.md`` §8.
+        """
+        if not callable(func):
+            raise TypeError(f"func must be callable, got {type(func).__name__}")
+
+        from nexus.extractors.resolver import build_resolver_chain
+
+        # Build the resolver ONCE at registration. PEP 563 is detected here and
+        # raised LOUD (ExtractorPEP563Error) before any request runs.
+        chain = build_resolver_chain(func)
+
+        self._ensure_extractor_middleware()
+
+        # The wrapper's PUBLIC signature exposes only the flat params, so the
+        # gateway maps HTTP-body inputs to them exactly as for a plain handler.
+        # Extractor params are resolved inside the wrapper at invocation.
+        flat_names = chain.flat_param_names
+        nexus_self = self
+
+        async def _extractor_wrapper(**flat_inputs: Any) -> Any:
+            # Shard 2 wires dependency_overrides consult here: the resolver
+            # consults nexus_self._dependency_overrides_map when present.
+            overrides = getattr(nexus_self, "_dependency_overrides_map", None)
+            return await chain.resolve_and_call(flat_inputs, overrides=overrides)
+
+        # Give the wrapper a signature the HandlerNode introspection maps to the
+        # flat params (so make_handler_workflow derives the right workflow
+        # inputs). A trailing ``**kwargs`` is appended so (a) the registry's
+        # "at least one parameter" gate passes even for handlers whose params
+        # are ALL extractors (flat_names empty), and (b) HandlerNode forwards
+        # every runtime kwarg to the wrapper (the wrapper reads only what it
+        # needs). _derive_params_from_signature skips VAR_KEYWORD, so the
+        # derived workflow inputs are exactly the flat params.
+        import inspect as _inspect
+
+        _params = [
+            _inspect.Parameter(fname, _inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for fname in flat_names
+        ]
+        _params.append(_inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD))
+        _extractor_wrapper.__signature__ = _inspect.Signature(_params)
+        _extractor_wrapper.__name__ = getattr(func, "__name__", name)
+        _extractor_wrapper.__doc__ = description or getattr(func, "__doc__", "")
+
+        # Reuse the existing register_handler path (Invariant 4: same
+        # HandlerNode workflow path). The wrapper is what becomes the node;
+        # the gateway maps inputs to flat_names, the wrapper resolves the rest.
+        self.register_handler(
+            name,
+            _extractor_wrapper,
+            description=description,
+            tags=tags,
+            metadata=metadata,
+            guard=guard,
+        )
 
     def _validate_workflow_sandbox(self, name: str, workflow: Workflow):
         """Check for PythonCodeNode/AsyncPythonCodeNode with blocked imports.

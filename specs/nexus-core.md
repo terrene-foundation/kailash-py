@@ -281,6 +281,37 @@ Non-decorator equivalent. Builds a `HandlerNode` workflow from the function and 
 
 **Contract:** The handler is exposed on all channels just like workflows registered via `register()`.
 
+### 2.3a Extractor-Based Handler Registration (`handler_extract`)
+
+```python
+def handler_extract(
+    self,
+    name: str,
+    func: Callable,
+    *,
+    description: str = "",
+    tags: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    guard: Any = None,
+) -> None
+```
+
+Registers `func` as a multi-channel handler with **extractor** support. The handler's parameters are inspected at registration and classified:
+
+- A parameter whose default is `Depends(callable)` (from `nexus.extractors`) schedules dependency resolution. Dependencies resolve recursively (the callable may itself take extractors) and are memoised once per invocation.
+- A parameter annotated `Request` / `Headers` / `Bytes` (from `nexus.extractors`) binds the corresponding extractor from the originating request.
+- Every other parameter is a flat input (same semantics as `register_handler`).
+
+The resolver builds once at registration and runs once per invocation, before handler dispatch, on the SAME `HandlerNode` workflow path as `register_handler` (Invariant: `register_handler` / `@app.handler` remain backward-compatible for non-extractor handlers). The originating request is captured by `RequestCaptureMiddleware` (installed once, lazily, on the first `handler_extract` call) into the `nexus.context` request ContextVar.
+
+**Extractor surface** (`nexus.extractors`, re-exported from `nexus`): `Depends`, `Request`, `UploadFile`, `Multipart`, `Bytes`, `Headers`, `NexusHandlerError`.
+
+**PEP 563:** if the handler's module enabled the PEP 563 annotations future-import, annotations are strings and the resolver cannot classify them; `handler_extract` raises `ExtractorPEP563Error` (a `TypeError` subclass) at registration, citing the handler's **workspace-relative** `file:line` (never an absolute path — PII hygiene).
+
+**Resolver error-path:** a `Depends` callable that raises is logged in full server-side (exc type, traceback, handler name, dependency `__qualname__`); the client receives ONLY HTTP 500 + `{"error": "internal error", "code": "INTERNAL_ERROR", "correlation_id": "<uuid>"}` — never `str(exc)`, class names, traceback, or paths. A raised `NexusHandlerError` is preserved with its typed `status_code` rather than collapsed to 500.
+
+**Configuration** (on `Nexus(...)`): `max_request_body_bytes` (default 10 MiB; inherited by `Bytes` → HTTP 413 `BODY_TOO_LARGE`), `max_request_header_bytes` (default 64 KiB; `Headers` → HTTP 431 `HEADERS_TOO_LARGE`), `trusted_proxy_cidrs` (default `[]`; gates whether forwarded headers are honoured — the structural `ipaddress` CIDR check never trusts a forwarded header unless the immediate TCP peer is inside a declared CIDR, and fails closed on mixed IP version without raising).
+
 ### 2.4 Custom Endpoint Registration
 
 ```python

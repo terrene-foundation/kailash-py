@@ -41,6 +41,18 @@ from .core import (
 )
 from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
 from .events import EventBus, NexusEvent, NexusEventType
+
+# Extractor surface (issue #1174) — handler_extract inspects these to build a
+# per-handler resolver chain. `Request` is already re-exported from starlette
+# below; the extractor module re-exports the same type.
+from .extractors import (
+    Bytes,
+    Depends,
+    Headers,
+    Multipart,
+    NexusHandlerError,
+    UploadFile,
+)
 from .files import NexusFile
 from .metrics import register_metrics_endpoint
 from .openapi import OpenApiGenerator, OpenApiInfo
@@ -199,4 +211,12 @@ __all__ = [
     # ServiceClient call sites — see nexus/outbound.py)
     "post_webhook",
     "probe_remote_health",
+    # Extractor surface (issue #1174) — handler_extract parameter markers and
+    # extractor classes. `Request` is exported above (shared starlette re-export).
+    "Depends",
+    "UploadFile",
+    "Multipart",
+    "Bytes",
+    "Headers",
+    "NexusHandlerError",
 ]
