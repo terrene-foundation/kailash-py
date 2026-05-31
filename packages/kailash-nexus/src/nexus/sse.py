@@ -36,8 +36,10 @@ Usage::
 import asyncio
 import json
 import logging
+import time
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, List, Optional
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
 
 if TYPE_CHECKING:
     from nexus.core import Nexus
@@ -155,8 +157,11 @@ def register_sse(
     4. **Slow-consumer disconnect** (``slow_consumer_timeout``). When the
        transport cannot accept the next flush within the timeout, the stream
        closes and per-subscription state is released.
-    5. **Rate-limit on SUBSCRIBE**. The ``nexus.auth`` rate-limit hook fires
-       ONCE at handshake; refusal closes with HTTP 429 BEFORE the upgrade.
+    5. **Rate-limit on SUBSCRIBE**. The per-endpoint ``nexus._rate_limit``
+       (requests/minute, per-client-IP) is enforced ONCE at handshake; over the
+       limit closes with HTTP 429 + the canonical ``{"error":...,"code":...}``
+       envelope BEFORE the SSE upgrade (never a partial ``text/event-stream``).
+       A non-positive / ``None`` ``nexus._rate_limit`` disables the limit.
     6. **on_subscribe exception handling**. ``asyncio.CancelledError`` (client
        disconnect / shutdown) releases state and exits silently; any other
        exception logs full context server-side AND emits
@@ -181,26 +186,48 @@ def register_sse(
 
     deps = list(dependencies or [])
 
+    # MUST 5 — per-endpoint, per-client-IP rate limit on SUBSCRIBE. Mirrors
+    # the per-client-IP counting + 429 logic of Nexus.add_custom_endpoint's
+    # rate_limited_func (see core.py): a sliding 60-second window keyed by
+    # client IP, with eviction of windows older than 5 minutes to bound the
+    # counter map. The cap is nexus._rate_limit (req/min); a non-positive /
+    # None value disables the limit (preserves existing no-limit semantics).
+    _rate_limit_window = 60  # seconds
+    _request_counts: Dict[str, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
+
+    def _rate_limit_exceeded(request: Request) -> bool:
+        rate_limit = getattr(nexus, "_rate_limit", None)
+        if not isinstance(rate_limit, int) or rate_limit <= 0:
+            return False  # no limit configured
+        client_ip = request.client.host if request.client else "unknown"
+        current_window = int(time.time() // _rate_limit_window)
+        per_client = _request_counts[client_ip]
+        if per_client[current_window] >= rate_limit:
+            return True
+        per_client[current_window] += 1
+        # Evict windows older than 5 minutes to bound the counter map.
+        stale = [w for w in per_client if w < current_window - 5]
+        for w in stale:
+            del per_client[w]
+        return False
+
     async def sse_handler(request: Request):
         # MUST 5 — rate-limit on the SUBSCRIBE event, once at handshake,
-        # BEFORE the SSE upgrade. Refusal -> HTTP 429 (NOT a partial stream).
-        rate_limit_check = getattr(getattr(nexus, "auth", None), "rate_limit", None)
-        if callable(rate_limit_check):
-            try:
-                allowed = rate_limit_check(request)
-                if asyncio.iscoroutine(allowed):
-                    allowed = await allowed
-            except Exception:  # noqa: BLE001 — fail closed on hook error
-                logger.exception(
-                    "sse.subscribe.rate_limit_hook_error",
-                    extra={"path": path},
-                )
-                allowed = False
-            if allowed is False:
-                return JSONResponse(
-                    {"error": "rate limit exceeded", "code": "RATE_LIMITED"},
-                    status_code=429,
-                )
+        # BEFORE the SSE upgrade. Over the limit -> HTTP 429 with the canonical
+        # error envelope (NOT a partial stream). Per rules/
+        # nexus-http-status-convention.md Rule 2: {"error":...,"code":...}.
+        if _rate_limit_exceeded(request):
+            logger.warning(
+                "sse.subscribe.rate_limited",
+                extra={"path": path},
+            )
+            return JSONResponse(
+                {
+                    "error": "rate limit exceeded",
+                    "code": "RATE_LIMITED",
+                },
+                status_code=429,
+            )
 
         # MUST 1 — resolve auth dependencies on SUBSCRIBE, BEFORE the
         # handshake. A raising Depends closes with the typed status + JSON
@@ -361,22 +388,60 @@ async def _sse_stream(
     # on every iteration and emit keepalives in a tight loop.
     keepalive_timeout = keepalive_interval if keepalive_interval > 0 else None
 
+    # MUST 4 — slow-consumer disconnect. Track the wall-clock time since the
+    # last successful drain to the transport (a successful ``yield``). When no
+    # frame OR keepalive flushes within ``slow_consumer_timeout`` seconds the
+    # consumer is wedged (the transport cannot accept the next flush), so we
+    # close the stream and the ``finally`` cancels the producer + releases per-
+    # subscription state. A non-positive timeout disables the slow-consumer
+    # cap (block indefinitely). Distinct from keepalive_interval: keepalive
+    # EMITS a comment and continues; slow-consumer RETURNS (terminal).
+    slow_consumer_enabled = slow_consumer_timeout > 0
+    last_flush = time.monotonic()
+
+    def _wait_budget() -> Optional[float]:
+        # Per-iteration wait is bounded by the keepalive cadence AND the
+        # remaining slow-consumer budget, so an idle stream still wakes to
+        # check the slow-consumer deadline even when no event arrives.
+        if not slow_consumer_enabled:
+            return keepalive_timeout
+        remaining = slow_consumer_timeout - (time.monotonic() - last_flush)
+        remaining = max(remaining, 0.0)
+        if keepalive_timeout is None:
+            return remaining
+        return min(keepalive_timeout, remaining)
+
     producer = asyncio.ensure_future(_producer())
     try:
         while True:
+            wait = _wait_budget()
             try:
-                # MUST 4 — slow-consumer / idle handling. wait_for bounds the
-                # idle window: on keepalive_interval idleness we emit a
-                # comment; the producer drains independently so a stuck
-                # consumer cannot wedge the producer past the queue bound.
-                if keepalive_timeout is None:
+                # The producer drains independently so a stuck consumer cannot
+                # wedge the producer past the queue bound.
+                if wait is None:
                     item = await queue.get()
                 else:
-                    item = await asyncio.wait_for(
-                        queue.get(), timeout=keepalive_timeout
-                    )
+                    item = await asyncio.wait_for(queue.get(), timeout=wait)
             except asyncio.TimeoutError:
-                yield ": keepalive\n\n"
+                # No event arrived within the wait budget. If the slow-consumer
+                # deadline has elapsed since the last successful flush, the
+                # transport is wedged — close (MUST 4). Otherwise emit a
+                # keepalive (only when keepalive is enabled) and continue.
+                if (
+                    slow_consumer_enabled
+                    and (time.monotonic() - last_flush) >= slow_consumer_timeout
+                ):
+                    logger.warning(
+                        "sse.slow_consumer_disconnect",
+                        extra={
+                            "path": path,
+                            "slow_consumer_timeout": slow_consumer_timeout,
+                        },
+                    )
+                    return
+                if keepalive_timeout is not None:
+                    yield ": keepalive\n\n"
+                    last_flush = time.monotonic()
                 continue
 
             if item is _DONE:
@@ -388,8 +453,10 @@ async def _sse_stream(
             kind, value, extra = item
             if kind == "data":
                 yield f"data: {value}\n\n"
+                last_flush = time.monotonic()
             elif kind == "error":
                 yield _sse_error_frame(value, **extra)
+                last_flush = time.monotonic()
                 if value == "INTERNAL_ERROR":
                     # INTERNAL_ERROR is terminal — EOF after the frame.
                     return
