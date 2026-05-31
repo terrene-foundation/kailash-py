@@ -173,6 +173,105 @@ def _extract_handshake_headers(ws: Any) -> Mapping[str, str]:
     return _EMPTY_HEADERS
 
 
+def _validate_subprotocols(subprotocols: Optional[List[str]]) -> List[str]:
+    """Validate the ``subprotocols`` allowlist at registration time.
+
+    Returns a fresh ``list[str]`` (empty when ``None`` — the default-reject
+    posture). Raises ``ValueError`` on a non-list or a non-string / empty
+    entry so a malformed allowlist never silently registers (issue #1174
+    AC 6 MUST 2).
+    """
+    if subprotocols is None:
+        return []
+    if isinstance(subprotocols, str):
+        raise ValueError(
+            "subprotocols must be a list of strings, not a single string "
+            '(did you mean subprotocols=["chat.v1"]?)'
+        )
+    validated: List[str] = []
+    for raw in subprotocols:
+        if not isinstance(raw, str):
+            raise ValueError(
+                f"subprotocols entries must be str; got {type(raw).__name__}"
+            )
+        entry = raw.strip()
+        if not entry:
+            raise ValueError("subprotocols entries must be non-empty strings")
+        validated.append(entry)
+    return validated
+
+
+def _offered_subprotocols(ws: Any) -> List[str]:
+    """Return the client's offered ``Sec-WebSocket-Protocol`` values.
+
+    Parses the comma-separated header per RFC 6455 §11.3.4. Returns an empty
+    list when the client offered none.
+    """
+    headers = _extract_handshake_headers(ws)
+    raw = headers.get("sec-websocket-protocol")
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+async def _resolve_ws_dependencies(dependencies: List[Any], ws: Any) -> None:
+    """Resolve handshake-auth ``Depends`` immediately post-upgrade, pre-on_connect.
+
+    Routes through the Shard-1 resolver chain (``nexus.extractors.resolver``)
+    so WS handshake auth is byte-identical to the HTTP path. The ``Depends``
+    callables resolve against a synthetic Starlette-style request built from
+    the handshake headers (the WebSocket has no Starlette ``Request``); the
+    callables typically read ``request.headers`` for a bearer token.
+
+    Timing note: ``websockets.serve()`` performs the Upgrade BEFORE the
+    transport's connection handler runs, so this resolution executes against an
+    already-upgraded socket — NOT before the upgrade. The security boundary
+    still holds: a raising dependency is rejected here, BEFORE ``on_connect``
+    or any application message, and the socket is closed with WS close code
+    1008 (policy violation). A clean HTTP 401/403 response body cannot be
+    emitted after the upgrade completes; WS-1008 is the correct WS-native
+    rejection. (issue #1174 AC 6 MUST 4. True pre-upgrade ``process_request``
+    rejection — which CAN emit an HTTP 401/403 — is a separate follow-up.)
+    """
+    if not dependencies:
+        return
+    from nexus.context import _current_request, set_current_request
+    from nexus.extractors import Depends
+    from nexus.extractors.resolver import ResolverChain
+
+    request = _HandshakeRequest(_extract_handshake_headers(ws))
+    token = set_current_request(request)
+    try:
+        chain = ResolverChain(lambda: None, [])
+        cache: Dict[Callable, Any] = {}
+        for dep in dependencies:
+            if not isinstance(dep, Depends):
+                raise TypeError(
+                    "register_websocket dependencies must be Depends(...) "
+                    f"markers; got {type(dep).__name__}"
+                )
+            await chain._resolve_dependency(dep, request, cache, None)
+    finally:
+        _current_request.reset(token)
+
+
+class _HandshakeRequest:
+    """Minimal Starlette-``Request``-shaped view over WS handshake headers.
+
+    The WebSocket handshake has no Starlette ``Request`` object, but handshake
+    ``Depends`` callables that read ``request.headers`` for a bearer token need
+    a header surface. This adapter exposes the captured handshake headers (a
+    read-only case-insensitive Mapping) as ``.headers`` so a ``Depends`` that
+    inspects ``request.headers.get("authorization")`` works unchanged. It is
+    NOT a full Request — it carries handshake auth context only.
+    """
+
+    __slots__ = ("headers",)
+
+    def __init__(self, headers: Mapping[str, str]) -> None:
+        self.headers = headers
+
+
 # ---------------------------------------------------------------------------
 # Connection
 # ---------------------------------------------------------------------------
@@ -572,6 +671,14 @@ class MessageHandlerRegistry:
         # path -> validated allowed_origins list (None == SDK does
         # not enforce; handler must use conn.headers itself).
         self._allowed_origins_by_path: Dict[str, Optional[List[str]]] = {}
+        # path -> subprotocol allowlist (issue #1174 AC 6 MUST 2). Empty list
+        # (the default) means default-reject ANY client-offered subprotocol.
+        self._subprotocols_by_path: Dict[str, List[str]] = {}
+        # path -> max inbound message size in bytes (issue #1174 AC 6 MUST 3).
+        # None == inherit the transport's max_size (no per-path override).
+        self._max_message_bytes_by_path: Dict[str, Optional[int]] = {}
+        # path -> handshake-auth Depends list (issue #1174 AC 6 MUST 4).
+        self._dependencies_by_path: Dict[str, List[Any]] = {}
 
     # ------------------------------------------------------------------
     # Registration
@@ -583,6 +690,9 @@ class MessageHandlerRegistry:
         handler_cls: Type[MessageHandler],
         *,
         allowed_origins: Optional[List[str]] = None,
+        subprotocols: Optional[List[str]] = None,
+        dependencies: Optional[List[Any]] = None,
+        max_message_bytes: Optional[int] = None,
     ) -> MessageHandler:
         """Register a handler class against a URL path.
 
@@ -604,6 +714,33 @@ class MessageHandlerRegistry:
                 ``conn.headers`` from inside ``on_connect`` for custom
                 enforcement OR explicitly accept that the endpoint is
                 Origin-unfiltered. Issue #673.
+            subprotocols: optional allowlist of ``Sec-WebSocket-Protocol``
+                values (issue #1174 AC 6 MUST 2). Negotiation is
+                REJECT-ONLY: the allowlist is VALIDATED against the client's
+                offered subprotocols but the accepted value is NOT echoed back
+                to the client (no ``Sec-WebSocket-Protocol`` on the accept).
+                The default (``None`` / ``[]``) DEFAULT-REJECTS any
+                client-offered subprotocol: a handshake offering a subprotocol
+                when the list is empty closes with code 1002 (protocol error).
+                A non-empty list admits the connection when at least one offered
+                value is present in the list, and closes with 1002 otherwise.
+                (Echoing the accepted subprotocol per RFC 6455 §4.2.2 via
+                ``select_subprotocol`` is a separate follow-up — it shares the
+                ``serve()``-rewiring root with the pre-upgrade ``Depends``
+                follow-up.)
+            dependencies: optional list of ``Depends(...)`` markers
+                resolved immediately POST-upgrade and BEFORE ``on_connect``
+                / any application message (issue #1174 AC 6 MUST 4). A raising
+                dependency closes the socket with WS close code 1008 (the typed
+                HTTP status rides in the close reason); the handler lifecycle
+                never starts. ``websockets.serve()`` upgrades before this runs,
+                so a clean pre-upgrade HTTP 401/403 body is not emittable —
+                WS-1008 is the WS-native rejection (true pre-upgrade
+                ``process_request`` rejection is a separate follow-up).
+            max_message_bytes: optional per-path inbound message-size cap
+                (issue #1174 AC 6 MUST 3). A frame exceeding the cap
+                closes the connection with code 1009 (message too big).
+                ``None`` inherits the transport-level ``max_size``.
 
         Raises:
             ValueError: if ``path`` is already registered, is not a
@@ -634,6 +771,7 @@ class MessageHandlerRegistry:
         # ValueError on failure; raises BEFORE the handler is
         # instantiated so a bad allowlist never silently registers).
         validated_origins = validate_origin_allowlist(allowed_origins)
+        validated_subprotocols = _validate_subprotocols(subprotocols)
 
         handler = handler_cls()
         handler._registry = self
@@ -641,6 +779,9 @@ class MessageHandlerRegistry:
         self._handlers[path] = handler
         self._connections_by_path[path] = {}
         self._allowed_origins_by_path[path] = validated_origins
+        self._subprotocols_by_path[path] = validated_subprotocols
+        self._dependencies_by_path[path] = list(dependencies or [])
+        self._max_message_bytes_by_path[path] = max_message_bytes
         logger.info(
             "ws.handler.registered",
             extra={
@@ -690,6 +831,9 @@ class MessageHandlerRegistry:
         self._handlers.clear()
         self._connections_by_path.clear()
         self._allowed_origins_by_path.clear()
+        self._subprotocols_by_path.clear()
+        self._dependencies_by_path.clear()
+        self._max_message_bytes_by_path.clear()
 
     def get_allowed_origins(self, path: str) -> Optional[List[str]]:
         """Return the validated allowed_origins list for ``path``.
@@ -784,6 +928,76 @@ class MessageHandlerRegistry:
                 # through to the legacy single-path guard.
                 return True
 
+        # Issue #1174 AC 6 MUST 2 — subprotocol allowlist (default-reject,
+        # REJECT-ONLY). An empty allowlist (the default) rejects ANY offered
+        # subprotocol with code 1002 (protocol error); a non-empty list admits
+        # the connection when at least one offered value is present in the list.
+        # The accepted subprotocol is NOT echoed to the client (no
+        # Sec-WebSocket-Protocol on the accept) — echoing per RFC 6455 §4.2.2
+        # requires select_subprotocol on serve(), a separate follow-up sharing
+        # the serve()-rewiring root. Enforced immediately post-upgrade and
+        # BEFORE on_connect so a disallowed subprotocol never reaches the
+        # handler lifecycle.
+        allowed_subprotocols = self._subprotocols_by_path.get(path, [])
+        offered = _offered_subprotocols(ws)
+        if offered:
+            if not allowed_subprotocols or not any(
+                p in allowed_subprotocols for p in offered
+            ):
+                logger.warning(
+                    "ws.handler.subprotocol_rejected",
+                    extra={
+                        "path": path,
+                        "handler": type(handler).__name__,
+                        "offered_count": len(offered),
+                    },
+                )
+                try:
+                    await ws.close(1002, "subprotocol not allowed")
+                except Exception as exc:  # noqa: BLE001 — best-effort
+                    logger.debug(
+                        "ws.handler.subprotocol_close_failed",
+                        extra={"path": path, "error": str(exc)},
+                    )
+                return True
+
+        # Issue #1174 AC 6 MUST 4 — handshake auth via Depends, resolved
+        # immediately POST-upgrade and BEFORE on_connect / any application
+        # message (websockets.serve() upgrades before this handler runs, so a
+        # clean pre-upgrade HTTP 401/403 body is not emittable here — WS-1008
+        # is the correct WS-native rejection). A raising dependency closes the
+        # socket with WS close code 1008, carrying the typed HTTP status in the
+        # close reason for triage; on_connect / on_disconnect do NOT fire
+        # (connection never reached the handler lifecycle).
+        ws_dependencies = self._dependencies_by_path.get(path, [])
+        if ws_dependencies:
+            try:
+                await _resolve_ws_dependencies(ws_dependencies, ws)
+            except Exception as exc:  # noqa: BLE001
+                from nexus.extractors import NexusHandlerError
+
+                status = exc.status_code if isinstance(exc, NexusHandlerError) else 401
+                logger.warning(
+                    "ws.handler.handshake_auth_rejected",
+                    extra={
+                        "path": path,
+                        "handler": type(handler).__name__,
+                        "status": status,
+                        "exc_type": type(exc).__name__,
+                    },
+                )
+                # RFC 6455 §7.4.1: 1008 (policy violation) is the WS-native
+                # close for an authz failure; the typed HTTP status is in the
+                # reason for operator triage (never echoed credential bytes).
+                try:
+                    await ws.close(1008, f"unauthorized ({status})")
+                except Exception as close_exc:  # noqa: BLE001 — best-effort
+                    logger.debug(
+                        "ws.handler.handshake_auth_close_failed",
+                        extra={"path": path, "error": str(close_exc)},
+                    )
+                return True
+
         connection_id = uuid.uuid4().hex
         conn = Connection(ws, connection_id, path, headers=headers)
         self._connections_by_path[path][connection_id] = conn
@@ -834,7 +1048,30 @@ class MessageHandlerRegistry:
 
     async def _receive_loop(self, handler: MessageHandler, conn: Connection) -> None:
         """Read frames from the socket and dispatch to the handler."""
+        # Issue #1174 AC 6 MUST 3 — per-path max inbound message size. A frame
+        # exceeding the cap closes the connection with code 1009 (message too
+        # big). None inherits the transport-level max_size (the websockets
+        # library rejects oversized frames at the protocol layer in that case).
+        max_message_bytes = self._max_message_bytes_by_path.get(conn.path)
         async for raw in conn.ws:
+            if max_message_bytes is not None:
+                frame_len = (
+                    len(raw)
+                    if isinstance(raw, (bytes, bytearray))
+                    else len(raw.encode("utf-8"))
+                )
+                if frame_len > max_message_bytes:
+                    logger.warning(
+                        "ws.handler.message_too_big",
+                        extra={
+                            "path": conn.path,
+                            "connection_id": conn.connection_id,
+                            "size": frame_len,
+                            "cap": max_message_bytes,
+                        },
+                    )
+                    await conn.close(1009, "message too big")
+                    return
             if isinstance(raw, bytes):
                 try:
                     raw = raw.decode("utf-8")

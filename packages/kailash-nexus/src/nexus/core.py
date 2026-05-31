@@ -275,6 +275,7 @@ class Nexus:
         # Extractor surface (issue #1174)
         max_request_body_bytes: int = 10_485_760,
         max_request_header_bytes: int = 65536,
+        max_websocket_message_bytes: int = 1_048_576,
         trusted_proxy_cidrs: Optional[List[str]] = None,
         # Shared runtime injection (M3-001)
         runtime=None,
@@ -353,6 +354,7 @@ class Nexus:
         # forwarded headers are honoured (default [] = no forwarded trust).
         self._max_request_body_bytes = max_request_body_bytes
         self._max_request_header_bytes = max_request_header_bytes
+        self._max_websocket_message_bytes = max_websocket_message_bytes
         # Validate operator CIDR config fail-fast (raises ValueError naming a
         # malformed entry) rather than silently degrading every request.
         from nexus.extractors.proxy import validate_trusted_proxy_cidrs
@@ -737,73 +739,218 @@ class Nexus:
     def register_websocket(
         self,
         path: str,
-        handler_cls,
+        handler_cls=None,
         *,
+        on_message=None,
+        on_connect=None,
+        on_disconnect=None,
         allowed_origins: Optional[List[str]] = None,
+        subprotocols: Optional[List[str]] = None,
+        dependencies: Optional[List[Any]] = None,
     ) -> Any:
-        """Imperative form of :meth:`websocket`.
+        """Register a WebSocket endpoint at ``path``.
 
-        Useful when the handler class is defined elsewhere and you
-        want to register it conditionally. Returns the instantiated
-        handler so the caller can wire external publishers.
+        Two shapes (issue #1174 AC 6):
+
+        1. **Class-based** (existing) — pass a
+           :class:`~nexus.websocket_handlers.MessageHandler` subclass as
+           ``handler_cls``.
+        2. **Callback** (new) — pass ``on_message`` (required) plus optional
+           ``on_connect`` / ``on_disconnect``. The SDK synthesizes a
+           ``MessageHandler`` subclass that wraps the callbacks and routes
+           through the SAME ``_ws_message_handlers.register`` call — so the
+           callback path inherits the class path's origin allowlist,
+           subprotocol allowlist, handshake auth, and max-frame enforcement
+           with NO parallel codepath.
+
+        Dispatch (per ``rules/zero-tolerance.md`` Rule 3d — discriminator, NOT
+        structural ``hasattr``):
+
+        - ``handler_cls is not None`` AND ``issubclass(handler_cls,
+          MessageHandler)`` → class-based path.
+        - ``handler_cls is None`` AND ``on_message is not None`` → callback
+          path (synthesizes a class).
+        - both / neither → :class:`ValueError` naming the BLOCKED case.
+
+        Callback signatures:
+
+        - ``on_message(conn, msg)`` — required for the callback shape; a
+          non-``None`` return value is auto-sent back to the same client (the
+          existing reply contract, issue #618).
+        - ``on_connect(conn)`` / ``on_disconnect(conn)`` — optional lifecycle
+          hooks.
 
         Args:
             path: URL path (must start with ``/``).
             handler_cls: subclass of
-                :class:`~nexus.websocket_handlers.MessageHandler`.
-            allowed_origins: optional list of HTTP ``Origin`` header
-                values allowed to open this WebSocket. When set, the
-                SDK rejects every handshake whose ``Origin`` header
-                does NOT match an entry BEFORE invoking
-                ``on_connect`` — closing the WebSocket with code
-                1008 (RFC 6455 policy violation) and a fingerprinted
-                reason that does NOT echo the rejected Origin back
-                to the client.
-
-                Entries:
-
-                - **Exact origin** (``"https://app.example.com"``) —
-                  case-sensitive byte-equal match against the request's
-                  ``Origin`` header.
-                - **Wildcard subdomain** (``"https://*.example.com"``) —
-                  matches strict subdomains of ``example.com`` whose
-                  scheme matches the entry's scheme. Does NOT match
-                  the bare ``example.com`` (the entry says ``*.``,
-                  requiring at least one subdomain label) and does
-                  NOT match ``example.com.evil.com`` (suffix-with-dot
-                  defense).
-                - **Literal ``"*"``** — accepts any non-empty origin.
-                  BLOCKED at registration unless the env var
-                  ``KAILASH_NEXUS_ALLOW_WILDCARD_ORIGIN=true`` is
-                  set. Fail-closed default: production deployments
-                  MUST list explicit origins; the ``"*"`` opt-in is
-                  for development / private internal services where
-                  the operator has explicitly accepted that any
-                  browser-reachable origin can open the socket.
-
-                When ``None`` (the default), the SDK does NOT
-                enforce — the registry emits a one-time WARN log at
-                registration naming the path so operators see the
-                gap. Consumers needing custom enforcement (signed-
-                token auth, per-tenant header validation) MUST use
-                :attr:`~nexus.websocket_handlers.Connection.headers`
-                from inside ``on_connect``.
+                :class:`~nexus.websocket_handlers.MessageHandler` (class
+                shape), or ``None`` for the callback shape.
+            on_message: ``async def on_message(conn, msg)`` (callback shape).
+            on_connect: optional ``async def on_connect(conn)``.
+            on_disconnect: optional ``async def on_disconnect(conn)``.
+            allowed_origins: optional ``Origin`` allowlist. Mismatches close
+                the handshake with code 1008 + a fingerprinted reason (never
+                echoing the raw Origin). See :func:`validate_origin_allowlist`
+                for entry shapes (exact origins, ``https://*.x.com``
+                wildcards, fail-closed ``"*"``). ``None`` disables SDK
+                enforcement (issue #673).
+            subprotocols: optional ``Sec-WebSocket-Protocol`` allowlist (issue
+                #1174 AC 6 MUST 2). Negotiation is REJECT-ONLY: the allowlist
+                is validated against the client's offered subprotocols but the
+                accepted value is NOT echoed back (no ``Sec-WebSocket-Protocol``
+                on the accept — echoing per RFC 6455 §4.2.2 is a separate
+                follow-up sharing the ``serve()``-rewiring root). The default
+                (``None`` / ``[]``) default-rejects ANY offered subprotocol
+                with code 1002.
+            dependencies: optional ``Depends(...)`` markers resolved
+                immediately POST-upgrade and BEFORE ``on_connect`` / any
+                application message (issue #1174 AC 6 MUST 4). A raising
+                dependency closes the socket with WS close code 1008 (the typed
+                HTTP status rides in the close reason); the handler lifecycle
+                never starts. ``websockets.serve()`` completes the upgrade
+                before the check runs, so a clean pre-upgrade HTTP 401/403 body
+                is not emittable — WS-1008 is the WS-native rejection (true
+                pre-upgrade ``process_request`` rejection is a separate
+                follow-up).
 
         Returns:
             The instantiated handler so the caller can wire external
             publishers.
 
         Raises:
-            ValueError: if ``allowed_origins`` fails validation
-                (empty list, non-string entry, malformed wildcard,
-                literal ``"*"`` without env opt-in).
+            ValueError: dispatch ambiguity (both ``handler_cls`` and
+                ``on_message`` given, or neither), an already-registered
+                ``path``, or invalid ``allowed_origins`` / ``subprotocols``.
+            TypeError: ``handler_cls`` is not a ``MessageHandler`` subclass.
 
-        Cross-SDK parity: kailash-rs is expected to ship the same
-        surface semantically (per EATP D6) at the equivalent
-        register_websocket surface. Issue #673.
+        Cross-SDK parity: kailash-rs is expected to ship the same surface
+        semantically (per EATP D6). Issues #673 + #1174.
         """
+        from nexus.websocket_handlers import Connection, MessageHandler
+
+        is_class = handler_cls is not None and (
+            isinstance(handler_cls, type) and issubclass(handler_cls, MessageHandler)
+        )
+        is_callback = handler_cls is None and on_message is not None
+
+        # Discriminator dispatch (rules/zero-tolerance.md Rule 3d). Both /
+        # neither is a ValueError naming the BLOCKED case — never a silent
+        # structural-guard fall-through.
+        if is_class and on_message is not None:
+            raise ValueError(
+                "register_websocket: pass EITHER handler_cls (class shape) OR "
+                "on_message (callback shape), not both — the dispatch is "
+                "ambiguous"
+            )
+        if not is_class and not is_callback:
+            if handler_cls is not None and not is_class:
+                # handler_cls supplied but not a MessageHandler subclass.
+                raise TypeError(
+                    f"register_websocket: handler_cls must be a MessageHandler "
+                    f"subclass (got {handler_cls!r}); pass on_message=... for "
+                    f"the callback shape"
+                )
+            raise ValueError(
+                "register_websocket: pass EITHER handler_cls (class shape) OR "
+                "on_message (callback shape) — got neither"
+            )
+
+        if is_class:
+            target_cls = handler_cls
+        else:
+            target_cls = self._synthesize_ws_handler(
+                on_message=on_message,
+                on_connect=on_connect,
+                on_disconnect=on_disconnect,
+            )
+
         return self._ws_message_handlers.register(
-            path, handler_cls, allowed_origins=allowed_origins
+            path,
+            target_cls,
+            allowed_origins=allowed_origins,
+            subprotocols=subprotocols,
+            dependencies=dependencies,
+            max_message_bytes=self._max_websocket_message_bytes,
+        )
+
+    @staticmethod
+    def _synthesize_ws_handler(*, on_message, on_connect, on_disconnect):
+        """Build a ``MessageHandler`` subclass wrapping the callbacks.
+
+        The synthesized class delegates each lifecycle hook to the user
+        callback (or a no-op when the callback is ``None``). ``on_message``'s
+        return value flows back through the registry's existing reply contract
+        (issue #618), so a callback returning a dict auto-replies to the same
+        client. The class carries NO security logic — origin / subprotocol /
+        handshake-auth / max-frame all live in the shared registry codepath.
+        """
+        from nexus.websocket_handlers import MessageHandler
+
+        async def _on_connect(self, conn):
+            if on_connect is not None:
+                await on_connect(conn)
+
+        async def _on_message(self, conn, msg):
+            return await on_message(conn, msg)
+
+        async def _on_disconnect(self, conn):
+            if on_disconnect is not None:
+                await on_disconnect(conn)
+
+        return type(
+            "_CallbackHandler",
+            (MessageHandler,),
+            {
+                "on_connect": _on_connect,
+                "on_message": _on_message,
+                "on_disconnect": _on_disconnect,
+            },
+        )
+
+    def register_sse(
+        self,
+        path: str,
+        on_subscribe,
+        *,
+        keepalive_interval: int = 15,
+        dependencies: Optional[List[Any]] = None,
+        max_queue_depth: int = 1000,
+        max_event_bytes: int = 65_536,
+        slow_consumer_timeout: float = 30.0,
+    ) -> None:
+        """Register a Server-Sent Events (SSE) endpoint at ``path``.
+
+        Thin instance-method facade over :func:`nexus.sse.register_sse` (issue
+        #1174 AC 5). ``on_subscribe(request)`` is an async generator yielding
+        ``dict`` events; each is framed as ``data: {json}\\n\\n``. See
+        :func:`nexus.sse.register_sse` for the full 6-MUST contract (auth via
+        ``dependencies`` on subscribe, bounded queue + ``QUEUE_OVERFLOW``,
+        ``EVENT_TOO_LARGE`` drop-and-continue, slow-consumer disconnect,
+        subscribe rate-limit, and ``on_subscribe`` split-visibility error
+        handling).
+
+        Args:
+            path: URL path for the SSE endpoint.
+            on_subscribe: ``async def on_subscribe(request)`` generator
+                yielding ``dict`` events.
+            keepalive_interval: seconds of idleness before a keepalive comment.
+            dependencies: list of ``Depends(...)`` markers resolved on
+                subscribe for their auth side effect.
+            max_queue_depth: per-subscription event-buffer bound.
+            max_event_bytes: per-event serialized-JSON cap.
+            slow_consumer_timeout: flush timeout before slow-consumer close.
+        """
+        from nexus.sse import register_sse as _register_sse
+
+        _register_sse(
+            self,
+            path,
+            on_subscribe,
+            keepalive_interval=keepalive_interval,
+            dependencies=dependencies,
+            max_queue_depth=max_queue_depth,
+            max_event_bytes=max_event_bytes,
+            slow_consumer_timeout=slow_consumer_timeout,
         )
 
     async def websocket_broadcast(self, path: str, event: Any) -> None:

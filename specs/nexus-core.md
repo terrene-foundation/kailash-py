@@ -711,3 +711,19 @@ register_sse_endpoint(app)
 app.register("pipeline", pipeline.build())
 app.start()
 ```
+
+### 29.7 SSE Streaming (`register_sse`)
+
+`Nexus.register_sse(path, on_subscribe, *, keepalive_interval=15, dependencies=[], max_queue_depth=1000, max_event_bytes=65_536, slow_consumer_timeout=30.0)` (issue #1174 AC 5) registers a general parameterized Server-Sent Events endpoint. `on_subscribe(request)` is an async generator yielding `dict` events; each is framed as `data: {json}\n\n` with canonical SSE headers (`text/event-stream`, `no-cache`, `X-Accel-Buffering: no`) and keepalive comments on idleness.
+
+```python
+async def on_subscribe(request):
+    async for row in db.express.stream("Trade"):
+        yield {"price": row["price"]}
+
+app.register_sse("/feed", on_subscribe, dependencies=[Depends(require_token)])
+```
+
+The endpoint carries the full HTTP-handler security posture: `dependencies` (each `Depends` resolves on subscribe through the resolver chain — a raising dependency closes with the typed 401/403 + JSON body BEFORE the SSE handshake, never a partial event-stream); a bounded `asyncio.Queue(maxsize=max_queue_depth)` (overflow emits `event: error\ndata: {"code":"QUEUE_OVERFLOW"}` then EOF); a per-event `max_event_bytes` cap (oversized events are dropped with `EVENT_TOO_LARGE` and the stream CONTINUES); a `slow_consumer_timeout`; a SUBSCRIBE-time rate-limit (refusal → HTTP 429 before upgrade); and `on_subscribe` split-visibility error handling (`CancelledError` releases state silently, any other exception logs full context server-side + emits `INTERNAL_ERROR` with a correlation id then EOF).
+
+`register_sse_endpoint(app)` (the EventBus-backed `GET /events/stream` convenience shown in §29.6) is a thin shim over `register_sse` with an EventBus-backed `on_subscribe` — no behavior change for existing consumers.
