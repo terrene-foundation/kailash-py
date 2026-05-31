@@ -299,6 +299,14 @@ class Node(ABC):
                 # raise. Don't mask the bug; just skip capture.
                 return
 
+            if not isinstance(self.config, dict):
+                # Param-capture merges init params into the dict that
+                # Node.__init__ creates. A subclass that deliberately replaces
+                # self.config with a typed config object (e.g. BaseAgentConfig)
+                # opts out of capture — skip rather than crash on the `in` /
+                # item-assignment operations below, which require a mapping.
+                return
+
             for name in param_names_to_capture:
                 if name in self.config:
                     # Subclass already forwarded this via **kwargs; preserve.
