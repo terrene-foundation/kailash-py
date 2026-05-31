@@ -215,15 +215,23 @@ def _offered_subprotocols(ws: Any) -> List[str]:
 
 
 async def _resolve_ws_dependencies(dependencies: List[Any], ws: Any) -> None:
-    """Resolve handshake-auth ``Depends`` BEFORE the WebSocket upgrade.
+    """Resolve handshake-auth ``Depends`` immediately post-upgrade, pre-on_connect.
 
     Routes through the Shard-1 resolver chain (``nexus.extractors.resolver``)
     so WS handshake auth is byte-identical to the HTTP path. The ``Depends``
     callables resolve against a synthetic Starlette-style request built from
     the handshake headers (the WebSocket has no Starlette ``Request``); the
-    callables typically read ``request.headers`` for a bearer token. A raising
-    dependency propagates so the caller closes with HTTP 401/403 (issue #1174
-    AC 6 MUST 4).
+    callables typically read ``request.headers`` for a bearer token.
+
+    Timing note: ``websockets.serve()`` performs the Upgrade BEFORE the
+    transport's connection handler runs, so this resolution executes against an
+    already-upgraded socket — NOT before the upgrade. The security boundary
+    still holds: a raising dependency is rejected here, BEFORE ``on_connect``
+    or any application message, and the socket is closed with WS close code
+    1008 (policy violation). A clean HTTP 401/403 response body cannot be
+    emitted after the upgrade completes; WS-1008 is the correct WS-native
+    rejection. (issue #1174 AC 6 MUST 4. True pre-upgrade ``process_request``
+    rejection — which CAN emit an HTTP 401/403 — is a separate follow-up.)
     """
     if not dependencies:
         return
@@ -707,15 +715,28 @@ class MessageHandlerRegistry:
                 enforcement OR explicitly accept that the endpoint is
                 Origin-unfiltered. Issue #673.
             subprotocols: optional allowlist of ``Sec-WebSocket-Protocol``
-                values (issue #1174 AC 6 MUST 2). The default (``None``
-                / ``[]``) DEFAULT-REJECTS any client-offered subprotocol:
-                a handshake offering a subprotocol when the list is empty
-                closes with code 1002 (protocol error). A non-empty list
-                accepts only offered subprotocols present in the list.
+                values (issue #1174 AC 6 MUST 2). Negotiation is
+                REJECT-ONLY: the allowlist is VALIDATED against the client's
+                offered subprotocols but the accepted value is NOT echoed back
+                to the client (no ``Sec-WebSocket-Protocol`` on the accept).
+                The default (``None`` / ``[]``) DEFAULT-REJECTS any
+                client-offered subprotocol: a handshake offering a subprotocol
+                when the list is empty closes with code 1002 (protocol error).
+                A non-empty list admits the connection when at least one offered
+                value is present in the list, and closes with 1002 otherwise.
+                (Echoing the accepted subprotocol per RFC 6455 §4.2.2 via
+                ``select_subprotocol`` is a separate follow-up — it shares the
+                ``serve()``-rewiring root with the pre-upgrade ``Depends``
+                follow-up.)
             dependencies: optional list of ``Depends(...)`` markers
-                resolved AT HANDSHAKE, BEFORE the WebSocket upgrade
-                completes (issue #1174 AC 6 MUST 4). A raising dependency
-                closes with HTTP 401/403; the upgrade never completes.
+                resolved immediately POST-upgrade and BEFORE ``on_connect``
+                / any application message (issue #1174 AC 6 MUST 4). A raising
+                dependency closes the socket with WS close code 1008 (the typed
+                HTTP status rides in the close reason); the handler lifecycle
+                never starts. ``websockets.serve()`` upgrades before this runs,
+                so a clean pre-upgrade HTTP 401/403 body is not emittable —
+                WS-1008 is the WS-native rejection (true pre-upgrade
+                ``process_request`` rejection is a separate follow-up).
             max_message_bytes: optional per-path inbound message-size cap
                 (issue #1174 AC 6 MUST 3). A frame exceeding the cap
                 closes the connection with code 1009 (message too big).
@@ -907,11 +928,16 @@ class MessageHandlerRegistry:
                 # through to the legacy single-path guard.
                 return True
 
-        # Issue #1174 AC 6 MUST 2 — subprotocol allowlist (default-reject).
-        # An empty allowlist (the default) rejects ANY offered subprotocol
-        # with code 1002 (protocol error); a non-empty list accepts only
-        # offered values present in the list. Enforced BEFORE on_connect so
-        # a disallowed subprotocol never reaches the handler lifecycle.
+        # Issue #1174 AC 6 MUST 2 — subprotocol allowlist (default-reject,
+        # REJECT-ONLY). An empty allowlist (the default) rejects ANY offered
+        # subprotocol with code 1002 (protocol error); a non-empty list admits
+        # the connection when at least one offered value is present in the list.
+        # The accepted subprotocol is NOT echoed to the client (no
+        # Sec-WebSocket-Protocol on the accept) — echoing per RFC 6455 §4.2.2
+        # requires select_subprotocol on serve(), a separate follow-up sharing
+        # the serve()-rewiring root. Enforced immediately post-upgrade and
+        # BEFORE on_connect so a disallowed subprotocol never reaches the
+        # handler lifecycle.
         allowed_subprotocols = self._subprotocols_by_path.get(path, [])
         offered = _offered_subprotocols(ws)
         if offered:
@@ -936,9 +962,13 @@ class MessageHandlerRegistry:
                 return True
 
         # Issue #1174 AC 6 MUST 4 — handshake auth via Depends, resolved
-        # BEFORE the upgrade completes. A raising dependency closes with the
-        # HTTP status (401/403) carried as a typed value; on_connect /
-        # on_disconnect do NOT fire (connection never reached the lifecycle).
+        # immediately POST-upgrade and BEFORE on_connect / any application
+        # message (websockets.serve() upgrades before this handler runs, so a
+        # clean pre-upgrade HTTP 401/403 body is not emittable here — WS-1008
+        # is the correct WS-native rejection). A raising dependency closes the
+        # socket with WS close code 1008, carrying the typed HTTP status in the
+        # close reason for triage; on_connect / on_disconnect do NOT fire
+        # (connection never reached the handler lifecycle).
         ws_dependencies = self._dependencies_by_path.get(path, [])
         if ws_dependencies:
             try:

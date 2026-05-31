@@ -795,12 +795,23 @@ class Nexus:
                 wildcards, fail-closed ``"*"``). ``None`` disables SDK
                 enforcement (issue #673).
             subprotocols: optional ``Sec-WebSocket-Protocol`` allowlist (issue
-                #1174 AC 6 MUST 2). The default (``None`` / ``[]``)
-                default-rejects ANY offered subprotocol with code 1002.
-            dependencies: optional ``Depends(...)`` markers resolved at
-                handshake BEFORE the upgrade (issue #1174 AC 6 MUST 4). A
-                raising dependency closes with 401/403; the upgrade never
-                completes.
+                #1174 AC 6 MUST 2). Negotiation is REJECT-ONLY: the allowlist
+                is validated against the client's offered subprotocols but the
+                accepted value is NOT echoed back (no ``Sec-WebSocket-Protocol``
+                on the accept — echoing per RFC 6455 §4.2.2 is a separate
+                follow-up sharing the ``serve()``-rewiring root). The default
+                (``None`` / ``[]``) default-rejects ANY offered subprotocol
+                with code 1002.
+            dependencies: optional ``Depends(...)`` markers resolved
+                immediately POST-upgrade and BEFORE ``on_connect`` / any
+                application message (issue #1174 AC 6 MUST 4). A raising
+                dependency closes the socket with WS close code 1008 (the typed
+                HTTP status rides in the close reason); the handler lifecycle
+                never starts. ``websockets.serve()`` completes the upgrade
+                before the check runs, so a clean pre-upgrade HTTP 401/403 body
+                is not emittable — WS-1008 is the WS-native rejection (true
+                pre-upgrade ``process_request`` rejection is a separate
+                follow-up).
 
         Returns:
             The instantiated handler so the caller can wire external
