@@ -40,6 +40,8 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
+from .overrides import DependencyOverrideMap, DependencyOverrideRuntimeMutationError
+
 __all__ = [
     "Depends",
     "Request",
@@ -48,6 +50,8 @@ __all__ = [
     "Bytes",
     "Headers",
     "NexusHandlerError",
+    "DependencyOverrideMap",
+    "DependencyOverrideRuntimeMutationError",
 ]
 
 

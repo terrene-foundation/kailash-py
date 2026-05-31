@@ -360,10 +360,19 @@ class Nexus:
         self._trusted_proxy_cidrs: List[str] = validate_trusted_proxy_cidrs(
             trusted_proxy_cidrs or []
         )
-        # dependency_overrides map is wired by Shard 2; the resolver consults
-        # this attribute when present. Initialised to None here so the consult
-        # site in the resolver is a no-op until Shard 2 lands the map.
-        self._dependency_overrides_map: Optional[Dict[Any, Any]] = None
+        # dependency_overrides (issue #1174 AC 3): the test-injection surface
+        # for the handler_extract resolver. ``dependency_overrides`` is the
+        # public, user-facing attribute (a DependencyOverrideMap manager);
+        # ``_dependency_overrides_map`` is the private alias the resolver
+        # consults via getattr. They are the SAME object — DependencyOverrideMap
+        # implements __contains__/__getitem__, so it is passed directly as the
+        # resolver's ``overrides`` argument (``real in overrides`` /
+        # ``overrides[real]``). Mutating it during an active request is BLOCKED
+        # (the map is a test-only surface — see DependencyOverrideMap).
+        from nexus.extractors.overrides import DependencyOverrideMap
+
+        self.dependency_overrides = DependencyOverrideMap()
+        self._dependency_overrides_map = self.dependency_overrides
         # Idempotency flag for the one-time request-capture middleware install.
         self._extractor_middleware_installed = False
 
