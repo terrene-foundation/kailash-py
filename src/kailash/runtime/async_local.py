@@ -15,6 +15,7 @@ Key Features:
 """
 
 import asyncio
+import contextvars
 import hashlib
 import logging
 import os
@@ -1348,7 +1349,16 @@ class AsyncLocalRuntime(LocalRuntime):
             # Convert context back to inputs for sync execution
             return self._execute_sync_workflow_internal(workflow, context.variables)
 
-        result = await loop.run_in_executor(self.thread_pool, sync_execute)
+        # Propagate the caller's contextvars.Context across the thread-pool
+        # boundary. ``loop.run_in_executor`` does NOT copy the calling context
+        # (unlike ``asyncio.to_thread``), so a ContextVar set before
+        # ``execute_workflow_async`` would otherwise be invisible inside the
+        # sync node's ``run()``. Snapshot in THIS (caller) frame and run the
+        # dispatched callable through ``ctx.run(...)`` (#1200).
+        ctx = contextvars.copy_context()
+        result = await loop.run_in_executor(
+            self.thread_pool, lambda: ctx.run(sync_execute)
+        )
 
         # Wrap result in expected format
         return {
@@ -1805,7 +1815,13 @@ class AsyncLocalRuntime(LocalRuntime):
         def execute_sync():
             return node_instance.execute(**inputs)
 
-        return await loop.run_in_executor(self.thread_pool, execute_sync)
+        # Propagate the caller's contextvars.Context across the thread-pool
+        # boundary so a ContextVar set before execution is visible inside the
+        # sync node's ``run()`` (#1200). Snapshot in this (caller) frame.
+        ctx = contextvars.copy_context()
+        return await loop.run_in_executor(
+            self.thread_pool, lambda: ctx.run(execute_sync)
+        )
 
     async def _prepare_async_node_inputs(
         self,
