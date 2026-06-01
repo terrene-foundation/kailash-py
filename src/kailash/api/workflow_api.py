@@ -314,7 +314,9 @@ class WorkflowAPI:
             """Check API health."""
             return {"status": "healthy", "workflow": self.workflow_id}
 
-    async def _execute_sync(self, request: WorkflowRequest) -> WorkflowResponse:
+    async def _execute_sync(
+        self, request: WorkflowRequest
+    ) -> "WorkflowResponse | JSONResponse":
         """Execute workflow synchronously."""
         import time
 
@@ -365,8 +367,73 @@ class WorkflowAPI:
             )
 
         except Exception as e:
+            # Honor a typed HTTP status carried by the exception BEFORE the
+            # generic 500 collapse. Nexus' extractor dispatch path raises
+            # `nexus.extractors.NexusHandlerError(status_code=int, body=dict|str)`
+            # to return a typed 4xx/5xx from a handler; that same convention
+            # MUST hold when a workflow raises it through this gateway-execute
+            # path (issue #1218). Core SDK cannot import nexus (the dependency
+            # runs the other way), so the typed-status contract is detected
+            # structurally: any exception carrying an int `status_code` plus a
+            # `body` (dict or str) is mapped to that status + body.
+            #
+            # The runtime wraps a node-raised exception in WorkflowExecutionError
+            # (async_local.py raises `... from e`), so the typed error is usually
+            # reachable only via the `__cause__`/`__context__` chain — walk it.
+            # The mirror pattern lives at packages/kailash-nexus/src/nexus/sse.py
+            # and nexus/websocket_handlers.py. A genuine internal error (no typed
+            # status anywhere in the chain) still collapses to the canonical 500
+            # below — unchanged.
+            typed_exc = self._find_typed_status_exc(e)
+            if typed_exc is not None:
+                # `_find_typed_status_exc` already validated this is an int in
+                # 100-599; `getattr` keeps the access off `BaseException` (which
+                # has no `status_code`) so the duck-typed contract type-checks.
+                typed_status: int = getattr(typed_exc, "status_code")
+                raw_body = getattr(typed_exc, "body", None)
+                if isinstance(raw_body, dict):
+                    typed_body: Any = raw_body
+                elif isinstance(raw_body, str):
+                    typed_body = {"error": raw_body}
+                else:
+                    typed_body = {"error": str(typed_exc)}
+                # Intent is logged server-side; the typed body is operator-facing
+                # by the handler's own design, so it is returned verbatim.
+                logger.warning(
+                    "Workflow execution returned typed status %s: %s",
+                    typed_status,
+                    typed_exc,
+                )
+                return JSONResponse(status_code=typed_status, content=typed_body)
+            # Generic internal error: raw error logged server-side, never echoed
+            # to the client (HTTP status convention Rule 2 — canonical 500 body).
             logger.error(f"Workflow execution failed: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
+
+    @staticmethod
+    def _find_typed_status_exc(exc: BaseException) -> BaseException | None:
+        """Walk the exception cause/context chain for a typed-HTTP-status error.
+
+        Returns the first exception in the chain that carries an int
+        ``status_code`` in the valid HTTP range (100-599) — the structural
+        contract of ``nexus.extractors.NexusHandlerError`` (issue #1218). The
+        runtime wraps node exceptions in ``WorkflowExecutionError(...) from e``,
+        so the typed error is typically the ``__cause__`` (or a deeper link)
+        rather than the top-level exception. Returns ``None`` when no link in
+        the chain carries a valid typed status (genuine internal error).
+
+        A bounded visited-set guards against a cyclic ``__cause__`` chain.
+        """
+        seen: set[int] = set()
+        current: BaseException | None = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            status = getattr(current, "status_code", None)
+            if isinstance(status, int) and 100 <= status <= 599:
+                return current
+            # Prefer the explicit cause (``raise ... from e``); fall back to the
+            # implicit context (``raise`` inside an ``except``).
+            current = current.__cause__ or current.__context__
 
     async def _execute_async(
         self, request: WorkflowRequest, background_tasks: BackgroundTasks
@@ -399,9 +466,21 @@ class WorkflowAPI:
 
             result = await self._execute_sync(request)
 
-            self._execution_cache[execution_id].update(
-                {"status": "completed", "result": result.dict()}
-            )
+            if isinstance(result, JSONResponse):
+                # A workflow raised a typed-status error (#1218); the async
+                # background path records it as a failure carrying the typed
+                # HTTP status rather than calling `.model_dump()` on a Response.
+                self._execution_cache[execution_id].update(
+                    {
+                        "status": "failed",
+                        "error": "Execution returned typed status",
+                        "status_code": result.status_code,
+                    }
+                )
+            else:
+                self._execution_cache[execution_id].update(
+                    {"status": "completed", "result": result.model_dump()}
+                )
 
         except Exception as e:
             logger.error(f"Async workflow execution failed for {execution_id}: {e}")
@@ -582,6 +661,12 @@ class HierarchicalRAGAPI(WorkflowAPI):
             )
 
             result = await self._execute_sync(workflow_request)
+
+            if isinstance(result, JSONResponse):
+                # A node raised a typed-status error (#1218) — surface it to the
+                # /query client verbatim rather than reading `.outputs` off a
+                # Response.
+                return result
 
             # Extract RAG-specific outputs
             outputs = result.outputs
