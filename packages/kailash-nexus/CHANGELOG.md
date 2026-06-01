@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.9.0] — 2026-06-01 — WebSocket pre-upgrade handshake rejection + subprotocol echo + typed-status gateway (#1216, #1217, #1218)
+
+Three deferred follow-ups of the #1174 FastAPI-parity work. Requires `kailash>=2.28.4` (the #1218 typed-status gateway fix lives in the Core SDK `WorkflowAPI`).
+
+### Added
+
+- **WebSocket pre-upgrade handshake rejection via `process_request` (#1216)** — `register_websocket`'s handshake-auth `dependencies` now resolve in a `serve(process_request=...)` callback **before** the WebSocket Upgrade. An unauthenticated handshake is rejected with a clean pre-upgrade HTTP **401/403** + JSON envelope (`{"error": ..., "code": "WS_HANDSHAKE_REJECTED"}`), the RFC-correct form, instead of the prior post-upgrade WS close **1008**. The security boundary is unchanged — rejection still happens before `on_connect`/any application surface — and is now fail-closed at two layers (the callback maps any auth raise to a rejection Response; the `websockets` library rejects with HTTP 500 if the callback itself errors). The rejection body never echoes credentials; the server-side WARN log carries only `path` + `status` + exception type.
+- **WebSocket subprotocol echo per RFC 6455 §4.2.2 (#1217)** — `register_websocket` wires a `serve(select_subprotocol=...)` callback that confirms the accepted subprotocol back to the client via the `Sec-WebSocket-Protocol` response header (`ws.subprotocol` is now the negotiated value). Negotiation stays reject-only at the allowlist — an unlisted offer still closes with code **1002**, and `select_subprotocol` only ever echoes a value already in the per-path allowlist (never reflects an arbitrary client offer).
+
+### Fixed
+
+- **`/workflows/{name}/execute` honors `NexusHandlerError` typed status (#1218)** — a workflow node raising `NexusHandlerError(status_code=422, body=...)` over the gateway-execute path now maps to the typed HTTP status + body instead of collapsing to a generic 500. The fix lives in the Core SDK gateway (`kailash` 2.28.4, `src/kailash/api/workflow_api.py`); the floor is bumped to `kailash>=2.28.4` so the typed-status behavior ships with this release. Genuine internal errors still collapse to the canonical 500 with no raw-error leak.
+
+### Internal
+
+- Single shared `serve()`-callback rewiring of the transport (`transports/websocket.py::WebSocketTransport._serve` / `_connection_handler`) addresses both #1216 and #1217; the handshake-auth resolution moved fully pre-upgrade and the redundant post-upgrade resolver was removed. Tier-2 coverage: `test_register_websocket_security.py` (pre-upgrade 401/403 + no-lifecycle-on-reject), `test_register_websocket_subprotocol_echo.py` (echo + 1002-on-unlisted), `test_workflow_execute_typed_status_wiring.py`.
+
 ## [2.8.0] — 2026-05-31 — FastAPI-parity handler extractors + SSE/WebSocket callbacks (#1174)
 
 FastAPI-shaped ergonomics for Nexus handlers so SDK users migrating from FastAPI keep the same handler shape. Six surface additions, all backwards-compatible (existing `register_handler` / `@app.handler` / class-based `register_websocket` / `register_sse_endpoint` paths are unchanged). No new top-level `fastapi` dependency — extractor types are Starlette re-exports.

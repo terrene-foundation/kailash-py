@@ -367,7 +367,26 @@ class WebSocketTransport(Transport):
             self._loop.close()
 
     async def _serve(self) -> None:
-        """Create and run the websockets server until stopped."""
+        """Create and run the websockets server until stopped.
+
+        Wires two pre-upgrade ``serve()`` callbacks (issues #1216 + #1217):
+
+        - ``process_request`` resolves the handshake-auth ``Depends`` chain
+          BEFORE the WebSocket Upgrade so an unauthenticated handshake is
+          rejected with an RFC-correct HTTP 401/403 response BODY (issue
+          #1216), not the post-upgrade WS close 1008.
+        - ``select_subprotocol`` echoes the accepted subprotocol back via the
+          ``Sec-WebSocket-Protocol`` response header per RFC 6455 §4.2.2
+          (issue #1217).
+
+        Both callbacks dispatch by request path into the shared
+        :class:`~nexus.websocket_handlers.MessageHandlerRegistry` — there is
+        NO parallel codepath. Origin-allowlist rejection (WS 1008) and the
+        reject-only subprotocol guard (WS 1002) stay post-upgrade in
+        ``MessageHandlerRegistry.handle_connection`` so their existing test
+        contracts (issue #673 origin close 1008, issue #1174 subprotocol
+        reject 1002) are preserved byte-for-byte.
+        """
         from websockets.asyncio.server import serve
 
         async with serve(
@@ -378,11 +397,128 @@ class WebSocketTransport(Transport):
             ping_timeout=self._ping_timeout,
             max_size=self._max_message_size,
             logger=logger,
+            process_request=self._process_request,
+            select_subprotocol=self._select_subprotocol,
         ) as server:
             self._server = server
             self._running = True
             # Block until the server is closed
             await server.serve_forever()
+
+    @staticmethod
+    def _request_path(request: Any) -> Optional[str]:
+        """Return the registry path from a pre-upgrade ``Request``.
+
+        ``Request.path`` includes the optional query string per RFC 7230;
+        strip the query so it matches the registry's registered paths.
+        """
+        raw_path = getattr(request, "path", None)
+        if not isinstance(raw_path, str):
+            return None
+        # Strip query string + fragment so "/ws?token=x" matches "/ws".
+        return raw_path.split("?", 1)[0].split("#", 1)[0]
+
+    async def _process_request(self, connection: Any, request: Any) -> Any:
+        """Pre-upgrade ``serve()`` callback — handshake-auth rejection (#1216).
+
+        Returns ``None`` to allow the handshake to proceed to the Upgrade, OR
+        a ``websockets`` ``Response`` to reject PRE-upgrade with an HTTP
+        status + JSON body. Only the registry's per-path handshake-auth
+        ``Depends`` chain is resolved here; origin + subprotocol rejection
+        stay post-upgrade (WS close codes) to preserve their test contracts.
+
+        A raising dependency carrying a typed ``status_code`` (a
+        :class:`~nexus.extractors.NexusHandlerError`) maps to that status; any
+        other raise maps to 401. The raw exception text is NEVER echoed to the
+        client — only the typed status + a generic JSON body — and the
+        server-side WARN log carries the status + path for triage (never the
+        credential bytes), per ``rules/observability.md`` Rule 4 / Rule 8.
+        """
+        registry = self._message_handlers
+        if registry is None:
+            return None  # legacy single-path transport — no pre-upgrade auth
+
+        path = self._request_path(request)
+        if path is None or path not in registry.paths:
+            # Unknown path — let the post-upgrade handler emit its 4004 close
+            # (preserves the existing invalid-path behavior).
+            return None
+
+        headers = self._freeze_request_headers(request)
+        try:
+            await registry.resolve_handshake_auth(path, headers)
+        except Exception as exc:  # noqa: BLE001 — map to typed HTTP rejection
+            from nexus.extractors import NexusHandlerError
+
+            status = exc.status_code if isinstance(exc, NexusHandlerError) else 401
+            logger.warning(
+                "ws.handshake.auth_rejected_pre_upgrade",
+                extra={
+                    "path": path,
+                    "status": status,
+                    "exc_type": type(exc).__name__,
+                },
+            )
+            return self._build_rejection_response(connection, status)
+        return None
+
+    def _select_subprotocol(self, connection: Any, subprotocols: Any) -> Any:
+        """Pre-upgrade ``serve()`` callback — subprotocol echo (#1217).
+
+        Returns the accepted subprotocol string (echoed to the client via the
+        ``Sec-WebSocket-Protocol`` response header per RFC 6455 §4.2.2) or
+        ``None`` for no echo. Returning ``None`` does NOT admit a disallowed
+        offer — the reject-only guard in
+        ``MessageHandlerRegistry.handle_connection`` still closes an unlisted
+        offer with WS code 1002 post-upgrade.
+        """
+        registry = self._message_handlers
+        if registry is None:
+            return None
+
+        request = getattr(connection, "request", None)
+        path = self._request_path(request) if request is not None else None
+        if path is None or path not in registry.paths:
+            return None
+
+        offered = [str(p) for p in (subprotocols or [])]
+        return registry.select_subprotocol(path, offered)
+
+    @staticmethod
+    def _freeze_request_headers(request: Any) -> Dict[str, str]:
+        """Return a plain case-preserving dict of the request's headers.
+
+        Wraps the ``websockets`` ``Headers`` object into a plain dict so the
+        registry's ``_HandshakeRequest`` (case-insensitive) sees a uniform
+        Mapping surface. The registry re-freezes via ``_freeze_headers``.
+        """
+        headers = getattr(request, "headers", None)
+        if headers is None:
+            return {}
+        try:
+            return {k: v for k, v in headers.raw_items()}
+        except AttributeError:
+            try:
+                return dict(headers)
+            except (TypeError, ValueError):
+                return {}
+
+    @staticmethod
+    def _build_rejection_response(connection: Any, status: int) -> Any:
+        """Build a pre-upgrade HTTP rejection ``Response`` with a JSON body.
+
+        Uses ``connection.respond`` (the ``websockets`` helper) to build the
+        base response, then overrides the body + content-type so the client
+        receives an RFC-correct ``{"error": ...}`` JSON envelope. The body
+        carries ONLY the typed status reason — never the raw exception text or
+        credential bytes (``rules/observability.md`` Rule 4).
+        """
+        reason = "unauthorized" if status == 401 else "forbidden"
+        body = json.dumps({"error": reason, "code": "WS_HANDSHAKE_REJECTED"})
+        response = connection.respond(status, body)
+        response.headers["Content-Type"] = "application/json"
+        response.body = body.encode("utf-8")
+        return response
 
     async def _connection_handler(self, websocket: Any) -> None:
         """Handle a single WebSocket client connection.

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.4] - 2026-06-01
+
+### Fixed
+
+- **Gateway `/workflows/{name}/execute` now honors a typed HTTP status raised by a workflow node (#1218)** — the `WorkflowAPI` execute route (`src/kailash/api/workflow_api.py`, mounted by `create_gateway` / `WorkflowServer`) collapsed every workflow-execution exception to a generic HTTP 500, discarding a typed status carried by the exception. A node raising a typed-status error (the `nexus.extractors.NexusHandlerError` contract: an `int` `status_code` in 100-599 **and** a `body`) over this path was reported to operators as an internal 5xx bug instead of the intended 4xx. The fix walks the exception `__cause__`/`__context__` chain (cycle-guarded — the async runtime wraps node exceptions in `WorkflowExecutionError(...) from e`) and, when it finds a link carrying **both** `status_code` (100-599) and a `body` attribute, maps that status + body to the HTTP response; everything else still collapses to the canonical `{"detail": "Internal server error"}` 500 with the raw error logged server-side and never echoed. The typed branch requires the `body` attribute (not `status_code` alone) so a stray `HTTPException(404, detail)` raised in a node does not surface `str(exc)` to the client. Regression: `packages/kailash-nexus/tests/integration/nexus/test_workflow_execute_typed_status_wiring.py` (typed 422 → typed body; genuine `RuntimeError` → 500 no-leak; `HTTPException`-status-only → 500 no-leak).
+
 ## [2.28.3] - 2026-06-01
 
 ### Fixed

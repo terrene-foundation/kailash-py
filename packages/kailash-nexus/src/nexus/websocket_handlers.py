@@ -214,24 +214,20 @@ def _offered_subprotocols(ws: Any) -> List[str]:
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
-async def _resolve_ws_dependencies(dependencies: List[Any], ws: Any) -> None:
-    """Resolve handshake-auth ``Depends`` immediately post-upgrade, pre-on_connect.
+async def _resolve_ws_dependencies_from_headers(
+    dependencies: List[Any], headers: Mapping[str, str]
+) -> None:
+    """Resolve handshake-auth ``Depends`` against pre-parsed handshake headers.
 
     Routes through the Shard-1 resolver chain (``nexus.extractors.resolver``)
     so WS handshake auth is byte-identical to the HTTP path. The ``Depends``
     callables resolve against a synthetic Starlette-style request built from
-    the handshake headers (the WebSocket has no Starlette ``Request``); the
-    callables typically read ``request.headers`` for a bearer token.
-
-    Timing note: ``websockets.serve()`` performs the Upgrade BEFORE the
-    transport's connection handler runs, so this resolution executes against an
-    already-upgraded socket — NOT before the upgrade. The security boundary
-    still holds: a raising dependency is rejected here, BEFORE ``on_connect``
-    or any application message, and the socket is closed with WS close code
-    1008 (policy violation). A clean HTTP 401/403 response body cannot be
-    emitted after the upgrade completes; WS-1008 is the correct WS-native
-    rejection. (issue #1174 AC 6 MUST 4. True pre-upgrade ``process_request``
-    rejection — which CAN emit an HTTP 401/403 — is a separate follow-up.)
+    the handshake ``headers`` (the WebSocket has no Starlette ``Request``); the
+    callables typically read ``request.headers`` for a bearer token. A raising
+    dependency propagates to the caller — the pre-upgrade ``process_request``
+    callback (issue #1216) maps it to an HTTP 401/403 response body; the
+    post-upgrade fallback (legacy single-path transport) maps it to WS close
+    1008.
     """
     if not dependencies:
         return
@@ -239,7 +235,12 @@ async def _resolve_ws_dependencies(dependencies: List[Any], ws: Any) -> None:
     from nexus.extractors import Depends
     from nexus.extractors.resolver import ResolverChain
 
-    request = _HandshakeRequest(_extract_handshake_headers(ws))
+    # Freeze into a case-insensitive Mapping so a Depends reading
+    # request.headers.get("authorization") matches a raw "Authorization"
+    # header regardless of the source casing (the pre-upgrade path may pass a
+    # plain dict from the transport; the post-upgrade path already passes a
+    # case-insensitive view).
+    request = _HandshakeRequest(_freeze_headers(headers))
     token = set_current_request(request)
     try:
         chain = ResolverChain(lambda: None, [])
@@ -250,7 +251,11 @@ async def _resolve_ws_dependencies(dependencies: List[Any], ws: Any) -> None:
                     "register_websocket dependencies must be Depends(...) "
                     f"markers; got {type(dep).__name__}"
                 )
-            await chain._resolve_dependency(dep, request, cache, None)
+            # _HandshakeRequest is a deliberate minimal Request-shaped adapter
+            # (it exposes only `.headers`, the surface a handshake-auth Depends
+            # reads); it is duck-typed, not a Starlette Request subclass, so the
+            # arg-type narrowing is intentional.
+            await chain._resolve_dependency(dep, request, cache, None)  # type: ignore[arg-type]
     finally:
         _current_request.reset(token)
 
@@ -715,28 +720,27 @@ class MessageHandlerRegistry:
                 enforcement OR explicitly accept that the endpoint is
                 Origin-unfiltered. Issue #673.
             subprotocols: optional allowlist of ``Sec-WebSocket-Protocol``
-                values (issue #1174 AC 6 MUST 2). Negotiation is
-                REJECT-ONLY: the allowlist is VALIDATED against the client's
-                offered subprotocols but the accepted value is NOT echoed back
-                to the client (no ``Sec-WebSocket-Protocol`` on the accept).
-                The default (``None`` / ``[]``) DEFAULT-REJECTS any
-                client-offered subprotocol: a handshake offering a subprotocol
-                when the list is empty closes with code 1002 (protocol error).
-                A non-empty list admits the connection when at least one offered
-                value is present in the list, and closes with 1002 otherwise.
-                (Echoing the accepted subprotocol per RFC 6455 §4.2.2 via
-                ``select_subprotocol`` is a separate follow-up — it shares the
-                ``serve()``-rewiring root with the pre-upgrade ``Depends``
-                follow-up.)
+                values (issue #1174 AC 6 MUST 2). The allowlist is VALIDATED
+                against the client's offered subprotocols; the ACCEPTED value
+                IS echoed back to the client via the ``Sec-WebSocket-Protocol``
+                response header per RFC 6455 §4.2.2 (issue #1217 — the
+                ``serve(select_subprotocol=...)`` callback). The default
+                (``None`` / ``[]``) DEFAULT-REJECTS any client-offered
+                subprotocol: a handshake offering a subprotocol when the list
+                is empty closes with code 1002 (protocol error). A non-empty
+                list admits + echoes the connection when at least one offered
+                value is present in the list, and closes with 1002 otherwise
+                (reject-only enforcement unchanged).
             dependencies: optional list of ``Depends(...)`` markers
-                resolved immediately POST-upgrade and BEFORE ``on_connect``
-                / any application message (issue #1174 AC 6 MUST 4). A raising
-                dependency closes the socket with WS close code 1008 (the typed
-                HTTP status rides in the close reason); the handler lifecycle
-                never starts. ``websockets.serve()`` upgrades before this runs,
-                so a clean pre-upgrade HTTP 401/403 body is not emittable —
-                WS-1008 is the WS-native rejection (true pre-upgrade
-                ``process_request`` rejection is a separate follow-up).
+                resolved PRE-upgrade via the
+                ``serve(process_request=...)`` callback, BEFORE the Upgrade
+                completes (issue #1216). A raising dependency rejects the
+                handshake with an RFC-correct HTTP 401/403 response BODY (the
+                typed ``NexusHandlerError.status_code`` maps to the HTTP
+                status; an untyped raise maps to 401); the handler lifecycle
+                never starts. The earlier post-upgrade WS-1008 close form was
+                secure-but-not-RFC and #1216 superseded it with the
+                pre-upgrade HTTP form.
             max_message_bytes: optional per-path inbound message-size cap
                 (issue #1174 AC 6 MUST 3). A frame exceeding the cap
                 closes the connection with code 1009 (message too big).
@@ -844,6 +848,86 @@ class MessageHandlerRegistry:
         """
         return self._allowed_origins_by_path.get(path)
 
+    def get_subprotocols(self, path: str) -> List[str]:
+        """Return the validated subprotocol allowlist for ``path``.
+
+        Returns an empty list when the path has no handler or the
+        default-reject posture is in effect. Used by the transport's
+        ``select_subprotocol`` callback (issue #1217) to echo the
+        accepted subprotocol per RFC 6455 §4.2.2.
+        """
+        return self._subprotocols_by_path.get(path, [])
+
+    # ------------------------------------------------------------------
+    # Pre-upgrade handshake hooks (issues #1216 + #1217)
+    # ------------------------------------------------------------------
+    #
+    # The two callbacks below are invoked by the transport's
+    # ``serve(process_request=..., select_subprotocol=...)`` wiring
+    # (``WebSocketTransport._serve``) BEFORE the WebSocket Upgrade
+    # completes. They share the per-path config tables with the
+    # post-upgrade ``handle_connection`` path — there is NO parallel
+    # codepath: the SAME ``_dependencies_by_path`` / ``_subprotocols_by_path``
+    # entries drive both.
+    #
+    # Division of responsibility (preserves the existing test contracts):
+    #   - Handshake-auth ``Depends`` rejection moves PRE-upgrade here so an
+    #     unauthenticated handshake can emit an RFC-correct HTTP 401/403
+    #     response BODY (issue #1216) instead of the post-upgrade WS close
+    #     1008. ``handle_connection`` still resolves dependencies for the
+    #     LEGACY single-path transport (no registry); when the registry IS
+    #     wired, the pre-upgrade resolution has already run and the
+    #     post-upgrade resolution short-circuits on the cleared per-path list.
+    #   - Origin allowlist rejection STAYS post-upgrade (WS close 1008) so
+    #     the issue #673 origin test contract (close code 1008 + fingerprint)
+    #     is preserved byte-for-byte.
+    #   - Subprotocol negotiation stays REJECT-ONLY (post-upgrade WS close
+    #     1002 for an unlisted offer); ``select_subprotocol`` ONLY adds the
+    #     ECHO of an already-allowlisted value (issue #1217).
+
+    async def resolve_handshake_auth(
+        self, path: str, headers: Mapping[str, str]
+    ) -> None:
+        """Resolve handshake-auth ``Depends`` for ``path`` PRE-upgrade.
+
+        Returns ``None`` when no dependencies are registered for the path
+        OR every dependency resolves cleanly. RAISES the dependency's
+        exception (typically a :class:`~nexus.extractors.NexusHandlerError`
+        carrying ``status_code``) when a dependency rejects — the transport's
+        ``process_request`` callback maps the raise to an HTTP 401/403
+        response BODY emitted BEFORE the Upgrade (issue #1216).
+
+        Unlike the post-upgrade path in :meth:`handle_connection`, this runs
+        against handshake headers extracted from the pre-upgrade
+        ``Request`` — no upgraded socket is required, so a clean HTTP
+        rejection is emittable.
+        """
+        dependencies = self._dependencies_by_path.get(path, [])
+        if not dependencies:
+            return
+        await _resolve_ws_dependencies_from_headers(dependencies, headers)
+
+    def select_subprotocol(self, path: str, offered: List[str]) -> Optional[str]:
+        """Choose the subprotocol to echo for ``path`` per RFC 6455 §4.2.2.
+
+        Returns the first client-offered subprotocol that is present in the
+        path's validated allowlist, or ``None`` when there is no match (no
+        echo). Returning ``None`` does NOT admit a disallowed offer — the
+        post-upgrade reject-only guard in :meth:`handle_connection` still
+        closes an unlisted offer with WS code 1002. This callback ONLY adds
+        the ``Sec-WebSocket-Protocol`` echo of an already-allowlisted value
+        (issue #1217); it never weakens the default-reject posture.
+        """
+        if not offered:
+            return None
+        allowed = self._subprotocols_by_path.get(path, [])
+        if not allowed:
+            return None
+        for candidate in offered:
+            if candidate in allowed:
+                return candidate
+        return None
+
     # ------------------------------------------------------------------
     # Connection dispatch (called from WebSocketTransport)
     # ------------------------------------------------------------------
@@ -932,12 +1016,14 @@ class MessageHandlerRegistry:
         # REJECT-ONLY). An empty allowlist (the default) rejects ANY offered
         # subprotocol with code 1002 (protocol error); a non-empty list admits
         # the connection when at least one offered value is present in the list.
-        # The accepted subprotocol is NOT echoed to the client (no
-        # Sec-WebSocket-Protocol on the accept) — echoing per RFC 6455 §4.2.2
-        # requires select_subprotocol on serve(), a separate follow-up sharing
-        # the serve()-rewiring root. Enforced immediately post-upgrade and
-        # BEFORE on_connect so a disallowed subprotocol never reaches the
-        # handler lifecycle.
+        # The ACCEPTED subprotocol IS now echoed to the client via the
+        # Sec-WebSocket-Protocol response header (issue #1217 — the
+        # serve(select_subprotocol=...) callback, WebSocketTransport.
+        # _select_subprotocol → select_subprotocol). This post-upgrade guard
+        # remains the reject-only enforcement: an unlisted offer still closes
+        # 1002 (no regression). Enforced immediately post-upgrade and BEFORE
+        # on_connect so a disallowed subprotocol never reaches the handler
+        # lifecycle.
         allowed_subprotocols = self._subprotocols_by_path.get(path, [])
         offered = _offered_subprotocols(ws)
         if offered:
@@ -961,42 +1047,19 @@ class MessageHandlerRegistry:
                     )
                 return True
 
-        # Issue #1174 AC 6 MUST 4 — handshake auth via Depends, resolved
-        # immediately POST-upgrade and BEFORE on_connect / any application
-        # message (websockets.serve() upgrades before this handler runs, so a
-        # clean pre-upgrade HTTP 401/403 body is not emittable here — WS-1008
-        # is the correct WS-native rejection). A raising dependency closes the
-        # socket with WS close code 1008, carrying the typed HTTP status in the
-        # close reason for triage; on_connect / on_disconnect do NOT fire
-        # (connection never reached the handler lifecycle).
-        ws_dependencies = self._dependencies_by_path.get(path, [])
-        if ws_dependencies:
-            try:
-                await _resolve_ws_dependencies(ws_dependencies, ws)
-            except Exception as exc:  # noqa: BLE001
-                from nexus.extractors import NexusHandlerError
-
-                status = exc.status_code if isinstance(exc, NexusHandlerError) else 401
-                logger.warning(
-                    "ws.handler.handshake_auth_rejected",
-                    extra={
-                        "path": path,
-                        "handler": type(handler).__name__,
-                        "status": status,
-                        "exc_type": type(exc).__name__,
-                    },
-                )
-                # RFC 6455 §7.4.1: 1008 (policy violation) is the WS-native
-                # close for an authz failure; the typed HTTP status is in the
-                # reason for operator triage (never echoed credential bytes).
-                try:
-                    await ws.close(1008, f"unauthorized ({status})")
-                except Exception as close_exc:  # noqa: BLE001 — best-effort
-                    logger.debug(
-                        "ws.handler.handshake_auth_close_failed",
-                        extra={"path": path, "error": str(close_exc)},
-                    )
-                return True
+        # Issue #1216 — handshake auth via Depends is resolved PRE-upgrade by
+        # the transport's serve(process_request=...) callback
+        # (WebSocketTransport._process_request → resolve_handshake_auth), so an
+        # unauthenticated handshake is rejected with an RFC-correct HTTP
+        # 401/403 response body BEFORE the Upgrade — never reaching this
+        # post-upgrade lifecycle. The transport ALWAYS wires process_request
+        # when this registry is attached, so re-resolving the Depends chain
+        # here would (a) be redundant and (b) double-fire any side-effecting
+        # dependency (a DB lookup, a token-introspection call). The
+        # pre-upgrade path is the single resolution site; this method assumes
+        # auth already passed. (The earlier WS-1008 close form lived here; it
+        # was secure-but-not-RFC and #1216 superseded it with the pre-upgrade
+        # HTTP form.)
 
         connection_id = uuid.uuid4().hex
         conn = Connection(ws, connection_id, path, headers=headers)
