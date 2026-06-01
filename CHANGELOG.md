@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.3] - 2026-06-01
+
+### Fixed
+
+- **Runtimes no longer drop `contextvars.Context` across their thread boundaries (#1200)** — `AsyncLocalRuntime`, `LocalRuntime`, `ParallelRuntime`, and `ParallelCyclicRuntime` dispatched sync node execution across a thread boundary (`loop.run_in_executor`, a raw `threading.Thread`, and `ThreadPoolExecutor.submit`) without propagating the caller's `contextvars.Context`. A `ContextVar` set before `execute()` / `execute_workflow_async()` was invisible inside a node's `run()` — the node saw the variable's default instead of the caller-set value, unlike the stdlib `asyncio.to_thread` convention. The fix snapshots `contextvars.copy_context()` in the caller frame and dispatches the thread-boundary callable through `ctx.run(...)` at all six affected sites (`async_local.py` ×2 `run_in_executor`, `local.py` raw `threading.Thread` + sync-in-async `ThreadPoolExecutor`, `parallel.py` `run_in_executor`, `parallel_cyclic.py` `submit`). Parallel paths use a fresh `ctx.copy()` per concurrent dispatch so a single `Context` is never entered concurrently. The distributed-worker path (`distributed.py`) is intentionally excluded: it reconstructs the workflow from a Redis-queued task in a separate process, so the original caller's context is already gone across the queue boundary. Regression: `tests/integration/runtime/test_contextvars_propagation.py` (8 tests — propagation across all five in-process dispatch paths + negative no-leak-when-unset cases).
+
 ## [2.28.2] - 2026-06-01
 
 ### Fixed
