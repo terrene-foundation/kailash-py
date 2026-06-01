@@ -4,6 +4,7 @@ DataFlow Node Generation
 Dynamic node generation for database operations.
 """
 
+import types
 from typing import Any, Dict, List, Optional, Type, Union
 
 try:
@@ -167,6 +168,34 @@ def _normalize_id_type(type_annotation: Any) -> Any:
     return str  # fallback for unknown
 
 
+def _unwrap_optional_type(type_annotation: Any) -> Any:
+    """Unwrap ``Optional[T]`` / ``Union[T, None]`` / ``T | None`` to bare ``T``.
+
+    Covers BOTH union spellings (issue #1207):
+
+    1. ``typing.Optional[list]`` / ``typing.Union[list, None]`` —
+       ``typing.get_origin(x) is typing.Union``.
+    2. PEP 604 ``list | None`` (Python 3.10+) — produces a
+       ``types.UnionType`` whose ``typing.get_origin(x)`` returns
+       ``types.UnionType`` (NOT ``typing.Union``).
+
+    Only single-non-None-arg unions collapse (e.g. ``Optional[list]`` -> ``list``).
+    Multi-arg unions (``Union[list, dict]``) and non-union annotations are
+    returned unchanged so the downstream ``in (dict, list)`` membership check
+    behaves identically to a bare annotation.
+    """
+    import typing
+
+    origin = typing.get_origin(type_annotation)
+    if origin is typing.Union or origin is types.UnionType:
+        non_none = [
+            arg for arg in typing.get_args(type_annotation) if arg is not type(None)
+        ]
+        if len(non_none) == 1:
+            return non_none[0]
+    return type_annotation
+
+
 def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict:
     """
     Convert ISO 8601 datetime strings to Python datetime objects for datetime fields.
@@ -205,12 +234,12 @@ def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict
         else:
             field_type = field_info.get("type")
 
-        # Handle Optional[datetime] types
-        if hasattr(field_type, "__origin__"):
-            if field_type.__origin__ is typing.Union:
-                actual_types = [t for t in field_type.__args__ if t is not type(None)]
-                if actual_types and actual_types[0] == datetime:
-                    field_type = datetime
+        # Handle Optional[datetime] AND PEP 604 ``datetime | None`` (#1207
+        # sibling: the prior ``__origin__ is typing.Union`` check missed PEP 604
+        # unions — a ``types.UnionType`` has no ``__origin__`` — so nullable
+        # datetime fields declared ``datetime | None`` skipped parsing). Routing
+        # through the shared helper covers both union spellings.
+        field_type = _unwrap_optional_type(field_type)
 
         # If field is datetime type and value is string, try to parse it
         if field_type == datetime:
@@ -576,6 +605,13 @@ class NodeGenerator:
                     # Check if this field is a JSON field (dict or list type)
                     field_info = self.model_fields.get(field_name, {})
                     field_type = field_info.get("type")
+
+                    # Issue #1207: a field declared Optional[list]/Optional[dict]
+                    # (or PEP 604 ``list | None``) carries a Union annotation, NOT
+                    # the bare ``list``/``dict`` type, so the membership check below
+                    # was False and the raw JSON string leaked back to the caller.
+                    # Unwrap the Optional wrapper so JSONB round-trips deserialize.
+                    field_type = _unwrap_optional_type(field_type)
 
                     if field_type in (dict, list):
                         # Try to deserialize JSON string

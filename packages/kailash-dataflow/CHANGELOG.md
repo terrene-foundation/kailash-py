@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.10.1] — 2026-06-01 — Optional[list]/Optional[dict] JSONB round-trip fix (#1207)
+
+### Fixed
+
+- **`db.express` round-trips `Optional[list]` / `Optional[dict]` JSONB fields as Python `list`/`dict`, not a JSON string (#1207)** — `express.create` and `express.read` returned a JSON-encoded `str` instead of the deserialized Python value for model fields declared `Optional[list]` / `Optional[dict]` (the idiomatic nullable-JSONB-column annotation). `_deserialize_json_fields` (`core/nodes.py`) checked `field_type in (dict, list)` against the raw annotation; for `Optional[list]` the annotation is `Union[list, None]` (or PEP 604 `list | None`, a `types.UnionType`), so the membership test was `False`, `json.loads` was skipped, and the raw string leaked to the caller. The fix adds `_unwrap_optional_type`, which collapses single-non-None-arg unions (`Optional[T]`, `Union[T, None]`, PEP 604 `T | None`) to the bare `T` before the membership check; routed through both `_deserialize_json_fields` (the read/create chokepoint covering all 13 call sites) AND `convert_datetime_fields` (the same `__origin__ is Union` blindness affected nullable `datetime | None` fields). Multi-arg unions and non-union annotations pass through unchanged. Regression: `tests/regression/test_issue_1207_optional_jsonb_roundtrip.py` (5 Tier-2 round-trips against real PostgreSQL with NON-EMPTY values) + `tests/unit/core/test_issue_1207_unwrap_optional_type.py` (15 Tier-1 helper unit tests).
+
 ## [2.10.0] — 2026-05-19 — node-registry collision fix (#891)
 
 **Requires `kailash>=2.23.0`** — generated CRUD-node registration now passes
