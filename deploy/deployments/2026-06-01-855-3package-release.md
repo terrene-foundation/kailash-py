@@ -48,16 +48,20 @@ the installed wheels.
 
 Release-time enumeration: no other framework package had `main` ahead of PyPI.
 
-## Follow-up surfaced (not blocking — pre-existing)
+## Follow-up — RESOLVED same session as kailash-kaizen 2.24.5
 
-- **kaizen.memory eagerly imports `aiosqlite` (an optional extra).**
-  `kaizen/memory/__init__.py` → `enterprise` → `persistent_tiers.py:21`
-  imports `aiosqlite` unconditionally, but `aiosqlite` is declared only in an
-  optional extra. So `import kaizen.memory` (the path to `DataFlowMemoryBackend`,
-  which itself uses DataFlow not aiosqlite) fails on a clean
-  `pip install kailash-kaizen` without the memory extra. Pre-existing (last
-  touched `e3309ef8`, predates this work); top-level `import kaizen` works.
-  Per `dependencies.md` § "**init**.py Module-Scope Imports Honor The Manifest"
-  the fix is to guard the `aiosqlite` import (try/except) or lazy-load the
-  persistent-tier subsystem so the DataFlow backend does not require aiosqlite.
-  Recommend a kailash-kaizen 2.24.5 patch.
+- **kaizen.memory eagerly imports `aiosqlite` (was an optional extra) — FIXED.**
+  `kaizen/memory/__init__.py` → `enterprise` → `persistent_tiers.py:21` imports
+  `aiosqlite` unconditionally, but #890 slim-core had scoped `aiosqlite` to the
+  optional `db` extra, so `import kaizen.memory` (the path to
+  `DataFlowMemoryBackend`) failed on a clean `pip install kailash-kaizen`. A
+  subsystem cannot eagerly require a dependency AND declare it optional.
+  Disposition after analysis + co-owner approval: **promote `aiosqlite` to a
+  core dependency** — pure-Python over the stdlib `sqlite3` (zero
+  compiled/transitive weight), eagerly imported by a first-class subsystem, and
+  mis-bucketed in #890 (whose real targets were heavy/niche deps). `asyncpg`
+  (Postgres, not eagerly imported) stays optional in `db`. Shipped as
+  `kailash-kaizen 2.24.5` (PR #1224, tag `kaizen-v2.24.5`, publish run success).
+  Verified live: `pip install kailash-kaizen==2.24.5` with **no extras** pulls
+  `aiosqlite` via the core dep, `import kaizen.memory` + `DataFlowMemoryBackend`
+  succeed, and `Requires-Dist` lists `aiosqlite>=0.19.0` unconditionally.
