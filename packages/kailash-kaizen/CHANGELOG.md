@@ -4,6 +4,12 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.5] — 2026-06-01 — aiosqlite is a core dependency (memory subsystem)
+
+### Fixed
+
+- **`import kaizen.memory` no longer fails on a clean install (`ModuleNotFoundError: aiosqlite`)** — `kaizen/memory/__init__.py` eagerly imports `persistent_tiers`, which has an unconditional module-scope `import aiosqlite`, but the #890 slim-core audit had scoped `aiosqlite` to the optional `db` extra. So the multi-tier memory subsystem (and the path to `DataFlowMemoryBackend`, which itself does not use aiosqlite) required the extra despite being a first-class, eagerly-exported API. Promoted `aiosqlite` to a core dependency — it is a pure-Python async wrapper over the stdlib `sqlite3` (zero compiled/transitive weight) that a core subsystem imports eagerly, so it cannot be optional. `asyncpg` (PostgreSQL trust migration, not eagerly imported) correctly stays in the `db` extra. Verified: `import kaizen.memory` succeeds on `pip install kailash-kaizen` with no extras.
+
 ## [2.24.4] — 2026-06-01 — DataFlowMemoryBackend warm-tier persistence (#855)
 
 ### Fixed
