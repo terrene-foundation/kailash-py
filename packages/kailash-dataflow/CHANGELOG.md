@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.10.3] — 2026-06-01 — PEP 604 union field-type normalization parity (#1228 / F34)
+
+### Fixed
+
+- **`ModelRegistry._normalize_field_type` normalizes PEP 604 `X | None` unions identically to the `typing` spelling (#1228 follow-up, F34)** — the type-string normalizer (used for schema storage + change-detection) returned the alias name (`"Optional"` / `"Union"`) for `typing.Optional[int]` / `Union[int, str]` but fell to the `str()` fallback (`"int | None"` / `"int | str"`) for the PEP 604 `types.UnionType` spelling, because a `types.UnionType` has no `__name__` or `__origin__`. A model author switching annotation style (`Optional[int]` → `int | None`) would then see a spurious field-type change in schema comparison. The normalizer now detects `types.UnionType` and mirrors typing's naming exactly: a 2-arg `X | None` → `"Optional"`, every other union → `"Union"`. Tier-1: 5 added parity tests in `tests/unit/core/test_issue_1228_pep604_union_introspection.py`.
+
 ## [2.10.2] — 2026-06-01 — PEP 604 `T | None` recognized across type-introspection paths (#1228)
 
 ### Fixed

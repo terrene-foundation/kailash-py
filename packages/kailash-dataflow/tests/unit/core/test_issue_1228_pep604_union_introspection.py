@@ -144,3 +144,47 @@ class TestTypeProcessorIssue1228:
         assert tp._resolved_types["x"] == (int | str)
         # Pass-through: a str value against int|str is returned unchanged.
         assert tp.validate_field("x", "hello") == "hello"
+
+
+@pytest.mark.unit
+class TestModelRegistryNormalizeFieldTypeIssue1228:
+    """ModelRegistry._normalize_field_type normalizes PEP 604 unions consistently.
+
+    Sibling of the #1228 introspection sweep (F34): the type-string normalizer used
+    for schema storage / change-detection returned the alias ``__name__`` ("Optional"
+    / "Union") for the ``typing`` spelling but fell to ``str(field_type)``
+    ("int | None") for the PEP 604 spelling. A user switching annotation style would
+    then see a spurious schema-type change. The fix mirrors typing's naming exactly
+    for ``types.UnionType``: a 2-arg ``X | None`` -> "Optional", every other union ->
+    "Union".
+    """
+
+    from typing import Union
+
+    def _norm(self, t):
+        from dataflow.core.model_registry import ModelRegistry
+
+        return ModelRegistry._normalize_field_type(object(), t)
+
+    def test_pep604_optional_matches_typing_optional(self):
+        assert self._norm(int | None) == self._norm(Optional[int]) == "Optional"
+
+    def test_pep604_optional_list_matches_typing(self):
+        assert self._norm(list | None) == self._norm(Optional[list]) == "Optional"
+
+    def test_pep604_multiarg_union_matches_typing_union(self):
+        from typing import Union
+
+        assert self._norm(int | str) == self._norm(Union[int, str]) == "Union"
+
+    def test_pep604_union_with_none_is_union_not_optional(self):
+        # typing names only the 2-arg Union[X, None] "Optional"; a 3-arg union
+        # (even with None) is "Union" — mirror that exactly.
+        from typing import Union
+
+        assert (
+            self._norm(int | str | None) == self._norm(Union[int, str, None]) == "Union"
+        )
+
+    def test_plain_type_unchanged(self):
+        assert self._norm(int) == "int"
