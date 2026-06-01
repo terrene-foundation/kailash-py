@@ -90,6 +90,27 @@ class GenuineInternalErrorNode(Node):
         raise RuntimeError("database connection pool exhausted")
 
 
+@register_node()
+class StatusOnlyNoBodyNode(Node):
+    """A node raising an exception that has ``status_code`` but NO ``body``.
+
+    A Starlette/FastAPI ``HTTPException`` carries ``status_code`` + ``detail``
+    (not ``body``). It is NOT the ``NexusHandlerError`` contract, so the typed
+    branch MUST NOT fire — the request collapses to the canonical 500 and the
+    ``detail`` string MUST NOT leak (security review LOW: body-less fallback).
+    """
+
+    def get_parameters(self) -> dict:
+        return {
+            "value": NodeParameter(name="value", type=str, required=False, default=""),
+        }
+
+    def run(self, **kwargs) -> dict:
+        from starlette.exceptions import HTTPException
+
+        raise HTTPException(status_code=404, detail="secret-internal-resource-name")
+
+
 @pytest.mark.integration
 def test_workflow_execute_honors_nexus_handler_error_typed_status():
     """A workflow raising NexusHandlerError(422, body) → HTTP 422 + typed body.
@@ -133,3 +154,28 @@ def test_workflow_execute_genuine_internal_error_still_500():
     # Canonical generic 500 body — the raw error string MUST NOT leak.
     assert "database connection pool exhausted" not in resp.text
     assert body.get("detail") == "Internal server error", body
+
+
+@pytest.mark.integration
+def test_workflow_execute_status_only_no_body_collapses_to_500():
+    """An exception with status_code but NO body (HTTPException) → 500, no leak.
+
+    Security review LOW: the typed-status match requires BOTH `status_code`
+    (100-599) AND a `body` attribute (the NexusHandlerError contract). A stray
+    HTTPException(404, detail) raised in a node carries `status_code` + `detail`
+    but no `body`, so it MUST collapse to the canonical 500 — never surface
+    `str(exc)` (which would echo the detail) at status 404.
+    """
+    app = Nexus(api_port=_free_port(), auto_discovery=False, enable_auth=False)
+
+    workflow = WorkflowBuilder()
+    workflow.add_node("StatusOnlyNoBodyNode", "raise_status_only", {})
+    app.register("status_only_wf", workflow.build())
+
+    client = _client_for(app)
+    resp = client.post("/workflows/status_only_wf/execute", json={"inputs": {}})
+
+    assert resp.status_code == 500, (resp.status_code, resp.text)
+    # The HTTPException detail MUST NOT leak — neither the status nor str(exc).
+    assert "secret-internal-resource-name" not in resp.text
+    assert resp.json().get("detail") == "Internal server error", resp.text

@@ -429,7 +429,18 @@ class WorkflowAPI:
         while current is not None and id(current) not in seen:
             seen.add(id(current))
             status = getattr(current, "status_code", None)
-            if isinstance(status, int) and 100 <= status <= 599:
+            # Require BOTH halves of the NexusHandlerError contract: an int
+            # `status_code` in 100-599 AND a `body` attribute. Gating on
+            # `status_code` alone would also match a stray `HTTPException`
+            # (which carries `status_code` + `detail`, NOT `body`) raised
+            # inside a workflow node, surfacing `str(exc)` to the client — a
+            # low-grade info-disclosure. Requiring `body` collapses any such
+            # non-NexusHandlerError to the canonical 500 instead.
+            if (
+                isinstance(status, int)
+                and 100 <= status <= 599
+                and hasattr(current, "body")
+            ):
                 return current
             # Prefer the explicit cause (``raise ... from e``); fall back to the
             # implicit context (``raise`` inside an ``except``).
