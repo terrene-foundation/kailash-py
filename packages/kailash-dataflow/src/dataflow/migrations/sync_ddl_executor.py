@@ -119,8 +119,9 @@ class SyncDDLExecutor:
 
         except ImportError:
             raise ImportError(
-                "psycopg2 is required for PostgreSQL migrations. "
-                "Install with: pip install psycopg2-binary"
+                "psycopg2 is required for the synchronous PostgreSQL DDL path. "
+                "DataFlow is async-first (asyncpg is baseline); psycopg2 is opt-in. "
+                'Install with: pip install "kailash-dataflow[postgres-sync]"'
             )
 
     def _get_sqlite_connection(self):

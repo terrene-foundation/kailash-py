@@ -159,8 +159,9 @@ def _probe_postgresql(database_url: str) -> Optional[int]:
         import psycopg2
     except ImportError:
         logger.warning(
-            "Cannot probe PostgreSQL max_connections: psycopg2 not installed. "
-            "Install with: pip install psycopg2-binary"
+            "Cannot probe PostgreSQL max_connections: psycopg2 not installed "
+            "(optional sync driver). DataFlow is async-first; install the sync "
+            'extra with: pip install "kailash-dataflow[postgres-sync]"'
         )
         return None
 
