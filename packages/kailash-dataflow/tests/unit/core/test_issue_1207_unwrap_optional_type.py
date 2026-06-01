@@ -73,3 +73,59 @@ class TestUnwrapOptionalTypeIssue1207:
         # field_info.get("type") returns None when type is absent — must not crash.
         assert _unwrap_optional_type(None) is None
         assert _unwrap_optional_type(None) not in (dict, list)
+
+
+@pytest.mark.unit
+class TestConvertDatetimeFieldsOptionalIssue1207Sibling:
+    """#1207 sibling: convert_datetime_fields must parse nullable-datetime fields.
+
+    The datetime-parse path in convert_datetime_fields previously unwrapped only
+    the classic ``Optional[datetime]`` form (via ``field_type.__origin__ is
+    typing.Union``). A PEP 604 ``datetime | None`` is a ``types.UnionType`` with
+    NO ``__origin__`` attribute, so the unwrap was skipped and the ISO string was
+    returned unparsed. Routing through ``_unwrap_optional_type`` (same helper as
+    the JSONB fix) covers both spellings. Same bug class as #1207, fixed in the
+    same shard per autonomous-execution Rule 4.
+    """
+
+    @staticmethod
+    def _convert(field_type, iso_value="2024-01-01T12:00:00"):
+        import logging
+
+        from dataflow.core.nodes import convert_datetime_fields
+
+        out = convert_datetime_fields(
+            {"ts": iso_value},
+            {"ts": {"type": field_type}},
+            logging.getLogger("test_issue_1207_sibling"),
+        )
+        return out["ts"]
+
+    def test_classic_optional_datetime_parses(self):
+        import datetime as _dt
+        from typing import Optional
+
+        result = self._convert(Optional[_dt.datetime])
+        assert isinstance(
+            result, _dt.datetime
+        ), f"Optional[datetime] field left ISO string unparsed: {result!r}"
+
+    def test_pep604_datetime_or_none_parses(self):
+        # The sibling bug: `datetime | None` (types.UnionType, no __origin__).
+        import datetime as _dt
+
+        result = self._convert(_dt.datetime | None)
+        assert isinstance(
+            result, _dt.datetime
+        ), f"PEP 604 'datetime | None' field left ISO string unparsed: {result!r}"
+
+    def test_bare_datetime_still_parses(self):
+        import datetime as _dt
+
+        result = self._convert(_dt.datetime)
+        assert isinstance(result, _dt.datetime)
+
+    def test_non_datetime_field_untouched(self):
+        # A str field must NOT be coerced to datetime even with an ISO-ish value.
+        result = self._convert(str, iso_value="2024-01-01T12:00:00")
+        assert result == "2024-01-01T12:00:00"

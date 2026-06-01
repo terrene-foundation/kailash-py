@@ -234,12 +234,12 @@ def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict
         else:
             field_type = field_info.get("type")
 
-        # Handle Optional[datetime] types
-        if hasattr(field_type, "__origin__"):
-            if field_type.__origin__ is typing.Union:
-                actual_types = [t for t in field_type.__args__ if t is not type(None)]
-                if actual_types and actual_types[0] == datetime:
-                    field_type = datetime
+        # Handle Optional[datetime] AND PEP 604 ``datetime | None`` (#1207
+        # sibling: the prior ``__origin__ is typing.Union`` check missed PEP 604
+        # unions — a ``types.UnionType`` has no ``__origin__`` — so nullable
+        # datetime fields declared ``datetime | None`` skipped parsing). Routing
+        # through the shared helper covers both union spellings.
+        field_type = _unwrap_optional_type(field_type)
 
         # If field is datetime type and value is string, try to parse it
         if field_type == datetime:
