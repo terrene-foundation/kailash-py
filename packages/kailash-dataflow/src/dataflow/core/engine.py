@@ -11,6 +11,7 @@ import os
 import re
 import threading
 import time
+import types
 import warnings
 from copy import deepcopy
 from datetime import datetime
@@ -5364,9 +5365,12 @@ class DataFlow(DataFlowEventMixin):
         """
         from typing import get_args, get_origin
 
-        # Handle Optional types (Union[type, None])
-        if hasattr(python_type, "__origin__") and python_type.__origin__ is Union:
-            args = python_type.__args__
+        # Handle Optional types (Union[type, None]). issue #1228: PEP 604 ``T | None``
+        # has origin types.UnionType and NO ``__origin__`` attribute, so route through
+        # get_origin/get_args to recognize both spellings.
+        _origin = get_origin(python_type)
+        if _origin is Union or _origin is types.UnionType:
+            args = get_args(python_type)
             if len(args) == 2 and type(None) in args:
                 # This is Optional[SomeType], extract the actual type
                 actual_type = args[0] if args[1] is type(None) else args[1]

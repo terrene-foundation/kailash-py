@@ -7,6 +7,7 @@ This module was migrated from the old core/schema.py to maintain test compatibil
 
 import inspect
 import logging
+import types
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -317,7 +318,9 @@ class SchemaParser:
         nullable = False
         actual_type = field_type
 
-        if origin is Union:
+        # issue #1228: match typing.Union AND PEP 604 ``T | None`` (a
+        # ``types.UnionType`` origin) so PEP 604 nullable fields parse as nullable.
+        if origin is Union or origin is types.UnionType:
             # Check if it's Optional (Union[X, None])
             if type(None) in args:
                 nullable = True

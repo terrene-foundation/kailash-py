@@ -122,8 +122,10 @@ class TypeAwareFieldProcessor:
             # No type annotation, pass through
             return value
 
-        # Handle Union types that weren't simplified (multiple non-None types)
-        if get_origin(expected_type) is Union:
+        # Handle Union types that weren't simplified (multiple non-None types).
+        # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
+        _origin = get_origin(expected_type)
+        if _origin is Union or _origin is types.UnionType:
             # For complex Union types, pass through
             return value
 

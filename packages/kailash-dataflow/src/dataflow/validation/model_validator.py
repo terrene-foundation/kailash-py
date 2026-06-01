@@ -15,6 +15,7 @@ Integration: Called during @db.model() decorator when strict_mode enabled
 """
 
 import datetime
+import types
 from typing import (
     Any,
     Dict,
@@ -158,8 +159,9 @@ def validate_primary_key(model_cls: type) -> ValidationResult:
     id_type = type_hints["id"]
 
     # Rule 4: Check if Optional/Union (id cannot be optional)
+    # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
     origin = get_origin(id_type)
-    if origin is Union:  # Optional is Union[T, None]
+    if origin is Union or origin is types.UnionType:  # Optional is Union[T, None]
         args = get_args(id_type)
         # Check if this is Optional (Union with None)
         if type(None) in args:
@@ -467,8 +469,9 @@ def validate_field_types(model_cls: type) -> List[ValidationResult]:
             continue
 
         # Unwrap Optional/Union to get base type
+        # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
         origin = get_origin(field_type)
-        if origin is Union:  # Optional is Union[T, None]
+        if origin is Union or origin is types.UnionType:  # Optional is Union[T, None]
             args = get_args(field_type)
             # Find non-None type
             base_type = None
