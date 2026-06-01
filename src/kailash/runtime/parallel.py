@@ -5,6 +5,7 @@ specifically designed to run independent nodes concurrently for maximum performa
 """
 
 import asyncio
+import contextvars
 import logging
 import time
 from collections import deque
@@ -477,8 +478,15 @@ class ParallelRuntime:
 
                     async def execute_with_metrics():
                         with collector.collect(node_id=node_id) as context:
+                            # Propagate the caller's contextvars across the
+                            # thread-pool boundary so a ContextVar set before
+                            # execution is visible inside node.run() (#1200).
+                            ctx = contextvars.copy_context()
                             result = await loop.run_in_executor(
-                                None, lambda: node_instance.execute(**inputs)
+                                None,
+                                lambda: ctx.run(
+                                    lambda: node_instance.execute(**inputs)
+                                ),
                             )
                             return result, context.result()
 

@@ -35,6 +35,7 @@ Examples:
 """
 
 import asyncio
+import contextvars
 import hashlib
 import json
 import logging
@@ -2183,6 +2184,15 @@ class LocalRuntime(
         result_container = []
         exception_container = []
 
+        # Propagate the caller's contextvars.Context across the raw thread
+        # boundary. A bare ``threading.Thread`` starts with an EMPTY context,
+        # so a ContextVar set before ``LocalRuntime.execute()`` (invoked from
+        # within a running event loop, routing through ``_execute_sync``) would
+        # otherwise be invisible inside the node's ``run()``. Snapshot in THIS
+        # (caller) frame and run the thread body through ``ctx.run(...)`` —
+        # mirroring stdlib ``asyncio.to_thread`` semantics (#1200).
+        _caller_ctx = contextvars.copy_context()
+
         def run_in_thread():
             """Run async execution in separate thread."""
             loop = None
@@ -2281,7 +2291,7 @@ class LocalRuntime(
                 if loop:
                     loop.close()
 
-        thread = threading.Thread(target=run_in_thread)
+        thread = threading.Thread(target=lambda: _caller_ctx.run(run_in_thread))
         thread.start()
         thread.join()
 
@@ -4279,8 +4289,12 @@ class LocalRuntime(
                 )
 
             try:
+                # Propagate the caller's contextvars across the thread-pool
+                # boundary so a ContextVar set before execution is visible
+                # inside the node's run() on this sync-in-async path (#1200).
+                _caller_ctx = contextvars.copy_context()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, run_async())
+                    future = executor.submit(_caller_ctx.run, asyncio.run, run_async())
                     return future.result()
             except RuntimeError as thread_err:
                 # Python 3.13: asyncio.run() may fail in worker threads, or

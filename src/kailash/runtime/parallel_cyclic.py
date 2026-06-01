@@ -1,5 +1,6 @@
 """Enhanced parallel runtime with cyclic workflow support."""
 
+import contextvars
 import logging
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -278,6 +279,11 @@ class ParallelCyclicRuntime:
             # Execute groups sequentially, but nodes within groups in parallel
             results = {}
 
+            # Propagate the caller's contextvars across the thread-pool
+            # boundary so a ContextVar set before execution is visible inside
+            # each node's run() on the parallel-cyclic path (#1200).
+            caller_ctx = contextvars.copy_context()
+
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 for group_index, node_group in enumerate(execution_groups):
                     self.logger.info(
@@ -288,6 +294,7 @@ class ParallelCyclicRuntime:
                     future_to_node = {}
                     for node_id in node_group:
                         future = executor.submit(
+                            caller_ctx.copy().run,
                             self._execute_single_node,
                             workflow,
                             node_id,
