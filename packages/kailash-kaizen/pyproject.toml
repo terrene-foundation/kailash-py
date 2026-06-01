@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.24.4"
+version = "2.24.5"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -25,10 +25,11 @@ classifiers = [
 ]
 dependencies = [
     # ─────────────────────────────────────────────────────────────
-    # Kaizen core. Down from 29 → 9 deps. See issue #890 audit.
-    # All other deps (provider SDKs, observability, DBs, RAG numerics)
-    # are either lazy-loaded or scoped to optional subsystems and now
-    # live behind extras.
+    # Kaizen core. Slimmed from 29 deps per the issue #890 audit; aiosqlite
+    # promoted back to core in 2.24.5 (kaizen.memory.persistent_tiers imports
+    # it eagerly, so it cannot be an optional extra). All other deps (provider
+    # SDKs, observability, PostgreSQL, RAG numerics) remain lazy-loaded or
+    # scoped to optional subsystems behind extras.
     # ─────────────────────────────────────────────────────────────
     "kailash>=2.28.0",
     "kailash-mcp>=0.2.4",       # core/base_agent.py:32 module-scope MCPClient
@@ -39,6 +40,7 @@ dependencies = [
     "aiohttp>=3.13.3",          # autonomy/control/transports/http + nodes/ai/semantic_memory
     "PyJWT>=2.8.0",             # security/authentication.py module-scope
     "cryptography>=41.0.0",     # security/encryption.py (AESGCM, PBKDF2HMAC, hashes)
+    "aiosqlite>=0.19.0",        # memory/persistent_tiers.py module-scope (multi-tier memory); pure-Python over stdlib sqlite3
 ]
 requires-python = ">=3.11"
 
@@ -78,9 +80,11 @@ observability = [
     "structlog>=23.0.0",
 ]
 
-# Database extras — multi-tier memory (aiosqlite) + trust migration (asyncpg).
+# Database extra — PostgreSQL trust migration (asyncpg). asyncpg is genuinely
+# optional: Postgres-only and not eagerly imported anywhere. (aiosqlite, the
+# multi-tier-memory dep, is now a core dependency — see above — because it is
+# imported eagerly by kaizen.memory.persistent_tiers.)
 db = [
-    "aiosqlite>=0.19.0",
     "asyncpg>=0.28.0",
 ]
 
@@ -91,14 +95,13 @@ cache = [
 
 # RAG / multimodal — the complete `import kaizen.nodes.rag` dependency set.
 # numpy/Pillow: similarity, vision, hybrid search. networkx: graph RAG.
-# requests + aiosqlite: pulled transitively via kailash.nodes.api.rest /
-# the kailash data path that the resurrected rag modules import.
+# requests: pulled transitively via kailash.nodes.api.rest / the kailash data
+# path that the resurrected rag modules import. (aiosqlite is now a core dep.)
 rag = [
     "numpy>=1.24.0",
     "Pillow>=10.0.0",
     "networkx>=3.0",
     "requests>=2.32",
-    "aiosqlite>=0.19.0",
 ]
 
 # Research validator — GitPython for repo introspection.
