@@ -5,6 +5,13 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.8] — 2026-06-01 — persistent/learning memory shortcut repair + pyright drift (#855)
+
+### Fixed
+
+- **`Agent(memory="persistent")` and `Agent(memory="learning")` no longer crash (#855)** — the shortcut factories passed `storage_path=`/`enable_*=` kwargs that `HierarchicalMemory.__init__` (`hot_size, warm_backend, cold_backend, ...`) never accepted, so both shortcuts raised `TypeError: unexpected keyword argument 'storage_path'` on every call and were unusable. Both factories now build a real warm-tier-backed `HierarchicalMemory`: a `_safe_sqlite_dsn()` helper emits DataFlow's required 4-slash absolute SQLite DSN (the 3-slash form fails `unable to open database file`) and rejects `?`/`#`/null bytes; a `_build_dataflow_warm_backend()` helper registers `MemoryEntryModel` with the `tag_list` column (not the reserved `NodeMetadata.tags`) and returns a `DataFlowMemoryBackend`, degrading to hot-tier-only with a logged warning when DataFlow is unavailable (never a silent drop). Verified end-to-end: `store()`→`get()` round-trips content AND tags.
+- **pyright type-drift in `patterns/state_manager.py` and `journey/core.py` (#855)** — bound `DataFlow`/`AsyncLocalRuntime`/`WorkflowBuilder` in a `TYPE_CHECKING` block (previously "possibly unbound" from the lazy `try/except ImportError`); guaranteed an async-capable `self.runtime` via a graceful fallback to an owned `AsyncLocalRuntime` when a sync runtime is supplied; imported `Pipeline` unconditionally for type-checking (the prior `Pipeline = None` on ImportError broke every `Pipeline` annotation); switched to the canonical `Signature.with_guidelines()`. Reduces the three files from 19 errors / 14 warnings to 0/0.
+
 ## [0.9.7] — 2026-05-09 — slim core: orphan deletes + httpx/openai consolidation (#890)
 
 Patch release shipping kaizen-agents' slice of the kailash 2.18.0 / #890 slim-core decoupling. **No public-API behavior change** — three deps audited as orphans (zero imports across `src/kaizen_agents/`) are deleted, and the dep ordering is cleaned up. Users see no difference in installed packages from the `kailash-kaizen` + `openai` transitive set.

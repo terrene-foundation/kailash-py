@@ -4,6 +4,12 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.4] — 2026-06-01 — DataFlowMemoryBackend warm-tier persistence (#855)
+
+### Fixed
+
+- **`DataFlowMemoryBackend` warm-tier persistence no longer raises on its own documented schema (#855)** — the `MemoryEntryModel` schema named a field `tags`, which collides with the core SDK's reserved `NodeMetadata.tags` (typed `set[str]`). `store()` passed `tags=json.dumps([...])` (a JSON string) to `MemoryEntryModelCreateNode`, and CreateNode metadata validation rejected it (`WorkflowValidationError: NodeMetadata.tags Input should be a valid set`), so warm-tier persistence raised on first store and had never worked for its own documented schema. Renamed the DataFlow column `tags` → `tag_list` at all four sites (docstring schema, `store()` write key, `store_many()` write key, and the `_record_to_entry()` read-back with a legacy `tags` fallback for pre-rename rows). The in-memory `MemoryEntry.tags` attribute is unchanged; only the persisted column name changes. Verified end-to-end against real SQLite: `store()`→`get()` round-trips content AND tags.
+
 ## [2.24.3] — 2026-05-28 — RAG query_processing + workflows defect close-out (F25 Shards D + E)
 
 ### Fixed (Shard E — `kaizen.nodes.rag.query_processing`)
@@ -76,7 +82,7 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   `semantic_chunker` required a `text` input that nothing supplied, so
   every call to `runtime.execute(...)` raised
   `WorkflowValidationError: Node 'semantic_chunker' missing required
-  inputs: ['text']`. The fix wires the chunker's `text` parameter
+inputs: ['text']`. The fix wires the chunker's `text` parameter
   through the workflow facade so users can now invoke
   `node.execute(text="document body...")` and the inner chunker
   receives the input as expected. Surfaced by the F25 RAG audit.
