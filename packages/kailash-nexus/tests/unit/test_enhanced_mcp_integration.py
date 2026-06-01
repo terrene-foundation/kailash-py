@@ -99,15 +99,27 @@ class TestEnhancedMCPServerCreation:
         call_args = mock_server.call_args[1]
         assert call_args["enable_discovery"] is True
 
-    def test_websocket_only_mode_no_mcp_server(self):
-        """In WebSocket-only mode, MCP server is not started (use kailash-mcp instead)."""
+    def test_websocket_only_mode_uses_mcp_server_without_channel(self):
+        """WebSocket-only mode uses the Core SDK MCPServer directly (no MCPChannel).
+
+        Architecture (nexus.core._setup_mcp, core.py): in WebSocket-only mode
+        (the default — no HTTP/SSE sub-transport) the Core SDK ``MCPServer``
+        IS created and binds its own WebSocket JSON-RPC transport via
+        ``_run_websocket()``. ``MCPChannel`` is bypassed because it only adds
+        workflow-management semantics on top of HTTP routing — there is no
+        HTTP path to bolt onto. So ``_mcp_server`` is present and
+        ``_mcp_channel`` is ``None``. (The ``0b559e0d`` refactor removed the
+        old in-package MCPServer SHIM, not the Core SDK MCPServer this path
+        now uses.)
+        """
         from nexus.core import Nexus
 
         # Create Nexus in WebSocket-only mode (default: no HTTP transport)
         app = Nexus()
 
-        # With the old MCPServer removed, WebSocket-only mode has no MCP server
-        assert app._mcp_server is None
+        # The Core SDK MCPServer handles JSON-RPC over WS directly; MCPChannel
+        # (HTTP-routing semantics) is bypassed in WebSocket-only mode.
+        assert app._mcp_server is not None
         assert app._mcp_channel is None
 
 
@@ -249,8 +261,11 @@ class TestMCPServerLifecycle:
         """Test running MCP server with channel."""
         from nexus.core import Nexus
 
-        # Mock event loop
+        # Mock event loop. A real loop consumes the coroutine; the mock must
+        # too, or the AsyncMock-produced `start()` coroutine GCs unawaited and
+        # emits a RuntimeWarning (testing.md § AsyncMock cleanup).
         mock_loop = Mock()
+        mock_loop.run_until_complete = Mock(side_effect=lambda coro: coro.close())
         mock_new_loop.return_value = mock_loop
 
         # Create Nexus with mocked channel
@@ -295,6 +310,10 @@ class TestMCPServerLifecycle:
         with patch("asyncio.new_event_loop") as mock_new_loop:
             with patch("asyncio.set_event_loop") as mock_set_loop:
                 mock_loop = Mock()
+                # Consume the AsyncMock coroutine (testing.md § AsyncMock cleanup).
+                mock_loop.run_until_complete = Mock(
+                    side_effect=lambda coro: coro.close()
+                )
                 mock_new_loop.return_value = mock_loop
 
                 app = Nexus()
@@ -317,6 +336,12 @@ class TestMCPServerLifecycle:
         with patch("asyncio.new_event_loop") as mock_new_loop:
             with patch("asyncio.set_event_loop") as mock_set_loop:
                 mock_loop = Mock()
+                # A real loop consumes the coroutine; the mock must too, or the
+                # AsyncMock-produced `stop()` coroutine GCs unawaited and emits a
+                # RuntimeWarning (testing.md § AsyncMock cleanup).
+                mock_loop.run_until_complete = Mock(
+                    side_effect=lambda coro: coro.close()
+                )
                 mock_new_loop.return_value = mock_loop
 
                 app = Nexus()
