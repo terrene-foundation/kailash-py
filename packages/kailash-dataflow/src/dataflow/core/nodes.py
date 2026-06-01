@@ -154,9 +154,13 @@ def _normalize_id_type(type_annotation: Any) -> Any:
     """Normalize a type annotation for ID coercion, stripping Optional/Union wrappers."""
     import typing
 
-    origin = getattr(type_annotation, "__origin__", None)
-    if origin is Union:
-        args = getattr(type_annotation, "__args__", ())
+    # Match BOTH union spellings (issue #1228, sibling of #1207): typing.Union /
+    # Optional[T] (get_origin -> typing.Union) AND PEP 604 ``T | None`` (get_origin
+    # -> types.UnionType; a UnionType has no ``__origin__`` attribute, so the prior
+    # getattr-based check silently missed it).
+    origin = typing.get_origin(type_annotation)
+    if origin is Union or origin is types.UnionType:
+        args = typing.get_args(type_annotation)
         non_none_types = [arg for arg in args if arg is not type(None)]
         if non_none_types:
             return _normalize_id_type(non_none_types[0])
@@ -368,6 +372,21 @@ class NodeGenerator:
             A simple Python type (str, int, bool, list, dict, etc.)
             For Optional[T], returns the normalized inner type T
         """
+        # PEP 604 ``T | None`` (issue #1228, sibling of #1207): a types.UnionType
+        # has NO ``__origin__`` attribute, so the hasattr-gated block below skips it
+        # entirely. Normalize it through the same single-non-None-arg collapse the
+        # typing.Union branch applies, BEFORE the __origin__ check.
+        from typing import get_args as _get_args
+        from typing import get_origin as _get_origin
+
+        if _get_origin(type_annotation) is types.UnionType:
+            non_none_types = [
+                arg for arg in _get_args(type_annotation) if arg is not type(None)
+            ]
+            if non_none_types:
+                return self._normalize_type_annotation(non_none_types[0])
+            return str
+
         # Handle typing constructs
         if hasattr(type_annotation, "__origin__"):
             origin = type_annotation.__origin__
@@ -1109,7 +1128,11 @@ class NodeGenerator:
                             is_optional = False
                             field_type = field_info["type"]
 
-                            if get_origin(field_type) is Union:
+                            # issue #1228: match typing.Union AND PEP 604 ``T | None``
+                            # (origin types.UnionType) so PEP 604 nullable fields are
+                            # detected as optional.
+                            _origin = get_origin(field_type)
+                            if _origin is Union or _origin is types.UnionType:
                                 args = get_args(field_type)
                                 if type(None) in args:
                                     is_optional = True

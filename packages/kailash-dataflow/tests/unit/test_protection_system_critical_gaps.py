@@ -50,7 +50,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from kailash.nodes.base import Node
-from kailash.runtime.async_local import AsyncLocalRuntime as _AsyncLocalRuntime
 
 _wf = pytest.importorskip("kailash.workflow.builder")
 WorkflowBuilder = _wf.WorkflowBuilder
@@ -195,6 +194,11 @@ async def _drain_protected_dataflow(db: "ProtectedDataFlow") -> None:
     # This mirrors tests/conftest.py::cleanup_dataflow_connection_pools'
     # session-cleanup philosophy (force-terminate leaked async resources
     # the framework did not track) and touches no production code.
+    # Import the real runtime function-local (not module-scope) per issue #979
+    # Tier-1 contract — a bare top-level runtime import drags asyncpg/runtime
+    # into clean-[dev] collection.
+    from kailash.runtime.async_local import AsyncLocalRuntime as _AsyncLocalRuntime
+
     gc.collect()
     for _obj in list(gc.get_objects()):
         if isinstance(_obj, _AsyncLocalRuntime) and getattr(_obj, "_ref_count", 0) > 0:

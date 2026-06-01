@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.10.2] — 2026-06-01 — PEP 604 `T | None` recognized across type-introspection paths (#1228)
+
+### Fixed
+
+- **psycopg2 ImportError / probe messages now point at the canonical `kailash-dataflow[postgres-sync]` extra (#753)** — DataFlow is async-first (asyncpg is the baseline driver); psycopg2 is opt-in for the synchronous PostgreSQL DDL path (`SyncDDLExecutor`, sync `create_tables()`). The `SyncDDLExecutor` ImportError and the `pool_utils` max-connections-probe warning previously said `pip install psycopg2-binary`; they now direct users to `pip install "kailash-dataflow[postgres-sync]"` and state the async-first rationale. The #753 regression test was corrected to guard the `postgres-sync` **extra** declaration (+ a new inverse guard that psycopg2-binary stays OUT of baseline), matching the post-#890 async-first architecture rather than the stale pre-#890 baseline expectation.
+- **PEP 604 `T | None` nullable fields are recognized identically to `Optional[T]` across every DataFlow type-introspection path (#1228)** — sibling of #1207. #1207 fixed only the JSONB read-path deserializer; the SAME two-spelling gap existed in every other introspection site that branched on `origin is Union` / `__origin__ is Union` WITHOUT also matching `types.UnionType`. A field declared `tags: list | None` (`typing.get_origin` → `types.UnionType`, with no `__origin__` attribute) was silently mishandled: not normalized for SQL-type inference / parameter generation, not detected as nullable during schema parsing, not detected as optional during validation, and not unwrapped during type coercion. Nine sites across five modules now recognize both spellings — `core/nodes.py` (`_normalize_id_type` ID coercion, `_normalize_type_annotation` param generation, the `is_optional` validation gate), `core/type_processor.py` (complex-union pass-through), `core/schema.py` (nullable detection), `core/engine.py` (`_python_type_to_sql_type`), `validation/model_validator.py` (Optional-id rejection + base-type unwrap), and `migrations/fk_aware_model_integration.py` (`_is_nullable_field`). The four `__origin__`-gated sites were converted to `get_origin`/`get_args` because a `types.UnionType` has no `__origin__` attribute. Regression: `tests/regression/test_issue_1228_pep604_union_roundtrip.py` (2 Tier-2 round-trips against real PostgreSQL — a `@db.model` declared entirely with PEP 604 `T | None` fields auto-migrates and round-trips with NON-EMPTY JSONB values) + `tests/unit/core/test_issue_1228_pep604_union_introspection.py` (12 Tier-1 unit tests, one per fixed path).
+
 ## [2.10.1] — 2026-06-01 — Optional[list]/Optional[dict] JSONB round-trip fix (#1207)
 
 ### Fixed
