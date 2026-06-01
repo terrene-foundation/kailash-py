@@ -413,6 +413,13 @@ class SignedActionEnvelope:
         canonical_bytes: The canonical-JSON encoding of the action.
         signature: Detached signature over ``canonical_bytes``.
         signer_delegate_id: Identifier of the signing principal.
+        observed_at: tz-aware UTC datetime of the action. Symmetric with
+            :attr:`AttestedReadReceipt.observed_at` (GH #1209): the signed
+            timestamp is committed inside ``canonical_bytes`` AND exposed
+            as a first-class field, so a write envelope is independently
+            verifiable from the envelope object alone — the verifier
+            re-derives ``observed_at`` from the envelope rather than
+            requiring the caller to supply it out-of-band.
         payload: The action's payload (kept for downstream consumers).
     """
 
@@ -420,6 +427,7 @@ class SignedActionEnvelope:
     canonical_bytes: bytes
     signature: bytes
     signer_delegate_id: str
+    observed_at: datetime
     payload: dict[str, Any] = field(default_factory=dict)
 
 
