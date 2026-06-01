@@ -4289,8 +4289,12 @@ class LocalRuntime(
                 )
 
             try:
+                # Propagate the caller's contextvars across the thread-pool
+                # boundary so a ContextVar set before execution is visible
+                # inside the node's run() on this sync-in-async path (#1200).
+                _caller_ctx = contextvars.copy_context()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, run_async())
+                    future = executor.submit(_caller_ctx.run, asyncio.run, run_async())
                     return future.result()
             except RuntimeError as thread_err:
                 # Python 3.13: asyncio.run() may fail in worker threads, or
