@@ -11,11 +11,12 @@ import hashlib
 import json
 import logging
 import threading
+import types
 import uuid
 import warnings
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, get_args
 
 try:
     from kailash.nodes.data.sql import SQLDatabaseNode
@@ -1228,6 +1229,20 @@ class ModelRegistry:
                 return origin.__name__
             else:
                 return f"{origin.__module__}.{origin.__name__}"
+        elif isinstance(field_type, types.UnionType):
+            # PEP 604 ``X | Y`` unions (e.g. ``int | None``) have no ``__name__``
+            # / ``__origin__``, so without this branch they fall to the
+            # ``str(field_type)`` fallback ("int | None") — diverging from the
+            # ``typing.Optional[int]`` / ``Union[int, None]`` spelling, which
+            # normalizes to "Optional" (or "Union") via the ``__name__`` branch
+            # above. Mirror that naming EXACTLY so a field declared ``int | None``
+            # normalizes identically to ``Optional[int]`` and a spelling switch
+            # is not seen as a schema change (issue #1228 / F34). typing names a
+            # 2-arg ``Union[X, None]`` "Optional" and every other union "Union".
+            args = get_args(field_type)
+            if len(args) == 2 and type(None) in args:
+                return "Optional"
+            return "Union"
         else:
             # Fallback to string representation
             return str(field_type)
