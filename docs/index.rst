@@ -69,6 +69,12 @@ Quick Links
    frameworks/dataflow
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Guides
+
+   scheduler/migrating-from-celery-beat
+
+.. toctree::
    :maxdepth: 2
    :caption: Enterprise
 
