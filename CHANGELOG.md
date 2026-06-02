@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.0] - 2026-06-02
+
+### Added
+
+- **`delegate.SignedActionEnvelope` now exposes `observed_at` as a first-class field (#1209)** — a write envelope's signed timestamp was committed inside `canonical_bytes` (so verification was cryptographically sound) but was not exposed as a field, so verifying a write envelope required the caller to supply `observed_at` out-of-band; it could not be re-derived from the envelope the way the read path re-derives it from `AttestedReadReceipt.observed_at`. `SignedActionEnvelope` now carries `observed_at: datetime` (placed before the defaulted `payload` field), symmetric with `AttestedReadReceipt`, so a write envelope is independently verifiable from the envelope object alone — the verifier reconstructs `canonical_bytes` from `envelope.observed_at` + `envelope.payload` with no out-of-band timestamp. Regression: `tests/regression/test_issue_1209_action_envelope_observed_at.py` (structural symmetry with `AttestedReadReceipt`; verify-from-envelope-alone round-trip; tampered-`observed_at` fails re-derived verification; `observed_at` is required-no-default).
+
+### Changed
+
+- **BREAKING (`delegate` module, new in 2.26.0): `SignedActionEnvelope` constructor now requires `observed_at` (#1209)** — the new field is required (no default), symmetric with `AttestedReadReceipt`; a default would let an envelope ship without the committed timestamp, defeating independent verifiability. New-shape `Connector.write` implementations that construct `SignedActionEnvelope` directly MUST pass `observed_at`. **Migration:** add `observed_at=datetime.now(timezone.utc)` (or the action's actual observation time, matching the timestamp committed into `canonical_bytes`) to each `SignedActionEnvelope(...)` call. Scoped to the `delegate` module; no other public surface is affected.
+
 ## [2.28.4] - 2026-06-01
 
 ### Fixed
