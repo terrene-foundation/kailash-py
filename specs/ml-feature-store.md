@@ -1,6 +1,6 @@
 # Kailash ML Feature Store Specification
 
-**Version:** 1.1.1 (verified at `packages/kailash-ml/src/kailash_ml/_version.py`)
+**Version:** 1.7.4 — package version at last spec sync (`packages/kailash-ml/src/kailash_ml/_version.py`, 2026-06-02). Point-in-time anchor, not a perpetual pin; re-verify against `_version.py` on each spec sync.
 **Status:** v2.0.0 (re-derived from filesystem mechanical sweeps 2026-04-26 — supersedes v1.0.0)
 **Package:** `kailash-ml`
 **Canonical module:** `kailash_ml.features` (1.0+ surface)
@@ -334,15 +334,15 @@ These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (
 
 Filesystem sweep: `find packages/kailash-ml/tests -name 'test_feature*'` yields six files. Three of these exercise the canonical 1.0+ surface (verified via grep for `from kailash_ml.features` imports):
 
-| File                                          | Tier | Surface exercised                                                                                                                                   |
-| --------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/unit/test_feature_store_unit.py`       | T1   | Canonical (`from kailash_ml.features import FeatureStore`) — constructor validation, tenant resolution, cache helpers, deferred-import loud failure |
-| `tests/unit/test_feature_store_schema.py`         | T1   | Canonical (`from kailash_ml.features import FeatureField, FeatureSchema`)                                                                                  |
-| `tests/unit/test_feature_store_cache_keys.py`     | T1   | Canonical (`from kailash_ml.features import ...`)                                                                                                          |
-| `tests/integration/test_feature_store_wiring.py`  | T2   | Canonical (`from kailash_ml.features import FeatureStore`) — exercises the 1.0+ surface end-to-end against a real `DataFlow(...)` instance                  |
-| `tests/integration/test_feature_store.py`         | T2   | Legacy (`from kailash_ml.engines.feature_store import FeatureStore`) — exercises the legacy `engines.feature_store` module retained for 0.x callers         |
-| `tests/unit/test_feature_engineer.py`             | T1   | Out-of-scope (feature-engineering primitive, not FeatureStore)                                                                                              |
-| `tests/unit/test_feature_sql.py`                  | T1   | Out-of-scope (legacy SQL builder)                                                                                                                           |
+| File                                             | Tier | Surface exercised                                                                                                                                   |
+| ------------------------------------------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/test_feature_store_unit.py`          | T1   | Canonical (`from kailash_ml.features import FeatureStore`) — constructor validation, tenant resolution, cache helpers, deferred-import loud failure |
+| `tests/unit/test_feature_store_schema.py`        | T1   | Canonical (`from kailash_ml.features import FeatureField, FeatureSchema`)                                                                           |
+| `tests/unit/test_feature_store_cache_keys.py`    | T1   | Canonical (`from kailash_ml.features import ...`)                                                                                                   |
+| `tests/integration/test_feature_store_wiring.py` | T2   | Canonical (`from kailash_ml.features import FeatureStore`) — exercises the 1.0+ surface end-to-end against a real `DataFlow(...)` instance          |
+| `tests/integration/test_feature_store.py`        | T2   | Legacy (`from kailash_ml.engines.feature_store import FeatureStore`) — exercises the legacy `engines.feature_store` module retained for 0.x callers |
+| `tests/unit/test_feature_engineer.py`            | T1   | Out-of-scope (feature-engineering primitive, not FeatureStore)                                                                                      |
+| `tests/unit/test_feature_sql.py`                 | T1   | Out-of-scope (legacy SQL builder)                                                                                                                   |
 
 ### 7.2 Canonical FeatureStore Tier-2 Wiring Test
 
