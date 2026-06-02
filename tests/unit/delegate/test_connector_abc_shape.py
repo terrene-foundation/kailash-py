@@ -254,6 +254,7 @@ class _NewShapeConnector(Connector):
             canonical_bytes=str(payload).encode("utf-8"),
             signature=b"new-shape-sig",
             signer_delegate_id=str(identity.delegate_id),
+            observed_at=datetime.now(timezone.utc),
             payload=payload if isinstance(payload, dict) else {"value": payload},
         )
 

@@ -160,6 +160,7 @@ class FourPrimitiveConnector(Connector):
             canonical_bytes=canonical_bytes,
             signature=b"4p-write-sig",
             signer_delegate_id=str(identity.delegate_id),
+            observed_at=datetime.now(timezone.utc),
             payload=payload if isinstance(payload, dict) else {"value": payload},
         )
 

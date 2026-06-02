@@ -423,12 +423,15 @@ async def test_new_shape_subclass_override_returns_real_value() -> None:
             )
 
         async def write(self, action, *, identity, envelope):
+            from datetime import datetime, timezone
+
             payload = await action()
             return SignedActionEnvelope(
                 action_id=uuid.uuid4(),
                 canonical_bytes=b"canon",
                 signature=b"real-sig-bytes",
                 signer_delegate_id=str(identity.delegate_id),
+                observed_at=datetime.now(timezone.utc),
                 payload=payload if isinstance(payload, dict) else {"value": payload},
             )
 
