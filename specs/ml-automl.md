@@ -1,6 +1,6 @@
 # Kailash ML AutoML & Hyperparameter Search Specification
 
-**Version:** 1.1.1 (matches `kailash_ml.__version__`)
+**Version:** 1.7.4 — package version at last spec sync (`kailash_ml.__version__`, 2026-06-02). Point-in-time anchor, not a perpetual pin; re-verify against `_version.py` on each spec sync.
 **Status:** v2.0.0 (re-derived from implementation 2026-04-26 — supersedes v1.0.0)
 **Package:** `kailash-ml`
 **Parent domain:** ML Lifecycle (see `ml-engines.md` for `MLEngine.compare`/`.fit`; `ml-tracking.md` for run hierarchy; `ml-feature-store.md` for data retrieval)
