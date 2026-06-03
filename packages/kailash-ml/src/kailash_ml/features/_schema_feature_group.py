@@ -138,15 +138,21 @@ class SchemaFeatureGroup:
 
         frame = pl.DataFrame(rows)
 
-        # As-of dedup: keep the latest row per entity. The window query already
-        # bounded timestamp <= point_in_time, so "latest per entity" within the
-        # fetched rows IS the point-in-time-correct value. `nulls_last=True`
-        # ensures a row with a NULL timestamp_column can never shadow a real
-        # timestamped row (descending sort otherwise places NULLs first, where
-        # `unique(keep="first")` would pick them).
+        # Latest-per-entity dedup: keep the most recent row per entity whenever
+        # the schema declares a timestamp column. This realises BOTH halves of
+        # the get_features contract (store.py docstring):
+        #   * point_in_time given → `_query_window` already bounded the rows to
+        #     timestamp <= T, so "latest per entity" within that window IS the
+        #     point-in-time-correct value (as-of T).
+        #   * point_in_time None → "the latest values are returned": one row per
+        #     entity, the most recent. Without this, the no-timestamp path would
+        #     return every historical row (duplicate entities) — wrong for a
+        #     feature-vector retrieval.
+        # `nulls_last=True` ensures a row with a NULL timestamp_column can never
+        # shadow a real timestamped row (a descending sort otherwise places
+        # NULLs first, where `unique(keep="first")` would pick them).
         if (
-            point_in_time is not None
-            and ts_col is not None
+            ts_col is not None
             and ts_col in frame.columns
             and entity_col in frame.columns
             and frame.height

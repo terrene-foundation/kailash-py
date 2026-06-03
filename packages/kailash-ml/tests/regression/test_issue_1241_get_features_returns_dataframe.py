@@ -84,6 +84,35 @@ async def test_issue_1241_get_features_point_in_time_is_correct(db: DataFlow):
     ], "as-of must return latest row <= T, not after T"
 
 
+async def test_issue_1241_no_timestamp_returns_latest_per_entity(db: DataFlow):
+    """1.7.6 regression: `get_features(schema)` with NO timestamp must return
+    the LATEST row per entity (one feature vector per entity), per the
+    get_features contract ("when timestamp is None the latest values are
+    returned"). The 1.7.5 adapter gated dedup on `point_in_time is not None`,
+    so the no-timestamp path returned every historical row — duplicate
+    entities. Caught by the published-wheel end-to-end walk.
+    """
+    # Two rows for e1 (Jan score=1, Mar score=9), one for e2.
+    db.express_sync.create(
+        "Churn", {"entity_id": "e1", "event_time": datetime(2026, 1, 1), "score": 1}
+    )
+    db.express_sync.create(
+        "Churn", {"entity_id": "e1", "event_time": datetime(2026, 3, 1), "score": 9}
+    )
+    db.express_sync.create(
+        "Churn", {"entity_id": "e2", "event_time": datetime(2026, 1, 1), "score": 7}
+    )
+    store = FeatureStore(db, default_tenant_id="_single")
+
+    out = await store.get_features(_schema())  # no timestamp → latest per entity
+
+    assert out.height == 2, "must be one row per entity, not every historical row"
+    assert sorted(out["entity_id"].to_list()) == ["e1", "e2"]
+    by_entity = {r["entity_id"]: r["score"] for r in out.to_dicts()}
+    assert by_entity["e1"] == 9, "e1 latest (Mar=9), not the Jan row"
+    assert by_entity["e2"] == 7
+
+
 async def test_issue_1241_empty_table_with_entity_ids_returns_empty(db: DataFlow):
     """MED-1 regression: an empty table + entity_ids filter must return an
     empty DataFrame, not raise. The adapter's empty return must carry the

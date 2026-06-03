@@ -66,9 +66,15 @@ def _schema() -> FeatureSchema:
 
 async def test_get_features_happy_path_returns_dataframe(churn_db: DataFlow):
     db = churn_db
+    # u1 has TWO observations — no-timestamp get_features MUST return the latest
+    # (one feature vector per entity), not every historical row.
     db.express_sync.create(
         "UserChurn",
         {"entity_id": "u1", "event_time": datetime(2026, 1, 1), "login_count_7d": 3},
+    )
+    db.express_sync.create(
+        "UserChurn",
+        {"entity_id": "u1", "event_time": datetime(2026, 2, 1), "login_count_7d": 5},
     )
     db.express_sync.create(
         "UserChurn",
@@ -81,7 +87,12 @@ async def test_get_features_happy_path_returns_dataframe(churn_db: DataFlow):
     assert isinstance(out, pl.DataFrame)
     assert "entity_id" in out.columns
     assert "login_count_7d" in out.columns
-    assert set(out["entity_id"].to_list()) == {"u1", "u2"}
+    # One row per entity (latest), NOT every historical row.
+    assert out.height == 2
+    assert sorted(out["entity_id"].to_list()) == ["u1", "u2"]
+    by_entity = {r["entity_id"]: r["login_count_7d"] for r in out.to_dicts()}
+    assert by_entity["u1"] == 5, "u1 latest (Feb=5), not the Jan row"
+    assert by_entity["u2"] == 7
 
 
 async def test_get_features_point_in_time_returns_as_of_value(churn_db: DataFlow):
