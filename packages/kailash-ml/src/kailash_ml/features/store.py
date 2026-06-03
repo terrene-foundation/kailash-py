@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from kailash_ml.errors import FeatureStoreError, TenantRequiredError
+from kailash_ml.features._schema_feature_group import SchemaFeatureGroup
 from kailash_ml.features.cache_keys import (
     make_feature_cache_key,
     make_feature_group_wildcard,
@@ -191,11 +192,23 @@ class FeatureStore:
             },
         )
         try:
+            # The DataFlow binding (ml_feature_source) consumes a
+            # FeatureGroup-shaped object that owns its backing-store query, NOT
+            # the declarative FeatureSchema. Wrap the schema in the read adapter
+            # (issue #1241): it reads the backing DataFlow table named after the
+            # schema (schema.name == model name) and applies point-in-time /
+            # tenant / window scoping. See _schema_feature_group for the
+            # FeatureSchema -> FeatureGroup bridge and the as-of contract.
+            group = SchemaFeatureGroup(
+                dataflow=self._df,
+                schema=schema,
+                multi_tenant=self._df.config.security.multi_tenant,
+            )
             # Delegate to DataFlow's polars-LazyFrame binding. The binding
             # itself enforces SQL-identifier safety + parameterized VALUES
             # per specs/dataflow-ml-integration.md §2.4.
             lazy = ml_feature_source(
-                schema,
+                group,
                 tenant_id=effective_tenant,
                 point_in_time=timestamp,
             )

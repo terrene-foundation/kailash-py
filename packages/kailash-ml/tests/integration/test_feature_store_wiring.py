@@ -342,10 +342,15 @@ async def test_assertion_09b_get_features_wraps_other_exceptions_as_feature_stor
     ``FeatureStoreError(reason=..., tenant_id=...)`` with ``__cause__``
     chained to the original.
 
-    The 1.0+ canonical surface delegates to ``dataflow.ml_feature_source``
-    which duck-types on ``.materialize`` — ``FeatureSchema`` does not
-    expose ``.materialize`` so the binding raises a wrapped error
-    that get_features reclassifies as ``FeatureStoreError``.
+    Genuine error scenario (issue #1241): the canonical surface reads the
+    backing DataFlow table named after the schema (``schema.name`` ==
+    model name). Here the ``user_churn`` model is NOT registered on ``db``,
+    so the DataFlow read raises and get_features reclassifies it as
+    ``FeatureStoreError``. (Pre-#1241 this test pinned a different error —
+    the binding's ``.materialize`` duck-type mismatch — which masked the
+    fact that get_features could never complete the happy path. The happy
+    path is now covered by
+    ``test_feature_store_get_features_wiring.py``.)
     """
     fs = FeatureStore(db, default_tenant_id="acme")
     with pytest.raises(FeatureStoreError) as exc_info:
