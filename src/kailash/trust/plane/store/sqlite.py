@@ -33,8 +33,8 @@ from typing import Any
 
 from kailash.trust._locking import validate_id
 from kailash.trust.plane.delegation import (
-    DelegationRecipient,
     DelegateStatus,
+    DelegationRecipient,
     ReviewResolution,
 )
 from kailash.trust.plane.exceptions import (
@@ -178,6 +178,13 @@ class SqliteTrustPlaneStore:
         """
         self._db_path = str(db_path)
         self._local = threading.local()
+        # Issue #1245: track EVERY per-thread connection so close() releases all
+        # of them, not just the calling thread's. ``threading.local`` only
+        # exposes the current thread's value, so connections opened on worker
+        # threads would otherwise leak until GC (ResourceWarning). Guarded by a
+        # lock (connections are registered from many threads).
+        self._all_conns: "set[sqlite3.Connection]" = set()
+        self._conns_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -191,11 +198,17 @@ class SqliteTrustPlaneStore:
         """
         conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self._db_path)
+            # ``check_same_thread=False`` lets close() release this connection
+            # from a different thread at shutdown (issue #1245). Each connection
+            # is still USED only on its creating thread (via ``threading.local``);
+            # the only cross-thread access is the close-all at teardown.
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=5000")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
+            with self._conns_lock:
+                self._all_conns.add(conn)
         return conn
 
     # ------------------------------------------------------------------
@@ -311,14 +324,23 @@ class SqliteTrustPlaneStore:
             self._run_migrations(conn, existing_version)
 
     def close(self) -> None:
-        """Close the per-thread database connection.
+        """Close EVERY database connection the store opened, across all threads.
 
-        Safe to call multiple times.
+        Issue #1245: connections opened on worker threads (e.g. via
+        ``asyncio.to_thread``) are tracked in ``_all_conns`` and released here,
+        not just the calling thread's. Safe to call multiple times.
         """
-        conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
+        with self._conns_lock:
+            for conn in self._all_conns:
+                try:
+                    conn.close()
+                except Exception:  # best-effort teardown; keep closing the rest
+                    logger.debug(
+                        "error closing a SqliteTrustPlaneStore connection",
+                        exc_info=True,
+                    )
+            self._all_conns.clear()
+        self._local.conn = None
         logger.debug("SqliteTrustPlaneStore closed")
 
     # ------------------------------------------------------------------

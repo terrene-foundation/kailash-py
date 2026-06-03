@@ -94,8 +94,8 @@ def _validate_db_path(db_path: str) -> None:
     """
     if "\x00" in db_path:
         raise ValueError(
-            f"Invalid db_path: contains null byte. "
-            f"Null bytes in file paths are a security risk."
+            "Invalid db_path: contains null byte. "
+            "Null bytes in file paths are a security risk."
         )
 
     # Check for path traversal: split on OS separator and check for '..'
@@ -246,6 +246,14 @@ class SQLitePostureStore:
 
         self._db_path = db_path
         self._local = threading.local()
+        # Issue #1245: track EVERY per-thread connection the store opens so
+        # close() can release all of them, not just the calling thread's.
+        # ``threading.local`` only exposes the current thread's value, so
+        # connections opened on worker threads (e.g. via ``asyncio.to_thread``)
+        # would otherwise leak until GC (ResourceWarning). Guarded by a lock
+        # because connections are registered from many threads.
+        self._all_conns: "set[sqlite3.Connection]" = set()
+        self._conns_lock = threading.Lock()
         self._closed = False
 
         # Create parent directories if needed
@@ -288,10 +296,16 @@ class SQLitePostureStore:
         """Return a per-thread SQLite connection, creating it if needed."""
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self._db_path)
+            # ``check_same_thread=False`` lets close() release this connection
+            # from a different thread at shutdown (issue #1245). Each connection
+            # is still USED only on its creating thread (via ``threading.local``);
+            # the only cross-thread access is the close-all at teardown.
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
+            with self._conns_lock:
+                self._all_conns.add(conn)
         return conn
 
     # ------------------------------------------------------------------
@@ -443,16 +457,34 @@ class SQLitePostureStore:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Close the calling thread's database connection.
+        """Close EVERY database connection the store opened, across all threads.
 
-        After calling close(), further operations on this thread will raise
-        RuntimeError.
+        Issue #1245: connections opened on worker threads (e.g. via
+        ``asyncio.to_thread``) are tracked in ``_all_conns`` and released here,
+        not just the calling thread's. After close(), further operations raise
+        RuntimeError (gated by ``_require_open`` / ``self._closed``).
+
+        Contract: the caller MUST ensure no store operations are in flight on
+        other threads while close() runs. The closed flag is flipped FIRST so a
+        racing operation that re-checks ``_require_open`` after this point
+        raises before reaching ``_get_connection`` — closing the close-vs-operate
+        window where a racing op could otherwise open a fresh, unregistered
+        connection and re-leak it.
         """
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
         self._closed = True
+        with self._conns_lock:
+            for conn in self._all_conns:
+                try:
+                    conn.close()
+                except Exception:  # best-effort teardown; keep closing the rest
+                    logger.debug(
+                        "error closing a SQLitePostureStore connection",
+                        exc_info=True,
+                    )
+            self._all_conns.clear()
+        # Clear the calling thread's cached handle; other threads are gated by
+        # ``_require_open`` (``self._closed`` already True above).
+        self._local.conn = None
         logger.info("SQLitePostureStore closed")
 
     def __enter__(self) -> SQLitePostureStore:

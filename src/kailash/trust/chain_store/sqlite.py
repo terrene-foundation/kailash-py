@@ -31,8 +31,8 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from kailash.trust.chain import TrustLineageChain
-from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.chain_store import TrustStore, _chain_has_missing_reasoning
+from kailash.trust.exceptions import TrustChainNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,13 @@ class SqliteTrustStore(TrustStore):
         self._db_path = db_path
         self._initialized = False
         self._local = threading.local()
+        # Issue #1245: track EVERY per-thread connection so close() releases all
+        # of them, not just the calling thread's. ``threading.local`` only
+        # exposes the current thread's value, so connections opened on worker
+        # threads (e.g. via ``asyncio.to_thread``) would otherwise leak until GC
+        # (ResourceWarning). Guarded by a lock (registered from many threads).
+        self._all_conns: "set[sqlite3.Connection]" = set()
+        self._conns_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -107,10 +114,16 @@ class SqliteTrustStore(TrustStore):
         """
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self._db_path)
+            # ``check_same_thread=False`` lets _sync_close release this
+            # connection from a different thread at shutdown (issue #1245).
+            # Each connection is still USED only on its creating thread (via
+            # ``threading.local``); the only cross-thread access is close-all.
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
+            with self._conns_lock:
+                self._all_conns.add(conn)
         return conn
 
     def _serialize_chain(self, chain: TrustLineageChain) -> str:
@@ -381,12 +394,34 @@ class SqliteTrustStore(TrustStore):
         return row["cnt"]
 
     def _sync_close(self) -> None:
-        """Close the per-thread connection if open."""
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
+        """Close EVERY connection the store opened, across all threads.
+
+        Issue #1245: connections opened on worker threads (e.g. via
+        ``asyncio.to_thread``) are tracked in ``_all_conns`` and released here,
+        not just the calling thread's. After close(), operations raise
+        RuntimeError (gated by ``_require_initialized`` / ``self._initialized``).
+
+        Contract: the caller MUST ensure no store operations are in flight on
+        other threads while close() runs. The initialized flag is cleared FIRST
+        so a racing operation that re-checks ``_require_initialized`` after this
+        point raises before reaching ``_get_connection`` — closing the
+        close-vs-operate window where a racing op could otherwise open a fresh,
+        unregistered connection and re-leak it.
+        """
         self._initialized = False
+        with self._conns_lock:
+            for conn in self._all_conns:
+                try:
+                    conn.close()
+                except Exception:  # best-effort teardown; keep closing the rest
+                    logger.debug(
+                        "error closing a SqliteTrustStore connection",
+                        exc_info=True,
+                    )
+            self._all_conns.clear()
+        # Clear the calling thread's cached handle; other threads are gated by
+        # ``_require_initialized`` (``self._initialized`` already False above).
+        self._local.conn = None
         logger.info("SqliteTrustStore closed")
 
     def _sync_get_chains_missing_reasoning(self) -> List[str]:
