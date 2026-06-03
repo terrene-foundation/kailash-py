@@ -82,7 +82,9 @@ def _reject_nan_inf(constant: str) -> None:
     )
 
 
-def _reject_non_string_keys(obj: Any, path: str = "$") -> None:
+def _reject_non_string_keys(
+    obj: Any, path: str = "$", _seen: set[int] | None = None
+) -> None:
     """Reject non-string object keys before canonical serialization.
 
     ``json.dumps`` silently coerces ``int`` / ``float`` / ``bool`` / ``None``
@@ -94,22 +96,46 @@ def _reject_non_string_keys(obj: Any, path: str = "$") -> None:
     failure surfaces at the signing site rather than as a verification
     mismatch on another implementation.
 
+    Cyclic structures are rejected with ``ValueError`` (mirroring
+    ``json.dumps``'s own ``ValueError("Circular reference detected")``) via a
+    markers set added on container entry and discarded on exit. This preserves
+    the call sites' ``except (TypeError, ValueError)`` exception taxonomy
+    rather than letting the pure-Python recursion raise an uncaught
+    ``RecursionError`` (a ``RuntimeError`` subclass) before ``json.dumps`` runs.
+    Shared (DAG) substructures are NOT rejected — only true cycles, exactly
+    like ``json.dumps``.
+
     Raises:
-        ValueError: If any object key (at any nesting depth) is not a ``str``.
+        ValueError: If any object key (at any nesting depth) is not a ``str``,
+            or if ``obj`` contains a circular reference.
     """
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            if not isinstance(key, str):
-                raise ValueError(
-                    f"non-string object key {key!r} ({type(key).__name__}) at "
-                    f"{path} — canonical JSON requires string keys (RFC 8259 "
-                    f"object members); coercing would break round-trip symmetry "
-                    f"with canonical_json_loads"
-                )
-            _reject_non_string_keys(value, f"{path}.{key}")
-    elif isinstance(obj, (list, tuple)):
-        for index, value in enumerate(obj):
-            _reject_non_string_keys(value, f"{path}[{index}]")
+    if _seen is None:
+        _seen = set()
+    if isinstance(obj, (dict, list, tuple)):
+        obj_id = id(obj)
+        if obj_id in _seen:
+            raise ValueError(
+                f"Circular reference detected at {path} — canonical JSON "
+                f"cannot serialize cyclic structures"
+            )
+        _seen.add(obj_id)
+        try:
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if not isinstance(key, str):
+                        raise ValueError(
+                            f"non-string object key {key!r} "
+                            f"({type(key).__name__}) at {path} — canonical JSON "
+                            f"requires string keys (RFC 8259 object members); "
+                            f"coercing would break round-trip symmetry with "
+                            f"canonical_json_loads"
+                        )
+                    _reject_non_string_keys(value, f"{path}.{key}", _seen)
+            else:  # list / tuple
+                for index, value in enumerate(obj):
+                    _reject_non_string_keys(value, f"{path}[{index}]", _seen)
+        finally:
+            _seen.discard(obj_id)
 
 
 def canonical_json_dumps(obj: Any) -> str:

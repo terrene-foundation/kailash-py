@@ -83,3 +83,71 @@ def test_issue_1243_finite_payloads_round_trip_unchanged():
     assert encoded == json.dumps(
         obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
+
+
+@pytest.mark.regression
+def test_issue_1243_dumps_rejects_circular_reference_as_valueerror():
+    """Cyclic input raises ValueError (not RecursionError).
+
+    The producer-side key guard recurses before ``json.dumps``; a cyclic
+    structure must raise ``ValueError`` (caught by the signing call sites'
+    ``except (TypeError, ValueError)`` taxonomy at dispatch.py / audit.py),
+    NOT an uncaught ``RecursionError`` (a ``RuntimeError`` subclass) that
+    would escape those wrappers.
+    """
+    cyclic: dict = {"a": 1}
+    cyclic["self"] = cyclic
+    with pytest.raises(ValueError, match="[Cc]ircular"):
+        canonical_json_dumps(cyclic)
+
+
+@pytest.mark.regression
+def test_issue_1243_dumps_allows_shared_dag_substructure():
+    """A shared (non-cyclic) substructure is NOT a cycle and must encode.
+
+    The cycle guard tracks the ancestor path only (markers add-on-entry /
+    discard-on-exit), so the same dict referenced by two sibling keys is
+    accepted, exactly like ``json.dumps``.
+    """
+    shared = {"x": 1}
+    obj = {"a": shared, "b": shared}
+    assert canonical_json_dumps(obj) == '{"a":{"x":1},"b":{"x":1}}'
+
+
+# ---------------------------------------------------------------------------
+# Issue #1243 (HIGH-1, surfaced at security review): the LIVE Ed25519/HMAC
+# signing pre-image `serialize_for_signing` is a sibling canonical encoder
+# that had the identical `allow_nan` hole — on the more critical, cross-SDK
+# (Rust serde_json / W3C-VC) signing path. Same bug class, fixed in this PR.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("non_finite", [float("nan"), float("inf"), float("-inf")])
+def test_issue_1243_serialize_for_signing_rejects_non_finite(non_finite):
+    """The live signing pre-image rejects NaN/Infinity rather than emitting them.
+
+    Before the fix, ``serialize_for_signing({"x": float("nan")})`` returned the
+    non-JSON string ``'{"x":NaN}'`` into the Ed25519/HMAC-signed bytes — a
+    pre-image Rust ``serde_json`` and W3C-VC verifiers cannot reconstruct.
+    """
+    from kailash.trust.signing.crypto import serialize_for_signing
+
+    with pytest.raises(ValueError):
+        serialize_for_signing({"x": non_finite})
+
+
+@pytest.mark.regression
+def test_issue_1243_serialize_for_signing_finite_payload_unchanged():
+    """Finite signing payloads still serialize deterministically (no regression).
+
+    The fix must only reject the non-finite domain; the canonical sorted-key
+    output for legal payloads — including big-int nonces — is unchanged, so
+    existing signatures over finite payloads remain valid.
+    """
+    from kailash.trust.signing.crypto import serialize_for_signing
+
+    payload = {"b": 2, "a": 1, "nonce_ns": 1_780_000_000_000_000_001}
+    assert (
+        serialize_for_signing(payload) == '{"a":1,"b":2,"nonce_ns":1780000000000000001}'
+    )

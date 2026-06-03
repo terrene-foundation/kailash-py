@@ -229,11 +229,23 @@ def serialize_for_signing(obj: Any) -> str:
     Converts dataclasses, dicts, and other types to a canonical JSON string
     that will produce the same output for equivalent inputs.
 
+    Non-finite floats (``NaN`` / ``Infinity`` / ``-Infinity``) are rejected
+    with ``ValueError`` (``allow_nan=False``): they are not valid JSON per
+    RFC 8259, so emitting them would produce signing pre-images that Rust
+    ``serde_json`` and other cross-SDK / W3C-VC verifiers cannot reconstruct,
+    silently breaking signature verification. This is consistent with the
+    trust-plane fail-closed-on-NaN posture (a ``NaN`` in a signed payload is
+    already unverifiable — see ``trust-plane-security`` Rule 3).
+
     Args:
         obj: Object to serialize (dataclass, dict, or primitive)
 
     Returns:
         Canonical JSON string
+
+    Raises:
+        ValueError: If ``obj`` contains a ``NaN`` / ``Infinity`` / ``-Infinity``
+            float value.
 
     Example:
         >>> serialize_for_signing({"b": 2, "a": 1})
@@ -284,7 +296,7 @@ def serialize_for_signing(obj: Any) -> str:
             return item
 
     converted = convert(obj)
-    return json.dumps(converted, separators=(",", ":"), sort_keys=True)
+    return json.dumps(converted, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 
 def hash_chain(data: Union[str, dict, bytes]) -> str:
