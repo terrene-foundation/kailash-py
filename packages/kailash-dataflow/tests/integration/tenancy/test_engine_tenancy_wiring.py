@@ -136,8 +136,16 @@ class TestGetTenantTables:
 class TestApplyTenantIsolation:
     """Tests that _apply_tenant_isolation on DataFlowNode works correctly."""
 
-    def test_no_tenant_context_passes_through(self, db):
-        """When no tenant context is active, queries pass through unchanged."""
+    def test_no_tenant_context_fails_closed_under_multi_tenant(self, db):
+        """Issue #1249: under multi_tenant=True, a tenant-isolated model queried
+        with NO bound tenant MUST fail closed — not pass through unscoped.
+
+        The legacy behavior here was a silent fail-OPEN: an unscoped SELECT
+        returned every tenant's rows and an unscoped INSERT persisted a
+        tenant_id=NULL row (the original cross-tenant leak class). Per
+        tenant-isolation.md MUST-2 + zero-tolerance.md Rule 3 the SQL
+        enforcement point must refuse rather than execute an unscoped query.
+        """
 
         @db.model
         class Item:
@@ -153,10 +161,29 @@ class TestApplyTenantIsolation:
         query = "SELECT * FROM items WHERE id = ?"
         params = ["item-1"]
 
-        # No tenant context active
-        result_query, result_params = node._apply_tenant_isolation(query, params)
-        assert result_query == query
-        assert result_params == params
+        # No tenant context active under multi_tenant=True -> fail closed.
+        with pytest.raises(RuntimeError, match="no tenant is bound"):
+            node._apply_tenant_isolation(query, params)
+
+    def test_ddl_passes_through_without_tenant_context(self, db):
+        """DDL (auto-migrate / schema bootstrap) runs with no bound tenant and
+        MUST still bypass tenant isolation — the fail-closed guard above applies
+        only to DML."""
+
+        @db.model
+        class Gadget:
+            id: str
+            tenant_id: str
+            name: str
+
+        node_class = db._nodes.get("GadgetCreateNode")
+        assert node_class is not None
+        node = node_class(node_id="test_ddl_no_tenant")
+
+        ddl = "CREATE TABLE gadgets (id TEXT, tenant_id TEXT, name TEXT)"
+        result_query, result_params = node._apply_tenant_isolation(ddl, [])
+        assert result_query == ddl
+        assert result_params == []
 
     def test_tenant_context_injects_conditions(self, db):
         """When tenant context is active, tenant conditions are injected into DML."""

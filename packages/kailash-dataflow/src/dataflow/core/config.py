@@ -568,7 +568,16 @@ class SecurityConfig:
 
     # Multi-tenancy
     multi_tenant: bool = False
-    tenant_isolation_strategy: str = "schema"  # schema, row, database
+    # Issue #1249: default changed from "schema" -> "row". DataFlow's tenant
+    # isolation is implemented as row-level tenant_id filtering (injected by
+    # QueryInterceptor on every DML path) and applies on EVERY backend. The
+    # prior "schema" default was a no-op on SQLite (which has no schemas),
+    # which silently left multi-tenant SQLite deployments with NO isolation —
+    # a cross-tenant leak. "row" is the only strategy that closes the leak on
+    # every backend. {"row", "schema", "database"} are the valid values;
+    # "schema"/"database" require physical-isolation backend support and are
+    # validated (fail-closed) at DataFlow startup.
+    tenant_isolation_strategy: str = "row"  # row, schema, database
 
     # Audit
     audit_enabled: bool = True

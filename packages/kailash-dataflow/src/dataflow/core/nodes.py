@@ -730,20 +730,47 @@ class NodeGenerator:
 
                 _logger = logging.getLogger(__name__)
 
-                # Check for active tenant context
                 from .tenant_context import get_current_tenant_id
 
-                tenant_id = get_current_tenant_id()
-                if not tenant_id:
+                # DDL operations bypass tenant isolation (auto-migrate and schema
+                # bootstrap run with no tenant bound).
+                query_upper = query.strip().upper()
+                if query_upper.startswith(("CREATE ", "ALTER ", "DROP ")):
                     return query, params
 
-                # Check if this model has a tenant_id field (auto-detect tenant tables)
+                # Non-tenant models carry no tenant_id field — nothing to isolate.
                 if "tenant_id" not in self.model_fields:
                     return query, params
 
-                # DDL operations bypass tenant isolation
-                query_upper = query.strip().upper()
-                if query_upper.startswith(("CREATE ", "ALTER ", "DROP ")):
+                # Issue #1249 — FAIL CLOSED on a tenant-isolated model with no
+                # bound tenant under multi_tenant. The legacy ``return query,
+                # params`` here was a silent fail-OPEN: a write persisted a
+                # tenant_id=NULL row and a read returned every tenant's rows
+                # (the original cross-tenant leak class). Per tenant-isolation.md
+                # MUST-2 + zero-tolerance.md Rule 3, refuse rather than execute an
+                # unscoped statement. Single-tenant DataFlow (multi_tenant=False)
+                # keeps the pass-through — there is no tenant to scope by.
+                tenant_id = get_current_tenant_id()
+                if not tenant_id:
+                    multi_tenant = bool(
+                        getattr(
+                            getattr(
+                                getattr(self.dataflow_instance, "config", None),
+                                "security",
+                                None,
+                            ),
+                            "multi_tenant",
+                            False,
+                        )
+                    )
+                    if multi_tenant:
+                        raise RuntimeError(
+                            f"Tenant isolation failed for {self.model_name}: "
+                            f"multi_tenant=True but no tenant is bound to the current "
+                            f"context. Bind one via db.tenant_context.switch(tenant_id) "
+                            f"before this operation. Refusing to execute an unscoped "
+                            f"query (potential cross-tenant leak)."
+                        )
                     return query, params
 
                 # Get the table name for this model

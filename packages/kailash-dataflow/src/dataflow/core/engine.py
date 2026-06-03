@@ -132,6 +132,15 @@ class DataFlow(DataFlowEventMixin):
         pool_recycle: int = 3600,
         echo: bool = False,
         multi_tenant: bool = False,
+        # Issue #1249: tenant_isolation_strategy is now an ACCEPTED, VALIDATED
+        # constructor parameter (previously dropped as an unknown kwarg with a
+        # DF-CFG-001 warning). Accepts {"row", "schema", "database"}; defaults
+        # to "row" (the strategy DataFlow actually implements on every backend
+        # via SQL tenant_id injection). "schema"/"database" require backend
+        # support; on a backend that cannot provide that isolation (e.g.
+        # SQLite, which has no schemas) DataFlow FAILS CLOSED at startup rather
+        # than silently no-op'ing into a cross-tenant leak.
+        tenant_isolation_strategy: Optional[str] = None,
         encryption_key: Optional[str] = None,
         audit_logging: bool = False,
         cache_enabled: Optional[
@@ -319,6 +328,13 @@ class DataFlow(DataFlowEventMixin):
             ):
                 # Zero-config mode - use from_env
                 self.config = DataFlowConfig.from_env()
+                # Issue #1249: even in zero-config mode, honor an explicit
+                # tenant_isolation_strategy override so the value is never
+                # silently dropped.
+                if tenant_isolation_strategy is not None:
+                    self.config.security.tenant_isolation_strategy = (
+                        tenant_isolation_strategy
+                    )
             else:
                 # Create structured config from individual parameters
                 database_config = DatabaseConfig(
@@ -336,11 +352,20 @@ class DataFlow(DataFlowEventMixin):
                     slow_query_threshold=slow_query_threshold,
                 )
 
-                security_config = SecurityConfig(
+                # Issue #1249: tenant_isolation_strategy flows into
+                # SecurityConfig (default "row" — the only strategy DataFlow
+                # implements on every backend). None means "use the
+                # SecurityConfig default".
+                _security_kwargs = dict(
                     multi_tenant=multi_tenant,
                     encrypt_at_rest=encryption_key is not None,
                     audit_enabled=audit_logging,
                 )
+                if tenant_isolation_strategy is not None:
+                    _security_kwargs["tenant_isolation_strategy"] = (
+                        tenant_isolation_strategy
+                    )
+                security_config = SecurityConfig(**_security_kwargs)
 
                 # Prepare config parameters
                 # FIX: CACHE_INVALIDATION_BUG_REPORT.md - enable_caching is alias for cache_enabled
@@ -394,6 +419,12 @@ class DataFlow(DataFlowEventMixin):
                 logger.warning(
                     "engine.configuration_issues_detected", extra={"issues": issues}
                 )
+
+        # Issue #1249: validate the tenant isolation strategy at startup and
+        # fail CLOSED when the configured strategy cannot provide isolation on
+        # the active backend (e.g. "schema"/"database" on SQLite). A strategy
+        # that silently no-ops is a cross-tenant leak — refuse to start.
+        self._validate_tenant_isolation_strategy()
 
         # DF-CFG-001: Validate unknown kwargs to prevent silent configuration failures
         # This catches typos and removed parameters like 'skip_registry' early
@@ -7849,6 +7880,73 @@ class DataFlow(DataFlowEventMixin):
             "delete": self._generate_delete_sql(model_name, database_type),
             "bulk": self._generate_bulk_sql(model_name, database_type),
         }
+
+    # Issue #1249: valid tenant isolation strategies. "row" is implemented on
+    # every backend (QueryInterceptor SQL injection). "schema"/"database" denote
+    # PHYSICAL isolation (separate PostgreSQL schemas / separate databases) and
+    # require backend infrastructure DataFlow does not provision itself.
+    _VALID_TENANT_ISOLATION_STRATEGIES = frozenset({"row", "schema", "database"})
+
+    def _validate_tenant_isolation_strategy(self) -> None:
+        """Validate the configured tenant isolation strategy; fail closed.
+
+        Issue #1249. Two failure-closed conditions:
+
+        1. **Unknown strategy value** — any value outside
+           {"row", "schema", "database"} raises ``DataFlowConfigurationError``
+           rather than being silently ignored (the pre-fix DF-CFG-001 drop).
+
+        2. **Strategy unsupportable on the active backend** — "schema"/"database"
+           request PHYSICAL tenant isolation (separate PostgreSQL schemas /
+           separate databases). DataFlow implements ROW-level isolation (the
+           tenant_id column filter injected by ``QueryInterceptor``) on every
+           backend, but it does NOT provision physical schema/database
+           isolation. On SQLite there is no schema concept at all. Rather than
+           silently no-op a requested physical-isolation strategy into a
+           cross-tenant leak, DataFlow refuses to start and directs the operator
+           to ``tenant_isolation_strategy="row"`` (which IS delivered).
+
+        Row-level isolation is ALWAYS applied for tenant-id-bearing models
+        regardless of the configured strategy, so the leak is closed on every
+        backend; this validation only gates the physical-isolation strategies
+        DataFlow cannot honor.
+        """
+        from .config import SecurityConfig
+
+        security = getattr(self.config, "security", None)
+        if security is None:
+            return
+        strategy = getattr(security, "tenant_isolation_strategy", "row")
+
+        # (1) Unknown value — fail closed regardless of multi_tenant.
+        if strategy not in self._VALID_TENANT_ISOLATION_STRATEGIES:
+            from dataflow.exceptions import DataFlowConfigurationError
+
+            raise DataFlowConfigurationError(
+                f"Invalid tenant_isolation_strategy={strategy!r}. "
+                f"Valid strategies: {sorted(self._VALID_TENANT_ISOLATION_STRATEGIES)}. "
+                "Use 'row' for the row-level tenant_id filtering DataFlow "
+                "implements on every backend."
+            )
+
+        # (2) Physical-isolation strategy that DataFlow cannot deliver — fail
+        # closed only when multi-tenancy is actually enabled (otherwise the
+        # strategy is inert and harmless).
+        multi_tenant = getattr(security, "multi_tenant", False) is True
+        if multi_tenant and strategy in ("schema", "database"):
+            from dataflow.exceptions import DataFlowConfigurationError
+
+            backend = self._detect_database_type()
+            raise DataFlowConfigurationError(
+                f"tenant_isolation_strategy={strategy!r} requests PHYSICAL tenant "
+                f"isolation (separate {strategy}s) which DataFlow does not "
+                f"provision on the {backend!r} backend. Refusing to start rather "
+                "than silently provide NO isolation (cross-tenant data leak). "
+                "Set tenant_isolation_strategy='row' to use the row-level "
+                "tenant_id filtering DataFlow applies on every backend, or "
+                "provision the physical schema/database isolation externally and "
+                "manage it outside DataFlow."
+            )
 
     def _detect_database_type(self) -> str:
         """

@@ -21,6 +21,47 @@ from .exceptions import CrossTenantAccessError, QueryParsingError, TenantIsolati
 logger = logging.getLogger(__name__)
 
 
+# Identifier fragment that matches an optionally-quoted SQL identifier across
+# the four dialect quoting styles DataFlow supports: bare (``feats``),
+# double-quoted (PostgreSQL / SQLite / ANSI ``"feats"``), backtick (MySQL
+# ```feats```) and bracket (SQL-Server ``[feats]``). The capture
+# group is the raw quoted-or-bare token; ``normalize_identifier`` strips the
+# wrapping quotes so matching and injection work regardless of dialect.
+#
+# Issue #1249: the prior validation / table-matching / injection regexes used a
+# bare ``\w+`` which silently failed to match quoted table names produced by
+# DataFlow's SQL builders (``INSERT INTO "feats" ...``). That mismatch
+# fail-closed the INSERT path AND fail-OPEN the SELECT path (no tenant filter
+# injected, no error raised). The shared ``_IDENT`` fragment closes the gap at
+# every site that matches or injects an identifier.
+_IDENT = r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|\w+)'
+
+
+def normalize_identifier(name: str) -> str:
+    """Strip dialect quoting from a SQL identifier token.
+
+    ``"feats"`` -> ``feats``; ```feats``` -> ``feats``;
+    ``[feats]`` -> ``feats``; ``feats`` -> ``feats``. The returned value is the
+    canonical, unquoted identifier used for table-name comparison so the
+    interceptor matches regardless of how the SQL builder quoted the name.
+
+    Per ``dataflow-identifier-safety.md`` this is a NORMALIZE-for-comparison
+    helper (it never re-quotes or re-emits the value into SQL); the tenant_id
+    VALUE is always bound as a parameter, never interpolated.
+    """
+    if not isinstance(name, str):
+        return name
+    name = name.strip()
+    if len(name) >= 2:
+        if name[0] == '"' and name[-1] == '"':
+            return name[1:-1]
+        if name[0] == "`" and name[-1] == "`":
+            return name[1:-1]
+        if name[0] == "[" and name[-1] == "]":
+            return name[1:-1]
+    return name
+
+
 @dataclass
 class ParsedQuery:
     """Represents a parsed SQL query with extracted components."""
@@ -220,7 +261,39 @@ class QueryInterceptor:
                 table for table in parsed_query.tables if self.is_tenant_table(table)
             ]
 
+            # For INSERT the parser exposes the table via target_table (INSERT
+            # statements have no FROM clause, so .tables may be empty). Fold it
+            # in so the fail-closed guard below sees the genuine tenant table.
+            if (
+                parsed_query.query_type == "INSERT"
+                and parsed_query.target_table
+                and self.is_tenant_table(parsed_query.target_table)
+                and parsed_query.target_table not in tenant_tables_in_query
+            ):
+                tenant_tables_in_query.append(parsed_query.target_table)
+
             if not tenant_tables_in_query:
+                # Issue #1249 — FAIL CLOSED. When the caller constructed this
+                # interceptor with an EXPLICIT non-empty ``tenant_tables`` list,
+                # the caller is asserting "this query targets a tenant table".
+                # If no tenant table matched in the parsed query, the matcher
+                # silently failed (e.g. an identifier-quoting style the parser
+                # mis-handled). Returning the query unchanged here is the
+                # cross-tenant leak: the read executes with NO tenant filter.
+                # Raise instead so the nodes.py wrapper converts it to a loud
+                # RuntimeError rather than leaking. Per tenant-isolation.md
+                # MUST-2 + zero-tolerance.md Rule 3 (no silent fallback).
+                if self.tenant_tables:
+                    raise TenantIsolationError(
+                        "Tenant isolation could not be applied: query does not "
+                        "reference any of the declared tenant tables "
+                        f"{self.tenant_tables} after identifier normalization. "
+                        "Refusing to execute an unfiltered query "
+                        f"(query_type={parsed_query.query_type})."
+                    )
+                # No explicit tenant_tables declared → nothing the interceptor
+                # can scope; preserve the legacy pass-through (the caller did
+                # not assert this is a tenant table).
                 return query, params
 
             modified_query = query
@@ -253,11 +326,32 @@ class QueryInterceptor:
                     tenant_tables_in_query,
                 )
 
+            # Issue #1249 — FAIL CLOSED on no-op injection. If we identified a
+            # tenant table but the injection produced an identical query (the
+            # injection regex failed to match), the tenant filter was NOT
+            # applied. A SELECT/UPDATE/DELETE that runs without the WHERE clause
+            # leaks/over-mutates across tenants; an INSERT that runs without the
+            # tenant column stores tenant_id=NULL. Either way, refuse rather
+            # than execute an unscoped statement.
+            if modified_query == query and modified_params == params:
+                raise TenantIsolationError(
+                    "Tenant isolation injection produced no change for "
+                    f"{parsed_query.query_type} on tenant table(s) "
+                    f"{tenant_tables_in_query}. Refusing to execute an "
+                    "unfiltered query (possible identifier-quoting mismatch)."
+                )
+
             with self._lock:
                 self._query_stats["tenant_injections"] += 1
 
             return modified_query, modified_params
 
+        except TenantIsolationError:
+            # Already a typed fail-closed signal — re-raise without re-wrapping
+            # so the nodes.py wrapper surfaces the precise reason.
+            with self._lock:
+                self._query_stats["errors"] += 1
+            raise
         except Exception as e:
             with self._lock:
                 self._query_stats["errors"] += 1
@@ -271,11 +365,22 @@ class QueryInterceptor:
         # Remove alias if present
         table_name = table_name.split()[0] if " " in table_name else table_name
 
+        # Issue #1249: normalize quoted/bracketed identifiers on BOTH sides so a
+        # parsed quoted table name (``"feats"``) matches an unquoted
+        # tenant_tables entry (``feats``) and vice-versa. Without this the
+        # SELECT path returned the query UNCHANGED (no WHERE filter, no error) —
+        # the silent cross-tenant leak hole.
+        normalized = normalize_identifier(table_name)
+
         # If explicit lists are provided, use them
         if self.tenant_tables:
-            return table_name in self.tenant_tables
+            return any(
+                normalize_identifier(t) == normalized for t in self.tenant_tables
+            )
         if self.non_tenant_tables:
-            return table_name not in self.non_tenant_tables
+            return all(
+                normalize_identifier(t) != normalized for t in self.non_tenant_tables
+            )
 
         # Default: assume all tables are tenant tables unless explicitly marked otherwise
         return True
@@ -502,24 +607,41 @@ class QueryInterceptor:
         return "UNKNOWN"
 
     def _extract_tables(self, parsed) -> List[str]:
-        """Extract table names from parsed query."""
+        """Extract table names from parsed query.
+
+        Issue #1249: a quoted table name (``"feats"``) is tokenized by sqlparse
+        as ``Token.Literal.String.Symbol``, NOT ``Token.Name``. The prior
+        implementation only collected ``T.Name`` tokens, so the quoted table
+        produced by DataFlow's SQL builders was never added to ``tables`` — the
+        SELECT path then found no tenant table and (pre-fix) returned the query
+        UNCHANGED with no WHERE filter and no error: the silent cross-tenant
+        leak. We now collect both token types and normalize the result.
+        """
         tables = []
+
+        # A table identifier may appear as a bare Name or as a quoted
+        # String.Symbol ("feats" / `feats` / [feats]).
+        ident_ttypes = (T.Name, T.String.Symbol)
+
+        def _is_ident_token(token) -> bool:
+            return token.ttype in ident_ttypes
 
         def extract_from_token(token):
             if hasattr(token, "tokens"):
                 for subtoken in token.tokens:
                     extract_from_token(subtoken)
-            elif token.ttype is T.Name:
-                # This is a simplified extraction - in production would need more sophisticated parsing
-                tables.append(token.value)
+            elif _is_ident_token(token):
+                # This is a simplified extraction - in production would need more
+                # sophisticated parsing.
+                tables.append(normalize_identifier(token.value))
 
         # Look for FROM keyword and extract subsequent table names
         in_from_clause = False
         for token in parsed.tokens:
             if token.ttype is T.Keyword and token.value.upper() == "FROM":
                 in_from_clause = True
-            elif in_from_clause and token.ttype is T.Name:
-                tables.append(token.value)
+            elif in_from_clause and _is_ident_token(token):
+                tables.append(normalize_identifier(token.value))
                 in_from_clause = False
             elif hasattr(token, "tokens"):
                 extract_from_token(token)
@@ -657,14 +779,21 @@ class QueryInterceptor:
             # below as reading a potentially-unbound name.
             match = None
             if query_type == "INSERT":
-                match = re.search(r"INSERT\s+INTO\s+(\w+)", query_str, re.IGNORECASE)
+                match = re.search(
+                    rf"INSERT\s+INTO\s+({_IDENT})", query_str, re.IGNORECASE
+                )
             elif query_type == "UPDATE":
-                match = re.search(r"UPDATE\s+(\w+)", query_str, re.IGNORECASE)
+                match = re.search(rf"UPDATE\s+({_IDENT})", query_str, re.IGNORECASE)
             elif query_type == "DELETE":
-                match = re.search(r"DELETE\s+FROM\s+(\w+)", query_str, re.IGNORECASE)
+                match = re.search(
+                    rf"DELETE\s+FROM\s+({_IDENT})", query_str, re.IGNORECASE
+                )
 
             if match:
-                return match.group(1)
+                # Issue #1249: return the normalized (unquoted) identifier so the
+                # downstream is_tenant_table comparison matches the unquoted
+                # tenant_tables entries.
+                return normalize_identifier(match.group(1))
 
         return None
 
@@ -706,40 +835,101 @@ class QueryInterceptor:
         modified_query = query
         modified_params = params.copy()
 
-        # Add tenant conditions to WHERE clause
+        # Issue #1249: build the tenant-column reference once. When a genuine
+        # alias / explicit table qualifier is needed (multi-table / JOIN
+        # queries) we qualify; for a single-table SELECT we emit the bare
+        # column. Qualifying a single-table query with the NORMALIZED (unquoted)
+        # table name would produce ``feats.tenant_id`` against a ``"feats"``
+        # FROM clause — a qualifier-vs-FROM quoting mismatch. Bare column avoids
+        # that entirely and is unambiguous for the single-table case.
+        has_join = len(tenant_tables) > 1 or parsed.has_joins
+
+        # Add tenant conditions to WHERE clause.
+        # Issue #1249: the tenant VALUE is inserted into ``modified_params`` at
+        # the index matching the injected ``?``'s position among all
+        # placeholders — NOT appended — so positional drivers bind it correctly.
         if "WHERE" in modified_query.upper():
             # Add AND condition
             for table in tenant_tables:
-                table_alias = self._get_table_alias(modified_query, table)
-                tenant_condition = f"{table_alias}.{self.tenant_column} = ?"
-                modified_query = re.sub(
-                    r"WHERE\s+",
-                    f"WHERE {tenant_condition} AND ",
-                    modified_query,
-                    flags=re.IGNORECASE,
-                    count=1,
+                tenant_condition = self._build_tenant_condition(
+                    modified_query, table, qualify=has_join
                 )
-                modified_params.append(self.tenant_id)
+                where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
+                # Char index where the injected tenant ``?`` lands: just after
+                # ``WHERE `` (the condition is "<col> = ?"). Placeholders before
+                # this index = the tenant param's positional index.
+                insert_char = where_match.end()
+                param_idx = self._count_placeholders_before(modified_query, insert_char)
+                modified_query = (
+                    modified_query[: where_match.end()]
+                    + f"{tenant_condition} AND "
+                    + modified_query[where_match.end() :]
+                )
+                modified_params.insert(param_idx, self.tenant_id)
+                if not has_join:
+                    break  # single table: one condition only
         else:
             # Add WHERE clause
             for table in tenant_tables:
-                table_alias = self._get_table_alias(modified_query, table)
-                tenant_condition = f"{table_alias}.{self.tenant_column} = ?"
+                tenant_condition = self._build_tenant_condition(
+                    modified_query, table, qualify=has_join
+                )
 
                 # Insert before ORDER BY, GROUP BY, or HAVING if present
                 insertion_point = self._find_insertion_point(modified_query)
                 if insertion_point:
+                    # The injected ``?`` lands at ``insertion_point`` (before
+                    # ORDER BY/GROUP BY/HAVING/LIMIT). Count placeholders before
+                    # that char index for the param insertion index.
+                    param_idx = self._count_placeholders_before(
+                        modified_query, insertion_point
+                    )
                     modified_query = (
                         modified_query[:insertion_point]
                         + f" WHERE {tenant_condition}"
                         + modified_query[insertion_point:]
                     )
+                    modified_params.insert(param_idx, self.tenant_id)
                 else:
+                    # WHERE clause appended at the very end → tenant ``?`` is the
+                    # last placeholder; append is correct here.
                     modified_query += f" WHERE {tenant_condition}"
-                modified_params.append(self.tenant_id)
+                    modified_params.append(self.tenant_id)
                 break  # Only add one WHERE clause
 
         return modified_query, modified_params
+
+    def _build_tenant_condition(self, query: str, table: str, qualify: bool) -> str:
+        """Build the ``<col> = ?`` tenant predicate for a SELECT table.
+
+        When ``qualify`` (multi-table / JOIN) the column is prefixed with the
+        table alias (or the verbatim table token from the query) so the predicate
+        is unambiguous. For a single-table SELECT the bare column is returned to
+        avoid a quoted-vs-unquoted qualifier mismatch (issue #1249).
+        """
+        if not qualify:
+            return f"{self.tenant_column} = ?"
+        table_alias = self._get_table_alias(query, table)
+        return f"{table_alias}.{self.tenant_column} = ?"
+
+    # Placeholder forms across dialects: ``?`` (SQLite / generic),
+    # ``$N`` (PostgreSQL), ``%s`` (MySQL / psycopg).
+    _PLACEHOLDER_RE = re.compile(r"\?|\$\d+|%s")
+
+    def _count_placeholders_before(self, query: str, char_index: int) -> int:
+        """Count bound-parameter placeholders before ``char_index`` in ``query``.
+
+        Issue #1249: the tenant ``?`` is inserted into the WHERE clause at a
+        specific character position, but positional drivers (SQLite, asyncpg)
+        bind parameters by ORDER OF APPEARANCE. The tenant VALUE must therefore
+        be inserted into the params list at the index equal to the number of
+        placeholders that precede the injected ``?`` — NOT appended at the end.
+        Appending shifts every trailing placeholder (e.g. ``LIMIT ?``,
+        ``OFFSET ?``) onto the wrong value and the tenant filter binds against a
+        LIMIT integer, silently matching zero rows (the read-returns-nothing
+        symptom) or, worse, the wrong tenant.
+        """
+        return len(self._PLACEHOLDER_RE.findall(query[:char_index]))
 
     def _inject_insert_conditions(
         self, query: str, params: List[Any], parsed: ParsedQuery
@@ -751,27 +941,57 @@ class QueryInterceptor:
         modified_query = query
         modified_params = params.copy()
 
-        # Add tenant_id to columns and values
+        # Issue #1249: ``_IDENT`` matches the quoted table name DataFlow emits
+        # (``INSERT INTO "feats" (...)``). The prior bare ``\w+`` did not match,
+        # so the tenant column/value was never injected and every multi-tenant
+        # write stored tenant_id=NULL. The tenant_id VALUE is always a bound
+        # parameter, never string-interpolated (security.md parameterized
+        # queries).
         insert_match = re.search(
-            r"INSERT\s+INTO\s+\w+\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+            rf"INSERT\s+INTO\s+({_IDENT})\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
             modified_query,
             re.IGNORECASE,
         )
         if insert_match:
-            columns = insert_match.group(1)
-            values = insert_match.group(2)
+            table_token = insert_match.group(1)  # keep original quoting verbatim
+            columns = insert_match.group(2)
+            values = insert_match.group(3)
 
-            # Add tenant_id column
-            new_columns = f"{columns}, {self.tenant_column}"
-            new_values = f"{values}, ?"
+            # Parse the column list (preserving original quoting per element) so
+            # we can detect whether the tenant column is ALREADY present. In
+            # multi-tenant mode DataFlow auto-adds ``tenant_id`` to the model's
+            # field list, so the generated INSERT already carries a
+            # ``tenant_id`` column — but with the user-omitted value bound as
+            # NULL. Appending a SECOND ``tenant_id`` column (the pre-fix #1249
+            # behavior) produced a duplicate column; the DB kept the first
+            # (NULL) and the row stored tenant_id=NULL. We instead OVERWRITE the
+            # bound value at the existing tenant column's position.
+            col_tokens = [c.strip() for c in columns.split(",")]
+            normalized_cols = [normalize_identifier(c) for c in col_tokens]
+            tenant_col_norm = normalize_identifier(self.tenant_column)
 
-            modified_query = re.sub(
-                r"INSERT\s+INTO\s+\w+\s*\([^)]+\)\s*VALUES\s*\([^)]+\)",
-                f"INSERT INTO {parsed.target_table} ({new_columns}) VALUES ({new_values})",
-                modified_query,
-                flags=re.IGNORECASE,
-            )
-            modified_params.append(self.tenant_id)
+            if tenant_col_norm in normalized_cols:
+                # Tenant column already in the INSERT — bind the tenant_id VALUE
+                # at its position instead of appending a duplicate column.
+                tenant_idx = normalized_cols.index(tenant_col_norm)
+                if tenant_idx < len(modified_params):
+                    modified_params[tenant_idx] = self.tenant_id
+                # Query string is unchanged in this branch (column already
+                # present), so the no-op fail-closed guard in
+                # inject_tenant_conditions checks params, not just the query,
+                # to confirm the tenant value was actually bound.
+            else:
+                # Tenant column absent — append it plus a bound ``?`` placeholder.
+                new_columns = f"{columns}, {self.tenant_column}"
+                new_values = f"{values}, ?"
+                modified_query = re.sub(
+                    rf"INSERT\s+INTO\s+{_IDENT}\s*\([^)]+\)\s*VALUES\s*\([^)]+\)",
+                    f"INSERT INTO {table_token} ({new_columns}) VALUES ({new_values})",
+                    modified_query,
+                    flags=re.IGNORECASE,
+                    count=1,
+                )
+                modified_params.append(self.tenant_id)
 
         return modified_query, modified_params
 
@@ -785,25 +1005,12 @@ class QueryInterceptor:
         """Inject tenant conditions into UPDATE queries."""
         modified_query = query
         modified_params = params.copy()
-
-        # Add tenant condition to WHERE clause
-        if "WHERE" in modified_query.upper():
-            # Add AND condition
-            tenant_condition = f"{self.tenant_column} = ?"
-            modified_query = re.sub(
-                r"WHERE\s+",
-                f"WHERE {tenant_condition} AND ",
-                modified_query,
-                flags=re.IGNORECASE,
-                count=1,
-            )
-            modified_params.append(self.tenant_id)
-        else:
-            # Add WHERE clause
-            tenant_condition = f"{self.tenant_column} = ?"
-            modified_query += f" WHERE {tenant_condition}"
-            modified_params.append(self.tenant_id)
-
+        # Issue #1249: insert the tenant VALUE at the placeholder-position of the
+        # injected ``?`` (after the SET-clause placeholders) rather than
+        # appending; positional drivers bind by order of appearance.
+        modified_query, modified_params = self._inject_where_predicate(
+            modified_query, modified_params, f"{self.tenant_column} = ?"
+        )
         return modified_query, modified_params
 
     def _inject_delete_conditions(
@@ -816,23 +1023,42 @@ class QueryInterceptor:
         """Inject tenant conditions into DELETE queries."""
         modified_query = query
         modified_params = params.copy()
+        # Issue #1249: position-aware tenant param insertion (see UPDATE above).
+        modified_query, modified_params = self._inject_where_predicate(
+            modified_query, modified_params, f"{self.tenant_column} = ?"
+        )
+        return modified_query, modified_params
 
-        # Add tenant condition to WHERE clause
+    def _inject_where_predicate(
+        self, query: str, params: List[Any], predicate: str
+    ) -> Tuple[str, List[Any]]:
+        """Inject a single-``?`` WHERE predicate with correct param positioning.
+
+        Shared by UPDATE / DELETE. ``predicate`` MUST contain exactly one ``?``
+        placeholder (the tenant column). The bound tenant VALUE
+        (``self.tenant_id``) is inserted into ``params`` at the index matching
+        the injected ``?``'s position among all placeholders in the resulting
+        query — never appended blindly (issue #1249 param-ordering bug).
+        """
+        modified_query = query
+        modified_params = list(params)
+
         if "WHERE" in modified_query.upper():
-            # Add AND condition
-            tenant_condition = f"{self.tenant_column} = ?"
-            modified_query = re.sub(
-                r"WHERE\s+",
-                f"WHERE {tenant_condition} AND ",
-                modified_query,
-                flags=re.IGNORECASE,
-                count=1,
+            where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
+            insert_char = where_match.end()
+            param_idx = self._count_placeholders_before(modified_query, insert_char)
+            modified_query = (
+                modified_query[: where_match.end()]
+                + f"{predicate} AND "
+                + modified_query[where_match.end() :]
             )
-            modified_params.append(self.tenant_id)
+            modified_params.insert(param_idx, self.tenant_id)
         else:
-            # Add WHERE clause
-            tenant_condition = f"{self.tenant_column} = ?"
-            modified_query += f" WHERE {tenant_condition}"
+            # No existing WHERE. For UPDATE/DELETE the WHERE goes at the end of
+            # the statement, after any SET-clause placeholders, so the tenant
+            # ``?`` is the last placeholder → append is correct. (DataFlow does
+            # not emit trailing LIMIT on UPDATE/DELETE.)
+            modified_query += f" WHERE {predicate}"
             modified_params.append(self.tenant_id)
 
         return modified_query, modified_params
@@ -982,23 +1208,26 @@ class QueryInterceptor:
                         "Malformed SQL: SELECT statement missing FROM clause"
                     )
 
-        # Check for proper table in INSERT statements
+        # Check for proper table in INSERT statements.
+        # Issue #1249: ``_IDENT`` accepts quoted identifiers ("feats" / `feats`
+        # / [feats]) — the prior bare ``\w+`` rejected DataFlow's quoted table
+        # names and fail-closed the INSERT path with "missing table name".
         if query_upper.startswith("INSERT"):
-            if not re.search(r"INSERT\s+INTO\s+\w+", query_upper):
+            if not re.search(rf"INSERT\s+INTO\s+{_IDENT}", query_upper):
                 raise QueryParsingError(
                     "Malformed SQL: INSERT statement missing table name"
                 )
 
         # Check for proper table in UPDATE statements
         if query_upper.startswith("UPDATE"):
-            if not re.search(r"UPDATE\s+\w+", query_upper):
+            if not re.search(rf"UPDATE\s+{_IDENT}", query_upper):
                 raise QueryParsingError(
                     "Malformed SQL: UPDATE statement missing table name"
                 )
 
         # Check for proper table in DELETE statements
         if query_upper.startswith("DELETE"):
-            if not re.search(r"DELETE\s+FROM\s+\w+", query_upper):
+            if not re.search(rf"DELETE\s+FROM\s+{_IDENT}", query_upper):
                 raise QueryParsingError(
                     "Malformed SQL: DELETE statement missing FROM clause"
                 )
