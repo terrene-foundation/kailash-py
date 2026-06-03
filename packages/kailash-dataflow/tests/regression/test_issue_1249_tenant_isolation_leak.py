@@ -272,6 +272,115 @@ def test_select_injection_binds_tenant_param_at_correct_position():
 
 @pytest.mark.regression
 @pytest.mark.unit
+def test_select_injection_renumbers_dollar_placeholders_postgres():
+    """Postgres ``$N``: tenant predicate is ``$N`` and existing $N renumber.
+
+    Regression for the #1249 follow-up (2.11.0 → 2.11.1). The injector hardcoded
+    ``?`` and did NOT renumber the trailing ``$N`` placeholders. DataFlow's
+    ``list`` emits ``... LIMIT $1 OFFSET $2``; injecting ``WHERE tenant_id = ?``
+    produced ``WHERE tenant_id = ? ... LIMIT $1 OFFSET $2`` with params
+    ``['acme', 100, 0]`` — on Postgres ``$1`` bound the tenant STRING to LIMIT
+    (``argument of LIMIT must be type bigint, not type text``). The fix renders
+    ``$1`` for the tenant predicate and shifts ``LIMIT $2 OFFSET $3``.
+    """
+    interceptor = QueryInterceptor(tenant_id="acme", tenant_tables=["feats"])
+    q = 'SELECT * FROM "feats" ORDER BY "id" DESC LIMIT $1 OFFSET $2'
+    mq, mp = interceptor.inject_tenant_conditions(q, [100, 0])
+    assert mq == (
+        'SELECT * FROM "feats" WHERE tenant_id = $1 ORDER BY "id" DESC '
+        "LIMIT $2 OFFSET $3"
+    ), f"placeholder renumber wrong: {mq}"
+    assert mp == ["acme", 100, 0], f"param ordering wrong: {mp}"
+    # No literal ``?`` may leak into a Postgres ($N) query (mixed-dialect bug).
+    assert "?" not in mq, f"mixed-dialect placeholder leaked: {mq}"
+
+
+@pytest.mark.regression
+@pytest.mark.unit
+def test_select_where_injection_renumbers_dollar_placeholders_postgres():
+    """Postgres ``$N`` SELECT WITH existing WHERE: AND-ed predicate renumbers.
+
+    ``SELECT ... WHERE active = $1 LIMIT $2 OFFSET $3`` → the tenant predicate is
+    inserted at position 0 (``$1``) and every existing placeholder shifts +1.
+    """
+    interceptor = QueryInterceptor(tenant_id="acme", tenant_tables=["feats"])
+    q = 'SELECT * FROM "feats" WHERE "active" = $1 ORDER BY "id" LIMIT $2 OFFSET $3'
+    mq, mp = interceptor.inject_tenant_conditions(q, [True, 50, 0])
+    assert mq == (
+        'SELECT * FROM "feats" WHERE tenant_id = $1 AND "active" = $2 '
+        'ORDER BY "id" LIMIT $3 OFFSET $4'
+    ), f"placeholder renumber wrong: {mq}"
+    assert mp == ["acme", True, 50, 0], f"param ordering wrong: {mp}"
+    assert "?" not in mq, f"mixed-dialect placeholder leaked: {mq}"
+
+
+@pytest.mark.regression
+@pytest.mark.unit
+def test_update_delete_injection_renumbers_dollar_placeholders_postgres():
+    """Postgres ``$N`` UPDATE / DELETE: tenant predicate renumbers correctly.
+
+    UPDATE: ``SET score=$1 WHERE id=$2`` → tenant inserted before ``id`` as
+    ``$2`` (after the SET placeholder), ``id`` shifts to ``$3``.
+    DELETE: ``WHERE id=$1`` → tenant ``$1``, ``id`` shifts to ``$2``.
+    """
+    it_u = QueryInterceptor(tenant_id="acme", tenant_tables=["feats"])
+    uq, up = it_u.inject_tenant_conditions(
+        'UPDATE "feats" SET "score" = $1 WHERE "id" = $2', [10, 42]
+    )
+    assert uq == (
+        'UPDATE "feats" SET "score" = $1 WHERE tenant_id = $2 AND "id" = $3'
+    ), f"update renumber wrong: {uq}"
+    assert up == [10, "acme", 42], f"update param ordering wrong: {up}"
+    assert "?" not in uq
+
+    it_d = QueryInterceptor(tenant_id="acme", tenant_tables=["feats"])
+    dq, dp = it_d.inject_tenant_conditions('DELETE FROM "feats" WHERE "id" = $1', [42])
+    assert dq == (
+        'DELETE FROM "feats" WHERE tenant_id = $1 AND "id" = $2'
+    ), f"delete renumber wrong: {dq}"
+    assert dp == ["acme", 42], f"delete param ordering wrong: {dp}"
+    assert "?" not in dq
+
+
+@pytest.mark.regression
+@pytest.mark.unit
+def test_select_injection_preserves_percent_placeholders_mysql():
+    """psycopg/MySQL ``%s``: tenant predicate uses ``%s``, no ``$N`` / ``?`` leak.
+
+    ``%s`` is positional, so no renumber is needed — but the injected tenant
+    placeholder MUST be ``%s`` (not the hardcoded ``?``) so the driver does not
+    see a mixed-dialect query.
+    """
+    interceptor = QueryInterceptor(tenant_id="acme", tenant_tables=["feats"])
+    q = 'SELECT * FROM "feats" ORDER BY "id" LIMIT %s OFFSET %s'
+    mq, mp = interceptor.inject_tenant_conditions(q, [100, 0])
+    assert mq == (
+        'SELECT * FROM "feats" WHERE tenant_id = %s ORDER BY "id" ' "LIMIT %s OFFSET %s"
+    ), f"percent placeholder wrong: {mq}"
+    assert mp == ["acme", 100, 0], f"param ordering wrong: {mp}"
+    assert "?" not in mq and "$" not in mq, f"mixed-dialect placeholder leaked: {mq}"
+
+
+@pytest.mark.regression
+@pytest.mark.unit
+def test_select_injection_qmark_unchanged_sqlite():
+    """SQLite ``?``: behavior is byte-identical to the pre-fix path (no regress).
+
+    The pre-#1249-follow-up SELECT injector hardcoded ``?`` and was correct for
+    SQLite. The dialect-aware fix MUST preserve that exact output for ``?``.
+    """
+    interceptor = QueryInterceptor(tenant_id="A", tenant_tables=["feats"])
+    q = 'SELECT * FROM "feats" ORDER BY "id" DESC LIMIT ? OFFSET ?'
+    mq, mp = interceptor.inject_tenant_conditions(q, [100, 0])
+    assert mq == (
+        'SELECT * FROM "feats" WHERE tenant_id = ? ORDER BY "id" DESC '
+        "LIMIT ? OFFSET ?"
+    ), f"sqlite ? path regressed: {mq}"
+    assert mp == ["A", 100, 0], f"param ordering wrong: {mp}"
+
+
+@pytest.mark.regression
+@pytest.mark.unit
 def test_insert_injection_does_not_duplicate_existing_tenant_column():
     """When tenant_id is already a column, bind its value — do not append.
 

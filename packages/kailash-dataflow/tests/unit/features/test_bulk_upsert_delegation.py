@@ -85,14 +85,29 @@ class TestBulkUpsertDelegation:
 
     @pytest.mark.asyncio
     async def test_bulk_upsert_tenant_context_applied(self, mock_dataflow):
-        """Test that tenant context is applied when multi-tenant is enabled."""
+        """Test that the BOUND tenant is stamped when multi-tenant is enabled.
+
+        Issue #1252: the tenant source is the ``_current_tenant`` ContextVar set
+        by ``tenant_context.switch()`` and read via ``get_current_tenant_id()``,
+        NOT the legacy ``self.dataflow._tenant_context`` dict (which is only
+        populated by the unused ``set_tenant_context()`` API and stays empty
+        under ``switch()``). This test pins the corrected source: it patches
+        ``get_current_tenant_id`` to model a bound tenant and asserts the
+        records are stamped from THAT source. The model is a tenant table
+        (``tenant_id`` in its fields), so stamping applies.
+        """
+        from dataflow.features import bulk as bulk_mod
         from dataflow.features.bulk import BulkOperations
 
-        # Enable multi-tenant mode
+        # Enable multi-tenant mode. The legacy dict is intentionally left empty
+        # to prove the fix no longer reads it.
         mock_dataflow.config.security.multi_tenant = True
-        mock_dataflow._tenant_context = {"tenant_id": "tenant_123"}
+        mock_dataflow._tenant_context = {}
         mock_dataflow._models = {"User": {"table_name": "test_users"}}
-        mock_dataflow.get_model_fields = MagicMock(return_value={})
+        # Tenant table = has a tenant_id field.
+        mock_dataflow.get_model_fields = MagicMock(
+            return_value={"tenant_id": {"type": str}}
+        )
 
         bulk_ops = BulkOperations(mock_dataflow)
 
@@ -108,18 +123,52 @@ class TestBulkUpsertDelegation:
             {"id": 2, "email": "test2@example.com", "name": "Test 2"},
         ]
 
-        await bulk_ops.bulk_upsert(
-            model_name="User",
-            data=test_data,
-            conflict_resolution="update",
-        )
+        # Model a bound tenant via the contextvar source (the #1249/#1252 source).
+        with patch.object(bulk_mod, "get_current_tenant_id", return_value="tenant_123"):
+            await bulk_ops.bulk_upsert(
+                model_name="User",
+                data=test_data,
+                conflict_resolution="update",
+            )
 
-        # Verify tenant_id was added to each record
+        # Verify the BOUND tenant_id was stamped on each record.
         for record in test_data:
             assert record.get("tenant_id") == "tenant_123"
 
         # Verify SQL node was called
         mock_sql_node.async_run.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_bulk_upsert_fails_closed_without_bound_tenant(self, mock_dataflow):
+        """Issue #1252: multi-tenant upsert on a tenant table with NO bound
+        tenant MUST raise — not stamp NULL and execute (fail-open)."""
+        from dataflow.features import bulk as bulk_mod
+        from dataflow.features.bulk import BulkOperations
+
+        mock_dataflow.config.security.multi_tenant = True
+        mock_dataflow._tenant_context = {}
+        mock_dataflow._models = {"User": {"table_name": "test_users"}}
+        mock_dataflow.get_model_fields = MagicMock(
+            return_value={"tenant_id": {"type": str}}
+        )
+        mock_sql_node = AsyncMock()
+        mock_sql_node.async_run = AsyncMock(return_value={"rows_affected": 0})
+        mock_dataflow._get_or_create_async_sql_node = MagicMock(
+            return_value=mock_sql_node
+        )
+
+        bulk_ops = BulkOperations(mock_dataflow)
+
+        with patch.object(bulk_mod, "get_current_tenant_id", return_value=None):
+            with pytest.raises(RuntimeError, match="no tenant is bound"):
+                await bulk_ops.bulk_upsert(
+                    model_name="User",
+                    data=[{"id": 1, "email": "x@e.com", "name": "X"}],
+                    conflict_resolution="update",
+                )
+
+        # No SQL executed — fail-closed before any write.
+        mock_sql_node.async_run.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_bulk_upsert_delegates_to_node(self, mock_dataflow):

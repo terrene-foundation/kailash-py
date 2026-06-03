@@ -835,6 +835,16 @@ class QueryInterceptor:
         modified_query = query
         modified_params = params.copy()
 
+        # Issue #1249 (Postgres regression): detect the placeholder style of the
+        # INCOMING query so the injected tenant predicate uses the SAME dialect.
+        # The prior code hardcoded ``?``; on PostgreSQL (``$N``) that mixed
+        # dialects AND failed to renumber the existing ``$N`` placeholders, so
+        # ``LIMIT $1`` silently bound to the tenant string (``argument of LIMIT
+        # must be type bigint, not type text``). For ``$N`` we emit a sentinel
+        # token and renumber the whole query left-to-right after insertion.
+        style = self._detect_placeholder_style(modified_query)
+        tenant_ph = self._tenant_placeholder_for_style(style)
+
         # Issue #1249: build the tenant-column reference once. When a genuine
         # alias / explicit table qualifier is needed (multi-table / JOIN
         # queries) we qualify; for a single-table SELECT we emit the bare
@@ -846,18 +856,18 @@ class QueryInterceptor:
 
         # Add tenant conditions to WHERE clause.
         # Issue #1249: the tenant VALUE is inserted into ``modified_params`` at
-        # the index matching the injected ``?``'s position among all
+        # the index matching the injected placeholder's position among all
         # placeholders — NOT appended — so positional drivers bind it correctly.
         if "WHERE" in modified_query.upper():
             # Add AND condition
             for table in tenant_tables:
                 tenant_condition = self._build_tenant_condition(
-                    modified_query, table, qualify=has_join
+                    modified_query, table, qualify=has_join, placeholder=tenant_ph
                 )
                 where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
-                # Char index where the injected tenant ``?`` lands: just after
-                # ``WHERE `` (the condition is "<col> = ?"). Placeholders before
-                # this index = the tenant param's positional index.
+                # Char index where the injected tenant placeholder lands: just
+                # after ``WHERE `` (the condition is "<col> = <ph>"). Placeholders
+                # before this index = the tenant param's positional index.
                 insert_char = where_match.end()
                 param_idx = self._count_placeholders_before(modified_query, insert_char)
                 modified_query = (
@@ -872,15 +882,15 @@ class QueryInterceptor:
             # Add WHERE clause
             for table in tenant_tables:
                 tenant_condition = self._build_tenant_condition(
-                    modified_query, table, qualify=has_join
+                    modified_query, table, qualify=has_join, placeholder=tenant_ph
                 )
 
                 # Insert before ORDER BY, GROUP BY, or HAVING if present
                 insertion_point = self._find_insertion_point(modified_query)
                 if insertion_point:
-                    # The injected ``?`` lands at ``insertion_point`` (before
-                    # ORDER BY/GROUP BY/HAVING/LIMIT). Count placeholders before
-                    # that char index for the param insertion index.
+                    # The injected placeholder lands at ``insertion_point``
+                    # (before ORDER BY/GROUP BY/HAVING/LIMIT). Count placeholders
+                    # before that char index for the param insertion index.
                     param_idx = self._count_placeholders_before(
                         modified_query, insertion_point
                     )
@@ -891,45 +901,141 @@ class QueryInterceptor:
                     )
                     modified_params.insert(param_idx, self.tenant_id)
                 else:
-                    # WHERE clause appended at the very end → tenant ``?`` is the
-                    # last placeholder; append is correct here.
+                    # WHERE clause appended at the very end → tenant placeholder
+                    # is the last placeholder; append is correct here.
                     modified_query += f" WHERE {tenant_condition}"
                     modified_params.append(self.tenant_id)
                 break  # Only add one WHERE clause
 
+        # Issue #1249 (Postgres): renumber ``$N`` placeholders left-to-right so
+        # the textual ordinals match the (already-correctly-ordered) params list
+        # and the tenant sentinel token becomes a real ``$N``. No-op for ``?`` /
+        # ``%s`` (positional, bind by appearance order).
+        if style == "dollar":
+            modified_query = self._renumber_dollar_placeholders(modified_query)
+
         return modified_query, modified_params
 
-    def _build_tenant_condition(self, query: str, table: str, qualify: bool) -> str:
-        """Build the ``<col> = ?`` tenant predicate for a SELECT table.
+    def _build_tenant_condition(
+        self, query: str, table: str, qualify: bool, placeholder: str = "?"
+    ) -> str:
+        """Build the ``<col> = <placeholder>`` tenant predicate for a SELECT table.
 
         When ``qualify`` (multi-table / JOIN) the column is prefixed with the
         table alias (or the verbatim table token from the query) so the predicate
         is unambiguous. For a single-table SELECT the bare column is returned to
         avoid a quoted-vs-unquoted qualifier mismatch (issue #1249).
+
+        ``placeholder`` is the dialect-correct placeholder text for the bound
+        tenant value (issue #1249 Postgres regression): ``?`` for SQLite/generic,
+        ``%s`` for psycopg/MySQL, or the ``$N`` sentinel token for PostgreSQL
+        (renumbered downstream). It MUST match the placeholder style of the
+        incoming query so the injected predicate does not mix dialects.
         """
         if not qualify:
-            return f"{self.tenant_column} = ?"
+            return f"{self.tenant_column} = {placeholder}"
         table_alias = self._get_table_alias(query, table)
-        return f"{table_alias}.{self.tenant_column} = ?"
+        return f"{table_alias}.{self.tenant_column} = {placeholder}"
 
     # Placeholder forms across dialects: ``?`` (SQLite / generic),
     # ``$N`` (PostgreSQL), ``%s`` (MySQL / psycopg).
     _PLACEHOLDER_RE = re.compile(r"\?|\$\d+|%s")
+    # Sentinel for the to-be-inserted tenant placeholder. It is NOT a real
+    # placeholder of any dialect, so ``_PLACEHOLDER_RE`` does not match it and a
+    # ``$N`` renumber pass skips over it; the final render step replaces it with
+    # the dialect-correct placeholder. Chosen to be SQL-illegal so any failure
+    # to replace it surfaces loudly at execution rather than binding silently.
+    _TENANT_PLACEHOLDER_TOKEN = "\x00TENANT_PH\x00"
 
     def _count_placeholders_before(self, query: str, char_index: int) -> int:
         """Count bound-parameter placeholders before ``char_index`` in ``query``.
 
-        Issue #1249: the tenant ``?`` is inserted into the WHERE clause at a
-        specific character position, but positional drivers (SQLite, asyncpg)
+        Issue #1249: the tenant placeholder is inserted into the WHERE clause at
+        a specific character position, but positional drivers (SQLite, asyncpg)
         bind parameters by ORDER OF APPEARANCE. The tenant VALUE must therefore
         be inserted into the params list at the index equal to the number of
-        placeholders that precede the injected ``?`` — NOT appended at the end.
-        Appending shifts every trailing placeholder (e.g. ``LIMIT ?``,
+        placeholders that precede the injected placeholder — NOT appended at the
+        end. Appending shifts every trailing placeholder (e.g. ``LIMIT ?``,
         ``OFFSET ?``) onto the wrong value and the tenant filter binds against a
         LIMIT integer, silently matching zero rows (the read-returns-nothing
         symptom) or, worse, the wrong tenant.
         """
         return len(self._PLACEHOLDER_RE.findall(query[:char_index]))
+
+    @classmethod
+    def _detect_placeholder_style(cls, query: str) -> str:
+        """Detect the dialect placeholder style of ``query``.
+
+        Issue #1249 (Postgres regression): the tenant predicate injected into a
+        SELECT/UPDATE/DELETE MUST use the SAME placeholder style as the incoming
+        query, and ``$N`` placeholders must be renumbered after insertion. The
+        ``_apply_tenant_isolation`` caller in ``core/nodes.py`` does NOT pass a
+        ``database_type``, so the style is read off the query itself (the query
+        already carries dialect-specific placeholders from the SQL builder).
+
+        Returns one of:
+            ``"dollar"``  — PostgreSQL / asyncpg ``$1, $2, ...`` (ordinal).
+            ``"percent"`` — psycopg / MySQL ``%s`` (positional).
+            ``"qmark"``   — SQLite / generic ``?`` (positional). Also the default
+                            when the query carries no placeholders at all.
+        """
+        if re.search(r"\$\d+", query):
+            return "dollar"
+        if "%s" in query:
+            return "percent"
+        return "qmark"
+
+    @classmethod
+    def _tenant_placeholder_for_style(cls, style: str) -> str:
+        """Return the literal placeholder text for a tenant predicate.
+
+        For ``dollar`` we emit the sentinel token so a downstream renumber pass
+        (``_renumber_dollar_placeholders``) assigns the correct ``$N`` once the
+        full query is assembled. For ``percent`` / ``qmark`` the placeholder is
+        positional, so the literal text is final.
+        """
+        if style == "dollar":
+            return cls._TENANT_PLACEHOLDER_TOKEN
+        if style == "percent":
+            return "%s"
+        return "?"
+
+    @classmethod
+    def _renumber_dollar_placeholders(cls, query: str) -> str:
+        """Renumber every ``$N`` placeholder in left-to-right appearance order.
+
+        Issue #1249 (Postgres regression): inserting a tenant predicate into a
+        ``$N`` query shifts the positional index of every placeholder AFTER the
+        insertion point, but the textual ``$N`` numbers do not move on their own.
+        After the predicate is inserted (using the sentinel token for the tenant
+        placeholder, and the params list already ``.insert()``-ed at the correct
+        index), this pass walks the query left-to-right and re-assigns ``$1,
+        $2, ...`` to BOTH the sentinel token AND every existing ``$N`` in order
+        of appearance — guaranteeing the rendered ``$N`` sequence matches the
+        positional order of the params list.
+
+        Example (tenant inserted at index 0):
+            ``SELECT * FROM t WHERE <TOKEN> AND id = $1 LIMIT $2 OFFSET $3``
+            → ``SELECT * FROM t WHERE $1 AND id = $2 LIMIT $3 OFFSET $4``
+
+        Only the ``$N`` style needs this pass; ``?`` / ``%s`` are positional and
+        bind purely by appearance order, so textual renumbering is a no-op for
+        them (handled by the caller skipping this pass).
+        """
+        counter = {"n": 0}
+
+        # A single regex alternation matches either the tenant sentinel token or
+        # an existing ``$N`` placeholder, in one left-to-right pass, so the
+        # ordinal assignment respects the true appearance order of ALL bound
+        # placeholders (tenant + originals interleaved).
+        token = re.escape(cls._TENANT_PLACEHOLDER_TOKEN)
+        pattern = re.compile(rf"{token}|\$\d+")
+
+        def _assign(_match: "re.Match[str]") -> str:
+            counter["n"] += 1
+            return f"${counter['n']}"
+
+        return pattern.sub(_assign, query)
 
     def _inject_insert_conditions(
         self, query: str, params: List[Any], parsed: ParsedQuery
@@ -981,9 +1087,22 @@ class QueryInterceptor:
                 # inject_tenant_conditions checks params, not just the query,
                 # to confirm the tenant value was actually bound.
             else:
-                # Tenant column absent — append it plus a bound ``?`` placeholder.
+                # Tenant column absent — append it plus a bound placeholder.
+                # Issue #1249 (Postgres): the appended placeholder MUST match the
+                # incoming dialect. The tenant column is the LAST value, so for
+                # ``$N`` it is ``$<count+1>`` (one past the existing max); for
+                # ``?`` / ``%s`` it is positional. Appending is correct here (no
+                # renumber needed) because the tenant value is the final param.
+                style = self._detect_placeholder_style(modified_query)
+                if style == "dollar":
+                    existing = len(self._PLACEHOLDER_RE.findall(values))
+                    value_ph = f"${existing + 1}"
+                elif style == "percent":
+                    value_ph = "%s"
+                else:
+                    value_ph = "?"
                 new_columns = f"{columns}, {self.tenant_column}"
-                new_values = f"{values}, ?"
+                new_values = f"{values}, {value_ph}"
                 modified_query = re.sub(
                     rf"INSERT\s+INTO\s+{_IDENT}\s*\([^)]+\)\s*VALUES\s*\([^)]+\)",
                     f"INSERT INTO {table_token} ({new_columns}) VALUES ({new_values})",
@@ -1006,10 +1125,12 @@ class QueryInterceptor:
         modified_query = query
         modified_params = params.copy()
         # Issue #1249: insert the tenant VALUE at the placeholder-position of the
-        # injected ``?`` (after the SET-clause placeholders) rather than
-        # appending; positional drivers bind by order of appearance.
+        # injected placeholder (after the SET-clause placeholders) rather than
+        # appending; positional drivers bind by order of appearance. The
+        # predicate placeholder is rendered dialect-correctly (``$N`` renumbered)
+        # by _inject_where_predicate.
         modified_query, modified_params = self._inject_where_predicate(
-            modified_query, modified_params, f"{self.tenant_column} = ?"
+            modified_query, modified_params
         )
         return modified_query, modified_params
 
@@ -1025,23 +1146,33 @@ class QueryInterceptor:
         modified_params = params.copy()
         # Issue #1249: position-aware tenant param insertion (see UPDATE above).
         modified_query, modified_params = self._inject_where_predicate(
-            modified_query, modified_params, f"{self.tenant_column} = ?"
+            modified_query, modified_params
         )
         return modified_query, modified_params
 
     def _inject_where_predicate(
-        self, query: str, params: List[Any], predicate: str
+        self, query: str, params: List[Any]
     ) -> Tuple[str, List[Any]]:
-        """Inject a single-``?`` WHERE predicate with correct param positioning.
+        """Inject a single tenant WHERE predicate with correct param positioning.
 
-        Shared by UPDATE / DELETE. ``predicate`` MUST contain exactly one ``?``
-        placeholder (the tenant column). The bound tenant VALUE
-        (``self.tenant_id``) is inserted into ``params`` at the index matching
-        the injected ``?``'s position among all placeholders in the resulting
-        query — never appended blindly (issue #1249 param-ordering bug).
+        Shared by UPDATE / DELETE. The predicate ``<tenant_column> = <ph>`` is
+        built with a dialect-correct placeholder (issue #1249 Postgres
+        regression): ``?`` for SQLite/generic, ``%s`` for psycopg/MySQL, or a
+        ``$N`` sentinel for PostgreSQL renumbered left-to-right after insertion.
+        The bound tenant VALUE (``self.tenant_id``) is inserted into ``params``
+        at the index matching the injected placeholder's position among all
+        placeholders — never appended blindly (issue #1249 param-ordering bug).
         """
         modified_query = query
         modified_params = list(params)
+
+        # Issue #1249 (Postgres): detect the incoming dialect placeholder style
+        # and render the tenant predicate to match. The prior hardcoded ``?``
+        # mixed dialects on PostgreSQL (``$N``) and left existing ``$N``
+        # unrenumbered after the insertion shifted positions.
+        style = self._detect_placeholder_style(modified_query)
+        tenant_ph = self._tenant_placeholder_for_style(style)
+        predicate = f"{self.tenant_column} = {tenant_ph}"
 
         if "WHERE" in modified_query.upper():
             where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
@@ -1056,10 +1187,16 @@ class QueryInterceptor:
         else:
             # No existing WHERE. For UPDATE/DELETE the WHERE goes at the end of
             # the statement, after any SET-clause placeholders, so the tenant
-            # ``?`` is the last placeholder → append is correct. (DataFlow does
-            # not emit trailing LIMIT on UPDATE/DELETE.)
+            # placeholder is the last placeholder → append is correct. (DataFlow
+            # does not emit trailing LIMIT on UPDATE/DELETE.)
             modified_query += f" WHERE {predicate}"
             modified_params.append(self.tenant_id)
+
+        # Issue #1249 (Postgres): renumber ``$N`` left-to-right so the sentinel
+        # token becomes a real ``$N`` and existing placeholders shift to match
+        # the params list order. No-op for ``?`` / ``%s``.
+        if style == "dollar":
+            modified_query = self._renumber_dollar_placeholders(modified_query)
 
         return modified_query, modified_params
 

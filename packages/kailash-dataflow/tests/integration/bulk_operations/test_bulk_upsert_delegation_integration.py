@@ -8,9 +8,9 @@ NO MOCKING - Uses real PostgreSQL on port 5434 via IntegrationTestSuite.
 """
 
 import pytest
-from dataflow import DataFlow
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -387,39 +387,44 @@ class TestBulkUpsertDelegationIntegration:
             score: int
             tenant_id: str
 
+        # Issue #1252: the bound tenant comes from the _current_tenant ContextVar
+        # set by tenant_context.switch() (read via get_current_tenant_id()), NOT
+        # the legacy db._tenant_context dict. Register the tenants and switch into
+        # each — the bulk subsystem stamps tenant_id from the bound context.
+        db.tenant_context.register_tenant("tenant_001", "T1")
+        db.tenant_context.register_tenant("tenant_002", "T2")
+
         # Upsert for tenant 1
-        db._tenant_context = {"tenant_id": "tenant_001"}
-        result1 = await db.bulk.bulk_upsert(
-            model_name="TestUpsertDelegation",
-            data=[
-                {
-                    "email": "shared@example.com",
-                    "name": "Tenant 1 User",
-                    "status": "active",
-                    "score": 100,
-                },
-            ],
-            conflict_resolution="update",
-            conflict_columns=["email", "tenant_id"],
-        )
+        with db.tenant_context.switch("tenant_001"):
+            result1 = await db.bulk.bulk_upsert(
+                model_name="TestUpsertDelegation",
+                data=[
+                    {
+                        "email": "shared@example.com",
+                        "name": "Tenant 1 User",
+                        "status": "active",
+                        "score": 100,
+                    },
+                ],
+                conflict_resolution="update",
+            )
 
         assert result1["success"] is True
 
         # Upsert for tenant 2 (same email, different tenant)
-        db._tenant_context = {"tenant_id": "tenant_002"}
-        result2 = await db.bulk.bulk_upsert(
-            model_name="TestUpsertDelegation",
-            data=[
-                {
-                    "email": "shared@example.com",
-                    "name": "Tenant 2 User",
-                    "status": "active",
-                    "score": 200,
-                },
-            ],
-            conflict_resolution="update",
-            conflict_columns=["email", "tenant_id"],
-        )
+        with db.tenant_context.switch("tenant_002"):
+            result2 = await db.bulk.bulk_upsert(
+                model_name="TestUpsertDelegation",
+                data=[
+                    {
+                        "email": "shared@example.com",
+                        "name": "Tenant 2 User",
+                        "status": "active",
+                        "score": 200,
+                    },
+                ],
+                conflict_resolution="update",
+            )
 
         assert result2["success"] is True
 

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from kailash.utils.url_credentials import mask_url
 
+from ..core.tenant_context import get_current_tenant_id
 from ..nodes.bulk_result_processor import BulkCreateResultProcessor
 
 
@@ -17,6 +18,90 @@ class BulkOperations:
 
     def __init__(self, dataflow_instance):
         self.dataflow = dataflow_instance
+
+    def _is_multi_tenant(self) -> bool:
+        """True iff this DataFlow instance is configured multi-tenant."""
+        return bool(
+            getattr(
+                getattr(getattr(self.dataflow, "config", None), "security", None),
+                "multi_tenant",
+                False,
+            )
+        )
+
+    def _model_has_tenant_field(self, model_name: str) -> bool:
+        """True iff the model carries a ``tenant_id`` field (a tenant table)."""
+        try:
+            return "tenant_id" in self.dataflow.get_model_fields(model_name)
+        except Exception:
+            return False
+
+    def _resolve_bulk_tenant(self, model_name: str) -> Optional[str]:
+        """Resolve the bound tenant for a bulk op, fail-closed under multi-tenant.
+
+        Issue #1252 — the bulk subsystem builds its own SQL and previously read
+        the bound tenant from the stale ``self.dataflow._tenant_context`` dict
+        (only ever populated by the unused ``set_tenant_context()`` legacy API),
+        which is empty ``{}`` under ``tenant_context.switch()``. That made every
+        bulk write persist ``tenant_id=NULL`` (rows invisible to all tenants) and
+        left bulk_update / bulk_delete unscoped (latent cross-tenant write/delete).
+
+        This reads the SAME contextvar source the single-record path uses
+        (``get_current_tenant_id()``) and FAILS CLOSED — mirroring the #1249
+        ``_apply_tenant_isolation`` guard in ``core/nodes.py`` — per
+        ``tenant-isolation.md`` MUST-2 + ``zero-tolerance.md`` Rule 3.
+
+        Returns:
+            The bound tenant id when the model is a tenant table under
+            multi_tenant. ``None`` when the model is NOT a tenant table OR the
+            instance is single-tenant (caller injects nothing in that case).
+
+        Raises:
+            RuntimeError: when the model is a tenant table under multi_tenant but
+            no tenant is bound to the current context — refusing to write a
+            NULL-tenant row or run an unscoped UPDATE/DELETE.
+        """
+        if not self._is_multi_tenant():
+            return None
+        if not self._model_has_tenant_field(model_name):
+            return None
+        tenant_id = get_current_tenant_id()
+        if not tenant_id:
+            raise RuntimeError(
+                f"Tenant isolation failed for {model_name}: multi_tenant=True but "
+                f"no tenant is bound to the current context. Bind one via "
+                f"db.tenant_context.switch(tenant_id) before this bulk operation. "
+                f"Refusing to execute an unscoped query (potential cross-tenant leak)."
+            )
+        return tenant_id
+
+    def _tenant_where_predicate(
+        self, database_type: str, params_offset: int, tenant_id: str
+    ) -> tuple:
+        """Build the ``tenant_id = <bound>`` SQL fragment for a WHERE clause.
+
+        Returns a dialect-correct placeholder fragment (NO leading ``AND``/``WHERE``
+        — the caller composes that) plus the single bound parameter. The tenant
+        value is always a BOUND parameter, never string-interpolated, per
+        ``security.md`` § Parameterized Queries.
+
+        Args:
+            database_type: 'postgresql' | 'mysql' | 'sqlite'.
+            params_offset: count of params already bound BEFORE this predicate
+                (drives PostgreSQL ``$N`` numbering).
+            tenant_id: the bound tenant id to compare against.
+
+        Returns:
+            tuple: (fragment: str, params: list) e.g. ``("tenant_id = $3", [tid])``.
+        """
+        db_lower = database_type.lower()
+        if db_lower == "postgresql":
+            fragment = f"tenant_id = ${params_offset + 1}"
+        elif db_lower == "mysql":
+            fragment = "tenant_id = %s"
+        else:  # sqlite
+            fragment = "tenant_id = ?"
+        return fragment, [tenant_id]
 
     def _serialize_params_for_sql(self, params: list, model_name: str) -> list:
         """Serialize dict/list parameters to JSON for SQL binding.
@@ -275,11 +360,15 @@ class BulkOperations:
                 "success": True,
             }
 
-        # Apply tenant context if multi-tenant
-        if self.dataflow.config.security.multi_tenant and self.dataflow._tenant_context:
-            tenant_id = self.dataflow._tenant_context.get("tenant_id")
+        # Issue #1252 — stamp tenant_id from the contextvar source (the one
+        # tenant_context.switch() actually sets), NOT the stale legacy
+        # self.dataflow._tenant_context dict. Fails closed under multi_tenant
+        # with no bound tenant; returns None (no stamp) for single-tenant or
+        # non-tenant models. See _resolve_bulk_tenant.
+        bound_tenant = self._resolve_bulk_tenant(model_name)
+        if bound_tenant is not None:
             for record in data:
-                record["tenant_id"] = tenant_id
+                record["tenant_id"] = bound_tenant
 
         # Auto-convert ISO datetime strings to datetime objects for each record
         from ..core.nodes import convert_datetime_fields
@@ -496,6 +585,16 @@ class BulkOperations:
         if is_filter_based:
             # Filter-based bulk update - perform actual database operation
             logger.warning("BULK_UPDATE: Processing filter-based update")
+
+            # Issue #1252 — resolve the bound tenant up front, OUTSIDE the try so
+            # the fail-closed RuntimeError PROPAGATES (raises) rather than being
+            # swallowed into an error dict by the broad `except Exception` below.
+            # Mirrors the #1249 _apply_tenant_isolation raise in core/nodes.py.
+            # None for single-tenant or non-tenant models. The tenant predicate is
+            # AND-ed into the WHERE below so it can never be dropped (latent
+            # cross-tenant write protection). See _resolve_bulk_tenant.
+            bound_tenant = self._resolve_bulk_tenant(model_name)
+
             try:
                 # Auto-convert ISO datetime strings to datetime objects in update_values
                 from ..core.nodes import convert_datetime_fields
@@ -565,6 +664,21 @@ class BulkOperations:
                 )
                 params.extend(where_params)
 
+                # Issue #1252 — AND the tenant predicate into the WHERE so a
+                # filter that would otherwise match another tenant's rows can
+                # only touch the bound tenant's rows. The tenant value is a
+                # BOUND parameter. An empty user filter yields no WHERE keyword,
+                # so add one when the tenant predicate is the only condition.
+                if bound_tenant is not None:
+                    tenant_fragment, tenant_params = self._tenant_where_predicate(
+                        database_type, params_offset=len(params), tenant_id=bound_tenant
+                    )
+                    if where_clause:
+                        where_clause = f"{where_clause} AND {tenant_fragment}"
+                    else:
+                        where_clause = f"WHERE {tenant_fragment}"
+                    params.extend(tenant_params)
+
                 query = f"UPDATE {table_name} {set_clause} {where_clause}"
                 logger.warning(
                     f"BULK_UPDATE: Executing query='{query}' with params={params}"
@@ -629,6 +743,12 @@ class BulkOperations:
         elif data is not None:
             # Data-based bulk update - update records by id
             logger.warning("BULK_UPDATE: Processing data-based update")
+
+            # Issue #1252 — resolve the bound tenant; AND-ed into each per-record
+            # WHERE id = ? below so tenant A cannot update tenant B's row by
+            # supplying its id. Fails closed under multi_tenant with no bound
+            # tenant. See _resolve_bulk_tenant.
+            bound_tenant = self._resolve_bulk_tenant(model_name)
 
             # Handle empty data list (valid - update 0 records)
             if len(data) == 0:
@@ -732,6 +852,19 @@ class BulkOperations:
                         else:  # sqlite
                             where_clause = "WHERE id = ?"
                         params.append(record["id"])
+
+                        # Issue #1252 — AND the tenant predicate so the per-id
+                        # UPDATE can only touch the bound tenant's row.
+                        if bound_tenant is not None:
+                            tenant_fragment, tenant_params = (
+                                self._tenant_where_predicate(
+                                    database_type,
+                                    params_offset=len(params),
+                                    tenant_id=bound_tenant,
+                                )
+                            )
+                            where_clause = f"{where_clause} AND {tenant_fragment}"
+                            params.extend(tenant_params)
 
                         query = f"UPDATE {table_name} {set_clause} {where_clause}"
 
@@ -844,6 +977,16 @@ class BulkOperations:
         if filter_criteria is not None:
             # Filter-based bulk delete - perform actual database operation
             logger.warning("BULK_DELETE: Processing filter-based delete")
+
+            # Issue #1252 — resolve the bound tenant up front, OUTSIDE the try so
+            # the fail-closed RuntimeError PROPAGATES (raises) rather than being
+            # swallowed into an error dict by the broad `except Exception` below.
+            # Mirrors the #1249 _apply_tenant_isolation raise in core/nodes.py.
+            # None for single-tenant or non-tenant models. AND-ed into the WHERE
+            # below so a filter cannot delete another tenant's rows (latent
+            # cross-tenant delete protection). See _resolve_bulk_tenant.
+            bound_tenant = self._resolve_bulk_tenant(model_name)
+
             try:
                 # Get database connection and execute DELETE
                 connection_string = self.dataflow.config.database.get_connection_url(
@@ -866,6 +1009,21 @@ class BulkOperations:
                 where_clause, params = self._build_where_clause(
                     filter_criteria, database_type, params_offset=0
                 )
+
+                # Issue #1252 — AND the tenant predicate into the WHERE so a
+                # filter can only delete the bound tenant's rows. Applied BEFORE
+                # the COUNT pre-check + the DELETE so both see the scoped WHERE.
+                # An empty user filter yields no WHERE keyword, so add one when
+                # the tenant predicate is the only condition.
+                if bound_tenant is not None:
+                    tenant_fragment, tenant_params = self._tenant_where_predicate(
+                        database_type, params_offset=len(params), tenant_id=bound_tenant
+                    )
+                    if where_clause:
+                        where_clause = f"{where_clause} AND {tenant_fragment}"
+                    else:
+                        where_clause = f"WHERE {tenant_fragment}"
+                    params.extend(tenant_params)
 
                 # Execute using cached AsyncSQLDatabaseNode
                 # FIX: Use cached node instead of creating fresh instance
@@ -1022,11 +1180,16 @@ class BulkOperations:
                     "All records must have an 'id' for upsert operations.",
                 }
 
-        # Apply tenant context if multi-tenant
-        if self.dataflow.config.security.multi_tenant and self.dataflow._tenant_context:
-            tenant_id = self.dataflow._tenant_context.get("tenant_id")
+        # Issue #1252 — stamp tenant_id from the contextvar source (the one
+        # tenant_context.switch() actually sets), NOT the stale legacy
+        # self.dataflow._tenant_context dict. Fails closed under multi_tenant
+        # with no bound tenant. tenant_id rides in the column list, so the
+        # ON CONFLICT (id) target stays valid (id is the PK; tenant_id is just
+        # another INSERT/EXCLUDED column). See _resolve_bulk_tenant.
+        bound_tenant = self._resolve_bulk_tenant(model_name)
+        if bound_tenant is not None:
             for record in data:
-                record["tenant_id"] = tenant_id
+                record["tenant_id"] = bound_tenant
 
         # Auto-convert ISO datetime strings to datetime objects for each record
         from ..core.nodes import convert_datetime_fields

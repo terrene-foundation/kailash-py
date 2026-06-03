@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [2.11.1] — 2026-06-03 — Multi-tenant PostgreSQL `list` regression fix + bulk-path tenant isolation (#1249 follow-up / #1252)
+
+### Security / Fixed
+
+- **PostgreSQL multi-tenant `list` regression fixed (#1249 follow-up, introduced in 2.11.0).** The 2.11.0 tenant-injection on the SELECT/UPDATE/DELETE path hardcoded a `?` placeholder and did not renumber PostgreSQL `$N` placeholders, so a multi-tenant `express.list` (which emits a trailing `LIMIT $1 OFFSET $2`) bound the tenant string to `$1`/`LIMIT` and raised `argument of LIMIT must be type bigint, not type text`. The injection is now **dialect-placeholder-aware**: for `$N` queries the tenant predicate uses a `$N` placeholder and all existing `$N` are renumbered consistently (`... WHERE tenant_id = $1 ... LIMIT $2 OFFSET $3`); `?` (SQLite) and `%s` (psycopg/MySQL) keep positional insertion (byte-identical output). Affected only multi-tenant PostgreSQL `list`; create/read/count/update/delete were unaffected. The `*_postgres.py` regression tests were made self-contained (they previously aborted on a non-existent harness method and never exercised the path — the gap that let the regression ship); a multi-tenant `list`-with-`LIMIT` cross-read test now guards it.
+
+- **Multi-tenant bulk/upsert paths now enforce tenant isolation (#1252).** `bulk_create` / `bulk_update` / `bulk_delete` / `bulk_upsert` / `upsert` (the `db.bulk` subsystem) read the bound tenant from a stale legacy dict (`_tenant_context`, only set by the unused `set_tenant_context()` API) instead of the `tenant_context.switch()` contextvar — so under multi-tenancy every bulk write stored `tenant_id = NULL` (rows invisible to all tenants) and bulk update/delete ran with no tenant filter (latent cross-tenant write/delete). All four paths now resolve the tenant from `get_current_tenant_id()`, stamp `tenant_id` on bulk-created rows, AND the bound tenant predicate into bulk update/delete WHERE clauses (dialect-correct `?`/`$N`/`%s`), and **fail closed** (raise) when multi-tenant mode is on but no tenant is bound — never writing a NULL-tenant row or running an unscoped mutation. Single-tenant projects are unaffected.
+
+### Tests
+
+- New `tests/regression/test_issue_1252_bulk_tenant_isolation.py` (10 SQLite Tier-2: bulk cross-read isolation, non-NULL tenant_id, update/delete tenant-scoping, upsert round-trip + isolation, fail-closed on each op, single-tenant-unchanged) + a `_postgres.py` variant. New dialect-renumber unit tests + a PostgreSQL multi-tenant `list` regression test added to the #1249 suites. Verified end-to-end against real PostgreSQL.
+
 ## [2.11.0] — 2026-06-03 — Multi-tenant `express` cross-tenant leak fixed; fail-closed isolation (#1249)
 
 ### Security
