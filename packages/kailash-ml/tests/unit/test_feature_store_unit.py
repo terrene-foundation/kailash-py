@@ -34,6 +34,18 @@ def _mk_schema() -> FeatureSchema:
     )
 
 
+def _fake_df() -> SimpleNamespace:
+    """Minimal DataFlow-shaped stand-in for the get_features happy path.
+
+    Models the `config.security.multi_tenant` surface a real DataFlow always
+    exposes (read by `FeatureStore.get_features` to gate tenant scoping, #1241).
+    The store still never touches the connection — the binding is monkeypatched.
+    """
+    return SimpleNamespace(
+        config=SimpleNamespace(security=SimpleNamespace(multi_tenant=False))
+    )
+
+
 # ---------------------------------------------------------------------------
 # Constructor
 # ---------------------------------------------------------------------------
@@ -191,7 +203,7 @@ async def test_get_features_returns_polars_dataframe(
         "_import_ml_feature_source",
         lambda: fake_source,
     )
-    fs = FeatureStore(SimpleNamespace(), default_tenant_id="acme")  # type: ignore[arg-type]
+    fs = FeatureStore(_fake_df(), default_tenant_id="acme")  # type: ignore[arg-type]
     out = await fs.get_features(schema)
     assert isinstance(out, pl.DataFrame)
     assert out.columns == ["user_id", "age", "tenure_months"]
@@ -211,7 +223,7 @@ async def test_get_features_collects_lazyframe(
         "_import_ml_feature_source",
         lambda: lambda s, *, tenant_id, point_in_time: frame.lazy(),
     )
-    fs = FeatureStore(SimpleNamespace(), default_tenant_id="acme")  # type: ignore[arg-type]
+    fs = FeatureStore(_fake_df(), default_tenant_id="acme")  # type: ignore[arg-type]
     out = await fs.get_features(schema)
     assert isinstance(out, pl.DataFrame)
     assert out.height == 1
@@ -233,6 +245,6 @@ async def test_get_features_entity_id_filter(
         "_import_ml_feature_source",
         lambda: lambda s, *, tenant_id, point_in_time: full,
     )
-    fs = FeatureStore(SimpleNamespace(), default_tenant_id="acme")  # type: ignore[arg-type]
+    fs = FeatureStore(_fake_df(), default_tenant_id="acme")  # type: ignore[arg-type]
     out = await fs.get_features(schema, entity_ids=["u1", "u3"])
     assert sorted(out["user_id"].to_list()) == ["u1", "u3"]
