@@ -1,5 +1,13 @@
 # kailash-ml Changelog
 
+## [1.7.6] — 2026-06-03 — fix: get_features without a timestamp returns latest-per-entity (#1241 follow-up)
+
+Follow-up to 1.7.5. The 1.7.5 `SchemaFeatureGroup` adapter gated its latest-per-entity dedup on `point_in_time is not None`, so `get_features(schema)` with **no** timestamp returned **every historical row** (duplicate entities) instead of the latest row per entity. The `get_features` contract is "when timestamp is None the latest values are returned" — one feature vector per entity. Caught by the 1.7.5 published-wheel end-to-end verification walk (the unit/integration tests had used one row per entity, so the dedup gap was unobservable).
+
+### Fixed
+
+- **`get_features(schema)` (no timestamp) now returns the latest row per entity (#1241).** Dedup-to-latest now runs whenever the schema declares a `timestamp_column`, realising both halves of the contract: `point_in_time` given → as-of-T value (window-bounded then deduped, unchanged); `point_in_time` None → latest value per entity. Happy-path + regression tests strengthened to use multiple observations per entity (a guard the prior tests lacked).
+
 ## [1.7.5] — 2026-06-03 — fix: canonical FeatureStore.get_features now retrieves features (#1241)
 
 The canonical 1.x feature-retrieval surface, `FeatureStore.get_features(...)`, previously raised on **every** call and is now functional. This unblocks the 2.0.0 cutover (#643 step 3), which depends on a working canonical retrieval surface.
