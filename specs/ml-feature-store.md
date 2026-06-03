@@ -167,11 +167,11 @@ async def get_features(
 
 The public-API boundary returns a concrete `polars.DataFrame`. If `dataflow.ml_feature_source` returns a `LazyFrame`, `get_features` collects it (`store.py:204`). If the binding returns any other type, `FeatureStoreError` is raised with the offending type name in `reason` (`store.py:205-214`).
 
-#### MUST 5 — Point-in-Time Join Delegates to DataFlow
+#### MUST 5 — Point-in-Time Join Is Split: DataFlow Filters The Window, Polars Computes The As-Of
 
-When `timestamp` is supplied, `get_features` MUST pass it through unchanged as `point_in_time=timestamp` to `ml_feature_source` (`store.py:197-201`). The store does NOT compute the as-of join itself — that contract belongs to `dataflow-ml-integration.md §1.1`. `timestamp` MUST be a `datetime`; non-`datetime` raises `TypeError` (`store.py:172-176`).
+When `timestamp` is supplied, `get_features` MUST pass it through unchanged as `point_in_time=timestamp` to `ml_feature_source`, which forwards it to the `SchemaFeatureGroup.materialize(...)` read adapter (issue #1241, `_schema_feature_group.py`). `timestamp` MUST be a `datetime`; non-`datetime` raises `TypeError` (`store.py` get_features type-guard). The point-in-time contract is realised in two halves, each by the tool that can express it: (a) the **DataFlow read** pushes the `timestamp_column <= point_in_time` window filter down to SQL via the MongoDB `$lte` operator (`dataflow.database.query_builder`); (b) **polars** computes the latest-row-per-entity as-of dedup (`sort(timestamp_column, descending=True).unique(subset=[entity_id_column], keep="first")`) on the fetched window. DataFlow's `express.list` has no group-by/distinct-on, so "latest per entity" is NOT expressible in the read alone — the polars dedup is the canonical as-of step. (Backing-table convention: `schema.name` == the DataFlow model name the user registered via `@db.model`; the store owns no DDL per § 1.1.)
 
-This is the F-E2-23 positive: PIT join via `dataflow.ml_feature_source(point_in_time=timestamp)` is wired end-to-end.
+**Scale note:** the polars-dedup as-of materialises the full `timestamp <= point_in_time` candidate window in memory; correct for 1.x-scale tables. DB-side windowed as-of (no in-memory cap) is M2 (§ 11) — it requires a DataFlow aggregation primitive not yet exposed without raw SQL.
 
 #### MUST 6 — Tenant Validation Precedes Every Read
 
