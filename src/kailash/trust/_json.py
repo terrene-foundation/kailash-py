@@ -48,20 +48,6 @@ def _make_duplicate_checker(path: str = "") -> Any:
     return check_duplicates
 
 
-def _walk_and_check(obj: Any, path: str = "$") -> Any:
-    """Recursively check for duplicate keys in nested objects.
-
-    The ``object_pairs_hook`` only detects duplicates at the level it is
-    called. For nested objects, we need to parse with the hook to catch
-    all levels. Since ``json.loads`` with ``object_pairs_hook`` applies
-    the hook at every nesting level, a single parse call handles all
-    depths.
-    """
-    # The hook is applied by json.loads at every object level, so
-    # recursive checking is handled by the parser itself.
-    return obj
-
-
 def canonical_json_loads(text: str) -> Any:
     """Parse JSON with strict mode and duplicate key rejection.
 
@@ -96,6 +82,62 @@ def _reject_nan_inf(constant: str) -> None:
     )
 
 
+def _reject_non_string_keys(
+    obj: Any, path: str = "$", _seen: set[int] | None = None
+) -> None:
+    """Reject non-string object keys before canonical serialization.
+
+    ``json.dumps`` silently coerces ``int`` / ``float`` / ``bool`` / ``None``
+    object keys to strings (``{1: "a"}`` -> ``'{"1":"a"}'``). The canonical
+    wire form assumes string keys (RFC 8259 object members), and
+    ``canonical_json_loads`` always yields string keys — so silent coercion
+    breaks round-trip symmetry between the encode/decode pair. We reject
+    non-string keys at the producer boundary instead, recursively, so the
+    failure surfaces at the signing site rather than as a verification
+    mismatch on another implementation.
+
+    Cyclic structures are rejected with ``ValueError`` (mirroring
+    ``json.dumps``'s own ``ValueError("Circular reference detected")``) via a
+    markers set added on container entry and discarded on exit. This preserves
+    the call sites' ``except (TypeError, ValueError)`` exception taxonomy
+    rather than letting the pure-Python recursion raise an uncaught
+    ``RecursionError`` (a ``RuntimeError`` subclass) before ``json.dumps`` runs.
+    Shared (DAG) substructures are NOT rejected — only true cycles, exactly
+    like ``json.dumps``.
+
+    Raises:
+        ValueError: If any object key (at any nesting depth) is not a ``str``,
+            or if ``obj`` contains a circular reference.
+    """
+    if _seen is None:
+        _seen = set()
+    if isinstance(obj, (dict, list, tuple)):
+        obj_id = id(obj)
+        if obj_id in _seen:
+            raise ValueError(
+                f"Circular reference detected at {path} — canonical JSON "
+                f"cannot serialize cyclic structures"
+            )
+        _seen.add(obj_id)
+        try:
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if not isinstance(key, str):
+                        raise ValueError(
+                            f"non-string object key {key!r} "
+                            f"({type(key).__name__}) at {path} — canonical JSON "
+                            f"requires string keys (RFC 8259 object members); "
+                            f"coercing would break round-trip symmetry with "
+                            f"canonical_json_loads"
+                        )
+                    _reject_non_string_keys(value, f"{path}.{key}", _seen)
+            else:  # list / tuple
+                for index, value in enumerate(obj):
+                    _reject_non_string_keys(value, f"{path}[{index}]", _seen)
+        finally:
+            _seen.discard(obj_id)
+
+
 def canonical_json_dumps(obj: Any) -> str:
     """Serialize to canonical JSON with sorted keys and no extra whitespace.
 
@@ -103,10 +145,35 @@ def canonical_json_dumps(obj: Any) -> str:
     nesting level, and no trailing whitespace or newlines are emitted.
     This matches the canonical encoder order required by SPEC-09 S8.2.
 
+    This encoder is symmetric with :func:`canonical_json_loads` on the value
+    domain it accepts: it rejects (raises) ``NaN`` / ``Infinity`` /
+    ``-Infinity`` (via ``allow_nan=False``) — which are not valid JSON per
+    RFC 8259 and which the paired decoder already refuses — and it rejects
+    non-string object keys rather than silently stringifying them. This
+    guarantees the encoder never produces signing pre-images that its own
+    decoder, Rust ``serde_json``, or any RFC-8259 verifier cannot read back.
+
+    Note: integers outside the JS-safe range (``±(2**53 - 1)``) are NOT
+    rejected. The canonical parity scope is Python and Rust (``serde_json``),
+    both of which carry 64-bit+ integers losslessly; common signing payloads
+    (e.g. nanosecond timestamps) depend on this. JS-consumer ``2**53`` safety
+    is out of scope (issue #1243 acceptance criterion 3).
+
     Args:
         obj: Python object to serialize.
 
     Returns:
         Canonical JSON string.
+
+    Raises:
+        ValueError: If ``obj`` contains ``NaN`` / ``Infinity`` / ``-Infinity``
+            float values, or any non-string object key.
     """
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    _reject_non_string_keys(obj)
+    return json.dumps(
+        obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
