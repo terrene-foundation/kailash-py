@@ -5,9 +5,11 @@ SQLite-specific database adapter implementation.
 """
 
 import asyncio
+import datetime as _datetime
 import logging
 import os
 import re
+import sqlite3 as _sqlite3
 import sys
 import traceback
 import warnings
@@ -25,6 +27,37 @@ from .dialect import DialectManager
 from .exceptions import ConnectionError, QueryError, TransactionError
 
 _sqlite_dialect = DialectManager.get_dialect("sqlite")
+
+
+def _register_sqlite_datetime_adapters() -> None:
+    """Register explicit sqlite3 ``datetime``/``date`` adapters (issue #1250).
+
+    Python 3.12 deprecated the stdlib ``sqlite3`` *default* datetime adapter;
+    binding a ``datetime`` through DataFlow's SQLite path
+    (``aiosqlite`` -> ``sqlite3``) therefore emits a ``DeprecationWarning``
+    (and an error under ``-W error::DeprecationWarning``). We register explicit
+    adapters that reproduce the legacy default's output **byte-for-byte** so no
+    warning fires AND the stored wire format is unchanged for existing
+    databases:
+
+    - ``datetime`` -> ``isoformat(" ")`` (SPACE separator, e.g.
+      ``"2026-01-01 12:00:00"``) — exactly what the deprecated default emitted.
+    - ``date`` -> ``isoformat()`` (e.g. ``"2026-01-01"``).
+
+    Process-global + idempotent (sqlite3 adapters are module-level, and
+    ``aiosqlite`` shares the same global registry). Last registration wins, so
+    an application that registers its own datetime adapter is unaffected.
+    """
+    # SPACE separator matches the deprecated stdlib default exactly; using the
+    # "T" separator (isoformat()) would silently change the stored format and
+    # break round-trips against pre-existing rows.
+    _sqlite3.register_adapter(_datetime.datetime, lambda val: val.isoformat(" "))
+    _sqlite3.register_adapter(_datetime.date, lambda val: val.isoformat())
+
+
+# Register on import so the adapters are active whenever DataFlow's SQLite
+# path is loaded (issue #1250).
+_register_sqlite_datetime_adapters()
 
 
 def _safe_identifier(name: str) -> str:
