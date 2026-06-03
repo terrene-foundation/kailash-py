@@ -463,7 +463,15 @@ class SQLitePostureStore:
         ``asyncio.to_thread``) are tracked in ``_all_conns`` and released here,
         not just the calling thread's. After close(), further operations raise
         RuntimeError (gated by ``_require_open`` / ``self._closed``).
+
+        Contract: the caller MUST ensure no store operations are in flight on
+        other threads while close() runs. The closed flag is flipped FIRST so a
+        racing operation that re-checks ``_require_open`` after this point
+        raises before reaching ``_get_connection`` — closing the close-vs-operate
+        window where a racing op could otherwise open a fresh, unregistered
+        connection and re-leak it.
         """
+        self._closed = True
         with self._conns_lock:
             for conn in self._all_conns:
                 try:
@@ -475,10 +483,8 @@ class SQLitePostureStore:
                     )
             self._all_conns.clear()
         # Clear the calling thread's cached handle; other threads are gated by
-        # ``_require_open`` once ``self._closed`` is set, so their now-closed
-        # cached handles are never used.
+        # ``_require_open`` (``self._closed`` already True above).
         self._local.conn = None
-        self._closed = True
         logger.info("SQLitePostureStore closed")
 
     def __enter__(self) -> SQLitePostureStore:

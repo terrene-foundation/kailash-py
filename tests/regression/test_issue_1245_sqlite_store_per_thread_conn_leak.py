@@ -26,6 +26,7 @@ import warnings
 import pytest
 
 from kailash.trust.chain_store.sqlite import SqliteTrustStore
+from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
 from kailash.trust.posture.posture_store import SQLitePostureStore
 
 
@@ -80,6 +81,34 @@ def test_issue_1245_posture_store_no_resourcewarning_after_cross_thread_use(tmp_
         warnings.simplefilter("error", ResourceWarning)
         # If any connection leaked unclosed, its finalizer raises here.
         gc.collect()
+
+
+@pytest.mark.regression
+def test_issue_1245_trust_plane_store_close_releases_cross_thread_connection(tmp_path):
+    """SqliteTrustPlaneStore.close() releases connections opened on other threads.
+
+    The third trust SQLite store with the same per-thread-connection pattern
+    (surfaced during the #1245 review); fixed the same way.
+    """
+    store = SqliteTrustPlaneStore(str(tmp_path / "plane.db"))
+    captured: dict[str, sqlite3.Connection] = {}
+
+    def worker() -> None:
+        captured["conn"] = store._get_connection()
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+
+    worker_conn = captured["conn"]
+    assert worker_conn is not None
+    assert worker_conn in store._all_conns
+
+    store.close()  # from the MAIN thread
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        worker_conn.execute("SELECT 1")
+    assert len(store._all_conns) == 0
 
 
 @pytest.mark.regression

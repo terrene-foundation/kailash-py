@@ -400,7 +400,15 @@ class SqliteTrustStore(TrustStore):
         ``asyncio.to_thread``) are tracked in ``_all_conns`` and released here,
         not just the calling thread's. After close(), operations raise
         RuntimeError (gated by ``_require_initialized`` / ``self._initialized``).
+
+        Contract: the caller MUST ensure no store operations are in flight on
+        other threads while close() runs. The initialized flag is cleared FIRST
+        so a racing operation that re-checks ``_require_initialized`` after this
+        point raises before reaching ``_get_connection`` — closing the
+        close-vs-operate window where a racing op could otherwise open a fresh,
+        unregistered connection and re-leak it.
         """
+        self._initialized = False
         with self._conns_lock:
             for conn in self._all_conns:
                 try:
@@ -412,9 +420,8 @@ class SqliteTrustStore(TrustStore):
                     )
             self._all_conns.clear()
         # Clear the calling thread's cached handle; other threads are gated by
-        # ``_require_initialized`` once ``self._initialized`` is False.
+        # ``_require_initialized`` (``self._initialized`` already False above).
         self._local.conn = None
-        self._initialized = False
         logger.info("SqliteTrustStore closed")
 
     def _sync_get_chains_missing_reasoning(self) -> List[str]:
