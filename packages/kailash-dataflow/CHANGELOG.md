@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.11.2] — 2026-06-04 — SQLite datetime DeprecationWarning fix (#1250)
+
+### Fixed
+
+- **Explicit `sqlite3` datetime adapters registered — no more Python 3.12+ `DeprecationWarning` on SQLite datetime writes (#1250).** Storing a `datetime` through DataFlow's SQLite path (`aiosqlite` → stdlib `sqlite3`) emitted a `DeprecationWarning` because DataFlow relied on the stdlib `sqlite3` _default_ datetime adapter, deprecated as of Python 3.12 (and an error under `-W error::DeprecationWarning`, which blocked downstreams from enabling it). `dataflow.adapters.sqlite` now registers explicit datetime/date adapters at import that reproduce the deprecated default's output **byte-for-byte** so the stored wire format is unchanged for existing databases: `datetime` → `isoformat(" ")` (SPACE separator, e.g. `"2026-01-01 12:00:00"`), `date` → `isoformat()`. The registration is process-global + idempotent (sqlite3 adapters are module-level; aiosqlite shares the registry); last registration wins, so an app with its own datetime adapter is unaffected. Verified to cover naive, microsecond, and timezone-aware datetimes (tz-aware stores `"... 12:00:00+00:00"`, matching the legacy default).
+
 ## [2.11.1] — 2026-06-03 — Multi-tenant PostgreSQL `list` regression fix + bulk-path tenant isolation (#1249 follow-up / #1252)
 
 ### Security / Fixed
