@@ -1,5 +1,24 @@
 # kailash-ml Changelog
 
+## [1.7.5] — 2026-06-03 — fix: canonical FeatureStore.get_features now retrieves features (#1241)
+
+The canonical 1.x feature-retrieval surface, `FeatureStore.get_features(...)`, previously raised on **every** call and is now functional. This unblocks the 2.0.0 cutover (#643 step 3), which depends on a working canonical retrieval surface.
+
+### Fixed
+
+- **`FeatureStore.get_features(...)` retrieves features instead of always raising (#1241).** `get_features` forwarded a declarative `FeatureSchema` to `dataflow.ml_feature_source`, but that binding duck-types on a FeatureGroup-shaped `.materialize()` the schema does not expose (the `FeatureGroup` class is M2-deferred per `ml-feature-store.md §11`). The schema therefore failed the binding's shape check and every call raised `FeatureStoreError`. The store now wraps the schema in an internal `SchemaFeatureGroup` read adapter that reads the backing DataFlow table named after the schema (`schema.name` == `@db.model` name, per the spec §1.1 "thin bridge, owns no DDL" framing). **No public-API change** — `get_features`'s signature is unchanged; the adapter is internal.
+  - **Point-in-time correctness (`§6.2 MUST-1`)** is realised framework-first with no raw SQL: the DataFlow read pushes the `timestamp_column <= point_in_time` window down via the MongoDB `$lte` operator, and polars computes the latest-row-per-entity as-of dedup (`sort(ts, descending, nulls_last).unique(subset=entity, keep="first")`).
+  - **Multi-tenant scoping** binds the DataFlow tenant context (`db.tenant_context.switch(...)`) so `express.list` auto-scopes — the DataFlow-native mechanism, correct under both the `schema` and `row` isolation strategies.
+
+### Changed
+
+- **Spec correction (`specs/dataflow-ml-integration.md`, `specs/ml-feature-store.md §4.1`):** retracted a phantom "consumed end-to-end (verified positive at audit finding F-E2-23)" claim — `get_features` had never worked before #1241 — and reframed the point-in-time contract to describe the real DataFlow-window-filter + polars-as-of split.
+
+### Notes
+
+- **Scale bound (documented):** the polars-dedup as-of materialises the full `timestamp <= T` candidate window in memory — correct for 1.x-scale tables. DB-side windowed as-of (no in-memory cap) is M2; it needs a DataFlow aggregation primitive not yet exposed without raw SQL.
+- **Cross-SDK:** the kailash-rs `FeatureStore` is a `save`/`load` artifact store (no `get_features` / `FeatureGroup` / DataFlow-bridge), so the #1241 bug class is structurally impossible there — no cross-SDK issue filed.
+
 ## [1.7.4] — 2026-05-09 — hotfix: aiosqlite restored to core deps
 
 Hotfix release closing a pre-existing latent dependency gap exposed by the 1.7.3 clean-venv install verification (`pip install kailash-ml==1.7.3` → `ModuleNotFoundError: No module named 'aiosqlite'` at module-import time).
