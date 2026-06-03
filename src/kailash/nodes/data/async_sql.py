@@ -46,6 +46,7 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
+
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.exceptions import PoolExhaustedError
@@ -5361,22 +5362,50 @@ class AsyncSQLDatabaseNode(AsyncNode):
         return sorted(_PROCESS_POOL_REGISTRY.keys())
 
     @classmethod
-    async def clear_shared_pools(cls, graceful: bool = True) -> Dict[str, Any]:
-        """Clear all shared connection pools with enhanced error handling (ADR-017).
+    async def clear_shared_pools(
+        cls, graceful: bool = True, *, loop_id: int | None = None
+    ) -> Dict[str, Any]:
+        """Clear shared connection pools with enhanced error handling (ADR-017).
 
         Args:
             graceful: If True, attempts graceful close. If False, immediately removes pools.
+            loop_id: If given, dispose ONLY the pools owned by that event loop
+                — i.e. pools whose key begins with ``f"{loop_id}|"`` (the
+                ``loop_id`` is the first ``|``-delimited segment of the pool
+                key per ``_generate_pool_key``). Pools owned by other,
+                still-live event loops are left intact. This is the
+                loop-ownership guard a teardown on one loop MUST use so it
+                does not dispose another loop's live pools (issue #1248). When
+                ``None`` (the default), every pool in the process-wide
+                registry is disposed (the original, unscoped behavior).
 
         Returns:
             Dict[str, Any]: Cleanup metrics
 
-        DPI-B2 extension: also clears ``_PROCESS_POOL_REGISTRY`` (the
-        process-wide registry that tracks both shared and fallback
-        pools) so test fixtures get a clean slate. Production callers
-        SHOULD prefer ``cleanup_all_pools()`` (alias defined below) for
-        the registry-clearing semantic.
+        DPI-B2 extension: when ``loop_id`` is ``None``, also clears
+        ``_PROCESS_POOL_REGISTRY`` (the process-wide registry that tracks
+        both shared and fallback pools) so test fixtures get a clean slate.
+        Production callers SHOULD prefer ``cleanup_all_pools()`` (alias
+        defined below) for the registry-clearing semantic. A loop-scoped
+        clear (``loop_id`` set) does NOT blanket-clear the process registry —
+        that would corrupt cap accounting for other loops' pools; the
+        ``WeakValueDictionary`` self-prunes the disposed adapters on GC.
         """
-        total_pools = len(cls._shared_pools)
+        if loop_id is not None:
+            # ``id(loop)`` reuse after a loop is GC'd is benign here: a closed
+            # loop's pool is already dead/unusable, so disposing it on a
+            # recycled-id collision is the correct outcome (identical to
+            # ``_cleanup_closed_loop_pools``). A live loop's pools hold refs
+            # that keep its ``id()`` from being recycled while they exist, so
+            # the "recycled id + stale live pool" window is empty under normal
+            # GC. Do NOT "fix" this by adding loop-identity bookkeeping.
+            _loop_prefix = f"{loop_id}|"
+            pool_keys = [
+                key for key in cls._shared_pools if key.startswith(_loop_prefix)
+            ]
+        else:
+            pool_keys = list(cls._shared_pools.keys())
+        total_pools = len(pool_keys)
         pools_cleared = 0
         clear_failures = 0
         clear_errors = []
@@ -5389,12 +5418,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 "clear_errors": [],
             }
 
+        _scope = "" if loop_id is None else f", loop_id={loop_id}"
         logger.info(
             f"AsyncSQLDatabaseNode: Clearing {total_pools} shared pools "
-            f"(graceful={graceful})"
+            f"(graceful={graceful}{_scope})"
         )
-
-        pool_keys = list(cls._shared_pools.keys())
 
         for pool_key in pool_keys:
             try:
@@ -5433,17 +5461,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
         # the cap or seed pools via the fallback path leak entries into
         # ``_PROCESS_POOL_REGISTRY`` that the legacy ``_shared_pools``
         # path never tracked. Clearing both keeps the cap honest across
-        # test runs.
-        registry_size = len(_PROCESS_POOL_REGISTRY)
-        if registry_size > 0:
-            # WeakValueDictionary clears in-place; values whose strong
-            # refs live elsewhere stay alive (test fixtures that hold a
-            # ref deliberately are unaffected).
-            _PROCESS_POOL_REGISTRY.clear()
-            logger.info(
-                f"AsyncSQLDatabaseNode: Cleared "
-                f"{registry_size} entries from process pool registry"
-            )
+        # test runs. A loop-scoped clear (issue #1248) MUST NOT blanket-clear
+        # the registry — that would drop cap-accounting entries for pools
+        # owned by other, still-live loops. The ``WeakValueDictionary``
+        # self-prunes the adapters disposed above once their strong refs drop.
+        if loop_id is None:
+            registry_size = len(_PROCESS_POOL_REGISTRY)
+            if registry_size > 0:
+                # WeakValueDictionary clears in-place; values whose strong
+                # refs live elsewhere stay alive (test fixtures that hold a
+                # ref deliberately are unaffected).
+                _PROCESS_POOL_REGISTRY.clear()
+                logger.info(
+                    f"AsyncSQLDatabaseNode: Cleared "
+                    f"{registry_size} entries from process pool registry"
+                )
 
         # DPI-B3: cancel reaper tasks for any closed event loops.
         # Tasks for the CURRENT loop stay alive; cleanup runs in a

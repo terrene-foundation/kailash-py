@@ -2003,7 +2003,19 @@ class AsyncLocalRuntime(LocalRuntime):
                 # was never awaited``. Sibling fix to LocalRuntime
                 # ``_cleanup_event_loop`` and ``_execute_sync``
                 # teardown paths landed for issue #942.
-                _inner = _clear_pools(graceful=True)
+                #
+                # Issue #1248: scope disposal to THIS runtime's loop
+                # (``loop_id=id(...)``) so cleanup does not dispose pools
+                # owned by another, still-live loop. ``cleanup`` runs as a
+                # coroutine, so a running loop is always present here — AND
+                # that running loop is the loop that created this runtime's
+                # pools (the runtime executes workflows on the same loop that
+                # awaits ``cleanup``, e.g. a FastAPI lifespan loop). A future
+                # refactor that drives ``cleanup`` from a foreign loop would
+                # break this assumption and MUST re-scope accordingly.
+                _inner = _clear_pools(
+                    graceful=True, loop_id=id(asyncio.get_running_loop())
+                )
                 try:
                     await asyncio.wait_for(_inner, timeout=5.0)
                 finally:

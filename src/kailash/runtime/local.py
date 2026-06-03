@@ -1728,7 +1728,14 @@ class LocalRuntime(
                                         # never awaited`` warning. Issue #917
                                         # closed the outer wrapper; #942
                                         # closes the inner coroutine.
-                                        _inner = _clear_pools(graceful=True)
+                                        #
+                                        # Issue #1248: scope disposal to THIS
+                                        # runtime's loop (``loop_id=id(loop)``)
+                                        # so shutdown does not dispose pools
+                                        # owned by another, still-live loop.
+                                        _inner = _clear_pools(
+                                            graceful=True, loop_id=id(loop)
+                                        )
                                         try:
                                             await asyncio.wait_for(
                                                 _inner,
@@ -2238,7 +2245,14 @@ class LocalRuntime(
                                 # wait_for that swallows its arg).
                                 # See sibling fix in
                                 # ``_cleanup_event_loop`` above.
-                                _inner = _clear_pools(graceful=True)
+                                #
+                                # Issue #1248: scope disposal to THIS
+                                # ephemeral loop's pools (``loop_id=id(loop)``)
+                                # so the sync-bridge teardown does NOT dispose
+                                # pools owned by another, still-live event loop
+                                # (e.g. an AsyncSQLDatabaseNode pool on a
+                                # request loop in the parent thread).
+                                _inner = _clear_pools(graceful=True, loop_id=id(loop))
                                 try:
                                     await asyncio.wait_for(
                                         _inner,
