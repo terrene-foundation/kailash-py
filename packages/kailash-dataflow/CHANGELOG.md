@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-06-03 — Multi-tenant `express` cross-tenant leak fixed; fail-closed isolation (#1249)
+
+### Security
+
+- **Multi-tenant `express` CRUD now enforces strict tenant isolation (#1249, CRITICAL).** With `multi_tenant=True`, `express(.sync)` provided NO isolation: writes stored `tenant_id = NULL` and reads returned every tenant's rows (a cross-tenant data leak). Four compounding defects in the tenant-injection enforcement point (`QueryInterceptor` / `_apply_tenant_isolation`) are fixed:
+  1. The SQL-syntax validator's `\w+` table-name regexes rejected quoted identifiers (`INSERT INTO "feats" …`), so every multi-tenant write fail-closed with a `RuntimeError`. The validator now accepts quoted/bracketed/backtick identifiers across all dialects.
+  2. The INSERT injection did not match quoted identifiers, so the tenant column/value was never bound (`tenant_id = NULL`). Injection is now identifier-normalized and binds the tenant value as a **bound parameter** at the correct position.
+  3. The SELECT/UPDATE/DELETE table matcher compared the parsed (quoted) table name against the unquoted declared tenant table; the mismatch left the query **unfiltered with no error** — the silent leak. Identifier normalization closes the mismatch, and the interceptor now **fails closed** (raises `TenantIsolationError`) when a declared tenant table cannot be matched or the injection is a no-op, rather than executing an unscoped query.
+  4. `tenant_isolation_strategy` was silently dropped as an unknown constructor parameter (DF-CFG-001) and its default `"schema"` was a no-op on SQLite. It is now an accepted, validated parameter; the default is `"row"` (the strategy DataFlow actually enforces on every backend); and a `"schema"`/`"database"` strategy on a backend that cannot deliver physical isolation **fails closed at startup** with a typed `DataFlowConfigurationError` instead of silently providing no isolation.
+
+### Changed (fail-closed — may surface previously-silent misconfigurations)
+
+- A tenant-isolated model written or read under `multi_tenant=True` with **no bound tenant** now raises (`RuntimeError`) instead of silently executing an unscoped query (which previously persisted a `tenant_id = NULL` row or returned all tenants' rows). Bind a tenant via `db.tenant_context.switch(tenant_id)` before the operation. DDL / auto-migration (which run with no bound tenant) are unaffected.
+- The default `SecurityConfig.tenant_isolation_strategy` changed `"schema"` → `"row"`. `"schema"` was a no-op on SQLite (no schemas); `"row"` is enforced on all backends.
+
+### Known limitation
+
+- The **bulk** and **upsert** write paths (`bulk_create`, `bulk_update`, `bulk_upsert`, `upsert`) are **not yet tenant-isolated** under `multi_tenant=True` — tracked in #1252. These paths do not disclose cross-tenant data, but `bulk_create` currently writes unscoped (`NULL`-tenant) rows. Use single-record `express` CRUD for tenant-isolated writes until #1252 lands.
+
+### Tests
+
+- Tier-2 regression suite `tests/regression/test_issue_1249_tenant_isolation_leak.py` (19 tests: cross-tenant read/write/delete isolation, non-NULL `tenant_id`, quoted-identifier validator, fail-closed no-tenant write, strategy validation) + a PostgreSQL-marked variant. Updated `tests/integration/tenancy/test_engine_tenancy_wiring.py` for the fail-closed enforcement point.
+
 ## [2.10.3] — 2026-06-01 — PEP 604 union field-type normalization parity (#1228 / F34)
 
 ### Fixed
