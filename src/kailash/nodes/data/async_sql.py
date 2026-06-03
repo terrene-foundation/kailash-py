@@ -5392,6 +5392,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
         ``WeakValueDictionary`` self-prunes the disposed adapters on GC.
         """
         if loop_id is not None:
+            # ``id(loop)`` reuse after a loop is GC'd is benign here: a closed
+            # loop's pool is already dead/unusable, so disposing it on a
+            # recycled-id collision is the correct outcome (identical to
+            # ``_cleanup_closed_loop_pools``). A live loop's pools hold refs
+            # that keep its ``id()`` from being recycled while they exist, so
+            # the "recycled id + stale live pool" window is empty under normal
+            # GC. Do NOT "fix" this by adding loop-identity bookkeeping.
             _loop_prefix = f"{loop_id}|"
             pool_keys = [
                 key for key in cls._shared_pools if key.startswith(_loop_prefix)

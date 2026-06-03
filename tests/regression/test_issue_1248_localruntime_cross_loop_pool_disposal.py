@@ -113,6 +113,50 @@ async def test_issue_1248_unscoped_clear_still_disposes_all():
         AsyncSQLDatabaseNode._shared_pools.pop(key_b, None)
 
 
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_issue_1248_scoped_clear_preserves_no_loop_pools_and_registry():
+    """A scoped clear must leave `no_loop` pools AND the process registry intact.
+
+    Pins the two halves of the fix the loop-key filter alone doesn't cover:
+    (a) sync-context `no_loop|...` pools are not owned by any event loop, so a
+    loop-scoped teardown MUST skip them (sweeping them would be the same bug
+    class #1248 fixes); the unscoped path still disposes them.
+    (b) a scoped clear MUST NOT blanket-clear `_PROCESS_POOL_REGISTRY` (that
+    would corrupt cap accounting for other live loops' pools); the unscoped
+    clear does clear it.
+    """
+    from kailash.nodes.data import async_sql as _async_sql
+
+    no_loop_key = "no_loop|postgresql|h:5432:db:u|10|20"
+    scoped_key = "991248301|postgresql|h:5432:db:u|10|20"
+    no_loop_adapter, scoped_adapter = _StubAdapter(), _StubAdapter()
+    # Hold a strong ref so the WeakValueDictionary entry survives until we drop it.
+    registry_sentinel = _StubAdapter()
+    registry_token = "test-1248-registry-sentinel"
+
+    AsyncSQLDatabaseNode._shared_pools[no_loop_key] = (no_loop_adapter, 1)
+    AsyncSQLDatabaseNode._shared_pools[scoped_key] = (scoped_adapter, 1)
+    _async_sql._PROCESS_POOL_REGISTRY[registry_token] = registry_sentinel
+    try:
+        # Scoped clear of the real-loop key: no_loop pool + registry survive.
+        await AsyncSQLDatabaseNode.clear_shared_pools(graceful=True, loop_id=991248301)
+        assert scoped_adapter.disconnected is True
+        assert no_loop_adapter.disconnected is False
+        assert no_loop_key in AsyncSQLDatabaseNode._shared_pools
+        assert registry_token in _async_sql._PROCESS_POOL_REGISTRY
+
+        # Unscoped clear: no_loop pool disposed AND registry cleared.
+        await AsyncSQLDatabaseNode.clear_shared_pools(graceful=True)
+        assert no_loop_adapter.disconnected is True
+        assert no_loop_key not in AsyncSQLDatabaseNode._shared_pools
+        assert registry_token not in _async_sql._PROCESS_POOL_REGISTRY
+    finally:
+        AsyncSQLDatabaseNode._shared_pools.pop(no_loop_key, None)
+        AsyncSQLDatabaseNode._shared_pools.pop(scoped_key, None)
+        _async_sql._PROCESS_POOL_REGISTRY.pop(registry_token, None)
+
+
 # ---------------------------------------------------------------------------
 # Tier 2 — real Postgres: a worker-thread LocalRuntime teardown must NOT
 # dispose the pool owned by this (live) loop.
