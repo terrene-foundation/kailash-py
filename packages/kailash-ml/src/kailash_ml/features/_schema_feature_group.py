@@ -122,17 +122,28 @@ class SchemaFeatureGroup:
             until=until,
         )
 
+        # Project shape: entity_id + declared field columns. Used for the
+        # empty-table return so the entity_id column is ALWAYS present — the
+        # store's downstream `entity_ids` filter does
+        # `pl.col(entity_id_column).is_in(...)` and would raise
+        # ColumnNotFoundError on a column-less empty frame.
+        projection = [entity_col] + [c for c in field_cols if c != entity_col]
+
         if not rows:
-            # Empty (or absent-data) table → empty frame, NOT an error. An
-            # actual missing/unmigrated table surfaces as an exception from
-            # express.list, which the binding/store wrap as FeatureStoreError.
-            return pl.DataFrame().lazy()
+            # Empty (or absent-data) table → empty, column-shaped frame, NOT an
+            # error. An actual missing/unmigrated table surfaces as an
+            # exception from express.list, which the binding/store wrap as
+            # FeatureStoreError.
+            return pl.DataFrame(schema=projection).lazy()
 
         frame = pl.DataFrame(rows)
 
         # As-of dedup: keep the latest row per entity. The window query already
         # bounded timestamp <= point_in_time, so "latest per entity" within the
-        # fetched rows IS the point-in-time-correct value.
+        # fetched rows IS the point-in-time-correct value. `nulls_last=True`
+        # ensures a row with a NULL timestamp_column can never shadow a real
+        # timestamped row (descending sort otherwise places NULLs first, where
+        # `unique(keep="first")` would pick them).
         if (
             point_in_time is not None
             and ts_col is not None
@@ -140,14 +151,13 @@ class SchemaFeatureGroup:
             and entity_col in frame.columns
             and frame.height
         ):
-            frame = frame.sort(ts_col, descending=True).unique(
+            frame = frame.sort(ts_col, descending=True, nulls_last=True).unique(
                 subset=[entity_col], keep="first"
             )
 
         # Project to entity_id + declared field columns (drop tenant_id,
         # timestamp, and any other backing-table columns).
-        keep = [entity_col] + [c for c in field_cols if c != entity_col]
-        present = [c for c in keep if c in frame.columns]
+        present = [c for c in projection if c in frame.columns]
         if present:
             frame = frame.select(present)
 
@@ -171,17 +181,23 @@ class SchemaFeatureGroup:
     ) -> list[dict[str, Any]]:
         """Fetch the candidate row window from the backing DataFlow table.
 
-        Builds a MongoDB-style filter (translated to SQL by
-        ``dataflow.database.query_builder``) bounding the timestamp window and,
-        for multi-tenant groups, the tenant. Returns raw rows; the caller
+        Builds a MongoDB-style timestamp-window filter (translated to SQL by
+        ``dataflow.database.query_builder``). Returns raw rows; the caller
         computes the as-of dedup in polars.
+
+        Tenant scoping is NOT a filter key: DataFlow multi-tenancy is
+        context-bound — ``express.list`` auto-scopes to the tenant bound via
+        ``db.tenant_context.switch(...)`` (see `express.py::_resolve_tenant_id`)
+        and raises ``TenantRequiredError`` when none is bound. A ``tenant_id``
+        filter would (a) do nothing under the default ``schema`` isolation
+        strategy where there is no ``tenant_id`` column, and (b) still fail the
+        context-bound read. So for a multi-tenant group we BIND the tenant
+        context around the read rather than filtering on it, which works under
+        both the ``schema`` and ``row`` isolation strategies.
         """
         schema = self._schema
         ts_col = schema.timestamp_column
         filter_spec: dict[str, Any] = {}
-
-        if self.multi_tenant and tenant_id is not None:
-            filter_spec["tenant_id"] = tenant_id
 
         if ts_col is not None:
             ts_bounds: dict[str, Any] = {}
@@ -208,6 +224,18 @@ class SchemaFeatureGroup:
                 "order_by": order_by,
             },
         )
+
+        if self.multi_tenant and tenant_id is not None:
+            # Bind the tenant context so express.list auto-scopes the read to
+            # this tenant (DataFlow-native multi-tenancy; works under both the
+            # schema- and row-isolation strategies).
+            with self._df.tenant_context.switch(tenant_id):
+                return self._df.express_sync.list(
+                    schema.name,
+                    filter_spec,
+                    limit=_CANDIDATE_FETCH_LIMIT,
+                    order_by=order_by,
+                )
 
         return self._df.express_sync.list(
             schema.name,
