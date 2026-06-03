@@ -33,13 +33,19 @@ def test_issue_1250_sqlite_datetime_adapters_registered():
         warnings.simplefilter("error", DeprecationWarning)
         conn = sqlite3.connect(":memory:")
         try:
-            conn.execute("CREATE TABLE t (d TIMESTAMP, day DATE)")
+            conn.execute("CREATE TABLE t (d TIMESTAMP, day DATE, tz TIMESTAMP)")
             conn.execute(
-                "INSERT INTO t VALUES (?, ?)",
-                (_datetime.datetime(2026, 1, 1, 12, 0, 0), _datetime.date(2026, 1, 1)),
+                "INSERT INTO t VALUES (?, ?, ?)",
+                (
+                    _datetime.datetime(2026, 1, 1, 12, 0, 0),
+                    _datetime.date(2026, 1, 1),
+                    _datetime.datetime(
+                        2026, 1, 1, 12, 0, 0, tzinfo=_datetime.timezone.utc
+                    ),
+                ),
             )
             conn.commit()
-            row = conn.execute("SELECT d, day FROM t").fetchone()
+            row = conn.execute("SELECT d, day, tz FROM t").fetchone()
         finally:
             conn.close()
 
@@ -47,6 +53,9 @@ def test_issue_1250_sqlite_datetime_adapters_registered():
     # datetime uses a SPACE separator, NOT "T" — so existing rows still match.
     assert row[0] == "2026-01-01 12:00:00"
     assert row[1] == "2026-01-01"
+    # tz-aware: SPACE separator + offset, exactly as the legacy default emitted
+    # (the legacy adapter was literally ``isoformat(" ")``).
+    assert row[2] == "2026-01-01 12:00:00+00:00"
 
 
 @pytest.mark.regression
