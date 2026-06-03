@@ -81,3 +81,84 @@ def test_strict_mode_rejects_control_characters():
     """
     with pytest.raises(json.JSONDecodeError):
         canonical_json_loads('{"key": "value\nwith newline"}')
+
+
+# ---------------------------------------------------------------------------
+# Issue #1243 — encoder/decoder round-trip symmetry.
+#
+# ``canonical_json_loads`` rejects NaN/Infinity (RFC 8259); the encoder MUST
+# reject the same values rather than emitting non-JSON tokens (``NaN``,
+# ``Infinity``) that its own paired decoder — and Rust ``serde_json`` — refuse.
+# It MUST also reject non-string object keys, which the wire form cannot carry
+# without silently stringifying them (breaking round-trip with the decoder,
+# whose output keys are always strings).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_dumps_rejects_non_finite_floats(bad):
+    """The encoder rejects NaN/Infinity/-Infinity, symmetric with the decoder.
+
+    Before the fix, ``canonical_json_dumps({"x": float("nan")})`` returned the
+    non-JSON string ``'{"x":NaN}'`` which ``canonical_json_loads`` then refused
+    to parse — the encode/decode pair was not round-trip-consistent.
+    """
+    with pytest.raises(ValueError):
+        canonical_json_dumps({"x": bad})
+
+
+def test_dumps_rejects_nested_non_finite_float():
+    """Non-finite floats nested inside arrays/objects are also rejected."""
+    with pytest.raises(ValueError):
+        canonical_json_dumps({"outer": {"vals": [1.0, float("inf")]}})
+
+
+def test_dumps_rejects_top_level_non_finite_float():
+    """A bare non-finite float (not wrapped in a container) is rejected."""
+    with pytest.raises(ValueError):
+        canonical_json_dumps(float("nan"))
+
+
+@pytest.mark.parametrize("key", [1, 2**53, 3.14, True, None])
+def test_dumps_rejects_non_string_object_key(key):
+    """Non-string object keys are rejected, not silently stringified.
+
+    ``json.dumps`` coerces int/float/bool/None keys to strings
+    (``{1: "a"}`` -> ``'{"1":"a"}'``); the canonical encoder MUST reject them
+    so the encode/decode pair round-trips (the decoder always yields string
+    keys).
+    """
+    with pytest.raises(ValueError):
+        canonical_json_dumps({key: "value"})
+
+
+def test_dumps_rejects_nested_non_string_object_key():
+    """Non-string keys nested below the top level are also rejected."""
+    with pytest.raises(ValueError):
+        canonical_json_dumps({"outer": {1: "value"}})
+
+
+def test_dumps_round_trip_symmetry_property():
+    """For every value the decoder rejects, the encoder rejects too.
+
+    This is the load-bearing invariant of issue #1243: the canonical
+    encode/decode pair must agree on the value domain. The encoder must never
+    produce bytes its own paired decoder cannot read back.
+    """
+    # NaN/Infinity: decoder rejects (parse_constant) -> encoder must reject.
+    for non_finite in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            canonical_json_dumps({"x": non_finite})
+
+
+def test_dumps_allows_large_integers():
+    """Integers beyond the JS-safe range are NOT rejected (Py<->Rust scope).
+
+    The canonical encoder's documented parity scope is Python and Rust
+    (``serde_json``), both of which carry 64-bit+ integers losslessly. Common
+    signing payloads (e.g. nanosecond timestamps ~1.78e18 > 2**53) rely on
+    this. JS-consumer 2**53 safety is explicitly out of scope per issue #1243
+    acceptance criterion 3 ("(Consider) ... when JS consumers are in scope").
+    """
+    assert canonical_json_dumps({"n": 2**53}) == '{"n":9007199254740992}'
+    assert canonical_json_dumps({"n": 2**63 + 1}) == '{"n":9223372036854775809}'
