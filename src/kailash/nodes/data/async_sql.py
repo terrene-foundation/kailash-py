@@ -51,6 +51,7 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.url_credentials import redact_pool_key
 
 logger = logging.getLogger(__name__)
 
@@ -2951,20 +2952,20 @@ async def _idle_pool_reaper_loop() -> None:
                     logger.info(
                         "async_sql.pool_reaped",
                         extra={
-                            "pool_key": key,
+                            "pool_key": redact_pool_key(key),
                             "registry_size_after": len(_PROCESS_POOL_REGISTRY),
                         },
                     )
                 except asyncio.TimeoutError:
                     logger.warning(
                         "async_sql.pool_reap_timeout",
-                        extra={"pool_key": key},
+                        extra={"pool_key": redact_pool_key(key)},
                     )
                 except Exception as e:
                     # Never let a single bad pool kill the reaper.
                     logger.warning(
                         "async_sql.pool_reap_error",
-                        extra={"pool_key": key, "error": str(e)},
+                        extra={"pool_key": redact_pool_key(key), "error": str(e)},
                     )
     except asyncio.CancelledError:
         # Expected on event-loop shutdown / cleanup_all_pools.
@@ -3338,24 +3339,24 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 self._acquire_start_time = time.time()
 
                 logger.debug(
-                    f"Attempting to acquire pool lock for '{self.pool_key}' (timeout: {self.timeout}s)"
+                    f"Attempting to acquire pool lock for '{redact_pool_key(self.pool_key)}' (timeout: {self.timeout}s)"
                 )
 
                 try:
                     await asyncio.wait_for(self.lock.acquire(), timeout=self.timeout)
                     acquire_time = time.time() - self._acquire_start_time
                     logger.debug(
-                        f"Successfully acquired pool lock for '{self.pool_key}' in {acquire_time:.3f}s"
+                        f"Successfully acquired pool lock for '{redact_pool_key(self.pool_key)}' in {acquire_time:.3f}s"
                     )
                     return self
                 except asyncio.TimeoutError:
                     acquire_time = time.time() - self._acquire_start_time
                     logger.warning(
-                        f"TIMEOUT: Failed to acquire pool lock for '{self.pool_key}' after {acquire_time:.3f}s "
+                        f"TIMEOUT: Failed to acquire pool lock for '{redact_pool_key(self.pool_key)}' after {acquire_time:.3f}s "
                         f"(timeout: {self.timeout}s). This may indicate deadlock or excessive lock contention."
                     )
                     raise RuntimeError(
-                        f"Failed to acquire pool lock for '{self.pool_key}' within {self.timeout}s timeout. "
+                        f"Failed to acquire pool lock for '{redact_pool_key(self.pool_key)}' within {self.timeout}s timeout. "
                         f"This may indicate deadlock or excessive lock contention."
                     )
 
@@ -3368,11 +3369,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if self._acquire_start_time:
                     hold_time = time.time() - self._acquire_start_time
                     logger.debug(
-                        f"Releasing pool lock for '{self.pool_key}' (held for {hold_time:.3f}s)"
+                        f"Releasing pool lock for '{redact_pool_key(self.pool_key)}' (held for {hold_time:.3f}s)"
                     )
 
                 self.lock.release()
-                logger.debug(f"Released pool lock for '{self.pool_key}'")
+                logger.debug(
+                    f"Released pool lock for '{redact_pool_key(self.pool_key)}'"
+                )
 
         # Check feature flag - if legacy mode is enabled, use global lock
         if cls._use_legacy_locking:
@@ -3380,7 +3383,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             logger = logging.getLogger(__name__)
             logger.debug(
-                f"Using legacy global locking for pool '{pool_key}' (KAILASH_USE_LEGACY_POOL_LOCKING=true)"
+                f"Using legacy global locking for pool '{redact_pool_key(pool_key)}' (KAILASH_USE_LEGACY_POOL_LOCKING=true)"
             )
             lock = cls._get_pool_lock()
             return TimeoutLockManager(lock, pool_key, timeout)
@@ -3486,7 +3489,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 metrics["total_locks"] += lock_count
                 metrics["locks_per_loop"][str(loop_id)] = {
                     "lock_count": lock_count,
-                    "pool_keys": list(pool_locks.keys()),
+                    # Redacted: lock keys are pool keys carrying the connection
+                    # string with credentials, and this is a public diagnostic
+                    # return surface (issue #1260).
+                    "pool_keys": [redact_pool_key(k) for k in pool_locks.keys()],
                 }
 
             # Calculate ratio
@@ -4383,7 +4389,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             except RuntimeError:
                                 # Loop is closed - remove stale pool
                                 logger.warning(
-                                    f"Removing stale pool for {self._pool_key} - event loop closed"
+                                    f"Removing stale pool for {redact_pool_key(self._pool_key)} - event loop closed"
                                 )
                                 del self._shared_pools[self._pool_key]
                                 # Fall through to create new pool
@@ -4427,8 +4433,8 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         "async_sql.fallback_pool_created",
                         extra={
                             "node_id": self.id,
-                            "pool_key": self._pool_key,
-                            "fallback_pool_key": fallback_pool_key,
+                            "pool_key": redact_pool_key(self._pool_key),
+                            "fallback_pool_key": redact_pool_key(fallback_pool_key),
                             "registry_size": current,
                             "cap": cap,
                             "trigger": type(e).__name__,
@@ -5217,7 +5223,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             for pool_key, (adapter, ref_count) in cls._shared_pools.items():
                 pool_info = {
-                    "key": pool_key,
+                    # Redacted: the raw key carries the connection string with
+                    # credentials and this diagnostic dict is commonly logged /
+                    # serialized by callers (issue #1260). Deterministic, so it
+                    # still correlates with the redacted log/metric surfaces.
+                    "key": redact_pool_key(pool_key),
                     "reference_count": ref_count,
                     "type": adapter.__class__.__name__,
                 }
@@ -5274,7 +5284,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 pool_loop_id = int(loop_id_str)
             except (ValueError, IndexError):
                 logger.warning(
-                    f"AsyncSQLDatabaseNode: Invalid pool key format: {pool_key}"
+                    f"AsyncSQLDatabaseNode: Invalid pool key format: {redact_pool_key(pool_key)}"
                 )
                 continue
 
@@ -5282,7 +5292,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             if pool_loop_id != current_loop_id:
                 pools_to_remove.append(pool_key)
                 logger.debug(
-                    f"AsyncSQLDatabaseNode: Marked stale pool {pool_key} "
+                    f"AsyncSQLDatabaseNode: Marked stale pool {redact_pool_key(pool_key)} "
                     f"(loop {pool_loop_id} != current {current_loop_id})"
                 )
 
@@ -5298,19 +5308,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 except asyncio.TimeoutError:
                     logger.warning(
                         f"AsyncSQLDatabaseNode: Timeout disconnecting stale pool "
-                        f"{pool_key}"
+                        f"{redact_pool_key(pool_key)}"
                     )
                 except Exception as close_error:
                     logger.debug(
                         f"AsyncSQLDatabaseNode: Could not disconnect adapter for "
-                        f"{pool_key}: {close_error}"
+                        f"{redact_pool_key(pool_key)}: {close_error}"
                     )
 
                 cleaned_count += 1
-                logger.info(f"AsyncSQLDatabaseNode: Cleaned stale pool {pool_key}")
+                logger.info(
+                    f"AsyncSQLDatabaseNode: Cleaned stale pool {redact_pool_key(pool_key)}"
+                )
             except Exception as e:
                 logger.warning(
-                    f"AsyncSQLDatabaseNode: Failed to cleanup pool {pool_key}: {e}"
+                    f"AsyncSQLDatabaseNode: Failed to cleanup pool {redact_pool_key(pool_key)}: {e}"
                 )
 
         if cleaned_count > 0:
@@ -5348,18 +5360,20 @@ class AsyncSQLDatabaseNode(AsyncNode):
         """Return sorted list of live pool keys (DPI-B2 diagnostic surface).
 
         Used by Tier-2 regression tests and operator diagnostics. Sorted
-        so test assertions are deterministic. The keys mirror the
-        ``pool_key`` log field emitted by the WARN logger on fallback —
-        cross-correlation between live registry state and incident logs
-        works by string equality on this surface.
+        so test assertions are deterministic. The keys are returned with
+        their connection-string segment redacted (issue #1260) — they
+        mirror the ``pool_key`` field emitted by the WARN logger on
+        fallback, which is ALSO redacted, so cross-correlation between
+        live registry state and incident logs still works by string
+        equality (redaction is deterministic).
 
         Returns:
-            list[str]: Sorted snapshot of pool keys at call time. Read
-                is non-locking; concurrent mutations may produce a
-                count drift between this call and a sibling
+            list[str]: Sorted snapshot of redacted pool keys at call
+                time. Read is non-locking; concurrent mutations may
+                produce a count drift between this call and a sibling
                 ``pool_count()`` call (acceptable; both are diagnostic).
         """
-        return sorted(_PROCESS_POOL_REGISTRY.keys())
+        return sorted(redact_pool_key(k) for k in _PROCESS_POOL_REGISTRY.keys())
 
     @classmethod
     async def clear_shared_pools(
@@ -5432,23 +5446,25 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     try:
                         await asyncio.wait_for(adapter.disconnect(), timeout=2.0)
                         logger.debug(
-                            f"AsyncSQLDatabaseNode: Gracefully disconnected pool {pool_key}"
+                            f"AsyncSQLDatabaseNode: Gracefully disconnected pool {redact_pool_key(pool_key)}"
                         )
                     except asyncio.TimeoutError:
                         logger.warning(
-                            f"AsyncSQLDatabaseNode: Timeout disconnecting pool {pool_key}"
+                            f"AsyncSQLDatabaseNode: Timeout disconnecting pool {redact_pool_key(pool_key)}"
                         )
                         clear_failures += 1
                     except Exception as close_error:
                         logger.warning(
-                            f"AsyncSQLDatabaseNode: Error disconnecting pool {pool_key}: "
+                            f"AsyncSQLDatabaseNode: Error disconnecting pool {redact_pool_key(pool_key)}: "
                             f"{close_error}"
                         )
 
                 pools_cleared += 1
             except Exception as e:
                 clear_failures += 1
-                error_msg = f"Failed to clear pool {pool_key}: {str(e)}"
+                error_msg = (
+                    f"Failed to clear pool {redact_pool_key(pool_key)}: {str(e)}"
+                )
                 clear_errors.append(error_msg)
                 logger.error(f"AsyncSQLDatabaseNode: {error_msg}")
 
@@ -5531,7 +5547,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
         """
         info = {
             "shared": self._share_pool,
-            "pool_key": self._pool_key,
+            # Redacted: the raw pool key carries the connection string with
+            # credentials; this diagnostic dict is commonly logged/serialized
+            # by callers, so mask before exposing (issue #1260).
+            "pool_key": redact_pool_key(self._pool_key),
             "connected": self._connected,
         }
 

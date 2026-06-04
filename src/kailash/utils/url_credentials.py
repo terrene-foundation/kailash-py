@@ -386,6 +386,76 @@ def _mask_multi_host_url(url: str) -> str:
     return f"{scheme}://{masked_authority}{path_prefix}{query_suffix}{frag_suffix}"
 
 
+def redact_pool_key(pool_key: Optional[str]) -> str:
+    """Redact the credential-bearing segment of a connection-pool key.
+
+    Connection-pool keys produced by ``AsyncSQLDatabaseNode._generate_pool_key``
+    have the shape ``loop_id|db_type|connection_string|min|max`` — the third
+    ``|``-segment is a raw connection string that can carry
+    ``user:password@`` credentials (e.g.
+    ``postgresql://user:secret@host/db``). Redis pool keys
+    (``RedisConnectionPoolManager``) have the simpler shape
+    ``<redis_url>/db<n>`` where the whole key is URL-shaped and the
+    URL can carry ``redis://:password@host`` credentials.
+
+    Every log line, error message, or structured ``extra`` field that
+    mentions a pool key MUST route it through this helper first, per
+    ``rules/security.md`` § "No secrets in logs" and
+    ``rules/observability.md`` Rule 6.2. The redaction preserves every
+    non-credential segment (loop id, db type, pool sizes, redis db
+    index) for forensic correlation in incident logs and replaces ONLY
+    the credential-bearing connection URL via :func:`mask_url`.
+
+    The host-fallback pool-key form (``host:port:db:user`` when no
+    connection string is configured) carries no password and is NOT a
+    URL, so it is returned unchanged — masking it would discard useful
+    host context for zero credential-leak benefit.
+
+    Args:
+        pool_key: A composite pool key, a bare URL-shaped key, or an
+            empty/``None`` value.
+
+    Returns:
+        The pool key with any embedded credential URL masked to
+        ``scheme://***@host``. Empty string for empty/``None`` input.
+
+    Examples:
+        >>> redact_pool_key("140234|postgresql|postgresql://u:secret@h/db|5|20")
+        '140234|postgresql|postgresql://***@h/db|5|20'
+        >>> redact_pool_key("fallback_456_140234|postgresql|postgresql://u:s@h/db|5|20")
+        'fallback_456_140234|postgresql|postgresql://***@h/db|5|20'
+        >>> redact_pool_key("redis://:secret@cache:6379/db0")
+        'redis://***@cache:6379/db0'
+        >>> redact_pool_key("140234|sqlite|host:5432:mydb:alice|5|20")
+        '140234|sqlite|host:5432:mydb:alice|5|20'
+        >>> redact_pool_key("")
+        ''
+    """
+    if not isinstance(pool_key, str) or not pool_key:
+        return ""
+    if "|" in pool_key:
+        parts = pool_key.split("|")
+        # _generate_pool_key shape: loop_id|db_type|connection_string|min|max.
+        # The connection string is the ONLY credential-bearing field, and it
+        # may itself contain "|" (e.g. a "|" in the password), so the 5
+        # logical fields can split into MORE than 5 parts. Reconstruct the
+        # middle (everything between db_type and the trailing min|max) and
+        # mask it as a whole — indexing parts[2] alone would over-split and
+        # leave the password tail in a later raw segment.
+        if len(parts) >= 5:
+            conn = "|".join(parts[2:-2])
+            if "://" in conn:
+                conn = mask_url(conn)
+            return "|".join([parts[0], parts[1], conn, parts[-2], parts[-1]])
+        # Fewer than the canonical 5 fields — not a well-formed pool key.
+        # Defensively mask any segment that looks like a credential URL.
+        return "|".join(mask_url(p) if "://" in p else p for p in parts)
+    # Non-composite key (redis "<url>/db<n>"); mask whole thing if URL-shaped.
+    if "://" in pool_key:
+        return mask_url(pool_key)
+    return pool_key
+
+
 def fingerprint_secret(value: str, *, length: int = 8) -> str:
     """Generate a short non-reversible fingerprint of a secret for log correlation.
 
@@ -467,7 +537,7 @@ def mask_secret(value: Optional[str], *, keep_tail: int = 4) -> str:
     Examples:
         >>> mask_secret("sk-1234567890abcdef")
         '***cdef'
-        >>> mask_secret("short")
+        >>> mask_secret("ab")  # shorter than keep_tail (4) → fully masked
         '***'
         >>> mask_secret(None)
         ''

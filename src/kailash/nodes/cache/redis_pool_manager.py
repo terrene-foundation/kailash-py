@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.url_credentials import redact_pool_key
 
 try:
     import redis.asyncio as redis
@@ -297,10 +298,12 @@ class RedisPoolManagerNode(AsyncNode):
                     self._failed_connections[pool_key] = []
                     self._health_history[pool_key] = []
 
-                    self.logger.info(f"Created Redis pool: {pool_key}")
+                    self.logger.info(f"Created Redis pool: {redact_pool_key(pool_key)}")
 
                 except Exception as e:
-                    self.logger.error(f"Failed to create Redis pool {pool_key}: {e}")
+                    self.logger.error(
+                        f"Failed to create Redis pool {redact_pool_key(pool_key)}: {e}"
+                    )
                     raise NodeExecutionError(f"Failed to create Redis pool: {e}")
 
             return self._pools[pool_key]
@@ -339,7 +342,7 @@ class RedisPoolManagerNode(AsyncNode):
 
             return {
                 "result": result,
-                "pool_used": pool_key,
+                "pool_used": redact_pool_key(pool_key),
                 "execution_time": execution_time,
                 "connection_id": id(connection),
             }
@@ -399,7 +402,7 @@ class RedisPoolManagerNode(AsyncNode):
             "timestamp": datetime.now(UTC),
             "error": error,
             "execution_time": execution_time,
-            "pool_key": pool_key,
+            "pool_key": redact_pool_key(pool_key),  # defense-in-depth (#1260)
         }
 
         if pool_key not in self._failed_connections:
@@ -473,13 +476,20 @@ class RedisPoolManagerNode(AsyncNode):
         """Get status of all pools or specific pool."""
         if pool_name:
             if pool_name not in self._pools:
-                return {"error": f"Pool {pool_name} not found"}
+                # pool_name may be a credential-bearing redis URL key (#1260).
+                return {"error": f"Pool {redact_pool_key(pool_name)} not found"}
 
-            return {"pool_status": {pool_name: self._get_single_pool_status(pool_name)}}
+            # Redact the dict key (carries redis://:pass@host); look up status
+            # by the raw key but expose the masked form (issue #1260).
+            return {
+                "pool_status": {
+                    redact_pool_key(pool_name): self._get_single_pool_status(pool_name)
+                }
+            }
         else:
             return {
                 "pool_status": {
-                    pool_key: self._get_single_pool_status(pool_key)
+                    redact_pool_key(pool_key): self._get_single_pool_status(pool_key)
                     for pool_key in self._pools.keys()
                 }
             }
@@ -537,7 +547,9 @@ class RedisPoolManagerNode(AsyncNode):
 
                 response_time = time.time() - start_time
 
-                health_results[pool_key] = {
+                # Redact the dict key: it carries redis://:pass@host and
+                # health_report is a public return surface (issue #1260).
+                health_results[redact_pool_key(pool_key)] = {
                     "healthy": True,
                     "response_time": response_time,
                     "last_check": datetime.now(UTC).isoformat(),
@@ -547,7 +559,7 @@ class RedisPoolManagerNode(AsyncNode):
             except Exception as e:
                 response_time = time.time() - start_time
 
-                health_results[pool_key] = {
+                health_results[redact_pool_key(pool_key)] = {
                     "healthy": False,
                     "error": str(e),
                     "response_time": response_time,
@@ -589,10 +601,15 @@ class RedisPoolManagerNode(AsyncNode):
                     self._failed_connections.pop(pool_key, None)
                     self._health_history.pop(pool_key, None)
 
-                    cleaned_pools.append(pool_key)
-                    self.logger.info(f"Cleaned up inactive pool: {pool_key}")
+                    # Returned to the caller; redact before exposing (#1260).
+                    cleaned_pools.append(redact_pool_key(pool_key))
+                    self.logger.info(
+                        f"Cleaned up inactive pool: {redact_pool_key(pool_key)}"
+                    )
 
                 except Exception as e:
-                    self.logger.error(f"Error cleaning up pool {pool_key}: {e}")
+                    self.logger.error(
+                        f"Error cleaning up pool {redact_pool_key(pool_key)}: {e}"
+                    )
 
         return {"cleaned_pools": cleaned_pools, "cleanup_count": len(cleaned_pools)}
