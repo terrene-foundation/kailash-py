@@ -95,6 +95,18 @@ class TestRedactPoolKeyContract:
         assert SECRET not in out
         assert "***" in out
 
+    def test_pipe_in_password_does_not_leak_tail(self):
+        # A literal '|' in the password over-splits the key into >5 parts;
+        # the helper must reconstruct the middle so the password TAIL after
+        # the '|' is not left in a raw trailing segment.
+        key = f"140234|postgresql|postgresql://u:pa|{SECRET}@h:5432/db|5|20"
+        out = redact_pool_key(key)
+        assert SECRET not in out
+        assert "pa|" not in out or "***" in out  # masked, not raw
+        assert "***" in out
+        assert out.startswith("140234|postgresql|")
+        assert out.endswith("|5|20")
+
 
 @pytest.mark.regression
 class TestPoolExhaustedErrorRedaction:
@@ -159,6 +171,55 @@ class TestClearSharedPoolsLogRedaction:
         # masked to the canonical ``***@host`` form.
         assert SECRET not in full_log
         assert "***" in full_log
+
+
+@pytest.mark.regression
+class TestReturnValueSurfaceRedaction:
+    """Diagnostic RETURN surfaces never expose the raw credential-bearing key."""
+
+    @pytest.mark.asyncio
+    async def test_get_pool_metrics_redacts_key(self):
+        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+        loop_id = 999_000_222
+        key = f"{loop_id}|postgresql|postgresql://admin:{SECRET}@db.internal:5432/kailash|5|20"
+
+        class _StubAdapter:
+            _pool = None
+
+        AsyncSQLDatabaseNode._shared_pools[key] = (_StubAdapter(), 1)  # type: ignore[assignment]
+        try:
+            metrics = await AsyncSQLDatabaseNode.get_pool_metrics()
+        finally:
+            AsyncSQLDatabaseNode._shared_pools.pop(key, None)
+
+        keys = [p["key"] for p in metrics["pools"]]
+        blob = " ".join(keys)
+        assert SECRET not in blob
+        # Our injected pool appears, redacted.
+        assert any(k.startswith(f"{loop_id}|postgresql|") and "***" in k for k in keys)
+
+    def test_pool_keys_returns_redacted(self):
+        from kailash.nodes.data.async_sql import (
+            _PROCESS_POOL_REGISTRY,
+            AsyncSQLDatabaseNode,
+        )
+
+        key = f"888000333|postgresql|postgresql://admin:{SECRET}@db.internal:5432/kailash|5|20"
+
+        class _Live:  # weak-referenceable value for the WeakValueDictionary
+            pass
+
+        live = _Live()
+        _PROCESS_POOL_REGISTRY[key] = live  # type: ignore[assignment]
+        try:
+            keys = AsyncSQLDatabaseNode.pool_keys()
+        finally:
+            _PROCESS_POOL_REGISTRY.pop(key, None)
+
+        blob = " ".join(keys)
+        assert SECRET not in blob
+        assert any("***" in k and k.startswith("888000333|") for k in keys)
 
 
 @pytest.mark.regression

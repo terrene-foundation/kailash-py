@@ -435,13 +435,21 @@ def redact_pool_key(pool_key: Optional[str]) -> str:
         return ""
     if "|" in pool_key:
         parts = pool_key.split("|")
-        # _generate_pool_key shape: loop_id|db_type|conn|min|max — index 2
-        # is the only credential-bearing segment, and only when it is a
-        # real connection URL (the host:port:db:user fallback carries no
-        # password and has no "://").
-        if len(parts) >= 3 and "://" in parts[2]:
-            parts[2] = mask_url(parts[2])
-        return "|".join(parts)
+        # _generate_pool_key shape: loop_id|db_type|connection_string|min|max.
+        # The connection string is the ONLY credential-bearing field, and it
+        # may itself contain "|" (e.g. a "|" in the password), so the 5
+        # logical fields can split into MORE than 5 parts. Reconstruct the
+        # middle (everything between db_type and the trailing min|max) and
+        # mask it as a whole — indexing parts[2] alone would over-split and
+        # leave the password tail in a later raw segment.
+        if len(parts) >= 5:
+            conn = "|".join(parts[2:-2])
+            if "://" in conn:
+                conn = mask_url(conn)
+            return "|".join([parts[0], parts[1], conn, parts[-2], parts[-1]])
+        # Fewer than the canonical 5 fields — not a well-formed pool key.
+        # Defensively mask any segment that looks like a credential URL.
+        return "|".join(mask_url(p) if "://" in p else p for p in parts)
     # Non-composite key (redis "<url>/db<n>"); mask whole thing if URL-shaped.
     if "://" in pool_key:
         return mask_url(pool_key)

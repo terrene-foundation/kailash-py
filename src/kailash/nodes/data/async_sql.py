@@ -5220,7 +5220,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             for pool_key, (adapter, ref_count) in cls._shared_pools.items():
                 pool_info = {
-                    "key": pool_key,
+                    # Redacted: the raw key carries the connection string with
+                    # credentials and this diagnostic dict is commonly logged /
+                    # serialized by callers (issue #1260). Deterministic, so it
+                    # still correlates with the redacted log/metric surfaces.
+                    "key": redact_pool_key(pool_key),
                     "reference_count": ref_count,
                     "type": adapter.__class__.__name__,
                 }
@@ -5353,18 +5357,20 @@ class AsyncSQLDatabaseNode(AsyncNode):
         """Return sorted list of live pool keys (DPI-B2 diagnostic surface).
 
         Used by Tier-2 regression tests and operator diagnostics. Sorted
-        so test assertions are deterministic. The keys mirror the
-        ``pool_key`` log field emitted by the WARN logger on fallback —
-        cross-correlation between live registry state and incident logs
-        works by string equality on this surface.
+        so test assertions are deterministic. The keys are returned with
+        their connection-string segment redacted (issue #1260) — they
+        mirror the ``pool_key`` field emitted by the WARN logger on
+        fallback, which is ALSO redacted, so cross-correlation between
+        live registry state and incident logs still works by string
+        equality (redaction is deterministic).
 
         Returns:
-            list[str]: Sorted snapshot of pool keys at call time. Read
-                is non-locking; concurrent mutations may produce a
-                count drift between this call and a sibling
+            list[str]: Sorted snapshot of redacted pool keys at call
+                time. Read is non-locking; concurrent mutations may
+                produce a count drift between this call and a sibling
                 ``pool_count()`` call (acceptable; both are diagnostic).
         """
-        return sorted(_PROCESS_POOL_REGISTRY.keys())
+        return sorted(redact_pool_key(k) for k in _PROCESS_POOL_REGISTRY.keys())
 
     @classmethod
     async def clear_shared_pools(
