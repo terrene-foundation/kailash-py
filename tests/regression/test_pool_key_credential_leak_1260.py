@@ -239,6 +239,33 @@ class TestReturnValueSurfaceRedaction:
 
 
 @pytest.mark.regression
+class TestRedisHealthReportRedaction:
+    """The redis health_report return surface never exposes raw redis URLs."""
+
+    @pytest.mark.asyncio
+    async def test_health_report_keys_are_redacted(self):
+        pytest.importorskip("redis")
+        from unittest.mock import MagicMock
+
+        from kailash.nodes.cache.redis_pool_manager import RedisPoolManagerNode
+
+        node = RedisPoolManagerNode()
+        key = f"redis://:{SECRET}@cache.internal:6379/db0"
+        # A fake pool makes ping() fail → the except branch records the result,
+        # which is the path that keys health_results by the (redacted) pool key.
+        node._pools[key] = MagicMock()
+        try:
+            report = await node._perform_health_check()
+        finally:
+            node._pools.pop(key, None)
+
+        health = report["health_report"]
+        blob = " ".join(health.keys())
+        assert SECRET not in blob
+        assert any("***" in k for k in health.keys())
+
+
+@pytest.mark.regression
 class TestMetricsLabelRedaction:
     """Prometheus pool_key labels never carry the raw connection string."""
 

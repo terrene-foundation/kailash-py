@@ -476,7 +476,8 @@ class RedisPoolManagerNode(AsyncNode):
         """Get status of all pools or specific pool."""
         if pool_name:
             if pool_name not in self._pools:
-                return {"error": f"Pool {pool_name} not found"}
+                # pool_name may be a credential-bearing redis URL key (#1260).
+                return {"error": f"Pool {redact_pool_key(pool_name)} not found"}
 
             # Redact the dict key (carries redis://:pass@host); look up status
             # by the raw key but expose the masked form (issue #1260).
@@ -546,7 +547,9 @@ class RedisPoolManagerNode(AsyncNode):
 
                 response_time = time.time() - start_time
 
-                health_results[pool_key] = {
+                # Redact the dict key: it carries redis://:pass@host and
+                # health_report is a public return surface (issue #1260).
+                health_results[redact_pool_key(pool_key)] = {
                     "healthy": True,
                     "response_time": response_time,
                     "last_check": datetime.now(UTC).isoformat(),
@@ -556,7 +559,7 @@ class RedisPoolManagerNode(AsyncNode):
             except Exception as e:
                 response_time = time.time() - start_time
 
-                health_results[pool_key] = {
+                health_results[redact_pool_key(pool_key)] = {
                     "healthy": False,
                     "error": str(e),
                     "response_time": response_time,
