@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.2] - 2026-06-04
+
+### Security
+
+- **Connection-pool keys no longer leak credentials into logs, metrics, or diagnostic return values (#1260)** — `AsyncSQLDatabaseNode` pool keys embed a raw connection string (`postgresql://user:pass@host/db`) in their third `|`-segment (per `_generate_pool_key`); Redis pool keys are `redis://:pass@host/dbN`. Pool-lifecycle log lines (disposal, cleanup, the per-pool lock manager, the idle-pool reaper, the fallback-pool path) interpolated the **full key at WARN/ERROR level** — which ships to log aggregators that typically have broader access than the database itself — leaking the credential. The Prometheus metrics layer (`kailash.monitoring.asyncsql_metrics`) used the raw key as a metric **label value** (same aggregator exposure, plus an unbounded-cardinality hazard), `PoolExhaustedError` embedded it in its message and `.pool_key` attribute, and several public diagnostic surfaces returned it verbatim (`AsyncSQLDatabaseNode.get_pool_info` / `get_pool_metrics` / `pool_keys` / `get_lock_metrics`; `RedisPoolManagerNode` pool-status / health-report / exec-result / cleanup return values). A new shared helper `kailash.utils.url_credentials.redact_pool_key` masks **only** the credential-bearing connection-URL segment via the canonical `mask_url` (`postgresql://***@host`), preserving the loop-id / db-type / pool-size segments (and the Redis db index) for forensic correlation; redaction is deterministic, so log/metric correlation still works and Prometheus label cardinality is now bounded. Every log line, metric label, exception, and diagnostic return value across `async_sql.py`, `exceptions.py`, `redis_pool_manager.py`, and `asyncsql_metrics.py` routes through the helper. The helper reconstructs the connection-string field from the middle `|`-segments so a literal `|` inside a password cannot leak the password tail. Pre-existing — gated to disposal / error / diagnostic paths, and connection strings often use env-var / `.pgpass` passwords; severity LOW-MEDIUM. Follow-up from the #1248 security review.
+
 ## [2.29.1] - 2026-06-04
 
 ### Fixed
