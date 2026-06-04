@@ -19,6 +19,7 @@ See also:
 from __future__ import annotations
 
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.url_credentials import redact_pool_key
 
 __all__ = ["PoolExhaustedError"]
 
@@ -77,7 +78,12 @@ class PoolExhaustedError(NodeExecutionError):
 
         self.current: int = current
         self.cap: int = cap
-        self.pool_key: str = pool_key
+        # Redact the connection-string segment: the pool key can carry
+        # credentials (``postgresql://user:pass@host/db``) and this error
+        # message propagates to logs / aggregators on the disposal path
+        # (issue #1260). Redaction is deterministic, so the value still
+        # serves the forensic-correlation purpose the attribute documents.
+        self.pool_key: str = redact_pool_key(pool_key)
         message = (
             f"Pool count {current} exceeds cap {cap}; "
             f"refusing to create dedicated fallback pool. "
@@ -85,6 +91,6 @@ class PoolExhaustedError(NodeExecutionError):
             f"set_pool_defaults(max_pool_count_per_process=N) "
             f"or fix the contention root cause "
             f"(per-pool lock timeout, DDL retry storm, etc.). "
-            f"pool_key={pool_key!r}"
+            f"pool_key={self.pool_key!r}"
         )
         super().__init__(message)

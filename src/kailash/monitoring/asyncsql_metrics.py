@@ -13,6 +13,8 @@ import types
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
+from kailash.utils.url_credentials import redact_pool_key
+
 try:
     import prometheus_client
 
@@ -111,6 +113,13 @@ class AsyncSQLMetrics:
         if not self.enabled:
             return
 
+        # Redact credentials before the key becomes a Prometheus label value:
+        # labels ship to metrics aggregators (broader access than the DB) and
+        # the raw key carries the connection string (issue #1260). Redaction is
+        # deterministic, so it also bounds label cardinality per
+        # ``tenant-isolation.md`` Rule 4.
+        pool_key = redact_pool_key(pool_key)
+
         self.lock_acquisition_counter.labels(pool_key=pool_key, status=status).inc()
 
         if wait_time > 0:
@@ -128,6 +137,7 @@ class AsyncSQLMetrics:
         if not self.enabled:
             return
 
+        pool_key = redact_pool_key(pool_key)  # mask credentials (issue #1260)
         self.active_locks_gauge.labels(pool_key=pool_key).set(count)
 
     def record_pool_operation(self, pool_key: str, operation: str):
@@ -141,6 +151,7 @@ class AsyncSQLMetrics:
         if not self.enabled:
             return
 
+        pool_key = redact_pool_key(pool_key)  # mask credentials (issue #1260)
         self.pool_operations_counter.labels(
             pool_key=pool_key, operation=operation
         ).inc()

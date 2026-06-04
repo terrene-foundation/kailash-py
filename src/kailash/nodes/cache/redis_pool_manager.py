@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.url_credentials import redact_pool_key
 
 try:
     import redis.asyncio as redis
@@ -297,10 +298,12 @@ class RedisPoolManagerNode(AsyncNode):
                     self._failed_connections[pool_key] = []
                     self._health_history[pool_key] = []
 
-                    self.logger.info(f"Created Redis pool: {pool_key}")
+                    self.logger.info(f"Created Redis pool: {redact_pool_key(pool_key)}")
 
                 except Exception as e:
-                    self.logger.error(f"Failed to create Redis pool {pool_key}: {e}")
+                    self.logger.error(
+                        f"Failed to create Redis pool {redact_pool_key(pool_key)}: {e}"
+                    )
                     raise NodeExecutionError(f"Failed to create Redis pool: {e}")
 
             return self._pools[pool_key]
@@ -590,9 +593,13 @@ class RedisPoolManagerNode(AsyncNode):
                     self._health_history.pop(pool_key, None)
 
                     cleaned_pools.append(pool_key)
-                    self.logger.info(f"Cleaned up inactive pool: {pool_key}")
+                    self.logger.info(
+                        f"Cleaned up inactive pool: {redact_pool_key(pool_key)}"
+                    )
 
                 except Exception as e:
-                    self.logger.error(f"Error cleaning up pool {pool_key}: {e}")
+                    self.logger.error(
+                        f"Error cleaning up pool {redact_pool_key(pool_key)}: {e}"
+                    )
 
         return {"cleaned_pools": cleaned_pools, "cleanup_count": len(cleaned_pools)}
