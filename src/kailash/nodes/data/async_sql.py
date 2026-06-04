@@ -3489,7 +3489,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 metrics["total_locks"] += lock_count
                 metrics["locks_per_loop"][str(loop_id)] = {
                     "lock_count": lock_count,
-                    "pool_keys": list(pool_locks.keys()),
+                    # Redacted: lock keys are pool keys carrying the connection
+                    # string with credentials, and this is a public diagnostic
+                    # return surface (issue #1260).
+                    "pool_keys": [redact_pool_key(k) for k in pool_locks.keys()],
                 }
 
             # Calculate ratio

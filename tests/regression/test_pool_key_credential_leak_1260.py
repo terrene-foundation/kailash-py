@@ -221,6 +221,22 @@ class TestReturnValueSurfaceRedaction:
         assert SECRET not in blob
         assert any("***" in k and k.startswith("888000333|") for k in keys)
 
+    def test_get_lock_metrics_redacts_pool_keys(self):
+        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+        loop_id = 777_000_444
+        key = f"{loop_id}|postgresql|postgresql://admin:{SECRET}@db.internal:5432/kailash|5|20"
+        AsyncSQLDatabaseNode._pool_locks_by_loop[loop_id] = {key: object()}  # type: ignore[dict-item]
+        try:
+            metrics = AsyncSQLDatabaseNode.get_lock_metrics()
+        finally:
+            AsyncSQLDatabaseNode._pool_locks_by_loop.pop(loop_id, None)
+
+        reported = metrics["locks_per_loop"][str(loop_id)]["pool_keys"]
+        blob = " ".join(reported)
+        assert SECRET not in blob
+        assert any("***" in k for k in reported)
+
 
 @pytest.mark.regression
 class TestMetricsLabelRedaction:
