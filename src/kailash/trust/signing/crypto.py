@@ -253,8 +253,8 @@ def serialize_for_signing(obj: Any) -> str:
       whitespace. The ``convert()`` whitelist below maps typed scalars
       (Decimal / UUID / datetime / bytes / Enum / dataclass) to canonical
       JSON forms (issue #959).
-    * **No Unicode normalization** — NFC (``"é"`` U+00E9) and NFD
-      (``"é"``) inputs are DISTINCT pre-images; their escapes differ
+    * **No Unicode normalization** — NFC (composed, U+00E9) and NFD
+      (decomposed, U+0065 U+0301) inputs are DISTINCT pre-images; their escapes differ
       (``\\u00e9`` vs ``e\\u0301``). Normalize upstream if equivalence matters.
 
     Sibling encoder — divergence is intentional (issue #1258). The delegate

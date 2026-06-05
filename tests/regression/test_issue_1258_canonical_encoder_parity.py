@@ -91,7 +91,7 @@ class TestDelegateCanonicalFixtureParity:
             f"cross-SDK delegate fixture missing at {_DELEGATE_FIXTURE_PATH}; "
             "this fixture is the cross-SDK byte contract per issue #1258"
         )
-        return json.loads(_DELEGATE_FIXTURE_PATH.read_text())
+        return json.loads(_DELEGATE_FIXTURE_PATH.read_text(encoding="utf-8"))
 
     def test_fixture_loads_with_required_floor(self, fixture: dict) -> None:
         assert fixture["contract"] == "delegate-canonical-bytes"

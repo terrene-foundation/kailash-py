@@ -235,3 +235,30 @@ state; divergence is visible and intentional; tests green. Deliverable walks.
 3. Should the long-term unification target (raw-UTF-8 / serde default) be
    captured as a tracked cross-SDK migration item now, or left dormant until a
    concrete driver (e.g. a JS consumer needing one canonical form) appears?
+
+## CI fix (2026-06-05) — Windows UnicodeDecodeError
+
+PR #1269's 4 windows-latest jobs failed: `test_conventions.py` (a trust
+source-convention scanner) raised `UnicodeDecodeError: 'charmap' codec can't
+decode byte 0x81` reading `crypto.py` with the locale codec (cp1252) on Windows.
+Root cause: my crypto.py docstring embedded a raw **decomposed** é
+(`e` + U+0301 = `0xCC 0x81`); `0x81` is undefined in cp1252.
+
+Fix (this fixup commit): ASCII-ify the crypto.py NFC/NFD docstring example
+(`"é"`/decomposed-`"é"` → "composed, U+00E9" / "decomposed, U+0065 U+0301") —
+also a doc improvement (invisible combining chars don't belong in a docstring).
+crypto.py + _json.py now carry ZERO cp1252-undefined bytes. Also hardened the
+two #1258 fixture loaders to `read_text(encoding="utf-8")`.
+
+### Follow-up (noted, not in this PR — pre-existing, out of #1258 scope)
+
+Three trust source-convention scanners read `*.py` source with the locale codec
+(no `encoding=`): `tests/trust/unit/test_conventions.py` (3 sites),
+`tests/trust/unit/test_sdk_conventions.py` (4), `tests/trust/test_dependency_direction.py`
+(1). A Python-source scanner MUST read UTF-8; on Windows they crash on ANY
+cp1252-undefined byte in scanned source (the codebase is full of non-ASCII
+docstrings). My crypto.py ASCII fix removes the immediate trigger, but the
+scanner fragility is latent. Recommended follow-up: add `encoding="utf-8"` to
+those source reads (also resolves pre-existing F541 lint surfaced in
+test_conventions.py). Reverted from this PR to keep #1258 scoped (per
+autonomous-execution Rule 4 shard-bound — separate concern, separate shard).
