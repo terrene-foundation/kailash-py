@@ -198,7 +198,7 @@ class TestV5Uuid:
 
 
 # ---------------------------------------------------------------------------
-# Vector V6 — Unicode BMP (e.g. CJK) is preserved as-is (not escaped)
+# Vector V6 — Unicode BMP (e.g. CJK) is escaped to \uXXXX (ensure_ascii=True)
 # ---------------------------------------------------------------------------
 
 

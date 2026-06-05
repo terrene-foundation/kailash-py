@@ -237,6 +237,33 @@ def serialize_for_signing(obj: Any) -> str:
     trust-plane fail-closed-on-NaN posture (a ``NaN`` in a signed payload is
     already unverifiable — see ``trust-plane-security`` Rule 3).
 
+    Canonical contract (cross-SDK — trust-plane signing family):
+
+    * ``ensure_ascii=True`` — this is the ``json.dumps`` default; the call
+      below passes no override, so non-ASCII code points are emitted as
+      ``\\uXXXX`` escape sequences, producing ASCII-only output
+      (``{"name":"漢字"}`` → ``{"name":"\\u6f22\\u5b57"}``). This is
+      LOAD-BEARING: it matches the pinned cross-SDK fixture
+      ``tests/test-vectors/trust-plane-canonical.json`` (issue #959, vendored
+      to kailash-rs per ``cross-sdk-inspection.md`` Rule 4a), whose Rust
+      counterpart escapes non-ASCII for byte-stable signing pre-images.
+      Changing it to ``ensure_ascii=False`` would invalidate every existing
+      trust-plane signature AND the fixture.
+    * ``sort_keys=True`` + ``separators=(",", ":")`` — keys sorted, no
+      whitespace. The ``convert()`` whitelist below maps typed scalars
+      (Decimal / UUID / datetime / bytes / Enum / dataclass) to canonical
+      JSON forms (issue #959).
+    * **No Unicode normalization** — NFC (``"é"`` U+00E9) and NFD
+      (``"é"``) inputs are DISTINCT pre-images; their escapes differ
+      (``\\u00e9`` vs ``e\\u0301``). Normalize upstream if equivalence matters.
+
+    Sibling encoder — divergence is intentional (issue #1258). The delegate
+    cross-SDK path (``kailash.trust._json.canonical_json_dumps``) uses the
+    OPPOSITE ``ensure_ascii=False`` (raw UTF-8) to match ``serde_json``'s
+    default ``to_string``. The two families never cross-mix. Whether to unify
+    the two contracts is a breaking cross-SDK signing-format migration tracked
+    in issue #1258 — NOT a casual edit.
+
     Args:
         obj: Object to serialize (dataclass, dict, or primitive)
 

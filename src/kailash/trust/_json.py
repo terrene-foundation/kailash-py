@@ -11,6 +11,14 @@ output.
 
 Used by all cross-SDK deserialization paths to ensure both Python and Rust
 parsers reach the same conclusion on every input.
+
+Encoder note: ``canonical_json_dumps`` is the ``kailash.delegate.*`` canonical
+encoder and emits **raw UTF-8** (``ensure_ascii=False``). It is distinct from
+the trust-plane SIGNING encoder
+``kailash.trust.signing.crypto.serialize_for_signing``, which emits
+**ASCII-escaped** ``\\uXXXX`` (``ensure_ascii=True``). The divergence is
+per-subsystem and intentional — see ``canonical_json_dumps`` below and issue
+#1258.
 """
 
 from __future__ import annotations
@@ -158,6 +166,43 @@ def canonical_json_dumps(obj: Any) -> str:
     both of which carry 64-bit+ integers losslessly; common signing payloads
     (e.g. nanosecond timestamps) depend on this. JS-consumer ``2**53`` safety
     is out of scope (issue #1243 acceptance criterion 3).
+
+    Canonical contract (cross-SDK, SPEC-09 S8.2 — ``kailash.delegate.*``):
+
+    * ``ensure_ascii=False`` — non-ASCII code points are emitted as **raw
+      UTF-8 bytes**, NOT ``\\uXXXX`` escapes (``{"name":"漢字"}`` →
+      ``{"name":"漢字"}``, not ``{"name":"\\u6f22\\u5b57"}``). This matches
+      Rust ``serde_json``'s default ``to_string`` output, which does not
+      escape non-ASCII, so the delegate cross-SDK signing pre-image is
+      byte-identical on both SDKs.
+    * ``sort_keys=True`` + ``separators=(",", ":")`` — keys sorted by Unicode
+      code point at every level (equivalent to Rust ``BTreeMap<String>`` /
+      UTF-8 byte order, which agree for valid UTF-8), no inter-token
+      whitespace.
+    * **No Unicode normalization.** ``"é"`` (NFC, U+00E9) and ``"é"`` (NFD,
+      U+0065 U+0301) are DISTINCT signing pre-images — the encoder preserves
+      the input's code points verbatim, exactly as ``serde_json`` does.
+      Callers requiring NFC/NFD equivalence MUST normalize upstream.
+
+    Sibling encoder — divergence is intentional (issue #1258). The trust-plane
+    SIGNING family (``kailash.trust.signing.crypto.serialize_for_signing`` plus
+    the selective-disclosure / PACT-audit signers) uses the OPPOSITE
+    ``ensure_ascii=True`` (``\\uXXXX``-escaped, ASCII-only) because its Rust
+    counterpart and the pinned fixture ``tests/test-vectors/trust-plane-canonical.json``
+    (issue #959) escape non-ASCII. The two families NEVER cross-mix: no delegate
+    code path calls a signing encoder, and no signing path calls
+    ``canonical_json_dumps``. Note the signing family is NOT one byte-identical
+    encoder — ``serialize_for_signing`` carries a typed-scalar whitelist
+    (Decimal/UUID/datetime/bytes/Enum/dataclass) while the selective-disclosure
+    and PACT-audit signers use their own ``json.dumps(..., ensure_ascii=True,
+    sort_keys=True)`` call sites (``default=str``, no whitelist), so they diverge
+    byte-for-byte on typed-scalar inputs; what is uniform across the signing
+    family, and OPPOSITE to delegate, is ``ensure_ascii=True``. Each family
+    matches a different Rust serde contract, so
+    unifying them is a breaking cross-SDK signing-format migration requiring
+    coordinated Rust-side regeneration — NOT a casual edit (issue #1258).
+    Byte-vectors for this encoder are pinned in
+    ``tests/test-vectors/delegate-canonical.json``.
 
     Args:
         obj: Python object to serialize.
