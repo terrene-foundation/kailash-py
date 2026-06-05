@@ -198,7 +198,7 @@ class TestV5Uuid:
 
 
 # ---------------------------------------------------------------------------
-# Vector V6 — Unicode BMP (e.g. CJK) is preserved as-is (not escaped)
+# Vector V6 — Unicode BMP (e.g. CJK) is escaped to \uXXXX (ensure_ascii=True)
 # ---------------------------------------------------------------------------
 
 
@@ -415,7 +415,7 @@ class TestVerifyIntegrityRaisesOnMismatchInStrictMode:
             len(candidates) == 1
         ), f"decision file MUST exist after record; found {candidates!r}"
         decision_file = candidates[0]
-        data = json.loads(decision_file.read_text())
+        data = json.loads(decision_file.read_text(encoding="utf-8"))
         data["decision"] = "tampered!"  # break the stored hash
         decision_file.write_text(json.dumps(data))
         return project, decision_id
@@ -457,7 +457,7 @@ class TestCrossSDKFixtureParity:
             f"cross-SDK trust-plane fixture missing at {_FIXTURE_PATH}; "
             "this fixture is the cross-SDK byte contract per issue #959"
         )
-        return json.loads(_FIXTURE_PATH.read_text())
+        return json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
 
     def test_fixture_loads_with_required_floor(self, fixture: dict) -> None:
         assert fixture["contract"] == "trust-plane-canonical-bytes"

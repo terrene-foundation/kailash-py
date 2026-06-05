@@ -1,0 +1,75 @@
+{
+  "contract": "delegate-canonical-bytes",
+  "version": "1.0.0",
+  "spec_ref": "SPEC-09 S8.2",
+  "issue": "https://github.com/terrene-foundation/kailash-py/issues/1258",
+  "description": "Cross-SDK canonical-bytes byte-pin vectors for the delegate canonical JSON encoder (kailash.trust._json.canonical_json_dumps), used by kailash.delegate.* for SPEC-09 S8.2 cross-SDK parity. Both kailash-py and kailash-rs MUST produce byte-identical canonical_json and identical SHA-256 hex for every vector. This encoder uses ensure_ascii=False (RAW UTF-8 output, matching serde_json's default to_string) — the OPPOSITE of the trust-plane signing encoder serialize_for_signing (ensure_ascii=True / ASCII-escaped, see tests/test-vectors/trust-plane-canonical.json). The divergence is per-subsystem and intentional (issue #1258). canonical_json_dumps has no typed-scalar whitelist, so inputs are JSON-native only (str/int/float/bool/null/list/dict); non-ASCII is stored here as raw UTF-8 (both input_repr and expected_canonical_json) and the encoder re-emits it raw. The encoder performs NO Unicode normalization, so D3 (NFC, U+00E9) and D4 (NFD, U+0065 U+0301) are byte-distinct pre-images. Keys are sorted by Unicode code point (D7).",
+  "vectors": [
+    {
+      "name": "D1_ascii_payload",
+      "input_repr": {
+        "agent": "a1",
+        "action": "approve",
+        "cost": 42
+      },
+      "expected_canonical_json": "{\"action\":\"approve\",\"agent\":\"a1\",\"cost\":42}",
+      "expected_sha256": "3d8562fdd4e63efd07d9de2b3a96bc03f04a179b9b75efd4cd42280240760147"
+    },
+    {
+      "name": "D2_unicode_bmp_raw",
+      "input_repr": {
+        "name": "漢字"
+      },
+      "expected_canonical_json": "{\"name\":\"漢字\"}",
+      "expected_sha256": "3011f1db78cd11606ada35338c4593cadca0def5f3ba46d7d787dbf80a85cfe9"
+    },
+    {
+      "name": "D3_unicode_nfc_composed_raw",
+      "input_repr": {
+        "name": "é"
+      },
+      "expected_canonical_json": "{\"name\":\"é\"}",
+      "expected_sha256": "2f16b8477146a1b2ba7d6bb7cf7c9979c191cc2838a107dbf5f0d920b4cb3ba1"
+    },
+    {
+      "name": "D4_unicode_nfd_decomposed_raw",
+      "input_repr": {
+        "name": "é"
+      },
+      "expected_canonical_json": "{\"name\":\"é\"}",
+      "expected_sha256": "6a547588c4055916e090ed61467326046dd52810679d03bfb84d862a7123522e"
+    },
+    {
+      "name": "D5_astral_emoji_raw",
+      "input_repr": {
+        "flag": "🎉"
+      },
+      "expected_canonical_json": "{\"flag\":\"🎉\"}",
+      "expected_sha256": "62e45a342f42a856a076fab76195eff322cffc0840ebf48684473aed387aa137"
+    },
+    {
+      "name": "D6_astral_object_key_raw",
+      "input_repr": {
+        "𝄞": "clef"
+      },
+      "expected_canonical_json": "{\"𝄞\":\"clef\"}",
+      "expected_sha256": "31e42b0bfa4f3a741f9e5bd036dabdb87ee5a9058b966f8b477d5c148162bb52"
+    },
+    {
+      "name": "D7_mixed_sorted_nonascii_keys",
+      "input_repr": {
+        "é": 1,
+        "a": 2,
+        "漢": 3
+      },
+      "expected_canonical_json": "{\"a\":2,\"é\":1,\"漢\":3}",
+      "expected_sha256": "8b8f5c9bdea20447e35e527616160152fcde9366d366ec1c88d7e76394d743db"
+    },
+    {
+      "name": "EmptyDict_sentinel",
+      "input_repr": {},
+      "expected_canonical_json": "{}",
+      "expected_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ]
+}

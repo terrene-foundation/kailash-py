@@ -162,3 +162,34 @@ def test_dumps_allows_large_integers():
     """
     assert canonical_json_dumps({"n": 2**53}) == '{"n":9007199254740992}'
     assert canonical_json_dumps({"n": 2**63 + 1}) == '{"n":9223372036854775809}'
+
+
+# ---------------------------------------------------------------------------
+# Issue #1258 — non-ASCII canonical contract: raw UTF-8 (ensure_ascii=False),
+# NO Unicode normalization. Byte-vectors are pinned cross-SDK in
+# tests/test-vectors/delegate-canonical.json (see
+# tests/regression/test_issue_1258_canonical_encoder_parity.py); these unit
+# tests document the behavior at the encoder's home module.
+# ---------------------------------------------------------------------------
+
+
+def test_dumps_emits_raw_utf8_not_ascii_escapes():
+    """``canonical_json_dumps`` uses ``ensure_ascii=False`` — non-ASCII code
+    points are emitted as raw UTF-8, NOT ``\\uXXXX`` escapes (matching Rust
+    ``serde_json``'s default ``to_string`` for the delegate cross-SDK path)."""
+    out = canonical_json_dumps({"name": "漢字"})  # 漢字
+    assert out == '{"name":"漢字"}'  # raw 漢字, not 漢字
+    assert not out.isascii()
+
+
+def test_dumps_does_not_unicode_normalize_nfc_vs_nfd():
+    """The encoder preserves the input's code points verbatim — NFC and NFD
+    are DISTINCT pre-images (no normalization). Constructed via
+    ``unicodedata.normalize`` so the two forms are byte-distinct by
+    construction regardless of source-file normalization."""
+    import unicodedata
+
+    nfc = unicodedata.normalize("NFC", "é")  # U+00E9
+    nfd = unicodedata.normalize("NFD", "é")  # U+0065 U+0301
+    assert nfc != nfd  # guard the test's own premise
+    assert canonical_json_dumps({"k": nfc}) != canonical_json_dumps({"k": nfd})
