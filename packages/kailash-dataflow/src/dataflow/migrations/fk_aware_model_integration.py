@@ -40,26 +40,17 @@ import asyncio
 import inspect
 import logging
 import re
-import types
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    Union,
-    get_args,
-    get_origin,
-)
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, get_args
 
 # DataFlow core imports
 from dataflow.core.engine import DataFlow
 from dataflow.core.model_registry import ModelRegistry
+from dataflow.core.type_introspection import (  # issue #772: shared union detection
+    union_non_none_args,
+)
 
 # from dataflow.core.schema_change import SchemaChange, ChangeType
 from dataflow.migrations.migration_engine import MigrationEngine
@@ -414,11 +405,10 @@ class FKAwareModelTracker:
 
     def _is_nullable_field(self, field_type: Type) -> bool:
         """Check if field is nullable based on type annotation."""
-        # Check for Optional[Type] or Union[Type, None]. issue #1228: PEP 604
-        # ``T | None`` has origin types.UnionType and NO ``__origin__`` attribute,
-        # so route through get_origin/get_args to recognize both spellings.
-        origin = get_origin(field_type)
-        if origin is Union or origin is types.UnionType:
+        # Two-spelling union detection (typing.Union AND PEP 604 ``T | None``)
+        # routes through the shared primitive (issue #772 / #1228); the policy
+        # here is distinct -- nullable iff the union args contain NoneType.
+        if union_non_none_args(field_type) is not None:
             return type(None) in get_args(field_type)
 
         # Default to nullable
