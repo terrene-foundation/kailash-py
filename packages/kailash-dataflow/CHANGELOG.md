@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.11.3] — 2026-06-06 — Type-introspection consolidation (#772)
+
+### Changed
+
+- **Two-spelling Optional/Union detection consolidated into a single primitive (#772).** Detection of `Optional[T]` / `Union[..., None]` (the `typing` spelling) AND PEP 604 `T | None` (the `types.UnionType` spelling) was previously re-inlined at 10 separate DataFlow core call-sites — so the #1228 PEP-604 fix had to patch each independently, the maintenance tax #772 predicted. All 10 sites (`type_processor`, `nodes`, `engine`, `schema`, `model_validator`, `fk_aware`, `model_registry`) now route through the single primitive `dataflow.core.type_introspection.union_non_none_args()`; each caller keeps its own post-detection policy. **Behavior-preserving** — verified byte-for-byte against the pre-#772 per-site detection across a full type battery (`Optional`/`Union`/PEP 604/multi-arg/container/all-None edge); SQL-type inference, PK-rejects-Optional, and field-nullability classification are unchanged.
+
+### Fixed
+
+- **`Annotated[T, ...]` now normalizes to `T` at the raw field-dict annotation sites (#772).** A new `strip_annotated()` primitive unwraps `Annotated[T, ...] → T` at `type_processor` + `nodes`, correcting a latent case where an `Annotated` alias could leak through as a "type" instead of resolving to its underlying type. Sites reading annotations via `get_type_hints(include_extras=False)` already stripped `Annotated`, so no double-strip; no metadata consumed anywhere is discarded (DataFlow classification is `@classify`-decorator-keyed by field name, decoupled from annotations).
+
 ## [2.11.2] — 2026-06-04 — SQLite datetime DeprecationWarning fix (#1250)
 
 ### Fixed
