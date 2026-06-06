@@ -11,7 +11,6 @@ import os
 import re
 import threading
 import time
-import types
 import warnings
 from copy import deepcopy
 from datetime import datetime
@@ -91,6 +90,9 @@ from .events import DataFlowEventMixin
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
+from .type_introspection import (  # issue #772: shared union detection
+    union_non_none_args,
+)
 
 # Source name validation (used in Redis keys, cache keys, endpoint paths)
 _SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
@@ -5396,11 +5398,11 @@ class DataFlow(DataFlowEventMixin):
         """
         from typing import get_args, get_origin
 
-        # Handle Optional types (Union[type, None]). issue #1228: PEP 604 ``T | None``
-        # has origin types.UnionType and NO ``__origin__`` attribute, so route through
-        # get_origin/get_args to recognize both spellings.
-        _origin = get_origin(python_type)
-        if _origin is Union or _origin is types.UnionType:
+        # Handle Optional types (Union[type, None]). Two-spelling union detection
+        # (typing.Union AND PEP 604 ``T | None``) routes through the shared
+        # primitive (issue #772 / #1228); this caller keeps its own extraction
+        # policy -- only a 2-arg Optional[SomeType] collapses to the SQL type.
+        if union_non_none_args(python_type) is not None:
             args = get_args(python_type)
             if len(args) == 2 and type(None) in args:
                 # This is Optional[SomeType], extract the actual type

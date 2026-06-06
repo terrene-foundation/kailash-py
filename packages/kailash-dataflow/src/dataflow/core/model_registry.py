@@ -11,12 +11,13 @@ import hashlib
 import json
 import logging
 import threading
-import types
 import uuid
 import warnings
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Tuple, get_args
+from typing import Any, Dict, List, Optional, Tuple
+
+from .type_introspection import union_non_none_args
 
 try:
     from kailash.nodes.data.sql import SQLDatabaseNode
@@ -1212,40 +1213,34 @@ class ModelRegistry:
         This prevents 'Unknown field type <class str>' warnings by converting
         Python type objects to their simple names.
         """
+        # Optional/Union in EITHER spelling -- typing ``Union[X, None]`` /
+        # ``Optional[X]`` AND PEP 604 ``X | Y`` -- normalizes identically: a
+        # 2-arg ``X | None`` names "Optional", every other union names "Union".
+        # Detection routes through the single ``union_non_none_args`` primitive
+        # (issue #772 consolidation) so a new union spelling is handled in ONE
+        # place, not re-inlined here. This also closes the #1228 / F34 spelling
+        # divergence structurally -- both spellings traverse the same branch.
+        non_none = union_non_none_args(field_type)
+        if non_none is not None:
+            return "Optional" if len(non_none) == 1 else "Union"
+
         if isinstance(field_type, type):
             # Handle built-in types
             if field_type.__module__ == "builtins":
                 return field_type.__name__
-            else:
-                # For non-builtin types, use module.name format
-                return f"{field_type.__module__}.{field_type.__name__}"
-        elif hasattr(field_type, "__name__"):
+            # For non-builtin types, use module.name format
+            return f"{field_type.__module__}.{field_type.__name__}"
+        if hasattr(field_type, "__name__"):
             # Handle other objects with __name__ attribute
             return field_type.__name__
-        elif hasattr(field_type, "__origin__"):
-            # Handle typing generics like List[str], Optional[int], etc.
+        if hasattr(field_type, "__origin__"):
+            # Handle non-union typing generics like List[str], Dict[K, V], etc.
             origin = field_type.__origin__
             if origin.__module__ == "builtins":
                 return origin.__name__
-            else:
-                return f"{origin.__module__}.{origin.__name__}"
-        elif isinstance(field_type, types.UnionType):
-            # PEP 604 ``X | Y`` unions (e.g. ``int | None``) have no ``__name__``
-            # / ``__origin__``, so without this branch they fall to the
-            # ``str(field_type)`` fallback ("int | None") — diverging from the
-            # ``typing.Optional[int]`` / ``Union[int, None]`` spelling, which
-            # normalizes to "Optional" (or "Union") via the ``__name__`` branch
-            # above. Mirror that naming EXACTLY so a field declared ``int | None``
-            # normalizes identically to ``Optional[int]`` and a spelling switch
-            # is not seen as a schema change (issue #1228 / F34). typing names a
-            # 2-arg ``Union[X, None]`` "Optional" and every other union "Union".
-            args = get_args(field_type)
-            if len(args) == 2 and type(None) in args:
-                return "Optional"
-            return "Union"
-        else:
-            # Fallback to string representation
-            return str(field_type)
+            return f"{origin.__module__}.{origin.__name__}"
+        # Fallback to string representation
+        return str(field_type)
 
     def _normalize_stored_field_type(self, field_type_str: str) -> str:
         """Normalize stored field types from old format to new format.

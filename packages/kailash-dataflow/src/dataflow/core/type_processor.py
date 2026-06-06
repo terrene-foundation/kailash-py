@@ -5,11 +5,12 @@ forced type conversions. Validates field values against declared types.
 """
 
 import logging
-import types
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import Any, Dict, Optional, get_origin
 from uuid import UUID
+
+from .type_introspection import strip_annotated, union_non_none_args
 
 logger = logging.getLogger("dataflow.type_processor")
 
@@ -69,21 +70,23 @@ class TypeAwareFieldProcessor:
         if field_type is None:
             return None
 
-        origin = get_origin(field_type)
+        # Strip a single Annotated[T, ...] layer first so Annotated[int, "x"]
+        # resolves to int (issue #772 consolidation: Annotated handled in one
+        # place via strip_annotated, not falling through to the str fallback).
+        field_type = strip_annotated(field_type)
 
         # ``Optional[T]`` / ``Union[T, None]`` (legacy typing form) and PEP 604
-        # ``T | None`` (the ``X | Y`` syntax) both reach this branch. The
-        # legacy form returns ``Union`` from ``get_origin``; PEP 604 returns
-        # ``types.UnionType``. Match either.
-        if origin is Union or origin is types.UnionType:
-            args = get_args(field_type)
-            non_none_types = [t for t in args if t is not type(None)]
+        # ``T | None`` both reach this branch via the shared two-spelling
+        # detection in union_non_none_args (issue #772 / #1207 / #1228).
+        non_none_types = union_non_none_args(field_type)
+        if non_none_types is not None:
             if len(non_none_types) == 1:
                 # Recurse so Optional[list[str]] resolves through list[str] to list.
                 return self._resolve_type(non_none_types[0])
-            # Multi-type union, return as-is
+            # Multi-type union, return as-is.
             return field_type
 
+        origin = get_origin(field_type)
         if origin is not None:
             # Parameterized builtin generic — strip parameters so isinstance() can
             # use it. list[str] -> list, dict[str, Any] -> dict, tuple[int, ...] -> tuple.
@@ -123,9 +126,9 @@ class TypeAwareFieldProcessor:
             return value
 
         # Handle Union types that weren't simplified (multiple non-None types).
-        # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
-        _origin = get_origin(expected_type)
-        if _origin is Union or _origin is types.UnionType:
+        # Two-spelling detection (typing.Union AND PEP 604 ``T | None``) routes
+        # through the shared primitive (issue #772 / #1228).
+        if union_non_none_args(expected_type) is not None:
             # For complex Union types, pass through
             return value
 

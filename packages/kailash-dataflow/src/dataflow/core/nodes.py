@@ -4,8 +4,9 @@ DataFlow Node Generation
 Dynamic node generation for database operations.
 """
 
-import types
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type
+
+from .type_introspection import strip_annotated, union_non_none_args
 
 try:
     from kailash.nodes.base import Node, NodeParameter, NodeRegistry
@@ -152,19 +153,16 @@ def _coerce_record_id(model_fields: Dict[str, Any], id_value: Any) -> Any:
 
 def _normalize_id_type(type_annotation: Any) -> Any:
     """Normalize a type annotation for ID coercion, stripping Optional/Union wrappers."""
-    import typing
+    # Strip a single Annotated[T, ...] layer first (issue #772 consolidation).
+    type_annotation = strip_annotated(type_annotation)
 
-    # Match BOTH union spellings (issue #1228, sibling of #1207): typing.Union /
-    # Optional[T] (get_origin -> typing.Union) AND PEP 604 ``T | None`` (get_origin
-    # -> types.UnionType; a UnionType has no ``__origin__`` attribute, so the prior
-    # getattr-based check silently missed it).
-    origin = typing.get_origin(type_annotation)
-    if origin is Union or origin is types.UnionType:
-        args = typing.get_args(type_annotation)
-        non_none_types = [arg for arg in args if arg is not type(None)]
+    # Two-spelling union detection (typing.Union / Optional[T] AND PEP 604
+    # ``T | None``) routes through the shared primitive (issue #772 / #1207 / #1228).
+    non_none_types = union_non_none_args(type_annotation)
+    if non_none_types is not None:
         if non_none_types:
             return _normalize_id_type(non_none_types[0])
-        return str  # fallback
+        return str  # all-None union edge -> fallback
 
     if isinstance(type_annotation, type):
         return type_annotation
@@ -187,16 +185,14 @@ def _unwrap_optional_type(type_annotation: Any) -> Any:
     Multi-arg unions (``Union[list, dict]``) and non-union annotations are
     returned unchanged so the downstream ``in (dict, list)`` membership check
     behaves identically to a bare annotation.
-    """
-    import typing
 
-    origin = typing.get_origin(type_annotation)
-    if origin is typing.Union or origin is types.UnionType:
-        non_none = [
-            arg for arg in typing.get_args(type_annotation) if arg is not type(None)
-        ]
-        if len(non_none) == 1:
-            return non_none[0]
+    Two-spelling detection routes through the shared primitive (issue #772 /
+    #1207); this caller keeps its collapse-only policy (single-non-None-arg
+    unions collapse; multi-arg and all-None unions return unchanged).
+    """
+    non_none = union_non_none_args(type_annotation)
+    if non_none is not None and len(non_none) == 1:
+        return non_none[0]
     return type_annotation
 
 
@@ -372,17 +368,22 @@ class NodeGenerator:
             A simple Python type (str, int, bool, list, dict, etc.)
             For Optional[T], returns the normalized inner type T
         """
-        # PEP 604 ``T | None`` (issue #1228, sibling of #1207): a types.UnionType
-        # has NO ``__origin__`` attribute, so the hasattr-gated block below skips it
-        # entirely. Normalize it through the same single-non-None-arg collapse the
-        # typing.Union branch applies, BEFORE the __origin__ check.
-        from typing import get_args as _get_args
-        from typing import get_origin as _get_origin
+        # Strip a single Annotated[T, ...] layer first (issue #772 consolidation):
+        # Annotated annotations now resolve to their wrapped type instead of
+        # falling through to the str fallback at the end of this method.
+        type_annotation = strip_annotated(type_annotation)
 
-        if _get_origin(type_annotation) is types.UnionType:
-            non_none_types = [
-                arg for arg in _get_args(type_annotation) if arg is not type(None)
-            ]
+        # Two-spelling union detection routes through the shared primitive
+        # (issue #772 / #1207 / #1228): typing.Union / Optional[T] AND PEP 604
+        # ``T | None``. This subsumes BOTH the prior standalone types.UnionType
+        # block AND the ``origin is Union`` branch inside the __origin__ check.
+        # Every non-empty union collapses to its first non-None arg (Optional,
+        # single-arg union, and multi-arg union all normalize to the first
+        # non-None member); an all-None union falls back to str. The Optional
+        # wrapper itself is detected SEPARATELY for required=False in parameter
+        # generation (see get_parameters); this method only returns the inner type.
+        non_none_types = union_non_none_args(type_annotation)
+        if non_none_types is not None:
             if non_none_types:
                 return self._normalize_type_annotation(non_none_types[0])
             return str
@@ -390,29 +391,9 @@ class NodeGenerator:
         # Handle typing constructs
         if hasattr(type_annotation, "__origin__"):
             origin = type_annotation.__origin__
-            args = getattr(type_annotation, "__args__", ())
-
-            # Handle Optional[T] -> Union[T, None]
-            if origin is Union:
-                # Check if this is Optional[T] (Union[T, None])
-                non_none_types = [arg for arg in args if arg is not type(None)]
-
-                if len(non_none_types) == 1 and type(None) in args:
-                    # This is Optional[T] - normalize the inner type
-                    # The Optional wrapper is detected separately in parameter generation
-                    return self._normalize_type_annotation(non_none_types[0])
-                elif len(non_none_types) == 1:
-                    # Union with single type (not Optional) - normalize it
-                    return self._normalize_type_annotation(non_none_types[0])
-                elif len(non_none_types) == 0:
-                    # Union[None] edge case - treat as Any
-                    return str
-                else:
-                    # Complex Union (not Optional) - keep first non-None type
-                    return self._normalize_type_annotation(non_none_types[0])
 
             # Handle List[T], Dict[K, V], etc. - return base container type
-            elif origin in (list, List):
+            if origin in (list, List):
                 return list
             elif origin in (dict, Dict):
                 return dict
@@ -1150,18 +1131,19 @@ class NodeGenerator:
                             # BUG #514 FIX: Store Optional info for validation
                             # We keep required=True to prevent Core SDK from dropping the parameter,
                             # but we'll handle None values specially in validate_inputs()
-                            from typing import get_args, get_origin
+                            from typing import get_args
 
                             is_optional = False
                             field_type = field_info["type"]
 
-                            # issue #1228: match typing.Union AND PEP 604 ``T | None``
-                            # (origin types.UnionType) so PEP 604 nullable fields are
-                            # detected as optional.
-                            _origin = get_origin(field_type)
-                            if _origin is Union or _origin is types.UnionType:
-                                args = get_args(field_type)
-                                if type(None) in args:
+                            # Two-spelling union detection routes through the shared
+                            # primitive (issue #772 / #1228: typing.Union AND PEP 604
+                            # ``T | None``). This is the SEPARATE Optional-detection
+                            # contract (required=False from Optional[T]); it keeps its
+                            # own policy -- a union is optional iff its args contained
+                            # NoneType -- distinct from the type-normalization sites.
+                            if union_non_none_args(field_type) is not None:
+                                if type(None) in get_args(field_type):
                                     is_optional = True
 
                             # ADR-002: Changed from WARNING to DEBUG - type normalization tracing

@@ -15,18 +15,11 @@ Integration: Called during @db.model() decorator when strict_mode enabled
 """
 
 import datetime
-import types
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Union,
-    get_args,
-    get_origin,
-    get_type_hints,
-)
+from typing import Any, Dict, List, Optional, get_args, get_origin, get_type_hints
 
+from dataflow.core.type_introspection import (  # issue #772: shared union detection
+    union_non_none_args,
+)
 from dataflow.validation.strict_mode import StrictModeConfig
 from dataflow.validation.validators import BaseValidator, ValidationError
 
@@ -158,10 +151,11 @@ def validate_primary_key(model_cls: type) -> ValidationResult:
     # Extract id field type
     id_type = type_hints["id"]
 
-    # Rule 4: Check if Optional/Union (id cannot be optional)
-    # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
-    origin = get_origin(id_type)
-    if origin is Union or origin is types.UnionType:  # Optional is Union[T, None]
+    # Rule 4: Check if Optional/Union (id cannot be optional). Two-spelling
+    # union detection (typing.Union AND PEP 604 ``T | None``) routes through the
+    # shared primitive (issue #772 / #1228); the policy here is distinct -- an
+    # Optional id is rejected.
+    if union_non_none_args(id_type) is not None:  # Optional is Union[T, None]
         args = get_args(id_type)
         # Check if this is Optional (Union with None)
         if type(None) in args:
@@ -468,10 +462,11 @@ def validate_field_types(model_cls: type) -> List[ValidationResult]:
         if field_name in ("created_at", "updated_at"):
             continue
 
-        # Unwrap Optional/Union to get base type
-        # issue #1228: match PEP 604 ``T | None`` (origin types.UnionType) too.
-        origin = get_origin(field_type)
-        if origin is Union or origin is types.UnionType:  # Optional is Union[T, None]
+        # Unwrap Optional/Union to get base type. Two-spelling union detection
+        # (typing.Union AND PEP 604 ``T | None``) routes through the shared
+        # primitive (issue #772 / #1228); this caller keeps its own policy --
+        # the first non-None arg is the base type.
+        if union_non_none_args(field_type) is not None:  # Optional is Union[T, None]
             args = get_args(field_type)
             # Find non-None type
             base_type = None

@@ -7,7 +7,6 @@ This module was migrated from the old core/schema.py to maintain test compatibil
 
 import inspect
 import logging
-import types
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -24,6 +23,10 @@ from typing import (
     get_type_hints,
 )
 from uuid import UUID
+
+from .type_introspection import (  # issue #772: shared union detection
+    union_non_none_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -318,9 +321,11 @@ class SchemaParser:
         nullable = False
         actual_type = field_type
 
-        # issue #1228: match typing.Union AND PEP 604 ``T | None`` (a
-        # ``types.UnionType`` origin) so PEP 604 nullable fields parse as nullable.
-        if origin is Union or origin is types.UnionType:
+        # Two-spelling union detection (typing.Union AND PEP 604 ``T | None``)
+        # routes through the shared primitive (issue #772 / #1228); this caller
+        # keeps its own policy -- Optional[X] sets nullable + unwraps, other
+        # unions become JSON (dict).
+        if union_non_none_args(field_type) is not None:
             # Check if it's Optional (Union[X, None])
             if type(None) in args:
                 nullable = True
