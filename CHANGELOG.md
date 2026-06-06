@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.3] - 2026-06-06
+
+### Documentation
+
+- **Canonical-encoder divergence contract documented + byte-vectors pinned (#1258).** The two canonical-JSON encoders carry **intentionally opposite** `ensure_ascii` settings: `kailash.trust._json.canonical_json_dumps` (the `kailash.delegate.*` cross-SDK encoder) emits raw UTF-8 (`ensure_ascii=False`) to match Rust `serde_json`'s default, while the trust-plane signing family (`kailash.trust.signing.crypto.serialize_for_signing` + the selective-disclosure / PACT-audit signers) emits ASCII-escaped `\uXXXX` (`ensure_ascii=True`) to match the pinned `trust-plane-canonical.json` fixture (#959). Both encoders' docstrings now state the full canonical contract (`ensure_ascii`, `sort_keys`, separators, no-Unicode-normalization) and explain why unifying them is a breaking cross-SDK signing-format migration (tracked in #1258, decision: do not unify). Cross-SDK byte-vectors pinned at `tests/test-vectors/delegate-canonical.json` + `tests/test-vectors/trust-plane-canonical.json`. **Documentation + test-vector only — zero runtime/API/behavior change** (both encoders behave exactly as in 2.29.2).
+
 ## [2.29.2] - 2026-06-04
 
 ### Security
