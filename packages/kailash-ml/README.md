@@ -4,7 +4,7 @@ Machine learning lifecycle for the Kailash ecosystem. Train models, store featur
 
 Part of the [Kailash Python SDK](https://github.com/terrene-foundation/kailash-py) by the Terrene Foundation.
 
-**Version**: 0.9.0 | **License**: Apache-2.0 | **Python**: 3.11+
+**Version**: 2.0.0 | **License**: Apache-2.0 | **Python**: 3.11+
 
 ---
 
@@ -76,7 +76,7 @@ Each line maps to a single deliberate effect:
 - **`async with km.track("demo") as run:`** — opens an ambient `ExperimentRun` context named `"demo"`. Every `km.train(...)` / `km.register(...)` / checkpoint / metric emitted inside the block is auto-attached to this run (`specs/ml-tracking.md §2.4`). The run finalises (status, end time, artifact manifest) on context exit.
 - **`result = await km.train(df, target="y")`** — picks the best model family for the target's dtype and row count, trains it on the chosen backend (CPU / CUDA / MPS / ROCm / XPU / TPU auto-detected per `specs/ml-backends.md`), and returns a `TrainingResult` with populated `metrics` and `device: DeviceReport` (`specs/ml-engines-v2.md §4.2 MUST 1`).
 - **`registered = await km.register(result, name="demo")`** — creates a new `ModelVersion` under the logical name `"demo"` (auto-bumped version number), serialises the trained artefact as ONNX by default (`specs/ml-engines-v2.md §2.1 MUST 9`), and returns a `RegisterResult` with `artifact_uris` pointing at the framework-agnostic ONNX + native format pair.
-- **`server = await km.serve("demo@production")`** — resolves the `"demo"` model's `production` alias to its current version, spins up a local in-process inference server exposing REST (default) and MCP channels, and returns a `ServeHandle` with `.uris["rest"]`, `.stop()`, and `.status` (`specs/ml-serving.md §2.2`).
+- **`server = await km.serve("demo@production")`** — resolves the `"demo"` model's `production` alias to its current version, spins up a local in-process inference server exposing REST (default) and MCP channels, and returns a `ServeResult` with `.uris["rest"]`, `.channels`, `.model_uri`, and `.model_version` (`specs/ml-serving.md §2.2`). (The low-level `InferenceServer.start()` returns a separate `ServeHandle` carrying `.stop()` / `.status`.)
 - **`# $ kailash-ml-dashboard  (separate shell)`** — invites the reader to launch the optional ML dashboard CLI from a second shell. The dashboard is a non-blocking visualisation surface for runs, models, and serving handles (`specs/ml-dashboard.md`). The comment is retained verbatim because the Quick Start's 5-to-10-line budget (`specs/ml-engines-v2.md §16.2 MUST 1`) accommodates exactly this one-line operational pointer, and newbies otherwise never discover the dashboard exists.
 
 For the full engine surface, multi-tenancy, checkpoint / resume, RL, AutoML, drift monitoring, and production deployment patterns, see the full spec set under `specs/ml-*.md`. The canonical Quick Start is intentionally narrow — it demonstrates the zero-ceremony promise of the 1.0.0 Engine and nothing beyond that.
@@ -162,7 +162,7 @@ from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactSt
 
 Manages the complete model lifecycle through four stages: **staging** (newly trained), **shadow** (running alongside production), **production** (serving traffic), and **archived** (retired). Stores artifacts on the local filesystem with optional ONNX export. Reads and writes MLflow MLmodel format v1 for interoperability.
 
-Key operations: `register_model()`, `promote()`, `get_model()`, `list_models()`, `get_production_model()`.
+Key operations: `register_model()`, `promote_model()`, `get_model()` (pass `stage="production"` for the live version), `get_model_versions()`, `list_models()`, `load_artifact()`.
 
 #### TrainingPipeline
 
@@ -192,7 +192,7 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 
 Detects distribution shifts in production data using PSI (Population Stability Index) and the Kolmogorov-Smirnov test. Stores reference distributions and drift reports in the database. Reports classify drift as `none`, `moderate`, or `severe` per feature and overall. Optionally augments reports with agent-powered interpretation (double opt-in).
 
-Key operations: `set_reference_data()`, `check_drift()`, `get_drift_history()`, `check_performance_degradation()`.
+Key operations: `set_reference_data()`, `check_drift()`, `get_drift_history()`, `check_performance()`, `schedule_monitoring()`.
 
 #### ExperimentTracker
 
@@ -533,7 +533,7 @@ env_reg.register("CartPole-v1")
 
 # Configure policy
 policy_reg = PolicyRegistry()
-policy_config = policy_reg.get("PPO")
+policy_config = policy_reg.get_spec("PPO")
 
 # Train
 trainer = RLTrainer(env_registry=env_reg, policy_registry=policy_reg)
@@ -545,7 +545,7 @@ config = RLTrainingConfig(
     eval_freq=10_000,
     seed=42,
 )
-result = await trainer.train(env_id="CartPole-v1", config=config)
+result = await trainer.train("CartPole-v1", "ppo-policy", config=config)
 print(f"Mean reward: {result.mean_reward:.1f}")
 ```
 
@@ -561,17 +561,19 @@ from kailash_ml.bridge.onnx_bridge import OnnxBridge
 bridge = OnnxBridge()
 
 # Check if a model can be exported
-compat = bridge.check_compatibility(trained_model)
-print(f"ONNX compatible: {compat.is_compatible}")
+compat = bridge.check_compatibility(trained_model, framework="sklearn")
+print(f"ONNX compatible: {compat.compatible}")
 
 # Export
-if compat.is_compatible:
-    export_result = bridge.export(trained_model, output_path="model.onnx")
+if compat.compatible:
+    export_result = bridge.export(
+        trained_model, framework="sklearn", n_features=10, output_path="model.onnx"
+    )
     print(f"Export success: {export_result.success}")
 
-    # Validate the exported artifact
-    validation = bridge.validate("model.onnx", sample_input)
-    print(f"Max deviation: {validation.max_deviation:.6f}")
+    # Validate the exported artifact against the original
+    validation = bridge.validate(trained_model, export_result.onnx_path, sample_input)
+    print(f"Max diff: {validation.max_diff:.6f}")
 ```
 
 ONNX export failure is non-fatal. The model falls back to native Python inference. Check `model.onnx_status` to determine export status.
@@ -614,24 +616,27 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
 
-monitor = DriftMonitor(conn)
-await monitor.initialize()
-
-# Set a reference distribution (e.g., from your training data)
-await monitor.set_reference_data("churn_model_v1", reference_df)
-
-# Check drift against new production data
-report = await monitor.check_drift(
-    "churn_model_v1",
-    current_df,
-    spec=DriftSpec(
-        psi_threshold=0.2,         # PSI > 0.2 = severe drift
-        ks_alpha=0.05,             # KS test significance level
-    ),
+# Thresholds are set at construction; tenant_id is required.
+monitor = DriftMonitor(
+    conn,
+    tenant_id="default",
+    psi_threshold=0.2,  # PSI > 0.2 = severe drift
+    ks_threshold=0.05,  # KS test significance level
 )
 
-print(f"Overall drift: {report.overall_drift}")     # "none", "moderate", "severe"
-print(f"Features drifted: {report.drifted_features}")
+# Set a reference distribution (e.g., from your training data)
+await monitor.set_reference_data(
+    "churn_model_v1",
+    reference_df,
+    feature_columns=["age", "tenure_months", "monthly_spend"],
+)
+
+# Check drift against new production data
+report = await monitor.check_drift("churn_model_v1", current_df)
+
+print(f"Drift severity: {report.overall_severity}")  # "none", "moderate", "severe"
+drifted = [f.feature_name for f in report.feature_results if f.drift_detected]
+print(f"Features drifted: {drifted}")
 
 for feature_result in report.feature_results:
     print(f"  {feature_result.feature_name}: PSI={feature_result.psi:.4f}, "
@@ -644,7 +649,7 @@ for feature_result in report.feature_results:
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml import ExperimentTracker
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
 
 # Option 1: Standalone (factory -- manages its own connection)
 async with await ExperimentTracker.create("sqlite:///ml.db") as tracker:
@@ -729,27 +734,29 @@ from kailash_ml.engines.ensemble import EnsembleEngine
 
 ensemble = EnsembleEngine()
 
+# Engines are polars-native: pass a DataFrame + target column, not sklearn X/y.
+
 # Blend: weighted average of predictions from multiple models
 blend_result = ensemble.blend(
     models=[model_a, model_b, model_c],
-    X_val=X_val,
-    y_val=y_val,
+    data=train_df,
+    target="churned",
     weights=[0.5, 0.3, 0.2],
 )
 
 # Stack: train a meta-learner on base model outputs
 stack_result = ensemble.stack(
     models=[model_a, model_b, model_c],
-    X_train=X_train,
-    y_train=y_train,
-    meta_learner_class="sklearn.linear_model.LogisticRegression",
+    data=train_df,
+    target="churned",
+    meta_model_class="sklearn.linear_model.LogisticRegression",
 )
 
-# Bag: bootstrap aggregation
+# Bag: bootstrap aggregation (single base model + n_estimators)
 bag_result = ensemble.bag(
-    model_class="sklearn.tree.DecisionTreeClassifier",
-    X_train=X_train,
-    y_train=y_train,
+    model=base_model,
+    data=train_df,
+    target="churned",
     n_estimators=10,
 )
 ```
@@ -779,20 +786,22 @@ await conn.initialize()
 
 ### Engine Initialization
 
-Every engine that persists state requires initialization to create its database tables.
+Most engines create their tables on construction (`auto_migrate`) or lazily on first
+use; the legacy `FeatureStore` engine is the one that exposes an explicit
+`initialize()`.
 
 ```python
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write engine
+from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
+from kailash_ml import DriftMonitor
+
 feature_store = FeatureStore(conn)
-await feature_store.initialize()
+await feature_store.initialize()  # legacy engine: explicit table creation
 
-registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-await registry.initialize()
-
-tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")
-# ExperimentTracker auto-initializes on first use (no initialize() needed)
-
-monitor = DriftMonitor(conn)
-await monitor.initialize()
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))  # ready on construct
+tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")  # lazy init
+monitor = DriftMonitor(conn, tenant_id="default")  # ready on construct; tenant required
 ```
 
 ### Model Class Allowlist

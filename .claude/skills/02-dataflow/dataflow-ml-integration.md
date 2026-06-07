@@ -42,31 +42,33 @@ await conn.initialize()
 
 # 2. Initialize FeatureStore with shared connection
 store = FeatureStore(conn, table_prefix="kml_feat_")
+await store.initialize()
 
-# 3. Register a feature group
+# 3. Register a feature schema (creates the backing table)
 schema = FeatureSchema(
     name="user_features",
-    entity_key="user_id",
+    entity_id_column="user_id",
     features=[
         FeatureField(name="login_count", dtype="int"),
         FeatureField(name="avg_session_min", dtype="float"),
     ],
 )
-await store.register_group(schema)
+await store.register_features(schema)
 
-# 4. Ingest features (polars DataFrame)
+# 4. Materialise features (polars DataFrame): compute validates + projects, store persists
 import polars as pl
 df = pl.DataFrame({
     "user_id": ["u1", "u2"],
     "login_count": [42, 7],
     "avg_session_min": [12.5, 3.2],
 })
-await store.ingest(schema.name, df)
+await store.store(store.compute(df, schema), schema)
 
 # 5. Point-in-time query
 result = await store.get_features(
-    schema.name,
-    entity_ids=["u1", "u2"],
+    ["u1", "u2"],                        # entity_ids
+    ["login_count", "avg_session_min"],  # feature_names
+    schema=schema,
     as_of=datetime(2026, 3, 30, tzinfo=UTC),  # temporal correctness
 )
 # Returns polars DataFrame

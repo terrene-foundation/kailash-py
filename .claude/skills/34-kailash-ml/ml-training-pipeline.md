@@ -1,13 +1,15 @@
 # ML Training Pipeline
 
-TrainingPipeline orchestrates schema-driven model training with FeatureStore integration, DataFlow storage backend, hyperparameter search, and experiment tracking.
+`TrainingPipeline` orchestrates schema-driven model training with FeatureStore +
+ModelRegistry, polars-native data, hyperparameter search, and experiment tracking.
 
 ## Basic Training
 
 ```python
-from kailash_ml import TrainingPipeline, ModelRegistry, ModelSpec, EvalSpec
-from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
-from kailash_ml.engines import LocalFileArtifactStore
+from kailash_ml import TrainingPipeline
+from kailash_ml.engines.training_pipeline import ModelSpec, EvalSpec
+from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface
 from kailash_ml.types import FeatureSchema, FeatureField
 from kailash.db.connection import ConnectionManager
 
@@ -17,15 +19,16 @@ await conn.initialize()
 fs = FeatureStore(conn, table_prefix="kml_feat_")
 await fs.initialize()
 
-registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-await registry.initialize()
+# ModelRegistry is ready on construction (no initialize()).
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))
 
-pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+pipeline = TrainingPipeline(feature_store=fs, registry=registry)
 ```
 
 ## Schema-Driven Training
 
-The pipeline uses FeatureSchema to determine inputs, target, and data types. No manual column selection.
+`FeatureSchema` declares inputs, entity key, and timestamp. The training target is
+an ordinary feature column named in the data — the schema has no `target` field.
 
 ```python
 schema = FeatureSchema(
@@ -34,193 +37,126 @@ schema = FeatureSchema(
         FeatureField(name="age", dtype="float"),
         FeatureField(name="tenure_months", dtype="float"),
         FeatureField(name="monthly_spend", dtype="float"),
+        FeatureField(name="churned", dtype="int"),  # the target column
     ],
-    target=FeatureField(name="churned", dtype="int"),
+    entity_id_column="user_id",
 )
 
+# train(data, schema, model_spec, eval_spec, experiment_name)
 result = await pipeline.train(
-    schema=schema,
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1", "precision", "recall"]),
+    training_df,
+    schema,
+    ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
+    EvalSpec(metrics=["accuracy", "f1", "precision", "recall"]),
+    experiment_name="user_churn",
 )
 
-# result.model_id      — registered in ModelRegistry (staging)
-# result.metrics        — {"accuracy": 0.92, "f1": 0.87, ...}
-# result.training_time  — duration in seconds
-# result.experiment_id  — linked to ExperimentTracker
+# result.metrics — {"accuracy": 0.92, "f1": 0.87, ...}
+# result.device  — resolved backend/device report
 ```
 
 ## Model Spec Options
 
+`ModelSpec(model_class, hyperparameters={}, framework="sklearn")` — pass tuned
+values via `hyperparameters=`.
+
 ```python
-# sklearn models
 ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier")
 ModelSpec(model_class="sklearn.linear_model.LogisticRegression")
-ModelSpec(model_class="sklearn.ensemble.GradientBoostingClassifier")
-
-# LightGBM
 ModelSpec(model_class="lightgbm.LGBMClassifier")
-
-# XGBoost (requires kailash-ml[xgb])
 ModelSpec(model_class="xgboost.XGBClassifier")
-
-# CatBoost (requires kailash-ml[catboost])
 ModelSpec(model_class="catboost.CatBoostClassifier")
 
 # With hyperparameters
 ModelSpec(
     model_class="sklearn.ensemble.RandomForestClassifier",
-    params={"n_estimators": 200, "max_depth": 10, "min_samples_leaf": 5},
+    hyperparameters={"n_estimators": 200, "max_depth": 10, "min_samples_leaf": 5},
 )
 ```
 
-**Model class allowlist**: Only `sklearn.`, `lightgbm.`, `xgboost.`, `catboost.`, `kailash_ml.`, `torch.`, `lightning.` prefixes are permitted. This prevents arbitrary code execution via model class strings.
-
-## FeatureStore Integration
-
-TrainingPipeline pulls data directly from FeatureStore, preserving point-in-time correctness.
-
-```python
-# Train from FeatureStore (recommended)
-result = await pipeline.train(
-    schema=schema,
-    feature_set="user_features",    # Pull from FeatureStore
-    as_of="2025-01-01T00:00:00",   # Point-in-time correctness
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
-)
-
-# Train from DataFrame (when data is already prepared)
-result = await pipeline.train(
-    schema=schema,
-    data=training_df,               # polars DataFrame
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
-)
-```
+**Model class allowlist**: Only `sklearn.`, `lightgbm.`, `xgboost.`, `catboost.`,
+`kailash_ml.`, `torch.`, `lightning.` prefixes are permitted — preventing arbitrary
+code execution via model class strings.
 
 ## Hyperparameter Search
 
-Four search strategies, all integrated with ExperimentTracker.
-
-### Grid Search
-
-```python
-from kailash_ml.engines.hyperparameter_search import GridSearch
-
-search = GridSearch(
-    param_grid={
-        "n_estimators": [100, 200, 500],
-        "max_depth": [5, 10, 20],
-        "min_samples_leaf": [1, 5, 10],
-    },
-)
-
-result = await pipeline.train(
-    schema=schema,
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1"], optimize="f1"),
-    search=search,
-)
-# Trains 27 combinations, registers best model
-```
-
-### Random Search
+One engine, `HyperparameterSearch`, runs every strategy — selected via
+`SearchConfig(strategy=...)`. The space is a `SearchSpace` of `ParamDistribution`s.
 
 ```python
-from kailash_ml.engines.hyperparameter_search import RandomSearch
-
-search = RandomSearch(
-    param_distributions={
-        "n_estimators": (100, 1000),       # Uniform int range
-        "max_depth": (3, 30),
-        "learning_rate": (0.001, 0.3),     # Uniform float range
-    },
-    n_trials=50,
+from kailash_ml.engines.hyperparameter_search import (
+    HyperparameterSearch,
+    SearchConfig,
+    SearchSpace,
+    ParamDistribution,
 )
+
+space = SearchSpace(params=[
+    ParamDistribution(name="n_estimators", type="int_uniform", low=100, high=1000),
+    ParamDistribution(name="max_depth", type="int_uniform", low=3, high=30),
+    ParamDistribution(name="learning_rate", type="log_uniform", low=0.001, high=0.3),
+])
+
+search = HyperparameterSearch(pipeline)
+
+# strategy selects grid / random / bayesian / successive-halving behaviour.
+result = await search.search(
+    training_df,
+    schema,
+    ModelSpec(model_class="sklearn.ensemble.GradientBoostingClassifier"),
+    space,
+    SearchConfig(strategy="bayesian", n_trials=100, metric_to_optimize="f1", direction="maximize"),
+    EvalSpec(metrics=["accuracy", "f1"]),
+    experiment_name="user_churn_hpo",
+)
+# result.best_params / result.best_metrics / result.all_trials / result.model_version
 ```
 
-### Bayesian Search
-
-```python
-from kailash_ml.engines.hyperparameter_search import BayesianSearch
-
-search = BayesianSearch(
-    param_space={
-        "n_estimators": (100, 1000),
-        "max_depth": (3, 30),
-        "learning_rate": (0.001, 0.3),
-    },
-    n_trials=100,
-    acquisition_function="expected_improvement",
-)
-```
-
-### Successive Halving
-
-Early-stops poorly performing configurations to focus budget on promising ones.
-
-```python
-from kailash_ml.engines.hyperparameter_search import SuccessiveHalving
-
-search = SuccessiveHalving(
-    param_distributions={
-        "n_estimators": (100, 1000),
-        "max_depth": (3, 30),
-    },
-    n_candidates=81,    # Start with 81 candidates
-    reduction_factor=3, # Keep top 1/3 each round
-)
-```
+For a grid sweep use `SearchConfig(strategy="grid")`; for random,
+`SearchConfig(strategy="random", n_trials=50)`. Categorical axes use
+`ParamDistribution(name=..., type="categorical", choices=[...])`.
 
 ## Experiment Tracking
 
-Every training run is logged to ExperimentTracker, which is MLflow-compatible.
+Pass an `ExperimentTracker` into `train(tracker=...)`; every run is recorded.
 
 ```python
-from kailash_ml.engines import ExperimentTracker
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
 
-tracker = ExperimentTracker(conn)
-await tracker.initialize()
+tracker = ExperimentTracker(conn, artifact_root="./artifacts")
 
-# Automatic tracking via pipeline (default)
-pipeline = TrainingPipeline(
-    feature_store=fs,
-    model_registry=registry,
-    experiment_tracker=tracker,
-)
-
-# Query experiments
-runs = await tracker.list_runs(experiment_name="user_churn")
-best_run = await tracker.get_best_run(
+result = await pipeline.train(
+    training_df, schema,
+    ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
+    EvalSpec(metrics=["accuracy", "f1"]),
     experiment_name="user_churn",
-    metric="f1",
-    direction="maximize",
+    tracker=tracker,
 )
 
-# Compare runs
-comparison = await tracker.compare_runs(
-    run_ids=["run_001", "run_002", "run_003"],
-    metrics=["accuracy", "f1", "training_time"],
-)
+# Query runs
+runs = await tracker.list_runs("user_churn")
+
+# Best run by a metric (order_by on search_runs; there is no get_best_run helper)
+best = await tracker.search_runs("user_churn", order_by="metrics.f1 DESC", max_results=1)
+
+# Compare specific runs
+comparison = await tracker.compare_runs([r.run_id for r in runs[:3]])
 ```
 
-## DataFlow Storage Backend
+## Storage Backend
 
-Training artifacts (models, metrics, schemas) are stored via DataFlow's ConnectionManager. This provides dialect-portable storage across SQLite, PostgreSQL, and MySQL.
+Artifacts (models, metrics, schemas) persist via `ConnectionManager`, dialect-portable
+across SQLite, PostgreSQL, and MySQL.
 
 ```python
-# SQLite for development
-conn = ConnectionManager("sqlite:///ml.db")
-
-# PostgreSQL for production
-conn = ConnectionManager("postgresql://user:pass@host/mldb")
-
-# Same pipeline code works with both — DataFlow handles dialect differences
-pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+conn = ConnectionManager("sqlite:///ml.db")                   # development
+conn = ConnectionManager("postgresql://user:pass@host/mldb")  # production
+# Same pipeline code — ConnectionManager handles dialect differences.
 ```
 
 ## Evaluation Spec
+
+`EvalSpec(metrics, split_strategy="holdout", n_splits=5, test_size=0.2, min_threshold={})`.
 
 ```python
 # Classification metrics
@@ -229,21 +165,21 @@ EvalSpec(metrics=["accuracy", "f1", "precision", "recall", "roc_auc"])
 # Regression metrics
 EvalSpec(metrics=["rmse", "mae", "r2", "mape"])
 
-# Cross-validation
-EvalSpec(metrics=["accuracy", "f1"], cv_folds=5)
+# Cross-validation (k-fold)
+EvalSpec(metrics=["accuracy", "f1"], split_strategy="cv", n_splits=5)
 
-# Optimize specific metric (for hyperparameter search)
-EvalSpec(metrics=["accuracy", "f1"], optimize="f1")
+# Custom holdout split
+EvalSpec(metrics=["accuracy"], split_strategy="holdout", test_size=0.2)
 
-# Custom train/test split ratio
-EvalSpec(metrics=["accuracy"], test_size=0.2, random_state=42)
+# Gate registration on a metric floor
+EvalSpec(metrics=["accuracy", "f1"], min_threshold={"f1": 0.8})
 ```
 
 ## Critical Rules
 
-- Schema drives everything — no manual column selection
-- Model class strings validated against allowlist before import
-- All data in polars — conversion at sklearn boundary via `interop.py`
-- Every training run tracked in ExperimentTracker
-- Trained models auto-registered in ModelRegistry at `staging` stage
-- Point-in-time correctness when pulling from FeatureStore
+- Schema drives inputs; the target is a feature column, not a schema field
+- `train(data, schema, model_spec, eval_spec, experiment_name)` — data is required
+- Model class strings validated against the allowlist before import
+- All data in polars — conversion at the sklearn boundary via `interop.py`
+- One `HyperparameterSearch` engine; `SearchConfig(strategy=...)` selects the method
+- Pass the tracker via `train(tracker=...)`, not the pipeline constructor

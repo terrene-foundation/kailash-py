@@ -42,8 +42,9 @@ schema = FeatureSchema(
         FeatureField(name="age", dtype="float"),
         FeatureField(name="tenure_months", dtype="float"),
         FeatureField(name="monthly_charges", dtype="float"),
+        FeatureField(name="churned", dtype="int"),  # the target column
     ],
-    target=FeatureField(name="churned", dtype="int"),
+    entity_id_column="user_id",
 )
 ```
 
@@ -59,11 +60,11 @@ await conn.initialize()
 fs = FeatureStore(conn, table_prefix="kml_feat_")
 await fs.initialize()
 
-await fs.register_schema(schema)
-await fs.ingest("user_churn", schema, polars_df)
+await fs.register_features(schema)
+await fs.store(fs.compute(polars_df, schema), schema)
 
 # Point-in-time retrieval
-features = await fs.get_features("user_churn", entity_ids=["u1", "u2"])
+features = await fs.get_features(["u1", "u2"], ["age", "tenure_months"], schema=schema)
 ```
 
 ### Training Pipeline
@@ -72,16 +73,18 @@ features = await fs.get_features("user_churn", entity_ids=["u1", "u2"])
 from kailash_ml import TrainingPipeline
 from kailash_ml.engines.training_pipeline import ModelSpec, EvalSpec
 
-pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+pipeline = TrainingPipeline(feature_store=fs, registry=registry)
 result = await pipeline.train(
-    schema=schema,
-    model_spec=ModelSpec(
+    training_df,
+    schema,
+    ModelSpec(
         model_class="sklearn.ensemble.RandomForestClassifier",
         hyperparameters={"n_estimators": 100, "max_depth": 10},
     ),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1", "roc_auc"]),
+    EvalSpec(metrics=["accuracy", "f1", "roc_auc"]),
+    experiment_name="user_churn",
 )
-# result.model_version, result.metrics, result.training_time
+# result.metrics, result.device
 ```
 
 ### Drift Monitoring Setup
@@ -89,11 +92,10 @@ result = await pipeline.train(
 ```python
 from kailash_ml import DriftMonitor
 
-monitor = DriftMonitor(conn)
-await monitor.initialize()
+monitor = DriftMonitor(conn, tenant_id="default")
 
 # Set reference distribution
-await monitor.set_reference_data("model_v1", reference_df)
+await monitor.set_reference_data("model_v1", reference_df, feature_columns=["age", "tenure_months"])
 
 # Check for drift (returns DriftReport)
 report = await monitor.check_drift("model_v1", current_df)
@@ -106,19 +108,20 @@ for feat in report.feature_results:
 
 ```python
 from kailash_ml import AutoMLEngine
-from kailash_ml.engines.automl_engine import AutoMLConfig
+from kailash_ml.automl import AutoMLConfig
 
 config = AutoMLConfig(
     task_type="classification",
-    metric_to_optimize="f1",
+    metric_name="f1",
     search_strategy="bayesian",
-    search_n_trials=50,
+    max_trials=50,
     agent=True,            # Enable LLM augmentation (requires kailash-ml[agents])
     auto_approve=False,    # Human approval gate
     max_llm_cost_usd=5.0,
 )
-engine = AutoMLEngine(feature_store=fs, model_registry=registry, config=config)
-result = await engine.run(schema=schema, data=df)
+engine = AutoMLEngine(config=config, tenant_id="default", actor_id="ci")
+# run() drives a search space + trial function — see 34-kailash-ml/ml-agent-guardrails.md
+result = await engine.run(space=search_space, trial_fn=trial_fn)
 ```
 
 ### Model Registry Lifecycle
@@ -127,11 +130,10 @@ result = await engine.run(schema=schema, data=df)
 from kailash_ml import ModelRegistry
 from kailash_ml.engines.model_registry import LocalFileArtifactStore
 
-registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-await registry.initialize()
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))  # no initialize()
 
 # Stage transitions: staging -> shadow -> production -> archived
-await registry.promote("model_v1", version_id, target_stage="production")
+await registry.promote_model("model_v1", version_id, target_stage="production")
 
 # Valid transitions:
 # staging  -> shadow, production, archived

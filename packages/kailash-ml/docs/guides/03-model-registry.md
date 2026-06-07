@@ -5,32 +5,42 @@ Version, track, and manage ML models through their lifecycle.
 ## Register a Model
 
 ```python
-from kailash_ml.engines.model_registry import ModelRegistry
+from kailash.db.connection import ConnectionManager
+from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
+from kailash_ml.types import MetricSpec
+import pickle
 
-registry = ModelRegistry()
+conn = ConnectionManager("sqlite:///ml.db")
+await conn.initialize()
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))
 
-# Register with metrics
-version = await registry.register(
-    name="churn-predictor",
-    model=trained_model,
-    metrics={"accuracy": 0.92, "f1": 0.88, "auc": 0.95},
-    tags={"team": "data-science", "dataset": "q4-2025"},
+# Register a serialized model artifact with metrics
+artifact = pickle.dumps(trained_model)
+mv = await registry.register_model(
+    "churn-predictor",
+    artifact,
+    metrics=[
+        MetricSpec(name="accuracy", value=0.92),
+        MetricSpec(name="f1", value=0.88),
+        MetricSpec(name="auc", value=0.95),
+    ],
 )
+print(f"Registered churn-predictor v{mv.version}")
 ```
 
 ## Version Management
 
 ```python
 # List all versions
-versions = await registry.list_versions("churn-predictor")
+versions = await registry.get_model_versions("churn-predictor")
 for v in versions:
-    print(f"v{v.version}: {v.stage} — accuracy={v.metrics.get('accuracy')}")
+    print(f"v{v.version}: {v.stage}")
 
-# Load a specific version
-model = await registry.load("churn-predictor", version=2)
+# Inspect a specific version's metadata
+model_v2 = await registry.get_model("churn-predictor", version=2)
 
-# Load latest
-model = await registry.load("churn-predictor")
+# Load a version's raw artifact bytes
+artifact_bytes = await registry.load_artifact("churn-predictor", version=2)
 ```
 
 ## Stage Transitions
@@ -39,19 +49,19 @@ Models progress through stages: `staging` -> `shadow` -> `production` -> `archiv
 
 ```python
 # Promote to production
-await registry.transition("churn-predictor", version=3, stage="production")
+await registry.promote_model("churn-predictor", version=3, target_stage="production")
 
-# Archive old version
-await registry.transition("churn-predictor", version=1, stage="archived")
+# Archive an old version
+await registry.promote_model("churn-predictor", version=1, target_stage="archived")
 ```
 
 ## MLflow Compatibility
 
-ModelRegistry uses a compatible artifact format. Export for MLflow:
+ModelRegistry exports versions in the MLflow `MLmodel` layout:
 
 ```python
-artifact_path = await registry.export_artifact("churn-predictor", version=3)
-# Returns path to model artifacts (model.pkl, metadata.json)
+mlflow_dir = await registry.export_mlflow("churn-predictor", version=3, output_dir="./mlflow-out")
+# Returns the path to the exported MLflow model directory
 ```
 
 ## Common Errors

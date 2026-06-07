@@ -14,8 +14,7 @@ For reinforcement learning: `pip install kailash-ml[rl]`
 ## Train a Model
 
 ```python
-from kailash_ml.engines.training_pipeline import TrainingPipeline
-from kailash_ml.engines.model_registry import ModelRegistry
+import kailash_ml as km
 from sklearn.datasets import load_iris
 import polars as pl
 
@@ -25,22 +24,12 @@ df = pl.DataFrame(iris.data, schema=iris.feature_names).with_columns(
     pl.Series("target", iris.target)
 )
 
-# 2. Train
-pipeline = TrainingPipeline()
-result = await pipeline.train(
-    data=df,
-    target_column="target",
-    task="classification",
-)
+# 2. Train — family + metrics inferred from the target column's dtype
+result = await km.train(df, target="target")
 
-# 3. Register
-registry = ModelRegistry()
-version = await registry.register(
-    name="iris-classifier",
-    model=result.model,
-    metrics=result.metrics,
-)
-print(f"Registered iris-classifier v{version}")
+# 3. Register — ONNX format by default
+registered = await km.register(result, name="iris-classifier")
+print(f"Registered iris-classifier: {registered}")
 ```
 
 ## Profile Your Data

@@ -40,6 +40,7 @@ plumbing. **Do NOT construct these primitives in application code.** The
 Engine caches a tenant-scoped default instance per process.
 
 ```python
+# doc-sweep: ignore — pre-1.0 (0.x) API shown for migration contrast; not current
 # 0.x -- six-import plumbing
 from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.feature_store import FeatureStore
@@ -292,7 +293,11 @@ from kailash_ml import FeatureStore                       # canonical read surfa
 # surface the canonical read store does not expose. Removal is deferred to a
 # later major (alongside the 3.0 ModelRegistry/TrainingPipeline sweep below).
 from kailash_ml.engines.feature_store import FeatureStore  # explicit legacy (writes)
+```
 
+```python
+# doc-sweep: ignore — 3.0 forward-looking namespace; kailash_ml.legacy.* is not
+# importable at 2.0.0 (planned for the 3.0 cut)
 # 3.0 -- ModelRegistry and TrainingPipeline imports removed; use the
 # legacy namespace explicitly if you still need them
 from kailash_ml.legacy import ModelRegistry  # explicit opt-in; no DeprecationWarning
@@ -337,6 +342,8 @@ canonical store reads the table whose name equals `schema.name`, so define a
 `get_features`:
 
 ```python
+# doc-sweep: ignore — before/after contrast; `store` here is the LEGACY engine
+# (register_features/store), shown against the canonical write-via-model path below
 # Before (legacy self-contained write path)
 await store.register_features(schema)          # created + tracked the table
 await store.store(rows, schema)                # materialised feature rows
