@@ -11,8 +11,8 @@ from kailash.db.connection import ConnectionManager
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
 
-monitor = DriftMonitor(conn)
-await monitor.initialize()
+# tenant_id is required; thresholds default (psi=0.2, ks=0.05) unless overridden.
+monitor = DriftMonitor(conn, tenant_id="default")
 ```
 
 ## Set Reference Distribution
@@ -177,21 +177,32 @@ await monitor.schedule(
 DriftMonitor can trigger automatic retraining when drift exceeds thresholds.
 
 ```python
+from datetime import timedelta
 from kailash_ml import DriftMonitor, TrainingPipeline
+from kailash_ml.engines.drift_monitor import DriftSpec
 
-monitor = DriftMonitor(conn)
-pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+monitor = DriftMonitor(conn, tenant_id="default")
+pipeline = TrainingPipeline(feature_store=fs, registry=registry)
 
-# Automatic retraining on severe drift
-await monitor.set_retraining_trigger(
-    model_name="churn_model_v1",
-    trigger_severity="severe",        # Only retrain on severe drift
-    pipeline=pipeline,
-    schema=schema,
-    model_spec=model_spec,
-    eval_spec=eval_spec,
-    auto_promote=False,               # Human approval still required for production
+# A drift callback retrains (human approval still gates shadow -> production).
+async def on_severe_drift(report):
+    if report.overall_drift == "severe":
+        await pipeline.retrain(
+            "churn_model_v1", schema, model_spec, eval_spec, data=fresh_df
+        )
+
+# Schedule periodic checks; the spec carries the drift thresholds + callback.
+schedule_id = await monitor.schedule_monitoring(
+    "churn_model_v1",
+    interval=timedelta(hours=6),
+    data_fn=fetch_recent_production_data,   # returns a polars DataFrame
+    spec=DriftSpec(
+        feature_columns=["age", "tenure_months", "monthly_spend"],
+        psi_threshold=0.2,
+        on_drift_detected=on_severe_drift,
+    ),
 )
+await monitor.start_scheduler()
 ```
 
 ### Retraining Flow

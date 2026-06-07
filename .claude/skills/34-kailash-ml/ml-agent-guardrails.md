@@ -27,7 +27,7 @@ if result.recommendation.confidence < 0.6:
 Cumulative LLM cost is tracked and capped at `max_llm_cost_usd`. Prevents runaway agent spending during exploration.
 
 ```python
-from kailash_ml.engines.automl_engine import AutoMLConfig
+from kailash_ml.automl import AutoMLConfig
 
 config = AutoMLConfig(
     agent=True,
