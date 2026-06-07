@@ -342,6 +342,8 @@ canonical store reads the table whose name equals `schema.name`, so define a
 `get_features`:
 
 ```python
+# doc-sweep: ignore — before/after contrast; `store` here is the LEGACY engine
+# (register_features/store), shown against the canonical write-via-model path below
 # Before (legacy self-contained write path)
 await store.register_features(schema)          # created + tracked the table
 await store.store(rows, schema)                # materialised feature rows

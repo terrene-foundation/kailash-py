@@ -545,7 +545,7 @@ config = RLTrainingConfig(
     eval_freq=10_000,
     seed=42,
 )
-result = await trainer.train(env_id="CartPole-v1", config=config)
+result = await trainer.train("CartPole-v1", "ppo-policy", config=config)
 print(f"Mean reward: {result.mean_reward:.1f}")
 ```
 
@@ -732,27 +732,29 @@ from kailash_ml.engines.ensemble import EnsembleEngine
 
 ensemble = EnsembleEngine()
 
+# Engines are polars-native: pass a DataFrame + target column, not sklearn X/y.
+
 # Blend: weighted average of predictions from multiple models
 blend_result = ensemble.blend(
     models=[model_a, model_b, model_c],
-    X_val=X_val,
-    y_val=y_val,
+    data=train_df,
+    target="churned",
     weights=[0.5, 0.3, 0.2],
 )
 
 # Stack: train a meta-learner on base model outputs
 stack_result = ensemble.stack(
     models=[model_a, model_b, model_c],
-    X_train=X_train,
-    y_train=y_train,
-    meta_learner_class="sklearn.linear_model.LogisticRegression",
+    data=train_df,
+    target="churned",
+    meta_model_class="sklearn.linear_model.LogisticRegression",
 )
 
-# Bag: bootstrap aggregation
+# Bag: bootstrap aggregation (single base model + n_estimators)
 bag_result = ensemble.bag(
-    model_class="sklearn.tree.DecisionTreeClassifier",
-    X_train=X_train,
-    y_train=y_train,
+    model=base_model,
+    data=train_df,
+    target="churned",
     n_estimators=10,
 )
 ```
@@ -782,20 +784,22 @@ await conn.initialize()
 
 ### Engine Initialization
 
-Every engine that persists state requires initialization to create its database tables.
+Most engines create their tables on construction (`auto_migrate`) or lazily on first
+use; the legacy `FeatureStore` engine is the one that exposes an explicit
+`initialize()`.
 
 ```python
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write engine
+from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
+from kailash_ml import DriftMonitor
+
 feature_store = FeatureStore(conn)
-await feature_store.initialize()
+await feature_store.initialize()  # legacy engine: explicit table creation
 
-registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-await registry.initialize()
-
-tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")
-# ExperimentTracker auto-initializes on first use (no initialize() needed)
-
-monitor = DriftMonitor(conn)
-await monitor.initialize()
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))  # ready on construct
+tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")  # lazy init
+monitor = DriftMonitor(conn, tenant_id="default")  # ready on construct; tenant required
 ```
 
 ### Model Class Allowlist

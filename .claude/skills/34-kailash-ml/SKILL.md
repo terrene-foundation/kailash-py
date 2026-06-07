@@ -303,7 +303,7 @@ Every engine accepts and returns `polars.DataFrame`. Conversion to numpy/pandas/
 ```python
 # DO: Work in polars throughout
 df = pl.read_csv("data.csv")
-await fs.ingest("features", schema, df)
+await fs.store(fs.compute(df, schema), schema)
 
 # DO NOT: Convert to pandas first
 df_pd = pd.read_csv("data.csv")  # WRONG — polars is the native format
@@ -379,13 +379,18 @@ See [ml-agent-guardrails](ml-agent-guardrails.md) for the 5 mandatory guardrails
 ## RL Module (kailash-ml[rl])
 
 ```python
-from kailash_ml.rl import RLTrainer, EnvironmentRegistry, PolicyRegistry
+from kailash_ml.rl import RLTrainer, EnvironmentRegistry, PolicyRegistry, RLTrainingConfig
 
 env_reg = EnvironmentRegistry()
 env_reg.register("CartPole-v1")
 
 trainer = RLTrainer(env_registry=env_reg, policy_registry=PolicyRegistry())
-result = await trainer.train(env_id="CartPole-v1", algorithm="PPO", total_timesteps=100_000)
+# train(env_name, policy_name, config) — algorithm + timesteps live on the config
+result = await trainer.train(
+    "CartPole-v1",
+    "ppo-policy",
+    RLTrainingConfig(algorithm="PPO", total_timesteps=100_000),
+)
 ```
 
 ## Security Checklist

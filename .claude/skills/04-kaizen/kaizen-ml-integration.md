@@ -86,7 +86,12 @@ version = await registry.register_model(
     "churn_predictor",
     model_bytes,
     metrics=[MetricSpec(name="accuracy", value=0.92), MetricSpec(name="f1", value=0.87)],
-    signature=ModelSignature(input_schema=[...], output_schema=[...]),
+    signature=ModelSignature(
+        input_schema=schema,
+        output_columns=["prediction"],
+        output_dtypes=["int"],
+        model_type="sklearn",
+    ),
 )
 
 # Promote through stages

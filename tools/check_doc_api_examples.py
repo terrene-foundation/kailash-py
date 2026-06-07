@@ -169,7 +169,17 @@ def _resolve_import(module: str, attr: str | None):
     return getattr(mod, attr)
 
 
-def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
+def _check_fence(
+    fence: Fence,
+    src_path: str,
+    res: _Resolution,
+    name_to_obj: dict[str, object],
+    var_to_class: dict[str, type],
+) -> None:
+    """Validate one fence. ``name_to_obj`` / ``var_to_class`` are FILE-scoped and
+    persist across fences in the same file, so a var bound in one fence (``store =
+    FeatureStore(...)``) is still resolvable when a later fence calls
+    ``store.get_features(...)`` — the cross-fence pattern docs routinely use."""
     tree = _parse_fence(fence.body)
     if tree is None:
         return  # placeholder-heavy fence we cannot parse; not a finding
@@ -177,29 +187,27 @@ def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
     def srcline(node: ast.AST) -> int:
         return fence.start_line + (getattr(node, "lineno", 1) - 1)
 
-    # name -> resolved object (class/function/module) for tracked imports.
-    name_to_obj: dict[str, object] = {}
-    # var name -> resolved class (from ``var = SomeClass(...)`` assignment).
-    var_to_class: dict[str, type] = {}
+    def _allowed_kw_params(sig: inspect.Signature) -> set[str] | None:
+        """Param names acceptable as keywords, or None if **kwargs accepts any."""
+        if any(
+            p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        ):
+            return None
+        return {
+            n
+            for n, p in sig.parameters.items()
+            if p.kind
+            in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        }
 
     def _validate_ctor_kwargs(cls: type, call: ast.Call, label: str) -> None:
         try:
             sig = inspect.signature(cls)
         except (ValueError, TypeError):
             return
-        if any(
-            p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-        ):
+        allowed = _allowed_kw_params(sig)
+        if allowed is None:
             return  # **kwargs accepts anything
-        allowed = {
-            n
-            for n, p in sig.parameters.items()
-            if p.kind
-            in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.KEYWORD_ONLY,
-            )
-        }
         for kw in call.keywords:
             if kw.arg is None:  # **expansion
                 continue
@@ -215,6 +223,37 @@ def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
                     )
                 )
 
+    def _validate_method_kwargs(
+        cls: type, method: str, call: ast.Call, label: str
+    ) -> None:
+        """Validate kwargs of a ``var.method(...)`` call against the bound method's
+        real signature (``self`` excluded). Skips when the method has **kwargs."""
+        fn = getattr(cls, method, None)
+        if fn is None or not callable(fn):
+            return
+        try:
+            sig = inspect.signature(fn)
+        except (ValueError, TypeError):
+            return
+        allowed = _allowed_kw_params(sig)
+        if allowed is None:
+            return
+        allowed.discard("self")
+        for kw in call.keywords:
+            if kw.arg is None:
+                continue
+            if kw.arg not in allowed:
+                res.findings.append(
+                    Finding(
+                        src_path,
+                        srcline(call),
+                        "method-kwarg",
+                        f"{label}.{method}(...{kw.arg}=...)",
+                        f"not a parameter of {cls.__module__}.{cls.__qualname__}"
+                        f".{method} (real: {', '.join(sorted(allowed))})",
+                    )
+                )
+
     def _validate_calls_in(node: ast.AST) -> None:
         """Validate every Call under ``node`` against the CURRENT bindings."""
         for sub in ast.walk(node):
@@ -227,7 +266,9 @@ def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
                     _validate_ctor_kwargs(obj, sub, func.id)
             elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
                 cls = var_to_class.get(func.value.id)
-                if cls is not None and not hasattr(cls, func.attr):
+                if cls is None:
+                    continue
+                if not hasattr(cls, func.attr):
                     public = [m for m in dir(cls) if not m.startswith("_")]
                     res.findings.append(
                         Finding(
@@ -239,6 +280,8 @@ def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
                             f" (real: {', '.join(public)})",
                         )
                     )
+                else:
+                    _validate_method_kwargs(cls, func.attr, sub, func.value.id)
 
     def _apply_imports(node: ast.Import | ast.ImportFrom) -> None:
         if isinstance(node, ast.ImportFrom):
@@ -283,10 +326,19 @@ def _check_fence(fence: Fence, src_path: str, res: _Resolution) -> None:
         if not isinstance(node.value, ast.Call):
             return
         func = node.value.func
+        bound_cls: type | None = None
         if isinstance(func, ast.Name) and isinstance(name_to_obj.get(func.id), type):
-            for tgt in node.targets:
-                if isinstance(tgt, ast.Name):
-                    var_to_class[tgt.id] = name_to_obj[func.id]  # type: ignore[assignment]
+            bound_cls = name_to_obj[func.id]  # type: ignore[assignment]
+        for tgt in node.targets:
+            if not isinstance(tgt, ast.Name):
+                continue
+            if bound_cls is not None:
+                var_to_class[tgt.id] = bound_cls
+            else:
+                # Rebound to an unknown/non-tracked-class call → drop any stale
+                # binding so a later var.method() is not checked against the wrong
+                # class (cross-fence state persistence makes this matter).
+                var_to_class.pop(tgt.id, None)
 
     def visit(stmts: list[ast.stmt]) -> None:
         """Process statements in SOURCE ORDER so within-fence rebinding (e.g. a
@@ -334,8 +386,12 @@ def main(argv: list[str] | None = None) -> int:
     files = _collect_targets(args.targets)
     for f in files:
         rel = str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else str(f)
+        # File-scoped binding state: a var bound in one fence stays resolvable in
+        # later fences of the SAME file (reset per file).
+        name_to_obj: dict[str, object] = {}
+        var_to_class: dict[str, type] = {}
         for fence in _iter_python_fences(f.read_text(encoding="utf-8")):
-            _check_fence(fence, rel, res)
+            _check_fence(fence, rel, res, name_to_obj, var_to_class)
 
     if args.json:
         print(
