@@ -1,5 +1,18 @@
 # kailash-align Changelog
 
+## [0.7.2] — 2026-06-08 — drop defensive `kailash-ml` cap + de-stale floor (#1183)
+
+Patch release. **No source changes** — diff is strictly `pyproject.toml` dependency-floor edits + `__version__` anchor + this CHANGELOG entry.
+
+### Changed
+
+- **`[rl-bridge]` extra: `kailash-ml[rl]>=1.1`** (was `kailash-ml[rl]>=1.1,<2.0`). The `<2.0` defensive cap excluded the current `kailash-ml 2.0.0` — a live resolution break per `dependencies.md` § "No Caps". Verified safe: all 9 `kailash_ml.rl.*` symbols the rl-bridge imports are present in ml 2.0.0, and the rl-bridge test suite (74 tests) passes against it.
+- **Core dep `kailash-ml>=1.1`** (was `kailash-ml>=0.11.0`). The `0.11.0` floor was stale (ml is at 2.0.0) and inconsistent with the `[rl-bridge]` floor within the same manifest; raised to the established `>=1.1` minimum.
+
+### Notes
+
+- No public-API changes; no behavior changes; wheel content is identical to 0.7.1 except for the `__version__` constant. Surfaced by the new `tools/check_pin_consistency.py` first-party pin-drift gate (#1183).
+
 ## [0.7.1] — 2026-05-09 — kailash floor bump for #890 slim-core alignment
 
 Patch release pairing kailash-align with the kailash 2.18.0 / #890 slim-core layout. **No source changes** — diff is strictly `pyproject.toml` floor bump + `__version__` anchor + this CHANGELOG entry.
