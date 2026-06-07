@@ -36,8 +36,9 @@ pip install kailash-ml[explore]  # + plotly (DataExplorer)
 
 ```python
 from kailash.db.connection import ConnectionManager
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
 from kailash_ml import (
-    FeatureStore, ModelRegistry, TrainingPipeline,
+    ModelRegistry, TrainingPipeline,
     InferenceServer, DriftMonitor,
 )
 
