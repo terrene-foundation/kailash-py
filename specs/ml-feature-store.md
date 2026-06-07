@@ -1,10 +1,11 @@
 # Kailash ML Feature Store Specification
 
-**Version:** 1.7.4 — package version at last spec sync (`packages/kailash-ml/src/kailash_ml/_version.py`, 2026-06-02). Point-in-time anchor, not a perpetual pin; re-verify against `_version.py` on each spec sync.
+**Version:** 2.0.0 — package version at last spec sync (`packages/kailash-ml/src/kailash_ml/_version.py`, 2026-06-07). Point-in-time anchor, not a perpetual pin; re-verify against `_version.py` on each spec sync.
 **Status:** v2.0.0 (re-derived from filesystem mechanical sweeps 2026-04-26 — supersedes v1.0.0)
 **Package:** `kailash-ml`
 **Canonical module:** `kailash_ml.features` (1.0+ surface)
-**Legacy module:** `kailash_ml.engines.feature_store` (0.x surface, retained for 0.x callers; not specified here)
+**Legacy module:** `kailash_ml.engines.feature_store` (0.x surface, retained for callers needing the self-contained write/registry/training-set path; not specified here)
+**Top-level resolution:** As of kailash-ml 2.0.0 (issue #643 cutover, `__init__.py` `_engine_map["FeatureStore"] = "kailash_ml.features"`), `from kailash_ml import FeatureStore` resolves to the canonical module above — the 1.7.2 bridge `DeprecationWarning` is removed. The legacy module is reachable only via its explicit import path `kailash_ml.engines.feature_store`.
 **Parent domain:** ML Lifecycle. See `ml-engines.md` (MLEngine), `ml-tracking.md` (runs/registry), `ml-drift.md` (monitoring), `dataflow-ml-integration.md §1.1` (the `ml_feature_source` polars binding this spec consumes).
 **License:** Apache-2.0
 **Python:** >=3.11
