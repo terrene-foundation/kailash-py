@@ -6,20 +6,17 @@
 
 Every agent-augmented ML engine MUST implement all 5 guardrails via `AgentGuardrailMixin`. These are non-negotiable — no agent recommendation reaches the user without passing through all 5.
 
-### 1. Confidence Scores on Every Recommendation
+### 1. Confidence Floor on Agent Trials
 
-Every agent recommendation includes a confidence score (0.0-1.0). Low-confidence recommendations are flagged to prevent blind trust in agent outputs.
+The agent's confidence floor is set via `AutoMLConfig.min_confidence` (0.0-1.0). Trials
+the agent proposes below the floor are denied rather than blindly trusted — they surface
+in `result.denied_trials`.
 
 ```python
-# Agent output always includes confidence
-result = await automl.run(schema=schema, data=df)
-# result.recommendation.confidence = 0.85
-# result.recommendation.reasoning = "High F1 correlation with ensemble approach"
+from kailash_ml.automl import AutoMLConfig
 
-# Low confidence triggers explicit warning
-if result.recommendation.confidence < 0.6:
-    # Agent adds: "Low confidence — consider manual review"
-    pass
+# Trials below the confidence floor are denied (counted in result.denied_trials).
+config = AutoMLConfig(agent=True, min_confidence=0.6)
 ```
 
 ### 2. Cost Budget Tracking
@@ -27,6 +24,7 @@ if result.recommendation.confidence < 0.6:
 Cumulative LLM cost is tracked and capped at `max_llm_cost_usd`. Prevents runaway agent spending during exploration.
 
 ```python
+from kailash_ml import AutoMLEngine, BudgetExhaustedError
 from kailash_ml.automl import AutoMLConfig
 
 config = AutoMLConfig(
@@ -34,9 +32,9 @@ config = AutoMLConfig(
     max_llm_cost_usd=5.0,  # Hard cap on LLM spending
 )
 
-engine = AutoMLEngine(feature_store=fs, model_registry=registry, config=config)
-result = await engine.run(schema=schema, data=df)
-# result.agent_cost_usd = 2.37  (total LLM cost for this run)
+engine = AutoMLEngine(config=config, tenant_id="default", actor_id="ci")
+result = await engine.run(space=search_space, trial_fn=trial_fn)
+# result.cumulative_cost_microdollars — total LLM spend for this run
 
 # Exceeding budget raises BudgetExhaustedError, not silent truncation
 ```
@@ -48,56 +46,46 @@ result = await engine.run(schema=schema, data=df)
 Agents cannot promote models to production or trigger retraining without human approval. `auto_approve=False` is the default.
 
 ```python
-config = AutoMLConfig(
-    agent=True,
-    auto_approve=False,  # DEFAULT — human must approve production changes
-)
+# auto_approve=False (the default) means agent-proposed actions above the budget /
+# cost-approval threshold are withheld rather than auto-executed.
+config = AutoMLConfig(agent=True, auto_approve=False)
 
-# Agent recommends but does not execute:
-result = await engine.run(schema=schema, data=df)
-# result.pending_actions = [
-#     {"action": "promote_to_production", "model_id": "abc123", "awaiting_approval": True},
-#     {"action": "retrain", "reason": "drift detected", "awaiting_approval": True},
-# ]
-
-# Human approves explicitly
-await engine.approve_action(result.pending_actions[0])
+result = await engine.run(space=search_space, trial_fn=trial_fn)
+# result.denied_trials — trials the guardrail withheld
+# result.early_stopped / result.early_stopped_reason — whether a gate halted the run
 ```
 
 **Opt-in override**: `auto_approve=True` removes the gate. Use only in fully automated pipelines with monitoring.
 
 ### 4. Baseline Comparison
 
-Agent must beat a non-agent baseline. A pure algorithmic baseline (no LLM) runs alongside the agent to verify that agent intelligence adds value.
+Run the search twice — once tagged `"baseline"` (pure algorithmic) and once tagged
+`"agent"` — and compare `result.best_trial` across the two runs to verify agent
+intelligence adds value. The `source_tag` is recorded on every trial for audit.
 
 ```python
-result = await engine.run(schema=schema, data=df)
+baseline = await engine.run(space=search_space, trial_fn=trial_fn, source_tag="baseline")
+agent_run = await engine.run(space=search_space, trial_fn=trial_fn, source_tag="agent")
 
-# Both results always available
-# result.agent_result     — agent-augmented outcome
-# result.baseline_result  — pure algorithmic baseline (no LLM)
-
-# Agent recommendation rejected if it doesn't beat baseline
-if result.agent_result.f1 <= result.baseline_result.f1:
-    # Falls back to baseline automatically
-    # Logs: "Agent recommendation did not beat baseline (agent: 0.82, baseline: 0.84)"
+# Compare the best trial's metric across the two runs.
+if agent_run.best_trial.metric_value <= baseline.best_trial.metric_value:
+    # Agent did not beat the baseline — keep the baseline result.
     pass
 ```
 
 ### 5. Full Audit Trail
 
-All agent decisions logged to `_kml_agent_audit_log` table with bounded storage (`deque(maxlen=N)`).
+Every trial and its cost are recorded on the result and via the engine's
+`cost_tracker`; denials and early-stop reasons are first-class result fields.
 
 ```python
-# Every agent action is logged
-# Columns: timestamp, agent_name, action, input_summary, output_summary,
-#           confidence, cost_usd, approved_by, baseline_comparison
+result = await engine.run(space=search_space, trial_fn=trial_fn)
 
-# Query audit trail
-audit = await engine.get_audit_trail(limit=100)
-for entry in audit:
-    print(f"{entry.timestamp} | {entry.agent_name} | {entry.action} | "
-          f"confidence={entry.confidence} | cost=${entry.cost_usd}")
+# Per-run audit surface (no separate query call needed):
+print(result.total_trials, result.completed_trials, result.denied_trials, result.failed_trials)
+print(result.cumulative_cost_microdollars)
+for trial in result.all_trials:
+    print(trial)  # each trial carries its params, metric, source_tag, and cost
 ```
 
 ## AgentGuardrailMixin

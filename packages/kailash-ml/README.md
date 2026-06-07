@@ -561,17 +561,19 @@ from kailash_ml.bridge.onnx_bridge import OnnxBridge
 bridge = OnnxBridge()
 
 # Check if a model can be exported
-compat = bridge.check_compatibility(trained_model)
-print(f"ONNX compatible: {compat.is_compatible}")
+compat = bridge.check_compatibility(trained_model, framework="sklearn")
+print(f"ONNX compatible: {compat.compatible}")
 
 # Export
-if compat.is_compatible:
-    export_result = bridge.export(trained_model, output_path="model.onnx")
+if compat.compatible:
+    export_result = bridge.export(
+        trained_model, framework="sklearn", n_features=10, output_path="model.onnx"
+    )
     print(f"Export success: {export_result.success}")
 
-    # Validate the exported artifact
-    validation = bridge.validate("model.onnx", sample_input)
-    print(f"Max deviation: {validation.max_deviation:.6f}")
+    # Validate the exported artifact against the original
+    validation = bridge.validate(trained_model, export_result.onnx_path, sample_input)
+    print(f"Max diff: {validation.max_diff:.6f}")
 ```
 
 ONNX export failure is non-fatal. The model falls back to native Python inference. Check `model.onnx_status` to determine export status.
