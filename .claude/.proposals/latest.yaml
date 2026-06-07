@@ -697,6 +697,62 @@ changes:
     is bound. Single-record correctness did not imply bulk correctness — a dual-tenant-source split is
     the failure mode. Extends tenant-isolation (which audits cache-key/filter/label/audit sites but not
     write-path tenant-source parity). loom: add Trust Posture Wiring + DO/DO NOT.'
+- type: rule_new
+  artifact: doc-api-import-execution-sweep
+  files:
+  - .claude/rules/spec-accuracy.md
+  - tools/check_doc_api_examples.py
+  classification_suggestion: global
+  context: |
+    F32 (kailash-py BUILD; PR #1277 merged 1decd6c49). NEW gate candidate: every
+    doc/skill python code fence MUST pass an import-execution sweep at /redteam — import
+    each cited symbol and assert every called method, constructor kwarg, and method-call
+    kwarg resolves against installed code; carry variable->class bindings across fences
+    within a file. Extends spec-accuracy.md Rule 1 ("every citation resolves against
+    working code") + user-flow-validation.md (examples must run) from prose/spec to
+    README/skill/guide fences. Reference tool: tools/check_doc_api_examples.py (5 check
+    classes: import / method-existence / ctor-kwarg / method-kwarg / cross-fence; ast-based,
+    never executes fences; kailash_ml-prefix import gate; auditable "# doc-sweep: ignore"
+    per-fence opt-out for intentional before/after migration contrast). loom Gate-1
+    decisions: (a) author the rule (new rules/doc-api-sweep.md OR extend spec-accuracy.md)
+    GLOBAL; (b) decide whether the sweep tool syncs as a global artifact (py + rs variants)
+    or stays per-BUILD-repo tooling. Cross-SDK: the fictional-doc-API failure mode is
+    language-agnostic (rs docs equally exposed). Evidence: journal 0006 (DISCOVERY, 87
+    findings/17 files) + 0007 (AMENDMENT, /redteam R1-R4) in
+    workspaces/issue-643-featurestore-canonical. Result: 87 -> 0 across 417 docs.
+- type: skill_update
+  artifact: kailash-ml-doc-real-api-rewrite
+  files:
+  - .claude/skills/34-kailash-ml/SKILL.md
+  - .claude/skills/34-kailash-ml/ml-feature-pipelines.md
+  - .claude/skills/34-kailash-ml/ml-model-registry.md
+  - .claude/skills/34-kailash-ml/ml-training-pipeline.md
+  - .claude/skills/34-kailash-ml/ml-inference-server.md
+  - .claude/skills/34-kailash-ml/ml-drift-monitoring.md
+  - .claude/skills/34-kailash-ml/ml-onnx-export.md
+  - .claude/skills/34-kailash-ml/ml-agent-guardrails.md
+  - .claude/skills/02-dataflow/dataflow-ml-integration.md
+  - .claude/skills/04-kaizen/kaizen-ml-integration.md
+  classification_suggestion: variant
+  context: |
+    F32 DURABILITY (closes F33). The kailash-ml skill examples taught a platform-wide
+    FICTIONAL API (methods/imports/kwargs absent from shipped 2.0.0). PR #1277 rewrote
+    every fence to the real surface: FeatureStore canonical-read (kailash_ml.features,
+    fields=) vs legacy-write (engines.feature_store, features=) split; ModelRegistry
+    (register_model/promote_model/get_model, no initialize); TrainingPipeline(feature_store=,
+    registry=) + train(data,schema,model_spec,eval_spec,experiment_name); InferenceServer
+    per-model from_registry + predict(features); DriftMonitor(tenant_id=, thresholds at
+    ctor) + DriftReport(overall_severity/feature_results); single HyperparameterSearch +
+    SearchConfig(strategy=) (not 4 fictional classes); two-ExperimentTracker distinction;
+    AutoMLEngine(config=,tenant_id=,actor_id=); OnnxBridge.export(framework=)/validate;
+    EnsembleEngine(data=,target=). These skills are loom-canonical (synced via
+    /sync-to-build) — loom MUST adopt these rewrites as canonical ELSE the next
+    /sync-to-build OVERWRITES the BUILD-local fix with the stale phantom versions.
+    Classification suggestion: variant/py (kailash-ml is Python-specific). NOTE:
+    .claude/skills/project/ml-quick-reference.md was also rewritten but is project-local
+    (not synced) — durable as-is. README/MIGRATION/docs/guides are kailash-ml PACKAGE docs
+    (BUILD-owned, durable on PR merge, not COC artifacts). Verify post-adopt with
+    tools/check_doc_api_examples.py. /redteam converged R1-R4 (journal 0007).
 deferred:
 - id: issue-1086-candidate-3
   summary: 'SessionEnd hook dedup-by-source_commit. Two .pending/ files for
