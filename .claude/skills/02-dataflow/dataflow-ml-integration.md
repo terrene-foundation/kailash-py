@@ -33,7 +33,7 @@ SQLite / PostgreSQL / MySQL
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml import FeatureStore
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
 from kailash_ml.types import FeatureSchema, FeatureField
 
 # 1. Create ConnectionManager (caller owns lifecycle)

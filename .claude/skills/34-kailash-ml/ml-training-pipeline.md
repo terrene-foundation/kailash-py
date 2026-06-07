@@ -6,6 +6,7 @@ TrainingPipeline orchestrates schema-driven model training with FeatureStore int
 
 ```python
 from kailash_ml import TrainingPipeline, ModelRegistry, ModelSpec, EvalSpec
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
 from kailash_ml.engines import LocalFileArtifactStore
 from kailash_ml.types import FeatureSchema, FeatureField
 from kailash.db.connection import ConnectionManager

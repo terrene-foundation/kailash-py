@@ -1,868 +1,857 @@
 source_repo: kailash-py
-codify_date: "2026-05-18"
+codify_date: '2026-05-18'
 status: pending_review
-codify_session: |
-  Session 2026-05-18 — /codify of issue #1086 ("4 root-cause fixes from
-  Wave C SessionEnd hook noise audit"). Originating evidence:
-  workspaces/_hygiene-2026-05-18/02-issue-835-journal-triage.md — the
-  triage of issue-835's 33 .pending/ journal entries found 28 of 33 were
-  SessionEnd-hook auto-captures of commits unrelated to #835 (the hook
-  captures into whatever workspace is the session CWD, regardless of the
-  commit's Closes/Refs #N).
+codify_session: 'Session 2026-05-18 — /codify of issue #1086 ("4 root-cause fixes from
 
-  Scope decision (user-gated this session): codify ONLY issue #1086's
+  Wave C SessionEnd hook noise audit"). Originating evidence:
+
+  workspaces/_hygiene-2026-05-18/02-issue-835-journal-triage.md — the
+
+  triage of issue-835''s 33 .pending/ journal entries found 28 of 33 were
+
+  SessionEnd-hook auto-captures of commits unrelated to #835 (the hook
+
+  captures into whatever workspace is the session CWD, regardless of the
+
+  commit''s Closes/Refs #N).
+
+
+  Scope decision (user-gated this session): codify ONLY issue #1086''s
+
   candidates 1, 2, 4 (rule changes, BUILD->loom). Candidate 3 (SessionEnd
+
   hook dedup-by-source_commit — hook CODE) is deferred to a loom-side
-  change per the issue's own acceptance criteria; it is NOT in this
+
+  change per the issue''s own acceptance criteria; it is NOT in this
+
   proposal. A separate deployment.md "split-version" rule mentioned in
-  the prior session's .session-notes was also user-scoped OUT of this
+
+  the prior session''s .session-notes was also user-scoped OUT of this
+
   codify and will be filed as its own issue with its own evidence.
 
+
   This codify ADDS three MUST clauses to two existing rules. Each carries
+
   a Trust Posture Wiring section per trust-posture.md MUST Rule 7 +
+
   codify Step 6b. No new agents/skills. No new rule FILES (clauses added
+
   to existing files), so no self-referential-codify.md gate applies
-  (deployment.md and journal.md are not on that rule's allowlist).
+
+  (deployment.md and journal.md are not on that rule''s allowlist).
+
 
   Gate-1 finding for loom (NOT blocking this proposal): deployment.md is
-  now 296 lines, over rule-authoring.md's 200-line limit. deployment.md
+
+  now 296 lines, over rule-authoring.md''s 200-line limit. deployment.md
+
   never adopted the .claude/guides/rule-extracts/<rule>.md extract
+
   pattern that git.md / zero-tolerance.md / agents.md use. The candidate-1
+
   clause is authored compactly, but the file was already ~240 lines
+
   before this codify. RECOMMENDATION: loom partitions deployment.md into
+
   a neutral body + a rule-extracts/deployment.md guide as a separate
+
   artifact-quality change (loom-side; out of #1086 scope).
 
+
   The previous distributed proposal (codify_date 2026-05-06, skill-15
+
   enterprise-infrastructure) was archived to
+
   .claude/.proposals/archive/2026-05-06-kailash-py-skill15-enterprise-infra.yaml
+
   per artifact-flow.md MUST: Archive Before Fresh.
 
+  '
 changes:
-  - type: rule_update
-    artifact: deployment
-    files:
-      - .claude/rules/deployment.md
-    classification_suggestion: global
-    context: |
-      Issue #1086 candidate 1. ADDS one MUST clause:
-      "## MUST: Eagerly-Imported Transitive Dependencies Are Declared By
-      The Importing Package".
+- type: rule_update
+  artifact: deployment
+  files:
+  - .claude/rules/deployment.md
+  classification_suggestion: global
+  context: 'Issue #1086 candidate 1. ADDS one MUST clause:
 
-      Lesson: a package whose import graph eagerly pulls in a third-party
-      library — directly OR transitively via an upstream Kailash package's
-      __init__.py re-export — MUST declare that library in its own
-      [project.dependencies]. Assuming an upstream optional extra will
-      install it is BLOCKED.
+    "## MUST: Eagerly-Imported Transitive Dependencies Are Declared By
 
-      Evidence: kailash-ml clean-venv `pip install` failed at `import`
-      because kailash.core.pool.__init__ eagerly re-exported `aiosqlite`
-      (a `kailash` extra, undeclared by ml). `pip install <pkg>` installs
-      declared deps + their core deps — never optional extras — so a
-      clean-venv user of bare `kailash-ml` got no aiosqlite. The same
-      pattern hit kailash-mcp 0.2.13 -> 0.2.14 the same day.
+    The Importing Package".
 
-      Sibling to the existing "MUST: All Files Imported By package
-      __init__.py Tracked In Git" rule — same failure family
-      (clean-venv import failures invisible to editable-install CI).
 
-      Trust Posture Wiring (in-clause): severity halt-and-report at
-      /release gate; 7-day grace; cumulative per trust-posture MUST-4;
-      regression-within-grace -> emergency downgrade; receipt
-      [ack: deployment-transitive-deps]; detection = mechanical
-      /release-time eager-import sweep; origin 2026-05-18.
+    Lesson: a package whose import graph eagerly pulls in a third-party
 
-      Classification rationale: GLOBAL — the failure mode (extras are not
-      transitive, eager imports of extra-only libs fail clean-venv) is
-      language- and CLI-invariant. Applies to every BUILD repo's release
-      pipeline.
+    library — directly OR transitively via an upstream Kailash package''s
 
-  - type: rule_update
-    artifact: journal
-    files:
-      - .claude/rules/journal.md
-    classification_suggestion: global
-    context: |
-      Issue #1086 candidate 2. ADDS a "## SessionEnd Auto-Capture &
-      Pending-Journal Hygiene" section, clause 1:
-      "### 1. Workspace journal/.pending/ MUST Be Gitignored At Repo Root".
+    __init__.py re-export — MUST declare that library in its own
 
-      Lesson: every repo running the SessionEnd auto-capture hook MUST
-      carry a `**/journal/.pending/` ignore pattern in the repo-root
-      .gitignore. .pending/ is session-local auto-capture staging;
-      without the root ignore pattern every /wrapup sweeps it into the
-      working tree and it leaks as dirty-tree noise into unrelated PRs.
+    [project.dependencies]. Assuming an upstream optional extra will
 
-      Evidence: the .gitignore pattern fix already landed in kailash-py
-      (.gitignore:205 `**/journal/.pending/`), but no rule enforced it —
-      a fresh consumer repo re-creates the un-ignored directory. This
-      clause codifies the requirement so the fix is durable across repos.
+    install it is BLOCKED.
 
-      Trust Posture Wiring (shared with clause 2, in-clause): severity
-      advisory; 7-day grace; cumulative per trust-posture MUST-4;
-      regression-within-grace -> emergency downgrade; receipt
-      [ack: pending-journal-hygiene]; detection = `git check-ignore`
-      exit-0 check; origin 2026-05-18.
 
-      Classification rationale: GLOBAL — every COC repo runs the
-      SessionEnd hook; the ignore pattern requirement is universal.
+    Evidence: kailash-ml clean-venv `pip install` failed at `import`
 
-  - type: rule_update
-    artifact: journal
-    files:
-      - .claude/rules/journal.md
-    classification_suggestion: global
-    context: |
-      Issue #1086 candidate 4. ADDS clause 2 to the same new section:
-      "### 2. SessionEnd Auto-Capture Routes By The Commit's Issue
-      Trailer, Not The CWD Workspace".
+    because kailash.core.pool.__init__ eagerly re-exported `aiosqlite`
 
-      Lesson: the SessionEnd auto-capture hook MUST write a commit's
-      .pending/ entry into the workspace whose issue number matches the
-      commit's `Closes #N` / `Refs #N` trailer — NOT the session CWD
-      workspace. Commits with no trailer route to a shared `_unrouted/`
-      staging area.
+    (a `kailash` extra, undeclared by ml). `pip install <pkg>` installs
 
-      Evidence: one session working in the issue-835 CWD auto-captured a
-      cluster of unrelated .pending/ files (the `1778398316957-*`
-      timestamp cluster spans issues #911/#912/#917) because the hook
-      routed by CWD. Across the full triage, 28 of issue-835's 33
-      .pending/ entries were discarded as unrelated auto-captures.
-      Institutional value diffuses away from the issue that earned it;
-      triage cost concentrates in whichever workspace was the CWD.
+    declared deps + their core deps — never optional extras — so a
 
-      This clause is the behavioral CONTRACT; the hook IMPLEMENTATION is
-      issue #1086 candidate 3, which lands loom-side (loom does not
-      originate per artifact-flow.md; the hook + its cc-artifacts Rule 9
-      audit fixtures attach in that loom-side change). This rule clause
-      can ship ahead of the hook — it documents the contract the hook
-      must satisfy.
+    clean-venv user of bare `kailash-ml` got no aiosqlite. The same
 
-      Trust Posture Wiring: shared with clause 1 above (advisory, 7-day
-      grace, [ack: pending-journal-hygiene]); detection for this clause
-      specifically = the SessionEnd hook's Closes/Refs #N parser
-      (candidate 3, loom-side).
+    pattern hit kailash-mcp 0.2.13 -> 0.2.14 the same day.
 
-      Classification rationale: GLOBAL — the CWD-misrouting failure mode
-      is inherent to the shared SessionEnd hook; the routing contract is
-      universal.
 
-  # ==========================================================================
-  # APPENDED 2026-05-22 — Delegate composition primitive arc (issue #1035)
-  # ==========================================================================
-  # 4 patterns generalised from PRs #1130-#1144 (8-shard Delegate build:
-  # Connector x Signature x ConstraintEnvelope x Executor under EATP audit) +
-  # post-merge cleanup #1145 + holistic /redteam follow-ups #1143/#1146-1150.
-  # Appended per artifact-flow.md MUST: Append, Never Overwrite Unprocessed
-  # Proposals. Existing pending_review entries above (issue #1086, candidates
-  # 1/2/4) are preserved unchanged; the loom-side processor handles both
-  # blocks in one batch. Trust Posture Wiring uses the canonical 8-field
-  # template per trust-posture.md MUST Rule 8.
-  #
-  # Pattern 5 ("multi-shard plan execution discipline") was assessed and
-  # WITHDRAWN before drafting: the discipline it would codify is already
-  # covered by autonomous-execution.md Per-Session Capacity Budget rules 1-4
-  # + agents.md MUST: Parallel-Worktree Package Ownership Coordination.
-  # Authoring would create the duplicate-rule failure mode cc-artifacts.md
-  # Rule 10 forbids. Cross-reference suffices.
+    Sibling to the existing "MUST: All Files Imported By package
 
-  - type: rule_update
-    artifact: eatp
-    files:
-      - .claude/rules/eatp.md
-    classification_suggestion: global
-    context: |
-      Delegate arc pattern 1. ADDS one MUST clause:
-      "## MUST: Signed Audit Event Emits BEFORE State Advance; FAILED
-      Path Uses A No-Recurse Helper".
+    __init__.py Tracked In Git" rule — same failure family
 
-      Lesson: any state-machine transition that emits a signed audit
-      event MUST sign-and-emit the audit row BEFORE advancing the state
-      slot. If signing/emit raises, the transition aborts at the
-      pre-advance position so the next call observes the pre-transition
-      state, NOT a half-advanced state with no audit row. The FAILED
-      path itself emits an audit event — and that emit MUST go through a
-      dedicated `_advance_to_failed_no_audit`-style helper that bypasses
-      the audit-emit step the parent advance used, preventing infinite
-      recursion when the FAILED path's own audit emit raises.
+    (clean-venv import failures invisible to editable-install CI).
 
-      Generalisation: applies to any system signing audit events
-      alongside state transitions (TrustExecutor, TAOD lifecycle, PACT
-      envelope cascade, dataflow transaction phases). The structural
-      defense is ordering + a no-recurse helper, not catch-all
-      exception handling.
 
-      Evidence: kailash-py PR #1139 commit `e9626a223` — S6 R1 fix-
-      immediately for /redteam findings A3 + D1. The pre-fix code
-      advanced TAODState's `phase` slot before calling
-      `_audit_engine.append`; an emit failure left the runtime in
-      (phase=ACTING, no audit row), next dispatch observed half-state
-      and either re-attempted or raised opaque AttributeError. Post-fix:
-      emit-first, advance-second, fail-closed at the pre-advance
-      position. Same commit added `_advance_to_failed_no_audit` for the
-      FAILED-path emit recursion-prevention.
+    Trust Posture Wiring (in-clause): severity halt-and-report at
 
-      Trust Posture Wiring (in-clause, canonical 8-field template):
-        - **Severity:** halt-and-report at /implement gate (reviewer +
-          security-reviewer mechanical sweep on every state-advance +
-          audit-emit call site pair). Structural-signal class per
-          hook-output-discipline.md MUST-2.
-        - **Grace period:** 7 days from rule landing.
-        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
-          posture per trust-posture.md MUST-4 standard window.
-        - **Regression-within-grace:** trigger key
-          `audit_after_state_advance` fires emergency downgrade
-          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
-        - **Receipt requirement:** SessionStart hard-gate
-          `[ack: audit-before-state-advance]` IFF
-          posture.json::pending_verification includes this rule_id AND
-          the most recent journal entry references TrustExecutor / TAOD
-          / envelope-cascade work.
-        - **Detection mechanism:** gate-level reviewer + security-
-          reviewer mechanical sweep at /implement + /redteam — AST
-          walk for `<state>.advance(` followed by `<audit>.append(` in
-          the SAME function; advance-before-emit ordering = HIGH
-          finding. Phase 2 (deferred): hook detector
-          `.claude/hooks/lib/violation-patterns.js::detectStateAdvanceBeforeAuditEmit`
-          with audit fixtures at
-          `.claude/audit-fixtures/violation-patterns/detectStateAdvanceBeforeAuditEmit/`.
-        - **Violation scope:** MUST 1 (ordering) — structural AST
-          sweep; MUST 2 (no-recurse FAILED helper) — structural AST
-          sweep asserting any function named `*_to_failed*` has zero
-          calls to the same module's audit-emit helper used by the
-          parent advance path.
-        - **Origin:** See § Origin (PR #1139 commit e9626a223,
-          2026-05-22).
+    /release gate; 7-day grace; cumulative per trust-posture MUST-4;
 
-      Classification rationale: GLOBAL — the failure mode generalises
-      across every state-machine + audit-chain pairing, not specific
-      to Delegate. Applies to trust-executor, PACT envelope cascade,
-      DataFlow transaction phases, kaizen agent lifecycles. eatp.md is
-      the natural home — audit-chain integrity is EATP's core domain.
+    regression-within-grace -> emergency downgrade; receipt
 
-      Relationship to existing rules: extends zero-tolerance.md Rule 3
-      ("no silent fallbacks") at the state-machine surface — an
-      advance-without-audit IS the silent-fallback failure mode for
-      audit chains. Distinct from Rule 3d (dual-shape return + hasattr
-      guard) which governs API surface, not state-machine ordering.
+    [ack: deployment-transitive-deps]; detection = mechanical
 
-  - type: rule_update
-    artifact: testing
-    files:
-      - .claude/rules/testing.md
-    classification_suggestion: global
-    context: |
-      Delegate arc pattern 2. ADDS one MUST clause to the existing
-      Regression Testing section:
-      "### MUST: Conformance Vectors Pinning A Contract Implementation
-      Does Not Yet Enforce MUST Use @pytest.mark.xfail(strict=True)".
+    /release-time eager-import sweep; origin 2026-05-18.
 
-      Lesson: when a conformance vector (canonical fixture, cross-impl
-      spec test, integration receipt) pins a contract the implementation
-      does NOT yet enforce, the test MUST carry
-      `@pytest.mark.xfail(strict=True, reason="...")` — NOT skip, NOT
-      delete, NOT comment-out. xfail-strict surfaces XPASS on closure:
-      the moment the implementation catches up, the test transitions
-      from xfail to passing AND pytest reports it as a "strict xpass
-      failure" — forcing the author to remove the marker. Skip silently
-      stays skipped after closure; deletion loses the contract pin
-      entirely.
 
-      Generalisation: pattern for any "spec ahead of impl" deferral
-      where the test SHOULD fail today but MUST be the first thing that
-      surfaces when impl catches up. xfail-strict converts honest
-      deferral from a silent ratchet (skip) into a self-clearing
-      tripwire (auto-XPASS on closure). Compiled-language analogues:
-      Rust `#[ignore = "..."]` + `cargo test -- --ignored` with a CI
-      job that asserts ignored tests STILL fail; Go `t.Skip` + explicit
-      "want fail, got pass" marker.
+    Classification rationale: GLOBAL — the failure mode (extras are not
 
-      Evidence: kailash-py PR #1142 + #1144 — S7 conformance vectors
-      DV-3-001 / DV-5-001 / DV-7-001 / DV-9-001 / DV-10-001 at
-      `tests/fixtures/delegate-conformance/canonical.json`. DV-7-001
-      (single-shot §7 phase monotonicity) initially xfailed-strict
-      because the runtime did not enforce single-shot consumption; the
-      xfail-strict reverted to passing automatically when commit
-      `d4ad6a9b3` landed `self._consumed: bool` guard + try/finally —
-      XPASS reported by pytest forced the author to remove the marker
-      same shard. Skip would have left DV-7-001 silently skipped after
-      the fix; deletion would have lost the §7 contract pin.
+    transitive, eager imports of extra-only libs fail clean-venv) is
 
-      Trust Posture Wiring (in-clause, canonical 8-field template):
-        - **Severity:** advisory at gate-review (reviewer mechanical
-          sweep on conformance-vector test files — lexical-regex-only
-          per hook-output-discipline.md MUST-2); halt-and-report at
-          /codify if a vector is added with @pytest.mark.skip instead
-          of xfail-strict for a deferred-impl claim (judgment-bearing
-          gate).
-        - **Grace period:** 7 days from rule landing.
-        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
-          posture per trust-posture.md MUST-4 standard window.
-        - **Regression-within-grace:** trigger key
-          `conformance_skip_instead_of_xfail` fires emergency downgrade
-          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
-        - **Receipt requirement:** SessionStart soft-gate
-          `[ack: xfail-strict-for-deferred-conformance]` IFF
-          posture.json::pending_verification includes this rule_id
-          AND the most recent journal entry references conformance
-          fixtures / cross-impl receipts.
-        - **Detection mechanism:** gate-level reviewer mechanical
-          sweep — `grep -rn '@pytest.mark.skip' tests/**/conformance/`
-          MUST return zero hits where the skip reason cites a
-          deferred implementation; AST walk for any test file under
-          `tests/**/conformance/` or matching `*conformance*` asserts
-          xfail markers are `strict=True`. Phase 2 (deferred): hook
-          detector `.claude/hooks/lib/violation-patterns.js::detectSkipInsteadOfXfailStrictForConformance`
-          with audit fixtures at
-          `.claude/audit-fixtures/violation-patterns/detectSkipInsteadOfXfailStrictForConformance/`.
-        - **Violation scope:** MUST 1 (xfail-strict required for
-          deferred-impl conformance) — structural AST sweep over all
-          tests classified as conformance vectors (path-based +
-          fixture-loader-import-based).
-        - **Origin:** See § Origin (PRs #1142/#1144, 2026-05-22).
+    language- and CLI-invariant. Applies to every BUILD repo''s release
 
-      Classification rationale: GLOBAL — xfail-strict-for-deferred is
-      a language/CLI/SDK-invariant testing discipline. pytest naming
-      is Python-specific but the principle (strict failure on XPASS)
-      maps to Rust `#[ignore]` + CI assertion and equivalents in
-      every test runner.
+    pipeline.
 
-      Relationship to existing rules: pairs with test-skip-discipline.md
-      ("acceptable skip vs masked failure") — that rule governs WHEN
-      tests skip; this rule governs the structural defense for the
-      specific subclass of "skip" that is actually "xfail-strict
-      deferral". Extends probe-driven-verification.md MUST-3 § skip
-      vs lexical-fallback shape pattern.
+    '
+- type: rule_update
+  artifact: journal
+  files:
+  - .claude/rules/journal.md
+  classification_suggestion: global
+  context: 'Issue #1086 candidate 2. ADDS a "## SessionEnd Auto-Capture &
 
-  - type: rule_update
-    artifact: agents
-    files:
-      - .claude/rules/agents.md
-    classification_suggestion: global
-    context: |
-      Delegate arc pattern 3. ADDS one MUST clause to the existing
-      Quality Gates section:
-      "### MUST: Multi-Wave Plans Require A Holistic Post-Wave /redteam
-      Across All Shards On main".
+    Pending-Journal Hygiene" section, clause 1:
 
-      Lesson: when a plan executes across N>=3 sharded waves and each
-      shard carries its own per-shard /redteam, the orchestrator MUST
-      run a HOLISTIC post-multi-wave /redteam across ALL merged shards
-      on main BEFORE declaring the plan converged. Per-shard /redteam
-      catches within-shard defects; holistic post-wave /redteam catches
-      cross-shard invariant violations — the failure mode where each
-      shard is locally correct but two shards together break a global
-      invariant (orphaned API surface, missing audit chain link, drift
-      between docs and merged impl, workspace path leakage scrubbed
-      from each shard but not from the combined surface).
+    "### 1. Workspace journal/.pending/ MUST Be Gitignored At Repo Root".
 
-      Generalisation: applies to every multi-wave COC plan (multi-shard
-      builds, multi-PR refactors, cross-package releases). The holistic
-      /redteam dispatches a minimum of three parallel agents (reviewer
-      + security-reviewer + closure-parity verifier) per `agents.md`
-      MUST: Audit/Closure-Parity Verification Specialist Has Bash +
-      Read, scoped to "all merged PRs in this plan on main", NOT "the
-      diff of the most recent shard". Same parallel-execution shape
-      as the existing "Parallel Brief-Claim Verification When Issue
-      Count >= 3" rule but applied at the post-implementation
-      convergence gate rather than at /analyze.
 
-      Evidence: kailash-py issue #1035 Delegate arc — after Wave 6
-      (PR #1144) merged, a holistic post-multi-wave /redteam across
-      all 8 shards on main surfaced 1 L1 cleanup gap (PR #1145 —
-      workspace path leakage scrub that NO per-shard /redteam caught
-      because each shard's per-shard /redteam was scoped to its own
-      diff) + 5 follow-up issues filed (#1143, #1146, #1147, #1148,
-      #1149, #1150). Per-shard /redteam caught zero CRIT/HIGH
-      unfixed; holistic /redteam caught one L1 + 5 cross-shard
-      findings.
+    Lesson: every repo running the SessionEnd auto-capture hook MUST
 
-      Trust Posture Wiring (in-clause, canonical 8-field template):
-        - **Severity:** halt-and-report at the orchestrator's "plan
-          converged" claim (cc-architect mechanical sweep on session
-          notes claiming multi-wave plan completion — judgment-
-          bearing gate per hook-output-discipline.md MUST-2).
-        - **Grace period:** 7 days from rule landing.
-        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
-          posture per trust-posture.md MUST-4 standard window.
-        - **Regression-within-grace:** trigger key
-          `multi_wave_plan_no_holistic_redteam` fires emergency
-          downgrade (1 step) per trust-posture.md MUST-4 emergency-
-          trigger list.
-        - **Receipt requirement:** SessionStart hard-gate
-          `[ack: holistic-post-multi-wave-redteam]` IFF
-          posture.json::pending_verification includes this rule_id
-          AND the most recent journal entry references >=3-shard
-          plan completion.
-        - **Detection mechanism:** gate-level cc-architect mechanical
-          sweep at /codify and at "plan converged" claims — assert a
-          journal entry exists at `workspaces/<id>/journal/` named
-          `holistic-post-wave-redteam-*` AND cites >=3 parallel
-          specialists (reviewer + security-reviewer + closure-parity
-          verifier or equivalent) AND scoped its review to the union
-          of all merged shards on main. Phase 2 (deferred): hook
-          detector
-          `.claude/hooks/lib/violation-patterns.js::detectMultiWavePlanWithoutHolisticRedteam`
-          with audit fixtures at
-          `.claude/audit-fixtures/violation-patterns/detectMultiWavePlanWithoutHolisticRedteam/`.
-        - **Violation scope:** MUST 1 (holistic post-wave /redteam
-          required for N>=3 shard plans) — structural sweep on
-          workspace journal + agent invocation transcripts.
-        - **Origin:** See § Origin (issue #1035, PRs #1130-#1150,
-          2026-05-22).
+    carry a `**/journal/.pending/` ignore pattern in the repo-root
 
-      Classification rationale: GLOBAL — multi-wave orchestration is
-      CLI/SDK/language-invariant. Applies to every COC workspace
-      crossing >=3 shards regardless of repo.
+    .gitignore. .pending/ is session-local auto-capture staging;
 
-      Relationship to existing rules: extends agents.md existing
-      Quality Gates section (per-edit + per-gate review pattern)
-      with the post-plan layer. Distinct from existing "Parallel
-      Brief-Claim Verification When Issue Count >= 3" which governs
-      /analyze brief verification, not /redteam post-plan
-      verification. Same structural shape (parallel agents at the
-      gate); different trigger and gate.
+    without the root ignore pattern every /wrapup sweeps it into the
 
-  - type: rule_update
-    artifact: deployment
-    files:
-      - .claude/rules/deployment.md
-    classification_suggestion: global
-    context: |
-      Delegate arc pattern 4. ADDS one MUST clause:
-      "## MUST: Pre-Pledge Release Disclosure For Pre-1.0 / Wave-0 New
-      Public APIs".
+    working tree and it leaks as dirty-tree noise into unrelated PRs.
 
-      Lesson: any /release that ships a NEW public API (new module,
-      new top-level package, new framework primitive) with a pre-1.0
-      / v0 / pre-pledge version anchor MUST include a "Pre-Pledge v0"
-      disclosure section in the package README or top-level docs
-      BEFORE the release tag is cut. The disclosure MUST enumerate
-      five required fields: (a) invariants enforced TODAY (the
-      contract users may rely on now), (b) items DEFERRED for later
-      versions (the contract not yet enforced), (c) explicit
-      NON-PROMISES (what users MUST NOT assume), (d) how-to-verify
-      (commands to run that exercise the enforced invariants),
-      (e) the version status.
 
-      Generalisation: applies to every pre-1.0 release of a new public
-      API — Delegate v0, dataflow new-engine v0, kaizen new lifecycle
-      v0, nexus new transport v0, etc. The disclosure structurally
-      separates "what we pledge" from "what we aspire to" — preventing
-      the silent-pledge failure mode where users adopt v0 assuming
-      all advertised features are enforced today, then break on first
-      upgrade when a previously-aspirational feature ships in v0.1
-      with different semantics.
+    Evidence: the .gitignore pattern fix already landed in kailash-py
 
-      Evidence: kailash-py PR #1144 — README "Delegate composition
-      primitive — Pre-Pledge v0" section starting line 317. The
-      section enumerates 8 enforced invariants (signed audit chain,
-      capability snapshot, posture ladder, etc.), 3 deferred items
-      (cross-SDK byte-determinism conformance for vectors DV-3 /
-      DV-7 / DV-9 still py-leads), 3 non-promises (no implicit
-      retries, no shadow audit chains, no posture auto-upgrade), and
-      how-to-verify commands. Pre-merge co-owner assessment of the
-      disclosure caught one "we enforce X" claim that the impl
-      actually deferred — would have shipped as a silent pledge
-      otherwise.
+    (.gitignore:205 `**/journal/.pending/`), but no rule enforced it —
 
-      Trust Posture Wiring (in-clause, canonical 8-field template):
-        - **Severity:** halt-and-report at /release gate (release-
-          specialist mechanical sweep on any new public API with
-          version anchor `0.*` / `v0.*` / `pre-pledge` — judgment-
-          bearing gate per hook-output-discipline.md MUST-2).
-        - **Grace period:** 7 days from rule landing.
-        - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1
-          posture per trust-posture.md MUST-4 standard window.
-        - **Regression-within-grace:** trigger key
-          `prepledge_release_no_disclosure` fires emergency downgrade
-          (1 step) per trust-posture.md MUST-4 emergency-trigger list.
-        - **Receipt requirement:** SessionStart hard-gate
-          `[ack: pre-pledge-disclosure]` IFF
-          posture.json::pending_verification includes this rule_id
-          AND the impending /release version anchor is `0.*` / `v0.*`
-          AND the release diff adds a NEW public API surface (new
-          top-level module/package).
-        - **Detection mechanism:** gate-level release-specialist
-          mechanical sweep at /release — for every new public
-          module/package shipping at version `0.*`, grep README.md
-          and docs/ for a section titled "Pre-Pledge",
-          "v0 Disclosure", "Pre-1.0 Status", or equivalent, AND
-          assert the section enumerates the 5 required fields
-          (enforced / deferred / non-promises / how-to-verify /
-          status). Phase 2 (deferred): hook detector
-          `.claude/hooks/lib/violation-patterns.js::detectPrePledgeReleaseMissingDisclosure`
-          with audit fixtures at
-          `.claude/audit-fixtures/violation-patterns/detectPrePledgeReleaseMissingDisclosure/`.
-        - **Violation scope:** MUST 1 (5-field disclosure required
-          for new-public-API pre-1.0 releases) — structural grep +
-          structured-section enumeration.
-        - **Origin:** See § Origin (PR #1144 README § Pre-Pledge v0,
-          2026-05-22).
+    a fresh consumer repo re-creates the un-ignored directory. This
 
-      Classification rationale: GLOBAL — pre-1.0 / v0 disclosure
-      discipline is CLI/SDK/language-invariant. Applies to every
-      Foundation repo's release pipeline.
+    clause codifies the requirement so the fix is durable across repos.
 
-      Relationship to existing rules: extends deployment.md existing
-      version-consistency rules (atomic version bumps across
-      pyproject.toml + __version__) with the pre-1.0 disclosure
-      requirement. Extends zero-tolerance.md Rule 6 ("implement
-      fully") at the docs surface — a pre-pledge disclosure is
-      structurally the inverse of "if endpoint exists, it returns
-      real data": the README MUST distinguish endpoints that DO
-      return real data today vs endpoints whose docs reserve a
-      contract impl will satisfy later. Co-located with the existing
-      issue #1086 candidate 1 deployment.md clause above; loom-side
-      processor handles both in one merge.
 
-  - type: rule_update
-    artifact: verify-claims-before-durable-write
-    files:
-      - .claude/rules/git.md
-    classification_suggestion: global
-    context: |
-      2026-05-27 release-cycle pattern (kailash 2.27.0 release-drive).
-      Candidate: extend git.md § "Commit-message claim accuracy" — OR
-      author a small new baseline rule — with a clause:
+    Trust Posture Wiring (shared with clause 2, in-clause): severity
 
-      "## MUST: Verify Code-Claims Against Ground Truth Before Durable
-      Write". Any claim about code written into a DURABLE artifact
-      (CHANGELOG, commit body, PR description, docs, a codified rule) —
-      public API names, signatures, set/list counts, class names,
-      allowlist/denylist contents — MUST be verified against ground
-      truth (import the symbol, read the source/wheel, print the FULL
-      collection) BEFORE the write. Trusting (a) a claim reconstructed
-      across a context boundary (compaction summary, .session-notes,
-      prior-session framing), or (b) truncated command output
-      (`tail -N` / `head -N` / `... | head` over the line carrying the
-      cited value) is BLOCKED.
+    advisory; 7-day grace; cumulative per trust-posture MUST-4;
 
-      Originating evidence (this session, both caught before consumer
-      impact but each cost an extra correction PR):
-        1. The 2.27.0 CHANGELOG Added section (commit b9b0a71ed) listed
-           5 kailash.workflow functions — from_brief / afrom_brief /
-           from_brief_validate / from_brief_analyze / from_brief_realize
-           — carried verbatim from a compaction-summary "5 entrypoints"
-           framing. Four of those names do not exist anywhere in the
-           package; the real surface is Workflow.from_brief +
-           kailash.bootstrap + workflow_from_brief. The "5 surfaces" of
-           PR #1181 are 5 distinct FRAMEWORKS, not 5 functions. Caught
-           by TestPyPI-rehearsal clean-venv import
-           (`ImportError: cannot import name 'afrom_brief'`). Corrected
-           in PR #1187 (commit ec2c99163).
-        2. The PR-#1187 correction then documented _DANGEROUS_NODE_TYPES
-           as "8 types" (and stated AsyncPythonCodeNode is NOT in it)
-           because a `tail -8` silently dropped the count line + first 4
-           alphabetical entries. Real floor is 12; AsyncPythonCodeNode IS
-           in it. Caught at post-publish production verify. Corrected in
-           PR #1188 (commit 1a3dab318).
+    regression-within-grace -> emergency downgrade; receipt
 
-      BLOCKED rationalizations: "the summary said so" / "the prior
-      session established this surface" / "tail is enough to see the
-      shape" / "I'll verify if something breaks" / "the count is
-      approximate anyway".
+    [ack: pending-journal-hygiene]; detection = `git check-ignore`
 
-      Relationship to existing rules: extends git.md § "Commit-message
-      claim accuracy" (commit bodies describe ONLY diff-present changes)
-      from the commit surface to the CHANGELOG/docs/rule surface. Same
-      epistemic family as zero-tolerance.md Rule 1c ("pre-existing is
-      unprovable after a context boundary") — a carried-forward API
-      claim is structurally unfalsifiable until re-verified. Sibling of
-      user-flow-validation.md (walk before declaring done) — the
-      durable-write verification is the artifact-claim analogue of the
-      user-flow walk. Pairs with the auto-memory
-      feedback_verify_claims_before_durable_write.md landed this session
-      as the immediate in-repo stopgap.
+    exit-0 check; origin 2026-05-18.
 
-      Self-referential-codify note: IF loom authors this as a NEW rule
-      FILE on the self-referential surface (a baseline rule governing
-      agent write-discipline), loom MUST run the multi-agent
-      redteam-with-tests gate per self-referential-codify.md MUST Rule 1.
-      IF loom extends git.md (already on no special gate), posture
-      default applies. cc-architect MUST emit canonical 8-field Trust
-      Posture Wiring per trust-posture.md MUST Rule 8 either way.
 
-  - type: skill_update
-    artifact: from-brief-default-deny-security-pattern
-    files:
-      - .claude/skills/18-security-patterns/SKILL.md
-    classification_suggestion: global
-    context: |
-      2026-05-27 — from_brief #1125 security model (shipped in kailash
-      2.27.0). Candidate: capture the reusable security pattern
-      "untrusted-input-selects-which-primitive-to-instantiate MUST
-      default-deny" as a security-patterns skill entry (cross-SDK — the
-      same surface exists in kailash-rs from_brief equivalents).
+    Classification rationale: GLOBAL — every COC repo runs the
 
-      Pattern (verified against the shipped 2.27.0 wheel):
-        - When untrusted input (an LLM-emitted plan from a natural-
-          language brief) selects WHICH node type to realize, the node-
-          type surface IS a code-execution boundary. The sound model is
-          a POSITIVE allowlist (a vetted `_SAFE_NODE_TYPES` frozenset of
-          43 entries) intersected with the live registry — NOT "all
-          registered nodes minus a denylist". Denylist-subtraction is
-          unsound by construction: every new SDK node added between
-          releases is implicitly trusted, and code-exec helpers
-          (PythonCodeNode execs via the CodeExecutor helper) are
-          invisible to a class-scope denylist scan.
-        - Enforce at the CHOKE POINT (`_realize()` at add_node time), not
-          only at a higher validate_plan() gate — a typed plan whose
-          shape differs from what validate_plan inspects (node_type
-          nested in plan.nodes[i]) bypassed the higher gate.
-        - Keep a hardcoded denylist FLOOR (12 explicitly-dangerous types)
-          subtracted BEFORE the allowlist applies, so a future allowlist
-          expansion cannot re-admit code-exec / SSRF surfaces.
-        - Ship an INVERSE-COMPLETENESS test that walks the MRO of every
-          allowlisted type and AST-scans every source path for exec /
-          eval / compile / import_module / __import__ / unsafe-
-          deserialization (pickle|marshal|dill|cloudpickle.loads,
-          yaml.load) / CodeExecutor references — so a future code-
-          executing node added under a familiar name fails the allowlist
-          TEST, not production.
-        - Reject NaN/inf/out-of-range at the confidence-gate
-          construction boundary (pydantic ConfigDict(extra="forbid",
-          allow_inf_nan=False) + math.isfinite check), closing a
-          confidence-bypass class.
+    SessionEnd hook; the ignore pattern requirement is universal.
 
-      Reference implementation:
-        src/kailash/workflow/from_brief.py (_SAFE_NODE_TYPES,
-        _DANGEROUS_NODE_TYPES, _realize), kailash/_from_brief/
-        {validator,confidence}.py, tests/unit/workflow/
-        test_from_brief_safe_allowlist.py (inverse-completeness test).
+    '
+- type: rule_update
+  artifact: journal
+  files:
+  - .claude/rules/journal.md
+  classification_suggestion: global
+  context: 'Issue #1086 candidate 4. ADDS clause 2 to the same new section:
 
-      Cross-SDK: kailash-rs has equivalent from_brief / brief-to-
-      primitive surfaces; the default-deny + choke-point + inverse-
-      completeness triad is language-invariant (EATP D6 semantic
-      parity). loom should classify whether this is a global skill
-      entry + a cross-SDK inspection issue on kailash-rs.
+    "### 2. SessionEnd Auto-Capture Routes By The Commit''s Issue
 
-      Convergence receipt: workspaces/from-brief-1125/04-validate/
-      (round-01 through round-03 + 00-convergence.md); 2 CRITICAL +
-      SharePoint MEDIUM + confidence-gate-bypass closed across the
-      redteam cycle. Cross-agent CRIT/HIGH disagreement (security-
-      reviewer static "closed" vs reviewer Bash-proved "denylist
-      incomplete") resolved BY CONSTRUCTION (probe: DataTransformer
-      realized through the gate) per self-referential-codify.md MUST-1
-      + redteam-integration.md — NOT by averaging severities.
+    Trailer, Not The CWD Workspace".
 
-  - type: command_update
-    artifact: sweep
-    files:
-      - .claude/commands/sweep.md
-    classification_suggestion: global
-    context: |
-      Sweep stale-tag false-positive fix (BUILD->loom, kailash-py 2026-05-30).
-      ADDS "Sweep 8: Release readiness (publishing repos only)"; bumps the
-      workflow count 7->8 and Closure step-1 count 1-7->1-8.
 
-      Root-cause: /sweep had NO mechanical release-readiness step (Sweep 4 is
-      "Open PRs and stale feature branches"). An agent improvised a release
-      check (SWEEP-2026-05-28.md "Sweep 4 / release-readiness") and hand-picked
-      a STALE diff base (v2.27.0) instead of the actual latest tag (v2.28.1),
-      re-flagging already-released fixes (#1182, #1185 — both ancestors of
-      v2.28.1) as "unreleased HIGH" on every sweep. That recurring false
-      positive is what made /sweep feel "neverending" to the operator.
+    Lesson: the SessionEnd auto-capture hook MUST write a commit''s
 
-      Fix: Sweep 8 derives the diff base MECHANICALLY from
-      `git tag --sort=-version:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$'`
-      (plain vX.Y.Z stable tags only; the $-anchor excludes prerelease -rc1
-      and package-prefixed dataflow-v* tags so a future v2.29.0-rc1 cannot
-      sort above v2.29.0 and re-introduce the bug). Flags "unreleased" ONLY
-      when `git log "$LATEST"..HEAD -- src/ packages/*/src` is non-empty;
-      docs/.claude/workspace diffs do NOT ship. Verifies any named PR via
-      `git merge-base --is-ancestor <sha> "$LATEST"` before calling it
-      unreleased. Hand-picking a base tag is BLOCKED.
+    .pending/ entry into the workspace whose issue number matches the
 
-      Self-referential gate (self-referential-codify.md Rule 1+2 — sweep.md is
-      named on the Commands allowlist): multi-agent redteam-with-tests ran in
-      parallel BEFORE this proposal. reviewer APPROVED (1 MED prerelease-sort,
-      fixed same-shard by the $-anchored regex; 2 LOW doc-grade). security-
-      reviewer APPROVED (0 CRIT/HIGH/MED; $LATEST quoted + read-only repo-local
-      => no injection; Sweeps 1-7 byte-unchanged; true-positive detection
-      preserved). cc-architect APPROVED (149 lines <= 150 cap; CLI-neutral;
-      structural fit). The line-141 "1-7"->"1-8" LOW (flagged by 2 agents)
-      fixed same-shard.
+    commit''s `Closes #N` / `Refs #N` trailer — NOT the session CWD
 
-      Loom Gate-1 classification suggestion: GLOBAL — the stale-tag bug class
-      is language-agnostic; every publishing BUILD repo (kailash-rs) shares the
-      failure mode. The bash is Python-anchored (pyproject.toml, src/,
-      packages/*/src); the "(publishing repos only)" guard + "no shippable
-      change" disposition degrade safely in non-Python/non-publishing repos.
-      loom may prefer a variant overlay for the rs lane's Cargo.toml anchors.
+    workspace. Commits with no trailer route to a shared `_unrouted/`
 
+    staging area.
+
+
+    Evidence: one session working in the issue-835 CWD auto-captured a
+
+    cluster of unrelated .pending/ files (the `1778398316957-*`
+
+    timestamp cluster spans issues #911/#912/#917) because the hook
+
+    routed by CWD. Across the full triage, 28 of issue-835''s 33
+
+    .pending/ entries were discarded as unrelated auto-captures.
+
+    Institutional value diffuses away from the issue that earned it;
+
+    triage cost concentrates in whichever workspace was the CWD.
+
+
+    This clause is the behavioral CONTRACT; the hook IMPLEMENTATION is
+
+    issue #1086 candidate 3, which lands loom-side (loom does not
+
+    originate per artifact-flow.md; the hook + its cc-artifacts Rule 9
+
+    audit fixtures attach in that loom-side change). This rule clause
+
+    can ship ahead of the hook — it documents the contract the hook
+
+    must satisfy.
+
+
+    Trust Posture Wiring: shared with clause 1 above (advisory, 7-day
+
+    grace, [ack: pending-journal-hygiene]); detection for this clause
+
+    specifically = the SessionEnd hook''s Closes/Refs #N parser
+
+    (candidate 3, loom-side).
+
+
+    Classification rationale: GLOBAL — the CWD-misrouting failure mode
+
+    is inherent to the shared SessionEnd hook; the routing contract is
+
+    universal.
+
+    '
+- type: rule_update
+  artifact: eatp
+  files:
+  - .claude/rules/eatp.md
+  classification_suggestion: global
+  context: "Delegate arc pattern 1. ADDS one MUST clause:\n\"## MUST: Signed Audit Event Emits BEFORE\
+    \ State Advance; FAILED\nPath Uses A No-Recurse Helper\".\n\nLesson: any state-machine transition\
+    \ that emits a signed audit\nevent MUST sign-and-emit the audit row BEFORE advancing the state\nslot.\
+    \ If signing/emit raises, the transition aborts at the\npre-advance position so the next call observes\
+    \ the pre-transition\nstate, NOT a half-advanced state with no audit row. The FAILED\npath itself\
+    \ emits an audit event — and that emit MUST go through a\ndedicated `_advance_to_failed_no_audit`-style\
+    \ helper that bypasses\nthe audit-emit step the parent advance used, preventing infinite\nrecursion\
+    \ when the FAILED path's own audit emit raises.\n\nGeneralisation: applies to any system signing audit\
+    \ events\nalongside state transitions (TrustExecutor, TAOD lifecycle, PACT\nenvelope cascade, dataflow\
+    \ transaction phases). The structural\ndefense is ordering + a no-recurse helper, not catch-all\n\
+    exception handling.\n\nEvidence: kailash-py PR #1139 commit `e9626a223` — S6 R1 fix-\nimmediately\
+    \ for /redteam findings A3 + D1. The pre-fix code\nadvanced TAODState's `phase` slot before calling\n\
+    `_audit_engine.append`; an emit failure left the runtime in\n(phase=ACTING, no audit row), next dispatch\
+    \ observed half-state\nand either re-attempted or raised opaque AttributeError. Post-fix:\nemit-first,\
+    \ advance-second, fail-closed at the pre-advance\nposition. Same commit added `_advance_to_failed_no_audit`\
+    \ for the\nFAILED-path emit recursion-prevention.\n\nTrust Posture Wiring (in-clause, canonical 8-field\
+    \ template):\n  - **Severity:** halt-and-report at /implement gate (reviewer +\n    security-reviewer\
+    \ mechanical sweep on every state-advance +\n    audit-emit call site pair). Structural-signal class\
+    \ per\n    hook-output-discipline.md MUST-2.\n  - **Grace period:** 7 days from rule landing.\n  -\
+    \ **Cumulative posture impact:** 3x same-rule in 30d -> drop 1\n    posture per trust-posture.md MUST-4\
+    \ standard window.\n  - **Regression-within-grace:** trigger key\n    `audit_after_state_advance`\
+    \ fires emergency downgrade\n    (1 step) per trust-posture.md MUST-4 emergency-trigger list.\n  -\
+    \ **Receipt requirement:** SessionStart hard-gate\n    `[ack: audit-before-state-advance]` IFF\n \
+    \   posture.json::pending_verification includes this rule_id AND\n    the most recent journal entry\
+    \ references TrustExecutor / TAOD\n    / envelope-cascade work.\n  - **Detection mechanism:** gate-level\
+    \ reviewer + security-\n    reviewer mechanical sweep at /implement + /redteam — AST\n    walk for\
+    \ `<state>.advance(` followed by `<audit>.append(` in\n    the SAME function; advance-before-emit\
+    \ ordering = HIGH\n    finding. Phase 2 (deferred): hook detector\n    `.claude/hooks/lib/violation-patterns.js::detectStateAdvanceBeforeAuditEmit`\n\
+    \    with audit fixtures at\n    `.claude/audit-fixtures/violation-patterns/detectStateAdvanceBeforeAuditEmit/`.\n\
+    \  - **Violation scope:** MUST 1 (ordering) — structural AST\n    sweep; MUST 2 (no-recurse FAILED\
+    \ helper) — structural AST\n    sweep asserting any function named `*_to_failed*` has zero\n    calls\
+    \ to the same module's audit-emit helper used by the\n    parent advance path.\n  - **Origin:** See\
+    \ § Origin (PR #1139 commit e9626a223,\n    2026-05-22).\n\nClassification rationale: GLOBAL — the\
+    \ failure mode generalises\nacross every state-machine + audit-chain pairing, not specific\nto Delegate.\
+    \ Applies to trust-executor, PACT envelope cascade,\nDataFlow transaction phases, kaizen agent lifecycles.\
+    \ eatp.md is\nthe natural home — audit-chain integrity is EATP's core domain.\n\nRelationship to existing\
+    \ rules: extends zero-tolerance.md Rule 3\n(\"no silent fallbacks\") at the state-machine surface\
+    \ — an\nadvance-without-audit IS the silent-fallback failure mode for\naudit chains. Distinct from\
+    \ Rule 3d (dual-shape return + hasattr\nguard) which governs API surface, not state-machine ordering.\n"
+- type: rule_update
+  artifact: testing
+  files:
+  - .claude/rules/testing.md
+  classification_suggestion: global
+  context: "Delegate arc pattern 2. ADDS one MUST clause to the existing\nRegression Testing section:\n\
+    \"### MUST: Conformance Vectors Pinning A Contract Implementation\nDoes Not Yet Enforce MUST Use @pytest.mark.xfail(strict=True)\"\
+    .\n\nLesson: when a conformance vector (canonical fixture, cross-impl\nspec test, integration receipt)\
+    \ pins a contract the implementation\ndoes NOT yet enforce, the test MUST carry\n`@pytest.mark.xfail(strict=True,\
+    \ reason=\"...\")` — NOT skip, NOT\ndelete, NOT comment-out. xfail-strict surfaces XPASS on closure:\n\
+    the moment the implementation catches up, the test transitions\nfrom xfail to passing AND pytest reports\
+    \ it as a \"strict xpass\nfailure\" — forcing the author to remove the marker. Skip silently\nstays\
+    \ skipped after closure; deletion loses the contract pin\nentirely.\n\nGeneralisation: pattern for\
+    \ any \"spec ahead of impl\" deferral\nwhere the test SHOULD fail today but MUST be the first thing\
+    \ that\nsurfaces when impl catches up. xfail-strict converts honest\ndeferral from a silent ratchet\
+    \ (skip) into a self-clearing\ntripwire (auto-XPASS on closure). Compiled-language analogues:\nRust\
+    \ `#[ignore = \"...\"]` + `cargo test -- --ignored` with a CI\njob that asserts ignored tests STILL\
+    \ fail; Go `t.Skip` + explicit\n\"want fail, got pass\" marker.\n\nEvidence: kailash-py PR #1142 +\
+    \ #1144 — S7 conformance vectors\nDV-3-001 / DV-5-001 / DV-7-001 / DV-9-001 / DV-10-001 at\n`tests/fixtures/delegate-conformance/canonical.json`.\
+    \ DV-7-001\n(single-shot §7 phase monotonicity) initially xfailed-strict\nbecause the runtime did\
+    \ not enforce single-shot consumption; the\nxfail-strict reverted to passing automatically when commit\n\
+    `d4ad6a9b3` landed `self._consumed: bool` guard + try/finally —\nXPASS reported by pytest forced the\
+    \ author to remove the marker\nsame shard. Skip would have left DV-7-001 silently skipped after\n\
+    the fix; deletion would have lost the §7 contract pin.\n\nTrust Posture Wiring (in-clause, canonical\
+    \ 8-field template):\n  - **Severity:** advisory at gate-review (reviewer mechanical\n    sweep on\
+    \ conformance-vector test files — lexical-regex-only\n    per hook-output-discipline.md MUST-2); halt-and-report\
+    \ at\n    /codify if a vector is added with @pytest.mark.skip instead\n    of xfail-strict for a deferred-impl\
+    \ claim (judgment-bearing\n    gate).\n  - **Grace period:** 7 days from rule landing.\n  - **Cumulative\
+    \ posture impact:** 3x same-rule in 30d -> drop 1\n    posture per trust-posture.md MUST-4 standard\
+    \ window.\n  - **Regression-within-grace:** trigger key\n    `conformance_skip_instead_of_xfail` fires\
+    \ emergency downgrade\n    (1 step) per trust-posture.md MUST-4 emergency-trigger list.\n  - **Receipt\
+    \ requirement:** SessionStart soft-gate\n    `[ack: xfail-strict-for-deferred-conformance]` IFF\n\
+    \    posture.json::pending_verification includes this rule_id\n    AND the most recent journal entry\
+    \ references conformance\n    fixtures / cross-impl receipts.\n  - **Detection mechanism:** gate-level\
+    \ reviewer mechanical\n    sweep — `grep -rn '@pytest.mark.skip' tests/**/conformance/`\n    MUST\
+    \ return zero hits where the skip reason cites a\n    deferred implementation; AST walk for any test\
+    \ file under\n    `tests/**/conformance/` or matching `*conformance*` asserts\n    xfail markers are\
+    \ `strict=True`. Phase 2 (deferred): hook\n    detector `.claude/hooks/lib/violation-patterns.js::detectSkipInsteadOfXfailStrictForConformance`\n\
+    \    with audit fixtures at\n    `.claude/audit-fixtures/violation-patterns/detectSkipInsteadOfXfailStrictForConformance/`.\n\
+    \  - **Violation scope:** MUST 1 (xfail-strict required for\n    deferred-impl conformance) — structural\
+    \ AST sweep over all\n    tests classified as conformance vectors (path-based +\n    fixture-loader-import-based).\n\
+    \  - **Origin:** See § Origin (PRs #1142/#1144, 2026-05-22).\n\nClassification rationale: GLOBAL —\
+    \ xfail-strict-for-deferred is\na language/CLI/SDK-invariant testing discipline. pytest naming\nis\
+    \ Python-specific but the principle (strict failure on XPASS)\nmaps to Rust `#[ignore]` + CI assertion\
+    \ and equivalents in\nevery test runner.\n\nRelationship to existing rules: pairs with test-skip-discipline.md\n\
+    (\"acceptable skip vs masked failure\") — that rule governs WHEN\ntests skip; this rule governs the\
+    \ structural defense for the\nspecific subclass of \"skip\" that is actually \"xfail-strict\ndeferral\"\
+    . Extends probe-driven-verification.md MUST-3 § skip\nvs lexical-fallback shape pattern.\n"
+- type: rule_update
+  artifact: agents
+  files:
+  - .claude/rules/agents.md
+  classification_suggestion: global
+  context: "Delegate arc pattern 3. ADDS one MUST clause to the existing\nQuality Gates section:\n\"###\
+    \ MUST: Multi-Wave Plans Require A Holistic Post-Wave /redteam\nAcross All Shards On main\".\n\nLesson:\
+    \ when a plan executes across N>=3 sharded waves and each\nshard carries its own per-shard /redteam,\
+    \ the orchestrator MUST\nrun a HOLISTIC post-multi-wave /redteam across ALL merged shards\non main\
+    \ BEFORE declaring the plan converged. Per-shard /redteam\ncatches within-shard defects; holistic\
+    \ post-wave /redteam catches\ncross-shard invariant violations — the failure mode where each\nshard\
+    \ is locally correct but two shards together break a global\ninvariant (orphaned API surface, missing\
+    \ audit chain link, drift\nbetween docs and merged impl, workspace path leakage scrubbed\nfrom each\
+    \ shard but not from the combined surface).\n\nGeneralisation: applies to every multi-wave COC plan\
+    \ (multi-shard\nbuilds, multi-PR refactors, cross-package releases). The holistic\n/redteam dispatches\
+    \ a minimum of three parallel agents (reviewer\n+ security-reviewer + closure-parity verifier) per\
+    \ `agents.md`\nMUST: Audit/Closure-Parity Verification Specialist Has Bash +\nRead, scoped to \"all\
+    \ merged PRs in this plan on main\", NOT \"the\ndiff of the most recent shard\". Same parallel-execution\
+    \ shape\nas the existing \"Parallel Brief-Claim Verification When Issue\nCount >= 3\" rule but applied\
+    \ at the post-implementation\nconvergence gate rather than at /analyze.\n\nEvidence: kailash-py issue\
+    \ #1035 Delegate arc — after Wave 6\n(PR #1144) merged, a holistic post-multi-wave /redteam across\n\
+    all 8 shards on main surfaced 1 L1 cleanup gap (PR #1145 —\nworkspace path leakage scrub that NO per-shard\
+    \ /redteam caught\nbecause each shard's per-shard /redteam was scoped to its own\ndiff) + 5 follow-up\
+    \ issues filed (#1143, #1146, #1147, #1148,\n#1149, #1150). Per-shard /redteam caught zero CRIT/HIGH\n\
+    unfixed; holistic /redteam caught one L1 + 5 cross-shard\nfindings.\n\nTrust Posture Wiring (in-clause,\
+    \ canonical 8-field template):\n  - **Severity:** halt-and-report at the orchestrator's \"plan\n \
+    \   converged\" claim (cc-architect mechanical sweep on session\n    notes claiming multi-wave plan\
+    \ completion — judgment-\n    bearing gate per hook-output-discipline.md MUST-2).\n  - **Grace period:**\
+    \ 7 days from rule landing.\n  - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1\n  \
+    \  posture per trust-posture.md MUST-4 standard window.\n  - **Regression-within-grace:** trigger\
+    \ key\n    `multi_wave_plan_no_holistic_redteam` fires emergency\n    downgrade (1 step) per trust-posture.md\
+    \ MUST-4 emergency-\n    trigger list.\n  - **Receipt requirement:** SessionStart hard-gate\n    `[ack:\
+    \ holistic-post-multi-wave-redteam]` IFF\n    posture.json::pending_verification includes this rule_id\n\
+    \    AND the most recent journal entry references >=3-shard\n    plan completion.\n  - **Detection\
+    \ mechanism:** gate-level cc-architect mechanical\n    sweep at /codify and at \"plan converged\"\
+    \ claims — assert a\n    journal entry exists at `workspaces/<id>/journal/` named\n    `holistic-post-wave-redteam-*`\
+    \ AND cites >=3 parallel\n    specialists (reviewer + security-reviewer + closure-parity\n    verifier\
+    \ or equivalent) AND scoped its review to the union\n    of all merged shards on main. Phase 2 (deferred):\
+    \ hook\n    detector\n    `.claude/hooks/lib/violation-patterns.js::detectMultiWavePlanWithoutHolisticRedteam`\n\
+    \    with audit fixtures at\n    `.claude/audit-fixtures/violation-patterns/detectMultiWavePlanWithoutHolisticRedteam/`.\n\
+    \  - **Violation scope:** MUST 1 (holistic post-wave /redteam\n    required for N>=3 shard plans)\
+    \ — structural sweep on\n    workspace journal + agent invocation transcripts.\n  - **Origin:** See\
+    \ § Origin (issue #1035, PRs #1130-#1150,\n    2026-05-22).\n\nClassification rationale: GLOBAL —\
+    \ multi-wave orchestration is\nCLI/SDK/language-invariant. Applies to every COC workspace\ncrossing\
+    \ >=3 shards regardless of repo.\n\nRelationship to existing rules: extends agents.md existing\nQuality\
+    \ Gates section (per-edit + per-gate review pattern)\nwith the post-plan layer. Distinct from existing\
+    \ \"Parallel\nBrief-Claim Verification When Issue Count >= 3\" which governs\n/analyze brief verification,\
+    \ not /redteam post-plan\nverification. Same structural shape (parallel agents at the\ngate); different\
+    \ trigger and gate.\n"
+- type: rule_update
+  artifact: deployment
+  files:
+  - .claude/rules/deployment.md
+  classification_suggestion: global
+  context: "Delegate arc pattern 4. ADDS one MUST clause:\n\"## MUST: Pre-Pledge Release Disclosure For\
+    \ Pre-1.0 / Wave-0 New\nPublic APIs\".\n\nLesson: any /release that ships a NEW public API (new module,\n\
+    new top-level package, new framework primitive) with a pre-1.0\n/ v0 / pre-pledge version anchor MUST\
+    \ include a \"Pre-Pledge v0\"\ndisclosure section in the package README or top-level docs\nBEFORE\
+    \ the release tag is cut. The disclosure MUST enumerate\nfive required fields: (a) invariants enforced\
+    \ TODAY (the\ncontract users may rely on now), (b) items DEFERRED for later\nversions (the contract\
+    \ not yet enforced), (c) explicit\nNON-PROMISES (what users MUST NOT assume), (d) how-to-verify\n\
+    (commands to run that exercise the enforced invariants),\n(e) the version status.\n\nGeneralisation:\
+    \ applies to every pre-1.0 release of a new public\nAPI — Delegate v0, dataflow new-engine v0, kaizen\
+    \ new lifecycle\nv0, nexus new transport v0, etc. The disclosure structurally\nseparates \"what we\
+    \ pledge\" from \"what we aspire to\" — preventing\nthe silent-pledge failure mode where users adopt\
+    \ v0 assuming\nall advertised features are enforced today, then break on first\nupgrade when a previously-aspirational\
+    \ feature ships in v0.1\nwith different semantics.\n\nEvidence: kailash-py PR #1144 — README \"Delegate\
+    \ composition\nprimitive — Pre-Pledge v0\" section starting line 317. The\nsection enumerates 8 enforced\
+    \ invariants (signed audit chain,\ncapability snapshot, posture ladder, etc.), 3 deferred items\n\
+    (cross-SDK byte-determinism conformance for vectors DV-3 /\nDV-7 / DV-9 still py-leads), 3 non-promises\
+    \ (no implicit\nretries, no shadow audit chains, no posture auto-upgrade), and\nhow-to-verify commands.\
+    \ Pre-merge co-owner assessment of the\ndisclosure caught one \"we enforce X\" claim that the impl\n\
+    actually deferred — would have shipped as a silent pledge\notherwise.\n\nTrust Posture Wiring (in-clause,\
+    \ canonical 8-field template):\n  - **Severity:** halt-and-report at /release gate (release-\n   \
+    \ specialist mechanical sweep on any new public API with\n    version anchor `0.*` / `v0.*` / `pre-pledge`\
+    \ — judgment-\n    bearing gate per hook-output-discipline.md MUST-2).\n  - **Grace period:** 7 days\
+    \ from rule landing.\n  - **Cumulative posture impact:** 3x same-rule in 30d -> drop 1\n    posture\
+    \ per trust-posture.md MUST-4 standard window.\n  - **Regression-within-grace:** trigger key\n   \
+    \ `prepledge_release_no_disclosure` fires emergency downgrade\n    (1 step) per trust-posture.md MUST-4\
+    \ emergency-trigger list.\n  - **Receipt requirement:** SessionStart hard-gate\n    `[ack: pre-pledge-disclosure]`\
+    \ IFF\n    posture.json::pending_verification includes this rule_id\n    AND the impending /release\
+    \ version anchor is `0.*` / `v0.*`\n    AND the release diff adds a NEW public API surface (new\n\
+    \    top-level module/package).\n  - **Detection mechanism:** gate-level release-specialist\n    mechanical\
+    \ sweep at /release — for every new public\n    module/package shipping at version `0.*`, grep README.md\n\
+    \    and docs/ for a section titled \"Pre-Pledge\",\n    \"v0 Disclosure\", \"Pre-1.0 Status\", or\
+    \ equivalent, AND\n    assert the section enumerates the 5 required fields\n    (enforced / deferred\
+    \ / non-promises / how-to-verify /\n    status). Phase 2 (deferred): hook detector\n    `.claude/hooks/lib/violation-patterns.js::detectPrePledgeReleaseMissingDisclosure`\n\
+    \    with audit fixtures at\n    `.claude/audit-fixtures/violation-patterns/detectPrePledgeReleaseMissingDisclosure/`.\n\
+    \  - **Violation scope:** MUST 1 (5-field disclosure required\n    for new-public-API pre-1.0 releases)\
+    \ — structural grep +\n    structured-section enumeration.\n  - **Origin:** See § Origin (PR #1144\
+    \ README § Pre-Pledge v0,\n    2026-05-22).\n\nClassification rationale: GLOBAL — pre-1.0 / v0 disclosure\n\
+    discipline is CLI/SDK/language-invariant. Applies to every\nFoundation repo's release pipeline.\n\n\
+    Relationship to existing rules: extends deployment.md existing\nversion-consistency rules (atomic\
+    \ version bumps across\npyproject.toml + __version__) with the pre-1.0 disclosure\nrequirement. Extends\
+    \ zero-tolerance.md Rule 6 (\"implement\nfully\") at the docs surface — a pre-pledge disclosure is\n\
+    structurally the inverse of \"if endpoint exists, it returns\nreal data\": the README MUST distinguish\
+    \ endpoints that DO\nreturn real data today vs endpoints whose docs reserve a\ncontract impl will\
+    \ satisfy later. Co-located with the existing\nissue #1086 candidate 1 deployment.md clause above;\
+    \ loom-side\nprocessor handles both in one merge.\n"
+- type: rule_update
+  artifact: verify-claims-before-durable-write
+  files:
+  - .claude/rules/git.md
+  classification_suggestion: global
+  context: "2026-05-27 release-cycle pattern (kailash 2.27.0 release-drive).\nCandidate: extend git.md\
+    \ § \"Commit-message claim accuracy\" — OR\nauthor a small new baseline rule — with a clause:\n\n\"\
+    ## MUST: Verify Code-Claims Against Ground Truth Before Durable\nWrite\". Any claim about code written\
+    \ into a DURABLE artifact\n(CHANGELOG, commit body, PR description, docs, a codified rule) —\npublic\
+    \ API names, signatures, set/list counts, class names,\nallowlist/denylist contents — MUST be verified\
+    \ against ground\ntruth (import the symbol, read the source/wheel, print the FULL\ncollection) BEFORE\
+    \ the write. Trusting (a) a claim reconstructed\nacross a context boundary (compaction summary, .session-notes,\n\
+    prior-session framing), or (b) truncated command output\n(`tail -N` / `head -N` / `... | head` over\
+    \ the line carrying the\ncited value) is BLOCKED.\n\nOriginating evidence (this session, both caught\
+    \ before consumer\nimpact but each cost an extra correction PR):\n  1. The 2.27.0 CHANGELOG Added\
+    \ section (commit b9b0a71ed) listed\n     5 kailash.workflow functions — from_brief / afrom_brief\
+    \ /\n     from_brief_validate / from_brief_analyze / from_brief_realize\n     — carried verbatim from\
+    \ a compaction-summary \"5 entrypoints\"\n     framing. Four of those names do not exist anywhere\
+    \ in the\n     package; the real surface is Workflow.from_brief +\n     kailash.bootstrap + workflow_from_brief.\
+    \ The \"5 surfaces\" of\n     PR #1181 are 5 distinct FRAMEWORKS, not 5 functions. Caught\n     by\
+    \ TestPyPI-rehearsal clean-venv import\n     (`ImportError: cannot import name 'afrom_brief'`). Corrected\n\
+    \     in PR #1187 (commit ec2c99163).\n  2. The PR-#1187 correction then documented _DANGEROUS_NODE_TYPES\n\
+    \     as \"8 types\" (and stated AsyncPythonCodeNode is NOT in it)\n     because a `tail -8` silently\
+    \ dropped the count line + first 4\n     alphabetical entries. Real floor is 12; AsyncPythonCodeNode\
+    \ IS\n     in it. Caught at post-publish production verify. Corrected in\n     PR #1188 (commit 1a3dab318).\n\
+    \nBLOCKED rationalizations: \"the summary said so\" / \"the prior\nsession established this surface\"\
+    \ / \"tail is enough to see the\nshape\" / \"I'll verify if something breaks\" / \"the count is\n\
+    approximate anyway\".\n\nRelationship to existing rules: extends git.md § \"Commit-message\nclaim\
+    \ accuracy\" (commit bodies describe ONLY diff-present changes)\nfrom the commit surface to the CHANGELOG/docs/rule\
+    \ surface. Same\nepistemic family as zero-tolerance.md Rule 1c (\"pre-existing is\nunprovable after\
+    \ a context boundary\") — a carried-forward API\nclaim is structurally unfalsifiable until re-verified.\
+    \ Sibling of\nuser-flow-validation.md (walk before declaring done) — the\ndurable-write verification\
+    \ is the artifact-claim analogue of the\nuser-flow walk. Pairs with the auto-memory\nfeedback_verify_claims_before_durable_write.md\
+    \ landed this session\nas the immediate in-repo stopgap.\n\nSelf-referential-codify note: IF loom\
+    \ authors this as a NEW rule\nFILE on the self-referential surface (a baseline rule governing\nagent\
+    \ write-discipline), loom MUST run the multi-agent\nredteam-with-tests gate per self-referential-codify.md\
+    \ MUST Rule 1.\nIF loom extends git.md (already on no special gate), posture\ndefault applies. cc-architect\
+    \ MUST emit canonical 8-field Trust\nPosture Wiring per trust-posture.md MUST Rule 8 either way.\n"
+- type: skill_update
+  artifact: from-brief-default-deny-security-pattern
+  files:
+  - .claude/skills/18-security-patterns/SKILL.md
+  classification_suggestion: global
+  context: "2026-05-27 — from_brief #1125 security model (shipped in kailash\n2.27.0). Candidate: capture\
+    \ the reusable security pattern\n\"untrusted-input-selects-which-primitive-to-instantiate MUST\ndefault-deny\"\
+    \ as a security-patterns skill entry (cross-SDK — the\nsame surface exists in kailash-rs from_brief\
+    \ equivalents).\n\nPattern (verified against the shipped 2.27.0 wheel):\n  - When untrusted input\
+    \ (an LLM-emitted plan from a natural-\n    language brief) selects WHICH node type to realize, the\
+    \ node-\n    type surface IS a code-execution boundary. The sound model is\n    a POSITIVE allowlist\
+    \ (a vetted `_SAFE_NODE_TYPES` frozenset of\n    43 entries) intersected with the live registry —\
+    \ NOT \"all\n    registered nodes minus a denylist\". Denylist-subtraction is\n    unsound by construction:\
+    \ every new SDK node added between\n    releases is implicitly trusted, and code-exec helpers\n  \
+    \  (PythonCodeNode execs via the CodeExecutor helper) are\n    invisible to a class-scope denylist\
+    \ scan.\n  - Enforce at the CHOKE POINT (`_realize()` at add_node time), not\n    only at a higher\
+    \ validate_plan() gate — a typed plan whose\n    shape differs from what validate_plan inspects (node_type\n\
+    \    nested in plan.nodes[i]) bypassed the higher gate.\n  - Keep a hardcoded denylist FLOOR (12 explicitly-dangerous\
+    \ types)\n    subtracted BEFORE the allowlist applies, so a future allowlist\n    expansion cannot\
+    \ re-admit code-exec / SSRF surfaces.\n  - Ship an INVERSE-COMPLETENESS test that walks the MRO of\
+    \ every\n    allowlisted type and AST-scans every source path for exec /\n    eval / compile / import_module\
+    \ / __import__ / unsafe-\n    deserialization (pickle|marshal|dill|cloudpickle.loads,\n    yaml.load)\
+    \ / CodeExecutor references — so a future code-\n    executing node added under a familiar name fails\
+    \ the allowlist\n    TEST, not production.\n  - Reject NaN/inf/out-of-range at the confidence-gate\n\
+    \    construction boundary (pydantic ConfigDict(extra=\"forbid\",\n    allow_inf_nan=False) + math.isfinite\
+    \ check), closing a\n    confidence-bypass class.\n\nReference implementation:\n  src/kailash/workflow/from_brief.py\
+    \ (_SAFE_NODE_TYPES,\n  _DANGEROUS_NODE_TYPES, _realize), kailash/_from_brief/\n  {validator,confidence}.py,\
+    \ tests/unit/workflow/\n  test_from_brief_safe_allowlist.py (inverse-completeness test).\n\nCross-SDK:\
+    \ kailash-rs has equivalent from_brief / brief-to-\nprimitive surfaces; the default-deny + choke-point\
+    \ + inverse-\ncompleteness triad is language-invariant (EATP D6 semantic\nparity). loom should classify\
+    \ whether this is a global skill\nentry + a cross-SDK inspection issue on kailash-rs.\n\nConvergence\
+    \ receipt: workspaces/from-brief-1125/04-validate/\n(round-01 through round-03 + 00-convergence.md);\
+    \ 2 CRITICAL +\nSharePoint MEDIUM + confidence-gate-bypass closed across the\nredteam cycle. Cross-agent\
+    \ CRIT/HIGH disagreement (security-\nreviewer static \"closed\" vs reviewer Bash-proved \"denylist\n\
+    incomplete\") resolved BY CONSTRUCTION (probe: DataTransformer\nrealized through the gate) per self-referential-codify.md\
+    \ MUST-1\n+ redteam-integration.md — NOT by averaging severities.\n"
+- type: command_update
+  artifact: sweep
+  files:
+  - .claude/commands/sweep.md
+  classification_suggestion: global
+  context: 'Sweep stale-tag false-positive fix (BUILD->loom, kailash-py 2026-05-30).
+
+    ADDS "Sweep 8: Release readiness (publishing repos only)"; bumps the
+
+    workflow count 7->8 and Closure step-1 count 1-7->1-8.
+
+
+    Root-cause: /sweep had NO mechanical release-readiness step (Sweep 4 is
+
+    "Open PRs and stale feature branches"). An agent improvised a release
+
+    check (SWEEP-2026-05-28.md "Sweep 4 / release-readiness") and hand-picked
+
+    a STALE diff base (v2.27.0) instead of the actual latest tag (v2.28.1),
+
+    re-flagging already-released fixes (#1182, #1185 — both ancestors of
+
+    v2.28.1) as "unreleased HIGH" on every sweep. That recurring false
+
+    positive is what made /sweep feel "neverending" to the operator.
+
+
+    Fix: Sweep 8 derives the diff base MECHANICALLY from
+
+    `git tag --sort=-version:refname | grep -E ''^v?[0-9]+\.[0-9]+\.[0-9]+$''`
+
+    (plain vX.Y.Z stable tags only; the $-anchor excludes prerelease -rc1
+
+    and package-prefixed dataflow-v* tags so a future v2.29.0-rc1 cannot
+
+    sort above v2.29.0 and re-introduce the bug). Flags "unreleased" ONLY
+
+    when `git log "$LATEST"..HEAD -- src/ packages/*/src` is non-empty;
+
+    docs/.claude/workspace diffs do NOT ship. Verifies any named PR via
+
+    `git merge-base --is-ancestor <sha> "$LATEST"` before calling it
+
+    unreleased. Hand-picking a base tag is BLOCKED.
+
+
+    Self-referential gate (self-referential-codify.md Rule 1+2 — sweep.md is
+
+    named on the Commands allowlist): multi-agent redteam-with-tests ran in
+
+    parallel BEFORE this proposal. reviewer APPROVED (1 MED prerelease-sort,
+
+    fixed same-shard by the $-anchored regex; 2 LOW doc-grade). security-
+
+    reviewer APPROVED (0 CRIT/HIGH/MED; $LATEST quoted + read-only repo-local
+
+    => no injection; Sweeps 1-7 byte-unchanged; true-positive detection
+
+    preserved). cc-architect APPROVED (149 lines <= 150 cap; CLI-neutral;
+
+    structural fit). The line-141 "1-7"->"1-8" LOW (flagged by 2 agents)
+
+    fixed same-shard.
+
+
+    Loom Gate-1 classification suggestion: GLOBAL — the stale-tag bug class
+
+    is language-agnostic; every publishing BUILD repo (kailash-rs) shares the
+
+    failure mode. The bash is Python-anchored (pyproject.toml, src/,
+
+    packages/*/src); the "(publishing repos only)" guard + "no shippable
+
+    change" disposition degrade safely in non-Python/non-publishing repos.
+
+    loom may prefer a variant overlay for the rs lane''s Cargo.toml anchors.
+
+    '
+- type: skill_update
+  artifact: featurestore-2.0.0-cutover-examples
+  files:
+  - .claude/skills/34-kailash-ml/ml-feature-pipelines.md
+  - .claude/skills/34-kailash-ml/ml-training-pipeline.md
+  - .claude/skills/34-kailash-ml/SKILL.md
+  - .claude/skills/project/ml-quick-reference.md
+  - .claude/skills/04-kaizen/kaizen-ml-integration.md
+  - .claude/skills/02-dataflow/dataflow-ml-integration.md
+  classification_suggestion: global
+  context: 'kailash-ml 2.0.0 FeatureStore canonical cutover (#643 step 3, shipped this session). Top-level
+    `from kailash_ml import FeatureStore` now resolves to the canonical READ-ONLY `kailash_ml.features.FeatureStore`
+    (ctor FeatureStore(dataflow, *, default_tenant_id=None)). These 6 skill examples taught the legacy
+    write workflow with `FeatureStore(conn, table_prefix=...)` + ingest/register/initialize, which now
+    TypeErrors at the top level. Applied LOCALLY this session: swapped each to the explicit legacy import
+    `from kailash_ml.engines.feature_store import FeatureStore` (the self-contained write surface the
+    canonical read store does not expose) + a self-documenting comment that top-level is the canonical
+    read surface. ml-training-pipeline.md additionally fixed a pre-existing missing FeatureStore import;
+    kaizen-ml-integration.md split FeatureStore out of the multi-symbol top-level import. Propose for
+    canonical sync. ADDITIONAL FINDING (pre-existing doc-rot, surfaced during this fix): these examples
+    also call PHANTOM methods that exist on NEITHER surface — fs.ingest(), fs.compose(), fs.register_schema(),
+    store.register_group() (real legacy methods: register_features(schema), store(...), compute(...),
+    get_features(...), get_training_set, get_features_lazy, list_schemas). The local import swap this
+    session is a PARTIAL fix (correct module, but the method calls remain phantom). loom Gate-1: author
+    a FULL canonical rewrite of the FeatureStore skill examples — decide legacy-explicit vs canonical-DataFlow-model
+    framing per example (training-pipeline/kaizen compose with legacy ConnectionManager engines; pure-FeatureStore
+    examples should teach the canonical read pattern + DataFlow-model writes per MIGRATION.md), and replace
+    every phantom method with the real signature. Same phantom-method class as the README rot fixed in
+    PR #1274.'
+- type: rule_new
+  artifact: verify-claims-before-durable-write
+  files:
+  - .claude/rules/verify-claims-before-durable-write.md
+  classification_suggestion: global
+  context: 'Evidence: workspaces/from-brief-1125/journal/0002-DISCOVERY-verify-claims-before-durable-write.md;
+    correction PRs #1187/#1188. DRAFT MUST: "Code-claims in durable artifacts MUST be verified against
+    ground truth before the write. Any claim about code — public API/symbol names, function signatures,
+    set/list/__all__ counts, class names, allowlist membership — written into a durable artifact (CHANGELOG,
+    commit body, PR description, docs, rule, spec) MUST first be verified against ground truth: import
+    the symbol, read the source/wheel, or print the FULL collection. Two claim sources are presumed false
+    until re-verified: (1) context-boundary reconstructions (any claim carried across /clear, auto-compaction,
+    resume, sub-agent handoff — same shape as zero-tolerance Rule 1c); (2) truncated command output (tail
+    -N/head -N/| head over the cited line silently drops the datum). Structural backstops (TestPyPI clean-venv
+    import, post-publish verify) confirm AFTER the write — last line, not a substitute for verifying BEFORE."
+    Pairs with existing feedback memory feedback_verify_claims_before_durable_write.md (in-repo stopgap,
+    no structural wiring); extends zero-tolerance Rule 1c (epistemic shape, not the durable-write trigger).
+    loom: author with Trust Posture Wiring 8-field block + DO/DO NOT per rule-authoring.md.'
+- type: rule_update
+  artifact: nexus-http-status-convention-sdk-scope
+  files:
+  - .claude/rules/nexus-http-status-convention.md
+  classification_suggestion: global
+  context: 'Evidence: workspaces/nexus-scheduler-admin-937/journal/0001-DISCOVERY-nexus-error-taxonomy-cross-sdk-divergence.md;
+    packages/kailash-nexus/src/nexus/errors.py:79-90. The rule paths: **/nexus/** scopes the Rust-frozen
+    NexusError enum-variant taxonomy + {"error","code"} body onto the Python package, whose errors.py
+    uses a CLASS HIERARCHY (NotFoundError/ValidationError/ForbiddenError) with body {"error":<error_code>,"detail":<message>}.
+    A Python handler "following the rule" codes against a non-existent Rust API. DRAFT: add SDK-scope
+    qualifier to MUST-1 — the frozen enum-variant taxonomy + {"error","code"} body is the Rust SDK contract;
+    Python kailash-nexus implements the class hierarchy + to_response_dict() {"error":<error_code>,"detail":<msg>}
+    shape; Python handlers follow the Python class hierarchy, NOT the Rust enum table; the paths: must
+    distinguish per SDK. (Docstring-lie/missing-handler half already resolved — add_exception_handler
+    shipped at http.py:241, #937 CLOSED.)'
+- type: rule_update
+  artifact: observability-credential-redaction-every-surface
+  files:
+  - .claude/rules/observability.md
+  classification_suggestion: global
+  context: 'Evidence: deploy/deployments/2026-06-04-v2.29.2-1260-pool-key-credential-masking.md (#1260,
+    4 security-review rounds). DRAFT new §6.3 "Credential Redaction Covers Every Observable Surface":
+    When a value that may embed credentials (connection string, pool key, DSN) is masked for log output,
+    the SAME redaction MUST be applied at EVERY observable surface that interpolates it — WARN/ERROR/INFO
+    log lines, Prometheus metric label values, exception messages AND exception attributes, and any public
+    diagnostic return value (get_pool_info/get_pool_metrics/pool_keys/health-report). Masking only the
+    log line is BLOCKED — metric labels ship to the same aggregators; exception/return surfaces are read
+    by callers. For composite keys (loop_id|db_type|connection_string|min|max) reconstruct the credential
+    segment from the middle fields ("|".join(parts[2:-2])) so a literal | inside a password cannot leak
+    the tail. Extends observability §6 (mask_url helper form) which mandates the helper but not the multi-surface
+    sweep. loom: add Trust Posture Wiring + DO/DO NOT.'
+- type: rule_update
+  artifact: patterns-contextvars-thread-boundary
+  files:
+  - .claude/rules/patterns.md
+  classification_suggestion: global
+  context: 'Evidence: deploy/deployments/2026-06-01-v2.28.3-1200-dataflow-v2.10.1-1207.md (#1200 — all
+    4 runtimes dropped caller contextvars across the executor boundary; a tenant/trace ContextVar read
+    its default inside node.run()). DRAFT clause "Propagate contextvars Across Every Thread-Boundary Dispatch":
+    Any runtime that dispatches a sync callable across a thread boundary (loop.run_in_executor, ThreadPoolExecutor.submit,
+    raw threading.Thread) MUST snapshot contextvars.copy_context() in the caller frame and run the callable
+    via ctx.run(...) — a fresh ctx.copy() per concurrent dispatch so one Context is never entered concurrently.
+    A ContextVar set before execute() MUST be visible inside a node run(), matching the asyncio.to_thread
+    convention. No existing patterns.md clause covers thread-boundary propagation. loom: add Trust Posture
+    Wiring + DO/DO NOT.'
+- type: rule_update
+  artifact: tenant-isolation-one-canonical-tenant-source
+  files:
+  - .claude/rules/tenant-isolation.md
+  classification_suggestion: global
+  context: 'Evidence: workspaces/issue-1252-bulk-tenant-isolation/journal/0001-DISCOVERY-bulk-tenant-source-mismatch.md
+    (#1252 — bulk subsystem read a stale _tenant_context dict instead of the switch() contextvar, writing
+    tenant_id=NULL rows invisible to every tenant). DRAFT new MUST clause "Every Write Path Reads Tenant
+    From One Canonical Source": When a model is multi_tenant=True, EVERY write/scope path — single-record
+    AND bulk (bulk_create/update/upsert, upsert) — MUST read the tenant from the SAME canonical source
+    (the live tenant contextvar via get_current_tenant_id()), never a parallel legacy dict/field. A subsystem
+    that builds its own SQL MUST still resolve tenant from the canonical source and fail closed when none
+    is bound. Single-record correctness did not imply bulk correctness — a dual-tenant-source split is
+    the failure mode. Extends tenant-isolation (which audits cache-key/filter/label/audit sites but not
+    write-path tenant-source parity). loom: add Trust Posture Wiring + DO/DO NOT.'
 deferred:
-  - id: "issue-1086-candidate-3"
-    summary: |
-      SessionEnd hook dedup-by-source_commit. Two .pending/ files for
-      commit 1fa3311e63c9 differed only in session_id; the hook re-fires
-      on every session re-entry whose HEAD matches, so triage cost
-      compounds linearly. This is hook CODE (.claude/hooks/lib/) —
-      per issue #1086 acceptance criteria it lands loom-side, not in this
-      BUILD->loom proposal. Candidate 4's rule clause (above) is the
-      paired contract for the same hook; candidate 3 implements both the
-      routing and the dedup.
-    disposition: "loom-side change — tracked by issue #1086 acceptance criterion 2"
+- id: issue-1086-candidate-3
+  summary: 'SessionEnd hook dedup-by-source_commit. Two .pending/ files for
 
-  - id: "delegate-arc-pattern-5-multi-shard-execution-discipline"
-    summary: |
-      Multi-shard plan execution discipline (sharding cadence + per-shard
-      commit hygiene + parallel-worktree integration). Assessed during
-      this codify and WITHDRAWN before drafting: the discipline it would
-      codify is already structurally covered by autonomous-execution.md
-      Per-Session Capacity Budget rules 1-4 (shard thresholds,
-      complexity-not-LOC sizing, feedback-loop multiplier, fix-
-      immediately within shard budget) + agents.md MUST: Parallel-
-      Worktree Package Ownership Coordination + agents.md MUST: Worktree
-      Agents Commit Incremental Progress. Authoring a new clause would
-      create the duplicate-rule failure mode cc-artifacts.md Rule 10
-      forbids.
-    disposition: "withdrawn — cross-reference to existing rules suffices"
+    commit 1fa3311e63c9 differed only in session_id; the hook re-fires
 
-  - id: "from-brief-redteam-cross-agent-disagreement-resolution"
-    summary: |
-      Redteam cross-agent CRIT/HIGH disagreement resolution (static
-      security-reviewer says "code-exec closed" while Bash-equipped
-      reviewer proves "denylist incomplete" → resolve by construction,
-      not by averaging severities). Assessed during the 2026-05-27
-      from_brief codify and WITHDRAWN before drafting: already covered by
-      self-referential-codify.md MUST Rule 1 (resolve by construction) +
-      agents.md MUST "Audit/Closure-Parity Verification Specialist Has
-      Bash + Read" (read-only specialist gives false-closed; Bash-
-      equipped re-verifies) + skills/32-trust-posture/redteam-
-      integration.md § Cross-Agent CRIT/HIGH Disagreement Resolution.
-      Authoring a new clause would trip cc-artifacts.md Rule 10
-      duplicate-rule prevention. The from_brief incident is logged as a
-      confirming instance of the existing rules, not a new rule.
-    disposition: "withdrawn — already covered by self-referential-codify.md MUST-1 + agents.md closure-parity + redteam-integration.md"
+    on every session re-entry whose HEAD matches, so triage cost
 
-append_session: |
-  Session 2026-05-27 — APPEND /codify covering 2 patterns from the
-  kailash 2.27.0 release-drive (from_brief #1125 + delegate #1035
-  security fixes → redteam convergence → release 2.27.0). Originating
-  evidence: workspaces/from-brief-1125/ (brief + 01-analysis +
-  04-validate round-01..03 + 00-convergence) + this session's release
-  cycle (PRs #1184 security fixes, #1186 release prep, #1187 + #1188
-  CHANGELOG corrections; tag v2.27.0; production PyPI publish +
-  clean-venv install/import-shape verify).
+    compounds linearly. This is hook CODE (.claude/hooks/lib/) —
 
-  Two candidates appended to changes[] (preserving the existing #1086
-  candidates 1/2/4 + the 4 delegate-arc patterns; status stays
-  pending_review — no reset needed, already pending):
-    1. verify-claims-before-durable-write (rule_update, git.md
-       extension OR new baseline rule) — verify code-claims against
-       ground truth before writing to CHANGELOG/commit/docs/rule;
-       never trust a context-boundary-reconstructed claim or
-       truncated output. Caused 2 correction PRs (#1187, #1188) this
-       session — both caught before consumer impact (TestPyPI
-       rehearsal + post-publish verify). Paired with auto-memory
-       feedback_verify_claims_before_durable_write.md (immediate
-       in-repo stopgap until this syncs back).
-    2. from-brief-default-deny-security-pattern (skill_update,
-       skills/18-security-patterns) — positive-allowlist ∩ registry +
-       choke-point enforcement + inverse-completeness AST/MRO test +
-       NaN/inf confidence-gate rejection. Reusable cross-SDK
-       (kailash-rs equivalent surfaces); loom should classify global
-       skill + cross-SDK inspection issue.
+    per issue #1086 acceptance criteria it lands loom-side, not in this
 
-  One candidate WITHDRAWN (added to deferred[]):
-    - from-brief-redteam-cross-agent-disagreement-resolution —
-      already covered by self-referential-codify.md MUST-1 +
-      agents.md closure-parity + redteam-integration.md;
-      cc-artifacts.md Rule 10 duplicate-rule prevention.
+    BUILD->loom proposal. Candidate 4''s rule clause (above) is the
 
-  No new rule FILES authored in this BUILD-repo session (candidates
-  are descriptions for loom to author/classify). loom-side processor
-  MUST emit canonical 8-field Trust Posture Wiring (trust-posture.md
-  MUST Rule 8) for candidate 1, AND — IF it authors candidate 1 as a
-  NEW baseline rule file on the self-referential surface — run the
-  multi-agent redteam-with-tests gate per self-referential-codify.md
-  MUST Rule 1 (git.md extension path needs no special gate).
+    paired contract for the same hook; candidate 3 implements both the
 
-  Distribution discipline: BUILD->loom proposal. No rule/skill files
-  edited in this kailash-py session; loom edits canonical + classifies
-  global vs variant at Gate-1.
+    routing and the dedup.
 
-  Receipts:
-    - Issue #1125 (from_brief primitives) — feature shipped in 2.27.0
-    - PRs #1184 (security fixes: default-deny + NaN/inf gate),
-      #1186 (release prep), #1187 + #1188 (CHANGELOG accuracy
-      corrections)
-    - Tag v2.27.0; production PyPI publish (run 26511132751) +
-      clean-venv install/import-shape verify (allowlist=43,
-      denylist-floor=12, disjoint, NaN/inf gate)
-    - Commits: 5abc806f8 (default-deny + tests), b9b0a71ed (release
-      prep + initial CHANGELOG), ec2c99163 (CHANGELOG surface fix),
-      1a3dab318 (CHANGELOG denylist-count fix)
-    - Workspace: workspaces/from-brief-1125/journal/
-    - Auto-memory: feedback_verify_claims_before_durable_write.md
+    '
+  disposition: 'loom-side change — tracked by issue #1086 acceptance criterion 2'
+- id: delegate-arc-pattern-5-multi-shard-execution-discipline
+  summary: 'Multi-shard plan execution discipline (sharding cadence + per-shard
 
-  --- prior append below ---
-  Session 2026-05-22 — APPEND /codify covering 4 patterns from the
-  kailash-py Delegate composition primitive arc (issue #1035, PRs
-  #1130-#1144 + post-wave cleanup #1145 + holistic /redteam follow-
-  ups #1143/#1146-1150). Originating evidence: workspaces/issue-1035-
-  delegate-py/journal/ entries 0001-0002 + the 8-shard arc journals
-  + commit `e9626a223` (S6 R1 audit-emit-ordering fix) + commit
-  `d4ad6a9b3` (S7 §7 single-shot consumption with auto-clearing
-  xfail-strict) + PR #1144 README pre-pledge section + PR #1145 L1
-  cleanup.
+    commit hygiene + parallel-worktree integration). Assessed during
 
-  Scope decision (user-gated this session): append 4 patterns to the
-  existing pending_review proposal above (issue #1086, candidates
-  1/2/4 unchanged). Pattern 5 ("multi-shard plan execution
-  discipline") withdrawn before drafting per overlap with
-  autonomous-execution.md Per-Session Capacity Budget rules 1-4 +
-  agents.md MUST: Parallel-Worktree Package Ownership Coordination —
-  authoring would have triggered cc-artifacts.md Rule 10 duplicate-
-  rule prevention.
+    this codify and WITHDRAWN before drafting: the discipline it would
 
-  This codify ADDS one MUST clause each to four EXISTING rule files
-  (eatp.md, testing.md, agents.md, deployment.md). Each carries an
-  in-clause Trust Posture Wiring summary covering all canonical 8
-  fields per trust-posture.md MUST Rule 8 (Severity / Grace period /
-  Cumulative posture impact / Regression-within-grace / Receipt
-  requirement / Detection mechanism / Violation scope / Origin). No
-  new agents/skills. No new rule FILES — clauses added to existing
-  files. status reset is N/A (proposal was already pending_review).
+    codify is already structurally covered by autonomous-execution.md
 
-  self-referential-codify.md gate assessment: agents.md IS on the
-  codify-discipline allowlist of self-referential-codify.md MUST
-  Rule 2. eatp.md, testing.md, deployment.md are NOT on the
-  allowlist (testing.md only governs implementation testing; not
-  codify discipline). The self-referential-codify.md MUST Rule 1
-  (multi-agent redteam-with-tests gate) applies to the agents.md
-  clause portion of this codify. The 3 non-self-referential clauses
-  follow posture default (L5_DELEGATED Round 1 OPTIONAL). loom-side
-  processor MUST dispatch parallel reviewer + security-reviewer +
-  cc-architect when classifying the agents.md clause; Phase-1 fail-
-  closed posture applies.
+    Per-Session Capacity Budget rules 1-4 (shard thresholds,
 
-  Distribution discipline: this is a BUILD->loom proposal. The
-  loom-side processor edits the four rule files in loom canonical;
-  no rule files are edited in this kailash-py session.
+    complexity-not-LOC sizing, feedback-loop multiplier, fix-
 
-  Trust Posture Wiring template note: the EXISTING entries above
-  (issue #1086 candidates 1/2/4) use the compact in-line wiring
-  summary common pre-canonical-template-update; the loom-side
-  processor MUST upgrade those to the canonical 8-field template per
-  trust-posture.md MUST Rule 8 grandfather-cutoff clause ("rules
-  landed BEFORE the SHA of this edit are exempt until their next
-  /codify-touched edit") — since both blocks are now /codify-touched
-  in this proposal, the loom-side processor authoring the rule edits
-  MUST emit canonical-template-compliant Wiring for ALL 7 clauses
-  (existing 3 + new 4).
+    immediately within shard budget) + agents.md MUST: Parallel-
 
-  Receipts:
-    - Issue #1035 (Delegate composition primitive build)
-    - PRs #1130 (S1), #1131 (S2.5), #1136 (S2), #1137 (Wave 2
-      __init__ reconciliation), #1138 (S5), #1139 (S6), #1142 (S7),
-      #1143 (holistic /redteam findings file), #1144 (S8 E2E +
-      cross-impl + pre-pledge README), #1145 (L1 cleanup), #1146-
-      #1150 (5 follow-up issues filed from holistic /redteam)
-    - Commits: `e9626a223` (S6 R1 audit-emit-before-state-advance),
-      `d4ad6a9b3` (S7 §7 single-shot consumption guard)
-    - Workspace journal: `workspaces/issue-1035-delegate-py/journal/`
-      entries 0001 (cross-impl receipts plan) + 0002 (cross-repo-
-      authorized fixture vendoring per repo-scope-discipline.md
-      User-Authorized Exception)
+    Worktree Package Ownership Coordination + agents.md MUST: Worktree
+
+    Agents Commit Incremental Progress. Authoring a new clause would
+
+    create the duplicate-rule failure mode cc-artifacts.md Rule 10
+
+    forbids.
+
+    '
+  disposition: withdrawn — cross-reference to existing rules suffices
+- id: from-brief-redteam-cross-agent-disagreement-resolution
+  summary: 'Redteam cross-agent CRIT/HIGH disagreement resolution (static
+
+    security-reviewer says "code-exec closed" while Bash-equipped
+
+    reviewer proves "denylist incomplete" → resolve by construction,
+
+    not by averaging severities). Assessed during the 2026-05-27
+
+    from_brief codify and WITHDRAWN before drafting: already covered by
+
+    self-referential-codify.md MUST Rule 1 (resolve by construction) +
+
+    agents.md MUST "Audit/Closure-Parity Verification Specialist Has
+
+    Bash + Read" (read-only specialist gives false-closed; Bash-
+
+    equipped re-verifies) + skills/32-trust-posture/redteam-
+
+    integration.md § Cross-Agent CRIT/HIGH Disagreement Resolution.
+
+    Authoring a new clause would trip cc-artifacts.md Rule 10
+
+    duplicate-rule prevention. The from_brief incident is logged as a
+
+    confirming instance of the existing rules, not a new rule.
+
+    '
+  disposition: withdrawn — already covered by self-referential-codify.md MUST-1 + agents.md closure-parity
+    + redteam-integration.md
+- artifact: codify-on-recurrence-2026-06-07
+  items:
+  - '#772 type-introspection consolidation (regression AST invariant covers; not yet cross-SDK pattern)'
+  - '#1245 sqlite trust-store per-thread conn leak (single-incident)'
+  - '#1248 cross-loop pool disposal scoping (single-incident, await 2nd occurrence)'
+  rationale: 'Per the corpus discipline: codify on recurrence signal, not first instance. Each has a regression
+    test capturing the point-fix.'
+append_session: "Session 2026-05-27 — APPEND /codify covering 2 patterns from the\nkailash 2.27.0 release-drive\
+  \ (from_brief #1125 + delegate #1035\nsecurity fixes → redteam convergence → release 2.27.0). Originating\n\
+  evidence: workspaces/from-brief-1125/ (brief + 01-analysis +\n04-validate round-01..03 + 00-convergence)\
+  \ + this session's release\ncycle (PRs #1184 security fixes, #1186 release prep, #1187 + #1188\nCHANGELOG\
+  \ corrections; tag v2.27.0; production PyPI publish +\nclean-venv install/import-shape verify).\n\n\
+  Two candidates appended to changes[] (preserving the existing #1086\ncandidates 1/2/4 + the 4 delegate-arc\
+  \ patterns; status stays\npending_review — no reset needed, already pending):\n  1. verify-claims-before-durable-write\
+  \ (rule_update, git.md\n     extension OR new baseline rule) — verify code-claims against\n     ground\
+  \ truth before writing to CHANGELOG/commit/docs/rule;\n     never trust a context-boundary-reconstructed\
+  \ claim or\n     truncated output. Caused 2 correction PRs (#1187, #1188) this\n     session — both\
+  \ caught before consumer impact (TestPyPI\n     rehearsal + post-publish verify). Paired with auto-memory\n\
+  \     feedback_verify_claims_before_durable_write.md (immediate\n     in-repo stopgap until this syncs\
+  \ back).\n  2. from-brief-default-deny-security-pattern (skill_update,\n     skills/18-security-patterns)\
+  \ — positive-allowlist ∩ registry +\n     choke-point enforcement + inverse-completeness AST/MRO test\
+  \ +\n     NaN/inf confidence-gate rejection. Reusable cross-SDK\n     (kailash-rs equivalent surfaces);\
+  \ loom should classify global\n     skill + cross-SDK inspection issue.\n\nOne candidate WITHDRAWN (added\
+  \ to deferred[]):\n  - from-brief-redteam-cross-agent-disagreement-resolution —\n    already covered\
+  \ by self-referential-codify.md MUST-1 +\n    agents.md closure-parity + redteam-integration.md;\n \
+  \   cc-artifacts.md Rule 10 duplicate-rule prevention.\n\nNo new rule FILES authored in this BUILD-repo\
+  \ session (candidates\nare descriptions for loom to author/classify). loom-side processor\nMUST emit\
+  \ canonical 8-field Trust Posture Wiring (trust-posture.md\nMUST Rule 8) for candidate 1, AND — IF it\
+  \ authors candidate 1 as a\nNEW baseline rule file on the self-referential surface — run the\nmulti-agent\
+  \ redteam-with-tests gate per self-referential-codify.md\nMUST Rule 1 (git.md extension path needs no\
+  \ special gate).\n\nDistribution discipline: BUILD->loom proposal. No rule/skill files\nedited in this\
+  \ kailash-py session; loom edits canonical + classifies\nglobal vs variant at Gate-1.\n\nReceipts:\n\
+  \  - Issue #1125 (from_brief primitives) — feature shipped in 2.27.0\n  - PRs #1184 (security fixes:\
+  \ default-deny + NaN/inf gate),\n    #1186 (release prep), #1187 + #1188 (CHANGELOG accuracy\n    corrections)\n\
+  \  - Tag v2.27.0; production PyPI publish (run 26511132751) +\n    clean-venv install/import-shape verify\
+  \ (allowlist=43,\n    denylist-floor=12, disjoint, NaN/inf gate)\n  - Commits: 5abc806f8 (default-deny\
+  \ + tests), b9b0a71ed (release\n    prep + initial CHANGELOG), ec2c99163 (CHANGELOG surface fix),\n\
+  \    1a3dab318 (CHANGELOG denylist-count fix)\n  - Workspace: workspaces/from-brief-1125/journal/\n\
+  \  - Auto-memory: feedback_verify_claims_before_durable_write.md\n\n--- prior append below ---\nSession\
+  \ 2026-05-22 — APPEND /codify covering 4 patterns from the\nkailash-py Delegate composition primitive\
+  \ arc (issue #1035, PRs\n#1130-#1144 + post-wave cleanup #1145 + holistic /redteam follow-\nups #1143/#1146-1150).\
+  \ Originating evidence: workspaces/issue-1035-\ndelegate-py/journal/ entries 0001-0002 + the 8-shard\
+  \ arc journals\n+ commit `e9626a223` (S6 R1 audit-emit-ordering fix) + commit\n`d4ad6a9b3` (S7 §7 single-shot\
+  \ consumption with auto-clearing\nxfail-strict) + PR #1144 README pre-pledge section + PR #1145 L1\n\
+  cleanup.\n\nScope decision (user-gated this session): append 4 patterns to the\nexisting pending_review\
+  \ proposal above (issue #1086, candidates\n1/2/4 unchanged). Pattern 5 (\"multi-shard plan execution\n\
+  discipline\") withdrawn before drafting per overlap with\nautonomous-execution.md Per-Session Capacity\
+  \ Budget rules 1-4 +\nagents.md MUST: Parallel-Worktree Package Ownership Coordination —\nauthoring\
+  \ would have triggered cc-artifacts.md Rule 10 duplicate-\nrule prevention.\n\nThis codify ADDS one\
+  \ MUST clause each to four EXISTING rule files\n(eatp.md, testing.md, agents.md, deployment.md). Each\
+  \ carries an\nin-clause Trust Posture Wiring summary covering all canonical 8\nfields per trust-posture.md\
+  \ MUST Rule 8 (Severity / Grace period /\nCumulative posture impact / Regression-within-grace / Receipt\n\
+  requirement / Detection mechanism / Violation scope / Origin). No\nnew agents/skills. No new rule FILES\
+  \ — clauses added to existing\nfiles. status reset is N/A (proposal was already pending_review).\n\n\
+  self-referential-codify.md gate assessment: agents.md IS on the\ncodify-discipline allowlist of self-referential-codify.md\
+  \ MUST\nRule 2. eatp.md, testing.md, deployment.md are NOT on the\nallowlist (testing.md only governs\
+  \ implementation testing; not\ncodify discipline). The self-referential-codify.md MUST Rule 1\n(multi-agent\
+  \ redteam-with-tests gate) applies to the agents.md\nclause portion of this codify. The 3 non-self-referential\
+  \ clauses\nfollow posture default (L5_DELEGATED Round 1 OPTIONAL). loom-side\nprocessor MUST dispatch\
+  \ parallel reviewer + security-reviewer +\ncc-architect when classifying the agents.md clause; Phase-1\
+  \ fail-\nclosed posture applies.\n\nDistribution discipline: this is a BUILD->loom proposal. The\nloom-side\
+  \ processor edits the four rule files in loom canonical;\nno rule files are edited in this kailash-py\
+  \ session.\n\nTrust Posture Wiring template note: the EXISTING entries above\n(issue #1086 candidates\
+  \ 1/2/4) use the compact in-line wiring\nsummary common pre-canonical-template-update; the loom-side\n\
+  processor MUST upgrade those to the canonical 8-field template per\ntrust-posture.md MUST Rule 8 grandfather-cutoff\
+  \ clause (\"rules\nlanded BEFORE the SHA of this edit are exempt until their next\n/codify-touched edit\"\
+  ) — since both blocks are now /codify-touched\nin this proposal, the loom-side processor authoring the\
+  \ rule edits\nMUST emit canonical-template-compliant Wiring for ALL 7 clauses\n(existing 3 + new 4).\n\
+  \nReceipts:\n  - Issue #1035 (Delegate composition primitive build)\n  - PRs #1130 (S1), #1131 (S2.5),\
+  \ #1136 (S2), #1137 (Wave 2\n    __init__ reconciliation), #1138 (S5), #1139 (S6), #1142 (S7),\n   \
+  \ #1143 (holistic /redteam findings file), #1144 (S8 E2E +\n    cross-impl + pre-pledge README), #1145\
+  \ (L1 cleanup), #1146-\n    #1150 (5 follow-up issues filed from holistic /redteam)\n  - Commits: `e9626a223`\
+  \ (S6 R1 audit-emit-before-state-advance),\n    `d4ad6a9b3` (S7 §7 single-shot consumption guard)\n\
+  \  - Workspace journal: `workspaces/issue-1035-delegate-py/journal/`\n    entries 0001 (cross-impl receipts\
+  \ plan) + 0002 (cross-repo-\n    authorized fixture vendoring per repo-scope-discipline.md\n    User-Authorized\
+  \ Exception)\n\n\n2026-06-07 append — codify of all sessions since last codification (2026-05-27). Added\
+  \ 1 skill_update (FeatureStore 2.0.0 cutover examples, applied locally) + 5 rule items (1 new: verify-claims-before-durable-write;\
+  \ 4 updates: nexus-http-status SDK-scope, observability credential-redaction-every-surface, patterns\
+  \ contextvars-thread-boundary, tenant-isolation one-canonical-tenant-source). Two parallel extraction\
+  \ agents surveyed the June 1-7 journal corpus + deploy records; most bug fixes were SKIP (already captured\
+  \ by journal + regression test). Deferred (codify-on-recurrence, single-incident): #772 type-introspection\
+  \ consolidation (AST invariant test covers), #1245 sqlite per-thread conn leak, #1248 cross-loop pool\
+  \ disposal."
