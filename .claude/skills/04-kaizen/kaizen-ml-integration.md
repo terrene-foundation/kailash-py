@@ -48,10 +48,12 @@ await conn.initialize()
 
 # Initialize engines
 features = FeatureStore(conn)
+await features.initialize()
 registry = ModelRegistry(conn)
-pipeline = TrainingPipeline(registry)
-server = InferenceServer(registry)
-monitor = DriftMonitor(conn)
+pipeline = TrainingPipeline(feature_store=features, registry=registry)
+# InferenceServer is per-model, built from the registry:
+server = InferenceServer.from_registry("churn_predictor", registry=registry)
+monitor = DriftMonitor(conn, tenant_id="default")
 ```
 
 ## Type Contracts (kailash_ml.types)
@@ -79,27 +81,27 @@ staging -> shadow -> production -> archived
 ```
 
 ```python
-# Register a model version
-version = await registry.register_version(
-    name="churn_predictor",
-    artifact=model_bytes,
+# Register a model version (artifact is bytes; metrics is a list of MetricSpec)
+version = await registry.register_model(
+    "churn_predictor",
+    model_bytes,
+    metrics=[MetricSpec(name="accuracy", value=0.92), MetricSpec(name="f1", value=0.87)],
     signature=ModelSignature(input_schema=[...], output_schema=[...]),
-    metrics={"accuracy": 0.92, "f1": 0.87},
 )
 
 # Promote through stages
-await registry.transition_stage(name, version.version, "shadow")
-await registry.transition_stage(name, version.version, "production")
+await registry.promote_model("churn_predictor", version.version, "shadow")
+await registry.promote_model("churn_predictor", version.version, "production")
 
 # ONNX export (requires [onnx] extra)
 from kailash_ml import OnnxBridge
 bridge = OnnxBridge()
-onnx_bytes = bridge.export(model, input_schema)
+export = bridge.export(model, framework="sklearn", n_features=10, output_path="model.onnx")
 
-# MLflow v1 format compatibility
+# MLflow MLmodel format compatibility — write a registered version out
 from kailash_ml import MlflowFormatReader, MlflowFormatWriter
 writer = MlflowFormatWriter()
-writer.save(model_dir, flavor="sklearn", model=model)
+writer.write(version, output_dir="./mlflow_out")
 ```
 
 ## AutoMLEngine (5 LLM Guardrails)
@@ -116,17 +118,25 @@ All 5 guardrails are opt-in. Without an LLM, AutoML runs purely algorithmically.
 
 ```python
 from kailash_ml import AutoMLEngine
+from kailash_ml.automl import AutoMLConfig
 
-# Pure algorithmic (no LLM)
-automl = AutoMLEngine(registry=registry, pipeline=pipeline)
-
-# With LLM augmentation (5 guardrails)
+# Pure algorithmic (no LLM): agent defaults to False on the config
 automl = AutoMLEngine(
-    registry=registry,
-    pipeline=pipeline,
-    agent_infusion=my_agent_infusion,  # AgentInfusionProtocol
+    config=AutoMLConfig(task_type="classification", metric_name="f1", max_trials=50),
+    tenant_id="default",
+    actor_id="ci",
 )
-result = await automl.run(data=df, target="churn", task="classification")
+
+# With LLM augmentation (5 guardrails): set agent=True + pass a governance engine
+automl = AutoMLEngine(
+    config=AutoMLConfig(task_type="classification", metric_name="f1", agent=True),
+    tenant_id="default",
+    actor_id="ci",
+    governance_engine=my_governance_engine,
+)
+
+# run() drives a search space + trial function (see ml-agent-guardrails.md)
+result = await automl.run(space=search_space, trial_fn=trial_fn)
 ```
 
 ## Interop Module (8 Converters)
