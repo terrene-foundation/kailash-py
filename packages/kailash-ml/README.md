@@ -533,7 +533,7 @@ env_reg.register("CartPole-v1")
 
 # Configure policy
 policy_reg = PolicyRegistry()
-policy_config = policy_reg.get("PPO")
+policy_config = policy_reg.get_spec("PPO")
 
 # Train
 trainer = RLTrainer(env_registry=env_reg, policy_registry=policy_reg)
@@ -614,21 +614,23 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
 
-monitor = DriftMonitor(conn)
-await monitor.initialize()
+# Thresholds are set at construction; tenant_id is required.
+monitor = DriftMonitor(
+    conn,
+    tenant_id="default",
+    psi_threshold=0.2,  # PSI > 0.2 = severe drift
+    ks_threshold=0.05,  # KS test significance level
+)
 
 # Set a reference distribution (e.g., from your training data)
-await monitor.set_reference_data("churn_model_v1", reference_df)
+await monitor.set_reference_data(
+    "churn_model_v1",
+    reference_df,
+    feature_columns=["age", "tenure_months", "monthly_spend"],
+)
 
 # Check drift against new production data
-report = await monitor.check_drift(
-    "churn_model_v1",
-    current_df,
-    spec=DriftSpec(
-        psi_threshold=0.2,         # PSI > 0.2 = severe drift
-        ks_alpha=0.05,             # KS test significance level
-    ),
-)
+report = await monitor.check_drift("churn_model_v1", current_df)
 
 print(f"Overall drift: {report.overall_drift}")     # "none", "moderate", "severe"
 print(f"Features drifted: {report.drifted_features}")
@@ -644,7 +646,7 @@ for feature_result in report.feature_results:
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml import ExperimentTracker
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
 
 # Option 1: Standalone (factory -- manages its own connection)
 async with await ExperimentTracker.create("sqlite:///ml.db") as tracker:

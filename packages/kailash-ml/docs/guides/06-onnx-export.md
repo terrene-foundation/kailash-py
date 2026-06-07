@@ -39,15 +39,16 @@ from kailash_ml.bridge.onnx_bridge import OnnxBridge
 bridge = OnnxBridge()
 
 # Export sklearn model
-onnx_path = bridge.export(
-    model=trained_sklearn_model,
-    input_shape={"float_input": [None, 4]},  # batch_size x features
+result = bridge.export(
+    trained_sklearn_model,
+    framework="sklearn",
+    n_features=4,
     output_path="model.onnx",
 )
 
-# Verify export
-is_valid = bridge.verify(onnx_path, sample_input)
-print(f"ONNX valid: {is_valid}")
+# Validate the export against the original model's predictions
+validation = bridge.validate(trained_sklearn_model, result.onnx_path, sample_input)
+print(f"ONNX valid: {validation.valid} (max diff: {validation.max_diff})")
 ```
 
 ## Rust Serving Bridge

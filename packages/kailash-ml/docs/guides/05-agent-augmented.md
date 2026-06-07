@@ -18,7 +18,7 @@ profile = await explorer.profile(df)
 
 # Agent reasons about the data
 agent = DataScientistAgent()
-result = await agent.recommend(
+result = await agent.analyze(
     data_profile=str(profile.to_dict()),
     business_context="Predict customer churn for telecom",
     constraints="Must train in under 1 hour on a single GPU",

@@ -1,14 +1,26 @@
 # ML Feature Pipelines
 
-FeatureStore provides polars-native feature ingestion, point-in-time queries, and schema-driven composition. All SQL is isolated in `_feature_sql.py` — zero raw SQL in engine files.
+The legacy `FeatureStore` engine provides polars-native feature materialisation,
+point-in-time queries, and schema-enforced storage. All SQL is isolated in
+`_feature_sql.py` — zero raw SQL in engine files.
+
+> **Which FeatureStore?** Since kailash-ml 2.0.0 (#643) the top-level
+> `from kailash_ml import FeatureStore` resolves to the **canonical read surface**
+> (`kailash_ml.features.FeatureStore` — a DataFlow bridge that reads features you
+> materialise as ordinary `@db.model` rows; see `dataflow-ml-integration.md`). The
+> self-contained **write/registry/training** engine shown here is the legacy
+> surface, reached via its explicit module path. Use it when you need
+> `register_features` / `store` / `get_training_set` (the canonical read store does
+> not expose a write path). See `MIGRATION.md` for the canonical recipe.
 
 ## FeatureStore Setup
 
-FeatureStore uses ConnectionManager (not Express) because point-in-time queries require window functions that Express cannot express.
+The legacy engine uses ConnectionManager (not Express) because point-in-time
+queries require window functions that Express cannot express.
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
+from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface
 from kailash_ml.types import FeatureSchema, FeatureField
 import polars as pl
 
@@ -19,9 +31,12 @@ fs = FeatureStore(conn, table_prefix="kml_feat_")
 await fs.initialize()
 ```
 
-## Schema-Driven Ingestion
+## Schema-Driven Registration
 
-Every feature set is defined by a `FeatureSchema` before ingestion. The schema enforces types, names, and target designation.
+Every feature set is defined by a `FeatureSchema` before storage. The schema
+enforces types, names, the entity key, and the point-in-time timestamp column.
+There is no `target` on the schema — the training target is an ordinary feature
+column you name at train time (`ModelSpec` / `km.train(df, target=...)`).
 
 ```python
 schema = FeatureSchema(
@@ -32,20 +47,25 @@ schema = FeatureSchema(
         FeatureField(name="monthly_spend", dtype="float"),
         FeatureField(name="support_tickets", dtype="int"),
         FeatureField(name="plan_type", dtype="text"),
+        FeatureField(name="churned", dtype="int"),  # training target column
     ],
-    target=FeatureField(name="churned", dtype="int"),
-    entity_key="user_id",        # Unique entity identifier
-    timestamp_field="event_time", # For point-in-time queries
+    entity_id_column="user_id",       # unique entity identifier
+    timestamp_column="event_time",    # enables point-in-time queries
 )
 
-# Ingest from polars DataFrame
+# Register the schema (creates the backing table), then materialise rows.
+await fs.register_features(schema)
+
+# `compute` validates + projects a DataFrame to the schema; `store` persists it.
 df = pl.read_csv("features.csv")
-await fs.ingest("user_features", schema, df)
+projected = fs.compute(df, schema)
+rows_stored = await fs.store(projected, schema)
 ```
 
 ## Polars-Only Rule
 
-All feature engineering happens in polars. No pandas or numpy in pipeline code. Conversion happens only at sklearn boundaries via `interop.py`.
+All feature engineering happens in polars. No pandas or numpy in pipeline code.
+Conversion happens only at sklearn boundaries via `interop.py`.
 
 ```python
 # DO: Polars expressions for feature engineering
@@ -60,81 +80,100 @@ df_pd = df.to_pandas()               # WRONG
 df_pd["spend_per_month"] = df_pd["monthly_spend"] / df_pd["tenure_months"]  # WRONG
 ```
 
-## Feature Composition
+## Composing Multiple Feature Sets
 
-Compose multiple feature sets into a single training DataFrame using entity keys and point-in-time joins.
+The legacy store materialises and retrieves one schema at a time — there is no
+multi-set join method. Register and store each feature set, retrieve each through
+`get_features`, then join in polars on the entity key.
 
 ```python
-# Define multiple feature schemas
-user_schema = FeatureSchema(name="user_demographics", ...)
-behavior_schema = FeatureSchema(name="user_behavior", ...)
-financial_schema = FeatureSchema(name="user_financials", ...)
+# Register + store each feature set separately
+for schema, frame in (
+    (demographics_schema, demo_df),
+    (behavior_schema, behavior_df),
+    (financials_schema, financial_df),
+):
+    await fs.register_features(schema)
+    await fs.store(fs.compute(frame, schema), schema)
 
-# Ingest separately
-await fs.ingest("demographics", user_schema, demo_df)
-await fs.ingest("behavior", behavior_schema, behavior_df)
-await fs.ingest("financials", financial_schema, financial_df)
-
-# Compose into training set with point-in-time correctness
-training_df = await fs.compose(
-    feature_sets=["demographics", "behavior", "financials"],
-    entity_key="user_id",
-    as_of="2025-01-01T00:00:00",  # No future leakage
-)
+# Retrieve each, then join in polars on the entity key
+entity_ids = ["user_001", "user_002"]
+demo = await fs.get_features(entity_ids, [f.name for f in demographics_schema.features], schema=demographics_schema)
+beh = await fs.get_features(entity_ids, [f.name for f in behavior_schema.features], schema=behavior_schema)
+training_df = demo.join(beh, on="user_id", how="inner")
 ```
 
 ## Point-in-Time Queries
 
-Point-in-time queries prevent future data leakage in training sets. The `as_of` parameter ensures only data available before the specified timestamp is included.
+Point-in-time queries prevent future data leakage in training sets. The `as_of`
+parameter on `get_features` returns the latest feature values that existed at or
+before the given timestamp; `get_training_set` returns a time-windowed set for one
+schema.
 
 ```python
-# Get features as they existed at a specific point in time
+from datetime import datetime, timezone
+
+# Features as they existed at a specific point in time (no future leakage)
 historical_df = await fs.get_features(
-    feature_set="user_features",
-    entity_ids=["user_001", "user_002"],
-    as_of="2025-06-15T12:00:00",
+    ["user_001", "user_002"],
+    ["age", "tenure_months", "monthly_spend"],
+    schema=schema,
+    as_of=datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc),
 )
 
 # Latest features (no time constraint)
 current_df = await fs.get_features(
-    feature_set="user_features",
-    entity_ids=["user_001", "user_002"],
+    ["user_001", "user_002"],
+    ["age", "tenure_months", "monthly_spend"],
+    schema=schema,
+)
+
+# Point-in-time-correct training window for one schema
+training_df = await fs.get_training_set(
+    schema,
+    start=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    end=datetime(2025, 6, 1, tzinfo=timezone.utc),
 )
 ```
 
 ## Feature Versioning
 
-Feature sets are versioned automatically on schema changes. Previous versions remain queryable for reproducibility.
+Feature sets are versioned by the schema `version`. Bump `version` when feature
+semantics change; previous versions remain queryable for reproducibility.
 
 ```python
 # Schema v1
-schema_v1 = FeatureSchema(name="user_churn", features=[...], version=1)
-await fs.ingest("user_features", schema_v1, df_v1)
+schema_v1 = FeatureSchema(name="user_churn", features=[...], entity_id_column="user_id", version=1)
+await fs.register_features(schema_v1)
+await fs.store(fs.compute(df_v1, schema_v1), schema_v1)
 
-# Schema v2 (added a feature)
-schema_v2 = FeatureSchema(name="user_churn", features=[..., new_field], version=2)
-await fs.ingest("user_features", schema_v2, df_v2)
+# Schema v2 (added a feature — bump version)
+schema_v2 = FeatureSchema(name="user_churn", features=[..., new_field], entity_id_column="user_id", version=2)
+await fs.register_features(schema_v2)
+await fs.store(fs.compute(df_v2, schema_v2), schema_v2)
 
-# Query specific version
-df = await fs.get_features("user_features", version=1)
+# Inspect registered schemas
+registered = await fs.list_schemas()
 ```
 
 ## Sklearn Interop (Boundary Only)
 
-Conversion to numpy/sklearn formats happens exclusively through `interop.py` at the framework boundary — never in pipeline code.
+Conversion to numpy/sklearn formats happens exclusively through `interop.py` at the
+framework boundary — never in pipeline code.
 
 ```python
-from kailash_ml.interop import to_sklearn_arrays
+from kailash_ml.interop import to_sklearn_input, from_sklearn_output
 
 # Convert at the sklearn boundary
-X, y = to_sklearn_arrays(training_df, schema)
-# X is numpy ndarray, y is numpy array
-# Use with sklearn estimators
+X, y, column_info = to_sklearn_input(
+    training_df,
+    feature_columns=["age", "tenure_months", "monthly_spend"],
+    target_column="churned",
+)
+# X is a numpy ndarray, y is a numpy array (or None when target_column is omitted)
 
-# Convert back after prediction
-from kailash_ml.interop import from_numpy_predictions
-result_df = from_numpy_predictions(predictions, entity_ids, schema)
-# result_df is polars DataFrame
+# Convert predictions back to a polars DataFrame
+result_df = from_sklearn_output(predictions, column_info)
 ```
 
 ## SQL Safety
@@ -155,7 +194,8 @@ All SQL in `_feature_sql.py` uses identifier validation from `kailash.db.dialect
 
 - All data in polars — no pandas/numpy in pipeline code
 - Conversion only at sklearn boundary via `interop.py`
-- FeatureStore uses ConnectionManager, not Express
+- Legacy `FeatureStore` uses ConnectionManager, not Express
+- Top-level `from kailash_ml import FeatureStore` is the canonical _read_ surface
 - Zero raw SQL outside `_feature_sql.py`
-- Point-in-time queries prevent future leakage
-- Schema defines everything — no ad-hoc column creation
+- Point-in-time queries (`as_of` / `get_training_set`) prevent future leakage
+- Schema defines everything — no ad-hoc column creation; no `target` on the schema
