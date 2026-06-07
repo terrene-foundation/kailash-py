@@ -4,7 +4,7 @@ Machine learning lifecycle for the Kailash ecosystem. Train models, store featur
 
 Part of the [Kailash Python SDK](https://github.com/terrene-foundation/kailash-py) by the Terrene Foundation.
 
-**Version**: 0.9.0 | **License**: Apache-2.0 | **Python**: 3.11+
+**Version**: 2.0.0 | **License**: Apache-2.0 | **Python**: 3.11+
 
 ---
 
@@ -162,7 +162,7 @@ from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactSt
 
 Manages the complete model lifecycle through four stages: **staging** (newly trained), **shadow** (running alongside production), **production** (serving traffic), and **archived** (retired). Stores artifacts on the local filesystem with optional ONNX export. Reads and writes MLflow MLmodel format v1 for interoperability.
 
-Key operations: `register_model()`, `promote()`, `get_model()`, `list_models()`, `get_production_model()`.
+Key operations: `register_model()`, `promote_model()`, `get_model()` (pass `stage="production"` for the live version), `get_model_versions()`, `list_models()`, `load_artifact()`.
 
 #### TrainingPipeline
 
@@ -192,7 +192,7 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 
 Detects distribution shifts in production data using PSI (Population Stability Index) and the Kolmogorov-Smirnov test. Stores reference distributions and drift reports in the database. Reports classify drift as `none`, `moderate`, or `severe` per feature and overall. Optionally augments reports with agent-powered interpretation (double opt-in).
 
-Key operations: `set_reference_data()`, `check_drift()`, `get_drift_history()`, `check_performance_degradation()`.
+Key operations: `set_reference_data()`, `check_drift()`, `get_drift_history()`, `check_performance()`, `schedule_monitoring()`.
 
 #### ExperimentTracker
 
@@ -632,8 +632,9 @@ await monitor.set_reference_data(
 # Check drift against new production data
 report = await monitor.check_drift("churn_model_v1", current_df)
 
-print(f"Overall drift: {report.overall_drift}")     # "none", "moderate", "severe"
-print(f"Features drifted: {report.drifted_features}")
+print(f"Drift severity: {report.overall_severity}")  # "none", "moderate", "severe"
+drifted = [f.feature_name for f in report.feature_results if f.drift_detected]
+print(f"Features drifted: {drifted}")
 
 for feature_result in report.feature_results:
     print(f"  {feature_result.feature_name}: PSI={feature_result.psi:.4f}, "

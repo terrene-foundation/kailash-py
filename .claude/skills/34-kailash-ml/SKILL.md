@@ -21,7 +21,7 @@ server = await km.serve("demo@production")                 # Group 1 lifecycle
 # $ kailash-ml-dashboard  (separate shell)                 # Group 1 lifecycle
 
 km.diagnose(model)                                         # Group 1 — DLDiagnostics / RAGDiagnostics / RLDiagnostics
-km.watch(model, reference_df)                              # Group 1 — DriftMonitor
+km.watch(model_uri, reference=reference_df)                # Group 1 — DriftMonitor
 km.seed(42); await km.reproduce(run_id)                    # Group 1 — reproducibility
 await km.resume(run_id)                                    # Group 1 — checkpoint resume
 graph = await km.lineage("demo@v1", tenant_id=None)        # Group 1 — LineageGraph; ambient tenant via get_current_tenant_id()
@@ -207,7 +207,7 @@ from kailash_ml import DriftMonitor
 monitor = DriftMonitor(conn, tenant_id="acme")
 await monitor.set_reference_data("model_v1", reference_df, feature_columns=["age", "tenure_months"])
 report = await monitor.check_drift("model_v1", current_df)
-# report.overall_drift, report.feature_results, report.recommendations
+# report.overall_drift_detected, report.overall_severity, report.feature_results
 ```
 
 ### Model Explainability (requires `[explain]`)

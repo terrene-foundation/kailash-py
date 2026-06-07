@@ -92,9 +92,9 @@ from kailash_ml.engines.hyperparameter_search import (
 )
 
 space = SearchSpace(params=[
-    ParamDistribution(name="n_estimators", type="int", low=100, high=1000),
-    ParamDistribution(name="max_depth", type="int", low=3, high=30),
-    ParamDistribution(name="learning_rate", type="float", low=0.001, high=0.3),
+    ParamDistribution(name="n_estimators", type="int_uniform", low=100, high=1000),
+    ParamDistribution(name="max_depth", type="int_uniform", low=3, high=30),
+    ParamDistribution(name="learning_rate", type="log_uniform", low=0.001, high=0.3),
 ])
 
 search = HyperparameterSearch(pipeline)
