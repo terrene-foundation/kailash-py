@@ -139,12 +139,20 @@ kailash-ml provides 14 engines plus a bridge and compatibility layer, organized 
 #### FeatureStore
 
 ```python
+# Canonical 1.0+ read surface (the top-level default since 2.0.0)
+from kailash_ml import FeatureStore  # → kailash_ml.features.FeatureStore
+```
+
+The canonical `FeatureStore` is a thin, polars-native DataFlow bridge: it wraps a live `DataFlow` instance and serves point-in-time-correct feature reads through `dataflow.ml_feature_source`. Constructor: `FeatureStore(dataflow, *, default_tenant_id=None)`. It owns no DDL — you materialise features as ordinary `@db.model` rows (`db.express.create(...)`) and read them back through the store.
+
+Key operation: `get_features(schema, timestamp=None, *, tenant_id=None, entity_ids=None)` — returns a `polars.DataFrame` (latest value per entity, or the as-of-`timestamp` value). See `specs/ml-feature-store.md` § 4.1 and `MIGRATION.md` for the write-via-model recipe.
+
+```python
+# Legacy 0.x write-capable surface (explicit import; ConnectionManager-based)
 from kailash_ml.engines.feature_store import FeatureStore
 ```
 
-Computes, versions, and serves features with point-in-time correct retrieval. Uses `ConnectionManager` for temporal window queries that require SQL beyond what Express can express. All raw SQL is encapsulated in `_feature_sql.py` -- the engine itself contains zero raw SQL.
-
-Key operations: `ingest()`, `get_features()`, `get_features_at_time()`, `list_feature_sets()`.
+The legacy engine computes, versions, and stores features itself via `ConnectionManager`; all raw SQL is encapsulated in `_feature_sql.py`. Constructor: `FeatureStore(conn, *, table_prefix="kml_feat_")`. Key operations: `initialize()`, `register_features()`, `compute()`, `store()`, `get_features()`, `get_training_set()`, `get_features_lazy()`, `list_schemas()`. Retained for callers needing the self-contained write path; see `MIGRATION.md` for the canonical migration.
 
 #### ModelRegistry
 
@@ -823,22 +831,31 @@ under `kailash_ml.<engine_module>`. Use that path; the top-level lazy
 re-export is kept for backwards compatibility only.
 
 ```python
-# Canonical 1.0+ surface (preferred — no DeprecationWarning, future-proof)
+# Canonical 1.0+ read surface — the top-level default since 2.0.0
+from kailash_ml import FeatureStore  # → kailash_ml.features.FeatureStore
+# Equivalent explicit form:
 from kailash_ml.features import FeatureStore
 # Constructor: FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)
 # See specs/ml-feature-store.md § 1.1.
 
-# Legacy top-level shortcut (still works, emits DeprecationWarning at 1.7+)
-from kailash_ml import FeatureStore  # resolves to kailash_ml.engines.feature_store
-# This path will be removed in kailash-ml 2.0.0; migrate to
-# `from kailash_ml.features import FeatureStore` — see MIGRATION.md for the recipe.
+# Legacy 0.x write-capable surface — explicit import only (no top-level access)
+from kailash_ml.engines.feature_store import FeatureStore
+# Constructor: FeatureStore(conn: ConnectionManager, *, table_prefix=...)
+# Retained for callers needing the self-contained write path
+# (register_features / store / compute / get_training_set / get_features_lazy /
+# list_schemas). See MIGRATION.md for the canonical migration recipe.
 ```
 
-Migration note (1.x → 2.0.0): the top-level legacy resolution targets a
-ConnectionManager-coupled constructor that is incompatible with the
-canonical DataFlow-bridge primitive at `kailash_ml.features.FeatureStore`.
-The 1.7+ bridge release emits a `DeprecationWarning` at first access; the
-2.0.0 cutover flips the legacy resolution path to the canonical module.
+Migration note (2.0.0 cutover): the top-level `from kailash_ml import
+FeatureStore` now resolves to the canonical DataFlow-bridge read surface
+`kailash_ml.features.FeatureStore` (constructor
+`FeatureStore(dataflow, *, default_tenant_id=None)`). The 1.7.2 bridge
+release emitted a `DeprecationWarning` while the top level still resolved to
+the legacy ConnectionManager-coupled engine; that warning is **removed at
+2.0.0** because the resolution has flipped. The legacy engine remains
+importable via its explicit module path
+`kailash_ml.engines.feature_store.FeatureStore` for the write/registry/
+training-set surface the canonical read store does not expose.
 
 ### "kailash-ml-protocols not found"
 

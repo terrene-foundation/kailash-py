@@ -1,5 +1,50 @@
 # kailash-ml Changelog
 
+## [2.0.0] — 2026-06-07 — BREAKING: FeatureStore canonical cutover (#643 step 3)
+
+Top-level `from kailash_ml import FeatureStore` now resolves to the **canonical
+1.0+ read surface** `kailash_ml.features.FeatureStore`, completing the issue #643
+migration whose deprecation bridge shipped in 1.7.2 and whose retrieval blocker
+was fixed in 1.7.5/1.7.6 (#1241). The legacy write-capable engine is **not
+removed** — it remains importable via its explicit module path.
+
+### Changed (BREAKING)
+
+- **`from kailash_ml import FeatureStore` resolves to `kailash_ml.features.FeatureStore`.**
+  Constructor changes from the legacy `FeatureStore(conn: ConnectionManager, *,
+table_prefix=...)` to the canonical `FeatureStore(dataflow: DataFlow, *,
+default_tenant_id=None)`. Any caller constructing the top-level symbol with a
+  `ConnectionManager` now raises `TypeError`. The canonical surface is
+  **read-only** (`get_features` + cache-key helpers); the legacy write/registry/
+  training-set operations are not present on it.
+
+### Removed
+
+- **The 1.7.2 bridge `DeprecationWarning`** emitted on top-level `FeatureStore`
+  access is removed — the warning has served its deprecation cycle (1.7.2 →
+  1.7.6) and the resolution it warned about has now flipped.
+
+### Migration
+
+- **Reads:** swap the construction site — `FeatureStore(df, default_tenant_id=...)`
+  (or `default_tenant_id=CANONICAL_SINGLE_TENANT_SENTINEL` for single-tenant) and
+  call `get_features(schema, timestamp=None, *, tenant_id=None)`.
+- **Writes:** the canonical store owns no DDL. Materialise features as a
+  `@db.model` whose name equals `schema.name`, write rows with `express.create`,
+  and read them back through `get_features`. Full recipe in `MIGRATION.md`.
+- **`get_training_set` / `get_features_lazy` / `list_schemas`** (and all legacy
+  write ops) have no canonical equivalent yet (M2-deferred per
+  `specs/ml-feature-store.md` § 11). Callers that need them keep the explicit
+  import `from kailash_ml.engines.feature_store import FeatureStore`, which is
+  retained and unchanged.
+
+### Fixed
+
+- **README FeatureStore section** documented three phantom methods (`ingest`,
+  `get_features_at_time`, `list_feature_sets`) that exist on neither surface;
+  corrected to the real canonical + legacy operation sets. `docs/guides/02-feature-pipelines.md`
+  rewritten from a fictional `put`/`get` API to the validated canonical pattern.
+
 ## [1.7.6] — 2026-06-03 — fix: get_features without a timestamp returns latest-per-entity (#1241 follow-up)
 
 Follow-up to 1.7.5. The 1.7.5 `SchemaFeatureGroup` adapter gated its latest-per-entity dedup on `point_in_time is not None`, so `get_features(schema)` with **no** timestamp returned **every historical row** (duplicate entities) instead of the latest row per entity. The `get_features` contract is "when timestamp is None the latest values are returned" — one feature vector per entity. Caught by the 1.7.5 published-wheel end-to-end verification walk (the unit/integration tests had used one row per entity, so the dedup gap was unobservable).

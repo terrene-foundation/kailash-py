@@ -13,13 +13,15 @@ via lazy ``__getattr__``).
 Engines that are NOT in the canonical ``__all__`` (e.g. ``FeatureStore``,
 ``PreprocessingPipeline``, ``MLDashboard``, ...) remain reachable via
 module-attribute lookup through the legacy :func:`__getattr__` below so
-existing ``from kailash_ml import FeatureStore`` consumers keep working;
-they are simply not advertised in ``from kailash_ml import *``.
+existing ``from kailash_ml import FeatureStore`` consumers keep resolving
+the symbol; they are simply not advertised in ``from kailash_ml import *``.
+(As of 2.0.0 the ``FeatureStore`` symbol resolves to the canonical
+``kailash_ml.features`` surface — the import resolves, but its constructor
+contract changed; see CHANGELOG 2.0.0 / MIGRATION.md for the breaking swap.)
 """
 from __future__ import annotations
 
 import contextvars as _contextvars
-import warnings as _warnings
 from contextlib import contextmanager as _contextmanager
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
@@ -628,7 +630,14 @@ def __getattr__(name: str):  # noqa: N807
     the documented ``from kailash_ml import *`` surface.
     """
     _engine_map = {
-        "FeatureStore": "kailash_ml.engines.feature_store",
+        # Issue #643 — 2.0.0 cutover: top-level ``from kailash_ml import
+        # FeatureStore`` now resolves to the canonical 1.0+ read surface
+        # ``kailash_ml.features.FeatureStore`` (ctor
+        # ``FeatureStore(dataflow, *, default_tenant_id=None)``). The legacy
+        # write-capable ``kailash_ml.engines.feature_store.FeatureStore``
+        # (ctor ``FeatureStore(conn, *, table_prefix=...)``) remains importable
+        # via its explicit module path — see ``packages/kailash-ml/MIGRATION.md``.
+        "FeatureStore": "kailash_ml.features",
         "TrainingPipeline": "kailash_ml.engines.training_pipeline",
         # `InferenceServer` lazy-loaded from the canonical surface
         # `kailash_ml.serving.server` after W6-004 deleted the legacy
@@ -662,32 +671,11 @@ def __getattr__(name: str):  # noqa: N807
 
         return importlib.import_module("kailash_ml.metrics")
     if name in _engine_map:
-        # Issue #643 — bridge release: top-level ``kailash_ml.FeatureStore``
-        # currently resolves to the legacy module
-        # ``kailash_ml.engines.feature_store`` whose constructor signature is
-        # ``FeatureStore(conn: ConnectionManager, *, table_prefix=...)``. The
-        # canonical 1.0+ surface lives at ``kailash_ml.features.FeatureStore``
-        # with a different constructor
-        # ``FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)``.
-        # Per ``rules/zero-tolerance.md`` Rule 6a (Public-API Removal Requires
-        # Deprecation Cycle) we emit a DeprecationWarning here so 1.x callers
-        # see the migration path BEFORE the cutover lands in 2.0.0. The
-        # legacy resolution path itself is unchanged — this is signal-only.
-        if name == "FeatureStore":
-            _warnings.warn(
-                "Top-level `from kailash_ml import FeatureStore` resolves to "
-                "the legacy module `kailash_ml.engines.feature_store` "
-                "(constructor: `FeatureStore(conn: ConnectionManager, *, "
-                "table_prefix=...)`). The canonical 1.0+ surface is "
-                "`from kailash_ml.features import FeatureStore` (constructor: "
-                "`FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)`)"
-                ". The legacy resolution will be removed in kailash-ml 2.0.0; "
-                "migrate now. See `specs/ml-feature-store.md` for the canonical "
-                "contract and `packages/kailash-ml/MIGRATION.md` for the "
-                "migration recipe.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+        # Lazy-load the engine module on first access. The bridge-release
+        # DeprecationWarning for ``FeatureStore`` (kailash-ml 1.7.2, issue #643
+        # step 1) was removed at the 2.0.0 cutover — the warning lived through
+        # 1.7.2 → 1.7.6, satisfying the deprecation-cycle requirement, and
+        # ``_engine_map["FeatureStore"]`` now points at the canonical surface.
         import importlib
 
         module = importlib.import_module(_engine_map[name])

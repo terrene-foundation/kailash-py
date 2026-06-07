@@ -275,22 +275,23 @@ removed; imports fail hard.
 # 0.x -- top-level primitive imports
 from kailash_ml import FeatureStore, ModelRegistry, TrainingPipeline
 
-# 1.7.x bridge release (issue #643) — top-level import still works,
-# now emits DeprecationWarning on first access pointing at the canonical
-# surface. Resolves to the LEGACY module
-# `kailash_ml.engines.feature_store.FeatureStore` whose constructor is
-# `FeatureStore(conn: ConnectionManager, *, table_prefix=...)`.
-from kailash_ml import FeatureStore  # DeprecationWarning emitted
+# 1.7.2 bridge release (issue #643 step 1) — top-level import still resolved
+# to the LEGACY module `kailash_ml.engines.feature_store.FeatureStore`
+# (`FeatureStore(conn: ConnectionManager, *, table_prefix=...)`) but emitted a
+# DeprecationWarning on first access pointing at the canonical surface.
 
-# 1.x canonical (preferred — no warning, future-proof)
-from kailash_ml.features import FeatureStore
-# Constructor: FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)
-# See specs/ml-feature-store.md § 1.1 for the contract.
+# 2.0.0 cutover (issue #643 step 3) — top-level `from kailash_ml import
+# FeatureStore` now resolves to the canonical READ surface
+# `kailash_ml.features.FeatureStore`
+# (`FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)`); the
+# DeprecationWarning is removed because the resolution has flipped.
+from kailash_ml import FeatureStore                       # canonical read surface
 
-# 2.0.0 (planned) -- top-level import flips to canonical module; legacy
-# `kailash_ml.engines.feature_store.FeatureStore` is removed. Callers still
-# on the 0.x ConnectionManager constructor MUST migrate to the canonical
-# DataFlow constructor before this cutover.
+# The legacy write-capable engine is NOT removed at 2.0.0 — it remains
+# importable via its explicit module path for the write/registry/training-set
+# surface the canonical read store does not expose. Removal is deferred to a
+# later major (alongside the 3.0 ModelRegistry/TrainingPipeline sweep below).
+from kailash_ml.engines.feature_store import FeatureStore  # explicit legacy (writes)
 
 # 3.0 -- ModelRegistry and TrainingPipeline imports removed; use the
 # legacy namespace explicitly if you still need them
@@ -299,32 +300,68 @@ from kailash_ml.legacy import ModelRegistry  # explicit opt-in; no DeprecationWa
 
 ### FeatureStore canonical surface migration recipe (1.x)
 
-The canonical FeatureStore is a DataFlow-bridge primitive — it wraps a live
-`DataFlow` instance and routes feature reads through
-`dataflow.ml_feature_source(...)`. Migration is two lines:
+The canonical 1.0+ `FeatureStore` is a **read-only** DataFlow-bridge primitive
+(spec § 1.2): it wraps a live `DataFlow` instance and routes feature _reads_
+through `dataflow.ml_feature_source(...)`. The legacy engine's _write_ surface
+(`initialize` / `register_features` / `compute` / `store`) is intentionally NOT
+part of the canonical store — in 1.0+ you materialise features as ordinary
+DataFlow model rows. The migration therefore has two halves.
+
+**Read path** — swap the construction site:
 
 ```python
-# Before (legacy 0.x ConnectionManager constructor — DeprecationWarning at 1.7+)
+# Before (legacy 0.x ConnectionManager constructor)
 from kailash.db.connection import ConnectionManager
-from kailash_ml import FeatureStore
+from kailash_ml.engines.feature_store import FeatureStore
 
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
 store = FeatureStore(conn, table_prefix="kml_feat_")
 
-# After (canonical 1.0+ surface — DataFlow-bridge constructor)
+# After (canonical 1.0+ read surface — top-level import resolves here at 2.0.0)
 from dataflow import DataFlow
-from kailash_ml.features import FeatureStore
+from kailash_ml import FeatureStore
 
 df = DataFlow("sqlite:///ml.db", auto_migrate=True)
-store = FeatureStore(df, default_tenant_id="acme")
+store = FeatureStore(df, default_tenant_id="acme")          # multi-tenant
 features = await store.get_features(schema, tenant_id="acme")
+# Single-tenant? bind the canonical sentinel and omit tenant_id thereafter:
+#   from kailash_ml.features import CANONICAL_SINGLE_TENANT_SENTINEL
+#   store = FeatureStore(df, default_tenant_id=CANONICAL_SINGLE_TENANT_SENTINEL)
 ```
 
-Migration only affects the construction site. `get_features`, cache-key
-helpers, and tenant-scoped invalidation patterns share compatible
-return shapes across both surfaces. See
-`specs/ml-feature-store.md` § 4 for the full method contract.
+**Write path** — feature materialisation moves to a DataFlow model. The
+canonical store reads the table whose name equals `schema.name`, so define a
+`@db.model` with that name + the schema's `entity_id_column` / `timestamp_column`
+/ field columns, write rows with `express.create`, and read them back through
+`get_features`:
+
+```python
+# Before (legacy self-contained write path)
+await store.register_features(schema)          # created + tracked the table
+await store.store(rows, schema)                # materialised feature rows
+
+# After (canonical: write via a DataFlow model, read via get_features)
+@df.model
+class UserChurnFeatures:                       # model name == schema.name
+    id: str
+    user_id: str                               # schema.entity_id_column
+    event_time: datetime                       # schema.timestamp_column
+    login_count_7d: int                        # schema field
+
+df.express_sync.create("UserChurnFeatures", {
+    "id": "r1", "user_id": "u1",
+    "event_time": ts, "login_count_7d": 7,
+})
+features = await store.get_features(schema)     # latest-per-entity, point-in-time
+```
+
+**Read methods without a canonical equivalent.** Legacy `get_training_set`,
+`get_features_lazy`, and `list_schemas` are not exposed on the canonical read
+surface (they are M2-deferred per spec § 11). Callers that need them MUST keep
+the explicit legacy import `from kailash_ml.engines.feature_store import
+FeatureStore` until a canonical equivalent ships. See
+`specs/ml-feature-store.md` § 4 (canonical contract) + § 11 (deferred surface).
 
 The migration sequence is deterministic:
 

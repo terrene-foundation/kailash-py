@@ -14,11 +14,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 import polars as pl
-from kailash.db.connection import ConnectionManager
-from kailash_ml.types import FeatureField, FeatureSchema
-
 from kailash_ml.engines import _feature_sql as sql
 from kailash_ml.interop import polars_to_dict_records
+from kailash_ml.types import FeatureSchema
+
+from kailash.db.connection import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,23 @@ def _chunked(items: list, size: int):
 
 class FeatureStore:
     """[P0: Production] DataFlow-backed feature versioning engine.
+
+    .. warning::
+
+        **Legacy 0.x surface — single-tenant only, NO tenant isolation.**
+        As of kailash-ml 2.0.0 (issue #643 cutover) the top-level
+        ``from kailash_ml import FeatureStore`` resolves to the canonical,
+        tenant-gated ``kailash_ml.features.FeatureStore`` read surface. This
+        legacy class is reachable only via its explicit module path and is
+        retained for callers needing the self-contained write/registry/
+        training-set path. It takes a raw ``ConnectionManager`` and a
+        ``table_prefix``, with **no ``tenant_id`` anywhere** — every method
+        operates on ``table_prefix``-scoped tables with no per-tenant
+        scoping. Multi-tenant deployments MUST NOT use this class for
+        materialisation; materialise features as a ``@db.model`` +
+        ``express.create`` and read through the canonical tenant-gated
+        ``FeatureStore.get_features`` instead (see
+        ``packages/kailash-ml/MIGRATION.md``).
 
     Parameters
     ----------
