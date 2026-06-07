@@ -161,34 +161,40 @@ schema = FeatureSchema(
     features=[
         FeatureField(name="age", dtype="float"),
         FeatureField(name="tenure_months", dtype="float"),
+        FeatureField(name="churned", dtype="int"),  # the target column
     ],
-    target=FeatureField(name="churned", dtype="int"),
+    entity_id_column="user_id",
 )
 
 fs = FeatureStore(conn, table_prefix="kml_feat_")
 await fs.initialize()
 
 df = pl.read_csv("data.csv")
-await fs.ingest("user_features", schema, df)
+await fs.register_features(schema)
+await fs.store(fs.compute(df, schema), schema)
 
 # Point-in-time retrieval
-features = await fs.get_features("user_features", entity_ids=["u1", "u2"])
+features = await fs.get_features(
+    ["u1", "u2"], ["age", "tenure_months"], schema=schema,
+)
 ```
 
 ### Training
 
 ```python
-from kailash_ml import TrainingPipeline, ModelRegistry, ModelSpec, EvalSpec
-from kailash_ml.engines import LocalFileArtifactStore
+from kailash_ml import TrainingPipeline, ModelRegistry
+from kailash_ml.engines.training_pipeline import ModelSpec, EvalSpec
+from kailash_ml.engines.model_registry import LocalFileArtifactStore
 
-registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-await registry.initialize()
+registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))  # no initialize()
 
-pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+pipeline = TrainingPipeline(feature_store=fs, registry=registry)
 result = await pipeline.train(
-    schema=schema,
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
+    df,
+    schema,
+    ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
+    EvalSpec(metrics=["accuracy", "f1"]),
+    experiment_name="user_churn",
 )
 ```
 
@@ -199,8 +205,7 @@ from kailash_ml import DriftMonitor
 
 # W26.e: tenant_id is REQUIRED at construction. One monitor per tenant.
 monitor = DriftMonitor(conn, tenant_id="acme")
-await monitor.initialize()
-await monitor.set_reference("model_v1", reference_df)
+await monitor.set_reference_data("model_v1", reference_df, feature_columns=["age", "tenure_months"])
 report = await monitor.check_drift("model_v1", current_df)
 # report.overall_drift, report.feature_results, report.recommendations
 ```
@@ -220,26 +225,27 @@ fig = explainer.to_plotly("summary")  # "summary", "beeswarm", "dependence"
 
 ```python
 from kailash_ml import AutoMLEngine
-from kailash_ml.engines.automl_engine import AutoMLConfig
+from kailash_ml.automl import AutoMLConfig
 
 config = AutoMLConfig(
     task_type="classification",
-    metric_to_optimize="f1",
+    metric_name="f1",
     search_strategy="bayesian",
-    search_n_trials=50,
+    max_trials=50,
     agent=True,            # LLM augmentation (requires kailash-ml[agents])
     auto_approve=False,    # Human approval gate
     max_llm_cost_usd=5.0,
 )
-engine = AutoMLEngine(feature_store=fs, model_registry=registry, config=config)
-result = await engine.run(schema=schema, data=df)
+engine = AutoMLEngine(config=config, tenant_id="default", actor_id="ci")
+# run() drives a search space + trial function — see ml-agent-guardrails.md
+result = await engine.run(space=search_space, trial_fn=trial_fn)
 ```
 
 ### Model Registry Lifecycle
 
 ```python
 # Stage transitions: staging → shadow → production → archived
-await registry.promote("model_v1", version_id, target_stage="production")
+await registry.promote_model("model_v1", version_id, target_stage="production")
 
 # Valid transitions:
 # staging    → shadow, production, archived
@@ -251,25 +257,24 @@ await registry.promote("model_v1", version_id, target_stage="production")
 ### Preprocessing Pipeline
 
 ```python
-from kailash_ml.engines import PreprocessingPipeline
+from kailash_ml import PreprocessingPipeline
 
-pipeline = PreprocessingPipeline()
-result = pipeline.setup(
-    data=df, target="churned",
-    normalize=True, normalize_method="zscore",       # zscore, minmax, robust, maxabs
-    imputation="knn", impute_n_neighbors=5,           # knn, iterative, default
+prep = PreprocessingPipeline()
+result = prep.setup(
+    df, target="churned",
+    normalize=True, normalize_method="zscore",            # zscore, minmax, robust, maxabs
+    imputation_strategy="knn", impute_n_neighbors=5,      # knn, iterative, mean
     remove_multicollinearity=True, multicollinearity_threshold=0.9,
-    fix_imbalance=True, imbalance_method="smote",     # smote, adasyn ([imbalance])
+    fix_imbalance=True, imbalance_method="smote",         # smote, adasyn ([imbalance])
 )
 ```
 
 ### Nested Runs & Auto-Logging
 
 ```python
-from kailash_ml import ExperimentTracker
+from kailash_ml.engines.experiment_tracker import ExperimentTracker
 
 tracker = ExperimentTracker(conn)
-await tracker.initialize()
 
 async with tracker.run("hyperopt-sweep") as parent:
     for params in param_grid:
