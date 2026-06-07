@@ -85,7 +85,7 @@ result = await engine.run(space=search_space, trial_fn=trial_fn)
 print(result.total_trials, result.completed_trials, result.denied_trials, result.failed_trials)
 print(result.cumulative_cost_microdollars)
 for trial in result.all_trials:
-    print(trial)  # each trial carries its params, metric, source_tag, and cost
+    print(trial)  # each trial carries its params, metric_value, source, and cost_microdollars
 ```
 
 ## AgentGuardrailMixin
