@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "2.0.0"
+version = "2.0.1"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -136,8 +136,8 @@ agents = [
 # at the call site; missing the extra produces a loud ImportError per
 # `rules/dependencies.md` § BLOCKED Anti-Patterns, NOT silent fallback.
 alignment = ["kailash-align>=0.6"]
-kaizen-judges = ["kailash-kaizen>=2.7"]
-kaizen-observability = ["kailash-kaizen>=2.7"]
+kaizen-judges = ["kailash-kaizen>=2.7.5"]
+kaizen-observability = ["kailash-kaizen>=2.7.5"]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
 # RAG evaluation backends for kailash_ml.diagnostics.RAGDiagnostics.

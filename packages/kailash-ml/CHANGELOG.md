@@ -1,5 +1,17 @@
 # kailash-ml Changelog
 
+## [2.0.1] — 2026-06-08 — `kailash-kaizen` floor consistency (#1183)
+
+Patch release. **No source changes** — diff is strictly `pyproject.toml` dependency-floor edits + `__version__` anchor + this CHANGELOG entry.
+
+### Changed
+
+- **`[kaizen-judges]` and `[kaizen-observability]` extras: `kailash-kaizen>=2.7.5`** (was `kailash-kaizen>=2.7`). The two extras drifted from the `>=2.7.5` floor used elsewhere in the same manifest (`[agents]`); `>=2.7.5` is the consistent floor and additionally pins past the known-bad kaizen 2.7.0–2.7.4 clean-venv `ModuleNotFoundError` class.
+
+### Notes
+
+- No public-API changes; no behavior changes. Surfaced by the new `tools/check_pin_consistency.py` first-party pin-drift gate (#1183).
+
 ## [2.0.0] — 2026-06-07 — BREAKING: FeatureStore canonical cutover (#643 step 3)
 
 Top-level `from kailash_ml import FeatureStore` now resolves to the **canonical

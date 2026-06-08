@@ -110,6 +110,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit, manual]
 
+  # First-party dependency-pin drift gate (issue #1183).
+  # See .claude/rules/dependencies.md — floors legitimately differ per
+  # package, but defensive caps on first-party siblings, unsatisfiable
+  # floors, and intra-manifest drift are ERRORS. Read-only (no working-tree
+  # mutation); advisory cross-manifest/staleness findings do NOT fail.
+  - repo: local
+    hooks:
+      - id: check-pin-consistency
+        name: First-party dependency-pin drift gate (#1183)
+        description: "Block caps on first-party siblings, unsatisfiable floors, intra-manifest pin drift."
+        entry: scripts/development/find-venv-python.sh tools/check_pin_consistency.py
+        language: system
+        files: ^(pyproject\.toml|packages/.+/pyproject\.toml|tools/check_pin_consistency\.py)$
+        pass_filenames: false
+        stages: [pre-commit, manual]
+
   # No untracked TODO-NNN markers in production source (issue #781).
   # See .claude/rules/zero-tolerance.md Rule 2 + Rule 6 — every TODO-NNN
   # marker MUST either carry a tracker link (tracked: gh#NNN) or be
