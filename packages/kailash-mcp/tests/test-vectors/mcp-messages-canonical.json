@@ -1,0 +1,112 @@
+{
+  "contract": "mcp-messages-canonical-bytes",
+  "version": "1.0.0",
+  "spec_ref": "SPEC-01 §7 / SPEC-09 §2.1",
+  "issue": "https://github.com/terrene-foundation/kailash-py/issues/1258",
+  "description": "Cross-SDK canonical-bytes byte-pin vectors for the four kailash_mcp.protocol.messages.*.to_canonical_json encoders (JsonRpcError / JsonRpcRequest / JsonRpcResponse / McpToolInfo). Both kailash-py and kailash-rs MUST produce byte-identical canonical JSON and identical SHA-256 for every vector. These encoders use ensure_ascii=False (RAW UTF-8 output, matching serde_json's default to_string) with sort_keys=True (keys sorted by Unicode code point) and separators=(\",\",\":\") (no insignificant whitespace). This is the SAME raw-UTF-8 contract as the delegate encoder (tests/test-vectors/delegate-canonical.json) and the OPPOSITE of the trust-plane signing encoder serialize_for_signing (ensure_ascii=True; tests/test-vectors/trust-plane-canonical.json). The encoders perform NO Unicode normalization, so M3 (NFC, U+00E9) and M4 (NFD, U+0065 U+0301) are byte-distinct pre-images. Each vector's input_wire is the to_dict() wire shape; reconstruct the object via <type>.from_dict(input_wire) then call to_canonical_json(). The Rust counterpart vendors this file per cross-sdk-inspection.md Rule 4a.",
+  "vectors": [
+    {
+      "name": "M1_error_ascii_sentinel",
+      "type": "JsonRpcError",
+      "input_wire": {
+        "code": -32600,
+        "message": "Invalid Request"
+      },
+      "expected_canonical_json": "{\"code\":-32600,\"message\":\"Invalid Request\"}",
+      "expected_sha256": "ed916e6993c2860796e280b3ddaab7e0288ae69933965412503e4c65e19d71a1"
+    },
+    {
+      "name": "M2_error_bmp_cjk",
+      "type": "JsonRpcError",
+      "input_wire": {
+        "code": -32000,
+        "message": "サーバ障害"
+      },
+      "expected_canonical_json": "{\"code\":-32000,\"message\":\"サーバ障害\"}",
+      "expected_sha256": "58b46a849f9f0b5074b3e9eb3405c7e55a17c2bbc1f464ab16067d207301df15"
+    },
+    {
+      "name": "M3_request_nfc_composed",
+      "type": "JsonRpcRequest",
+      "input_wire": {
+        "jsonrpc": "2.0",
+        "method": "notify",
+        "params": {
+          "name": "é"
+        },
+        "id": 1
+      },
+      "expected_canonical_json": "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"notify\",\"params\":{\"name\":\"é\"}}",
+      "expected_sha256": "e7f9292ca509dee6c1799bed27e4f5c2c26bcbfb7f6788c09455adacbf9b7ebf"
+    },
+    {
+      "name": "M4_request_nfd_decomposed",
+      "type": "JsonRpcRequest",
+      "input_wire": {
+        "jsonrpc": "2.0",
+        "method": "notify",
+        "params": {
+          "name": "é"
+        },
+        "id": 1
+      },
+      "expected_canonical_json": "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"notify\",\"params\":{\"name\":\"é\"}}",
+      "expected_sha256": "b7a2cf5158c731c4e2ed4bd8840e3d4247f5ef601de4d5d31b2f615ed04bd06e"
+    },
+    {
+      "name": "M5_response_astral_emoji",
+      "type": "JsonRpcResponse",
+      "input_wire": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "result": {
+          "flag": "🎉"
+        }
+      },
+      "expected_canonical_json": "{\"id\":7,\"jsonrpc\":\"2.0\",\"result\":{\"flag\":\"🎉\"}}",
+      "expected_sha256": "4cac969d6dd30f5acfaa8acb1100a65d52a8dbd1be28aad05fa4217e20af1a8f"
+    },
+    {
+      "name": "M6_tool_astral_object_key",
+      "type": "McpToolInfo",
+      "input_wire": {
+        "name": "t",
+        "description": "d",
+        "inputSchema": {
+          "𝄞": "clef"
+        }
+      },
+      "expected_canonical_json": "{\"description\":\"d\",\"inputSchema\":{\"𝄞\":\"clef\"},\"name\":\"t\"}",
+      "expected_sha256": "a7b7c010ec97d788c42aea62443eb931539389451fc51e6f7d4ed706249bd045"
+    },
+    {
+      "name": "M7_tool_mixed_sorted_nonascii",
+      "type": "McpToolInfo",
+      "input_wire": {
+        "name": "工具",
+        "description": "漢字 tool",
+        "inputSchema": {
+          "β": 1,
+          "α": 2,
+          "漢": 3
+        }
+      },
+      "expected_canonical_json": "{\"description\":\"漢字 tool\",\"inputSchema\":{\"α\":2,\"β\":1,\"漢\":3},\"name\":\"工具\"}",
+      "expected_sha256": "50859e7b4d68ba534eed97d336e35bcdfca953f1c03f3a36fb1ba8f1f165402c"
+    },
+    {
+      "name": "M8_response_error_cjk",
+      "type": "JsonRpcResponse",
+      "input_wire": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {
+          "code": -32700,
+          "message": "解析エラー"
+        }
+      },
+      "expected_canonical_json": "{\"error\":{\"code\":-32700,\"message\":\"解析エラー\"},\"id\":null,\"jsonrpc\":\"2.0\"}",
+      "expected_sha256": "0eaec6b7c3a03cc195651334a97df4916e4d5f1d9057b7a107294085ff36b81e"
+    }
+  ]
+}
