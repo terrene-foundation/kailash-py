@@ -128,6 +128,27 @@ def _cap_excludes(caps: list[str], current: str) -> bool:
     return False
 
 
+def _tilde_upper(ver: str) -> str | None:
+    """Exclusive upper bound for a PEP 440 ``~=`` compatible-release specifier.
+
+    ``~=2.7.5`` -> ``"2.8"`` (i.e. ``>=2.7.5,<2.8``); ``~=2.7`` -> ``"3"``
+    (``>=2.7,<3``). Returns ``None`` when fewer than two numeric release
+    components are present (``~=2`` is not a valid PEP 440 specifier, so there
+    is no compatible-release cap to synthesise).
+    """
+    rel: list[int] = []
+    for chunk in re.split(r"[.+!-]", ver):
+        if chunk.isdigit():
+            rel.append(int(chunk))
+        else:
+            break
+    if len(rel) < 2:
+        return None
+    rel = rel[:-1]
+    rel[-1] += 1
+    return ".".join(str(p) for p in rel)
+
+
 def _normalize(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
@@ -157,8 +178,21 @@ def _parse_req(spec: str) -> Pin | None:
     floor = None
     caps: list[str] = []
     for op, ver in _SPEC_RE.findall(m.group("rest") or ""):
-        if op in (">=", "~="):
+        if op in (">=", ">"):
+            # `>` is a strict lower bound; treat it as a floor for drift checks
+            # (an unsatisfiable `kailash-ml>3.0` against an in-repo 2.0.0 is the
+            # same resolution break a `>=3.0` floor would be). Without this, `>`
+            # is parsed into no branch and the dep vanishes from the report.
             floor = ver  # lower bound
+        elif op == "~=":
+            # PEP 440 compatible-release: a lower bound AND an implicit upper
+            # cap (`~=2.7.5` == `>=2.7.5,<2.8`). The cap on a first-party
+            # sibling is exactly what dependencies.md § "No Caps" forbids, so
+            # it MUST be recorded as a cap — not waved through as a bare floor.
+            floor = ver
+            upper = _tilde_upper(ver)
+            if upper:
+                caps.append(f"<{upper}")
         elif op == "==" and "*" not in ver:
             # exact pin acts as both floor and cap
             floor = ver

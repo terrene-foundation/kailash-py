@@ -195,6 +195,83 @@ def test_semantically_equal_floors_not_flagged(tmp_path: Path):
     assert "kailash-ml" not in intra  # 1.1 == 1.1.0, no drift
 
 
+def test_tilde_compatible_release_is_cap_error(tmp_path: Path):
+    # `~=2.7.5` means `>=2.7.5,<2.8` — the implicit upper bound is a cap on a
+    # first-party sibling that EXCLUDES the current 2.24.5. The detector MUST
+    # flag it as an ERROR, not wave it through as a bare floor. Regression for
+    # the #1183 redteam: PEP 440 compatible-release was mis-parsed as a pure
+    # floor, so a live `~=` resolution break passed the gate with exit 0.
+    _write(tmp_path, "pyproject.toml", _root_manifest("kailash", "1.0.0", []))
+    _write(
+        tmp_path,
+        "packages/kailash-kaizen/pyproject.toml",
+        _root_manifest("kailash-kaizen", "2.24.5", ["kailash>=1.0"]),
+    )
+    _write(
+        tmp_path,
+        "packages/kailash-ml/pyproject.toml",
+        _root_manifest(
+            "kailash-ml",
+            "2.0.0",
+            ["kailash>=1.0", "kailash-kaizen~=2.7.5"],
+        ),
+    )
+    rep = mod.build_report(tmp_path)
+    caps = {n for n, _ in rep["caps_errors"]}
+    assert "kailash-kaizen" in caps
+    kz_sites = [s for n, s in rep["caps_errors"] if n == "kailash-kaizen"]
+    assert kz_sites and kz_sites[0].caps == ["<2.8"]
+    assert mod._cap_excludes(kz_sites[0].caps, "2.24.5") is True
+    assert mod.main(["--root", str(tmp_path)]) == 1
+
+
+def test_tilde_floor_still_recorded(tmp_path: Path):
+    # The `~=` lower bound MUST still be tracked as a floor so the
+    # unsatisfiable / cross-manifest / staleness logic keeps working; adding
+    # the synthesized cap must not drop the floor.
+    _write(tmp_path, "pyproject.toml", _root_manifest("kailash", "1.0.0", []))
+    _write(
+        tmp_path,
+        "packages/kailash-ml/pyproject.toml",
+        _root_manifest("kailash-ml", "2.0.0", ["kailash~=1.0"]),
+    )
+    rep = mod.build_report(tmp_path)
+    site = rep["deps"]["kailash"].sites[0]
+    assert site.floor == "1.0"
+    assert site.caps == ["<2"]  # ~=1.0 -> >=1.0,<2
+
+
+def test_strict_gt_floor_is_tracked_and_can_be_unsatisfiable(tmp_path: Path):
+    # `kailash-kaizen>3.0` is a strict lower bound. Before the fix, `>` matched
+    # no parse branch, the dep vanished from the report, and an unsatisfiable
+    # floor (>3.0 against in-repo 2.0.0) passed the gate silently. Regression
+    # for the #1183 round-2 redteam (same false-negative class as `~=`).
+    _write(tmp_path, "pyproject.toml", _root_manifest("kailash", "1.0.0", []))
+    _write(
+        tmp_path,
+        "packages/kailash-kaizen/pyproject.toml",
+        _root_manifest("kailash-kaizen", "2.0.0", ["kailash>=1.0"]),
+    )
+    _write(
+        tmp_path,
+        "packages/kailash-ml/pyproject.toml",
+        _root_manifest("kailash-ml", "2.0.0", ["kailash>=1.0", "kailash-kaizen>3.0"]),
+    )
+    rep = mod.build_report(tmp_path)
+    assert "kailash-kaizen" in rep["deps"]  # no longer dropped
+    assert rep["deps"]["kailash-kaizen"].sites[0].floor == "3.0"
+    names = {n for n, _, _ in rep["unsatisfiable"]}
+    assert "kailash-kaizen" in names  # >3.0 exceeds in-repo 2.0.0
+    assert mod.main(["--root", str(tmp_path)]) == 1
+
+
+def test_tilde_upper_helper():
+    assert mod._tilde_upper("2.7.5") == "2.8"
+    assert mod._tilde_upper("2.7") == "3"
+    assert mod._tilde_upper("1.0.0") == "1.1"
+    assert mod._tilde_upper("2") is None  # invalid PEP 440 ~=, no cap to synthesize
+
+
 def test_version_equality_helper():
     assert mod._veq("1.1", "1.1.0") is True
     assert mod._veq("2.0", "2.0.0") is True
