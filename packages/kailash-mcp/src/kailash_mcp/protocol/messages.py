@@ -9,13 +9,30 @@ byte-identical canonical JSON for the same logical input per EATP D6.
 
 The canonical form used for cross-SDK round-trip comparison is:
 
-- Keys sorted alphabetically
+- Keys sorted by Unicode code point (``sort_keys=True``)
 - No insignificant whitespace (``separators=(",", ":")``)
+- ``ensure_ascii=False`` -> RAW UTF-8 output (non-ASCII characters are
+  emitted as their literal UTF-8 bytes, NOT ``\\uXXXX`` escapes). This
+  matches ``serde_json``'s default ``to_string`` byte form on the Rust
+  side, so both SDKs produce byte-identical canonical JSON. It is the
+  SAME raw-UTF-8 contract as the delegate encoder
+  (``tests/test-vectors/delegate-canonical.json``) and the OPPOSITE of
+  the trust-plane signing encoder ``serialize_for_signing``
+  (``ensure_ascii=True`` / ASCII-escaped; issue #1258).
+- NO Unicode normalization: an NFC pre-image (``U+00E9``) and its NFD
+  decomposition (``U+0065 U+0301``) serialize to byte-distinct canonical
+  forms. A future normalization step would silently change every existing
+  pre-image, so it is forbidden.
 - ``null`` for explicitly-absent fields (NOT omitted) only where the
   protocol spec requires it; optional fields with ``None`` value are
   omitted from the serialized output
 - Integer error codes as JSON numbers (no string coercion)
 - ``strict=True`` parsing rejects duplicate keys / BOMs / trailing commas
+
+The non-ASCII byte-vectors for all four message types are pinned in
+``tests/test-vectors/mcp-messages-canonical.json`` (issue #1258 follow-up,
+per ``cross-sdk-inspection.md`` Rule 4); the Rust counterpart vendors that
+fixture per Rule 4a.
 
 Classes
 -------
@@ -132,7 +149,13 @@ class JsonRpcError:
         )
 
     def to_canonical_json(self) -> str:
-        """Deterministic JSON (sorted keys, no whitespace) for cross-SDK use."""
+        """Canonical JSON for cross-SDK use (issue #1258).
+
+        ``sort_keys=True`` + ``separators=(",", ":")`` + ``ensure_ascii=False``
+        (raw UTF-8, matching ``serde_json``'s default ``to_string``; no Unicode
+        normalization). See the module docstring for the full byte contract and
+        ``tests/test-vectors/mcp-messages-canonical.json`` for pinned vectors.
+        """
         return json.dumps(
             self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
@@ -252,7 +275,13 @@ class JsonRpcRequest:
         )
 
     def to_canonical_json(self) -> str:
-        """Canonical JSON (sorted keys, no whitespace) per SPEC-09 §2.1."""
+        """Canonical JSON per SPEC-09 §2.1 (issue #1258).
+
+        ``sort_keys=True`` + ``separators=(",", ":")`` + ``ensure_ascii=False``
+        (raw UTF-8, matching ``serde_json``'s default ``to_string``; no Unicode
+        normalization). See the module docstring for the full byte contract and
+        ``tests/test-vectors/mcp-messages-canonical.json`` for pinned vectors.
+        """
         return json.dumps(
             self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
@@ -381,7 +410,13 @@ class JsonRpcResponse:
         )
 
     def to_canonical_json(self) -> str:
-        """Canonical JSON (sorted keys, no whitespace) per SPEC-09 §2.1."""
+        """Canonical JSON per SPEC-09 §2.1 (issue #1258).
+
+        ``sort_keys=True`` + ``separators=(",", ":")`` + ``ensure_ascii=False``
+        (raw UTF-8, matching ``serde_json``'s default ``to_string``; no Unicode
+        normalization). See the module docstring for the full byte contract and
+        ``tests/test-vectors/mcp-messages-canonical.json`` for pinned vectors.
+        """
         return json.dumps(
             self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
@@ -471,7 +506,13 @@ class McpToolInfo:
         )
 
     def to_canonical_json(self) -> str:
-        """Canonical JSON (sorted keys, no whitespace) for cross-SDK use."""
+        """Canonical JSON for cross-SDK use (issue #1258).
+
+        ``sort_keys=True`` + ``separators=(",", ":")`` + ``ensure_ascii=False``
+        (raw UTF-8, matching ``serde_json``'s default ``to_string``; no Unicode
+        normalization). See the module docstring for the full byte contract and
+        ``tests/test-vectors/mcp-messages-canonical.json`` for pinned vectors.
+        """
         return json.dumps(
             self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
