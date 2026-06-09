@@ -15,13 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          LABEL: ${{ github.event.label.name }}
+          REPO: ${{ github.repository }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            PR="${{ github.event.pull_request.number }}"
-            TITLE="${{ github.event.pull_request.title }}"
-            LABEL="${{ github.event.label.name }}"
-            REPO="${{ github.repository }}"
-
             if [ "$LABEL" = "auto-fix" ]; then
               COLOR=3066993
               DESC="High confidence — ready for admin review"
@@ -29,10 +30,11 @@ jobs:
               COLOR=15105570
               DESC="Needs careful review before merging"
             fi
-
-            curl -s -H "Content-Type: application/json" \
-              -d "{\"embeds\":[{\"title\":\"[PR #${PR}] ${TITLE}\",\"url\":\"https://github.com/${REPO}/pull/${PR}\",\"color\":${COLOR},\"description\":\"${DESC}\"}]}" \
-              "$DISCORD_WEBHOOK_URL" || true
+            payload=$(jq -n \
+              --arg t "[PR #${PR_NUMBER}] ${PR_TITLE}" \
+              --arg url "https://github.com/${REPO}/pull/${PR_NUMBER}" \
+              --argjson color "$COLOR" \
+              --arg desc "$DESC" \
+              '{embeds:[{title:$t,url:$url,color:$color,description:$desc}]}')
+            curl -s -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL" || true
           fi
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
