@@ -355,13 +355,18 @@ class TestGraphRAGNode:
 
     def test_create_workflow_builds_expected_nodes_with_summary(self):
         """``_create_workflow()`` with ``use_global_summary=True`` builds the
-        full 9-node graph RAG pipeline.
+        full 12-node graph RAG pipeline.
 
         L3 fix (Wave-2): three ``*_messages_composer`` from_function nodes were
-        added — one per LLM stage (entity_extractor / query_processor /
-        summary_generator) — so each LLM stage receives its REAL context via the
-        VALID ``messages`` port instead of a phantom (dropped) inbound port. The
-        prior 6-node set grew to 9 (6 + 3 composers)."""
+        added — one per LLM stage — so each LLM stage receives its REAL context
+        via the VALID ``messages`` port (input side).
+
+        O3 fix (Wave-O3): three OUTPUT-side from_function parser nodes were added —
+        ``entity_extraction_parser`` (between entity_extractor and graph_builder),
+        ``query_analysis_parser`` (between query_processor and graph_retriever),
+        and ``global_summary_parser`` (between summary_generator and
+        result_synthesizer) — so each LLM stage's output is PARSED before its
+        consumer reads it. The prior 9-node set grew to 12 (9 + 3 parsers)."""
         # type: ignore[attr-defined] — the @register_node decorator erases the
         # concrete subclass type to base Node, which does not declare the
         # per-node _create_workflow helper. The method exists at runtime; the
@@ -371,25 +376,36 @@ class TestGraphRAGNode:
         assert node_ids == {
             "entity_extractor",
             "entity_messages_composer",
+            "entity_extraction_parser",
             "graph_builder",
             "query_processor",
             "query_messages_composer",
+            "query_analysis_parser",
             "graph_retriever",
             "summary_generator",
             "summary_messages_composer",
+            "global_summary_parser",
             "result_synthesizer",
         }
 
     def test_create_workflow_omits_summary_node_when_disabled(self):
         """With ``use_global_summary=False`` the ``summary_generator`` node AND
-        its ``summary_messages_composer`` are absent — a 7-node pipeline
-        (5 original non-summary nodes + the entity & query message composers;
-        the summary composer is added only when ``use_global_summary=True``)."""
+        its ``summary_messages_composer`` AND its ``global_summary_parser`` are
+        absent — a 9-node pipeline (5 original non-summary nodes + the entity &
+        query message composers + the entity_extraction_parser + the
+        query_analysis_parser; the summary stage and its parser are added only
+        when ``use_global_summary=True``)."""
         wf = GraphRAGNode(use_global_summary=False)._create_workflow()  # type: ignore[attr-defined]
         node_ids = set(wf.nodes.keys())
         assert "summary_generator" not in node_ids
         assert "summary_messages_composer" not in node_ids
-        assert len(node_ids) == 7
+        assert "global_summary_parser" not in node_ids
+        # The entity & query analysis parsers ARE present on the disabled path
+        # (entity extraction + query analysis happen regardless of the summary
+        # stage — query_processor is built unconditionally).
+        assert "entity_extraction_parser" in node_ids
+        assert "query_analysis_parser" in node_ids
+        assert len(node_ids) == 9
 
     def test_create_workflow_entity_types_flow_into_extractor_prompt(self):
         """Custom ``entity_types`` appear in the entity_extractor's system

@@ -143,13 +143,15 @@ class TestToolAugmentedRAGIntegration:
 # AgenticRAGNode — real WorkflowBuilder graph + real code= template execution
 # ===========================================================================
 class TestAgenticRAGIntegration:
-    def test_real_workflow_built_with_nine_nodes(self):
-        """``_create_workflow()`` builds a real Workflow with nine nodes when
-        verification is enabled: the 6 original nodes plus the 3 L3
+    def test_real_workflow_built_with_twelve_nodes(self):
+        """``_create_workflow()`` builds a real Workflow with twelve nodes when
+        verification is enabled: the 6 original nodes, the 3 L3
         messages-composers (planner / react / verifier) that render real context
-        into each LLM stage's ``messages`` port."""
+        into each LLM stage's ``messages`` port, AND the 3 O5 output-side
+        response parsers (plan / reasoning / verification) that unwrap each LLM
+        stage's ``response.content`` before its consumer."""
         wf = _build(AgenticRAGNode(verification_enabled=True))
-        assert len(wf.nodes) == 9
+        assert len(wf.nodes) == 12
         # The workflow carries real connections between the nodes.
         assert len(wf.connections) > 0
 
@@ -220,11 +222,13 @@ class TestAgenticRAGIntegration:
 # ReasoningRAGNode — real WorkflowBuilder graph
 # ===========================================================================
 class TestReasoningRAGIntegration:
-    def test_real_workflow_built_with_six_nodes(self):
-        """``_create_workflow()`` builds a real Workflow with six nodes and
-        real connections: the 3 LLM stages plus the 3 L3 messages-composers
-        (one per LLM stage) that render real context into each ``messages``
-        port."""
+    def test_real_workflow_built_with_eight_nodes(self):
+        """``_create_workflow()`` builds a real Workflow with eight nodes and
+        real connections: the 3 LLM stages, the 3 L3 messages-composers (one per
+        LLM stage) that render real context into each ``messages`` port, AND the
+        2 O5 output-side response parsers (decomposition / reasoning-chain) that
+        unwrap the decomposer's and step_reasoner's ``response.content`` before
+        the downstream composer."""
         wf = _build(ReasoningRAGNode())
         assert set(wf.nodes) == {
             "problem_decomposer",
@@ -233,6 +237,8 @@ class TestReasoningRAGIntegration:
             "decomposer_messages_composer",
             "step_reasoner_messages_composer",
             "logic_verifier_messages_composer",
+            "decomposition_parser",
+            "reasoning_chain_parser",
         }
         assert len(wf.connections) > 0
 
@@ -318,18 +324,32 @@ class _MessageCapturingLLMAgent(Node):
     """Protocol-Satisfying Deterministic Adapter (legal Tier-2 surface per
     ``rules/testing.md`` § 3-Tier Testing) that records the ``messages`` each
     LLM stage receives into ``_CAPTURED_MESSAGES`` AND returns deterministic
-    JSON so the rest of each workflow runs to completion.
+    output so the rest of each workflow runs to completion.
 
     This is NOT a mock: it inherits the real ``kailash.nodes.base.Node`` base
-    and implements the full runtime contract (``get_parameters`` + ``run``
-    returning the documented ``{"response": ...}`` shape) deterministically.
+    and implements the full runtime contract (``get_parameters`` + ``run``).
     Dispatch is keyed on ``self.id`` (the graph node_id) so each LLM stage
     routes to its specific payload.
+
+    O5 PRODUCTION-SHAPE FIX: ``run`` returns the EXACT wire shape the real
+    ``LLMAgentNode`` publishes — ``{"response": {"content": "<text-or-JSON>"}}``
+    (``llm_agent.py::_mock_llm_response`` returns a dict whose ``content`` is a
+    string; the JSON-output stages carry a ``json.dumps(...)`` string). The
+    runtime delivers the inner ``{"content": ...}`` for a wired ``response``
+    port, which the O5 ``parse_*_response`` parsers unwrap (``.content`` ->
+    ``json.loads``). The PRIOR shape put the structured fields at the TOP LEVEL
+    of ``response`` (no ``content`` key) — a FALSE-GREEN that matched the
+    pre-O5 consumer bug and never exercised the real parsed path.
     """
 
-    _RESPONSES: Dict[str, Any] = {
-        # ReasoningRAGNode.problem_decomposer → step_reasoner composer expects
-        # the decomposition on `reasoning_plan`.
+    # Each value is the JSON/prose payload the stage's ``content`` carries —
+    # exactly what the real provider would emit. JSON-output stages
+    # (problem_decomposer, logic_verifier) carry a JSON object; the prose stage
+    # (step_reasoner) carries free text. ``run`` wraps each as
+    # ``{"content": <str>}`` mirroring the production wire shape.
+    _CONTENT_PAYLOADS: Dict[str, Any] = {
+        # ReasoningRAGNode.problem_decomposer → decomposition_parser unwraps
+        # `.content` -> json.loads -> the step_reasoner composer's reasoning_plan.
         "problem_decomposer": {
             "steps": [
                 {
@@ -342,12 +362,11 @@ class _MessageCapturingLLMAgent(Node):
             "assumptions": ["compound annual growth"],
             "complexity": "medium",
         },
-        # ReasoningRAGNode.step_reasoner → logic_verifier composer expects the
-        # reasoning chain on `reasoning_to_verify`.
-        "step_reasoner": {
-            "reasoning": "A compounds at 20%, B at 15% from a 50% larger base",
-            "conclusion": "A overtakes B after several years",
-        },
+        # ReasoningRAGNode.step_reasoner is a PROSE stage → reasoning_chain_parser
+        # unwraps `.content` (a plain string) -> the logic_verifier composer's
+        # reasoning_to_verify.
+        "step_reasoner": "A compounds at 20%, B at 15% from a 50% larger base; "
+        "A overtakes B after several years",
         "logic_verifier": {"verified": True, "confidence": 0.9, "issues": []},
     }
 
@@ -369,7 +388,12 @@ class _MessageCapturingLLMAgent(Node):
 
     def run(self, **kwargs: Any) -> Dict[str, Any]:
         _CAPTURED_MESSAGES[self.id] = kwargs.get("messages")
-        return {"response": self._RESPONSES.get(self.id, {})}
+        payload = self._CONTENT_PAYLOADS.get(self.id, "")
+        # PRODUCTION wire shape: the real LLMAgentNode publishes
+        # `response = {"content": "<str>"}`; JSON-output stages carry a
+        # json.dumps(...) string in `content`, prose stages a plain string.
+        content = payload if isinstance(payload, str) else json.dumps(payload)
+        return {"response": {"content": content}}
 
 
 @pytest.fixture
@@ -608,3 +632,250 @@ class TestAgenticContextReachesLLM:
         target_inputs = {(c.target_node, c.target_input) for c in wf.connections}
         assert ("step_reasoner", "reasoning_plan") not in target_inputs
         assert ("logic_verifier", "reasoning_to_verify") not in target_inputs
+
+
+# ===========================================================================
+# O5 output-side proof — every LLM stage's REAL parsed output reaches its
+# consumer (Wave: provably correct, not merely importable).
+#
+# The L3 wave proved the INPUT side (real context reaches each LLM stage via
+# `messages`). This wave proves the OUTPUT side: each LLM stage's `response`
+# port is PARSED (response.content -> json.loads / prose) by a dedicated
+# `parse_*_response` node BEFORE its consumer reads structured fields.
+#
+# AgenticRAGNode's ReAct loop is a GENUINE pre-existing cycle, so its full
+# graph cannot run under a plain `LocalRuntime` (the L3 disposition, unchanged).
+# Output-side correctness is proven by (a) the consumer `code=` templates run
+# under real `exec` against the PRODUCTION parser output, asserting the real
+# parsed field reaches the consumer's published output (read-back), AND (b) a
+# STRUCTURAL parser-wiring assertion that each LLM stage's `response` flows
+# through its parser (the production guard). ReasoningRAGNode is acyclic and is
+# already proven end-to-end above (the decomposition + reasoning chain reach
+# their downstream composers via the parser, with the PRODUCTION
+# `{"content": <JSON>}` adapter shape).
+# ===========================================================================
+class TestAgenticOutputSideParsed:
+    """Each agentic LLM stage's REAL parsed output reaches its consumer — NOT
+    the raw `{"content": ...}` wrapper off which the prior `.get("response")`
+    read a non-existent key (state_manager crashed on `None.strip()`; the
+    verifier verdict was silently dropped)."""
+
+    def _build_codes(self, **kw):
+        wf = _build(AgenticRAGNode(**kw))
+        return wf
+
+    # -- state_manager consumes the PARSED ReAct prose (read-back) ------------
+
+    def test_state_manager_parses_react_answer_from_parsed_prose(self):
+        """The state_manager line parser receives the reasoning_parser's
+        OUTPUT (a bare prose string already unwrapped from `response.content`),
+        extracts the Answer, and publishes it in `reasoning_state`. RED pre-O5:
+        the consumer read `reasoning_response.get("response")` off the inner
+        `{"content": ...}` dict -> None -> `None.strip()` AttributeError."""
+        wf = self._build_codes()
+        code = wf.nodes["state_manager"].config["code"]
+        ns = {
+            # reasoning_parser publishes `result.reasoning_text` = bare prose str.
+            "reasoning_response": (
+                "Thought: compare growth\nAction: search(revenue)\n"
+                "Answer: A overtakes B in 4 years"
+            ),
+            # plan_parser publishes `result.plan` = parsed planner dict.
+            "plan": {"plan": [], "complexity": "simple"},
+        }
+        exec(code, ns)
+        rs = ns["result"]["reasoning_state"]
+        assert rs["final_answer"] == "A overtakes B in 4 years", (
+            "state_manager MUST parse the ReAct Answer from the parsed prose; "
+            f"got: {rs['final_answer']!r}"
+        )
+        assert rs["steps"][0]["thought"] == "compare growth"
+        assert rs["steps"][0]["action"] == "search(revenue)"
+
+    def test_state_manager_tolerates_empty_parsed_reasoning(self):
+        """When the reasoning_parser emits "" (the honest "no reasoning yet"
+        on an empty/missing `response.content`), the state_manager records an
+        empty step WITHOUT crashing — no fabricated answer."""
+        wf = self._build_codes()
+        code = wf.nodes["state_manager"].config["code"]
+        ns = {"reasoning_response": "", "plan": {}}
+        exec(code, ns)
+        rs = ns["result"]["reasoning_state"]
+        # No Answer line -> final_answer stays None (honest), no crash.
+        assert rs["final_answer"] is None
+        assert rs["steps"][0]["thought"] is None
+
+    # -- result_synthesizer consumes the PARSED verifier verdict -------------
+
+    def test_synthesizer_applies_parsed_verifier_confidence(self):
+        """The synthesizer receives the verification_parser's OUTPUT (the parsed
+        verdict dict already unwrapped + json.loads'd from `response.content`)
+        and applies its confidence. RED pre-O5: `verification.get("response")`
+        off the inner `{"content": ...}` dict -> None -> verdict silently
+        dropped, confidence never adjusted (stuck at base+boost)."""
+        wf = self._build_codes()
+        code = wf.nodes["result_synthesizer"].config["code"]
+        ns = {
+            "reasoning_state": {
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "thought": "t",
+                        "action": "a",
+                        "observation": {"tool": "search"},
+                    }
+                ],
+                "final_answer": "A",
+                "completed": True,
+            },
+            # verification_parser publishes `result.verification` = parsed dict.
+            "verification": {"verified": True, "confidence": 0.5, "issues": []},
+            "query": "q",
+        }
+        exec(code, ns)
+        out = ns["result"]["agentic_rag_result"]
+        # (base 0.7 + boost 0.1) * verdict 0.5 = 0.4 — the verdict WAS applied.
+        assert out["confidence"] == pytest.approx(0.4), (
+            "synthesizer MUST apply the parsed verifier confidence; "
+            f"got: {out['confidence']!r} (0.8 means the verdict was dropped)"
+        )
+        # The real parsed verdict reaches the published output (read-back).
+        assert out["verification"] == {
+            "verified": True,
+            "confidence": 0.5,
+            "issues": [],
+        }
+
+    def test_synthesizer_honest_on_parse_error_sentinel(self):
+        """When the verification_parser flags malformed verifier output with a
+        typed `{"parse_error": ...}` sentinel, the synthesizer leaves confidence
+        UNADJUSTED and publishes `verification: None` — it does NOT fabricate a
+        0.8 verdict (zero-tolerance Rule 2)."""
+        wf = self._build_codes()
+        code = wf.nodes["result_synthesizer"].config["code"]
+        ns = {
+            "reasoning_state": {
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "thought": "t",
+                        "action": "a",
+                        "observation": {"tool": "search"},
+                    }
+                ],
+                "final_answer": "A",
+                "completed": True,
+            },
+            "verification": {"parse_error": "non-json-response"},
+            "query": "q",
+        }
+        exec(code, ns)
+        out = ns["result"]["agentic_rag_result"]
+        # base 0.7 + boost 0.1 = 0.8, UNADJUSTED (no usable verdict).
+        assert out["confidence"] == pytest.approx(0.8)
+        assert out["verification"] is None
+
+    # -- Structural parser-wiring guards (load-bearing — production edge) -----
+
+    def test_agentic_response_ports_flow_through_parsers(self):
+        """STRUCTURAL: each agentic LLM stage's `response` port feeds its
+        `parse_*_response` parser, and the parser's parsed `result.*` feeds the
+        consumer — NOT a direct LLM-`response` -> consumer edge (the pre-O5
+        wiring that delivered the raw `{"content": ...}` wrapper)."""
+        wf = _build(AgenticRAGNode(verification_enabled=True))
+        edges = {
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        }
+        # planner.response -> plan_parser -> state_manager.plan
+        assert ("planner_agent", "response", "plan_parser", "response") in edges
+        assert (
+            "plan_parser",
+            "result.plan",
+            "state_manager",
+            "plan",
+        ) in edges
+        # react.response -> reasoning_parser -> state_manager.reasoning_response
+        assert ("react_agent", "response", "reasoning_parser", "response") in edges
+        assert (
+            "reasoning_parser",
+            "result.reasoning_text",
+            "state_manager",
+            "reasoning_response",
+        ) in edges
+        # verifier.response -> verification_parser -> synthesizer.verification
+        assert (
+            "verifier_agent",
+            "response",
+            "verification_parser",
+            "response",
+        ) in edges
+        assert (
+            "verification_parser",
+            "result.verification",
+            "result_synthesizer",
+            "verification",
+        ) in edges
+        # The pre-O5 direct LLM-response -> consumer edges MUST be gone.
+        assert ("planner_agent", "response", "state_manager", "plan") not in edges
+        assert (
+            "react_agent",
+            "response",
+            "state_manager",
+            "reasoning_response",
+        ) not in edges
+        assert (
+            "verifier_agent",
+            "response",
+            "result_synthesizer",
+            "verification",
+        ) not in edges
+
+    def test_reasoning_response_ports_flow_through_parsers(self):
+        """STRUCTURAL: the ReasoningRAGNode decomposer + step_reasoner `response`
+        ports feed their `parse_*_response` parsers, whose parsed output feeds
+        the downstream composer — NOT a direct LLM-`response` -> composer edge."""
+        wf = _build(ReasoningRAGNode())
+        edges = {
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        }
+        # decomposer.response -> decomposition_parser -> step_reasoner composer
+        assert (
+            "problem_decomposer",
+            "response",
+            "decomposition_parser",
+            "response",
+        ) in edges
+        assert (
+            "decomposition_parser",
+            "result.reasoning_plan",
+            "step_reasoner_messages_composer",
+            "reasoning_plan",
+        ) in edges
+        # step_reasoner.response -> reasoning_chain_parser -> logic_verifier composer
+        assert (
+            "step_reasoner",
+            "response",
+            "reasoning_chain_parser",
+            "response",
+        ) in edges
+        assert (
+            "reasoning_chain_parser",
+            "result.reasoning_to_verify",
+            "logic_verifier_messages_composer",
+            "reasoning_to_verify",
+        ) in edges
+        # The pre-O5 direct decomposer-response -> composer edges MUST be gone.
+        assert (
+            "problem_decomposer",
+            "response",
+            "step_reasoner_messages_composer",
+            "reasoning_plan",
+        ) not in edges
+        assert (
+            "step_reasoner",
+            "response",
+            "logic_verifier_messages_composer",
+            "reasoning_to_verify",
+        ) not in edges

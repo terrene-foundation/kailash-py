@@ -860,3 +860,277 @@ class TestWorkflowsContextReachesLLM:
             "in the pre-shard topology the analyzer MUST NOT receive the real "
             f"document characteristics (red-pre proof); got: {text!r}"
         )
+
+
+# ==========================================================================
+# OUTPUT-SIDE proof (F31-FU3 / O2): the strategy DECISION the LLM produces
+# actually DRIVES the SwitchNode executor and reaches the aggregator.
+#
+# Defect classes fixed this shard:
+#   (A) wrong port — the pre-shard graph wired `rag_strategy_analyzer.result`
+#       into both the SwitchNode `strategy_executor` (condition_field
+#       `recommended_strategy`) AND the `results_aggregator`. LLMAgentNode
+#       publishes on `response`, NOT `result`, so both consumers got nothing.
+#   (B) parse gap — the decision lives as a JSON STRING inside
+#       `response["content"]`; the SwitchNode needs a PARSED dict with
+#       `recommended_strategy` as a top-level key.
+#
+# Fix: a `strategy_decision_parser` (PythonCodeNode.from_function) consumes the
+# real `response` port, unwraps `.content`, `json.loads` it, and republishes the
+# parsed `{recommended_strategy, ...}` on `result` -> the SwitchNode + aggregator.
+#
+# Proof shape (mirrors the L3 class above + the O1 evaluation.py parsers): the
+# full AdaptiveRAG graph is NOT runnable past the analyzer (its inner strategy
+# sub-pipelines need an out-of-graph vector DB), so the END-TO-END decision-flow
+# assertions run on a STANDALONE parser->SwitchNode subgraph under real
+# LocalRuntime, and the full-graph assertions are STRUCTURAL (node + edge set).
+# This is the same honest disposition the L3 shard and O1 used for the
+# non-runnable adaptive graph.
+# ==========================================================================
+
+
+class _StrategyDecidingLLMAgent(_DeterministicLLMAgent):
+    """Protocol-Satisfying Deterministic Adapter that publishes the PRODUCTION
+    ``LLMAgentNode`` output shape — ``response = {"content": "<JSON string>"}``
+    — instead of the bare ``result`` dict the base adapter returns. This is the
+    shape the new ``strategy_decision_parser`` consumes; using it proves the
+    OUTPUT-side path end-to-end against the real parser node.
+
+    NOT a mock (inherits the real ``Node`` base, deterministic output). The
+    emitted JSON is the exact object the analyzer's ``system_prompt`` instructs
+    the LLM to produce."""
+
+    _DECISION_JSON = (
+        '{"recommended_strategy": "hybrid", '
+        '"reasoning": "mixed structured + technical content", '
+        '"confidence": 0.82, '
+        '"fallback_strategy": "semantic"}'
+    )
+
+    def run(self, **_kwargs):
+        return {"response": {"content": self._DECISION_JSON}}
+
+
+class TestWorkflowsDecisionDrivesExecutor:
+    """The parsed strategy DECISION drives the SwitchNode executor and reaches
+    the aggregator — proving the OUTPUT side is provably correct end-to-end, not
+    merely importable."""
+
+    _CASES = ["semantic", "statistical", "hybrid", "hierarchical"]
+
+    def _decision_flow_subgraph(self, response_payload) -> Workflow:
+        """Build the load-bearing OUTPUT-side subgraph in isolation:
+        a deterministic LLM-shaped source publishing ``response`` ->
+        ``strategy_decision_parser`` (the real production parser node) ->
+        ``strategy_executor`` (the real production SwitchNode config). The full
+        adaptive graph cannot run past the analyzer (inner vector-DB
+        sub-pipelines), so this subgraph exercises EXACTLY the rewired
+        decision-flow edges under real LocalRuntime."""
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow.builder import WorkflowBuilder
+
+        from kaizen.nodes.rag.workflows import parse_strategy_decision
+
+        builder = WorkflowBuilder()
+        # Deterministic LLM-shaped source: publishes the production `response`
+        # dict on its `result` port (a PythonCodeNode publishes its return on
+        # `result`); we wire `result -> parser.response` to feed the parser the
+        # production `{"content": "<JSON>"}` shape.
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                lambda: {"response": response_payload},
+                name="fake_llm_response",
+            ),
+            node_id="fake_llm_response",
+            _internal=True,
+        )
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_strategy_decision,
+                name="strategy_decision_parser",
+            ),
+            node_id="strategy_decision_parser",
+            _internal=True,
+        )
+        builder.add_node(
+            "SwitchNode",
+            node_id="strategy_executor",
+            config={"condition_field": "recommended_strategy", "cases": self._CASES},
+        )
+        builder.add_connection(
+            "fake_llm_response",
+            "result.response",
+            "strategy_decision_parser",
+            "response",
+        )
+        builder.add_connection(
+            "strategy_decision_parser", "result", "strategy_executor", "input_data"
+        )
+        return builder.build(name="decision_flow_subgraph")
+
+    def test_parsed_decision_fires_matching_switch_case(self):
+        """END-TO-END (real LocalRuntime): the parsed ``recommended_strategy``
+        reaches the SwitchNode and fires the matching ``case_<value>`` port —
+        proving the DECISION drives execution, not just imports."""
+        payload = {
+            "content": (
+                '{"recommended_strategy": "hybrid", "reasoning": "r", '
+                '"confidence": 0.82, "fallback_strategy": "semantic"}'
+            )
+        }
+        wf = self._decision_flow_subgraph(payload)
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(wf)
+        switch = results["strategy_executor"]
+        # The matched case fired with the REAL parsed decision dict.
+        assert switch.get("condition_result") == "hybrid", switch
+        assert switch.get("case_hybrid", {}).get("recommended_strategy") == "hybrid"
+        assert switch.get("case_hybrid", {}).get("confidence") == 0.82
+        # The non-matched cases stayed None — the decision routed exactly one branch.
+        for other in ("case_semantic", "case_statistical", "case_hierarchical"):
+            assert switch.get(other) is None, (other, switch.get(other))
+
+    def test_full_adaptive_graph_wires_parser_between_analyzer_and_consumers(self):
+        """STRUCTURAL (full adaptive graph): the analyzer's REAL ``response``
+        port routes through ``strategy_decision_parser`` to BOTH the SwitchNode
+        and the aggregator; the pre-shard phantom ``result`` edges are REMOVED."""
+        wf = AdaptiveRAGWorkflowNode()._create_adaptive_workflow()  # type: ignore[attr-defined]
+        assert "strategy_decision_parser" in wf.nodes, wf.nodes.keys()
+        conns = [
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        ]
+        # The analyzer's REAL `response` port feeds the parser.
+        assert (
+            "rag_strategy_analyzer",
+            "response",
+            "strategy_decision_parser",
+            "response",
+        ) in conns, conns
+        # The parser's parsed `result` drives the SwitchNode + aggregator.
+        assert (
+            "strategy_decision_parser",
+            "result",
+            "strategy_executor",
+            "input_data",
+        ) in conns, conns
+        assert (
+            "strategy_decision_parser",
+            "result",
+            "results_aggregator",
+            "llm_decision",
+        ) in conns, conns
+        # The pre-shard phantom `rag_strategy_analyzer.result -> ...` edges are gone.
+        phantom = [
+            c for c in conns if c[0] == "rag_strategy_analyzer" and c[1] == "result"
+        ]
+        assert phantom == [], f"phantom `result` edges must be removed; got {phantom}"
+
+    def test_red_pre_proof_phantom_result_edge_starves_executor(self):
+        """RED-PRE proof: a faithful reconstruction of the EXACT pre-shard
+        OUTPUT topology — the LLM stage wired ``result -> strategy_executor``
+        with NO parser, while the production LLMAgentNode publishes on
+        ``response`` and the decision lives as a JSON string in
+        ``response['content']``. The SwitchNode therefore receives NOTHING on a
+        port it can switch on, and NO case fires — proving the parser + the
+        ``response``-port rewire this shard adds is load-bearing, not decorative.
+
+        The deterministic source publishes the PRODUCTION ``response`` shape on
+        ``response``; the pre-shard edge reads the (non-existent) ``result`` port
+        of that source into the SwitchNode, exactly as the pre-shard graph read
+        ``rag_strategy_analyzer.result``."""
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        # Source emits ONLY the production `response` dict (no top-level
+        # `recommended_strategy`), faithfully reproducing LLMAgentNode's output.
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                lambda: {
+                    "response": {
+                        "content": (
+                            '{"recommended_strategy": "hybrid", "reasoning": "r", '
+                            '"confidence": 0.82, "fallback_strategy": "semantic"}'
+                        )
+                    }
+                },
+                name="fake_llm_response",
+            ),
+            node_id="fake_llm_response",
+            _internal=True,
+        )
+        builder.add_node(
+            "SwitchNode",
+            node_id="strategy_executor",
+            config={"condition_field": "recommended_strategy", "cases": self._CASES},
+        )
+        # PRE-SHARD phantom edge: reads `result` (a port the LLM-shaped source
+        # does NOT publish its decision on) straight into the SwitchNode — no
+        # parser, no `response`-port consumption.
+        builder.add_connection(
+            "fake_llm_response", "result", "strategy_executor", "input_data"
+        )
+        wf = builder.build(name="pre_shard_output_replica")
+        with LocalRuntime() as runtime:
+            try:
+                results, _ = runtime.execute(wf)
+            except (
+                Exception
+            ):  # noqa: BLE001 — pre-shard topology may not resolve a port
+                results = {}
+        switch = results.get("strategy_executor", {})
+        # In the pre-shard topology the SwitchNode never sees a parsed
+        # `recommended_strategy`, so NO strategy case fires.
+        assert switch.get("condition_result") != "hybrid", (
+            "pre-shard topology MUST NOT route the decision to case_hybrid "
+            f"(red-pre proof); got: {switch!r}"
+        )
+        for case in (
+            "case_semantic",
+            "case_statistical",
+            "case_hybrid",
+            "case_hierarchical",
+        ):
+            assert switch.get(case) is None, (
+                "pre-shard topology MUST NOT fire any strategy case (red-pre "
+                f"proof); {case} fired with {switch.get(case)!r}"
+            )
+
+    def test_malformed_output_fails_closed_no_fabricated_strategy(self):
+        """HONESTY (zero-tolerance Rule 2): malformed LLM output yields the typed
+        parse-error sentinel, the SwitchNode fails CLOSED (no case fires), and NO
+        fabricated strategy (e.g. ``"semantic"``) is invented."""
+        wf = self._decision_flow_subgraph({"content": "not json at all"})
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(wf)
+        parsed = results["strategy_decision_parser"]["result"]
+        switch = results["strategy_executor"]
+        # Typed sentinel, NOT a fabricated strategy.
+        assert parsed["recommended_strategy"] is None, parsed
+        assert parsed["parse_error"] == "non-json-response", parsed
+        assert parsed["recommended_strategy"] not in self._CASES
+        # SwitchNode fails closed: no case matched None.
+        assert switch.get("condition_result") is None, switch
+        for case in (
+            "case_semantic",
+            "case_statistical",
+            "case_hybrid",
+            "case_hierarchical",
+        ):
+            assert switch.get(case) is None, (case, switch.get(case))
+
+    def test_deterministic_adapter_publishes_production_response_shape(self):
+        """The Protocol-Satisfying Deterministic Adapter emits the PRODUCTION
+        ``response = {"content": "<JSON>"}`` shape (not the pre-shard ``result``
+        port), feeding the real parser end-to-end — proving the adapter exercises
+        the genuine OUTPUT-side contract."""
+        agent = _StrategyDecidingLLMAgent()
+        out = agent.run()
+        assert "response" in out and "content" in out["response"], out
+        from kaizen.nodes.rag.workflows import parse_strategy_decision
+
+        parsed = parse_strategy_decision(response=out["response"])
+        assert parsed["recommended_strategy"] == "hybrid"
+        assert parsed["confidence"] == 0.82
+        assert parsed["fallback_strategy"] == "semantic"

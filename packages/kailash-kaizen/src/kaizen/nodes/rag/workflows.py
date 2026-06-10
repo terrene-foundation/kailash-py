@@ -123,6 +123,119 @@ def compose_strategy_analyzer_messages(
     return {"messages": [{"role": "user", "content": content}]}
 
 
+# ---------------------------------------------------------------------------
+# Strategy-decision parser (OUTPUT-side fix — same reference template as the O1
+# evaluation.py response parsers `_unwrap_response_content` + `parse_*_response`).
+#
+# LLMAgentNode publishes its model output on the `response` port as a dict
+# `{"content": "<text or JSON string>", "success": ..., "usage": ...,
+# "metadata": ...}`. The `rag_strategy_analyzer` system_prompt instructs the LLM
+# to emit ONLY a JSON object `{"recommended_strategy", "reasoning", "confidence",
+# "fallback_strategy"}` — but that object lives as a JSON STRING inside
+# `response["content"]`.
+#
+# The pre-shard topology wired `rag_strategy_analyzer.result -> ...` (a port
+# LLMAgentNode does NOT publish) into the SwitchNode `strategy_executor`
+# (condition_field `recommended_strategy`) AND the `results_aggregator`
+# PythonCodeNode (reads `llm_decision.get("recommended_strategy")` etc.). Both
+# consumers therefore received NOTHING — the strategy DECISION never drove the
+# executor nor reached the aggregator (every field resolved to its default/None).
+#
+# This parser consumes the REAL `response` port, unwraps `.content`, and
+# `json.loads` it into a PARSED dict the SwitchNode + aggregator can read:
+# `{recommended_strategy, reasoning, confidence, fallback_strategy}` at the top
+# level (so `condition_field: "recommended_strategy"` resolves against the
+# from_function `result` dict).
+#
+# HONESTY (zero-tolerance Rule 2): on non-JSON / missing-field / malformed
+# output the parser returns a TYPED parse-error sentinel
+# (`{"recommended_strategy": None, "parse_error": "<reason>"}`) — NEVER a
+# fabricated default like `"semantic"` (that would be the fake-dispatch /
+# fake-classification failure mode). The SwitchNode `cases` allowlist
+# (`["semantic","statistical","hybrid","hierarchical"]`) fails CLOSED when
+# `recommended_strategy` is None (no case matches) — that is the CORRECT honest
+# behavior for unparseable LLM output, NOT papered with a default case.
+#
+# This is tool-result PARSING (permitted deterministic logic per
+# rules/agent-reasoning.md exception 6 — extracting structured data from LLM
+# output), NOT agent decision-making: the LLM still makes the strategy decision;
+# this function only extracts it. NO if-else strategy heuristics are added.
+# ---------------------------------------------------------------------------
+
+
+def parse_strategy_decision(response=None):
+    """Parse the ``rag_strategy_analyzer`` ``response`` into a strategy-decision dict.
+
+    Reads ``response`` -> ``.content`` (a JSON string) -> ``json.loads`` -> the
+    ``{recommended_strategy, reasoning, confidence, fallback_strategy}`` object
+    the analyzer's ``system_prompt`` instructs the LLM to emit. The parsed object
+    is returned as the from_function ``result`` so the downstream SwitchNode
+    (``condition_field: "recommended_strategy"``) switches on the REAL parsed
+    strategy and the ``results_aggregator`` reads the REAL reasoning/confidence/
+    fallback.
+
+    Malformed / non-JSON / missing-strategy output is FLAGGED with a typed
+    sentinel (``{"recommended_strategy": None, "parse_error": "<reason>"}``) —
+    never a fabricated strategy (zero-tolerance Rule 2). The SwitchNode then
+    fails closed (no case matches ``None``), surfacing the parse failure honestly
+    rather than dispatching to an invented strategy.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+
+    # Honest empty: the analyzer published nothing parseable. Surface, don't
+    # invent — the SwitchNode fails closed on a None strategy.
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"recommended_strategy": None, "parse_error": "empty-response"}
+
+    # The provider may already have emitted a parsed dict (some do).
+    parsed: Any
+    if isinstance(content, dict):
+        parsed = content
+    elif isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"recommended_strategy": None, "parse_error": "non-json-response"}
+    else:
+        return {
+            "recommended_strategy": None,
+            "parse_error": "unexpected-content-type",
+        }
+
+    if not isinstance(parsed, dict):
+        return {"recommended_strategy": None, "parse_error": "non-object-json"}
+
+    strategy = parsed.get("recommended_strategy")
+    if not isinstance(strategy, str) or not strategy.strip():
+        # Parsed JSON but the load-bearing decision field is absent/blank. FLAG,
+        # don't fabricate — the SwitchNode fails closed.
+        return {"recommended_strategy": None, "parse_error": "missing-strategy"}
+
+    # Real decision: surface the strategy + its rationale fields so the SwitchNode
+    # switches on the genuine strategy and the aggregator reports genuine metadata.
+    return {
+        "recommended_strategy": strategy,
+        "reasoning": parsed.get("reasoning"),
+        "confidence": parsed.get("confidence"),
+        "fallback_strategy": parsed.get("fallback_strategy"),
+    }
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode ``response`` port into the model's text payload.
+
+    ``LLMAgentNode`` publishes ``response`` as ``{"content": "<text>", ...}``
+    (mock + real providers both). A defensive caller may also pass the bare
+    string. Mirrors evaluation.py's ``_unwrap_response_content`` + the
+    conversational.py ``response.get("content")`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
+
+
 @register_node()
 class SimpleRAGWorkflowNode(WorkflowNode):
     """
@@ -659,6 +772,26 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
             _internal=True,
         )
 
+        # Strategy-decision parser (OUTPUT-side fix — same `from_function` +
+        # `add_node_instance(_internal=True)` primitive as the composer above and
+        # the O1 evaluation.py response parsers). The `rag_strategy_analyzer`
+        # LLMAgentNode publishes its decision on the `response` port (a dict
+        # `{"content": "<JSON string>", ...}`); this parser unwraps `.content`,
+        # `json.loads` it, and republishes the parsed `{recommended_strategy,
+        # reasoning, confidence, fallback_strategy}` on its `result` so the
+        # SwitchNode + aggregator consume the REAL decision (the pre-shard edges
+        # read a `result` port LLMAgentNode never publishes — see the rewired
+        # connections below). Malformed output yields a typed parse-error
+        # sentinel, NOT a fabricated strategy (zero-tolerance Rule 2).
+        strategy_decision_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_strategy_decision,
+                name="strategy_decision_parser",
+            ),
+            node_id="strategy_decision_parser",
+            _internal=True,
+        )
+
         # Connect adaptive pipeline. SwitchNode's primary input port is
         # `input_data`; each multi-case match emits on `case_<value>`.
         #
@@ -719,7 +852,18 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
             llm_analyzer_id,
             "messages",
         )
-        builder.add_connection(llm_analyzer_id, "result", executor_id, "input_data")
+        # OUTPUT-side fix: the analyzer publishes its decision on `response`
+        # (NOT `result` — the pre-shard phantom port). Route `response` through
+        # the parser, which republishes the PARSED decision dict on `result`. The
+        # SwitchNode then switches on the real `recommended_strategy` (its
+        # `condition_field` reads the top-level key of `input_data`), and the
+        # aggregator reads the real reasoning/confidence/fallback.
+        builder.add_connection(
+            llm_analyzer_id, "response", strategy_decision_parser_id, "response"
+        )
+        builder.add_connection(
+            strategy_decision_parser_id, "result", executor_id, "input_data"
+        )
         builder.add_connection(
             preprocessor_id, "result", executor_id, "preprocessed_data"
         )
@@ -749,7 +893,14 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
         builder.add_connection(
             hierarchical_pipeline_id, "output", aggregator_id, "rag_results"
         )
-        builder.add_connection(llm_analyzer_id, "result", aggregator_id, "llm_decision")
+        # OUTPUT-side fix: the aggregator's `llm_decision` reads the PARSED
+        # decision dict (republished on `strategy_decision_parser.result`), NOT
+        # the analyzer's non-existent `result` port. So `strategy_used`,
+        # `llm_reasoning`, `confidence`, and `fallback_available` reflect the REAL
+        # LLM strategy decision instead of defaulting to None.
+        builder.add_connection(
+            strategy_decision_parser_id, "result", aggregator_id, "llm_decision"
+        )
         builder.add_connection(
             preprocessor_id, "result", aggregator_id, "preprocessed_data"
         )

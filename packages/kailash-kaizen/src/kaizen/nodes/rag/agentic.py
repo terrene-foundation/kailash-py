@@ -273,6 +273,175 @@ def _render_reasoning_plan(value: Any) -> str:
     return _coerce_text(value)
 
 
+# ---------------------------------------------------------------------------
+# Response parsers (O5 output-side fix — same reference template as
+# evaluation.py `_unwrap_response_content`/`parse_*_response`, workflows.py,
+# graph.py, query_processing.py).
+#
+# LLMAgentNode publishes its `response` port as `{"content": "<text-or-JSON>",
+# ...}` (mock + real providers both — `_mock_llm_response` returns a dict whose
+# `content` is a string; JSON-output stages carry a `json.dumps(...)` string).
+# The runtime delivers `source_outputs["response"]` for a wired `response` port,
+# i.e. the inner `{"content": ...}` dict — NOT a `{"response": ...}` wrapper.
+#
+# The prior consumers read a NON-EXISTENT `.get("response")` key off that inner
+# dict (the planner/react `plan`/`reasoning_response` reads in state_manager,
+# the `verification.get("response")` read in result_synthesizer) and the
+# reasoning composers rendered the raw `{"content": ...}` wrapper via
+# `_render_reasoning_plan` instead of its content. So under the production wire
+# shape the ReAct answer was dropped (state_manager crashed on `None.strip()`),
+# the verifier verdict was silently skipped (confidence never adjusted), and the
+# decomposition/reasoning chains reached their next stage as a stringified dict.
+#
+# These parsers sit between each LLM stage's `response` port and its consumer.
+# They unwrap `response -> .content`, `json.loads` the JSON-output stages, and
+# flag malformed output with a typed `parse_error` sentinel (NEVER a fabricated
+# parse — zero-tolerance Rule 2). They are real module-level functions (real
+# `return` -> `result`, type-checkable) per the program's reference template —
+# pure tool-result parsing (the permitted exception per rules/agent-reasoning.md:
+# no agent decisions, no content classification, just shape extraction).
+# ---------------------------------------------------------------------------
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode ``response`` port into the model's text payload.
+
+    ``LLMAgentNode`` publishes ``response`` as ``{"content": "<text>", ...}``
+    (mock + real providers both). A defensive caller may also pass the bare
+    string or a pre-parsed structure. Mirrors evaluation.py /
+    conversational.py's ``response.get("content", ...)`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
+
+
+def parse_reasoning_response(response=None):
+    """Parse the react_agent ``response`` into the ReAct prose string.
+
+    The react_agent is a PROSE stage (Thought/Action/Observation/Answer lines),
+    so its ``.content`` is used directly as the string the state_manager's line
+    parser consumes. Returns ``{"reasoning_text": "<str>"}`` wired to the
+    state_manager ``reasoning_response`` input. An empty / missing content
+    yields ``""`` (an honest "no reasoning yet"), never a fabricated answer.
+    """
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_text": ""}
+    if isinstance(content, str):
+        return {"reasoning_text": content}
+    # A pre-parsed dict/list from some providers — coerce to text faithfully.
+    return {"reasoning_text": _coerce_text(content)}
+
+
+def parse_plan_response(response=None):
+    """Parse the planner_agent ``response`` (a JSON plan) into a dict.
+
+    The planner is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"plan": [...], "complexity": ...}``). Returns ``{"plan": <dict>}`` wired
+    to the state_manager ``plan`` input. Malformed / non-JSON content is FLAGGED
+    with a typed sentinel (``{"plan": {"parse_error": "<reason>"}}``) — never a
+    fabricated plan (zero-tolerance Rule 2).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"plan": {}}
+    if isinstance(content, dict):
+        return {"plan": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"plan": {"parse_error": "non-json-response"}}
+        if isinstance(parsed, dict):
+            return {"plan": parsed}
+        return {"plan": {"parse_error": "non-object-json"}}
+    return {"plan": {"parse_error": "unexpected-content-type"}}
+
+
+def parse_verification_response(response=None):
+    """Parse the verifier_agent ``response`` (a JSON verdict) into a dict.
+
+    The verifier is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"verified": ..., "confidence": ..., "issues": [...]}``). Returns
+    ``{"verification": <dict>}`` wired to the result_synthesizer ``verification``
+    input. Malformed / non-JSON content is FLAGGED with a typed sentinel
+    (``{"verification": {"parse_error": "<reason>"}}``) — never a fabricated
+    verdict that would silently inflate or deflate the confidence
+    (zero-tolerance Rule 2).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"verification": {}}
+    if isinstance(content, dict):
+        return {"verification": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"verification": {"parse_error": "non-json-response"}}
+        if isinstance(parsed, dict):
+            return {"verification": parsed}
+        return {"verification": {"parse_error": "non-object-json"}}
+    return {"verification": {"parse_error": "unexpected-content-type"}}
+
+
+def parse_decomposition_response(response=None):
+    """Parse the problem_decomposer ``response`` into the decomposition dict.
+
+    The decomposer is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"steps": [...], "assumptions": [...], ...}``). Returns
+    ``{"reasoning_plan": <dict-or-str>}`` wired to the step_reasoner composer's
+    ``reasoning_plan`` input, where ``_render_reasoning_plan`` extracts the
+    steps. On non-JSON content the raw text is forwarded as-is (the composer
+    renders the prose faithfully) — honest, not fabricated.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_plan": ""}
+    if isinstance(content, dict):
+        return {"reasoning_plan": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            # Non-JSON prose: forward the real text so the composer renders it.
+            return {"reasoning_plan": content}
+        return {"reasoning_plan": parsed}
+    return {"reasoning_plan": _coerce_text(content)}
+
+
+def parse_reasoning_chain_response(response=None):
+    """Parse the step_reasoner ``response`` into the reasoning chain.
+
+    The step_reasoner is a PROSE stage; its ``.content`` is the reasoning text
+    the logic_verifier checks. Returns ``{"reasoning_to_verify": <dict-or-str>}``
+    wired to the logic_verifier composer's ``reasoning_to_verify`` input, where
+    ``_render_reasoning_plan`` renders it. A pre-parsed dict (some providers)
+    is forwarded as-is; otherwise the raw text is forwarded faithfully.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_to_verify": ""}
+    if isinstance(content, dict):
+        return {"reasoning_to_verify": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"reasoning_to_verify": content}
+        return {"reasoning_to_verify": parsed}
+    return {"reasoning_to_verify": _coerce_text(content)}
+
+
 @register_node()
 class AgenticRAGNode(WorkflowNode):
     """
@@ -632,9 +801,14 @@ def update_reasoning_state(state, new_response, tool_result=None):
 
     return state
 
-# Process current iteration
-plan = plan.get("response") if isinstance(plan, dict) else plan
-reasoning_response = reasoning_response.get("response") if isinstance(reasoning_response, dict) else reasoning_response
+# Process current iteration. `plan` arrives from the plan parser as the
+# parsed planner dict; `reasoning_response` arrives from the reasoning parser
+# as the ReAct prose STRING (the parsers already unwrapped `response.content`
+# upstream, so NO further `.get("response")` unwrap is needed — and would be
+# wrong, the inner dict has no `response` key). `reasoning_response` may still
+# be a non-str on a defensive path; coerce so the line parser never crashes.
+if not isinstance(reasoning_response, str):
+    reasoning_response = "" if reasoning_response is None else str(reasoning_response)
 tool_result = tool_result if "tool_result" in locals() else None
 
 # Initialize or update state
@@ -712,20 +886,23 @@ for step in reasoning_state["steps"]:
     if step["observation"] and "tool" in step["observation"]:
         tools_used.append(step["observation"]["tool"])
 
-# Calculate confidence
+# Calculate confidence. `verification` arrives from the verification parser
+# as the PARSED verifier dict ({{"verified", "confidence", "issues", ...}} or a
+# parse-error sentinel carrying {{"parse_error": ...}}) — already unwrapped from
+# `response.content` + json.loads upstream. The prior `.get("response")` read a
+# non-existent key off the inner content dict, so the verdict was always
+# dropped. A flagged parse-error sentinel carries no real confidence, so it is
+# treated as "no usable verdict" (NOT a fabricated 0.8) and confidence is left
+# unadjusted — honest, per zero-tolerance Rule 2.
 base_confidence = 0.7
 confidence_boost = min(0.3, len(tools_used) * 0.1)
-if verification and verification.get("response"):
-    verification_data = verification["response"]
-    if isinstance(verification_data, str):
-        import json
-        try:
-            verification_data = json.loads(verification_data)
-        except Exception:
-            # Fallback for invalid JSON (sandboxed - no logging available)
-            verification_data = {{"confidence": 0.8}}
-
-    verification_confidence = verification_data.get("confidence", 0.8)
+_has_verdict = (
+    isinstance(verification, dict)
+    and "confidence" in verification
+    and verification.get("parse_error") is None
+)
+if _has_verdict:
+    verification_confidence = verification.get("confidence", 0.8)
     final_confidence = (base_confidence + confidence_boost) * verification_confidence
 else:
     final_confidence = base_confidence + confidence_boost
@@ -749,7 +926,7 @@ result = {{
         "tools_used": list(set(tools_used)),
         "confidence": final_confidence,
         "total_steps": len(reasoning_state["steps"]),
-        "verification": verification.get("response") if verification else None,
+        "verification": verification if _has_verdict else None,
         "metadata": {{
             "planning_strategy": "{self.planning_strategy}",
             "max_steps": {self.max_reasoning_steps},
@@ -799,14 +976,48 @@ result = {{
                 _internal=True,
             )
 
+        # O5 output-side response parsers. Each sits between an LLM stage's
+        # `response` port and its PythonCodeNode consumer, unwrapping
+        # `response -> .content` (+ json.loads for JSON-output stages) so the
+        # consumer reads PARSED fields — NOT the raw `{"content": ...}` wrapper
+        # off which the prior `.get("response")` read a non-existent key.
+        plan_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_plan_response,
+                name="plan_parser",
+            ),
+            node_id="plan_parser",
+            _internal=True,
+        )
+        reasoning_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_reasoning_response,
+                name="reasoning_parser",
+            ),
+            node_id="reasoning_parser",
+            _internal=True,
+        )
+        verification_parser_id: Optional[str] = None
+        if self.verification_enabled:
+            verification_parser_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    parse_verification_response,
+                    name="verification_parser",
+                ),
+                node_id="verification_parser",
+                _internal=True,
+            )
+
         # Connect workflow
         # Planning phase. The planner composer renders the REAL top-level `query`
         # (the parameter injector delivers it) into the planner's `messages`
-        # port; the planner's `response` feeds the state_manager `plan` input.
+        # port; the planner's `response` is PARSED (response.content -> json) by
+        # the plan_parser, whose `result.plan` feeds the state_manager `plan`.
         builder.add_connection(
             planner_messages_composer_id, "result.messages", planner_id, "messages"
         )
-        builder.add_connection(planner_id, "response", state_manager_id, "plan")
+        builder.add_connection(planner_id, "response", plan_parser_id, "response")
+        builder.add_connection(plan_parser_id, "result.plan", state_manager_id, "plan")
 
         # ReAct loop connections.
         # FIX: the prior `state_manager.context_for_agent ->
@@ -825,8 +1036,17 @@ result = {{
         builder.add_connection(
             react_messages_composer_id, "result.messages", react_agent_id, "messages"
         )
+        # The react_agent `response` is PARSED (response.content -> prose string)
+        # by the reasoning_parser; its `result.reasoning_text` feeds the
+        # state_manager `reasoning_response` (the line parser consumes a string).
         builder.add_connection(
-            react_agent_id, "response", state_manager_id, "reasoning_response"
+            react_agent_id, "response", reasoning_parser_id, "response"
+        )
+        builder.add_connection(
+            reasoning_parser_id,
+            "result.reasoning_text",
+            state_manager_id,
+            "reasoning_response",
         )
         builder.add_connection(
             state_manager_id, "reasoning_state", tool_executor_id, "reasoning_state"
@@ -855,6 +1075,7 @@ result = {{
             # and narrow the type for pyright.
             assert verifier_id is not None
             assert verifier_messages_composer_id is not None
+            assert verification_parser_id is not None
             builder.add_connection(
                 state_manager_id,
                 "reasoning_state",
@@ -867,8 +1088,17 @@ result = {{
                 verifier_id,
                 "messages",
             )
+            # The verifier_agent `response` is PARSED (response.content -> json)
+            # by the verification_parser; its `result.verification` feeds the
+            # result_synthesizer `verification` (the parsed verdict dict).
             builder.add_connection(
-                verifier_id, "response", synthesizer_id, "verification"
+                verifier_id, "response", verification_parser_id, "response"
+            )
+            builder.add_connection(
+                verification_parser_id,
+                "result.verification",
+                synthesizer_id,
+                "verification",
             )
 
         # Final synthesis
@@ -1194,6 +1424,30 @@ Rate confidence: 0.0-1.0""",
             _internal=True,
         )
 
+        # O5 output-side response parsers. Each sits between an LLM stage's
+        # `response` port and the downstream composer, unwrapping
+        # `response -> .content` (+ json.loads for the decomposer's JSON output)
+        # so the composer's `_render_reasoning_plan` receives the PARSED
+        # decomposition / reasoning chain — NOT the raw `{"content": ...}`
+        # wrapper, which `_render_reasoning_plan` would otherwise stringify
+        # (the steps/assumptions never extracted).
+        decomposition_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_decomposition_response,
+                name="decomposition_parser",
+            ),
+            node_id="decomposition_parser",
+            _internal=True,
+        )
+        reasoning_chain_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_reasoning_chain_response,
+                name="reasoning_chain_parser",
+            ),
+            node_id="reasoning_chain_parser",
+            _internal=True,
+        )
+
         # Connect workflow.
         # Stage 1: the REAL top-level `query` (parameter injector) → decomposer
         # composer → decomposer.messages.
@@ -1203,15 +1457,20 @@ Rate confidence: 0.0-1.0""",
             decomposer_id,
             "messages",
         )
-        # Stage 2: the REAL query + the real decomposer.response →
-        # step_reasoner composer → step_reasoner.messages. The phantom
-        # `decomposer.response -> step_reasoner.reasoning_plan` edge is REMOVED;
-        # the decomposition now reaches the reasoner through the composer's
-        # `messages`. (`query` is the top-level injected input; `reasoning_plan`
-        # is wired from decomposer.response.)
+        # Stage 2: the decomposer.response is PARSED (response.content -> json)
+        # by the decomposition_parser; its `result.reasoning_plan` (the real
+        # decomposition dict) feeds the step_reasoner composer's `reasoning_plan`
+        # input, which `_render_reasoning_plan` renders into the reasoner's
+        # `messages`. (`query` is the top-level injected input.)
         builder.add_connection(
             decomposer_id,
             "response",
+            decomposition_parser_id,
+            "response",
+        )
+        builder.add_connection(
+            decomposition_parser_id,
+            "result.reasoning_plan",
             step_reasoner_messages_composer_id,
             "reasoning_plan",
         )
@@ -1221,14 +1480,19 @@ Rate confidence: 0.0-1.0""",
             step_reasoner_id,
             "messages",
         )
-        # Stage 3: the real step_reasoner.response (the reasoning chain) →
-        # logic_verifier composer → logic_verifier.messages. The phantom
-        # `step_reasoner.response -> logic_verifier.reasoning_to_verify` edge is
-        # REMOVED; the reasoning chain now reaches the verifier through
-        # `messages`.
+        # Stage 3: the step_reasoner.response (the reasoning chain) is PARSED
+        # (response.content) by the reasoning_chain_parser; its
+        # `result.reasoning_to_verify` feeds the logic_verifier composer, which
+        # renders the real chain into the verifier's `messages`.
         builder.add_connection(
             step_reasoner_id,
             "response",
+            reasoning_chain_parser_id,
+            "response",
+        )
+        builder.add_connection(
+            reasoning_chain_parser_id,
+            "result.reasoning_to_verify",
             logic_verifier_messages_composer_id,
             "reasoning_to_verify",
         )

@@ -200,10 +200,12 @@ class TestGraphRAGNodeIntegration:
         # per-node _create_workflow helper. The method exists at runtime; the
         # static erasure is a known Core SDK decorator gap (out of B2 scope).
         wf = GraphRAGNode()._create_workflow()  # type: ignore[attr-defined]
-        # The full pipeline has 9 nodes when global summary is enabled
-        # (6 original + 3 L3 `*_messages_composer` from_function nodes, one per
-        # LLM stage — see TestGraphContextReachesLLM).
-        assert len(wf.nodes) == 9
+        # The full pipeline has 12 nodes when global summary is enabled
+        # (6 original + 3 L3 `*_messages_composer` input-side composers + 3 O3
+        # output-side parsers: entity_extraction_parser + query_analysis_parser +
+        # global_summary_parser — see TestGraphContextReachesLLM +
+        # TestGraphOutputReachesConsumers).
+        assert len(wf.nodes) == 12
         # The graph_builder PythonCodeNode carries a real code template.
         builder_code = wf.nodes["graph_builder"].config["code"]
         assert "build_knowledge_graph" in builder_code
@@ -217,17 +219,23 @@ class TestGraphRAGNodeIntegration:
         assert "depth >= 3" in retriever_code
 
     def test_create_workflow_summary_disabled_drops_node_and_connections(self):
-        """With ``use_global_summary=False`` the real workflow has 7 nodes and
+        """With ``use_global_summary=False`` the real workflow has 9 nodes and
         no summary_generator wiring.
 
         L3 fix (Wave-2): the entity & query ``*_messages_composer`` from_function
-        nodes are always present (5 original non-summary nodes + 2 composers);
-        the ``summary_generator`` and its ``summary_messages_composer`` are added
-        only when ``use_global_summary=True``."""
+        nodes are always present (5 original non-summary nodes + 2 composers).
+        O3 fix (Wave-O3): the ``entity_extraction_parser`` AND the
+        ``query_analysis_parser`` are always present (+2 = 9 — query_processor is
+        built unconditionally); the ``summary_generator`` /
+        ``summary_messages_composer`` / ``global_summary_parser`` are added only
+        when ``use_global_summary=True``."""
         wf = GraphRAGNode(use_global_summary=False)._create_workflow()  # type: ignore[attr-defined]
-        assert len(wf.nodes) == 7
+        assert len(wf.nodes) == 9
         assert "summary_generator" not in wf.nodes
         assert "summary_messages_composer" not in wf.nodes
+        assert "global_summary_parser" not in wf.nodes
+        assert "entity_extraction_parser" in wf.nodes
+        assert "query_analysis_parser" in wf.nodes
 
     def test_graph_rag_node_is_workflow_node(self):
         """GraphRAGNode constructs as a real WorkflowNode with a built
@@ -511,3 +519,615 @@ class TestGraphContextReachesLLM:
         # With the edge stripped, the guard the production wiring provides is
         # GONE — proving the composer→messages edge is the load-bearing guarantee.
         assert composer_edge not in stripped
+
+
+# ===========================================================================
+# O3 OUTPUT-SIDE proof (Wave-O3): every GraphRAGNode LLM stage's OUTPUT is
+# PARSED + REACHES its consumer — "provably correct end-to-end, not merely
+# importable" (the value-anchor).
+#
+# DEFECT 1 (Class B — entity-extraction parse gap): the pre-shard graph wired
+# `entity_extractor.response` (a `{"content": "<JSON>"}` dict) STRAIGHT into
+# `graph_builder.extraction_results`, whose `build_knowledge_graph` iterates
+# `extraction_results` as a LIST of per-doc extraction objects. Iterating the
+# response DICT yields its string KEYS — garbage / AttributeError. The new
+# `entity_extraction_parser` unwraps `response.content`, `json.loads` it, and
+# republishes the parsed extraction WRAPPED IN A ONE-ELEMENT LIST on `result`.
+#
+# DEFECT 2 (F31-FU1 — summary output orphaned): the pre-shard graph wired
+# `summary_generator.response` to `result_synthesizer.global_summaries`, but the
+# synthesizer body NEVER read `global_summaries` (accepted-but-unread, Rule 3c).
+# The new `global_summary_parser` unwraps the prose `response.content` into
+# `{"global_summary": <text>}`, and the synthesizer now READS it into
+# `graph_rag_results["global_summary"]`.
+#
+# NON-RUNNABLE-GRAPH HONEST DISPOSITION (zero-tolerance Rule 2): the FULL inner
+# GraphRAGNode workflow CANNOT run under a plain LocalRuntime for a PRE-EXISTING
+# structural reason — `graph_builder`/`graph_retriever` `code=` blocks import
+# `networkx`, which the PythonCodeNode SANDBOX BLOCKS ("Import of module
+# 'networkx' is not allowed"). That is NOT this shard's defect and NOT in scope
+# to fix (converting those graph-algorithm `code=` blocks to from_function is an
+# independent larger refactor). So the O3 fix is proven by:
+#   (a) STRUCTURAL wiring assertions — the parser nodes exist, the parser edges
+#       exist, and the phantom direct edges are GONE (the wiring IS the
+#       production guard); AND
+#   (b) STANDALONE-parser production-delivery probes under a REAL LocalRuntime:
+#       - the summary parser → real result_synthesizer subgraph runs end-to-end
+#         (result_synthesizer is plain Python — no networkx — so it IS runnable),
+#         asserting the REAL parsed summary reaches `graph_rag_results.global_summary`;
+#       - the entity parser runs STANDALONE under real LocalRuntime, then the
+#         parsed list is fed to a REAL `networkx.MultiDiGraph` built with the
+#         SAME per-doc iteration `build_knowledge_graph` performs — proving the
+#         parsed shape produces a real graph (and a malformed parse → an EMPTY
+#         real graph, never fabricated entities, never a crash).
+# Each probe uses a Protocol-Satisfying Deterministic Adapter publishing the
+# PRODUCTION `response={"content": ...}` shape (subclass of the workflows.py
+# `_DeterministicLLMAgent`, NOT a mock) — exercising the genuine output contract.
+# ===========================================================================
+
+import networkx as _o3_nx  # noqa: E402
+
+from kaizen.nodes.rag.graph import (  # noqa: E402
+    parse_entity_extraction,
+    parse_global_summary,
+    parse_query_analysis,
+)
+
+
+def _build_real_graph_from_extraction(extraction_results) -> "_o3_nx.MultiDiGraph":
+    """Build a REAL networkx MultiDiGraph from a parsed ``extraction_results``
+    list using the SAME per-doc iteration ``build_knowledge_graph`` performs.
+
+    This is the genuine consumer behavior of ``graph_builder`` (whose own
+    ``code=`` cannot run inside the PythonCodeNode networkx sandbox). It iterates
+    ``extraction_results`` as a LIST of per-doc extraction objects — exactly the
+    shape the parser MUST publish. If the parser published the raw response DICT
+    instead, this loop would iterate the dict's string keys and raise (the
+    pre-shard defect)."""
+    G = _o3_nx.MultiDiGraph()
+    for doc_extraction in extraction_results:
+        for entity in doc_extraction.get("entities", []):
+            node_id = entity["name"].lower()
+            G.add_node(
+                node_id,
+                name=entity["name"],
+                type=entity["type"],
+                description=entity.get("description", ""),
+            )
+        for rel in doc_extraction.get("relationships", []):
+            G.add_edge(
+                rel["source"].lower(),
+                rel["target"].lower(),
+                type=rel["type"],
+                description=rel.get("description", ""),
+            )
+    return G
+
+
+class _EntityExtractingLLMAgent:
+    """Protocol-Satisfying Deterministic Adapter publishing the PRODUCTION
+    ``entity_extractor`` output shape — ``response = {"content": "<JSON>"}``
+    carrying the ONE merged ``{"entities":[...], "relationships":[...]}`` object
+    the extractor's ``system_prompt`` instructs the LLM to emit. NOT a mock
+    (deterministic output, genuine production shape)."""
+
+    _EXTRACTION_JSON = (
+        '{"entities": ['
+        '{"name": "Transformer", "type": "technology", "description": "attention model"}, '
+        '{"name": "Attention", "type": "concept", "description": "core mechanism"}'
+        '], "relationships": ['
+        '{"source": "Transformer", "target": "Attention", "type": "uses", '
+        '"description": "core building block"}'
+        "]}"
+    )
+
+    def run(self):
+        return {"response": {"content": self._EXTRACTION_JSON}}
+
+
+class _SummaryGeneratingLLMAgent:
+    """Protocol-Satisfying Deterministic Adapter publishing the PRODUCTION
+    ``summary_generator`` output shape — ``response = {"content": "<prose>"}``
+    (FREE-TEXT, not JSON). NOT a mock."""
+
+    _SUMMARY_TEXT = (
+        "The corpus centers on transformer architectures and the attention "
+        "mechanism that powers them; the dominant relationship is that "
+        "transformers USE attention as their core building block."
+    )
+
+    def run(self):
+        return {"response": {"content": self._SUMMARY_TEXT}}
+
+
+class _QueryAnalyzingLLMAgent:
+    """Protocol-Satisfying Deterministic Adapter publishing the PRODUCTION
+    ``query_processor`` output shape — ``response = {"content": "<JSON>"}``
+    carrying the ``{entities, relationship_types, requires_multi_hop,
+    reasoning_type}`` object the analyzer's ``system_prompt`` instructs the LLM
+    to emit. NOT a mock (deterministic output, genuine production shape)."""
+
+    _ANALYSIS_JSON = (
+        '{"entities": ["transformer", "attention"], '
+        '"relationship_types": ["uses"], '
+        '"requires_multi_hop": false, '
+        '"reasoning_type": "analytical"}'
+    )
+
+    def run(self):
+        return {"response": {"content": self._ANALYSIS_JSON}}
+
+
+def _retrieve_relevant_nodes(graph, query_analysis) -> set:
+    """Replicate the node-matching core of ``graph_retriever.retrieve_from_graph``
+    against a REAL networkx graph using the SAME field reads the production code
+    performs: ``query_analysis.get("entities", [])`` (fuzzy-matched against graph
+    node names).
+
+    The full ``retrieve_from_graph`` ``code=`` cannot run inside the PythonCodeNode
+    networkx sandbox, so this exercises its genuine query-entity → node-match
+    behavior outside the sandbox. If ``query_analysis`` is the RAW response dict
+    (the pre-shard defect), ``.get("entities", [])`` returns ``[]`` (the keys live
+    inside ``response["content"]``) → NO relevant nodes matched → empty subgraph."""
+    query_entities = [e.lower() for e in query_analysis.get("entities", [])]
+    relevant_nodes = set()
+    for entity in query_entities:
+        for node in graph.nodes():
+            if entity in node or node in entity:
+                relevant_nodes.add(node)
+    return relevant_nodes
+
+
+class TestGraphOutputReachesConsumers:
+    """Every GraphRAGNode LLM stage's OUTPUT is parsed and reaches its consumer:
+    the entity extraction builds a REAL graph; the global summary reaches
+    ``graph_rag_results.global_summary``."""
+
+    # -- DEFECT 1: entity-extraction output → real graph ----------------------
+
+    def test_entity_parser_output_builds_real_graph(self):
+        """END-TO-END (real LocalRuntime for the parser + real networkx for the
+        consumer): the entity_extractor's production ``response`` shape, parsed,
+        produces a REAL networkx graph with the genuine entities + relationship —
+        proving the parsed list drives graph construction, not just imports."""
+        agent = _EntityExtractingLLMAgent()
+        response_payload = agent.run()["response"]
+        # Parser runs STANDALONE under real LocalRuntime via the production path
+        # (top-level `response` input → parser's declared `response` param).
+        extraction_results = _run_parser_result(
+            parse_entity_extraction, response=response_payload
+        )
+        # Parsed shape: a one-element LIST of {"entities":[...], "relationships":[...]}.
+        assert isinstance(extraction_results, list) and len(extraction_results) == 1
+        assert "parse_error" not in extraction_results[0]
+        # Feed the parsed list to a REAL networkx graph via the genuine per-doc
+        # iteration build_knowledge_graph performs.
+        G = _build_real_graph_from_extraction(extraction_results)
+        assert isinstance(G, _o3_nx.MultiDiGraph)
+        assert set(G.nodes()) == {"transformer", "attention"}
+        assert G.nodes["transformer"]["type"] == "technology"
+        assert G.has_edge("transformer", "attention")
+        assert G.number_of_edges() == 1
+
+    def test_entity_parser_malformed_builds_empty_real_graph_no_crash(self):
+        """HONESTY (zero-tolerance Rule 2): malformed entity output yields the
+        typed parse-error sentinel as a ONE-ELEMENT LIST; building a real graph
+        from it produces an EMPTY graph — no fabricated entities, no crash."""
+        extraction_results = _run_parser_result(
+            parse_entity_extraction, response={"content": "not json at all"}
+        )
+        assert isinstance(extraction_results, list) and len(extraction_results) == 1
+        sentinel = extraction_results[0]
+        assert sentinel["entities"] == []
+        assert sentinel["relationships"] == []
+        assert sentinel["parse_error"] == "non-json-response"
+        # The graph builds EMPTY honestly — the per-doc loop iterates the empty
+        # lists without raising and adds nothing.
+        G = _build_real_graph_from_extraction(extraction_results)
+        assert G.number_of_nodes() == 0
+        assert G.number_of_edges() == 0
+
+    # -- DEFECT 3: query-analysis output → graph_retriever node-match ----------
+
+    # A real networkx graph the retriever's node-matching runs against.
+    def _real_query_graph(self) -> "_o3_nx.MultiDiGraph":
+        G = _o3_nx.MultiDiGraph()
+        G.add_node("transformer", name="transformer", type="technology")
+        G.add_node("attention", name="attention", type="concept")
+        G.add_edge("transformer", "attention", type="uses")
+        return G
+
+    def test_query_parser_output_drives_nonempty_subgraph(self):
+        """END-TO-END (real LocalRuntime for the parser + real networkx for the
+        consumer): the query_processor's production ``response`` shape, parsed,
+        yields query entities that MATCH graph nodes and drive a NON-EMPTY
+        subgraph — proving the parsed analysis drives retrieval, not just imports."""
+        agent = _QueryAnalyzingLLMAgent()
+        response_payload = agent.run()["response"]
+        # Parser runs STANDALONE under real LocalRuntime via the production path.
+        query_analysis = _run_parser_result(
+            parse_query_analysis, response=response_payload
+        )
+        # Parsed shape carries the REAL query entities the LLM extracted.
+        assert "parse_error" not in query_analysis
+        assert query_analysis["entities"] == ["transformer", "attention"]
+        assert query_analysis["relationship_types"] == ["uses"]
+        assert query_analysis["requires_multi_hop"] is False
+        # The retriever's node-matching core finds the REAL relevant nodes.
+        relevant = _retrieve_relevant_nodes(self._real_query_graph(), query_analysis)
+        assert relevant == {"transformer", "attention"}, relevant
+
+    def test_query_parser_malformed_yields_empty_subgraph_no_fabrication(self):
+        """HONESTY (zero-tolerance Rule 2): malformed query-analysis output yields
+        the typed sentinel with EMPTY entity defaults; the retriever matches no
+        nodes → an honest EMPTY subgraph — NEVER fabricated entities."""
+        query_analysis = _run_parser_result(
+            parse_query_analysis, response={"content": "not json at all"}
+        )
+        assert query_analysis["entities"] == []
+        assert query_analysis["relationship_types"] == []
+        assert query_analysis["requires_multi_hop"] is False
+        assert query_analysis["reasoning_type"] is None
+        assert query_analysis["parse_error"] == "non-json-response"
+        # No query entities → the retriever matches NO nodes → empty subgraph.
+        relevant = _retrieve_relevant_nodes(self._real_query_graph(), query_analysis)
+        assert relevant == set()
+
+    def test_red_pre_proof_raw_response_to_retriever_yields_empty_subgraph(self):
+        """RED-PRE proof (Defect 3): a faithful reconstruction of the EXACT
+        pre-shard topology — the raw ``response`` dict fed STRAIGHT to the
+        retriever's ``query_analysis.get("entities", [])``. The analysis keys live
+        INSIDE ``response["content"]`` as a JSON string, so ``.get("entities")``
+        returns ``[]`` → NO nodes matched → EMPTY subgraph regardless of the LLM's
+        analysis (the dead query-driven retrieval path). GREEN-post: the parsed
+        analysis drives a non-empty subgraph."""
+        raw_response = {
+            "content": _QueryAnalyzingLLMAgent._ANALYSIS_JSON,
+            "success": True,
+        }
+        graph = self._real_query_graph()
+        # PRE-SHARD: the raw response dict was fed as `query_analysis`. Its
+        # query-analysis keys are absent (nested inside `content`), so the
+        # retriever matches NO nodes — the empty subgraph the defect produced.
+        pre_shard_relevant = _retrieve_relevant_nodes(graph, raw_response)
+        assert pre_shard_relevant == set(), (
+            "pre-shard topology MUST NOT match any nodes (the analysis keys are "
+            f"nested in response['content']); got: {pre_shard_relevant!r}"
+        )
+        # GREEN-POST: the parsed analysis matches the real nodes.
+        parsed = _run_parser_result(parse_query_analysis, response=raw_response)
+        post_relevant = _retrieve_relevant_nodes(graph, parsed)
+        assert post_relevant == {"transformer", "attention"}
+
+    # -- DEFECT 2: global-summary output → graph_rag_results ------------------
+
+    def _summary_to_synthesizer_subgraph(self, response_payload) -> Any:
+        """Build the load-bearing OUTPUT-side subgraph: a deterministic
+        summary-LLM-shaped source publishing ``response`` →
+        ``global_summary_parser`` (the real production parser) →
+        ``result_synthesizer`` (the real production synthesizer code, summary
+        path). The result_synthesizer is plain Python (NO networkx) so it RUNS
+        under real LocalRuntime; the graph_retrieval + graph_data inputs are
+        delivered as top-level workflow inputs (parameter-injector auto-
+        distribute), exactly as the full graph delivers them."""
+        builder = WorkflowBuilder()
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                lambda: {"response": response_payload},
+                name="fake_summary_response",
+            ),
+            node_id="fake_summary_response",
+            _internal=True,
+        )
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_global_summary,
+                name="global_summary_parser",
+            ),
+            node_id="global_summary_parser",
+            _internal=True,
+        )
+        # The real production result_synthesizer code (summary-enabled path).
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            full_wf = GraphRAGNode(
+                use_global_summary=True
+            )._create_workflow()  # type: ignore[attr-defined]
+        synth_code = full_wf.nodes["result_synthesizer"].config["code"]
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="result_synthesizer",
+            config={"code": synth_code},
+        )
+        builder.add_connection(
+            "fake_summary_response",
+            "result.response",
+            "global_summary_parser",
+            "response",
+        )
+        builder.add_connection(
+            "global_summary_parser",
+            "result",
+            "result_synthesizer",
+            "global_summaries",
+        )
+        return builder.build(name="summary_to_synthesizer_subgraph")
+
+    # Minimal real graph_retrieval/graph_data inputs the synthesizer needs (it
+    # reads entities/relationships/community_context + graph_data["stats"]).
+    _GRAPH_RETRIEVAL = {
+        "entities": [
+            {"name": "transformer", "type": "technology", "description": "model"}
+        ],
+        "relationships": [],
+        "community_context": {},
+        "subgraph_stats": {"nodes": 1, "edges": 0},
+    }
+    _GRAPH_DATA = {"stats": {"num_entities": 1, "num_relationships": 0}}
+    _QUERY = "how do transformers use attention"
+
+    def test_parsed_summary_reaches_graph_rag_results(self):
+        """END-TO-END (real LocalRuntime): the summary_generator's production
+        ``response`` prose, parsed, REACHES ``graph_rag_results.global_summary``
+        — proving the summary output is consumed, not orphaned (Rule 3c)."""
+        agent = _SummaryGeneratingLLMAgent()
+        wf = self._summary_to_synthesizer_subgraph(agent.run()["response"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(
+                    wf,
+                    parameters={
+                        "graph_retrieval": self._GRAPH_RETRIEVAL,
+                        "graph_data": self._GRAPH_DATA,
+                        "query": self._QUERY,
+                    },
+                )
+        synth = results["result_synthesizer"]["result"]["graph_rag_results"]
+        # The REAL parsed summary prose reached the synthesizer output.
+        assert synth["global_summary"] == agent._SUMMARY_TEXT
+        assert "transformer" in synth["global_summary"]
+
+    def test_parsed_summary_empty_surfaces_none_honestly(self):
+        """HONESTY (zero-tolerance Rule 2): empty summary output yields the typed
+        sentinel and the synthesizer surfaces ``global_summary: None`` — NEVER a
+        fabricated summary."""
+        wf = self._summary_to_synthesizer_subgraph({"content": ""})
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(
+                    wf,
+                    parameters={
+                        "graph_retrieval": self._GRAPH_RETRIEVAL,
+                        "graph_data": self._GRAPH_DATA,
+                        "query": self._QUERY,
+                    },
+                )
+        synth = results["result_synthesizer"]["result"]["graph_rag_results"]
+        assert synth["global_summary"] is None
+
+    def test_summary_disabled_path_synthesizer_has_no_nameerror(self):
+        """CONDITIONAL-WIRING (Option i): with ``use_global_summary=False`` the
+        synthesizer body references NO ``global_summaries`` input (it is unwired),
+        so running it under real LocalRuntime does NOT raise NameError, and
+        ``graph_rag_results.global_summary`` is ``None`` honestly."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            full_wf = GraphRAGNode(
+                use_global_summary=False
+            )._create_workflow()  # type: ignore[attr-defined]
+        synth_code = full_wf.nodes["result_synthesizer"].config["code"]
+        # The disabled-path body MUST NOT reference `global_summaries` (the
+        # unwired name) — referencing it would NameError at exec.
+        assert "global_summaries" not in synth_code
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="result_synthesizer",
+            config={"code": synth_code},
+        )
+        wf = builder.build(name="disabled_synth_probe")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(
+                    wf,
+                    parameters={
+                        "graph_retrieval": self._GRAPH_RETRIEVAL,
+                        "graph_data": self._GRAPH_DATA,
+                        "query": self._QUERY,
+                    },
+                )
+        synth = results["result_synthesizer"]["result"]["graph_rag_results"]
+        assert synth["global_summary"] is None
+
+    # -- STRUCTURAL wiring guards (load-bearing — the production edges) --------
+
+    def test_o3_parser_nodes_and_edges_wired(self):
+        """STRUCTURAL: the entity_extraction_parser sits between entity_extractor
+        and graph_builder; the query_analysis_parser sits between query_processor
+        and graph_retriever; the global_summary_parser sits between
+        summary_generator and result_synthesizer; and the phantom DIRECT edges
+        (entity_extractor→graph_builder, query_processor→graph_retriever,
+        summary_generator→result_synthesizer) are GONE. Removing a parser edge
+        breaks this test."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            wf = GraphRAGNode(
+                use_global_summary=True
+            )._create_workflow()  # type: ignore[attr-defined]
+        edges = {
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        }
+        # DEFECT 1 edges present.
+        assert (
+            "entity_extractor",
+            "response",
+            "entity_extraction_parser",
+            "response",
+        ) in edges
+        assert (
+            "entity_extraction_parser",
+            "result",
+            "graph_builder",
+            "extraction_results",
+        ) in edges
+        # DEFECT 3 edges present (query_processor → parser → graph_retriever).
+        assert (
+            "query_processor",
+            "response",
+            "query_analysis_parser",
+            "response",
+        ) in edges
+        assert (
+            "query_analysis_parser",
+            "result",
+            "graph_retriever",
+            "query_analysis",
+        ) in edges
+        # DEFECT 2 edges present.
+        assert (
+            "summary_generator",
+            "response",
+            "global_summary_parser",
+            "response",
+        ) in edges
+        assert (
+            "global_summary_parser",
+            "result",
+            "result_synthesizer",
+            "global_summaries",
+        ) in edges
+        # The phantom DIRECT edges the O3 fix removed MUST be gone.
+        assert (
+            "entity_extractor",
+            "response",
+            "graph_builder",
+            "extraction_results",
+        ) not in edges
+        assert (
+            "query_processor",
+            "response",
+            "graph_retriever",
+            "query_analysis",
+        ) not in edges
+        assert (
+            "summary_generator",
+            "response",
+            "result_synthesizer",
+            "global_summaries",
+        ) not in edges
+
+    def test_red_pre_proof_raw_response_to_graph_builder_iterates_dict_keys(self):
+        """RED-PRE proof (Defect 1): a faithful reconstruction of the EXACT
+        pre-shard topology — the raw ``response`` dict fed STRAIGHT to the graph
+        builder's per-doc loop. Iterating the response DICT yields its string
+        KEYS; ``"content".get(...)`` raises AttributeError — proving the parser is
+        load-bearing, not decorative. GREEN-post: the parsed list iterates cleanly."""
+        raw_response = {
+            "content": _EntityExtractingLLMAgent._EXTRACTION_JSON,
+            "success": True,
+        }
+        # PRE-SHARD: the raw response dict was fed as `extraction_results`. The
+        # per-doc loop iterates the dict's KEYS ("content", "success") — strings —
+        # and `"content".get("entities", [])` raises AttributeError.
+        with pytest.raises(AttributeError):
+            _build_real_graph_from_extraction(raw_response)
+        # GREEN-POST: the parsed list iterates cleanly into a real graph.
+        parsed = _run_parser_result(parse_entity_extraction, response=raw_response)
+        G = _build_real_graph_from_extraction(parsed)
+        assert set(G.nodes()) == {"transformer", "attention"}
+
+    def test_red_pre_proof_synthesizer_without_read_drops_summary(self):
+        """RED-PRE proof (Defect 2): a faithful reconstruction of the pre-shard
+        synthesizer body — one that NEVER reads ``global_summaries`` and has no
+        ``global_summary`` field — produces a ``graph_rag_results`` with NO
+        ``global_summary``, proving the synthesizer-read this shard adds is
+        load-bearing. GREEN-post: the real synthesizer carries the field."""
+        # Pre-shard synthesizer body: the real production code with the O3
+        # global_summary lines stripped (faithful reconstruction).
+        pre_shard_code = """
+graph_retrieval = graph_retrieval
+query = query
+graph_data = graph_data
+result = {
+    "graph_rag_results": {
+        "query": query,
+        "retrieved_entities": graph_retrieval["entities"],
+    }
+}
+"""
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="result_synthesizer",
+            config={"code": pre_shard_code},
+        )
+        wf = builder.build(name="pre_shard_synth_replica")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(
+                    wf,
+                    parameters={
+                        "graph_retrieval": self._GRAPH_RETRIEVAL,
+                        "graph_data": self._GRAPH_DATA,
+                        "query": self._QUERY,
+                    },
+                )
+        synth = results["result_synthesizer"]["result"]["graph_rag_results"]
+        # In the pre-shard topology the summary NEVER reaches graph_rag_results.
+        assert "global_summary" not in synth, (
+            "pre-shard synthesizer MUST NOT carry the global_summary (red-pre "
+            f"proof); got: {synth!r}"
+        )
+
+    def test_deterministic_adapters_publish_production_response_shape(self):
+        """The Protocol-Satisfying Deterministic Adapters emit the PRODUCTION
+        ``response = {"content": ...}`` shape, feeding the real parsers
+        end-to-end — proving the adapters exercise the genuine OUTPUT contract."""
+        ent = _EntityExtractingLLMAgent().run()
+        assert "response" in ent and "content" in ent["response"]
+        parsed_ent = _run_parser_result(
+            parse_entity_extraction, response=ent["response"]
+        )
+        assert parsed_ent[0]["entities"][0]["name"] == "Transformer"
+
+        qry = _QueryAnalyzingLLMAgent().run()
+        assert "response" in qry and "content" in qry["response"]
+        parsed_qry = _run_parser_result(parse_query_analysis, response=qry["response"])
+        assert parsed_qry["entities"] == ["transformer", "attention"]
+
+        summ = _SummaryGeneratingLLMAgent().run()
+        assert "response" in summ and "content" in summ["response"]
+        parsed_summ = _run_parser_result(
+            parse_global_summary, response=summ["response"]
+        )
+        assert "transformer" in parsed_summ["global_summary"]
+
+
+def _run_parser_result(parser_func, **inputs: Any) -> Any:
+    """Run a single ``from_function`` PARSER node STANDALONE under a real
+    ``LocalRuntime`` and return its published ``result`` port value.
+
+    Companion to ``_run_composer`` (which reads ``result.messages``); the O3
+    parsers publish their parsed value on the bare ``result`` port. Inputs are
+    delivered as TOP-LEVEL workflow inputs (parameter-injector auto-distribute),
+    exactly as the full graph delivers the upstream ``response`` to the parser."""
+    builder = WorkflowBuilder()
+    builder.add_node_instance(
+        PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            parser_func,
+            name="probe_parser",
+        ),
+        node_id="probe_parser",
+        _internal=True,
+    )
+    wf = builder.build(name="graph_parser_probe")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with LocalRuntime() as rt:
+            results, _run_id = rt.execute(wf, parameters=inputs)
+    return results["probe_parser"]["result"]
