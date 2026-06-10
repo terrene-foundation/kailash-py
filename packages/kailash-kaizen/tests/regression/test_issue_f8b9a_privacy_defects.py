@@ -76,7 +76,7 @@ class TestR4LeakBraceEscapes:
     def test_privacy_node_constructs_with_all_kwargs(self):
         """Custom kwargs MUST also construct cleanly (no kwarg drops the fix)."""
         node = PrivacyPreservingRAGNode(
-            privacy_budget=0.1,
+            score_noise=0.1,
             redact_pii=True,
             anonymize_queries=True,
             audit_logging=True,
@@ -170,8 +170,6 @@ class TestPyrightCleanup:
         PR #1108 + B8 PR #1110). Behavioral assertion: the annotation
         matches the runtime return type.
         """
-        from kailash.workflow.graph import Workflow
-
         # Introspect the annotation.
         ann = inspect.signature(
             PrivacyPreservingRAGNode._create_workflow  # type: ignore[attr-defined]
@@ -181,10 +179,35 @@ class TestPyrightCleanup:
         annotation_name = ann.__name__ if hasattr(ann, "__name__") else str(ann)
         assert "Workflow" in annotation_name
 
-        # Runtime check: the value is actually a Workflow.
+        # Runtime check: the value is actually a Workflow. Compare by
+        # module + qualified name rather than `isinstance` — a sibling
+        # regression test (test_issue_f9_rag_codegen_cleanup) clears
+        # `sys.modules` to reset the node registry, after which the freshly
+        # re-imported `kailash.workflow.graph.Workflow` is a DIFFERENT class
+        # object than the one the node's own (also re-imported) module built
+        # `wf` from, so `isinstance` is order-dependently False. The
+        # module+qualname identity is reload-stable and asserts the same
+        # contract.
         node = PrivacyPreservingRAGNode()
         wf = node._create_workflow()  # type: ignore[attr-defined]
-        assert isinstance(wf, Workflow)
+        wf_cls = type(wf)
+        assert (wf_cls.__module__, wf_cls.__qualname__) == (
+            "kailash.workflow.graph",
+            "Workflow",
+        )
+
+    def test_secure_multiparty_emits_deprecation_warning(self):
+        """SecureMultiPartyRAGNode is a non-functional simulation deprecated for
+        removal (zero-tolerance Rule 6a). Instantiating it MUST emit a
+        DeprecationWarning naming the non-functional-simulation reason and the
+        removal plan."""
+        with pytest.warns(DeprecationWarning, match="non-functional simulation"):
+            SecureMultiPartyRAGNode()
+        # The warning also fires when kwargs are supplied (no path skips it).
+        with pytest.warns(DeprecationWarning, match="REMOVED in a future"):
+            SecureMultiPartyRAGNode(
+                parties=["a", "b"], protocol="homomorphic", threshold=1
+            )
 
     def test_secure_multiparty_parties_signature_is_optional(self):
         """SecureMultiPartyRAGNode.parties is typed Optional[List[str]].

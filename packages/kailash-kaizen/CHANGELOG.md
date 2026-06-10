@@ -4,6 +4,49 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+### Fixed (F9 #1117 — `PrivacyPreservingRAGNode` published nothing at runtime)
+
+- **`PrivacyPreservingRAGNode` now runs end-to-end and PUBLISHES its documented
+  output (F9 #1117).** Five codegen stages of the wrapped workflow
+  (`query_anonymizer`, `dp_noise_injector`, `secure_aggregator`, `audit_logger`,
+  `result_formatter`) DEFINED an inner function that bound a function-LOCAL
+  `result` but never CALLED it at module scope, so each `PythonCodeNode`'s output
+  gate published nothing — and the workflow actually crashed
+  (`Node outputs must be JSON-serializable. Failed keys: ['anonymize_query']`)
+  when it tried to serialize the bound function object. Each stage now calls its
+  function at module scope (`result = <fn>(...)`) and `del`s the helper, exactly
+  as the sibling `evaluation.py` F9 #1117 fix does. Three additional latent
+  defects surfaced once the stages actually ran and were fixed in the same pass:
+  (a) inter-node edges read non-existent nested output ports
+  (`private_rag_executor.retrieval_results`, `audit_logger.audit_record`) instead
+  of the single `result` port a `PythonCodeNode` publishes — every edge now reads
+  `result` and each downstream stage unwraps the nested shape it needs;
+  (b) `query_anonymizer` / `secure_aggregator` / `audit_logger` used `re` /
+  `random` / `hashlib` / `datetime` without importing them inside the function
+  body (the F9 #1118 separate-`exec`-namespace closure gotcha) — imports moved
+  function-local; (c) `perturb_scores` divided by zero on an empty retrieval set
+  — guarded. The Wave-2 honesty work (derived `data_minimization` /
+  `anonymization_strength` / `pii_redaction_attempted` flags, no fake regulatory
+  verdicts) is preserved and now actually reaches the published output. Verified
+  end-to-end against a real `LocalRuntime`: a query carrying PII + sample
+  documents + consent produces a non-empty `privacy_preserving_results` payload
+  with the documented `results` / `privacy_report` / `audit_record` /
+  `confidence_bounds` keys and PII (email, phone) redacted.
+
+### Deprecated
+
+- **`SecureMultiPartyRAGNode` is deprecated and slated for removal in a future
+  minor release.** It is a NON-FUNCTIONAL simulation: it performs NO cryptography
+  (no secret sharing, homomorphic encryption, or multi-party computation) and
+  does NOT compute over the supplied `party_data` — it aggregates
+  `random.random()` placeholder values, so its `aggregate_result` is unrelated to
+  the inputs and its `computation_proof` is a hash label, not a cryptographic
+  proof. Instantiating it now emits a `DeprecationWarning`. **Migration:** there
+  is no real in-tree replacement; do not use this node for any privacy-sensitive
+  workload. If you need genuine secure aggregation, integrate a real
+  MPC / secret-sharing / homomorphic-encryption library outside this node. The
+  node remains importable and runnable for one minor cycle before removal.
+
 ## [2.24.5] — 2026-06-01 — aiosqlite is a core dependency (memory subsystem)
 
 ### Fixed

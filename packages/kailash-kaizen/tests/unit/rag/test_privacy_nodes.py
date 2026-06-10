@@ -66,7 +66,7 @@ class TestAllThreeConstruct:
     def test_privacy_preserving_constructs_with_custom_kwargs(self):
         node = PrivacyPreservingRAGNode(
             name="custom_privacy",
-            privacy_budget=0.5,
+            score_noise=0.5,
             redact_pii=False,
             anonymize_queries=False,
             audit_logging=False,
@@ -74,7 +74,9 @@ class TestAllThreeConstruct:
         assert node.metadata.name == "custom_privacy"
         # @register_node erases PrivacyPreservingRAGNode→Node for static
         # checkers; the attrs below are real instance state.
-        assert node.privacy_budget == 0.5  # type: ignore[attr-defined]
+        # score_noise is the honest name for the optional retrieval-score
+        # perturbation scale — NOT a differential-privacy epsilon.
+        assert node.score_noise == 0.5  # type: ignore[attr-defined]
         assert node.redact_pii is False  # type: ignore[attr-defined]
         assert node.anonymize_queries is False  # type: ignore[attr-defined]
         assert node.audit_logging is False  # type: ignore[attr-defined]
@@ -227,13 +229,22 @@ class TestPrivacyPreservingGraphShape:
         inbound = [c for c in wf.connections if c.target_node == "result_formatter"]
         assert len(inbound) >= 4  # secure_aggregator, pii_detector, anon, dp_noise
 
-    def test_privacy_budget_baked_into_dp_noise_code(self):
-        """The privacy_budget kwarg flows into the dp_noise_injector code."""
-        wf = _build(PrivacyPreservingRAGNode(privacy_budget=0.25))
+    def test_score_noise_baked_into_perturbation_code(self):
+        """The score_noise kwarg flows into the perturbation node code.
+
+        The node perturbs retrieval scores with random noise — this is NOT
+        differential privacy and the code MUST NOT claim any DP guarantee.
+        """
+        wf = _build(PrivacyPreservingRAGNode(score_noise=0.25))
         dp_noise = wf.get_node("dp_noise_injector")
         assert dp_noise is not None
         code = dp_noise.config.get("code", "")
-        assert "0.25" in code, "privacy_budget=0.25 must be baked into dp_noise code"
+        assert "0.25" in code, "score_noise=0.25 must be baked into perturbation code"
+        # Honest-claim guardrail: no differential-privacy guarantee language
+        # survives in the generated perturbation code.
+        assert "differential privacy" not in code.lower()
+        assert "privacy_guarantee" not in code
+        assert "actual_epsilon" not in code
 
     def test_redact_pii_false_baked_into_pii_detector_code(self):
         """redact_pii=False flows into the pii_detector code template."""
@@ -316,7 +327,14 @@ class TestCodegenBraceHandling:
 
 
 class TestSecureMultiPartyRun:
-    def test_run_with_quorum_returns_aggregate(self):
+    """SecureMultiPartyRAGNode is a NON-FUNCTIONAL simulation (no crypto).
+
+    These tests pin the documented output SHAPE and the honest
+    simulation markers — they MUST NOT assert any privacy/encryption
+    guarantee, because none is provided.
+    """
+
+    def test_run_with_quorum_returns_aggregate_shape(self):
         node = SecureMultiPartyRAGNode(
             parties=["a", "b", "c"], protocol="secret_sharing", threshold=2
         )
@@ -328,8 +346,14 @@ class TestSecureMultiPartyRun:
         assert "aggregate_result" in out
         assert "computation_proof" in out
         assert "party_contributions" in out
-        assert out.get("privacy_preserved") is True
-        assert out.get("no_raw_data_exposed") is True
+        # Honest marker: the node self-identifies as a simulation. It MUST NOT
+        # claim privacy_preserved / no_raw_data_exposed (no crypto runs).
+        assert out.get("simulation") is True
+        assert "privacy_preserved" not in out
+        assert "no_raw_data_exposed" not in out
+        # The "proof" is a simulated record, not a cryptographic proof.
+        assert out["computation_proof"].get("protocol") == "simulated_secret_sharing"
+        assert out["computation_proof"].get("simulation") is True
 
     def test_run_insufficient_parties_returns_error(self):
         node = SecureMultiPartyRAGNode(
@@ -339,7 +363,7 @@ class TestSecureMultiPartyRun:
         assert "error" in out
         assert out["required_parties"] == 3
 
-    def test_run_homomorphic_protocol(self):
+    def test_run_homomorphic_protocol_is_simulated(self):
         node = SecureMultiPartyRAGNode(protocol="homomorphic", threshold=1)
         out = node.run(
             query="x",
@@ -347,8 +371,10 @@ class TestSecureMultiPartyRun:
             computation_type="sum",
         )
         proof = out.get("computation_proof", {})
-        assert proof.get("protocol") == "homomorphic_encryption"
-        assert out.get("fully_encrypted") is True
+        # Honest label: the homomorphic path is simulated, NOT real HE.
+        assert proof.get("protocol") == "simulated_homomorphic"
+        assert out.get("simulation") is True
+        assert "fully_encrypted" not in out
 
     def test_run_unknown_protocol_returns_error(self):
         node = SecureMultiPartyRAGNode(protocol="bogus", threshold=1)
@@ -430,6 +456,88 @@ class TestComplianceRun:
         report = out.get("compliance_report", {})
         assert set(report.get("regulations_applied", [])) == {"gdpr", "ccpa"}
         assert report.get("jurisdiction") == "EU"
+
+    # GDPR _validate_consent requires all four fields present for a VALID
+    # consent (the success path that emits compliance_report). The
+    # explicit_consent VALUE then drives the lawful-basis + score derivation.
+    _GDPR_WEAK_CONSENT = {
+        "purpose": "research",
+        "retention_allowed": True,
+        "sharing_allowed": False,
+        "explicit_consent": False,  # valid shape, but weak (fallback lawful basis)
+    }
+    _GDPR_STRONG_CONSENT = {
+        "purpose": "research",
+        "retention_allowed": True,
+        "sharing_allowed": False,
+        "explicit_consent": True,  # strong: consent-based lawful basis
+    }
+
+    def test_data_minimization_false_when_nothing_filtered(self):
+        """Honest-claim: data_minimization.applied MUST be False when no
+        document was actually redacted/truncated (no classified docs)."""
+        node = ComplianceRAGNode(regulations=["gdpr"], require_explicit_consent=False)
+        out = node.run(
+            query="x",
+            documents=[
+                {
+                    "content": "fully public doc",
+                    "metadata": {"classification": "public"},
+                },
+            ],
+            user_consent=self._GDPR_STRONG_CONSENT,
+            jurisdiction="US",
+        )
+        report = out["compliance_report"]
+        # Public-only docs → nothing redacted → minimization did NOT run.
+        assert report["data_minimization"]["fields_redacted"] == 0
+        assert report["data_minimization"]["applied"] is False
+
+    def test_data_minimization_true_when_classified_docs_filtered(self):
+        """data_minimization.applied is True only when filtering actually
+        redacted/truncated at least one result."""
+        node = ComplianceRAGNode(regulations=["gdpr"], require_explicit_consent=False)
+        out = node.run(
+            query="x",
+            documents=[
+                {"content": "secret", "metadata": {"classification": "confidential"}},
+            ],
+            user_consent=self._GDPR_STRONG_CONSENT,
+            jurisdiction="US",
+        )
+        report = out["compliance_report"]
+        assert report["data_minimization"]["fields_redacted"] >= 1
+        assert report["data_minimization"]["applied"] is True
+
+    def test_compliance_score_is_derived_not_hardcoded(self):
+        """Honest-claim: compliance_score MUST be derived from real signals,
+        not the former magic 0.95. A weak-consent + no-filtering request
+        scores strictly below a full-consent + filtering request."""
+        weak = ComplianceRAGNode(regulations=["gdpr"], require_explicit_consent=False)
+        weak_out = weak.run(
+            query="x",
+            documents=[
+                {"content": "public", "metadata": {"classification": "public"}},
+            ],
+            user_consent=self._GDPR_WEAK_CONSENT,  # no explicit consent, no filtering
+            jurisdiction="US",
+        )
+        strong = ComplianceRAGNode(regulations=["gdpr"], require_explicit_consent=False)
+        strong_out = strong.run(
+            query="x",
+            documents=[
+                {"content": "secret", "metadata": {"classification": "confidential"}},
+            ],
+            user_consent=self._GDPR_STRONG_CONSENT,  # explicit consent + filtering
+            jurisdiction="US",
+        )
+        weak_score = weak_out["compliance_report"]["compliance_score"]
+        strong_score = strong_out["compliance_report"]["compliance_score"]
+        # Both are real fractions in [0, 1] and the stronger request scores higher.
+        assert 0.0 <= weak_score <= 1.0
+        assert 0.0 <= strong_score <= 1.0
+        assert strong_score > weak_score
+        assert weak_score != 0.95 or strong_score != 0.95  # not the old constant
 
 
 # ==========================================================================

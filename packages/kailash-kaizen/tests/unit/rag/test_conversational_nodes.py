@@ -147,15 +147,21 @@ class TestConversationalRAGGraphShape:
     """The _create_workflow graph wires the documented pipeline shape."""
 
     def test_default_graph_includes_all_optional_nodes(self):
-        """With every flag True (defaults), all 7 nodes are wired."""
+        """With every flag True (defaults), all nodes are wired — including the
+        L3-fix messages-composer for each LLM stage (response/coreference/
+        summary), which render retrieved docs + history + query into the valid
+        LLMAgentNode `messages` port."""
         wf = _build(ConversationalRAGNode())
         assert set(wf.nodes.keys()) == {
             "context_loader",
             "coreference_resolver",
+            "coreference_messages_composer",
             "topic_tracker",
             "context_retriever",
             "response_generator",
+            "response_messages_composer",
             "context_summarizer",
+            "summary_messages_composer",
             "session_updater",
             "result_formatter",
         }
@@ -193,7 +199,10 @@ class TestConversationalRAGGraphShape:
         assert summarizer_edges == []
 
     def test_minimal_graph_with_all_optional_flags_off(self):
-        """With every optional flag False, only the 5 mandatory nodes remain."""
+        """With every optional flag False, the mandatory nodes remain — plus the
+        always-present response messages-composer (the response_generator LLM
+        stage always needs grounded `messages`). The coreference/summary
+        composers are gated to their optional flags and are absent here."""
         wf = _build(
             ConversationalRAGNode(
                 coreference_resolution=False,
@@ -205,9 +214,13 @@ class TestConversationalRAGGraphShape:
             "context_loader",
             "context_retriever",
             "response_generator",
+            "response_messages_composer",
             "session_updater",
             "result_formatter",
         }
+        # The optional composers track their optional LLM stages.
+        assert "coreference_messages_composer" not in wf.nodes
+        assert "summary_messages_composer" not in wf.nodes
 
     def test_context_loader_feeds_context_retriever(self):
         wf = _build(ConversationalRAGNode())
@@ -218,9 +231,34 @@ class TestConversationalRAGGraphShape:
             and c.target_node == "context_retriever"
         ]
         assert len(edges) >= 1
-        # The session_context output flows into context_retriever.session_context.
+        # F9 #1117 wiring fix: a PythonCodeNode publishes a SINGLE `result`
+        # port (carrying its whole module-scope `result` dict); the nested
+        # "session_context" key is NOT an individual port. The edge MUST read
+        # `result` (the prior `session_context` source port never existed, so
+        # the downstream input silently bound to nothing).
         ports = {(e.source_output, e.target_input) for e in edges}
-        assert ("session_context", "session_context") in ports
+        assert ("result", "session_context") in ports
+
+    def test_pythoncode_producer_edges_read_result_port(self):
+        """Every edge sourced from a PythonCodeNode codegen stage MUST read the
+        `result` port — the only port a PythonCodeNode publishes. Reading a
+        non-existent nested-key port (the F9 #1117 wiring bug) silently binds
+        nothing downstream."""
+        wf = _build(ConversationalRAGNode())
+        pycode_sources = {
+            "context_loader",
+            "topic_tracker",
+            "context_retriever",
+            "session_updater",
+        }
+        offenders = [
+            (c.source_node, c.source_output)
+            for c in wf.connections
+            if c.source_node in pycode_sources and c.source_output != "result"
+        ]
+        assert (
+            offenders == []
+        ), f"PythonCodeNode edges not reading `result`: {offenders}"
 
     def test_result_formatter_is_final_sink(self):
         """result_formatter has no outbound edges; it is the final sink."""

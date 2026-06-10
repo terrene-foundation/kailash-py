@@ -10,13 +10,10 @@ Implements high-performance RAG patterns:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import hashlib
-import json
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional
 
-from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base import register_node
 from kailash.nodes.cache import cache  # noqa: F401 — registers CacheNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
@@ -155,20 +152,34 @@ result = {{
             node_id="semantic_cache_manager",
             config={
                 "code": f"""
-# Check semantic cache
-cache_result = cache_check_result
-exact_hit = cache_result.get("exact_hit", False)
-semantic_candidates = cache_result.get("semantic_candidates", {{}})
+# Check semantic cache.
+#
+# F9 #1117/#1123: this node already binds `result` at module scope (inside the
+# if/else branches), so PythonCodeNode publishes a real `result` port — the AST
+# "publishes nothing" flag was a column-0 false positive (the assignment is
+# indented inside the branches, never at module column-0). The genuine defect
+# was a CONTRACT MISMATCH with the upstream CacheNode: this node read
+# `exact_hit` / `exact_result` / `semantic_candidates`, but CacheNode's `get`
+# operation publishes `{{"hit": bool, "value": <cached>, "success": ...}}`. The
+# reads are now aligned to CacheNode's real output shape, so an exact cache hit
+# is detected from the live cache backend instead of always defaulting to miss.
+#
+# Semantic-similarity caching is honest-but-dormant: no node in this workflow
+# populates a candidate store, so `semantic_candidates` is empty and the
+# similarity branch never fires. The similarity logic is real (not simulated);
+# it activates only when a candidate-store node is wired in. The workflow today
+# is a real exact-match cache over CacheNode.
+def decide_cache_use(cache_hit, cache_value, semantic_candidates, query):
+    '''Decide whether to serve from cache. Returns the decision dict.'''
+    if bool(cache_hit):
+        # Direct cache hit — return the value CacheNode retrieved.
+        return {{
+            "use_cache": True,
+            "cache_type": "exact",
+            "cached_result": cache_value
+        }}
 
-if exact_hit:
-    # Direct cache hit
-    result = {{
-        "use_cache": True,
-        "cache_type": "exact",
-        "cached_result": cache_result.get("exact_result")
-    }}
-else:
-    # Check semantic similarity
+    # Check semantic similarity (dormant unless a candidate-store node is wired).
     best_match = None
     best_similarity = 0
 
@@ -186,17 +197,28 @@ else:
             best_match = cache_entry
 
     if best_match:
-        result = {{
+        return {{
             "use_cache": True,
             "cache_type": "semantic",
             "cached_result": best_match,
             "similarity": best_similarity
         }}
-    else:
-        result = {{
-            "use_cache": False,
-            "cache_type": None
-        }}
+
+    return {{
+        "use_cache": False,
+        "cache_type": None
+    }}
+
+# CacheNode's `get` publishes flat ports (`hit`, `value`, ...), NOT a nested
+# dict — so this node reads `cache_hit` + `cache_value` wired from those ports.
+# `semantic_candidates` is {{}} because no candidate-store node feeds it in this
+# workflow (the exact-match cache is the live path; semantic caching is dormant
+# until a candidate-store node is wired in).
+#
+# F9 #1117/#1123: module-scope `result =` (column 0) so PythonCodeNode publishes
+# the `result` port the rag_processor skip-gate + result_aggregator read.
+result = decide_cache_use(cache_hit, cache_value, {{}}, query)
+del decide_cache_use
 """
             },
         )
@@ -256,18 +278,37 @@ result = {
             },
         )
 
-        # Connect workflow with conditional execution
-        builder.add_connection(cache_key_gen_id, "cache_keys", cache_checker_id, "keys")
+        # Connect workflow with conditional execution.
+        #
+        # F9 #1117/#1123 wiring fix: every PythonCodeNode publishes ONLY the
+        # `result` port (code-mode PythonCodeNode returns {"result": <ns.result>}
+        # when a module-scope `result` is bound, else the whole namespace). The
+        # pre-fix edges read non-existent ports (`cache_keys`, `use_cache`) that
+        # are nested *inside* `result`, so the graph raised
+        # "Source output 'cache_keys' not found ... Available outputs: ['result']"
+        # at runtime. Each edge now reads the real `result` port via a dotted
+        # nested path (`result.cache_keys.exact`, `result.use_cache`), which the
+        # runtime resolves into the published dict. CacheNode's `key` input is a
+        # str, so we feed the flat exact-key string, not the nested dict.
         builder.add_connection(
-            cache_checker_id, "result", semantic_cache_id, "cache_check_result"
+            cache_key_gen_id, "result.cache_keys.exact", cache_checker_id, "key"
+        )
+        # CacheNode.get publishes flat ports (`hit`, `value`); wire each to the
+        # semantic_cache_manager's dedicated inputs (the pre-fix edge read a
+        # non-existent `result` port off CacheNode).
+        builder.add_connection(cache_checker_id, "hit", semantic_cache_id, "cache_hit")
+        builder.add_connection(
+            cache_checker_id, "value", semantic_cache_id, "cache_value"
         )
 
-        # Only run RAG if cache miss
+        # Only run RAG if cache miss (skip-gate reads the nested use_cache flag).
         builder.add_connection(
-            semantic_cache_id, "use_cache", rag_processor_id, "_skip_if_true"
+            semantic_cache_id, "result.use_cache", rag_processor_id, "_skip_if_true"
         )
         builder.add_connection(rag_processor_id, "output", cache_updater_id, "value")
-        builder.add_connection(cache_key_gen_id, "cache_keys", cache_updater_id, "key")
+        builder.add_connection(
+            cache_key_gen_id, "result.cache_keys.exact", cache_updater_id, "key"
+        )
 
         # Aggregate results
         builder.add_connection(

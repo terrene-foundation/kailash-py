@@ -99,7 +99,15 @@ class TestCacheKeyGenerator:
 
 
 class TestSemanticCacheManager:
-    """The semantic_cache_manager codegen routes on exact_hit / semantic match."""
+    """The semantic_cache_manager codegen routes on CacheNode's real hit/value.
+
+    F9 #1117/#1123 contract-alignment: the node reads CacheNode.get's flat
+    ``cache_hit`` / ``cache_value`` ports (NOT the fabricated
+    ``cache_check_result`` nested dict with ``exact_hit`` / ``exact_result``
+    keys CacheNode never produced). ``semantic_candidates`` is hardcoded ``{}``
+    in the node because no candidate-store node feeds it — the semantic-cache
+    branch is honest-but-dormant; the workflow is a real exact-match cache.
+    """
 
     def test_exact_hit_returns_cached_result(self):
         node = CacheOptimizedRAGNode()
@@ -107,16 +115,13 @@ class TestSemanticCacheManager:
         sem_mgr = wf.get_node("semantic_cache_manager")
         assert sem_mgr is not None
         code = sem_mgr.config["code"]
-        # cache_check_result has exact_hit=True → use_cache=True, type=exact.
+        # CacheNode.get hit shape: cache_hit=True, cache_value=<cached doc>.
         out = _exec_codegen(
             code,
             {
                 "query": "anything",
-                "cache_check_result": {
-                    "exact_hit": True,
-                    "exact_result": {"results": ["cached_doc"]},
-                    "semantic_candidates": {},
-                },
+                "cache_hit": True,
+                "cache_value": {"results": ["cached_doc"]},
             },
         )
         assert out["use_cache"] is True
@@ -129,66 +134,56 @@ class TestSemanticCacheManager:
         sem_mgr = wf.get_node("semantic_cache_manager")
         assert sem_mgr is not None
         code = sem_mgr.config["code"]
+        # CacheNode.get miss shape: cache_hit=False, cache_value=None.
         out = _exec_codegen(
             code,
             {
                 "query": "completely different",
-                "cache_check_result": {
-                    "exact_hit": False,
-                    "semantic_candidates": {},
-                },
+                "cache_hit": False,
+                "cache_value": None,
             },
         )
         assert out["use_cache"] is False
         assert out["cache_type"] is None
 
-    def test_semantic_hit_above_threshold_returns_cached(self):
-        """High similarity_threshold (0.5 here) lets near-duplicate queries
-        hit the semantic cache."""
-        node = CacheOptimizedRAGNode(similarity_threshold=0.5)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        sem_mgr = wf.get_node("semantic_cache_manager")
-        assert sem_mgr is not None
-        code = sem_mgr.config["code"]
-        # Query "alpha beta gamma" vs cached "alpha beta delta":
-        # intersection={alpha,beta}, union={alpha,beta,gamma,delta} → 2/4=0.5.
-        # 0.5 >= 0.5 threshold → semantic hit.
-        out = _exec_codegen(
-            code,
-            {
-                "query": "alpha beta gamma",
-                "cache_check_result": {
-                    "exact_hit": False,
-                    "semantic_candidates": {
-                        "alpha beta delta": {"results": ["sem_doc"]},
-                    },
-                },
-            },
-        )
-        assert out["use_cache"] is True
-        assert out["cache_type"] == "semantic"
-        assert out["similarity"] == pytest.approx(0.5)
-
-    def test_semantic_miss_below_threshold(self):
-        """Low similarity → no semantic hit when above threshold isn't met."""
+    def test_falsy_cache_hit_routes_to_miss(self):
+        """A falsy ``cache_hit`` (the CacheNode miss signal) routes to a cache
+        miss regardless of any stale ``cache_value``."""
         node = CacheOptimizedRAGNode(similarity_threshold=0.95)
         wf = node._create_workflow()  # type: ignore[attr-defined]
         sem_mgr = wf.get_node("semantic_cache_manager")
         assert sem_mgr is not None
         code = sem_mgr.config["code"]
-        # similarity=0.5, threshold=0.95 → miss.
         out = _exec_codegen(
             code,
             {
                 "query": "alpha beta gamma",
-                "cache_check_result": {
-                    "exact_hit": False,
-                    "semantic_candidates": {
-                        "alpha beta delta": {"results": ["sem_doc"]},
-                    },
-                },
+                "cache_hit": False,
+                "cache_value": None,
             },
         )
+        assert out["use_cache"] is False
+        assert out["cache_type"] is None
+
+    def test_semantic_branch_dormant_without_candidate_store(self):
+        """The semantic-similarity branch is dormant by design: no node feeds
+        ``semantic_candidates`` (hardcoded ``{}``), so a non-hit always routes
+        to a miss — an honest exact-match cache, not a fabricated semantic hit.
+        """
+        node = CacheOptimizedRAGNode(similarity_threshold=0.5)
+        wf = node._create_workflow()  # type: ignore[attr-defined]
+        sem_mgr = wf.get_node("semantic_cache_manager")
+        assert sem_mgr is not None
+        code = sem_mgr.config["code"]
+        out = _exec_codegen(
+            code,
+            {
+                "query": "alpha beta gamma",
+                "cache_hit": False,
+                "cache_value": None,
+            },
+        )
+        # No candidate store wired → no semantic hit possible → miss.
         assert out["use_cache"] is False
         assert out["cache_type"] is None
 
@@ -605,3 +600,145 @@ class TestStreamingChunkedOutput:
         assert meta["total_chunks"] == 3
         assert meta["result_chunks"] == 2
         assert meta["supports_backpressure"] is True
+
+
+# ==========================================================================
+# F9 #1117/#1123 — CacheOptimizedRAGNode semantic_cache_manager publishes +
+# wires end-to-end through a REAL LocalRuntime (no mocking).
+# ==========================================================================
+
+
+class TestSemanticCacheManagerEndToEnd:
+    """End-to-end proof that ``semantic_cache_manager`` publishes a real
+    ``result`` port AND that its edges read ports the upstream nodes actually
+    publish.
+
+    Pre-fix defects (all confirmed to fail this test):
+
+    1. ``cache_key_generator`` publishes only the ``result`` port (code-mode
+       PythonCodeNode), so the edge reading a non-existent ``cache_keys`` port
+       raised "Source output 'cache_keys' not found ... Available: ['result']".
+    2. The edge read CacheNode's non-existent ``result`` port (CacheNode.get
+       publishes flat ``hit`` / ``value`` ports).
+    3. ``semantic_cache_manager`` read ``exact_hit`` / ``exact_result`` from
+       the cache result, but CacheNode.get publishes ``hit`` / ``value`` — so a
+       real cache hit was ALWAYS treated as a miss (``use_cache`` stuck False).
+
+    The test builds a cache subgraph from the REAL node configs the fixed
+    ``_create_workflow`` produces (no re-authoring of codegen), then runs it
+    under a real ``LocalRuntime`` — NO mocking, deterministic in-memory
+    CacheNode backend. The orthogonal ``rag_processor`` (HybridRAGNode) is
+    excluded because it carries a separate, pre-existing config-shape defect
+    (``config={"config": {...}}`` passes a dict where a ``RAGConfig`` is
+    expected) that blocks the full 5-node graph and is out of scope for this
+    ``semantic_cache_manager`` shard. The cache-decision subgraph the fix
+    repaired is exercised in full.
+    """
+
+    @staticmethod
+    def _real_node_codes() -> Dict[str, str]:
+        node = CacheOptimizedRAGNode(similarity_threshold=0.95)
+        wf = node._create_workflow()  # type: ignore[attr-defined]
+        return {
+            "cache_key_generator": wf.get_node("cache_key_generator").config["code"],
+            "semantic_cache_manager": wf.get_node("semantic_cache_manager").config[
+                "code"
+            ],
+        }
+
+    def test_cache_miss_subgraph_runs_end_to_end_and_publishes_result(self):
+        """key-gen -> CacheNode.get (miss) -> semantic_cache_manager runs
+        end-to-end under LocalRuntime and publishes the documented decision."""
+        from kailash.runtime.local import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
+        codes = self._real_node_codes()
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode",
+            "cache_key_generator",
+            {"code": codes["cache_key_generator"]},
+        )
+        builder.add_node(
+            "CacheNode", "cache_checker", {"operation": "get", "backend": "memory"}
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            "semantic_cache_manager",
+            {"code": codes["semantic_cache_manager"]},
+        )
+        # The exact wiring the fix produced: flat exact-key string -> CacheNode
+        # `key`; CacheNode flat `hit`/`value` ports -> the manager's inputs.
+        builder.add_connection(
+            "cache_key_generator", "result.cache_keys.exact", "cache_checker", "key"
+        )
+        builder.add_connection(
+            "cache_checker", "hit", "semantic_cache_manager", "cache_hit"
+        )
+        builder.add_connection(
+            "cache_checker", "value", "semantic_cache_manager", "cache_value"
+        )
+
+        runtime = LocalRuntime()
+        results, _run_id = runtime.execute(
+            builder.build(),
+            parameters={
+                "cache_key_generator": {"query": "what is deep learning"},
+                "semantic_cache_manager": {"query": "what is deep learning"},
+            },
+        )
+
+        # semantic_cache_manager published a NON-EMPTY result with the
+        # documented keys (empty cache -> miss).
+        published = results["semantic_cache_manager"]["result"]
+        assert published, "semantic_cache_manager published an empty result"
+        assert published["use_cache"] is False
+        assert published["cache_type"] is None
+
+    def test_cache_hit_detected_from_real_cachenode_shape(self):
+        """The contract-alignment fix: semantic_cache_manager reads CacheNode's
+        REAL ``hit`` / ``value`` ports, so a populated cache yields an exact
+        hit. Pre-fix (reading ``exact_hit`` / ``exact_result``) this returned a
+        miss for every real CacheNode get — the load-bearing regression."""
+        from kailash.runtime.local import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
+        codes = self._real_node_codes()
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode",
+            "semantic_cache_manager",
+            {"code": codes["semantic_cache_manager"]},
+        )
+        runtime = LocalRuntime()
+        # Feed CacheNode.get's real hit-shape ports directly.
+        results, _run_id = runtime.execute(
+            builder.build(),
+            parameters={
+                "semantic_cache_manager": {
+                    "cache_hit": True,
+                    "cache_value": {"results": ["cached_doc"], "scores": [0.99]},
+                    "query": "what is deep learning",
+                }
+            },
+        )
+        published = results["semantic_cache_manager"]["result"]
+        assert published["use_cache"] is True
+        assert published["cache_type"] == "exact"
+        assert published["cached_result"] == {
+            "results": ["cached_doc"],
+            "scores": [0.99],
+        }
+
+    def test_semantic_cache_manager_binds_module_scope_result(self):
+        """F9 #1117 acceptance criterion: the codegen ends with a module-scope
+        (column-0) ``result =`` so PythonCodeNode publishes the ``result``
+        port. Pre-fix the assignment lived only inside if/else branches (never
+        at column 0)."""
+        import re
+
+        codes = self._real_node_codes()
+        code = codes["semantic_cache_manager"]
+        assert re.search(
+            r"^result\s*=", code, re.M
+        ), "semantic_cache_manager codegen does not bind `result` at module scope"

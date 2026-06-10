@@ -12,21 +12,25 @@ Implements RAG with conversation context and memory management:
 Based on conversational AI and dialogue systems research.
 """
 
-import json
 import logging
 import os
 import secrets
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
-from typing import Any, Deque, Dict, List, Optional, Union
+from datetime import datetime
+from typing import Any, Deque, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+
+# Registering imports (mirrors realtime.py #1120): wired by STRING via
+# `builder.add_node("PythonCodeNode" / "LLMAgentNode", ...)`; importing runs the
+# `@register_node` side effect that populates the registry. Do NOT drop to satisfy
+# an unused-import linter.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,163 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — reference template for the program).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# Any other wired port (`retrieval_results`, `conversation_context`,
+# `conversation_history`, `context`, ...) is read via `kwargs.get` and SILENTLY
+# DROPPED. The prior wiring fed these phantom ports, so the LLM never saw the
+# retrieved documents or the conversation history — it answered from its
+# system_prompt alone (the L3 "LLM ignores context" defect).
+#
+# The fix routes every LLM stage's context through a `PythonCodeNode`
+# `.from_function`-wrapped composer that RENDERS the retrieved docs + history +
+# query into a real `messages` list wired to the VALID `messages` port. These
+# are real module-level functions (real imports, real `return` → `result`,
+# statically checkable, no f-string brace-escaping) per the program's reference
+# template — NOT inline `code=` codegen blocks.
+#
+# Each composer is defensive about the wrapped shapes its upstream producers
+# publish: PythonCodeNode producers publish a single `result` port carrying
+# their whole module-scope dict, so a wrapper like {"session_context": {...}}
+# or {"contextual_retrieval": {...}} arrives and must be unwrapped. The
+# coreference_resolver / context_summarizer LLM stages publish a `response`
+# port whose value is an inner message dict keyed by "content".
+# ---------------------------------------------------------------------------
+
+
+def _render_history(conversation_context: Any) -> str:
+    """Render the recent conversation turns into a plain-text transcript.
+
+    `conversation_context` is the context_loader `result` port value, i.e. the
+    {"session_context": {...}} wrapper. Returns "" when no prior turns exist.
+    """
+    if isinstance(conversation_context, dict):
+        inner = conversation_context.get("session_context", conversation_context)
+    else:
+        inner = {}
+    if not isinstance(inner, dict):
+        return ""
+    # context_loader already formats the sliding-window transcript; prefer it.
+    text = inner.get("context_text") or ""
+    if text:
+        return text.strip()
+    # Fall back to rendering recent_turns if context_text is absent.
+    rendered = []
+    for turn in inner.get("recent_turns", []) or []:
+        if isinstance(turn, dict):
+            rendered.append(f"User: {turn.get('query', '')}")
+            rendered.append(f"Assistant: {turn.get('response', '')}")
+    return "\n".join(rendered).strip()
+
+
+def _render_documents(contextual_retrieval: Any) -> str:
+    """Render the retrieved documents into a plain-text context block.
+
+    `contextual_retrieval` is the context_retriever `result` port value, i.e.
+    the {"contextual_retrieval": {...}} wrapper carrying `documents`.
+    """
+    if isinstance(contextual_retrieval, dict):
+        inner = contextual_retrieval.get("contextual_retrieval", contextual_retrieval)
+    else:
+        inner = {}
+    documents = inner.get("documents", []) if isinstance(inner, dict) else []
+    blocks = []
+    for i, doc in enumerate(documents):
+        if not isinstance(doc, dict):
+            continue
+        # doc.get("content") may be present-with-None; the `or ""` covers it.
+        content = (doc.get("content") or "").strip()
+        if content:
+            blocks.append(f"[Document {i + 1}] {content}")
+    return "\n\n".join(blocks)
+
+
+def _query_from_retrieval(contextual_retrieval: Any) -> str:
+    """Extract the (enhanced) query the retriever computed from the wrapper.
+
+    `context_retriever` publishes {"contextual_retrieval": {"enhanced_query":
+    ...}}. The enhanced_query embeds the original user query (the retriever
+    builds it as `f"{query} ..."` / `f"{topic} context: {query}"`), so it is a
+    faithful in-graph source of the user's question — no separate external
+    input is needed for the response composer.
+    """
+    if isinstance(contextual_retrieval, dict):
+        inner = contextual_retrieval.get("contextual_retrieval", contextual_retrieval)
+        if isinstance(inner, dict):
+            return inner.get("enhanced_query", "") or ""
+    return ""
+
+
+def compose_response_messages(
+    contextual_retrieval=None,
+    conversation_context=None,
+    query="",
+):
+    """Compose the OpenAI-format ``messages`` list for the response_generator.
+
+    Embeds the retrieved documents + the conversation history + the user query
+    so the LLM's answer is GROUNDED in the retrieved context — not produced
+    from system_prompt alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+
+    The query is taken from the retriever's ``enhanced_query`` (an in-graph
+    source embedding the original question) unless an explicit ``query`` is
+    wired — so no extra external input is required for this composer.
+    """
+    effective_query = query or _query_from_retrieval(contextual_retrieval)
+    history = _render_history(conversation_context)
+    documents = _render_documents(contextual_retrieval)
+
+    parts = []
+    if documents:
+        parts.append("Retrieved context:\n" + documents)
+    if history:
+        parts.append("Conversation so far:\n" + history)
+    parts.append("Current question:\n" + effective_query)
+    user_content = "\n\n".join(parts)
+
+    return {"messages": [{"role": "user", "content": user_content}]}
+
+
+def compose_coreference_messages(current_query="", conversation_context=None):
+    """Compose the ``messages`` list for the coreference_resolver LLM stage.
+
+    Embeds the conversation history (the antecedent source) + the user query so
+    the resolver can replace pronouns with their specific antecedents. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+
+    The coreference stage runs BEFORE retrieval (its output feeds the
+    retriever's ``resolved_query``), so the raw user query is taken from the
+    ``current_query`` external input — the same input the topic_tracker reads.
+    """
+    history = _render_history(conversation_context)
+    parts = []
+    if history:
+        parts.append("Conversation so far:\n" + history)
+    parts.append("Query to resolve:\n" + (current_query or ""))
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_summary_messages(conversation_context=None):
+    """Compose the ``messages`` list for the context_summarizer LLM stage.
+
+    Embeds the conversation history to be summarized. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port. When
+    no history exists yet, the user message is an explicit empty-history note
+    so the stage still receives a well-formed (non-empty) messages list.
+    """
+    history = _render_history(conversation_context)
+    content = (
+        "Summarize this conversation:\n" + history
+        if history
+        else "No conversation history yet."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
 
 
 @register_node()
@@ -137,17 +298,19 @@ class ConversationalRAGNode(WorkflowNode):
             node_id="context_loader",
             config={
                 "code": f"""
-import json
-from collections import deque
-
 def load_conversation_context(session_id, sessions_store):
     '''Load conversation context for session'''
+    # F9 #1118 sibling: import inside the function body. PythonCodeNode passes
+    # separate (globals, locals) to exec(), so a module-scope import binds into
+    # the LOCAL namespace and is invisible to this function's closure
+    # (`datetime.now()` on the module raises AttributeError otherwise).
+    from datetime import datetime as _datetime_class
 
     if session_id not in sessions_store:
         # Create new session
         session = {{
             "id": session_id,
-            "created_at": datetime.now().isoformat(),
+            "created_at": _datetime_class.now().isoformat(),
             "turns": [],
             "summary": "",
             "current_topic": None,
@@ -171,7 +334,10 @@ def load_conversation_context(session_id, sessions_store):
         context_text += f"User: {{turn['query']}}\\n"
         context_text += f"Assistant: {{turn['response']}}\\n\\n"
 
-    result = {{
+    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
+    # bound a function-scope local that was never returned, so the session
+    # context never reached the module-scope `session_context` output.
+    return {{
         "session_context": {{
             "session_id": session_id,
             "recent_turns": recent_turns,
@@ -182,6 +348,18 @@ def load_conversation_context(session_id, sessions_store):
             "user_preferences": session.get("user_preferences", {{}})
         }}
     }}
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
+# (carrying {{"session_context": ...}}) that downstream nodes unwrap. `session_id`
+# is an external workflow input; `sessions_store` is an internal per-run store —
+# default it to an empty dict when the caller does not wire one. `del` the helper
+# so the output gate sees only `result`.
+try:
+    sessions_store
+except NameError:
+    sessions_store = {{}}
+result = load_conversation_context(session_id, sessions_store)
+del load_conversation_context
 """
             },
         )
@@ -284,7 +462,10 @@ def track_conversation_topic(current_query, session_context):
             transition_type = trans_type
             break
 
-    result = {
+    # F9 #1117: function MUST return its dict; the prior `result = {...}`
+    # bound a function-scope local that was never returned, so the topic
+    # analysis never reached the module-scope `topic_analysis` output.
+    return {
         "topic_analysis": {
             "current_topic": new_topic,
             "previous_topic": current_topic,
@@ -294,6 +475,13 @@ def track_conversation_topic(current_query, session_context):
             "confidence": 0.8 if query_topics else 0.3
         }
     }
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
+# (carrying {"topic_analysis": ...}) that context_retriever / session_updater /
+# result_formatter unwrap. `current_query` is an external workflow input;
+# `session_context` is wired from context_loader (unwrapped below).
+result = track_conversation_topic(current_query, session_context.get("session_context", session_context))
+del track_conversation_topic
 """
                 },
             )
@@ -358,14 +546,53 @@ def retrieve_with_context(query, documents, session_context, topic_info=None):
     # Sort by score
     scored_docs.sort(key=lambda x: x["score"], reverse=True)
 
-    result = {
+    # F9 #1117: function MUST return its dict; the prior `result = {...}`
+    # bound a function-scope local that was never returned, so the contextual
+    # retrieval never reached the module-scope `contextual_retrieval` output.
+    return {
         "contextual_retrieval": {
             "documents": [d["document"] for d in scored_docs[:10]],
             "scores": [d["score"] for d in scored_docs[:10]],
             "enhanced_query": enhanced_query,
-            "context_influence": sum(1 for d in scored_docs[:10] if d["context_boosted"]) / min(10, len(scored_docs))
+            "context_influence": sum(1 for d in scored_docs[:10] if d["context_boosted"]) / min(10, len(scored_docs)) if scored_docs else 0
         }
     }
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
+# (carrying {"contextual_retrieval": ...}) that response_generator /
+# result_formatter unwrap. `query` and `documents` are external workflow inputs.
+# `session_context` is wired from context_loader's `result` port (the whole
+# {"session_context": ...} dict), so unwrap the inner dict the function body's
+# .get("summary")/.get("context_text") calls expect. `topic_info` is wired from
+# topic_tracker's `result` port (already the {"topic_analysis": ...} shape the
+# function's .get("topic_analysis") expects) — passed through WITHOUT unwrap.
+# `resolved_query` (optional) is the coreference_resolver (LLMAgentNode)
+# `response` port value — an inner message dict keyed by "content"; when present
+# its content overrides the raw query string. Default optionals so a False
+# optional-branch leaves the call well-formed.
+try:
+    documents
+except NameError:
+    documents = []
+try:
+    topic_info
+except NameError:
+    topic_info = None
+_effective_query = query
+try:
+    if isinstance(resolved_query, dict) and resolved_query.get("content"):
+        _effective_query = resolved_query["content"]
+    elif isinstance(resolved_query, str) and resolved_query:
+        _effective_query = resolved_query
+except NameError:
+    pass
+result = retrieve_with_context(
+    _effective_query,
+    documents,
+    session_context.get("session_context", session_context),
+    topic_info,
+)
+del retrieve_with_context
 """
             },
         )
@@ -431,23 +658,49 @@ This will be used to maintain context in future turns.""",
                 "code": f"""
 def update_session(session_id, sessions_store, query, response, topic_info, summary=None):
     '''Update session with new turn'''
+    # F9 #1118 sibling: import inside the function body (separate exec ns).
+    from datetime import datetime as _datetime_class
+
+    # PythonCodeNode runs each node with an independent copy of its inputs, so
+    # the `sessions_store` mutation context_loader performed is NOT visible
+    # here. Seed the session if absent (same shape context_loader creates) so
+    # this turn is recorded against a real session record rather than crashing
+    # with KeyError. Cross-execution persistence is owned by the WorkflowNode's
+    # own `self.sessions` store (see create_session), not this per-run store.
+    if session_id not in sessions_store:
+        sessions_store[session_id] = {{
+            "id": session_id,
+            "created_at": _datetime_class.now().isoformat(),
+            "turns": [],
+            "summary": "",
+            "current_topic": None,
+            "user_preferences": {{}},
+            "metrics": {{
+                "turn_count": 0,
+                "topics_discussed": [],
+                "avg_response_length": 0
+            }}
+        }}
 
     session = sessions_store[session_id]
 
-    # Add new turn
+    # Add new turn. `response` is the response_generator (LLMAgentNode) `response`
+    # port value — an inner message dict keyed by "content" (NOT "response").
     new_turn = {{
         "turn_number": len(session["turns"]) + 1,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _datetime_class.now().isoformat(),
         "query": query,
-        "response": response.get("response", ""),
-        "topic": topic_info.get("topic_analysis", {{}}).get("current_topic")
+        "response": response.get("content", "") if isinstance(response, dict) else (response or ""),
+        "topic": topic_info.get("topic_analysis", {{}}).get("current_topic") if isinstance(topic_info, dict) else None
     }}
 
     session["turns"].append(new_turn)
 
-    # Update summary if provided
-    if summary and summary.get("response"):
-        session["summary"] = summary["response"]
+    # Update summary if provided. `summary` is the context_summarizer
+    # (LLMAgentNode) `response` port value — an inner message dict keyed by
+    # "content" (NOT "response").
+    if isinstance(summary, dict) and summary.get("content"):
+        session["summary"] = summary["content"]
 
     # Update current topic
     if topic_info and topic_info.get("topic_analysis"):
@@ -468,15 +721,25 @@ def update_session(session_id, sessions_store, query, response, topic_info, summ
         # Keep recent turns and rely on summary for older context
         session["turns"] = session["turns"][-{self.max_context_turns}:]
 
+    # Coherence proxy: topic consistency. Fewer DISTINCT topics across the
+    # turns => the conversation stayed on-topic => more coherent. Derived from
+    # the real session signal (NOT a hardcoded score); single-topic = 1.0.
+    _distinct_topics = len(session["metrics"]["topics_discussed"])
+    _coherence_turns = max(1, session["metrics"]["turn_count"])
+    coherence_score = max(0.0, min(1.0, 1.0 - (max(0, _distinct_topics - 1) / _coherence_turns)))
+
     # Calculate conversation health metrics
     conversation_metrics = {{
-        "coherence_score": 0.85,  # Would calculate based on topic consistency
+        "coherence_score": coherence_score,  # derived from topic consistency
         "engagement_level": min(1.0, len(session["turns"]) / 10),  # Higher with more turns
         "topic_diversity": len(session["metrics"]["topics_discussed"]) / max(1, session["metrics"]["turn_count"]),
         "avg_turn_length": session["metrics"]["avg_response_length"]
     }}
 
-    result = {{
+    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
+    # bound a function-scope local that was never returned, so the session
+    # update never reached the module-scope `session_update` output.
+    return {{
         "session_update": {{
             "session_id": session_id,
             "turn_added": new_turn["turn_number"],
@@ -485,64 +748,185 @@ def update_session(session_id, sessions_store, query, response, topic_info, summ
             "conversation_metrics": conversation_metrics
         }}
     }}
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
+# (carrying {{"session_update": ...}}) that result_formatter unwraps.
+# `session_id` + `query` are external workflow inputs; `sessions_store` bound via
+# config/inputs; `response` <- response_generator.response (LLMAgentNode);
+# `topic_info` <- topic_tracker.result ({{"topic_analysis": ...}}); `summary` <-
+# context_summarizer.response when enable_summarization (else default None).
+# `del` the helper so the output gate sees only `result`.
+try:
+    topic_info
+except NameError:
+    topic_info = None
+try:
+    summary
+except NameError:
+    summary = None
+try:
+    sessions_store
+except NameError:
+    sessions_store = {{}}
+result = update_session(
+    session_id, sessions_store, query, response, topic_info, summary
+)
+del update_session
 """
             },
         )
 
-        # Result formatter
+        # Result formatter (TERMINAL node — publishes the WorkflowNode's
+        # documented `conversational_response` output).
+        #
+        # F9 #1123: this config is now an f-string so the {{self.*}} config
+        # flags interpolate to literal Python values. The prior NON-f-string
+        # form left `{{self.max_context_turns}}` etc. as runtime set-literals
+        # referencing undefined names — the terminal node crashed with
+        # NameError, so the whole workflow published nothing.
+        #
+        # Every wired input here arrives as its PRODUCER's published port value:
+        #   - `response`             <- response_generator.response (LLMAgentNode
+        #                               port value = inner message dict keyed by
+        #                               "content")
+        #   - `session_update`       <- session_updater.result ({{"session_update"}})
+        #   - `topic_info`           <- topic_tracker.result ({{"topic_analysis"}})
+        #   - `contextual_retrieval` <- context_retriever.result
+        #                               ({{"contextual_retrieval"}})
+        # so each is unwrapped to the nested shape this formatter consumes.
         result_formatter_id = builder.add_node(
             "PythonCodeNode",
             node_id="result_formatter",
             config={
-                "code": """
-# Format conversational response
-response = response.get("response", "")
-session_update = session_update.get("session_update", {})
-topic_info = topic_info.get("topic_analysis", {}) if topic_info else {}
-contextual_retrieval = contextual_retrieval.get("contextual_retrieval", {})
+                "code": f"""
+# Optional inputs may be unwired on a False optional-branch (topic_tracking off
+# leaves `topic_info` unbound). Default each to a benign empty value so the
+# TERMINAL node still publishes a well-formed conversational_response.
+try:
+    topic_info
+except NameError:
+    topic_info = {{}}
+try:
+    session_update
+except NameError:
+    session_update = {{}}
+try:
+    contextual_retrieval
+except NameError:
+    contextual_retrieval = {{}}
+try:
+    response
+except NameError:
+    response = {{}}
+
+# Format conversational response. `response` is the LLMAgentNode `response`
+# port value (inner message dict keyed by "content", NOT "response").
+response_text = response.get("content", "") if isinstance(response, dict) else (response or "")
+session_update = session_update.get("session_update", {{}}) if isinstance(session_update, dict) else {{}}
+topic_info = topic_info.get("topic_analysis", {{}}) if isinstance(topic_info, dict) else {{}}
+contextual_retrieval = contextual_retrieval.get("contextual_retrieval", {{}}) if isinstance(contextual_retrieval, dict) else {{}}
 
 # Build session state summary
-session_state = {
+session_state = {{
     "session_id": session_update.get("session_id"),
     "turn_number": session_update.get("turn_added"),
     "total_turns": session_update.get("total_turns"),
     "context_window": {self.max_context_turns},
     "summary_available": {self.enable_summarization}
-}
+}}
 
 # Topic information
-topic_summary = {
+topic_summary = {{
     "current_topic": topic_info.get("current_topic"),
     "topic_changed": topic_info.get("topic_changed", False),
     "transition_type": topic_info.get("transition_type", "continuation"),
-    "topics_discussed": session_update.get("conversation_metrics", {}).get("topic_diversity", 0)
-}
+    "topics_discussed": session_update.get("conversation_metrics", {{}}).get("topic_diversity", 0)
+}}
 
 # Conversation metrics
-metrics = session_update.get("conversation_metrics", {})
+metrics = session_update.get("conversation_metrics", {{}})
 metrics["retrieval_context_influence"] = contextual_retrieval.get("context_influence", 0)
 
-result = {
-    "conversational_response": {
-        "response": response,
+# F9 #1117/#1123: module-scope `result =` so this TERMINAL node publishes the
+# documented `conversational_response` the WorkflowNode promises.
+result = {{
+    "conversational_response": {{
+        "response": response_text,
         "session_state": session_state,
         "topic_info": topic_summary,
         "conversation_metrics": metrics,
-        "metadata": {
+        "metadata": {{
             "coreference_resolution": {self.coreference_resolution},
             "personalization": {self.personalization_enabled},
             "context_enhanced_retrieval": True
-        }
-    }
-}
+        }}
+    }}
+}}
 """
             },
         )
 
-        # Connect workflow
+        # Messages-composer nodes (L3 fix). Each LLM stage's context is routed
+        # through a `PythonCodeNode.from_function` composer that RENDERS the
+        # retrieved docs + history + query into a real OpenAI-format `messages`
+        # list wired to the LLMAgentNode `messages` port — the ONLY port through
+        # which LLMAgentNode consumes context. The prior wiring fed phantom
+        # ports (`retrieval_results` / `conversation_context` / `context` /
+        # `conversation_history`) that the node silently drops.
+        #
+        # `.from_function` is the correct primitive here (real module-level
+        # functions get real imports, real `return`→`result`, type-checkable, no
+        # brace-escaping). Instances are added via `add_node_instance(...,
+        # _internal=True)` — this IS an SDK-internal node-construction path
+        # (mirrors Nexus's `@app.handler()`), so the consumer-facing instance-API
+        # advisory `UserWarning` is correctly suppressed (zero-tolerance Rule 1:
+        # no spurious runtime warnings).
+        response_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                compose_response_messages,
+                name="response_messages_composer",
+            ),
+            node_id="response_messages_composer",
+            _internal=True,
+        )
+
+        coreference_messages_composer_id: Optional[str] = None
+        if self.coreference_resolution:
+            coreference_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(
+                    compose_coreference_messages,
+                    name="coreference_messages_composer",
+                ),
+                node_id="coreference_messages_composer",
+                _internal=True,
+            )
+
+        summary_messages_composer_id: Optional[str] = None
+        if self.enable_summarization:
+            summary_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(
+                    compose_summary_messages,
+                    name="summary_messages_composer",
+                ),
+                node_id="summary_messages_composer",
+                _internal=True,
+            )
+
+        # Connect workflow.
+        #
+        # F9 #1117/#1123 wiring fix: a PythonCodeNode publishes a SINGLE `result`
+        # output port carrying its whole module-scope `result` dict — the nested
+        # keys ("session_context", "topic_analysis", "contextual_retrieval",
+        # "session_update") are NOT individual ports. The prior edges read those
+        # non-existent nested ports, so every downstream input silently bound to
+        # nothing. Every PythonCodeNode source edge now reads `result`; the
+        # consumer's module-scope wrapper unwraps the nested key it needs.
+        # LLMAgentNode publishes each top-level result key as a real port, so
+        # `response` (NOT the non-existent `resolved_query`) is the correct read
+        # for the coreference_resolver and summarizer.
         builder.add_connection(
             context_loader_id,
-            "session_context",
+            "result",
             context_retriever_id,
             "session_context",
         )
@@ -551,11 +935,40 @@ result = {
             assert (
                 coreference_resolver_id is not None
             )  # narrowed: bound in optional block above
+            assert coreference_messages_composer_id is not None
+            # L3 fix: feed conversation history into the composer (NOT the
+            # phantom `context` port on the LLM stage). The composer renders the
+            # history + query into a `messages` list on the VALID port.
             builder.add_connection(
-                context_loader_id, "session_context", coreference_resolver_id, "context"
+                context_loader_id,
+                "result",
+                coreference_messages_composer_id,
+                "conversation_context",
             )
+            # MED-1 fix: the coreference stage runs BEFORE retrieval, so there
+            # is NO in-graph query source (unlike response_generator, which
+            # recovers the query from contextual_retrieval.enhanced_query). The
+            # composer declares `current_query` as a function parameter, so the
+            # runtime's parameter injector delivers the caller-supplied
+            # top-level `current_query` workflow input to it (the same external
+            # input the topic_tracker reads) — embedding the user's query in the
+            # `messages` list the pronoun-resolver consumes. Without the query,
+            # the composer would publish an EMPTY "Query to resolve:" message
+            # and the resolver — whose entire job is resolving pronouns in the
+            # user's query — would never see the query.
             builder.add_connection(
-                coreference_resolver_id, "resolved_query", context_retriever_id, "query"
+                coreference_messages_composer_id,
+                "result.messages",
+                coreference_resolver_id,
+                "messages",
+            )
+            # LLMAgentNode publishes `response` (not `resolved_query`); the
+            # retriever's wrapper extracts the resolved-query string from it.
+            builder.add_connection(
+                coreference_resolver_id,
+                "response",
+                context_retriever_id,
+                "resolved_query",
             )
 
         if self.topic_tracking:
@@ -564,34 +977,56 @@ result = {
             )  # narrowed: bound in optional block above
             builder.add_connection(
                 context_loader_id,
-                "session_context",
+                "result",
                 topic_tracker_id,
                 "session_context",
             )
             builder.add_connection(
-                topic_tracker_id, "topic_analysis", context_retriever_id, "topic_info"
+                topic_tracker_id, "result", context_retriever_id, "topic_info"
             )
 
+        # L3 fix: route the response_generator's context through its composer.
+        # The retrieved docs (context_retriever.result → contextual_retrieval)
+        # and the conversation history (context_loader.result →
+        # conversation_context) feed the COMPOSER, which renders them into a
+        # `messages` list on the VALID `messages` port — NOT the phantom
+        # `retrieval_results` / `conversation_context` ports the LLM drops.
         builder.add_connection(
             context_retriever_id,
+            "result",
+            response_messages_composer_id,
             "contextual_retrieval",
-            response_generator_id,
-            "retrieval_results",
         )
         builder.add_connection(
             context_loader_id,
-            "session_context",
-            response_generator_id,
+            "result",
+            response_messages_composer_id,
             "conversation_context",
+        )
+        builder.add_connection(
+            response_messages_composer_id,
+            "result.messages",
+            response_generator_id,
+            "messages",
         )
 
         if self.enable_summarization:
             assert summarizer_id is not None  # narrowed: bound in optional block above
+            assert summary_messages_composer_id is not None
+            # L3 fix: feed history into the summary composer (NOT the phantom
+            # `conversation_history` port). The composer renders the history
+            # into a `messages` list on the VALID `messages` port.
             builder.add_connection(
                 context_loader_id,
-                "session_context",
+                "result",
+                summary_messages_composer_id,
+                "conversation_context",
+            )
+            builder.add_connection(
+                summary_messages_composer_id,
+                "result.messages",
                 summarizer_id,
-                "conversation_history",
+                "messages",
             )
             builder.add_connection(
                 summarizer_id, "response", session_updater_id, "summary"
@@ -605,11 +1040,11 @@ result = {
                 topic_tracker_id is not None
             )  # narrowed: bound in optional block above
             builder.add_connection(
-                topic_tracker_id, "topic_analysis", session_updater_id, "topic_info"
+                topic_tracker_id, "result", session_updater_id, "topic_info"
             )
 
         builder.add_connection(
-            session_updater_id, "session_update", result_formatter_id, "session_update"
+            session_updater_id, "result", result_formatter_id, "session_update"
         )
         builder.add_connection(
             response_generator_id, "response", result_formatter_id, "response"
@@ -619,11 +1054,11 @@ result = {
                 topic_tracker_id is not None
             )  # narrowed: bound in optional block above
             builder.add_connection(
-                topic_tracker_id, "topic_analysis", result_formatter_id, "topic_info"
+                topic_tracker_id, "result", result_formatter_id, "topic_info"
             )
         builder.add_connection(
             context_retriever_id,
-            "contextual_retrieval",
+            "result",
             result_formatter_id,
             "contextual_retrieval",
         )

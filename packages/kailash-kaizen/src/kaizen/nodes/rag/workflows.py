@@ -7,9 +7,14 @@ and operations into reusable workflow patterns.
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from kailash.nodes.base import register_node
+
+# PythonCodeNode is imported for BOTH its @register_node side effect (the inner
+# workflows reference it by the string "PythonCodeNode") AND so the L3
+# messages-composer fix below can call `PythonCodeNode.from_function(fn)`.
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -30,6 +35,205 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer function (L3 fix — same reference template as
+# conversational.py, query_processing.py, agentic.py, and graph.py).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name is read via `kwargs.get` and SILENTLY DROPPED.
+#
+# In AdaptiveRAGWorkflowNode the ONLY direct LLMAgentNode stage —
+# `rag_strategy_analyzer` — was wired `document_preprocessor.result ->
+# rag_strategy_analyzer.input`. `input` is NOT a port LLMAgentNode reads, so
+# the strategy analyzer answered from its `system_prompt` alone: it never saw
+# the document characteristics (count / average length / structure / technical
+# signals / content types) NOR the user query it is meant to analyze to select
+# the optimal RAG strategy (the L3 "LLM ignores its input" defect).
+#
+# The composer renders the REAL in-graph data characteristics the
+# `document_preprocessor` PythonCodeNode genuinely publishes (document_count,
+# avg_length, has_structure, is_technical, content_types) PLUS the real user
+# query into a `messages` list wired to the VALID `messages` port. This is pure
+# data rendering (the permitted output-formatting exception per
+# rules/agent-reasoning.md) — NO if-else routing / keyword classification on
+# content, and NO NEW deterministic agent-loop logic (the existing strategy
+# routing/orchestration in workflows.py is unchanged).
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): every field rendered is a real key
+# the `document_preprocessor` codegen publishes on its `result` (verified
+# against the `analyze_for_llm` return dict). No input is invented.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_text(value: Any) -> str:
+    """Coerce a wired input to a clean string.
+
+    The parameter injector delivers top-level inputs as plain strings; a wired
+    upstream port may arrive None on an unwired optional branch.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def compose_strategy_analyzer_messages(
+    query="",
+    document_count=0,
+    avg_length=0,
+    has_structure=False,
+    is_technical=False,
+    content_types=None,
+):
+    """Compose the ``messages`` list for AdaptiveRAGWorkflowNode's
+    ``rag_strategy_analyzer`` LLM stage.
+
+    Renders the REAL document characteristics the upstream
+    ``document_preprocessor`` publishes (``document_count`` / ``avg_length`` /
+    ``has_structure`` / ``is_technical`` / ``content_types``) AND the real user
+    ``query`` into a ``messages`` list wired to the LLMAgentNode ``messages``
+    port — so the analyzer selects the RAG strategy FROM the actual corpus +
+    query, not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``.
+
+    Mirrors the analyzer's ``prompt_template`` field shape (Count / Average
+    length / Has structure / Technical content / Content types / Query) so the
+    rendered message carries exactly the inputs the ``system_prompt`` advertises
+    it will reason over. Every value is a genuine in-graph
+    ``document_preprocessor.result`` key — none is invented.
+    """
+    q = _coerce_text(query)
+    types = content_types if isinstance(content_types, list) else []
+    types_text = ", ".join(str(t) for t in types) if types else "none detected"
+    content = (
+        "Analyze these documents for optimal RAG strategy selection:\n\n"
+        "Document Analysis:\n"
+        f"- Count: {document_count}\n"
+        f"- Average length: {avg_length} characters\n"
+        f"- Has structure (headings/sections): {has_structure}\n"
+        f"- Technical content detected: {is_technical}\n"
+        f"- Content types: {types_text}\n\n"
+        "Query (if provided): " + (q if q else "(none)") + "\n\n"
+        "Recommend the optimal RAG strategy:"
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+# ---------------------------------------------------------------------------
+# Strategy-decision parser (OUTPUT-side fix — same reference template as the O1
+# evaluation.py response parsers `_unwrap_response_content` + `parse_*_response`).
+#
+# LLMAgentNode publishes its model output on the `response` port as a dict
+# `{"content": "<text or JSON string>", "success": ..., "usage": ...,
+# "metadata": ...}`. The `rag_strategy_analyzer` system_prompt instructs the LLM
+# to emit ONLY a JSON object `{"recommended_strategy", "reasoning", "confidence",
+# "fallback_strategy"}` — but that object lives as a JSON STRING inside
+# `response["content"]`.
+#
+# The pre-shard topology wired `rag_strategy_analyzer.result -> ...` (a port
+# LLMAgentNode does NOT publish) into the SwitchNode `strategy_executor`
+# (condition_field `recommended_strategy`) AND the `results_aggregator`
+# PythonCodeNode (reads `llm_decision.get("recommended_strategy")` etc.). Both
+# consumers therefore received NOTHING — the strategy DECISION never drove the
+# executor nor reached the aggregator (every field resolved to its default/None).
+#
+# This parser consumes the REAL `response` port, unwraps `.content`, and
+# `json.loads` it into a PARSED dict the SwitchNode + aggregator can read:
+# `{recommended_strategy, reasoning, confidence, fallback_strategy}` at the top
+# level (so `condition_field: "recommended_strategy"` resolves against the
+# from_function `result` dict).
+#
+# HONESTY (zero-tolerance Rule 2): on non-JSON / missing-field / malformed
+# output the parser returns a TYPED parse-error sentinel
+# (`{"recommended_strategy": None, "parse_error": "<reason>"}`) — NEVER a
+# fabricated default like `"semantic"` (that would be the fake-dispatch /
+# fake-classification failure mode). The SwitchNode `cases` allowlist
+# (`["semantic","statistical","hybrid","hierarchical"]`) fails CLOSED when
+# `recommended_strategy` is None (no case matches) — that is the CORRECT honest
+# behavior for unparseable LLM output, NOT papered with a default case.
+#
+# This is tool-result PARSING (permitted deterministic logic per
+# rules/agent-reasoning.md exception 6 — extracting structured data from LLM
+# output), NOT agent decision-making: the LLM still makes the strategy decision;
+# this function only extracts it. NO if-else strategy heuristics are added.
+# ---------------------------------------------------------------------------
+
+
+def parse_strategy_decision(response=None):
+    """Parse the ``rag_strategy_analyzer`` ``response`` into a strategy-decision dict.
+
+    Reads ``response`` -> ``.content`` (a JSON string) -> ``json.loads`` -> the
+    ``{recommended_strategy, reasoning, confidence, fallback_strategy}`` object
+    the analyzer's ``system_prompt`` instructs the LLM to emit. The parsed object
+    is returned as the from_function ``result`` so the downstream SwitchNode
+    (``condition_field: "recommended_strategy"``) switches on the REAL parsed
+    strategy and the ``results_aggregator`` reads the REAL reasoning/confidence/
+    fallback.
+
+    Malformed / non-JSON / missing-strategy output is FLAGGED with a typed
+    sentinel (``{"recommended_strategy": None, "parse_error": "<reason>"}``) —
+    never a fabricated strategy (zero-tolerance Rule 2). The SwitchNode then
+    fails closed (no case matches ``None``), surfacing the parse failure honestly
+    rather than dispatching to an invented strategy.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+
+    # Honest empty: the analyzer published nothing parseable. Surface, don't
+    # invent — the SwitchNode fails closed on a None strategy.
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"recommended_strategy": None, "parse_error": "empty-response"}
+
+    # The provider may already have emitted a parsed dict (some do).
+    parsed: Any
+    if isinstance(content, dict):
+        parsed = content
+    elif isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"recommended_strategy": None, "parse_error": "non-json-response"}
+    else:
+        return {
+            "recommended_strategy": None,
+            "parse_error": "unexpected-content-type",
+        }
+
+    if not isinstance(parsed, dict):
+        return {"recommended_strategy": None, "parse_error": "non-object-json"}
+
+    strategy = parsed.get("recommended_strategy")
+    if not isinstance(strategy, str) or not strategy.strip():
+        # Parsed JSON but the load-bearing decision field is absent/blank. FLAG,
+        # don't fabricate — the SwitchNode fails closed.
+        return {"recommended_strategy": None, "parse_error": "missing-strategy"}
+
+    # Real decision: surface the strategy + its rationale fields so the SwitchNode
+    # switches on the genuine strategy and the aggregator reports genuine metadata.
+    return {
+        "recommended_strategy": strategy,
+        "reasoning": parsed.get("reasoning"),
+        "confidence": parsed.get("confidence"),
+        "fallback_strategy": parsed.get("fallback_strategy"),
+    }
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode ``response`` port into the model's text payload.
+
+    ``LLMAgentNode`` publishes ``response`` as ``{"content": "<text>", ...}``
+    (mock + real providers both). A defensive caller may also pass the bare
+    string. Mirrors evaluation.py's ``_unwrap_response_content`` + the
+    conversational.py ``response.get("content")`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
 
 
 @register_node()
@@ -537,10 +741,129 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
             },
         )
 
+        # L3 messages-composer (reference template — conversational.py /
+        # query_processing.py / agentic.py / graph.py). The
+        # `rag_strategy_analyzer` LLM stage previously received NO real input on
+        # a port LLMAgentNode reads: its only inbound edge was
+        # `document_preprocessor.result -> rag_strategy_analyzer.input`, and
+        # `input` is a port LLMAgentNode silently drops (its `run` reads only
+        # `kwargs["messages"]`). The analyzer answered from its `system_prompt`
+        # alone — it never saw the document characteristics nor the query it is
+        # meant to analyze to pick the optimal RAG strategy.
+        #
+        # The composer renders the REAL `document_preprocessor` output
+        # characteristics (delivered via the nested `result.<key>` ports a
+        # from_function node publishes — `document_count` / `avg_length` /
+        # `has_structure` / `is_technical` / `content_types`) PLUS the real
+        # top-level `query` (auto-distributed by the parameter injector) into the
+        # analyzer's VALID `messages` port. `from_function` is the correct
+        # primitive (real module-level function: real `return`→`result`,
+        # statically checkable). `type: ignore[attr-defined]`: `from_function`
+        # is a
+        # classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        strategy_analyzer_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_strategy_analyzer_messages,
+                name="strategy_analyzer_messages_composer",
+            ),
+            node_id="strategy_analyzer_messages_composer",
+            _internal=True,
+        )
+
+        # Strategy-decision parser (OUTPUT-side fix — same `from_function` +
+        # `add_node_instance(_internal=True)` primitive as the composer above and
+        # the O1 evaluation.py response parsers). The `rag_strategy_analyzer`
+        # LLMAgentNode publishes its decision on the `response` port (a dict
+        # `{"content": "<JSON string>", ...}`); this parser unwraps `.content`,
+        # `json.loads` it, and republishes the parsed `{recommended_strategy,
+        # reasoning, confidence, fallback_strategy}` on its `result` so the
+        # SwitchNode + aggregator consume the REAL decision (the pre-shard edges
+        # read a `result` port LLMAgentNode never publishes — see the rewired
+        # connections below). Malformed output yields a typed parse-error
+        # sentinel, NOT a fabricated strategy (zero-tolerance Rule 2).
+        strategy_decision_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_strategy_decision,
+                name="strategy_decision_parser",
+            ),
+            node_id="strategy_decision_parser",
+            _internal=True,
+        )
+
         # Connect adaptive pipeline. SwitchNode's primary input port is
         # `input_data`; each multi-case match emits on `case_<value>`.
-        builder.add_connection(preprocessor_id, "result", llm_analyzer_id, "input")
-        builder.add_connection(llm_analyzer_id, "result", executor_id, "input_data")
+        #
+        # FIX: the prior `document_preprocessor.result ->
+        # rag_strategy_analyzer.input` phantom edge fed the analyzer a port
+        # LLMAgentNode drops. The composer now renders the REAL preprocessor
+        # characteristics + the real query into the analyzer's `messages` port;
+        # the phantom `input` edge is REMOVED.
+        #
+        # The real `document_preprocessor.result` characteristics reach the
+        # composer via the nested-key ports a from_function node publishes
+        # (`result.<key>`); the real `query` reaches the composer the same way —
+        # the top-level `query` is delivered into `document_preprocessor` via
+        # `input_mapping` (see __init__), the preprocessor republishes it on
+        # `result.query`, and the wired `preprocessor.result.query ->
+        # composer.query` edge below carries it in. This is the production
+        # delivery path (top-level input → in-graph wiring), NOT node-keyed
+        # injection of the analyzer's load-bearing content.
+        builder.add_connection(
+            preprocessor_id,
+            "result.document_count",
+            strategy_analyzer_messages_composer_id,
+            "document_count",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.avg_length",
+            strategy_analyzer_messages_composer_id,
+            "avg_length",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.has_structure",
+            strategy_analyzer_messages_composer_id,
+            "has_structure",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.is_technical",
+            strategy_analyzer_messages_composer_id,
+            "is_technical",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.content_types",
+            strategy_analyzer_messages_composer_id,
+            "content_types",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.query",
+            strategy_analyzer_messages_composer_id,
+            "query",
+        )
+        builder.add_connection(
+            strategy_analyzer_messages_composer_id,
+            "result.messages",
+            llm_analyzer_id,
+            "messages",
+        )
+        # OUTPUT-side fix: the analyzer publishes its decision on `response`
+        # (NOT `result` — the pre-shard phantom port). Route `response` through
+        # the parser, which republishes the PARSED decision dict on `result`. The
+        # SwitchNode then switches on the real `recommended_strategy` (its
+        # `condition_field` reads the top-level key of `input_data`), and the
+        # aggregator reads the real reasoning/confidence/fallback.
+        builder.add_connection(
+            llm_analyzer_id, "response", strategy_decision_parser_id, "response"
+        )
+        builder.add_connection(
+            strategy_decision_parser_id, "result", executor_id, "input_data"
+        )
         builder.add_connection(
             preprocessor_id, "result", executor_id, "preprocessed_data"
         )
@@ -570,7 +893,14 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
         builder.add_connection(
             hierarchical_pipeline_id, "output", aggregator_id, "rag_results"
         )
-        builder.add_connection(llm_analyzer_id, "result", aggregator_id, "llm_decision")
+        # OUTPUT-side fix: the aggregator's `llm_decision` reads the PARSED
+        # decision dict (republished on `strategy_decision_parser.result`), NOT
+        # the analyzer's non-existent `result` port. So `strategy_used`,
+        # `llm_reasoning`, `confidence`, and `fallback_available` reflect the REAL
+        # LLM strategy decision instead of defaulting to None.
+        builder.add_connection(
+            strategy_decision_parser_id, "result", aggregator_id, "llm_decision"
+        )
         builder.add_connection(
             preprocessor_id, "result", aggregator_id, "preprocessed_data"
         )

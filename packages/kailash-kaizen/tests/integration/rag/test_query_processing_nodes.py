@@ -74,6 +74,7 @@ mismatches the original Shard A documented are now FIXED in
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict
 
 import pytest
@@ -124,13 +125,17 @@ class _DeterministicLLMAgent(Node):
        ``WorkflowBuilder.add_node("LLMAgentNode", ...)`` resolves through.
     """
 
-    # The fixed dict payloads each downstream PythonCodeNode block parses.
-    # Each shape matches the `Return as JSON: {...}` contract in the source
-    # `system_prompt` for the corresponding LLM node. The substitute returns
-    # the payload AS A DICT (not a JSON string) under the `response` key
-    # because the PythonCodeNode consumers call `.get(...)` on it directly
-    # — mirroring the real workflow-execution wire surface where the LLM's
-    # response field is the parsed JSON dict, not the raw string.
+    # The fixed dict payloads each stage's `system_prompt` advertises as its
+    # `Return as JSON: {...}` contract. O4 OUTPUT-SIDE FIX: the substitute now
+    # publishes the PRODUCTION wire shape — `response = {"content": <JSON
+    # string>}` (mirroring the real LLMAgentNode, which emits the structured
+    # JSON as a STRING inside `response["content"]`, NOT at the top level of
+    # `response`). The O4 `parse_*_response` from_function nodes unwrap
+    # `.content` + `json.loads` it before the downstream PythonCodeNode
+    # consumers `.get(...)` the structured fields. (Pre-O4 the substitute put
+    # the fields at the top level of `response`, modelling the WRONG wire shape
+    # — that is exactly the Class-B parse gap O4 closes; see the module
+    # docstring's RUNTIME-DEFECT CLOSURE note.)
     _RESPONSES: Dict[str, Dict[str, Any]] = {
         # QueryExpansionNode.llm_expander → expansion_processor expects
         # `expansion_response` with expansions/keywords/concepts.
@@ -255,17 +260,19 @@ class _DeterministicLLMAgent(Node):
         }
 
     def run(self, **_kwargs: Any) -> Dict[str, Any]:
-        # The downstream PythonCodeNode consumer reads the source's
-        # `response` field directly via `expansion_response.get(...)` /
-        # `decomposition_result.get(...)` / etc. — i.e. it expects the
-        # payload AS A DICT, not as a JSON string. The substitute returns
-        # the dict directly under the `response` key the workflow edge is
-        # wired against. Dispatch is keyed on `self.id` (the graph-level
-        # node_id the WorkflowBuilder assigned) so each LLM-shaped node in
-        # the inner workflow (llm_expander, query_decomposer, etc.) routes
-        # to its specific JSON payload.
+        # O4 OUTPUT-SIDE FIX: publish the PRODUCTION wire shape. The real
+        # LLMAgentNode emits `response = {"content": "<JSON string>", ...}` —
+        # the structured JSON the `system_prompt` requests lives INSIDE
+        # `response["content"]` as a STRING, NOT at the top level. The O4
+        # `parse_*_response` from_function nodes unwrap `.content` +
+        # `json.loads` before the downstream PythonCodeNode consumers
+        # `.get(...)` the structured fields. The substitute therefore
+        # `json.dumps` the per-stage payload into `content`. Dispatch is keyed
+        # on `self.id` (the WorkflowBuilder-assigned graph node_id) so each
+        # LLM-shaped node (llm_expander, query_decomposer, ...) routes to its
+        # specific JSON payload.
         payload = self._RESPONSES.get(self.id, {})
-        return {"response": payload}
+        return {"response": {"content": json.dumps(payload)}}
 
 
 # ==========================================================================
@@ -751,3 +758,621 @@ class TestQueryProcessingModuleIntegration:
         wf = _build(node)
         assert isinstance(wf, Workflow)
         assert len(wf.nodes) > 0
+
+
+# ==========================================================================
+# L3 messages-wiring proof — the real query reaches every LLM stage via the
+# `messages` port (Wave 2 Shard 2).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through `messages` (its `run` reads
+# `kwargs["messages"]`); ANY other wired port is silently dropped. Pre-shard the
+# query_processing LLM stages received NO real input — they answered from their
+# `system_prompt` alone. This shard added a `*_messages_composer`
+# (PythonCodeNode.from_function) per LLM stage that renders the REAL query (+ the
+# upstream analyzer output for the rewriter) into the `messages` port.
+#
+# These tests exercise the PRODUCTION delivery path: the query is delivered as a
+# TOP-LEVEL workflow input (`parameters={"query": ...}`), so the runtime's
+# parameter injector auto-distributes it to every node declaring a `query`
+# param — including each composer. This is NOT node-keyed injection into the LLM
+# stage (the false-green trap that would bypass the composer entirely).
+#
+# Proof shape: a `_MessageCapturingLLMAgent` substitute records the `messages`
+# each LLM stage actually receives (keyed by node id) AND returns the same
+# deterministic JSON payloads so the rest of each workflow runs to completion.
+# Asserting the captured `messages` embed the literal query text proves the
+# composer ran with the real query AND the wire reached the `messages` port.
+# ==========================================================================
+
+
+# Module-level sink the capturing substitute writes into. Keyed by the LLM
+# stage's graph node_id → the `messages` list it received. Reset per test.
+_CAPTURED_MESSAGES: Dict[str, Any] = {}
+
+
+class _MessageCapturingLLMAgent(_DeterministicLLMAgent):
+    """Deterministic substitute that ADDITIONALLY records the ``messages`` each
+    LLM stage receives into the module-level ``_CAPTURED_MESSAGES`` sink.
+
+    Inherits the deterministic JSON payloads from ``_DeterministicLLMAgent`` (so
+    every downstream ``PythonCodeNode`` parses real output and each workflow runs
+    end-to-end), and overrides ``run`` to capture the ``messages`` kwarg BEFORE
+    returning the payload — proving the composer's ``result.messages`` reached
+    the VALID ``messages`` port. This is a Protocol-Satisfying Deterministic
+    Adapter (legal Tier-2 surface), NOT a mock: it inherits the real ``Node``
+    base and implements the runtime contract deterministically.
+    """
+
+    def run(self, **kwargs: Any) -> Dict[str, Any]:
+        _CAPTURED_MESSAGES[self.id] = kwargs.get("messages")
+        return super().run(**kwargs)
+
+
+@pytest.fixture
+def capturing_llm(monkeypatch: pytest.MonkeyPatch):
+    """Like ``deterministic_llm`` but substitutes the message-capturing adapter,
+    and clears the capture sink per test."""
+    from kailash.nodes.base import NodeRegistry
+
+    import kaizen.nodes.rag.query_processing as qp_mod
+
+    _CAPTURED_MESSAGES.clear()
+
+    monkeypatch.setattr(
+        qp_mod, "LLMAgentNode", _MessageCapturingLLMAgent  # type: ignore[assignment]
+    )
+    nodes_dict = NodeRegistry._nodes  # type: ignore[attr-defined]
+    prior = nodes_dict.get("LLMAgentNode")
+    nodes_dict["LLMAgentNode"] = _MessageCapturingLLMAgent
+    try:
+        yield _MessageCapturingLLMAgent
+    finally:
+        if prior is None:
+            nodes_dict.pop("LLMAgentNode", None)
+        else:
+            nodes_dict["LLMAgentNode"] = prior
+
+
+def _flatten_message_text(messages: Any) -> str:
+    """Concatenate the `content` of every message in an OpenAI-format list."""
+    assert isinstance(messages, list), f"messages must be a list, got {messages!r}"
+    return "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+
+
+class TestQueryProcessingContextReachesLLM:
+    """Every LLM stage in the query_processing module receives the REAL user
+    query through the VALID ``messages`` port — delivered via the production
+    top-level-input path (parameter injector), NOT node-keyed injection."""
+
+    _QUERY = "how do transformer attention mechanisms scale to long sequences"
+
+    def _run(self, node: Any) -> Dict[str, Any]:
+        wf = _build(node)
+        return _execute_workflow(wf, query=self._QUERY)
+
+    def test_expansion_llm_receives_query(self, capturing_llm):
+        self._run(QueryExpansionNode(name="ctx_qe"))
+        # The composer node published its `messages` AND the LLM stage received
+        # them on the `messages` port — both proven below.
+        captured = _CAPTURED_MESSAGES.get("llm_expander")
+        text = _flatten_message_text(captured)
+        assert self._QUERY in text, (
+            "llm_expander MUST receive the real query via `messages`; " f"got: {text!r}"
+        )
+
+    def test_decomposition_llm_receives_query(self, capturing_llm):
+        self._run(QueryDecompositionNode(name="ctx_qd"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_decomposer"))
+        assert self._QUERY in text
+
+    def test_rewriting_analyzer_receives_query(self, capturing_llm):
+        self._run(QueryRewritingNode(name="ctx_qr"))
+        analyzer_text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_analyzer"))
+        assert (
+            self._QUERY in analyzer_text
+        ), "query_analyzer (stage 1) MUST receive the real query via `messages`"
+
+    def test_rewriting_rewriter_receives_query_and_analysis(self, capturing_llm):
+        self._run(QueryRewritingNode(name="ctx_qr2"))
+        rewriter_text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_rewriter"))
+        # The rewriter (stage 2) receives the REAL query ...
+        assert (
+            self._QUERY in rewriter_text
+        ), "query_rewriter (stage 2) MUST receive the real query via `messages`"
+        # ... AND the upstream analyzer output. The deterministic analyzer
+        # reports `issues: ["spelling_errors"]` + a `suggestions` dict; the
+        # rewrite composer renders that analysis into the rewriter's messages.
+        assert "spelling_errors" in rewriter_text, (
+            "query_rewriter MUST receive the upstream analyzer output "
+            f"(analysis) via `messages`; got: {rewriter_text!r}"
+        )
+
+    def test_intent_classifier_llm_receives_query(self, capturing_llm):
+        self._run(QueryIntentClassifierNode(name="ctx_qic"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("intent_classifier"))
+        assert self._QUERY in text
+
+    def test_multihop_planner_llm_receives_query(self, capturing_llm):
+        self._run(MultiHopQueryPlannerNode(name="ctx_mhp"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("hop_planner"))
+        assert self._QUERY in text
+
+    def test_composer_publishes_messages_on_result_port(self, capturing_llm):
+        """The composer is a real from_function PythonCodeNode publishing its
+        returned dict under a single `result` port; the nested `messages` key is
+        addressed `result.messages`. Assert the composer node's OWN output
+        carries the real query — proving the rendering happened in-graph (not
+        just at the captured LLM boundary)."""
+        wf = _build(QueryExpansionNode(name="ctx_qe_composer"))
+        results = _execute_workflow(wf, query=self._QUERY)
+        assert "expansion_messages_composer" in results
+        composed = results["expansion_messages_composer"]["result"]["messages"]
+        assert self._QUERY in _flatten_message_text(composed)
+
+    def test_adaptive_owns_no_direct_llm_stage_query_reaches_embedded(
+        self, capturing_llm
+    ):
+        """HONEST DISPOSITION: ``AdaptiveQueryProcessorNode`` owns NO direct
+        LLMAgentNode stage. Its embedded ``intent_analyzer`` is a
+        ``QueryIntentClassifierNode`` wired by node-type string; under
+        LocalRuntime that subclass executes its deterministic ``run()`` (NOT its
+        OWN inner LLM ``_create_workflow``), so NO LLMAgentNode runs at this
+        composition level — there is no `messages` port to capture here.
+
+        The QueryIntentClassifierNode LLM stage's `messages` defect is fixed in
+        THAT class's `_create_workflow` (covered by
+        ``test_intent_classifier_llm_receives_query`` above). Here we prove the
+        production top-level-input path still delivers the real query INTO the
+        adaptive composition: the embedded classifier's ``run()`` receives the
+        query and the adaptive plan reflects it."""
+        wf = _build(AdaptiveQueryProcessorNode(name="ctx_aqp"))
+        results = _execute_workflow(wf, query=self._QUERY)
+        # No LLMAgentNode ran at this level, so nothing was captured.
+        assert _CAPTURED_MESSAGES == {}, (
+            "AdaptiveQueryProcessorNode must NOT run an LLMAgentNode directly; "
+            f"unexpected capture: {_CAPTURED_MESSAGES!r}"
+        )
+        # The real query reached the embedded classifier's run() and flows into
+        # the adaptive plan.
+        plan = results["adaptive_processor"]["result"]["adaptive_plan"]
+        assert plan["original_query"] == self._QUERY
+
+
+# ==========================================================================
+# O4 output-side parse proof — each LLM stage's structured decision reaches
+# its consumer PARSED (Wave output-side shard O4).
+#
+# LLMAgentNode publishes `response = {"content": "<JSON string>", ...}`. The
+# structured decision the stage's `system_prompt` advertises lives INSIDE
+# `response["content"]` as a JSON STRING. Pre-O4 the consumer `.get`-ed the
+# structured fields off the RAW response dict — they silently resolved to
+# defaults ([] / {} / "") and the LLM's expansion / decomposition / rewrite /
+# intent / hop decision NEVER reached its consumer.
+#
+# These tests use a CONFIGURABLE-content Protocol-Satisfying Deterministic
+# Adapter publishing the PRODUCTION wire shape with caller-chosen `content`, so
+# each test pins (a) the REAL parsed structured fields reach the consumer's
+# published output, (b) a RED-PRE proof reconstructing the pre-shard raw-wired
+# topology goes RED (the field is empty — decision dropped), and (c) malformed
+# `content` produces an HONEST empty consumer output + a grep-able `parse_error`
+# — NEVER fabricated data (zero-tolerance Rule 2).
+# ==========================================================================
+
+
+# Module-level content map the configurable adapter reads. node_id -> the raw
+# `content` string the substitute publishes under `response["content"]`. Reset
+# per test.
+_CONFIGURED_CONTENT: Dict[str, Any] = {}
+
+
+class _ConfigurableContentLLMAgent(_DeterministicLLMAgent):
+    """Protocol-Satisfying Deterministic Adapter publishing the PRODUCTION wire
+    shape ``response = {"content": <caller-chosen string>}`` per LLM node_id.
+
+    Inherits the real ``Node`` base + parameter contract from
+    ``_DeterministicLLMAgent`` (NOT a mock). Overrides ``run`` to publish the
+    ``_CONFIGURED_CONTENT[self.id]`` string verbatim as ``content`` — so a test
+    can inject a real JSON string (parsed-value proof) OR a non-JSON string
+    (malformed-honesty proof). When no content is configured for a node, falls
+    through to the parent's deterministic ``json.dumps`` payload so unrelated
+    stages in a multi-stage workflow still run to completion.
+    """
+
+    def run(self, **_kwargs: Any) -> Dict[str, Any]:
+        if self.id in _CONFIGURED_CONTENT:
+            return {"response": {"content": _CONFIGURED_CONTENT[self.id]}}
+        return super().run(**_kwargs)
+
+
+@pytest.fixture
+def configurable_llm(monkeypatch: pytest.MonkeyPatch):
+    """Substitute the configurable-content adapter + clear the content map."""
+    from kailash.nodes.base import NodeRegistry
+
+    import kaizen.nodes.rag.query_processing as qp_mod
+
+    _CONFIGURED_CONTENT.clear()
+    monkeypatch.setattr(
+        qp_mod, "LLMAgentNode", _ConfigurableContentLLMAgent  # type: ignore[assignment]
+    )
+    nodes_dict = NodeRegistry._nodes  # type: ignore[attr-defined]
+    prior = nodes_dict.get("LLMAgentNode")
+    nodes_dict["LLMAgentNode"] = _ConfigurableContentLLMAgent
+    try:
+        yield _ConfigurableContentLLMAgent
+    finally:
+        if prior is None:
+            nodes_dict.pop("LLMAgentNode", None)
+        else:
+            nodes_dict["LLMAgentNode"] = prior
+
+
+class TestExpansionOutputReachesConsumerParsed:
+    """``QueryExpansionNode``: the llm_expander's expansion decision reaches the
+    expansion_processor PARSED (O4)."""
+
+    def test_parsed_expansions_reach_processor(self, configurable_llm):
+        # Real production wire shape: structured JSON STRING inside `content`.
+        _CONFIGURED_CONTENT["llm_expander"] = json.dumps(
+            {
+                "expansions": ["vector search", "semantic retrieval"],
+                "keywords": ["embedding", "ann"],
+                "concepts": ["information_retrieval"],
+            }
+        )
+        wf = _build(QueryExpansionNode(name="o4_qe"))
+        results = _execute_workflow(wf, query="how does dense retrieval work")
+        expanded = results["expansion_processor"]["result"]["expanded_query"]
+        # READ-BACK: the REAL parsed keywords/expansions reach the expanded set.
+        assert expanded["expansions"] == ["vector search", "semantic retrieval"]
+        assert expanded["keywords"] == ["embedding", "ann"]
+        assert expanded["concepts"] == ["information_retrieval"]
+        # The expanded all_terms set carries the parsed expansions+keywords.
+        assert "vector search" in expanded["all_terms"]
+        assert "embedding" in expanded["all_terms"]
+
+    def test_red_pre_raw_wiring_drops_the_expansion_decision(self):
+        """RED-PRE proof: reconstruct the pre-O4 topology (raw
+        `llm_expander.response -> expansion_processor.expansion_response`, NO
+        parser). The consumer `.get`s structured fields off the RAW
+        `{"content": ...}` wrapper, so every field resolves to its default —
+        the expansion decision is DROPPED."""
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        # The production wire shape: structured JSON inside `content`.
+        content = json.dumps({"expansions": ["vector search"], "keywords": ["ann"]})
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="raw_llm",
+            config={"code": f"result = {{'content': {content!r}}}"},
+        )
+        # The ACTUAL pre-O4 consumer body (verbatim `.get` pattern).
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="expansion_processor",
+            config={
+                "code": (
+                    "expansion_result = expansion_response\n"
+                    "result = {\n"
+                    "  'expansions': expansion_result.get('expansions', []),\n"
+                    "  'keywords': expansion_result.get('keywords', []),\n"
+                    "}\n"
+                )
+            },
+        )
+        # PRE-O4 WIRING: raw response -> consumer (NO parser).
+        builder.add_connection(
+            "raw_llm", "result", "expansion_processor", "expansion_response"
+        )
+        results = _execute_workflow(builder.build(name="red_pre_expansion"))
+        out = results["expansion_processor"]["result"]
+        # RED: the structured decision is DROPPED — fields default to empty.
+        assert out["expansions"] == []
+        assert out["keywords"] == []
+        # CONTRAST: the O4 parsed path (above) surfaces the real expansions.
+
+    def test_malformed_content_yields_honest_empty_not_fabricated(
+        self, configurable_llm
+    ):
+        """HONESTY (zero-tolerance Rule 2): non-JSON `content` → the parser's
+        typed sentinel → the processor produces an HONEST empty expansion set
+        (NOT fabricated keywords), AND the parser surfaces a grep-able
+        `parse_error`."""
+        _CONFIGURED_CONTENT["llm_expander"] = "not json at all"
+        wf = _build(QueryExpansionNode(name="o4_qe_bad"))
+        results = _execute_workflow(wf, query="how does dense retrieval work")
+        # The parser's own output carries the grep-able sentinel.
+        parsed = results["expansion_parser"]["result"]
+        assert parsed["expansions"] == []
+        assert parsed["keywords"] == []
+        assert parsed["parse_error"] == "non-json-response"
+        # The processor produces an honest empty expansion set — the ONLY
+        # non-default term is the original query (never fabricated expansions).
+        expanded = results["expansion_processor"]["result"]["expanded_query"]
+        assert expanded["expansions"] == []
+        assert expanded["keywords"] == []
+        assert expanded["all_terms"] == ["how does dense retrieval work"]
+
+
+class TestDecompositionOutputReachesConsumerParsed:
+    """``QueryDecompositionNode``: the decomposer's sub-question decision reaches
+    the dependency_resolver PARSED (O4)."""
+
+    def test_parsed_sub_questions_reach_resolver(self, configurable_llm):
+        _CONFIGURED_CONTENT["query_decomposer"] = json.dumps(
+            {
+                "sub_questions": [
+                    {"question": "What is RAG?", "depends_on": []},
+                    {"question": "How is it tuned?", "depends_on": [0]},
+                ],
+                "composition_strategy": "sequential",
+            }
+        )
+        wf = _build(QueryDecompositionNode(name="o4_qd"))
+        results = _execute_workflow(wf, query="what is RAG and how is it tuned")
+        plan = results["dependency_resolver"]["result"]["execution_plan"]
+        # READ-BACK: the REAL parsed sub-questions drive the resolved plan.
+        assert plan["total_questions"] == 2
+        assert set(plan["execution_order"]) == {0, 1}
+        assert plan["composition_strategy"] == "sequential"
+
+    def test_red_pre_raw_wiring_drops_the_decomposition_decision(self):
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        content = json.dumps({"sub_questions": [{"question": "q", "depends_on": []}]})
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="raw_llm",
+            config={"code": f"result = {{'content': {content!r}}}"},
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="dependency_resolver",
+            config={
+                "code": (
+                    "decomposition = decomposition_result\n"
+                    "sub_questions = decomposition.get('sub_questions', [])\n"
+                    "result = {'total_questions': len(sub_questions)}\n"
+                )
+            },
+        )
+        builder.add_connection(
+            "raw_llm", "result", "dependency_resolver", "decomposition_result"
+        )
+        results = _execute_workflow(builder.build(name="red_pre_decomp"))
+        # RED: the raw wrapper has no top-level `sub_questions` → empty.
+        assert results["dependency_resolver"]["result"]["total_questions"] == 0
+
+    def test_malformed_content_yields_honest_empty_not_fabricated(
+        self, configurable_llm
+    ):
+        _CONFIGURED_CONTENT["query_decomposer"] = "definitely not json"
+        wf = _build(QueryDecompositionNode(name="o4_qd_bad"))
+        results = _execute_workflow(wf, query="what is RAG and how is it tuned")
+        parsed = results["decomposition_parser"]["result"]
+        assert parsed["sub_questions"] == []
+        assert parsed["parse_error"] == "non-json-response"
+        # Honest empty plan — zero fabricated sub-questions.
+        plan = results["dependency_resolver"]["result"]["execution_plan"]
+        assert plan["total_questions"] == 0
+        assert plan["sub_questions"] == []
+
+
+class TestRewritingOutputReachesConsumerParsed:
+    """``QueryRewritingNode``: BOTH the analyzer's analysis AND the rewriter's
+    rewrites reach the result_combiner PARSED, and the parsed analysis reaches
+    the rewriter via its messages (O4 — two stages, three consumers)."""
+
+    def test_parsed_analysis_and_rewrites_reach_combiner(self, configurable_llm):
+        _CONFIGURED_CONTENT["query_analyzer"] = json.dumps(
+            {"issues": ["ambiguous_term"], "suggestions": {"context": "add domain"}}
+        )
+        _CONFIGURED_CONTENT["query_rewriter"] = json.dumps(
+            {
+                "rewrites": {
+                    "corrected": "what is retrieval augmented generation",
+                    "clarified": "explain retrieval augmented generation",
+                },
+                "recommended": "explain retrieval augmented generation",
+            }
+        )
+        wf = _build(QueryRewritingNode(name="o4_qr"))
+        results = _execute_workflow(wf, query="what is RAG")
+        rewritten = results["result_combiner"]["result"]["rewritten_queries"]
+        # READ-BACK: the REAL parsed analyzer issues + rewriter rewrites surface.
+        assert rewritten["issues_found"] == ["ambiguous_term"]
+        assert rewritten["recommended"] == "explain retrieval augmented generation"
+        assert rewritten["versions"] == {
+            "corrected": "what is retrieval augmented generation",
+            "clarified": "explain retrieval augmented generation",
+        }
+
+    def test_red_pre_raw_wiring_drops_the_rewrite_decision(self):
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        content = json.dumps({"rewrites": {"corrected": "x"}, "recommended": "x"})
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="raw_llm",
+            config={"code": f"result = {{'content': {content!r}}}"},
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="result_combiner",
+            config={
+                "code": (
+                    "rewrites = rewrite_result\n"
+                    "rewrite_dict = rewrites.get('rewrites', {})\n"
+                    "result = {\n"
+                    "  'versions': rewrite_dict,\n"
+                    "  'recommended': rewrites.get('recommended', ''),\n"
+                    "}\n"
+                )
+            },
+        )
+        builder.add_connection("raw_llm", "result", "result_combiner", "rewrite_result")
+        results = _execute_workflow(builder.build(name="red_pre_rewrite"))
+        out = results["result_combiner"]["result"]
+        # RED: the rewrite decision is DROPPED — empty versions, empty recommended.
+        assert out["versions"] == {}
+        assert out["recommended"] == ""
+
+    def test_malformed_analyzer_content_yields_honest_empty_not_fabricated(
+        self, configurable_llm
+    ):
+        # Analyzer emits non-JSON; rewriter still emits valid JSON.
+        _CONFIGURED_CONTENT["query_analyzer"] = "garbage"
+        _CONFIGURED_CONTENT["query_rewriter"] = json.dumps(
+            {"rewrites": {"corrected": "ok"}, "recommended": "ok"}
+        )
+        wf = _build(QueryRewritingNode(name="o4_qr_bad"))
+        results = _execute_workflow(wf, query="what is RAG")
+        parsed = results["analysis_parser"]["result"]
+        assert parsed["issues"] == []
+        assert parsed["parse_error"] == "non-json-response"
+        # Honest: combiner reports NO issues (not fabricated ones); the valid
+        # rewriter output still surfaces.
+        rewritten = results["result_combiner"]["result"]["rewritten_queries"]
+        assert rewritten["issues_found"] == []
+        assert rewritten["versions"] == {"corrected": "ok"}
+
+
+class TestIntentOutputReachesConsumerParsed:
+    """``QueryIntentClassifierNode``: the classifier's intent decision reaches
+    the strategy_mapper PARSED (O4)."""
+
+    def test_parsed_intent_reaches_strategy_mapper(self, configurable_llm):
+        _CONFIGURED_CONTENT["intent_classifier"] = json.dumps(
+            {
+                "query_type": "analytical",
+                "domain": "technical",
+                "complexity": "complex",
+                "requirements": [],
+                "suggested_strategy": "hierarchical",
+            }
+        )
+        wf = _build(QueryIntentClassifierNode(name="o4_qic"))
+        results = _execute_workflow(wf, query="why do transformers scale")
+        routing = results["strategy_mapper"]["result"]["routing_decision"]
+        # READ-BACK: the REAL parsed intent drives the strategy_map lookup.
+        # (analytical, complex) -> "hierarchical" per the mapper's strategy_map.
+        assert routing["intent_analysis"]["query_type"] == "analytical"
+        assert routing["recommended_strategy"] == "hierarchical"
+        assert routing["confidence"] == 0.85
+
+    def test_red_pre_raw_wiring_drops_the_intent_decision(self):
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        content = json.dumps({"query_type": "analytical", "complexity": "complex"})
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="raw_llm",
+            config={"code": f"result = {{'content': {content!r}}}"},
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="strategy_mapper",
+            config={
+                "code": (
+                    "intent = intent_classification\n"
+                    "result = {\n"
+                    "  'query_type': intent.get('query_type', 'factual'),\n"
+                    "  'complexity': intent.get('complexity', 'simple'),\n"
+                    "}\n"
+                )
+            },
+        )
+        builder.add_connection(
+            "raw_llm", "result", "strategy_mapper", "intent_classification"
+        )
+        results = _execute_workflow(builder.build(name="red_pre_intent"))
+        out = results["strategy_mapper"]["result"]
+        # RED: the intent decision is DROPPED — both fields fall to defaults.
+        assert out["query_type"] == "factual"
+        assert out["complexity"] == "simple"
+
+    def test_malformed_content_yields_honest_default_not_fabricated(
+        self, configurable_llm
+    ):
+        _CONFIGURED_CONTENT["intent_classifier"] = "not-json"
+        wf = _build(QueryIntentClassifierNode(name="o4_qic_bad"))
+        results = _execute_workflow(wf, query="why do transformers scale")
+        parsed = results["intent_parser"]["result"]
+        assert parsed["query_type"] is None
+        assert parsed["parse_error"] == "non-json-response"
+        # The strategy_mapper falls to its documented default (query_type ->
+        # "factual" via .get default) honestly — NOT a fabricated classification.
+        routing = results["strategy_mapper"]["result"]["routing_decision"]
+        assert routing["intent_analysis"]["query_type"] is None
+
+
+class TestHopPlanOutputReachesConsumerParsed:
+    """``MultiHopQueryPlannerNode``: the planner's hop decision reaches the
+    execution_planner PARSED (O4)."""
+
+    def test_parsed_hops_reach_execution_planner(self, configurable_llm):
+        _CONFIGURED_CONTENT["hop_planner"] = json.dumps(
+            {
+                "hops": [
+                    {"hop_number": 1, "depends_on": []},
+                    {"hop_number": 2, "depends_on": [1]},
+                ],
+                "combination_strategy": "sequential",
+                "total_hops": 2,
+            }
+        )
+        wf = _build(MultiHopQueryPlannerNode(name="o4_mhp"))
+        results = _execute_workflow(wf, query="how did BERT influence GPT")
+        plan = results["execution_planner"]["result"]["multi_hop_plan"]
+        # READ-BACK: the REAL parsed hops drive the batched execution plan.
+        assert plan["total_hops"] == 2
+        assert len(plan["batches"]) == 2
+        assert plan["combination_strategy"] == "sequential"
+
+    def test_red_pre_raw_wiring_drops_the_hop_decision(self):
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        content = json.dumps(
+            {"hops": [{"hop_number": 1, "depends_on": []}], "combination_strategy": "x"}
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="raw_llm",
+            config={"code": f"result = {{'content': {content!r}}}"},
+        )
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="execution_planner",
+            config={
+                "code": (
+                    "hop_plan = hop_plan_result\n"
+                    "hops = hop_plan.get('hops', [])\n"
+                    "result = {'total_hops': len(hops)}\n"
+                )
+            },
+        )
+        builder.add_connection(
+            "raw_llm", "result", "execution_planner", "hop_plan_result"
+        )
+        results = _execute_workflow(builder.build(name="red_pre_hop"))
+        # RED: the hop decision is DROPPED — zero hops.
+        assert results["execution_planner"]["result"]["total_hops"] == 0
+
+    def test_malformed_content_yields_honest_empty_not_fabricated(
+        self, configurable_llm
+    ):
+        _CONFIGURED_CONTENT["hop_planner"] = "{not valid json"
+        wf = _build(MultiHopQueryPlannerNode(name="o4_mhp_bad"))
+        results = _execute_workflow(wf, query="how did BERT influence GPT")
+        parsed = results["hop_plan_parser"]["result"]
+        assert parsed["hops"] == []
+        assert parsed["parse_error"] == "non-json-response"
+        # Honest empty plan — zero batches, zero fabricated hops.
+        plan = results["execution_planner"]["result"]["multi_hop_plan"]
+        assert plan["total_hops"] == 0
+        assert plan["batches"] == []

@@ -16,6 +16,15 @@ import os
 from typing import Any, Dict, List, Optional, Union  # noqa: F401
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+# Registering import (mirrors evaluation.py / conversational.py): the inner
+# workflows wire PythonCodeNode by STRING via `builder.add_node("PythonCodeNode",
+# ...)`, AND the L3 messages-composer fix below wraps real module-level functions
+# via `PythonCodeNode.from_function(fn)`. Importing the class runs the
+# `@register_node` side effect that populates the registry the string lookup
+# resolves against, and binds the symbol `.from_function` is called on. Do NOT
+# drop to satisfy an unused-import linter.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
@@ -40,6 +49,382 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199 and evaluation.py lines 51-229).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name (`query`, `analysis`, ...) is read via `kwargs.get` and SILENTLY DROPPED.
+# The prior wiring fed NO real input to any LLM stage in this module — each
+# `_create_workflow` added an LLMAgentNode whose ONLY inbound edge was from a
+# DOWNSTREAM consumer's perspective, so the LLM never saw the user's query. It
+# answered every expansion / decomposition / rewrite / classification / hop-plan
+# request from its `system_prompt` alone (the L3 "LLM ignores its input" defect).
+#
+# KEY DISTINCTION from the evaluation / conversational shards: these stages run
+# PRE-retrieval. The context an LLM stage must reason over is the USER QUERY
+# (and, for the query_rewriter, the upstream query_analyzer output) — NOT
+# retrieved documents. Every composer below therefore renders the REAL query
+# (delivered as the top-level `query` workflow input the parameter injector
+# auto-distributes — the same external input each node's deterministic `run()`
+# reads) into a `messages` list wired to the LLM stage's VALID `messages` port.
+#
+# These are real module-level functions (real `return`→`result`, type-checkable,
+# no f-string brace-escaping) per the program's reference template — NOT inline
+# `code=` codegen blocks. Each is pure data rendering (the permitted
+# output-formatting exception per rules/agent-reasoning.md) — NO if-else routing
+# / keyword classification on query content.
+# ---------------------------------------------------------------------------
+
+
+def _query_text(query: Any) -> str:
+    """Coerce the wired `query` input to a clean string.
+
+    The parameter injector delivers the top-level `query` workflow input; it is
+    normally a plain string but may arrive None on an unwired optional branch.
+    """
+    if isinstance(query, str):
+        return query.strip()
+    if query is None:
+        return ""
+    return str(query).strip()
+
+
+def compose_expansion_messages(query=""):
+    """Compose the ``messages`` list for the QueryExpansionNode llm_expander.
+
+    Embeds the REAL user query so the LLM generates expansions OF THE QUERY —
+    not from its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired
+    to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Generate query expansions for the following query:\n" + q
+        if q
+        else "No query was provided to expand."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_decomposition_messages(query=""):
+    """Compose the ``messages`` list for the QueryDecompositionNode
+    query_decomposer.
+
+    Embeds the REAL complex query so the LLM decomposes THE QUERY into
+    sub-questions — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Decompose the following complex query into sub-questions:\n" + q
+        if q
+        else "No query was provided to decompose."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_analysis_messages(query=""):
+    """Compose the ``messages`` list for the QueryRewritingNode query_analyzer
+    (stage 1 of the 2-stage rewrite chain).
+
+    Embeds the REAL query so the analyzer detects issues IN THE QUERY — not from
+    its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Analyze the following query for issues and improvements:\n" + q
+        if q
+        else "No query was provided to analyze."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_rewrite_messages(query="", analysis=None):
+    """Compose the ``messages`` list for the QueryRewritingNode query_rewriter
+    (stage 2 of the 2-stage rewrite chain).
+
+    Embeds the REAL query AND the upstream query_analyzer output so the rewriter
+    rewrites THE QUERY guided by the analysis — not from its ``system_prompt``
+    alone. Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages``
+    port.
+
+    ``analysis`` is the query_analyzer LLMAgentNode's ``response`` port value —
+    the parsed JSON dict the analyzer's ``system_prompt`` advertises
+    (``{"issues": [...], "suggestions": {...}}``). It is rendered as readable
+    text so the rewriter genuinely sees the analysis it must act on.
+    """
+    q = _query_text(query)
+    parts = ["Rewrite the following query for optimal retrieval."]
+    parts.append("Query:\n" + (q or "(empty)"))
+
+    if isinstance(analysis, dict) and analysis:
+        issues = analysis.get("issues")
+        suggestions = analysis.get("suggestions")
+        analysis_lines = []
+        if isinstance(issues, list) and issues:
+            analysis_lines.append(
+                "Detected issues: " + ", ".join(str(i) for i in issues)
+            )
+        if isinstance(suggestions, dict) and suggestions:
+            for key, val in suggestions.items():
+                analysis_lines.append(f"{key}: {val}")
+        if analysis_lines:
+            parts.append("Analysis of the query:\n" + "\n".join(analysis_lines))
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_intent_messages(query=""):
+    """Compose the ``messages`` list for the QueryIntentClassifierNode
+    intent_classifier.
+
+    Embeds the REAL query so the classifier classifies THE QUERY's intent — not
+    from its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to
+    the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Classify the intent of the following query:\n" + q
+        if q
+        else "No query was provided to classify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_hop_plan_messages(query=""):
+    """Compose the ``messages`` list for the MultiHopQueryPlannerNode
+    hop_planner.
+
+    Embeds the REAL query so the planner plans a multi-hop strategy FOR THE
+    QUERY — not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``
+    wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Plan a multi-hop retrieval strategy for the following query:\n" + q
+        if q
+        else "No query was provided to plan."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+# ---------------------------------------------------------------------------
+# Output-side parsers (O4 fix — same reference template as evaluation.py
+# `parse_*_response` (~285-373), workflows.py `parse_strategy_decision` (~166),
+# and graph.py `parse_entity_extraction` / `parse_global_summary`).
+#
+# Each LLM stage above publishes on its `response` port the shape
+# `{"content": "<JSON string>", ...}` (mock + real providers both — see
+# `kaizen/nodes/ai/llm_agent.py` `result["response"]["content"]`). The
+# structured decision the stage's `system_prompt` advertises
+# (`{"expansions": [...]}`, `{"hops": [...]}`, ...) lives INSIDE
+# `response["content"]` as a JSON STRING — NOT at the top level of `response`.
+#
+# Pre-O4 each consumer wired `<llm>.response -> consumer.<param>` and then did
+# `consumer_var = <param>` followed by `.get("<structured_field>")` on the RAW
+# response dict — so every structured field silently resolved to its default
+# ([] / {} / ""), the LLM's expansion / decomposition / rewrite / intent / hop
+# decision NEVER reached its consumer. This is the Class-B parse gap
+# (rules/zero-tolerance.md Rule 3c — a documented consumer input accepted but
+# silently dropped).
+#
+# Each parser below consumes the REAL `response` port, unwraps `.content`,
+# `json.loads` it, and returns the structured dict the consumer's `.get(...)`
+# calls already expect — wired `<llm>.response -> parse_<stage>.response` and
+# `parse_<stage>.result -> consumer.<param>` (the direct `<llm>.response ->
+# consumer` edge is REMOVED).
+#
+# HONESTY (zero-tolerance Rule 2): on non-JSON / missing-field / malformed
+# output a parser returns a TYPED parse-error sentinel
+# (`{"<primary_field>": <empty>, "parse_error": "<reason>"}`) so the consumer
+# produces an HONEST empty/degraded result — NEVER a fabricated expansion /
+# sub-question / rewrite / intent / hop. An empty expansion set on unparseable
+# output is CORRECT; a fabricated keyword list is the fake-data failure mode.
+#
+# These are tool-result PARSING (the permitted deterministic exception per
+# rules/agent-reasoning.md #6 — extracting structured data from LLM output),
+# NOT agent decision-making: the LLM still makes the expansion / decomposition /
+# rewrite / intent / hop reasoning. NO keyword/regex query heuristics are added.
+# ---------------------------------------------------------------------------
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode ``response`` port into the model's text payload.
+
+    ``LLMAgentNode`` publishes ``response`` as ``{"content": "<text>", ...}``
+    (mock + real providers both — ``llm_agent.py`` ``result["response"]``). A
+    defensive caller may also pass the bare string. Mirrors evaluation.py /
+    workflows.py / conversational.py's ``response.get("content")`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
+
+
+def _loads_response_object(response: Any) -> Union[dict, str]:
+    """Unwrap ``response`` -> ``.content`` -> ``json.loads`` -> a dict.
+
+    Returns the parsed dict on success, or a one-word reason string
+    (``"empty-response"`` / ``"non-json-response"`` / ``"unexpected-content-type"``
+    / ``"non-object-json"``) the caller converts into its own typed sentinel.
+    Shared by the 5 object-shaped parsers so the unwrap+load+shape-check logic
+    lives in one place (the 6th, expansion, also reuses it).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+
+    # Honest empty: the stage published nothing parseable. Surface, don't invent.
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return "empty-response"
+
+    # The provider may already have emitted a parsed dict (some do).
+    if isinstance(content, dict):
+        return content
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return "non-json-response"
+    else:
+        return "unexpected-content-type"
+
+    if not isinstance(parsed, dict):
+        return "non-object-json"
+    return parsed
+
+
+def parse_expansion_response(response=None):
+    """Parse the ``llm_expander`` ``response`` into the expansion dict the
+    ``expansion_processor`` reads.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{expansions, keywords, concepts}`` object the expander's ``system_prompt``
+    advertises. Malformed / missing output → a typed sentinel with EMPTY lists +
+    ``parse_error`` (zero-tolerance Rule 2) so the processor produces an honest
+    empty expansion set, never fabricated expansions.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {
+            "expansions": [],
+            "keywords": [],
+            "concepts": [],
+            "parse_error": parsed,
+        }
+    return {
+        "expansions": parsed.get("expansions", []),
+        "keywords": parsed.get("keywords", []),
+        "concepts": parsed.get("concepts", []),
+    }
+
+
+def parse_decomposition_response(response=None):
+    """Parse the ``query_decomposer`` ``response`` into the decomposition dict the
+    ``dependency_resolver`` reads.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{sub_questions, composition_strategy}`` object the decomposer's
+    ``system_prompt`` advertises. Malformed / missing output → a typed sentinel
+    with an EMPTY sub_questions list + ``parse_error`` so the resolver produces
+    an honest empty plan, never fabricated sub-questions.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {"sub_questions": [], "parse_error": parsed}
+    return {
+        "sub_questions": parsed.get("sub_questions", []),
+        "composition_strategy": parsed.get("composition_strategy", "sequential"),
+    }
+
+
+def parse_analysis_response(response=None):
+    """Parse the ``query_analyzer`` ``response`` into the analysis dict the
+    ``result_combiner`` AND ``rewrite_messages_composer`` read.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{issues, suggestions}`` object the analyzer's ``system_prompt`` advertises.
+    Malformed / missing output → a typed sentinel with an EMPTY issues list +
+    ``parse_error`` so the combiner reports no issues honestly (the rewrite
+    composer then renders no analysis), never fabricated issues.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {"issues": [], "parse_error": parsed}
+    return {
+        "issues": parsed.get("issues", []),
+        "suggestions": parsed.get("suggestions", {}),
+    }
+
+
+def parse_rewrite_response(response=None):
+    """Parse the ``query_rewriter`` ``response`` into the rewrite dict the
+    ``result_combiner`` reads.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{rewrites, recommended}`` object the rewriter's ``system_prompt``
+    advertises. Malformed / missing output → a typed sentinel with an EMPTY
+    rewrites dict + ``parse_error`` so the combiner emits only the original
+    query honestly, never fabricated rewrites.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {"rewrites": {}, "parse_error": parsed}
+    return {
+        "rewrites": parsed.get("rewrites", {}),
+        "recommended": parsed.get("recommended", ""),
+    }
+
+
+def parse_intent_response(response=None):
+    """Parse the ``intent_classifier`` ``response`` into the intent dict the
+    ``strategy_mapper`` reads.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{query_type, domain, complexity, requirements, suggested_strategy}`` object
+    the classifier's ``system_prompt`` advertises. Malformed / missing output →
+    a typed sentinel with a None ``query_type`` + ``parse_error`` so the mapper
+    falls through to its defaults honestly, never a fabricated classification.
+
+    The strategy_mapper's ``strategy_map`` lookup is post-LLM tool-result
+    formatting (the LLM made the classification; the map only renders it to a
+    retrieval strategy), so the sentinel is read by ``.get(..., <default>)``
+    paths there and surfaces as the documented low-confidence fallback.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {"query_type": None, "parse_error": parsed}
+    return {
+        "query_type": parsed.get("query_type"),
+        "domain": parsed.get("domain"),
+        "complexity": parsed.get("complexity"),
+        "requirements": parsed.get("requirements", []),
+        "suggested_strategy": parsed.get("suggested_strategy"),
+    }
+
+
+def parse_hop_plan_response(response=None):
+    """Parse the ``hop_planner`` ``response`` into the hop-plan dict the
+    ``execution_planner`` reads.
+
+    Reads ``response`` -> ``.content`` -> ``json.loads`` -> the
+    ``{hops, combination_strategy, total_hops}`` object the planner's
+    ``system_prompt`` advertises. Malformed / missing output → a typed sentinel
+    with an EMPTY hops list + ``parse_error`` so the execution planner produces
+    an honest empty (zero-batch) plan, never fabricated hops.
+    """
+    parsed = _loads_response_object(response)
+    if isinstance(parsed, str):
+        return {"hops": [], "parse_error": parsed}
+    return {
+        "hops": parsed.get("hops", []),
+        "combination_strategy": parsed.get("combination_strategy", "sequential"),
+        "total_hops": parsed.get("total_hops"),
+    }
 
 
 @register_node()
@@ -240,9 +625,59 @@ result = {
             },
         )
 
-        # Connect workflow
+        # L3 messages-composer (reference template — conversational.py /
+        # evaluation.py). The llm_expander previously received NO real input;
+        # it generated expansions from its `system_prompt` alone, never seeing
+        # the user's query. The composer renders the REAL `query` (the top-level
+        # workflow input the parameter injector delivers — the same input
+        # `run()` reads) into a `messages` list wired to the VALID `messages`
+        # port (the ONLY port LLMAgentNode reads — its `run` does
+        # `kwargs["messages"]`). type: ignore[attr-defined]: `from_function` is
+        # a classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        expansion_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_expansion_messages,
+                name="expansion_messages_composer",
+            ),
+            node_id="expansion_messages_composer",
+            _internal=True,
+        )
+
+        # O4 output-side parser: unwraps `llm_expander.response.content` ->
+        # json.loads -> the {expansions, keywords, concepts} dict the
+        # expansion_processor `.get`s. Pre-O4 the raw `response` (a
+        # `{"content": "<json>"}` wrapper) reached the processor, so every
+        # `.get("expansions")` resolved to []. type: ignore[attr-defined] per
+        # the composer note above.
+        expansion_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_expansion_response,
+                name="expansion_parser",
+            ),
+            node_id="expansion_parser",
+            _internal=True,
+        )
+
+        # Connect workflow. The composer declares `query` as a function param,
+        # so the runtime's parameter injector delivers the caller-supplied
+        # top-level `query` workflow input to it. Its `result.messages` (nested
+        # key on the single `result` port a from_function node publishes) feeds
+        # the llm_expander `messages` port.
         builder.add_connection(
-            llm_expander_id, "response", processor_id, "expansion_response"
+            expansion_messages_composer_id,
+            "result.messages",
+            llm_expander_id,
+            "messages",
+        )
+        # O4: route the LLM `response` THROUGH the parser, then the parsed dict
+        # (`result`) to the processor's `expansion_response` param.
+        builder.add_connection(
+            llm_expander_id, "response", expansion_parser_id, "response"
+        )
+        builder.add_connection(
+            expansion_parser_id, "result", processor_id, "expansion_response"
         )
 
         return builder.build(name="query_expansion_workflow")
@@ -444,9 +879,49 @@ result = {"execution_plan": execution_plan}
             },
         )
 
+        # L3 messages-composer (reference template). The query_decomposer
+        # previously received NO real input — it decomposed from its
+        # `system_prompt` alone, never seeing the query. The composer renders the
+        # REAL `query` (top-level workflow input via the parameter injector) into
+        # a `messages` list wired to the VALID `messages` port.
+        decomposition_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_decomposition_messages,
+                name="decomposition_messages_composer",
+            ),
+            node_id="decomposition_messages_composer",
+            _internal=True,
+        )
+
+        # O4 output-side parser: unwraps `query_decomposer.response.content` ->
+        # json.loads -> the {sub_questions, composition_strategy} dict the
+        # dependency_resolver `.get`s. Pre-O4 the raw `response` reached the
+        # resolver, so `.get("sub_questions")` resolved to [].
+        decomposition_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_decomposition_response,
+                name="decomposition_parser",
+            ),
+            node_id="decomposition_parser",
+            _internal=True,
+        )
+
         # Connect workflow
         builder.add_connection(
-            decomposer_id, "response", dependency_resolver_id, "decomposition_result"
+            decomposition_messages_composer_id,
+            "result.messages",
+            decomposer_id,
+            "messages",
+        )
+        # O4: route the LLM `response` THROUGH the parser to the resolver.
+        builder.add_connection(
+            decomposer_id, "response", decomposition_parser_id, "response"
+        )
+        builder.add_connection(
+            decomposition_parser_id,
+            "result",
+            dependency_resolver_id,
+            "decomposition_result",
         )
 
         return builder.build(name="query_decomposition_workflow")
@@ -680,10 +1155,97 @@ result = {
             },
         )
 
-        # Connect workflow
-        builder.add_connection(analyzer_id, "response", rewriter_id, "analysis")
-        builder.add_connection(analyzer_id, "response", combiner_id, "analysis_result")
-        builder.add_connection(rewriter_id, "response", combiner_id, "rewrite_result")
+        # L3 messages-composers (reference template) for the 2-stage chain.
+        # PREVIOUS PHANTOM WIRING: `analyzer.response -> rewriter."analysis"` fed
+        # the analyzer's output to the rewriter on a port the LLMAgentNode
+        # SILENTLY DROPS (its `run` reads only `kwargs["messages"]`), AND neither
+        # LLM stage ever received the user's query. Both stages answered from
+        # their `system_prompt` alone.
+        #
+        # FIX: an analysis composer renders the REAL `query` into the analyzer's
+        # `messages`; a rewrite composer renders the REAL `query` PLUS the real
+        # upstream `analyzer.response` (the analysis JSON the analyzer's
+        # system_prompt advertises) into the rewriter's `messages`. The
+        # `analyzer.response -> rewriter."analysis"` phantom edge is REMOVED; the
+        # analysis now reaches the rewriter through the composer's `messages`.
+        analysis_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_analysis_messages,
+                name="analysis_messages_composer",
+            ),
+            node_id="analysis_messages_composer",
+            _internal=True,
+        )
+        rewrite_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_rewrite_messages,
+                name="rewrite_messages_composer",
+            ),
+            node_id="rewrite_messages_composer",
+            _internal=True,
+        )
+
+        # O4 output-side parsers (TWO LLM stages, THREE raw-response consumers).
+        # Pre-O4: `analyzer.response` (raw) reached BOTH the rewrite composer
+        # (`.get("issues")`) AND the combiner (`analysis_result.get("issues")`),
+        # and `rewriter.response` (raw) reached the combiner
+        # (`rewrite_result.get("rewrites")`) — all three resolving to defaults.
+        # The analysis_parser's parsed `{issues, suggestions}` dict is fanned to
+        # BOTH the rewrite composer AND the combiner so the analysis reaches the
+        # rewriter (via its `messages`) AND surfaces in the combined output.
+        analysis_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_analysis_response,
+                name="analysis_parser",
+            ),
+            node_id="analysis_parser",
+            _internal=True,
+        )
+        rewrite_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_rewrite_response,
+                name="rewrite_parser",
+            ),
+            node_id="rewrite_parser",
+            _internal=True,
+        )
+
+        # Connect workflow.
+        # Stage 1: query -> analysis composer -> analyzer.messages.
+        builder.add_connection(
+            analysis_messages_composer_id,
+            "result.messages",
+            analyzer_id,
+            "messages",
+        )
+        # O4: analyzer.response -> analysis_parser -> {parsed analysis} fanned to
+        # the rewrite composer (so the rewriter sees the REAL parsed analysis in
+        # its messages) AND the combiner (analysis_result).
+        builder.add_connection(analyzer_id, "response", analysis_parser_id, "response")
+        # Stage 2: query + parsed analysis -> rewrite composer -> rewriter.messages.
+        # (The composer declares `query` (top-level injected) AND `analysis`
+        # (now the PARSED analyzer dict) as function params.)
+        builder.add_connection(
+            analysis_parser_id,
+            "result",
+            rewrite_messages_composer_id,
+            "analysis",
+        )
+        builder.add_connection(
+            rewrite_messages_composer_id,
+            "result.messages",
+            rewriter_id,
+            "messages",
+        )
+        # O4: rewriter.response -> rewrite_parser -> {parsed rewrites} to combiner.
+        builder.add_connection(rewriter_id, "response", rewrite_parser_id, "response")
+        # Combiner fan-in: it reads both PARSED LLM-stage dicts.
+        builder.add_connection(
+            analysis_parser_id, "result", combiner_id, "analysis_result"
+        )
+        builder.add_connection(
+            rewrite_parser_id, "result", combiner_id, "rewrite_result"
+        )
 
         return builder.build(name="query_rewriting_workflow")
 
@@ -1007,9 +1569,45 @@ result = {"routing_decision": routing_decision}
             },
         )
 
+        # L3 messages-composer (reference template). The intent_classifier
+        # previously received NO real input — it classified from its
+        # `system_prompt` alone, never seeing the query. The composer renders the
+        # REAL `query` (top-level workflow input via the parameter injector) into
+        # a `messages` list wired to the VALID `messages` port.
+        intent_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_intent_messages,
+                name="intent_messages_composer",
+            ),
+            node_id="intent_messages_composer",
+            _internal=True,
+        )
+
+        # O4 output-side parser: unwraps `intent_classifier.response.content` ->
+        # json.loads -> the {query_type, domain, complexity, requirements,
+        # suggested_strategy} dict the strategy_mapper `.get`s. Pre-O4 the raw
+        # `response` reached the mapper, so every `.get(...)` fell to its default
+        # and the strategy_map lookup ran on fabricated-default keys.
+        intent_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_intent_response,
+                name="intent_parser",
+            ),
+            node_id="intent_parser",
+            _internal=True,
+        )
+
         # Connect workflow
         builder.add_connection(
-            classifier_id, "response", strategy_mapper_id, "intent_classification"
+            intent_messages_composer_id,
+            "result.messages",
+            classifier_id,
+            "messages",
+        )
+        # O4: route the LLM `response` THROUGH the parser to the mapper.
+        builder.add_connection(classifier_id, "response", intent_parser_id, "response")
+        builder.add_connection(
+            intent_parser_id, "result", strategy_mapper_id, "intent_classification"
         )
 
         return builder.build(name="query_intent_classifier_workflow")
@@ -1270,9 +1868,46 @@ result = {"multi_hop_plan": execution_plan}
             },
         )
 
+        # L3 messages-composer (reference template). The hop_planner previously
+        # received NO real input — it planned from its `system_prompt` alone,
+        # never seeing the query. The composer renders the REAL `query`
+        # (top-level workflow input via the parameter injector) into a `messages`
+        # list wired to the VALID `messages` port.
+        hop_plan_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_hop_plan_messages,
+                name="hop_plan_messages_composer",
+            ),
+            node_id="hop_plan_messages_composer",
+            _internal=True,
+        )
+
+        # O4 output-side parser: unwraps `hop_planner.response.content` ->
+        # json.loads -> the {hops, combination_strategy, total_hops} dict the
+        # execution_planner `.get`s. Pre-O4 the raw `response` reached the
+        # planner, so `.get("hops")` resolved to [] (zero batches, zero hops).
+        hop_plan_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_hop_plan_response,
+                name="hop_plan_parser",
+            ),
+            node_id="hop_plan_parser",
+            _internal=True,
+        )
+
         # Connect workflow
         builder.add_connection(
-            hop_planner_id, "response", execution_planner_id, "hop_plan_result"
+            hop_plan_messages_composer_id,
+            "result.messages",
+            hop_planner_id,
+            "messages",
+        )
+        # O4: route the LLM `response` THROUGH the parser to the execution planner.
+        builder.add_connection(
+            hop_planner_id, "response", hop_plan_parser_id, "response"
+        )
+        builder.add_connection(
+            hop_plan_parser_id, "result", execution_planner_id, "hop_plan_result"
         )
 
         return builder.build(name="multi_hop_planner_workflow")
@@ -1400,7 +2035,21 @@ class AdaptiveQueryProcessorNode(Node):
         """Create adaptive query processing workflow"""
         builder = WorkflowBuilder()
 
-        # Add query analyzer
+        # L3 NOTE (no composer needed here): AdaptiveQueryProcessorNode owns NO
+        # direct LLMAgentNode stage. Its only "LLM-ish" stage is the embedded
+        # `intent_analyzer`, a QueryIntentClassifierNode wired by node-type
+        # string. When that subclass executes inside this workflow under
+        # LocalRuntime it runs its deterministic `run()` (the registry resolves
+        # the node-type to the class; LocalRuntime invokes `run()`, NOT the
+        # class's OWN inner `_create_workflow()`), so NO LLMAgentNode runs at this
+        # composition level — there is no `messages` port to wire here. The
+        # QueryIntentClassifierNode LLM stage's `messages` defect is fixed in
+        # THAT class's `_create_workflow` (intent_messages_composer above); when
+        # a caller drives the classifier through ITS inner LLM workflow, the
+        # query reaches the LLM. The adaptive composition consumes the
+        # classifier's `routing_decision` run()-contract output, so feeding the
+        # real query INTO this workflow is via the top-level `query` input the
+        # parameter injector delivers to the embedded classifier's `run()`.
         analyzer_id = builder.add_node(
             "QueryIntentClassifierNode", node_id="intent_analyzer"
         )

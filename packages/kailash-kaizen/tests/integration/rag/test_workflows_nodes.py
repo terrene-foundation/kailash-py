@@ -559,3 +559,578 @@ class TestRAGPipelineWorkflowEntryWiring:
             assert (
                 "kwargs" not in msg or "NameError" not in msg
             ), f"config_processor codegen still references undefined kwargs: {msg!r}"
+
+
+# ==========================================================================
+# L3 messages-wiring proof — the real query + the genuine in-graph document
+# characteristics reach the AdaptiveRAGWorkflowNode strategy analyzer via the
+# `messages` port (Wave 2 Shard 5).
+#
+# `AdaptiveRAGWorkflowNode` is the ONLY one of the 4 workflows.py WorkflowNode
+# classes with a DIRECT `add_node("LLMAgentNode", ...)` stage
+# (`rag_strategy_analyzer`). The other three compose only PythonCodeNode /
+# SwitchNode / WorkflowNode sub-nodes — their LLM stages (if any) live inside
+# the strategies.py sub-pipelines, fixed by other shards, OUT OF SCOPE here.
+#
+# LLMAgentNode consumes context EXCLUSIVELY through `messages` (its `run` reads
+# `kwargs["messages"]`); ANY other wired port is silently dropped. Pre-shard the
+# analyzer's only inbound edge was `document_preprocessor.result ->
+# rag_strategy_analyzer.input` — `input` is a dropped port, so the analyzer
+# answered from its `system_prompt` alone (never seeing the corpus
+# characteristics nor the query it must analyze to pick the RAG strategy). This
+# shard added a `strategy_analyzer_messages_composer`
+# (PythonCodeNode.from_function) rendering the REAL preprocessor characteristics
+# (document_count / avg_length / has_structure / is_technical / content_types)
+# + the REAL query into the `messages` port.
+#
+# Proof shape (structural + standalone-composer + message-capture, mirroring
+# agentic.py / graph.py): the AdaptiveRAG full graph is NOT runnable under plain
+# LocalRuntime — its inner strategies.py sub-pipelines (semantic/statistical/
+# hybrid/hierarchical) require an out-of-graph configured vector DB
+# (`doc_vector_db` needs provider/index_name/dimension). The analyzer + its
+# composer run BEFORE that downstream failure point, so the `_MessageCapturing`
+# adapter captures the analyzer's `messages` under real LocalRuntime even though
+# the full graph cannot complete. Production delivery path: the query is a
+# TOP-LEVEL workflow input (`parameters={"query": ...}`), auto-distributed by
+# the parameter injector to the composer (which declares a `query` param) — NOT
+# node-keyed injection into the LLM stage (the false-green trap).
+# ==========================================================================
+
+
+# Module-level sink the capturing substitute writes into. Keyed by the LLM
+# stage's graph node_id -> the `messages` list it received. Reset per test.
+_WF_CAPTURED_MESSAGES: dict = {}
+
+
+class _DeterministicLLMAgent(Node):
+    """Protocol-Satisfying Deterministic Adapter for ``LLMAgentNode`` (legal
+    Tier-2 surface per ``rules/testing.md`` § Tier 2 exception — inherits the
+    real ``kailash.nodes.base.Node`` base and satisfies the full runtime
+    contract; NOT a mock). Returns a fixed strategy-decision shape on the
+    `result` port the existing downstream edges read."""
+
+    def __init__(self, *args, **kwargs):
+        # WorkflowBuilder constructs each node via the registry; drop the
+        # LLM-specific config kwargs the base Node doesn't accept.
+        for k in (
+            "system_prompt",
+            "model",
+            "provider",
+            "temperature",
+            "prompt_template",
+        ):
+            kwargs.pop(k, None)
+        super().__init__(*args, **kwargs)
+
+    def get_parameters(self):
+        from kailash.nodes.base import NodeParameter
+
+        return {
+            "messages": NodeParameter(
+                name="messages",
+                type=list,
+                required=False,
+                default=[],
+                description="LLM chat messages (deterministic substitute captures)",
+            ),
+        }
+
+    def run(self, **_kwargs):
+        return {
+            "result": {
+                "recommended_strategy": "semantic",
+                "reasoning": "deterministic",
+                "confidence": 0.9,
+                "fallback_strategy": "hybrid",
+            }
+        }
+
+
+class _MessageCapturingLLMAgent(_DeterministicLLMAgent):
+    """Deterministic substitute that ADDITIONALLY records the ``messages`` each
+    LLM stage receives into ``_WF_CAPTURED_MESSAGES`` — proving the composer's
+    ``result.messages`` reached the VALID ``messages`` port."""
+
+    def run(self, **kwargs):
+        _WF_CAPTURED_MESSAGES[self.id] = kwargs.get("messages")
+        return super().run(**kwargs)
+
+
+@pytest.fixture
+def capturing_llm(monkeypatch: pytest.MonkeyPatch):
+    """Substitute ``LLMAgentNode`` (both the module symbol and the NodeRegistry
+    string key the inner workflow resolves through) with the message-capturing
+    Protocol-Satisfying Deterministic Adapter, and clear the capture sink."""
+    from kailash.nodes.base import NodeRegistry
+
+    import kaizen.nodes.rag.workflows as wf_mod
+
+    _WF_CAPTURED_MESSAGES.clear()
+
+    # `workflows.py` resolves "LLMAgentNode" purely via the NodeRegistry string
+    # key (it does NOT import the symbol at module scope, unlike agentic.py /
+    # query_processing.py). Patch the module symbol only if present (future-proof
+    # if a direct import is ever added); the registry surface is the load-bearing
+    # one the inner-workflow builder resolves through.
+    if hasattr(wf_mod, "LLMAgentNode"):
+        monkeypatch.setattr(
+            wf_mod, "LLMAgentNode", _MessageCapturingLLMAgent  # type: ignore[attr-defined]
+        )
+    nodes_dict = NodeRegistry._nodes  # type: ignore[attr-defined]
+    prior = nodes_dict.get("LLMAgentNode")
+    nodes_dict["LLMAgentNode"] = _MessageCapturingLLMAgent
+    try:
+        yield _MessageCapturingLLMAgent
+    finally:
+        if prior is None:
+            nodes_dict.pop("LLMAgentNode", None)
+        else:
+            nodes_dict["LLMAgentNode"] = prior
+
+
+def _flatten_message_text(messages) -> str:
+    """Concatenate the `content` of every message in an OpenAI-format list."""
+    assert isinstance(messages, list), f"messages must be a list, got {messages!r}"
+    return "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+
+
+class TestWorkflowsContextReachesLLM:
+    """The AdaptiveRAGWorkflowNode strategy analyzer receives the REAL query
+    AND the genuine in-graph document characteristics through the VALID
+    ``messages`` port — delivered via the production top-level-input path
+    (parameter injector), NOT node-keyed injection."""
+
+    _QUERY = "how do transformer attention mechanisms scale to long sequences"
+    # Real technical corpus so the preprocessor publishes is_technical=True.
+    _CORPUS = [
+        {
+            "content": (
+                "def train(model): return model.fit()  import numpy algorithm "
+                "complexity class api function. " * 4
+            ),
+            "title": "ML code",
+            "id": "d1",
+        }
+    ]
+
+    def _build_under_substitute(self) -> Workflow:
+        """Build the adaptive inner workflow AFTER the substitute is registered
+        (the fixture registers it; ``_create_adaptive_workflow`` rebuilds fresh
+        so the analyzer instantiates from the substituted registry)."""
+        return AdaptiveRAGWorkflowNode()._create_adaptive_workflow()  # type: ignore[attr-defined]
+
+    def test_only_one_direct_llm_stage_in_workflows(self, capturing_llm):
+        """Inventory invariant: across the 4 workflows.py classes, exactly ONE
+        direct LLMAgentNode stage exists (`rag_strategy_analyzer` in
+        AdaptiveRAGWorkflowNode). The Advanced/Simple/RAGPipeline classes use a
+        PythonCodeNode/SwitchNode strategy selector, no direct LLM stage."""
+        adaptive_wf = self._build_under_substitute()
+        assert "rag_strategy_analyzer" in adaptive_wf.nodes
+        # The other three workflows.py classes expose NO direct LLMAgentNode.
+        for cls in (
+            SimpleRAGWorkflowNode,
+            AdvancedRAGWorkflowNode,
+            RAGPipelineWorkflowNode,
+        ):
+            wf = _wf(cls())
+            llm_stage_ids = [
+                nid
+                for nid in wf.nodes
+                if type(_node(wf, nid)).__name__
+                in ("LLMAgentNode", "_MessageCapturingLLMAgent")
+            ]
+            assert llm_stage_ids == [], (
+                f"{cls.__name__} must have NO direct LLMAgentNode stage in "
+                f"workflows.py (composed sub-node LLM stages are other shards' "
+                f"scope); got {llm_stage_ids}"
+            )
+
+    def test_strategy_analyzer_composer_wired_to_messages_no_phantom(
+        self, capturing_llm
+    ):
+        """STRUCTURAL: the composer feeds `rag_strategy_analyzer.messages`; the
+        phantom `document_preprocessor.result -> rag_strategy_analyzer.input`
+        edge is REMOVED."""
+        wf = self._build_under_substitute()
+        conns = [
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        ]
+        to_messages = [
+            c for c in conns if c[2] == "rag_strategy_analyzer" and c[3] == "messages"
+        ]
+        assert to_messages == [
+            (
+                "strategy_analyzer_messages_composer",
+                "result.messages",
+                "rag_strategy_analyzer",
+                "messages",
+            )
+        ], to_messages
+        phantom = [
+            c for c in conns if c[2] == "rag_strategy_analyzer" and c[3] == "input"
+        ]
+        assert phantom == [], f"phantom `input` edge must be removed; got {phantom}"
+
+    def test_strategy_analyzer_receives_query_and_characteristics(self, capturing_llm):
+        """END-TO-END (message-capture under real LocalRuntime): the analyzer
+        receives the REAL query AND the genuine in-graph document
+        characteristics on `messages`. The full graph cannot complete (inner
+        strategy sub-pipelines need an out-of-graph vector DB); the analyzer +
+        composer run BEFORE that point, so the capture is real."""
+        wf = self._build_under_substitute()
+        runtime = LocalRuntime()
+        # Production delivery path: query is a TOP-LEVEL workflow input.
+        try:
+            runtime.execute(
+                wf, parameters={"query": self._QUERY, "documents": self._CORPUS}
+            )
+        except Exception:  # noqa: BLE001 — downstream vector-db infra is out of scope
+            pass
+        captured = _WF_CAPTURED_MESSAGES.get("rag_strategy_analyzer")
+        text = _flatten_message_text(captured)
+        # The real user query reached the `messages` port.
+        assert self._QUERY in text, (
+            "rag_strategy_analyzer MUST receive the real query via `messages`; "
+            f"got: {text!r}"
+        )
+        # The genuine in-graph document characteristics reached `messages`:
+        # the real corpus is 1 technical document.
+        assert "Count: 1" in text, (
+            "analyzer MUST receive the real document_count from the upstream "
+            f"document_preprocessor; got: {text!r}"
+        )
+        assert "Technical content detected: True" in text, (
+            "analyzer MUST receive the real is_technical characteristic; "
+            f"got: {text!r}"
+        )
+
+    def test_red_pre_proof_phantom_input_edge_starves_analyzer(self, capturing_llm):
+        """RED-PRE proof: a faithful reconstruction of the EXACT pre-shard
+        topology — `document_preprocessor.result -> rag_strategy_analyzer.input`
+        (the phantom edge, NO composer) — starves the analyzer: it receives NO
+        real context on `messages`, proving the composer + `result.messages`
+        edge this shard adds is load-bearing, not decorative.
+
+        Reconstructing at the BUILDER level (not mutating a post-build Workflow)
+        is the honest pre-shard graph: only the two real nodes + the phantom
+        `input` edge LLMAgentNode drops. The analyzer's `messages` capture MUST
+        be empty/absent."""
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode",
+            node_id="document_preprocessor",
+            config={
+                "code": (
+                    "result = {\n"
+                    "    'document_count': 1, 'avg_length': 100,\n"
+                    "    'has_structure': False, 'is_technical': True,\n"
+                    "    'content_types': ['technical'], 'query': query,\n"
+                    "    'documents': documents,\n"
+                    "}\n"
+                )
+            },
+        )
+        builder.add_node(
+            "LLMAgentNode",
+            node_id="rag_strategy_analyzer",
+            config={"system_prompt": "select a strategy", "provider": "openai"},
+        )
+        # The PRE-SHARD phantom edge: feeds `input`, a port LLMAgentNode drops.
+        builder.add_connection(
+            "document_preprocessor", "result", "rag_strategy_analyzer", "input"
+        )
+        wf = builder.build(name="pre_shard_adaptive_replica")
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(
+                wf, parameters={"query": self._QUERY, "documents": self._CORPUS}
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        captured = _WF_CAPTURED_MESSAGES.get("rag_strategy_analyzer")
+        text = _flatten_message_text(captured) if captured else ""
+        assert self._QUERY not in text, (
+            "in the pre-shard topology (phantom `input` edge, no composer) the "
+            f"analyzer MUST NOT receive the real query (red-pre proof); got: {text!r}"
+        )
+        assert "Count: 1" not in text, (
+            "in the pre-shard topology the analyzer MUST NOT receive the real "
+            f"document characteristics (red-pre proof); got: {text!r}"
+        )
+
+
+# ==========================================================================
+# OUTPUT-SIDE proof (F31-FU3 / O2): the strategy DECISION the LLM produces
+# actually DRIVES the SwitchNode executor and reaches the aggregator.
+#
+# Defect classes fixed this shard:
+#   (A) wrong port — the pre-shard graph wired `rag_strategy_analyzer.result`
+#       into both the SwitchNode `strategy_executor` (condition_field
+#       `recommended_strategy`) AND the `results_aggregator`. LLMAgentNode
+#       publishes on `response`, NOT `result`, so both consumers got nothing.
+#   (B) parse gap — the decision lives as a JSON STRING inside
+#       `response["content"]`; the SwitchNode needs a PARSED dict with
+#       `recommended_strategy` as a top-level key.
+#
+# Fix: a `strategy_decision_parser` (PythonCodeNode.from_function) consumes the
+# real `response` port, unwraps `.content`, `json.loads` it, and republishes the
+# parsed `{recommended_strategy, ...}` on `result` -> the SwitchNode + aggregator.
+#
+# Proof shape (mirrors the L3 class above + the O1 evaluation.py parsers): the
+# full AdaptiveRAG graph is NOT runnable past the analyzer (its inner strategy
+# sub-pipelines need an out-of-graph vector DB), so the END-TO-END decision-flow
+# assertions run on a STANDALONE parser->SwitchNode subgraph under real
+# LocalRuntime, and the full-graph assertions are STRUCTURAL (node + edge set).
+# This is the same honest disposition the L3 shard and O1 used for the
+# non-runnable adaptive graph.
+# ==========================================================================
+
+
+class _StrategyDecidingLLMAgent(_DeterministicLLMAgent):
+    """Protocol-Satisfying Deterministic Adapter that publishes the PRODUCTION
+    ``LLMAgentNode`` output shape — ``response = {"content": "<JSON string>"}``
+    — instead of the bare ``result`` dict the base adapter returns. This is the
+    shape the new ``strategy_decision_parser`` consumes; using it proves the
+    OUTPUT-side path end-to-end against the real parser node.
+
+    NOT a mock (inherits the real ``Node`` base, deterministic output). The
+    emitted JSON is the exact object the analyzer's ``system_prompt`` instructs
+    the LLM to produce."""
+
+    _DECISION_JSON = (
+        '{"recommended_strategy": "hybrid", '
+        '"reasoning": "mixed structured + technical content", '
+        '"confidence": 0.82, '
+        '"fallback_strategy": "semantic"}'
+    )
+
+    def run(self, **_kwargs):
+        return {"response": {"content": self._DECISION_JSON}}
+
+
+class TestWorkflowsDecisionDrivesExecutor:
+    """The parsed strategy DECISION drives the SwitchNode executor and reaches
+    the aggregator — proving the OUTPUT side is provably correct end-to-end, not
+    merely importable."""
+
+    _CASES = ["semantic", "statistical", "hybrid", "hierarchical"]
+
+    def _decision_flow_subgraph(self, response_payload) -> Workflow:
+        """Build the load-bearing OUTPUT-side subgraph in isolation:
+        a deterministic LLM-shaped source publishing ``response`` ->
+        ``strategy_decision_parser`` (the real production parser node) ->
+        ``strategy_executor`` (the real production SwitchNode config). The full
+        adaptive graph cannot run past the analyzer (inner vector-DB
+        sub-pipelines), so this subgraph exercises EXACTLY the rewired
+        decision-flow edges under real LocalRuntime."""
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow.builder import WorkflowBuilder
+
+        from kaizen.nodes.rag.workflows import parse_strategy_decision
+
+        builder = WorkflowBuilder()
+        # Deterministic LLM-shaped source: publishes the production `response`
+        # dict on its `result` port (a PythonCodeNode publishes its return on
+        # `result`); we wire `result -> parser.response` to feed the parser the
+        # production `{"content": "<JSON>"}` shape.
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                lambda: {"response": response_payload},
+                name="fake_llm_response",
+            ),
+            node_id="fake_llm_response",
+            _internal=True,
+        )
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_strategy_decision,
+                name="strategy_decision_parser",
+            ),
+            node_id="strategy_decision_parser",
+            _internal=True,
+        )
+        builder.add_node(
+            "SwitchNode",
+            node_id="strategy_executor",
+            config={"condition_field": "recommended_strategy", "cases": self._CASES},
+        )
+        builder.add_connection(
+            "fake_llm_response",
+            "result.response",
+            "strategy_decision_parser",
+            "response",
+        )
+        builder.add_connection(
+            "strategy_decision_parser", "result", "strategy_executor", "input_data"
+        )
+        return builder.build(name="decision_flow_subgraph")
+
+    def test_parsed_decision_fires_matching_switch_case(self):
+        """END-TO-END (real LocalRuntime): the parsed ``recommended_strategy``
+        reaches the SwitchNode and fires the matching ``case_<value>`` port —
+        proving the DECISION drives execution, not just imports."""
+        payload = {
+            "content": (
+                '{"recommended_strategy": "hybrid", "reasoning": "r", '
+                '"confidence": 0.82, "fallback_strategy": "semantic"}'
+            )
+        }
+        wf = self._decision_flow_subgraph(payload)
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(wf)
+        switch = results["strategy_executor"]
+        # The matched case fired with the REAL parsed decision dict.
+        assert switch.get("condition_result") == "hybrid", switch
+        assert switch.get("case_hybrid", {}).get("recommended_strategy") == "hybrid"
+        assert switch.get("case_hybrid", {}).get("confidence") == 0.82
+        # The non-matched cases stayed None — the decision routed exactly one branch.
+        for other in ("case_semantic", "case_statistical", "case_hierarchical"):
+            assert switch.get(other) is None, (other, switch.get(other))
+
+    def test_full_adaptive_graph_wires_parser_between_analyzer_and_consumers(self):
+        """STRUCTURAL (full adaptive graph): the analyzer's REAL ``response``
+        port routes through ``strategy_decision_parser`` to BOTH the SwitchNode
+        and the aggregator; the pre-shard phantom ``result`` edges are REMOVED."""
+        wf = AdaptiveRAGWorkflowNode()._create_adaptive_workflow()  # type: ignore[attr-defined]
+        assert "strategy_decision_parser" in wf.nodes, wf.nodes.keys()
+        conns = [
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        ]
+        # The analyzer's REAL `response` port feeds the parser.
+        assert (
+            "rag_strategy_analyzer",
+            "response",
+            "strategy_decision_parser",
+            "response",
+        ) in conns, conns
+        # The parser's parsed `result` drives the SwitchNode + aggregator.
+        assert (
+            "strategy_decision_parser",
+            "result",
+            "strategy_executor",
+            "input_data",
+        ) in conns, conns
+        assert (
+            "strategy_decision_parser",
+            "result",
+            "results_aggregator",
+            "llm_decision",
+        ) in conns, conns
+        # The pre-shard phantom `rag_strategy_analyzer.result -> ...` edges are gone.
+        phantom = [
+            c for c in conns if c[0] == "rag_strategy_analyzer" and c[1] == "result"
+        ]
+        assert phantom == [], f"phantom `result` edges must be removed; got {phantom}"
+
+    def test_red_pre_proof_phantom_result_edge_starves_executor(self):
+        """RED-PRE proof: a faithful reconstruction of the EXACT pre-shard
+        OUTPUT topology — the LLM stage wired ``result -> strategy_executor``
+        with NO parser, while the production LLMAgentNode publishes on
+        ``response`` and the decision lives as a JSON string in
+        ``response['content']``. The SwitchNode therefore receives NOTHING on a
+        port it can switch on, and NO case fires — proving the parser + the
+        ``response``-port rewire this shard adds is load-bearing, not decorative.
+
+        The deterministic source publishes the PRODUCTION ``response`` shape on
+        ``response``; the pre-shard edge reads the (non-existent) ``result`` port
+        of that source into the SwitchNode, exactly as the pre-shard graph read
+        ``rag_strategy_analyzer.result``."""
+        from kailash.nodes.code.python import PythonCodeNode
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        # Source emits ONLY the production `response` dict (no top-level
+        # `recommended_strategy`), faithfully reproducing LLMAgentNode's output.
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                lambda: {
+                    "response": {
+                        "content": (
+                            '{"recommended_strategy": "hybrid", "reasoning": "r", '
+                            '"confidence": 0.82, "fallback_strategy": "semantic"}'
+                        )
+                    }
+                },
+                name="fake_llm_response",
+            ),
+            node_id="fake_llm_response",
+            _internal=True,
+        )
+        builder.add_node(
+            "SwitchNode",
+            node_id="strategy_executor",
+            config={"condition_field": "recommended_strategy", "cases": self._CASES},
+        )
+        # PRE-SHARD phantom edge: reads `result` (a port the LLM-shaped source
+        # does NOT publish its decision on) straight into the SwitchNode — no
+        # parser, no `response`-port consumption.
+        builder.add_connection(
+            "fake_llm_response", "result", "strategy_executor", "input_data"
+        )
+        wf = builder.build(name="pre_shard_output_replica")
+        with LocalRuntime() as runtime:
+            try:
+                results, _ = runtime.execute(wf)
+            except (
+                Exception
+            ):  # noqa: BLE001 — pre-shard topology may not resolve a port
+                results = {}
+        switch = results.get("strategy_executor", {})
+        # In the pre-shard topology the SwitchNode never sees a parsed
+        # `recommended_strategy`, so NO strategy case fires.
+        assert switch.get("condition_result") != "hybrid", (
+            "pre-shard topology MUST NOT route the decision to case_hybrid "
+            f"(red-pre proof); got: {switch!r}"
+        )
+        for case in (
+            "case_semantic",
+            "case_statistical",
+            "case_hybrid",
+            "case_hierarchical",
+        ):
+            assert switch.get(case) is None, (
+                "pre-shard topology MUST NOT fire any strategy case (red-pre "
+                f"proof); {case} fired with {switch.get(case)!r}"
+            )
+
+    def test_malformed_output_fails_closed_no_fabricated_strategy(self):
+        """HONESTY (zero-tolerance Rule 2): malformed LLM output yields the typed
+        parse-error sentinel, the SwitchNode fails CLOSED (no case fires), and NO
+        fabricated strategy (e.g. ``"semantic"``) is invented."""
+        wf = self._decision_flow_subgraph({"content": "not json at all"})
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(wf)
+        parsed = results["strategy_decision_parser"]["result"]
+        switch = results["strategy_executor"]
+        # Typed sentinel, NOT a fabricated strategy.
+        assert parsed["recommended_strategy"] is None, parsed
+        assert parsed["parse_error"] == "non-json-response", parsed
+        assert parsed["recommended_strategy"] not in self._CASES
+        # SwitchNode fails closed: no case matched None.
+        assert switch.get("condition_result") is None, switch
+        for case in (
+            "case_semantic",
+            "case_statistical",
+            "case_hybrid",
+            "case_hierarchical",
+        ):
+            assert switch.get(case) is None, (case, switch.get(case))
+
+    def test_deterministic_adapter_publishes_production_response_shape(self):
+        """The Protocol-Satisfying Deterministic Adapter emits the PRODUCTION
+        ``response = {"content": "<JSON>"}`` shape (not the pre-shard ``result``
+        port), feeding the real parser end-to-end — proving the adapter exercises
+        the genuine OUTPUT-side contract."""
+        agent = _StrategyDecidingLLMAgent()
+        out = agent.run()
+        assert "response" in out and "content" in out["response"], out
+        from kaizen.nodes.rag.workflows import parse_strategy_decision
+
+        parsed = parse_strategy_decision(response=out["response"])
+        assert parsed["recommended_strategy"] == "hybrid"
+        assert parsed["confidence"] == 0.82
+        assert parsed["fallback_strategy"] == "semantic"

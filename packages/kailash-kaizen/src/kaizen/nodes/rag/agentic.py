@@ -40,6 +40,408 @@ _DEFAULT_LLM_MODEL = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199 and query_processing.py lines 54-212).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name (`additional_context`, `answer_to_verify`, `reasoning_plan`,
+# `reasoning_to_verify`, ...) is read via `kwargs.get` and SILENTLY DROPPED. The
+# prior wiring in BOTH agentic WorkflowNodes fed those phantom ports, so every
+# LLM stage answered from its `system_prompt` alone — the planner never saw the
+# user's query, the ReAct agent never saw the tool observations, the verifier
+# never saw the answer it was meant to check, and the reasoning chain never
+# reached the step-reasoner or logic-verifier (the L3 "LLM ignores its input"
+# defect).
+#
+# The context contract is HETEROGENEOUS per stage: each composer renders the
+# REAL inputs that stage must reason over (the user query and/or the genuine
+# upstream node output) into a `messages` list wired to the stage's VALID
+# `messages` port. These are real module-level functions (real `return`→
+# `result`, type-checkable, no f-string brace-escaping) per the program's
+# reference template — NOT inline `code=` codegen blocks. Each is pure data
+# rendering (the permitted output-formatting exception per
+# rules/agent-reasoning.md) — NO if-else routing / keyword classification on
+# content, and NO NEW deterministic agent-loop logic (agentic.py legitimately
+# owns ReAct/agent-loop orchestration; these composers only render context).
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): each composer renders only inputs a
+# real upstream node publishes. Where a stage's genuinely-needed input is the
+# output of an UPSTREAM LLM stage, that output is only available on the
+# upstream's `response` port (a PythonCodeNode consumer between them publishes
+# its `result`); the composer renders the REAL available port. No input is
+# invented — the ReAct loop's first-pass observations are empty in-graph (the
+# state_manager's `context_for_agent` is "" until a tool has executed), which
+# the composer renders honestly as a "no observations yet" note rather than
+# fabricating tool output.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_text(value: Any) -> str:
+    """Coerce a wired input to a clean string.
+
+    The parameter injector delivers top-level inputs as plain strings; wired
+    upstream ports may arrive None on an unwired optional branch. PythonCodeNode
+    producers may also publish their value pre-stringified.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _render_reasoning_state(reasoning_state: Any) -> str:
+    """Render the state_manager's `reasoning_state` into a readable transcript.
+
+    `reasoning_state` is the state_manager `reasoning_state` port value — the
+    dict carrying `steps` (each with thought/action/observation) and
+    `final_answer`. Returns the step-by-step trace + the final answer so a
+    verifier sees both the answer AND the supporting evidence (the observations).
+    Returns "" when no steps exist yet.
+    """
+    if not isinstance(reasoning_state, dict):
+        return ""
+    lines: List[str] = []
+    for step in reasoning_state.get("steps", []) or []:
+        if not isinstance(step, dict):
+            continue
+        if step.get("thought"):
+            lines.append(f"Thought: {step['thought']}")
+        if step.get("action"):
+            lines.append(f"Action: {step['action']}")
+        if step.get("observation") is not None:
+            lines.append(f"Observation: {step['observation']}")
+    final = reasoning_state.get("final_answer")
+    if final:
+        lines.append(f"Answer: {final}")
+    return "\n".join(lines).strip()
+
+
+def compose_planner_messages(query=""):
+    """Compose the ``messages`` list for the AgenticRAGNode planner_agent.
+
+    Embeds the REAL user query so the planner builds a step-by-step plan FOR THE
+    QUERY — not from its ``system_prompt`` alone. The available tools are already
+    rendered into the planner's ``system_prompt`` by the constructor, so the
+    query is the only per-request input this stage needs. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _coerce_text(query)
+    content = (
+        "Create a step-by-step research plan for the following query:\n" + q
+        if q
+        else "No query was provided to plan."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_react_messages(query="", context_for_agent=None):
+    """Compose the ``messages`` list for the AgenticRAGNode react_agent.
+
+    Embeds the REAL user query AND the real observations/tool-execution
+    transcript the state_manager publishes (``context_for_agent``), so the ReAct
+    agent reasons over the query plus what the tools have actually returned so
+    far — not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``
+    wired to the LLMAgentNode ``messages`` port.
+
+    IN-GRAPH HONESTY: ``context_for_agent`` is the genuine accumulated
+    Thought/Action/Observation transcript the state_manager builds from real
+    tool_executor output. On the FIRST ReAct pass no tool has executed yet, so
+    the state_manager's transcript is empty — rendered here as an explicit
+    "no observations yet" note rather than fabricating tool results.
+    """
+    q = _coerce_text(query)
+    observations = _coerce_text(context_for_agent)
+    parts = ["Question:\n" + (q or "(empty)")]
+    if observations:
+        parts.append("Reasoning and observations so far:\n" + observations)
+    else:
+        parts.append("No observations gathered yet — begin reasoning.")
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_verifier_messages(reasoning_state=None):
+    """Compose the ``messages`` list for the AgenticRAGNode verifier_agent.
+
+    Embeds the generated answer AND the supporting evidence (the observations
+    accumulated across the reasoning steps) the state_manager publishes in
+    ``reasoning_state``, so the verifier fact-checks the answer AGAINST its
+    evidence — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    transcript = _render_reasoning_state(reasoning_state)
+    content = (
+        "Verify the accuracy of this answer and its supporting evidence:\n" + transcript
+        if transcript
+        else "No answer or evidence was provided to verify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_decomposer_messages(query=""):
+    """Compose the ``messages`` list for the ReasoningRAGNode problem_decomposer.
+
+    Embeds the REAL problem statement (the user query) so the decomposer breaks
+    THE PROBLEM into reasoning steps — not from its ``system_prompt`` alone.
+    Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _coerce_text(query)
+    content = (
+        "Break down the following problem into reasoning steps:\n" + q
+        if q
+        else "No problem was provided to decompose."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_step_reasoner_messages(query="", reasoning_plan=None):
+    """Compose the ``messages`` list for the ReasoningRAGNode step_reasoner.
+
+    Embeds the REAL problem (query) AND the upstream problem_decomposer output
+    (``reasoning_plan`` — the decomposer's ``response`` carrying the steps +
+    assumptions), so the reasoner executes the current step guided by the prior
+    decomposition — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+
+    ``reasoning_plan`` is the problem_decomposer LLMAgentNode's ``response``
+    port value (the parsed decomposition the decomposer's ``system_prompt``
+    advertises: ``{"steps": [...], "assumptions": [...], ...}``). It is rendered
+    as readable text so the reasoner genuinely sees the plan it must follow.
+    """
+    q = _coerce_text(query)
+    parts = ["Problem:\n" + (q or "(empty)")]
+    plan_text = _render_reasoning_plan(reasoning_plan)
+    if plan_text:
+        parts.append("Decomposition (steps to reason through):\n" + plan_text)
+    parts.append("Execute the next reasoning step.")
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_logic_verifier_messages(reasoning_to_verify=None):
+    """Compose the ``messages`` list for the ReasoningRAGNode logic_verifier.
+
+    Embeds the REAL reasoning chain the upstream step_reasoner produced
+    (``reasoning_to_verify`` — the step_reasoner's ``response``), so the verifier
+    checks the LOGICAL CONSISTENCY of the actual reasoning — not from its
+    ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+    """
+    chain = _render_reasoning_plan(reasoning_to_verify)
+    content = (
+        "Verify the logical consistency of this reasoning:\n" + chain
+        if chain
+        else "No reasoning chain was provided to verify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def _render_reasoning_plan(value: Any) -> str:
+    """Render an upstream LLM stage's ``response`` (decomposition / reasoning
+    chain) into readable text.
+
+    The upstream LLMAgentNode publishes its parsed output on the ``response``
+    port. It may arrive as a dict (the JSON the ``system_prompt`` advertises) or
+    as a plain string. Render whichever shape is present without fabricating.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        lines: List[str] = []
+        steps = value.get("steps")
+        if isinstance(steps, list):
+            for step in steps:
+                if isinstance(step, dict):
+                    goal = step.get("goal") or step.get("question") or ""
+                    approach = step.get("approach") or step.get("contribution") or ""
+                    num = step.get("step", "")
+                    lines.append(
+                        f"Step {num}: {goal}" + (f" — {approach}" if approach else "")
+                    )
+                else:
+                    lines.append(str(step))
+        assumptions = value.get("assumptions")
+        if isinstance(assumptions, list) and assumptions:
+            lines.append("Assumptions: " + ", ".join(str(a) for a in assumptions))
+        if not lines:
+            # No recognized structured keys — render the dict faithfully rather
+            # than dropping the real upstream output.
+            return _coerce_text(value)
+        return "\n".join(lines).strip()
+    return _coerce_text(value)
+
+
+# ---------------------------------------------------------------------------
+# Response parsers (O5 output-side fix — same reference template as
+# evaluation.py `_unwrap_response_content`/`parse_*_response`, workflows.py,
+# graph.py, query_processing.py).
+#
+# LLMAgentNode publishes its `response` port as `{"content": "<text-or-JSON>",
+# ...}` (mock + real providers both — `_mock_llm_response` returns a dict whose
+# `content` is a string; JSON-output stages carry a `json.dumps(...)` string).
+# The runtime delivers `source_outputs["response"]` for a wired `response` port,
+# i.e. the inner `{"content": ...}` dict — NOT a `{"response": ...}` wrapper.
+#
+# The prior consumers read a NON-EXISTENT `.get("response")` key off that inner
+# dict (the planner/react `plan`/`reasoning_response` reads in state_manager,
+# the `verification.get("response")` read in result_synthesizer) and the
+# reasoning composers rendered the raw `{"content": ...}` wrapper via
+# `_render_reasoning_plan` instead of its content. So under the production wire
+# shape the ReAct answer was dropped (state_manager crashed on `None.strip()`),
+# the verifier verdict was silently skipped (confidence never adjusted), and the
+# decomposition/reasoning chains reached their next stage as a stringified dict.
+#
+# These parsers sit between each LLM stage's `response` port and its consumer.
+# They unwrap `response -> .content`, `json.loads` the JSON-output stages, and
+# flag malformed output with a typed `parse_error` sentinel (NEVER a fabricated
+# parse — zero-tolerance Rule 2). They are real module-level functions (real
+# `return` -> `result`, type-checkable) per the program's reference template —
+# pure tool-result parsing (the permitted exception per rules/agent-reasoning.md:
+# no agent decisions, no content classification, just shape extraction).
+# ---------------------------------------------------------------------------
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode ``response`` port into the model's text payload.
+
+    ``LLMAgentNode`` publishes ``response`` as ``{"content": "<text>", ...}``
+    (mock + real providers both). A defensive caller may also pass the bare
+    string or a pre-parsed structure. Mirrors evaluation.py /
+    conversational.py's ``response.get("content", ...)`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
+
+
+def parse_reasoning_response(response=None):
+    """Parse the react_agent ``response`` into the ReAct prose string.
+
+    The react_agent is a PROSE stage (Thought/Action/Observation/Answer lines),
+    so its ``.content`` is used directly as the string the state_manager's line
+    parser consumes. Returns ``{"reasoning_text": "<str>"}`` wired to the
+    state_manager ``reasoning_response`` input. An empty / missing content
+    yields ``""`` (an honest "no reasoning yet"), never a fabricated answer.
+    """
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_text": ""}
+    if isinstance(content, str):
+        return {"reasoning_text": content}
+    # A pre-parsed dict/list from some providers — coerce to text faithfully.
+    return {"reasoning_text": _coerce_text(content)}
+
+
+def parse_plan_response(response=None):
+    """Parse the planner_agent ``response`` (a JSON plan) into a dict.
+
+    The planner is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"plan": [...], "complexity": ...}``). Returns ``{"plan": <dict>}`` wired
+    to the state_manager ``plan`` input. Malformed / non-JSON content is FLAGGED
+    with a typed sentinel (``{"plan": {"parse_error": "<reason>"}}``) — never a
+    fabricated plan (zero-tolerance Rule 2).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"plan": {}}
+    if isinstance(content, dict):
+        return {"plan": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"plan": {"parse_error": "non-json-response"}}
+        if isinstance(parsed, dict):
+            return {"plan": parsed}
+        return {"plan": {"parse_error": "non-object-json"}}
+    return {"plan": {"parse_error": "unexpected-content-type"}}
+
+
+def parse_verification_response(response=None):
+    """Parse the verifier_agent ``response`` (a JSON verdict) into a dict.
+
+    The verifier is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"verified": ..., "confidence": ..., "issues": [...]}``). Returns
+    ``{"verification": <dict>}`` wired to the result_synthesizer ``verification``
+    input. Malformed / non-JSON content is FLAGGED with a typed sentinel
+    (``{"verification": {"parse_error": "<reason>"}}``) — never a fabricated
+    verdict that would silently inflate or deflate the confidence
+    (zero-tolerance Rule 2).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return {"verification": {}}
+    if isinstance(content, dict):
+        return {"verification": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"verification": {"parse_error": "non-json-response"}}
+        if isinstance(parsed, dict):
+            return {"verification": parsed}
+        return {"verification": {"parse_error": "non-object-json"}}
+    return {"verification": {"parse_error": "unexpected-content-type"}}
+
+
+def parse_decomposition_response(response=None):
+    """Parse the problem_decomposer ``response`` into the decomposition dict.
+
+    The decomposer is a JSON-output stage; its ``.content`` is a JSON string
+    (``{"steps": [...], "assumptions": [...], ...}``). Returns
+    ``{"reasoning_plan": <dict-or-str>}`` wired to the step_reasoner composer's
+    ``reasoning_plan`` input, where ``_render_reasoning_plan`` extracts the
+    steps. On non-JSON content the raw text is forwarded as-is (the composer
+    renders the prose faithfully) — honest, not fabricated.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_plan": ""}
+    if isinstance(content, dict):
+        return {"reasoning_plan": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            # Non-JSON prose: forward the real text so the composer renders it.
+            return {"reasoning_plan": content}
+        return {"reasoning_plan": parsed}
+    return {"reasoning_plan": _coerce_text(content)}
+
+
+def parse_reasoning_chain_response(response=None):
+    """Parse the step_reasoner ``response`` into the reasoning chain.
+
+    The step_reasoner is a PROSE stage; its ``.content`` is the reasoning text
+    the logic_verifier checks. Returns ``{"reasoning_to_verify": <dict-or-str>}``
+    wired to the logic_verifier composer's ``reasoning_to_verify`` input, where
+    ``_render_reasoning_plan`` renders it. A pre-parsed dict (some providers)
+    is forwarded as-is; otherwise the raw text is forwarded faithfully.
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+    if content is None:
+        return {"reasoning_to_verify": ""}
+    if isinstance(content, dict):
+        return {"reasoning_to_verify": content}
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return {"reasoning_to_verify": content}
+        return {"reasoning_to_verify": parsed}
+    return {"reasoning_to_verify": _coerce_text(content)}
+
+
 @register_node()
 class AgenticRAGNode(WorkflowNode):
     """
@@ -399,9 +801,14 @@ def update_reasoning_state(state, new_response, tool_result=None):
 
     return state
 
-# Process current iteration
-plan = plan.get("response") if isinstance(plan, dict) else plan
-reasoning_response = reasoning_response.get("response") if isinstance(reasoning_response, dict) else reasoning_response
+# Process current iteration. `plan` arrives from the plan parser as the
+# parsed planner dict; `reasoning_response` arrives from the reasoning parser
+# as the ReAct prose STRING (the parsers already unwrapped `response.content`
+# upstream, so NO further `.get("response")` unwrap is needed — and would be
+# wrong, the inner dict has no `response` key). `reasoning_response` may still
+# be a non-str on a defensive path; coerce so the line parser never crashes.
+if not isinstance(reasoning_response, str):
+    reasoning_response = "" if reasoning_response is None else str(reasoning_response)
 tool_result = tool_result if "tool_result" in locals() else None
 
 # Initialize or update state
@@ -479,20 +886,23 @@ for step in reasoning_state["steps"]:
     if step["observation"] and "tool" in step["observation"]:
         tools_used.append(step["observation"]["tool"])
 
-# Calculate confidence
+# Calculate confidence. `verification` arrives from the verification parser
+# as the PARSED verifier dict ({{"verified", "confidence", "issues", ...}} or a
+# parse-error sentinel carrying {{"parse_error": ...}}) — already unwrapped from
+# `response.content` + json.loads upstream. The prior `.get("response")` read a
+# non-existent key off the inner content dict, so the verdict was always
+# dropped. A flagged parse-error sentinel carries no real confidence, so it is
+# treated as "no usable verdict" (NOT a fabricated 0.8) and confidence is left
+# unadjusted — honest, per zero-tolerance Rule 2.
 base_confidence = 0.7
 confidence_boost = min(0.3, len(tools_used) * 0.1)
-if verification and verification.get("response"):
-    verification_data = verification["response"]
-    if isinstance(verification_data, str):
-        import json
-        try:
-            verification_data = json.loads(verification_data)
-        except Exception:
-            # Fallback for invalid JSON (sandboxed - no logging available)
-            verification_data = {{"confidence": 0.8}}
-
-    verification_confidence = verification_data.get("confidence", 0.8)
+_has_verdict = (
+    isinstance(verification, dict)
+    and "confidence" in verification
+    and verification.get("parse_error") is None
+)
+if _has_verdict:
+    verification_confidence = verification.get("confidence", 0.8)
     final_confidence = (base_confidence + confidence_boost) * verification_confidence
 else:
     final_confidence = base_confidence + confidence_boost
@@ -516,7 +926,7 @@ result = {{
         "tools_used": list(set(tools_used)),
         "confidence": final_confidence,
         "total_steps": len(reasoning_state["steps"]),
-        "verification": verification.get("response") if verification else None,
+        "verification": verification if _has_verdict else None,
         "metadata": {{
             "planning_strategy": "{self.planning_strategy}",
             "max_steps": {self.max_reasoning_steps},
@@ -528,16 +938,115 @@ result = {{
             },
         )
 
-        # Connect workflow
-        # Planning phase
-        builder.add_connection(planner_id, "response", state_manager_id, "plan")
+        # L3 messages-composers (reference template — conversational.py /
+        # query_processing.py). Each LLM stage previously received NO real input
+        # on a port LLMAgentNode reads (its `run` reads only `kwargs["messages"]`)
+        # — the planner/react/verifier answered from their `system_prompt` alone.
+        # Each composer renders the REAL inputs that stage must reason over into
+        # a `messages` list wired to the VALID `messages` port. `from_function`
+        # is the correct primitive (real module-level functions: real `return`→
+        # `result`, type-checkable). type: ignore[attr-defined]: `from_function`
+        # is a classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        planner_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_planner_messages,
+                name="planner_messages_composer",
+            ),
+            node_id="planner_messages_composer",
+            _internal=True,
+        )
+        react_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_react_messages,
+                name="react_messages_composer",
+            ),
+            node_id="react_messages_composer",
+            _internal=True,
+        )
+        verifier_messages_composer_id: Optional[str] = None
+        if self.verification_enabled:
+            verifier_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    compose_verifier_messages,
+                    name="verifier_messages_composer",
+                ),
+                node_id="verifier_messages_composer",
+                _internal=True,
+            )
 
-        # ReAct loop connections
+        # O5 output-side response parsers. Each sits between an LLM stage's
+        # `response` port and its PythonCodeNode consumer, unwrapping
+        # `response -> .content` (+ json.loads for JSON-output stages) so the
+        # consumer reads PARSED fields — NOT the raw `{"content": ...}` wrapper
+        # off which the prior `.get("response")` read a non-existent key.
+        plan_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_plan_response,
+                name="plan_parser",
+            ),
+            node_id="plan_parser",
+            _internal=True,
+        )
+        reasoning_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_reasoning_response,
+                name="reasoning_parser",
+            ),
+            node_id="reasoning_parser",
+            _internal=True,
+        )
+        verification_parser_id: Optional[str] = None
+        if self.verification_enabled:
+            verification_parser_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    parse_verification_response,
+                    name="verification_parser",
+                ),
+                node_id="verification_parser",
+                _internal=True,
+            )
+
+        # Connect workflow
+        # Planning phase. The planner composer renders the REAL top-level `query`
+        # (the parameter injector delivers it) into the planner's `messages`
+        # port; the planner's `response` is PARSED (response.content -> json) by
+        # the plan_parser, whose `result.plan` feeds the state_manager `plan`.
         builder.add_connection(
-            state_manager_id, "context_for_agent", react_agent_id, "additional_context"
+            planner_messages_composer_id, "result.messages", planner_id, "messages"
+        )
+        builder.add_connection(planner_id, "response", plan_parser_id, "response")
+        builder.add_connection(plan_parser_id, "result.plan", state_manager_id, "plan")
+
+        # ReAct loop connections.
+        # FIX: the prior `state_manager.context_for_agent ->
+        # react_agent.additional_context` phantom edge fed the observations to a
+        # port LLMAgentNode silently drops. The react composer now renders the
+        # REAL `query` PLUS the real `state_manager.context_for_agent` (the
+        # accumulated Thought/Action/Observation transcript) into the react
+        # agent's `messages` port. The phantom `additional_context` edge is
+        # REMOVED.
+        builder.add_connection(
+            state_manager_id,
+            "context_for_agent",
+            react_messages_composer_id,
+            "context_for_agent",
         )
         builder.add_connection(
-            react_agent_id, "response", state_manager_id, "reasoning_response"
+            react_messages_composer_id, "result.messages", react_agent_id, "messages"
+        )
+        # The react_agent `response` is PARSED (response.content -> prose string)
+        # by the reasoning_parser; its `result.reasoning_text` feeds the
+        # state_manager `reasoning_response` (the line parser consumes a string).
+        builder.add_connection(
+            react_agent_id, "response", reasoning_parser_id, "response"
+        )
+        builder.add_connection(
+            reasoning_parser_id,
+            "result.reasoning_text",
+            state_manager_id,
+            "reasoning_response",
         )
         builder.add_connection(
             state_manager_id, "reasoning_state", tool_executor_id, "reasoning_state"
@@ -546,21 +1055,50 @@ result = {{
             tool_executor_id, "tool_result", state_manager_id, "tool_result"
         )
 
-        # Loop control - continue if not completed
+        # Loop control - continue if not completed. This is a loop-control edge
+        # (not a context port), so it stays unchanged: it gates whether the react
+        # agent runs again, it does NOT carry reasoning context.
         builder.add_connection(
             state_manager_id, "continue_reasoning", react_agent_id, "_continue_if_true"
         )
 
-        # Verification (if enabled)
+        # Verification (if enabled).
+        # FIX: the prior `state_manager.reasoning_state ->
+        # verifier_agent.answer_to_verify` phantom edge fed the answer+evidence
+        # to a dropped port. The verifier composer now renders the generated
+        # answer AND its supporting evidence (the observations across the
+        # reasoning steps, carried in `reasoning_state`) into the verifier's
+        # `messages` port. The phantom `answer_to_verify` edge is REMOVED.
         if self.verification_enabled:
-            # verifier_id was assigned in the matching `if` block above; the
-            # assert documents that invariant and narrows the type for pyright.
+            # verifier_id + verifier_messages_composer_id were assigned in the
+            # matching `if` blocks above; the asserts document that invariant
+            # and narrow the type for pyright.
             assert verifier_id is not None
+            assert verifier_messages_composer_id is not None
+            assert verification_parser_id is not None
             builder.add_connection(
-                state_manager_id, "reasoning_state", verifier_id, "answer_to_verify"
+                state_manager_id,
+                "reasoning_state",
+                verifier_messages_composer_id,
+                "reasoning_state",
             )
             builder.add_connection(
-                verifier_id, "response", synthesizer_id, "verification"
+                verifier_messages_composer_id,
+                "result.messages",
+                verifier_id,
+                "messages",
+            )
+            # The verifier_agent `response` is PARSED (response.content -> json)
+            # by the verification_parser; its `result.verification` feeds the
+            # result_synthesizer `verification` (the parsed verdict dict).
+            builder.add_connection(
+                verifier_id, "response", verification_parser_id, "response"
+            )
+            builder.add_connection(
+                verification_parser_id,
+                "result.verification",
+                synthesizer_id,
+                "verification",
             )
 
         # Final synthesis
@@ -854,14 +1392,115 @@ Rate confidence: 0.0-1.0""",
             },
         )
 
-        # Connect workflow
-        builder.add_connection(
-            decomposer_id, "response", step_reasoner_id, "reasoning_plan"
+        # L3 messages-composers (reference template). Each LLM stage previously
+        # received NO real input on a port LLMAgentNode reads (its `run` reads
+        # only `kwargs["messages"]`): the decomposer never saw the problem, the
+        # step_reasoner's `reasoning_plan` + the logic_verifier's
+        # `reasoning_to_verify` were both phantom ports the node silently drops.
+        # Each composer renders the REAL inputs (the query and/or the genuine
+        # upstream LLM `response`) into the stage's VALID `messages` port.
+        decomposer_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_decomposer_messages,
+                name="decomposer_messages_composer",
+            ),
+            node_id="decomposer_messages_composer",
+            _internal=True,
+        )
+        step_reasoner_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_step_reasoner_messages,
+                name="step_reasoner_messages_composer",
+            ),
+            node_id="step_reasoner_messages_composer",
+            _internal=True,
+        )
+        logic_verifier_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_logic_verifier_messages,
+                name="logic_verifier_messages_composer",
+            ),
+            node_id="logic_verifier_messages_composer",
+            _internal=True,
         )
 
-        # Multiple reasoning steps (simplified - would use loop in production)
+        # O5 output-side response parsers. Each sits between an LLM stage's
+        # `response` port and the downstream composer, unwrapping
+        # `response -> .content` (+ json.loads for the decomposer's JSON output)
+        # so the composer's `_render_reasoning_plan` receives the PARSED
+        # decomposition / reasoning chain — NOT the raw `{"content": ...}`
+        # wrapper, which `_render_reasoning_plan` would otherwise stringify
+        # (the steps/assumptions never extracted).
+        decomposition_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_decomposition_response,
+                name="decomposition_parser",
+            ),
+            node_id="decomposition_parser",
+            _internal=True,
+        )
+        reasoning_chain_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_reasoning_chain_response,
+                name="reasoning_chain_parser",
+            ),
+            node_id="reasoning_chain_parser",
+            _internal=True,
+        )
+
+        # Connect workflow.
+        # Stage 1: the REAL top-level `query` (parameter injector) → decomposer
+        # composer → decomposer.messages.
         builder.add_connection(
-            step_reasoner_id, "response", verifier_id, "reasoning_to_verify"
+            decomposer_messages_composer_id,
+            "result.messages",
+            decomposer_id,
+            "messages",
+        )
+        # Stage 2: the decomposer.response is PARSED (response.content -> json)
+        # by the decomposition_parser; its `result.reasoning_plan` (the real
+        # decomposition dict) feeds the step_reasoner composer's `reasoning_plan`
+        # input, which `_render_reasoning_plan` renders into the reasoner's
+        # `messages`. (`query` is the top-level injected input.)
+        builder.add_connection(
+            decomposer_id,
+            "response",
+            decomposition_parser_id,
+            "response",
+        )
+        builder.add_connection(
+            decomposition_parser_id,
+            "result.reasoning_plan",
+            step_reasoner_messages_composer_id,
+            "reasoning_plan",
+        )
+        builder.add_connection(
+            step_reasoner_messages_composer_id,
+            "result.messages",
+            step_reasoner_id,
+            "messages",
+        )
+        # Stage 3: the step_reasoner.response (the reasoning chain) is PARSED
+        # (response.content) by the reasoning_chain_parser; its
+        # `result.reasoning_to_verify` feeds the logic_verifier composer, which
+        # renders the real chain into the verifier's `messages`.
+        builder.add_connection(
+            step_reasoner_id,
+            "response",
+            reasoning_chain_parser_id,
+            "response",
+        )
+        builder.add_connection(
+            reasoning_chain_parser_id,
+            "result.reasoning_to_verify",
+            logic_verifier_messages_composer_id,
+            "reasoning_to_verify",
+        )
+        builder.add_connection(
+            logic_verifier_messages_composer_id,
+            "result.messages",
+            verifier_id,
+            "messages",
         )
 
         return builder.build(name="reasoning_rag_workflow")

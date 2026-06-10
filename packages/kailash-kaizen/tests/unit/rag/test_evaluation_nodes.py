@@ -25,8 +25,6 @@ storage-read-back half via real aiosqlite.
 
 from __future__ import annotations
 
-import re
-
 import pytest
 from kailash.workflow.graph import Workflow
 
@@ -182,15 +180,26 @@ class TestTestDatasetGeneratorParameters:
 class TestRAGEvaluationGraphShape:
     """The _create_workflow graph holds the documented pipeline shape."""
 
-    def test_default_graph_has_six_nodes_including_answer_quality(self):
-        """With default use_reference_answers=True, all 6 nodes are wired."""
+    def test_default_graph_has_all_nodes_including_messages_composers(self):
+        """With default use_reference_answers=True, all 12 nodes are wired: the 6
+        pipeline nodes PLUS the 3 L3 messages-composers (one per LLM judge) that
+        render the real evaluation data into each judge's ``messages`` port PLUS
+        the 3 OUTPUT-side response-parsers (one per LLM judge) that read each
+        judge's ``response`` -> ``.content`` -> ``json.loads`` into the per-test
+        score list the aggregator indexes (the parse-gap fix)."""
         wf = _build(RAGEvaluationNode())
         assert set(wf.nodes.keys()) == {
             "test_executor",
             "faithfulness_evaluator",
+            "faithfulness_messages_composer",
+            "faithfulness_response_parser",
             "relevance_evaluator",
+            "relevance_messages_composer",
+            "relevance_response_parser",
             "context_evaluator",
             "answer_quality_evaluator",
+            "answer_quality_messages_composer",
+            "answer_quality_response_parser",
             "metric_aggregator",
         }
 
@@ -217,18 +226,28 @@ class TestRAGEvaluationGraphShape:
         ]
         assert aq_edges == []
 
-    def test_test_executor_fans_out_to_three_evaluators(self):
-        """test_executor feeds faithfulness, relevance, context evaluators."""
+    def test_test_executor_fans_out_to_composers_context_and_aggregator(self):
+        """test_executor feeds the 2 LLM-judge messages-composers (L3 fix), the
+        context_evaluator (a PythonCodeNode, fed directly), and the aggregator.
+
+        The LLM judges (faithfulness / relevance) are NO LONGER fed directly by
+        test_executor — their context now flows test_executor → composer →
+        judge.messages (the VALID LLMAgentNode context port). The composers are
+        the new fan-out targets; the judges are downstream of them.
+        """
         wf = _build(RAGEvaluationNode(use_reference_answers=False))
         targets = {
             c.target_node for c in wf.connections if c.source_node == "test_executor"
         }
         assert {
-            "faithfulness_evaluator",
-            "relevance_evaluator",
+            "faithfulness_messages_composer",
+            "relevance_messages_composer",
             "context_evaluator",
             "metric_aggregator",
         }.issubset(targets)
+        # The LLM judges are fed by their composers, NOT directly by test_executor.
+        assert "faithfulness_evaluator" not in targets
+        assert "relevance_evaluator" not in targets
 
     def test_metric_aggregator_is_final_sink(self):
         """metric_aggregator has no outbound edges."""
@@ -385,18 +404,139 @@ class TestContextPrecisionMetricCorrectness:
 
 
 # ==========================================================================
-# RAGBenchmarkNode.run() deterministic paths
+# RAGEvaluationNode test_executor — honest pass-through (no fabrication)
 # ==========================================================================
 
 
+class TestTestExecutorPassThrough:
+    """The test_executor codegen judges caller-provided results, not invented ones.
+
+    Provably-correct remediation: the inner ``collect_rag_results`` MUST pass
+    the caller's real ``generated_answer`` + ``retrieved_contexts`` through
+    (no ``f"Generated answer for: {query}"`` fabrication, no hardcoded
+    contexts) and MUST raise when those fields are absent.
+    """
+
+    @staticmethod
+    def _exec_collector(code: str, test_queries: list) -> dict:
+        """Exec the codegen with the helper preserved; return module `result`."""
+        # Strip the F9 cleanup `del` so we can also assert on the namespace.
+        code_no_del = "\n".join(
+            line
+            for line in code.splitlines()
+            if not line.startswith("del collect_rag_results")
+        )
+        ns: dict = {"test_queries": test_queries}
+        exec(code_no_del, ns)
+        return ns["result"]
+
+    def test_codegen_no_longer_fabricates_answers(self):
+        """The fabrication template MUST be gone from the source."""
+        wf = _build(RAGEvaluationNode())
+        executor = wf.get_node("test_executor")
+        assert executor is not None
+        code = executor.config["code"]
+        assert 'f"Generated answer for: {query}"' not in code
+        assert "Context 1 about transformers" not in code
+
+    def test_passes_through_caller_provided_results(self):
+        wf = _build(RAGEvaluationNode())
+        executor = wf.get_node("test_executor")
+        assert executor is not None
+        out = self._exec_collector(
+            executor.config["code"],
+            [
+                {
+                    "query": "What is BERT?",
+                    "reference": "BERT is bidirectional...",
+                    "generated_answer": "BERT is a transformer encoder.",
+                    "retrieved_contexts": [
+                        {"content": "BERT paper excerpt", "score": 0.92}
+                    ],
+                }
+            ],
+        )
+        assert out["total_tests"] == 1
+        tr = out["test_results"][0]
+        # The caller's REAL answer + contexts survive verbatim.
+        assert tr["generated_answer"] == "BERT is a transformer encoder."
+        assert tr["retrieved_contexts"] == [
+            {"content": "BERT paper excerpt", "score": 0.92}
+        ]
+        assert tr["query"] == "What is BERT?"
+        assert tr["reference_answer"] == "BERT is bidirectional..."
+
+    def test_missing_generated_answer_raises(self):
+        wf = _build(RAGEvaluationNode())
+        executor = wf.get_node("test_executor")
+        assert executor is not None
+        with pytest.raises(ValueError, match="generated_answer"):
+            self._exec_collector(
+                executor.config["code"],
+                [{"query": "q", "retrieved_contexts": []}],
+            )
+
+    def test_missing_retrieved_contexts_raises(self):
+        wf = _build(RAGEvaluationNode())
+        executor = wf.get_node("test_executor")
+        assert executor is not None
+        with pytest.raises(ValueError, match="retrieved_contexts"):
+            self._exec_collector(
+                executor.config["code"],
+                [{"query": "q", "generated_answer": "a"}],
+            )
+
+
+# ==========================================================================
+# RAGBenchmarkNode.run() — REAL execution of a deterministic system
+# ==========================================================================
+
+
+class _DeterministicRagSystem:
+    """A deterministic, runnable RAG system for benchmarking offline.
+
+    NOT a mock: it satisfies the runtime runner contract (a callable accepting
+    ``query=...`` returning a result dict) with deterministic output and a
+    tiny real CPU cost, so RAGBenchmarkNode's REAL execution path is exercised
+    without a network/LLM. Per ``rules/testing.md`` Tier-2 exception, a
+    Protocol-satisfying deterministic adapter is NOT a mock.
+    """
+
+    def __init__(self, work: int = 200):
+        self._work = work
+        self.calls = 0
+
+    def __call__(self, query=None, **kwargs):
+        self.calls += 1
+        # A small, real arithmetic loop so latency is measured (not synthetic).
+        acc = 0
+        for i in range(self._work):
+            acc += i * i
+        return {
+            "answer": f"answer::{query}::{acc}",
+            "retrieved_contexts": [{"content": "ctx", "score": 0.9}],
+        }
+
+
+class _NodeStyleRagSystem:
+    """Deterministic runnable exposing ``.execute(**query)`` like a Core SDK Node."""
+
+    def __init__(self, work: int = 200):
+        self._inner = _DeterministicRagSystem(work=work)
+
+    def execute(self, query=None, **kwargs):
+        return self._inner(query=query, **kwargs)
+
+
 class TestRAGBenchmarkRun:
-    """Benchmark run() exercises the documented aggregate shape end-to-end."""
+    """Benchmark run() executes a REAL deterministic system end-to-end."""
 
     def test_run_single_system_returns_documented_shape(self):
         # Keep workload + users tiny so the per-test budget stays sub-second.
         node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
+        system = _DeterministicRagSystem()
         out = node.run(
-            rag_systems={"system_a": {}},
+            rag_systems={"system_a": system},
             test_queries=[{"q": "1"}, {"q": "2"}, {"q": "3"}],
             duration=1,
         )
@@ -411,11 +551,41 @@ class TestRAGBenchmarkRun:
         # The workload-size-2 latency profile reports p50/p95/p99/mean/std_dev.
         size_2 = sys_results["latency_profiles"]["size_2"]
         assert {"p50", "p95", "p99", "mean", "std_dev"}.issubset(set(size_2.keys()))
+        # The system was REALLY executed: workload-2 + concurrency workload.
+        assert system.calls > 0
+        # resource_usage now carries a real measured memory_mb (tracemalloc).
+        assert "memory_mb" in sys_results["resource_usage"]
+        assert isinstance(sys_results["resource_usage"]["memory_mb"], float)
+
+    def test_run_node_style_system_via_execute(self):
+        """A system exposing ``.execute(**query)`` is run through that path."""
+        node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
+        system = _NodeStyleRagSystem()
+        out = node.run(
+            rag_systems={"node_sys": system},
+            test_queries=[{"query": "a"}, {"query": "b"}],
+            duration=1,
+        )
+        assert system._inner.calls > 0
+        assert "node_sys" in out["benchmark_results"]
+
+    def test_run_non_runnable_system_raises_typed_error(self):
+        """A non-runnable 'system' (e.g. {}) raises — NO fabrication fallback."""
+        node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
+        with pytest.raises(TypeError, match="cannot execute system"):
+            node.run(
+                rag_systems={"bad": {}},
+                test_queries=[{"q": "1"}, {"q": "2"}],
+                duration=1,
+            )
 
     def test_run_multi_system_picks_comparison_keys(self):
         node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
         out = node.run(
-            rag_systems={"system_a": {}, "system_b": {}},
+            rag_systems={
+                "system_a": _DeterministicRagSystem(work=50),
+                "system_b": _DeterministicRagSystem(work=400),
+            },
             test_queries=[{"q": "1"}, {"q": "2"}, {"q": "3"}],
             duration=1,
         )
@@ -427,10 +597,19 @@ class TestRAGBenchmarkRun:
         # Recommendations enumerate the three winners.
         assert len(comparison["recommendations"]) == 3
 
+    def test_run_empty_systems_returns_null_winner_shape(self):
+        """Zero systems → null-winner comparison, no crash on empty mapping."""
+        node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
+        out = node.run(rag_systems={}, test_queries=[{"q": "1"}], duration=1)
+        assert out["benchmark_results"] == {}
+        assert out["comparison"]["fastest_system"] is None
+        assert out["comparison"]["most_scalable"] is None
+        assert out["comparison"]["most_efficient"] is None
+
     def test_run_test_configuration_carries_constructor_state(self):
         node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
         out = node.run(
-            rag_systems={"system_a": {}},
+            rag_systems={"system_a": _DeterministicRagSystem()},
             test_queries=[{"q": "1"}, {"q": "2"}],
             duration=5,
         )
@@ -439,6 +618,68 @@ class TestRAGBenchmarkRun:
         assert cfg["concurrent_users"] == [1]
         assert cfg["duration"] == 5
         assert cfg["num_queries"] == 2
+
+    def test_run_test_configuration_carries_duration_exceeded_flag(self):
+        """A fast run reports duration_exceeded=False (the budget held)."""
+        node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
+        out = node.run(
+            rag_systems={"system_a": _DeterministicRagSystem()},
+            test_queries=[{"q": "1"}, {"q": "2"}],
+            duration=30,
+        )
+        assert out["test_configuration"]["duration_exceeded"] is False
+
+
+class TestMostScalableRankingDirection:
+    """Direction-pin for the `most_scalable` ranking (deterministic, no timing).
+
+    `parallel_speedup` is HIGHER = better (≈ achieved concurrency). The
+    ranking MUST select the system with the GREATEST mean speedup. A prior
+    cut ranked with `min`, silently crowning the LEAST-scalable system; this
+    test crafts `_compare_systems` input directly so the assertion locks the
+    direction without depending on thread-scheduling timing.
+    """
+
+    @staticmethod
+    def _system_block(speedups: list[float]) -> dict:
+        return {
+            "latency_profiles": {"size_2": {"mean": 0.01}},
+            "throughput_curves": {"size_2": 100.0},
+            "resource_usage": {"memory_mb": 1.0},
+            "scalability_analysis": {
+                f"users_{i}": {
+                    "avg_latency": 0.01,
+                    "concurrent_throughput": 50.0,
+                    "parallel_speedup": s,
+                    "timed_out": False,
+                }
+                for i, s in enumerate(speedups, start=1)
+            },
+        }
+
+    def test_most_scalable_is_the_highest_mean_speedup(self):
+        node = RAGBenchmarkNode()
+        results = {
+            "scalable": self._system_block([7.8, 8.2]),  # mean 8.0 — best
+            "serial": self._system_block([1.1, 1.0]),  # mean ~1.05 — worst
+        }
+        comparison = node._compare_systems(results)  # type: ignore[attr-defined]
+        assert comparison["most_scalable"] == "scalable"
+
+    def test_no_scalability_data_defaults_to_zero_not_winner(self):
+        """A system with no concurrency data (speedup default 0.0) cannot win."""
+        node = RAGBenchmarkNode()
+        results = {
+            "has_data": self._system_block([3.0]),
+            "no_data": {
+                "latency_profiles": {"size_2": {"mean": 0.01}},
+                "throughput_curves": {"size_2": 100.0},
+                "resource_usage": {"memory_mb": 1.0},
+                "scalability_analysis": {},  # no concurrency measured
+            },
+        }
+        comparison = node._compare_systems(results)  # type: ignore[attr-defined]
+        assert comparison["most_scalable"] == "has_data"
 
 
 # ==========================================================================

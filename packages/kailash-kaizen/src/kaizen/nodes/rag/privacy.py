@@ -1,29 +1,38 @@
 """
-Privacy-Preserving RAG Implementation
+Privacy-aware RAG nodes.
 
-Implements RAG with privacy protection mechanisms:
-- Differential privacy for queries and responses
-- PII detection and redaction
-- Secure multi-party retrieval
-- Homomorphic encryption support
-- Audit logging and compliance
+This module provides best-effort privacy hygiene helpers for RAG pipelines:
+- Regex-based PII detection and redaction (email, phone, SSN, credit-card,
+  IP, simple name/date patterns) — best-effort, pattern-based, NOT a formal
+  guarantee
+- Query generalization/anonymization (term replacement + word dropout)
+- Compliance-aware retrieval (consent validation, jurisdiction filtering,
+  classification-based truncation) — see ComplianceRAGNode
 
-Based on privacy-preserving ML research and regulations.
+These are operational privacy hygiene measures, not cryptographic guarantees.
+The module does NOT implement differential privacy, homomorphic encryption,
+or secure multi-party computation; no such cryptographic mechanism is present
+in the code.
 """
 
 import hashlib
-import json
 import logging
-import math
 import random
-import re
+import warnings
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+
+# Registering imports (mirrors realtime.py #1120): referenced only by STRING via
+# `builder.add_node("PythonCodeNode", ...)` / consumed by security workflows; the
+# import runs the `@register_node` side effect that populates the registry. Do NOT
+# drop to satisfy an unused-import linter.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
-from kailash.nodes.security.credential_manager import CredentialManagerNode
+from kailash.nodes.security.credential_manager import (  # noqa: F401
+    CredentialManagerNode,
+)
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
@@ -33,64 +42,97 @@ logger = logging.getLogger(__name__)
 @register_node()
 class PrivacyPreservingRAGNode(WorkflowNode):
     """
-    Privacy-Preserving RAG with Differential Privacy
+    Privacy-aware RAG node — regex PII redaction + query generalization.
 
-    Implements RAG that protects user privacy and sensitive information
-    through various privacy-preserving techniques.
+    The node's real, useful capability is **best-effort, pattern-based PII
+    redaction**: it detects and replaces email/phone/SSN/credit-card/IP and
+    simple name/date patterns with stable hashed sentinels before retrieval,
+    and generalizes/anonymizes queries (term replacement + random word
+    dropout). It also writes a structured audit record of what hygiene steps
+    ran.
+
+    This is operational privacy hygiene, NOT a formal privacy guarantee.
+    Regex redaction is best-effort and will miss PII it has no pattern for.
+
+    NOTE on the score perturbation step: the node optionally adds random
+    noise to retrieval scores. This is NOT differential privacy — there is
+    no privacy-budget accounting, no composition tracking across queries,
+    and the noise is drawn from a non-cryptographic PRNG. Do NOT rely on it
+    for any privacy claim; it is optional score perturbation only.
 
     When to use:
-    - Best for: Healthcare, finance, legal, personal data applications
-    - Not ideal for: Public data, non-sensitive queries
-    - Performance: 10-30% overhead for privacy protection
-    - Privacy guarantee: ε-differential privacy with configurable epsilon
+    - Best for: stripping obvious PII (emails, phone numbers, SSNs) from
+      free-text before it reaches a retrieval/LLM stage
+    - Not ideal for: any setting requiring a provable privacy guarantee, or
+      PII forms the regex patterns do not cover
+    - Performance: small overhead for the regex + generalization passes
 
-    Key features:
-    - Differential privacy for queries and responses
-    - PII detection and automatic redaction
-    - Query anonymization and generalization
-    - Secure aggregation of results
-    - Audit trail for compliance
+    Capabilities (what the code actually does):
+    - Best-effort regex PII detection + redaction with stable hashed sentinels
+    - Query generalization/anonymization (term replacement + word dropout)
+    - Optional retrieval-score perturbation (NOT a privacy guarantee)
+    - k-anonymity-style result clustering of similar documents
+    - Structured audit record of which hygiene steps ran
 
     Example:
         private_rag = PrivacyPreservingRAGNode(
-            privacy_budget=1.0,  # epsilon for differential privacy
+            score_noise=1.0,     # optional retrieval-score perturbation scale
             redact_pii=True,
             anonymize_queries=True
         )
 
-        # Query with sensitive information
-        result = await private_rag.execute(
-            query="What is John Smith's diagnosis based on symptoms X, Y, Z?",
-            documents=medical_records,
-            user_consent={"data_usage": True, "retention_days": 7}
+        # This is a WorkflowNode: the wrapped inner workflow is fed via the
+        # `inputs={node_id: {param: value}}` mapping (each codegen stage reads
+        # the external inputs it needs). The free-text query reaches the PII
+        # detector as `text`; the executor + audit stages read query/documents/
+        # consent directly.
+        query = "What is John Smith's diagnosis based on symptoms X, Y, Z?"
+        result = private_rag.execute(
+            inputs={
+                "pii_detector": {"text": query},
+                "query_anonymizer": {"query": query},
+                "private_rag_executor": {"query": query, "documents": medical_records},
+                "audit_logger": {
+                    "query": query,
+                    "user_consent": {"data_usage": True, "retention_days": 7},
+                },
+            }
         )
 
-        # Returns anonymized results with PII redacted
-        # Query logged as: "What is [PERSON]'s diagnosis based on symptoms [REDACTED]?"
+        # The terminal `result_formatter` stage publishes its output under the
+        # auto-mapped `result_formatter_result` key:
+        privacy_results = result["result_formatter_result"][
+            "privacy_preserving_results"
+        ]
+        # privacy_results["results"]        -> regex-detectable PII redacted
+        # privacy_results["privacy_report"] -> which hygiene steps actually ran
+        # privacy_results["audit_record"]   -> structured audit of the steps
+        # Query logged as: "What is [PERSON_NAME_<hash>]'s diagnosis ...?"
 
     Parameters:
-        privacy_budget: Epsilon for differential privacy (lower = more private)
-        redact_pii: Automatically detect and redact PII
-        anonymize_queries: Generalize queries before processing
-        secure_aggregation: Use secure multi-party computation
-        audit_logging: Enable compliance audit trail
+        score_noise: Scale for optional retrieval-score perturbation. Larger
+            = more perturbation. This is NOT a differential-privacy epsilon
+            and provides no formal guarantee.
+        redact_pii: Detect and redact regex-matchable PII (best-effort)
+        anonymize_queries: Generalize/anonymize queries before processing
+        audit_logging: Write a structured audit record of hygiene steps
 
     Returns:
-        results: Privacy-protected results
-        privacy_report: What was protected and how
-        audit_record: Compliance audit information
-        confidence_bounds: Uncertainty due to privacy noise
+        results: Results with regex-detectable PII redacted
+        privacy_report: Which hygiene steps were applied
+        audit_record: Audit information about the hygiene steps
+        confidence_bounds: Score uncertainty introduced by perturbation
     """
 
     def __init__(
         self,
         name: str = "privacy_preserving_rag",
-        privacy_budget: float = 1.0,
+        score_noise: float = 1.0,
         redact_pii: bool = True,
         anonymize_queries: bool = True,
         audit_logging: bool = True,
     ):
-        self.privacy_budget = privacy_budget
+        self.score_noise = score_noise
         self.redact_pii = redact_pii
         self.anonymize_queries = anonymize_queries
         self.audit_logging = audit_logging
@@ -148,7 +190,9 @@ def detect_and_redact_pii(text, redact={self.redact_pii}):
         if matches:
             pii_found[pii_type] = []
             for match in matches:
-                # Create hash for audit trail (not reversible)
+                # Short fingerprint for audit correlation; NOT a secure or
+                # irreversible hash (8 hex chars of SHA-256 is brute-forceable
+                # for low-entropy PII like phone numbers).
                 hash_value = hashlib.sha256(match.encode()).hexdigest()[:8]
                 pii_found[pii_type].append({{
                     "hash": hash_value,
@@ -197,6 +241,12 @@ del detect_and_redact_pii
                 "code": f"""
 def anonymize_query(query, pii_info, anonymize={self.anonymize_queries}):
     '''Anonymize and generalize queries for privacy'''
+    # F9 #1118 sibling: import inside the function body. PythonCodeNode
+    # passes separate (globals, locals) to exec(), so a module-scope import
+    # binds into LOCAL namespace and is invisible to this function's closure.
+    # The generalization-rule regex pass + word-dropout RNG below need these.
+    import re
+    import random
 
     if not anonymize:
         return {{
@@ -251,47 +301,65 @@ def anonymize_query(query, pii_info, anonymize={self.anonymize_queries}):
         anonymized = " ".join(words_to_keep)
         generalizations.append("word_dropout")
 
-    result = {{
+    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
+    # bound a function-scope local that was never returned, so the module
+    # never saw the anonymization output.
+    return {{
         "anonymized_query": anonymized,
         "anonymization_applied": True,
         "generalization_level": len(generalizations),
         "techniques_used": generalizations
     }}
+
+# F9 #1117: module-scope call so PythonCodeNode's outbound port carries the
+# anonymization dict (the function was previously defined but never called).
+# `query` is an external workflow input; `pii_info` is wired from
+# pii_detector.result. `del` the helper so the output gate sees only `result`.
+result = anonymize_query(query, pii_info, anonymize={self.anonymize_queries})
+del anonymize_query
 """
             },
         )
 
-        # Differential privacy noise injector
+        # Optional retrieval-score perturbation.
+        # NOT differential privacy: there is no privacy-budget accounting, no
+        # composition tracking across queries, and the noise is drawn from a
+        # non-cryptographic PRNG. This perturbs scores so the exact retrieval
+        # ranking is less directly readable; it provides NO formal guarantee.
         dp_noise_id = builder.add_node(
             "PythonCodeNode",
             node_id="dp_noise_injector",
             config={
                 "code": f"""
-import math
-import random
+def perturb_scores(scores, noise_scale={self.score_noise}):
+    '''Add random noise to retrieval scores.
 
-def add_differential_privacy_noise(scores, epsilon={self.privacy_budget}):
-    '''Add calibrated noise for differential privacy'''
+    NOT a differential-privacy mechanism and NOT a formal privacy guarantee.
+    Optional score perturbation only: noise is drawn from a non-cryptographic
+    PRNG with no privacy-budget accounting or cross-query composition.
+    '''
+    # F9 #1118 sibling: import inside the function body. PythonCodeNode passes
+    # separate (globals, locals) to exec(), so module-scope imports are
+    # invisible to this function's closure.
+    import math
+    import random
 
-    if epsilon <= 0:
-        # No privacy budget means no results
+    if noise_scale <= 0 or not scores:
+        # No perturbation requested, OR no retrieval scores to perturb (an
+        # empty retrieval set must NOT divide-by-zero on the avg below).
         return {{
-            "dp_scores": [0.5] * len(scores),
-            "noise_added": True,
-            "privacy_guarantee": "infinite"
+            "dp_scores": list(scores),
+            "noise_added": False,
+            "avg_noise": 0.0
         }}
-
-    # Laplace mechanism for differential privacy
-    sensitivity = 1.0  # Max change in score from single document
-    scale = sensitivity / epsilon
 
     noisy_scores = []
     noise_values = []
 
     for score in scores:
-        # Add Laplace noise
-        noise = random.random() - 0.5
-        noise = -scale * math.copysign(1, noise) * math.log(1 - 2 * abs(noise))
+        # Draw a symmetric noise sample and add it to the score.
+        u = random.random() - 0.5
+        noise = -noise_scale * math.copysign(1, u) * math.log(1 - 2 * abs(u))
 
         # Clip to valid range [0, 1]
         noisy_score = max(0, min(1, score + noise))
@@ -299,16 +367,26 @@ def add_differential_privacy_noise(scores, epsilon={self.privacy_budget}):
         noisy_scores.append(noisy_score)
         noise_values.append(noise)
 
-    # Calculate privacy loss
-    actual_epsilon = sensitivity / (sum(abs(n) for n in noise_values) / len(noise_values))
-
-    result = {{
+    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
+    # bound a function-scope local that was never returned, so the perturbed
+    # scores never reached the module-scope output.
+    return {{
         "dp_scores": noisy_scores,
         "noise_added": True,
-        "privacy_guarantee": f"{{epsilon}}-differential privacy",
-        "actual_epsilon": actual_epsilon,
         "avg_noise": sum(abs(n) for n in noise_values) / len(noise_values)
     }}
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the perturbation
+# dict. The wire from private_rag_executor.result carries that node's whole
+# returned dict {{"retrieval_results": {{documents, scores, query_used,
+# privacy_applied}}}}, so unwrap the inner score LIST before perturbing (a bare
+# dict would iterate keys). Tolerate either the wrapped or a bare-list shape.
+if isinstance(scores, dict):
+    _retrieval_scores = scores.get("retrieval_results", {{}}).get("scores", [])
+else:
+    _retrieval_scores = scores
+result = perturb_scores(_retrieval_scores, noise_scale={self.score_noise})
+del perturb_scores, _retrieval_scores
 """
             },
         )
@@ -319,13 +397,29 @@ def add_differential_privacy_noise(scores, epsilon={self.privacy_budget}):
             node_id="secure_aggregator",
             config={
                 "code": """
-def secure_aggregate_results(retrieval_results, dp_info):
-    '''Securely aggregate results with privacy guarantees'''
+def aggregate_results(retrieval_results, dp_info):
+    '''Group similar documents into k-anonymity-style clusters.
 
-    documents = retrieval_results.get("documents", [])
+    This is content-similarity clustering (group documents whose content
+    prefix hashes match, surface clusters of size >= 2 as an aggregate). It
+    is NOT cryptographic secure aggregation / secure multi-party computation
+    and provides no formal privacy guarantee.
+    '''
+    # F9 #1118 sibling: import inside the function body. PythonCodeNode passes
+    # separate (globals, locals) to exec(), so a module-scope import is
+    # invisible to this function's closure. The content-prefix clustering
+    # below hashes document prefixes via hashlib.
+    import hashlib
+
+    # The wire from private_rag_executor.result carries that node's whole
+    # returned dict {"retrieval_results": {documents, scores, ...}}; unwrap the
+    # inner retrieval payload. Tolerate a pre-unwrapped dict too.
+    inner = retrieval_results.get("retrieval_results", retrieval_results)
+
+    documents = inner.get("documents", [])
     dp_scores = dp_info.get("dp_scores", [])
 
-    # Apply secure aggregation
+    # Group similar documents into clusters.
     aggregated_results = []
 
     # Group similar documents to prevent inference attacks
@@ -347,36 +441,47 @@ def secure_aggregate_results(retrieval_results, dp_info):
 
     # Aggregate clusters
     for cluster_id, cluster_docs in doc_clusters.items():
-        if len(cluster_docs) >= 2:  # k-anonymity with k=2
+        if len(cluster_docs) >= 2:  # k-anonymity-style grouping with k=2
             # Average scores in cluster
             avg_score = sum(d["score"] for d in cluster_docs) / len(cluster_docs)
 
-            # Create aggregated result
+            # Real aggregation occurred: >=2 documents collapsed into one result.
             aggregated_results.append({
                 "content": f"[Aggregated from {len(cluster_docs)} similar documents]",
                 "score": avg_score,
                 "cluster_size": len(cluster_docs),
-                "privacy_protected": True
+                "aggregated": True  # k>=2 grouping actually happened
             })
         else:
-            # Single document - apply additional privacy measures
+            # Single document - NO aggregation, only a length truncation.
+            # Do NOT claim protection here: the doc stands alone (k=1).
             doc_info = cluster_docs[0]
             aggregated_results.append({
                 "content": doc_info["doc"].get("content", "")[:200] + "...",  # Truncate
                 "score": doc_info["score"],
                 "cluster_size": 1,
-                "privacy_protected": True
+                "aggregated": False  # k=1: truncated only, not aggregated
             })
 
     # Sort by score
     aggregated_results.sort(key=lambda x: x["score"], reverse=True)
 
-    result = {
+    # F9 #1117: function MUST return its dict; the prior `result = {...}`
+    # bound a function-scope local that was never returned, so the clustered
+    # results never reached the module-scope output.
+    return {
         "secure_results": aggregated_results[:5],  # Limit results
         "aggregation_method": "k-anonymity clustering",
         "k_value": 2,
         "clusters_formed": len(doc_clusters)
     }
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the aggregation
+# dict. `retrieval_results` is wired from private_rag_executor.retrieval_results;
+# `dp_info` is wired from dp_noise_injector.result. `del` the helper so the
+# output gate sees only `result`.
+result = aggregate_results(retrieval_results, dp_info)
+del aggregate_results
 """
             },
         )
@@ -387,9 +492,14 @@ def secure_aggregate_results(retrieval_results, dp_info):
             node_id="private_rag_executor",
             config={
                 "code": """
-# Execute RAG with privacy protections
+# Execute RAG over the (possibly) anonymized query.
 anonymized_query = anonymized_query_info.get("anonymized_query", query)
 documents = documents
+
+# Whether any query-side hygiene actually ran upstream. The anonymizer sets
+# anonymization_applied (which also covers PII redaction folded into the query).
+# Derive the flag — do NOT hardcode True on the redact_pii=False path.
+privacy_applied = bool(anonymized_query_info.get("anonymization_applied", False))
 
 # Simple retrieval (would use actual RAG in production)
 query_words = set(anonymized_query.lower().split())
@@ -423,7 +533,7 @@ result = {
         "documents": [d["document"] for d in top_docs],
         "scores": [d["score"] for d in top_docs],
         "query_used": anonymized_query,
-        "privacy_applied": True
+        "privacy_applied": privacy_applied
     }
 }
 """
@@ -437,17 +547,20 @@ result = {
                 node_id="audit_logger",
                 config={
                     "code": """
-from datetime import datetime
-import hashlib
-
 def create_audit_record(query, pii_info, anonymization_info, dp_info, results, user_consent):
     '''Create privacy audit record for compliance'''
+    # F9 #1118 sibling: import inside the function body. PythonCodeNode passes
+    # separate (globals, locals) to exec(), so a module-scope import binds into
+    # LOCAL namespace and is invisible to this function's closure
+    # (`datetime.now()` on the module raises AttributeError otherwise).
+    from datetime import datetime as _datetime_class
+    import hashlib
 
     # Hash original query for audit without storing it
     query_hash = hashlib.sha256(query.encode()).hexdigest()
 
     audit_record = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _datetime_class.now().isoformat(),
         "query_hash": query_hash,
         "privacy_measures": {
             "pii_redaction": {
@@ -460,10 +573,11 @@ def create_audit_record(query, pii_info, anonymization_info, dp_info, results, u
                 "generalization_level": anonymization_info.get("generalization_level", 0),
                 "techniques": anonymization_info.get("techniques_used", [])
             },
-            "differential_privacy": {
+            "score_perturbation": {
+                # Optional retrieval-score noise. NOT differential privacy and
+                # NOT a formal privacy guarantee (no budget accounting, no
+                # cross-query composition, non-cryptographic PRNG).
                 "applied": dp_info.get("noise_added", False),
-                "epsilon": {self.privacy_budget},
-                "actual_epsilon": dp_info.get("actual_epsilon", 0),
                 "avg_noise": dp_info.get("avg_noise", 0)
             },
             "result_aggregation": {
@@ -475,10 +589,12 @@ def create_audit_record(query, pii_info, anonymization_info, dp_info, results, u
             "data_usage": False,
             "retention_days": 0
         },
-        "compliance": {
-            "gdpr_compliant": True,
-            "ccpa_compliant": True,
-            "hipaa_compliant": self.redact_pii
+        "pii_hygiene": {
+            # Factual action descriptor — NOT a regulatory compliance verdict.
+            # This node does best-effort regex PII redaction; it does NOT
+            # assess or determine GDPR/CCPA/HIPAA compliance.
+            "pii_redaction_attempted": pii_info.get("redaction_applied", False),
+            "compliance_note": "best-effort PII hygiene only; NOT a GDPR/CCPA/HIPAA compliance determination"
         },
         "data_retention": {
             "query_stored": False,
@@ -487,7 +603,20 @@ def create_audit_record(query, pii_info, anonymization_info, dp_info, results, u
         }
     }
 
-    result = {"audit_record": audit_record}
+    # F9 #1117: function MUST return its dict; the prior `result = {...}`
+    # bound a function-scope local that was never returned, so the audit
+    # record never reached the module-scope output port.
+    return {"audit_record": audit_record}
+
+# F9 #1117: module-scope call so PythonCodeNode publishes the `audit_record`
+# port the result_formatter wiring reads. `query` + `user_consent` are external
+# workflow inputs; pii_info / anonymization_info / dp_info / results are wired
+# from pii_detector / query_anonymizer / dp_noise_injector / secure_aggregator.
+# `del` the helper so the output gate sees only `result`.
+result = create_audit_record(
+    query, pii_info, anonymization_info, dp_info, results, user_consent
+)
+del create_audit_record
 """
                 },
             )
@@ -501,7 +630,7 @@ def create_audit_record(query, pii_info, anonymization_info, dp_info, results, u
 def format_private_results(secure_results, audit_record, pii_info, anonymization_info, dp_info):
     '''Format results with privacy protection report'''
 
-    # Calculate confidence bounds due to privacy noise
+    # Calculate confidence bounds due to score perturbation noise
     if dp_info.get("noise_added"):
         avg_noise = dp_info.get("avg_noise", 0)
         confidence_bounds = {{
@@ -518,12 +647,10 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
 
     privacy_report = {{
         "privacy_techniques_applied": [],
-        "data_minimization": True,
-        "anonymization_strength": "high",
         "information_loss": 0.0
     }}
 
-    # Compile privacy techniques
+    # Compile the hygiene steps that ACTUALLY ran.
     if pii_info.get("redaction_applied"):
         privacy_report["privacy_techniques_applied"].append("PII redaction")
         privacy_report["information_loss"] += 0.1
@@ -533,26 +660,62 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
         privacy_report["information_loss"] += 0.15
 
     if dp_info.get("noise_added"):
-        privacy_report["privacy_techniques_applied"].append("Differential privacy")
+        # Optional score perturbation — NOT differential privacy, no guarantee.
+        privacy_report["privacy_techniques_applied"].append("Score perturbation")
         privacy_report["information_loss"] += dp_info.get("avg_noise", 0)
 
     if secure_results.get("clusters_formed", 0) > 1:
         privacy_report["privacy_techniques_applied"].append("K-anonymity clustering")
 
-    result = {{
+    # Derive descriptors from what actually ran (never a hardcoded verdict).
+    techniques_count = len(privacy_report["privacy_techniques_applied"])
+    # data_minimization is true only if a minimizing step actually ran
+    # (PII redaction or query generalization reduce the data exposed).
+    privacy_report["data_minimization"] = bool(
+        pii_info.get("redaction_applied")
+        or anonymization_info.get("anonymization_applied")
+    )
+    # Factual strength descriptor derived from the count of hygiene steps.
+    if techniques_count == 0:
+        privacy_report["anonymization_strength"] = "none"
+    elif techniques_count == 1:
+        privacy_report["anonymization_strength"] = "minimal"
+    else:
+        privacy_report["anonymization_strength"] = "multi-step"
+
+    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
+    # bound a function-scope local that was never returned, so the TERMINAL
+    # node published nothing and the WorkflowNode's whole output was empty.
+    return {{
         "privacy_preserving_results": {{
             "results": secure_results.get("secure_results", []),
             "privacy_report": privacy_report,
             "audit_record": audit_record.get("audit_record") if {self.audit_logging} else None,
             "confidence_bounds": confidence_bounds,
             "metadata": {{
-                "privacy_budget_used": {self.privacy_budget},
+                "score_noise_scale": {self.score_noise},
                 "techniques_count": len(privacy_report["privacy_techniques_applied"]),
-                "compliance_status": "compliant",
                 "data_retention": "none"
             }}
         }}
     }}
+
+# F9 #1117: module-scope call so this TERMINAL node publishes the documented
+# privacy_preserving_results (results / privacy_report / audit_record /
+# confidence_bounds) the node docstring promises. All five inputs are wired:
+# secure_results <- secure_aggregator.result, audit_record <- audit_logger
+# .audit_record (only when audit_logging=True), pii_info / anonymization_info /
+# dp_info from their producers. When audit_logging=False the audit_record port
+# is not wired, so default it to an empty dict before the call. `del` the
+# helper so the output gate sees only `result`.
+try:
+    audit_record
+except NameError:
+    audit_record = {{}}
+result = format_private_results(
+    secure_results, audit_record, pii_info, anonymization_info, dp_info
+)
+del format_private_results
 """
             },
         )
@@ -567,12 +730,15 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
             private_rag_executor_id,
             "anonymized_query_info",
         )
-        builder.add_connection(
-            private_rag_executor_id, "retrieval_results", dp_noise_id, "scores"
-        )
+        # PythonCodeNode publishes a single `result` output port carrying the
+        # whole returned dict (NOT each nested key as its own port). Every
+        # inter-node edge reads `result`; each downstream codegen unwraps the
+        # nested shape it needs (e.g. private_rag_executor's `result` carries
+        # {"retrieval_results": {documents, scores, ...}}).
+        builder.add_connection(private_rag_executor_id, "result", dp_noise_id, "scores")
         builder.add_connection(
             private_rag_executor_id,
-            "retrieval_results",
+            "result",
             secure_aggregator_id,
             "retrieval_results",
         )
@@ -593,7 +759,7 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
                 secure_aggregator_id, "result", audit_logger_id, "results"
             )
             builder.add_connection(
-                audit_logger_id, "audit_record", result_formatter_id, "audit_record"
+                audit_logger_id, "result", result_formatter_id, "audit_record"
             )
 
         builder.add_connection(
@@ -613,41 +779,35 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
 @register_node()
 class SecureMultiPartyRAGNode(Node):
     """
-    Secure Multi-Party RAG Node
+    Multi-party aggregation placeholder — NON-FUNCTIONAL SIMULATION.
 
-    Enables RAG across multiple parties without sharing raw data.
+    WARNING — DO NOT USE FOR ANY PRIVACY-SENSITIVE WORKLOAD. This node does
+    NOT implement secure multi-party computation, secret sharing, or
+    homomorphic encryption. It performs NO cryptography and does NOT compute
+    over the supplied ``party_data``: the per-party "encrypted" values it
+    aggregates are samples from ``random.random()``, so the returned
+    ``aggregate_result`` is the mean/sum of random numbers, unrelated to the
+    inputs. The ``computation_proof`` field is a hash label, not a
+    cryptographic proof, and the ``privacy_preserved`` / ``fully_encrypted``
+    flags are hardcoded ``True`` with nothing backing them.
 
-    When to use:
-    - Best for: Federated learning, collaborative analytics, consortium data
-    - Not ideal for: Single-party data, public datasets
-    - Security: Cryptographic guarantees for data privacy
-    - Performance: 2-5x overhead due to encryption
-
-    Example:
-        smpc_rag = SecureMultiPartyRAGNode(
-            parties=["hospital_a", "hospital_b", "hospital_c"],
-            protocol="shamir_secret_sharing"
-        )
-
-        # Each party contributes encrypted data
-        result = await smpc_rag.execute(
-            query="Average treatment success rate",
-            party_data={
-                "hospital_a": encrypted_data_a,
-                "hospital_b": encrypted_data_b,
-                "hospital_c": encrypted_data_c
-            }
-        )
+    It exists only as an interface/shape placeholder. It is flagged for
+    REMOVAL — a real implementation would require an actual MPC/secret-sharing
+    or homomorphic-encryption library, none of which is present here. Until a
+    real implementation lands (or the node is removed), treat any output as
+    meaningless.
 
     Parameters:
-        parties: List of participating parties
-        protocol: SMPC protocol (secret_sharing, homomorphic)
-        threshold: Minimum parties for computation
+        parties: List of participating party identifiers (labels only)
+        protocol: Dispatch label ("secret_sharing" | "homomorphic") selecting
+            which simulated code path runs — NOT a real cryptographic protocol
+        threshold: Minimum number of parties required before the simulated
+            path runs (an input-count check only)
 
-    Returns:
-        aggregate_result: Combined result without exposing individual data
-        computation_proof: Cryptographic proof of correct computation
-        party_contributions: Encrypted contributions per party
+    Returns (all simulated — see WARNING above):
+        aggregate_result: Mean/sum of per-party RANDOM values (not real data)
+        computation_proof: A hash label, NOT a cryptographic proof
+        party_contributions: Per-party status placeholders
     """
 
     def __init__(
@@ -657,6 +817,23 @@ class SecureMultiPartyRAGNode(Node):
         protocol: str = "secret_sharing",
         threshold: int = 2,
     ):
+        # User-approved deprecation (zero-tolerance Rule 6a — remove via a
+        # deprecation cycle). This node is a NON-FUNCTIONAL simulation: it
+        # performs NO cryptography (no secret sharing / homomorphic encryption /
+        # MPC) and does NOT compute over party_data — it aggregates
+        # random.random() placeholders. It is slated for REMOVAL in a future
+        # minor release. There is no real in-tree alternative; do not rely on
+        # its output for any privacy-sensitive workload.
+        warnings.warn(
+            "SecureMultiPartyRAGNode is a non-functional simulation: it performs "
+            "NO cryptography (no secret sharing, homomorphic encryption, or "
+            "multi-party computation) and does NOT compute over party_data (it "
+            "aggregates random placeholder values). It is DEPRECATED and will be "
+            "REMOVED in a future minor release. Do not use it for any "
+            "privacy-sensitive workload; no real alternative is provided.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         resolved_parties = parties or []
         super().__init__(
             name=name,
@@ -682,45 +859,57 @@ class SecureMultiPartyRAGNode(Node):
                 type=list,
                 required=False,
                 default=None,
-                description="Participating parties in the MPC protocol",
+                description="Participating party identifiers (labels only)",
             ),
             "protocol": NodeParameter(
                 name="protocol",
                 type=str,
                 required=False,
                 default="secret_sharing",
-                description="Secure multiparty computation protocol",
+                description=(
+                    "Dispatch label selecting the simulated code path "
+                    "('secret_sharing' | 'homomorphic') — NOT a real "
+                    "cryptographic protocol (this node is a non-functional "
+                    "simulation; see class docstring)"
+                ),
             ),
             "threshold": NodeParameter(
                 name="threshold",
                 type=int,
                 required=False,
                 default=2,
-                description="Minimum parties required to reconstruct",
+                description="Minimum number of parties before the simulated path runs",
             ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
-                description="Query to execute across parties",
+                description="Query label (not used in any real computation)",
             ),
             "party_data": NodeParameter(
                 name="party_data",
                 type=dict,
                 required=True,
-                description="Encrypted data from each party",
+                description=(
+                    "Per-party data — NOTE: this node does NOT compute over "
+                    "these values (simulation only; see class docstring)"
+                ),
             ),
             "computation_type": NodeParameter(
                 name="computation_type",
                 type=str,
                 required=False,
                 default="average",
-                description="Type of secure computation",
+                description="Aggregation label ('average' | 'sum' | 'count')",
             ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute secure multi-party RAG"""
+        """Run the multi-party aggregation SIMULATION.
+
+        WARNING: non-functional simulation. See the class docstring — no
+        cryptography runs and ``party_data`` is not computed over.
+        """
         query = kwargs.get("query", "")
         party_data = kwargs.get("party_data", {})
         computation_type = kwargs.get("computation_type", "average")
@@ -732,7 +921,7 @@ class SecureMultiPartyRAGNode(Node):
                 "required_parties": self.threshold,
             }
 
-        # Simulate secure computation
+        # Dispatch to the matching SIMULATED code path (no real crypto).
         if self.protocol == "secret_sharing":
             result = self._secret_sharing_computation(
                 query, party_data, computation_type
@@ -747,40 +936,39 @@ class SecureMultiPartyRAGNode(Node):
     def _secret_sharing_computation(
         self, query: str, party_data: Dict, computation_type: str
     ) -> Dict[str, Any]:
-        """Simulate Shamir secret sharing computation"""
-        # In production, would use actual cryptographic protocols
+        """SIMULATION — no secret sharing is performed.
 
-        # Simulate shares from each party
+        Aggregates RANDOM per-party values (NOT ``party_data``). See the class
+        docstring. A real implementation requires an actual secret-sharing /
+        MPC library, which is not present.
+        """
+
+        # Per-party placeholder values — random, NOT derived from party_data.
         shares = {}
         for party, data in party_data.items():
-            # Each party's "encrypted" contribution
             shares[party] = {
                 "share_id": hashlib.sha256(f"{party}_{query}".encode()).hexdigest()[:8],
-                "encrypted_value": random.random(),  # Simulated
+                "value": random.random(),  # placeholder; NOT an encrypted share
                 "commitment": hashlib.sha256(str(data).encode()).hexdigest()[:16],
             }
 
-        # Simulate secure aggregation
+        # Aggregate the random placeholder values (meaningless output).
         if computation_type == "average":
-            # Average without revealing individual values
-            aggregated_value = sum(s["encrypted_value"] for s in shares.values()) / len(
-                shares
-            )
+            aggregated_value = sum(s["value"] for s in shares.values()) / len(shares)
         elif computation_type == "sum":
-            aggregated_value = sum(s["encrypted_value"] for s in shares.values())
+            aggregated_value = sum(s["value"] for s in shares.values())
         elif computation_type == "count":
-            aggregated_value = len(
-                [s for s in shares.values() if s["encrypted_value"] > 0.5]
-            )
+            aggregated_value = len([s for s in shares.values() if s["value"] > 0.5])
         else:
             aggregated_value = 0.5
 
-        # Generate computation proof
-        computation_proof = {
-            "protocol": "shamir_secret_sharing",
+        # Descriptive record — a hash label, NOT a cryptographic proof.
+        computation_record = {
+            "protocol": "simulated_secret_sharing",
+            "simulation": True,
             "parties_involved": list(shares.keys()),
             "threshold_met": len(shares) >= self.threshold,
-            "proof_hash": hashlib.sha256(
+            "record_hash": hashlib.sha256(
                 f"{aggregated_value}_{list(shares.keys())}".encode()
             ).hexdigest()[:32],
             "timestamp": datetime.now().isoformat(),
@@ -788,53 +976,51 @@ class SecureMultiPartyRAGNode(Node):
 
         return {
             "aggregate_result": aggregated_value,
-            "computation_proof": computation_proof,
+            "computation_proof": computation_record,
             "party_contributions": {
                 party: {"status": "contributed", "share_id": share["share_id"]}
                 for party, share in shares.items()
             },
-            "privacy_preserved": True,
-            "no_raw_data_exposed": True,
+            "simulation": True,
         }
 
     def _homomorphic_computation(
         self, query: str, party_data: Dict, computation_type: str
     ) -> Dict[str, Any]:
-        """Simulate homomorphic encryption computation"""
-        # Simplified simulation of HE computation
+        """SIMULATION — no homomorphic encryption is performed.
 
-        encrypted_results = []
-        for party, data in party_data.items():
-            # Simulate encrypted computation on each party's data
-            encrypted_results.append(
+        Aggregates RANDOM per-party values (NOT ``party_data``). See the class
+        docstring. A real implementation requires an actual HE library, which
+        is not present.
+        """
+
+        placeholder_results = []
+        for party in party_data:
+            placeholder_results.append(
                 {
                     "party": party,
-                    "encrypted_result": random.random() * 100,  # Simulated
-                    "noise_level": random.random() * 0.1,
+                    "value": random.random() * 100,  # placeholder, NOT encrypted
                 }
             )
 
-        # Aggregate encrypted results
+        # Aggregate the random placeholder values (meaningless output).
         if computation_type == "average":
-            final_result = sum(r["encrypted_result"] for r in encrypted_results) / len(
-                encrypted_results
+            final_result = sum(r["value"] for r in placeholder_results) / len(
+                placeholder_results
             )
         else:
-            final_result = sum(r["encrypted_result"] for r in encrypted_results)
+            final_result = sum(r["value"] for r in placeholder_results)
 
         return {
             "aggregate_result": final_result,
             "computation_proof": {
-                "protocol": "homomorphic_encryption",
-                "encryption_scheme": "BFV",  # Example scheme
-                "noise_budget_remaining": 0.7,
-                "computation_depth": 3,
+                "protocol": "simulated_homomorphic",
+                "simulation": True,
             },
             "party_contributions": {
-                r["party"]: {"computed": True, "noise_added": r["noise_level"]}
-                for r in encrypted_results
+                r["party"]: {"computed": True} for r in placeholder_results
             },
-            "fully_encrypted": True,
+            "simulation": True,
         }
 
 
@@ -1081,7 +1267,25 @@ class ComplianceRAGNode(Node):
     def _generate_compliance_report(
         self, query: str, results: List[Dict], consent: Dict, jurisdiction: str
     ) -> Dict[str, Any]:
-        """Generate detailed compliance report"""
+        """Generate a compliance report derived from the checks that ran."""
+        fields_redacted = sum(1 for r in results if r.get("compliance_filtered", False))
+        # data_minimization is "applied" only when classification filtering
+        # actually redacted/truncated at least one result — never an
+        # unconditional True.
+        minimization_applied = fields_redacted > 0
+
+        # Derive a score from REAL signals, not a magic constant. Each factual
+        # check that passed contributes equally; the score is the fraction of
+        # checks that held for this request.
+        signals = [
+            bool(consent.get("explicit_consent")),  # explicit consent captured
+            self._determine_lawful_basis(consent, jurisdiction)
+            != "legitimate_interests",  # a stronger lawful basis than the fallback
+            minimization_applied,  # minimization actually reduced exposure
+            len(self.regulations) > 0,  # at least one regulation enforced
+        ]
+        compliance_score = round(sum(1 for s in signals if s) / len(signals), 2)
+
         return {
             "regulations_applied": self.regulations,
             "jurisdiction": jurisdiction,
@@ -1091,11 +1295,9 @@ class ComplianceRAGNode(Node):
                 "lawful_basis": self._determine_lawful_basis(consent, jurisdiction),
             },
             "data_minimization": {
-                "applied": True,
+                "applied": minimization_applied,
                 "documents_filtered": len(results),
-                "fields_redacted": sum(
-                    1 for r in results if r.get("compliance_filtered", False)
-                ),
+                "fields_redacted": fields_redacted,
             },
             "audit_trail": {
                 "timestamp": datetime.now().isoformat(),
@@ -1104,7 +1306,9 @@ class ComplianceRAGNode(Node):
                     "retention_days", self.default_retention_days
                 ),
             },
-            "compliance_score": 0.95,  # High compliance
+            # Fraction of the factual compliance checks above that held for
+            # this request — derived, not a hardcoded "high compliance" number.
+            "compliance_score": compliance_score,
         }
 
     def _determine_lawful_basis(self, consent: Dict, jurisdiction: str) -> str:
