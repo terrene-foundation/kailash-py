@@ -4,6 +4,43 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.6] — 2026-06-10 — RAG nodes provably correct end-to-end
+
+### Fixed — RAG output-side wiring (F31 Wave 2.5): every LLM stage's OUTPUT now reaches its consumer parsed
+
+- **Every LLMAgentNode stage across the 5 real RAG node files now has its OUTPUT
+  parsed before reaching its downstream consumer (PR #1283).** Each stage
+  publishes on the `response` port (`{"content": "<text or JSON string>"}`), but
+  consumers were reading structured fields off the raw `response` dict — so every
+  field resolved to its default and the stage's decision/output was silently
+  dropped. The fix inserts a module-level `from_function` response-parser between
+  each LLM stage and its consumer that unwraps `response → .content → json.loads`
+  (or `.content` directly for prose stages) and publishes the parsed structured
+  dict. 15 parsers total — workflows 1, graph 3, query_processing 6, agentic 5 —
+  each returning a **typed parse-error sentinel** on malformed/non-JSON/missing-
+  field output (never a fabricated default), so a node degrades to an honest
+  empty/unadjusted result rather than inventing data.
+  - **`AdaptiveRAGWorkflowNode`:** the `rag_strategy_analyzer` decision now drives
+    the `SwitchNode` strategy executor + results aggregator (was read off the
+    wrong `result` port + unparsed; the strategy choice never reached the
+    executor). Closes F31-FU3.
+  - **`GraphRAGNode`:** entity-extraction, query-analysis, and global-summary
+    outputs are now parsed — the knowledge graph was previously built by iterating
+    the unparsed response dict's keys, the query-driven retrieval returned an empty
+    subgraph regardless of the LLM's analysis, and the global summary was accepted
+    but never read by the synthesizer. Closes F31-FU1.
+  - **`Query*` processors (expansion / decomposition / rewriting / intent /
+    multi-hop):** all 6 LLM stages were silently defaulting their structured
+    output; now parsed.
+  - **`AgenticRAGNode` / `ReasoningRAGNode`:** all 5 LLM stages were dropping
+    verdicts or raising on prose output read as a missing key; now parsed.
+    `ConversationalRAGNode` was already correct and is unchanged.
+- Each fix ships a real-`LocalRuntime` end-to-end test with a verified red-pre
+  proof + a malformed-output honesty test; non-runnable graphs (networkx sandbox,
+  agentic cycle) are proven via structural-wiring + standalone-parser probes.
+  RAG suite: 948 passed; `src/kailash/nodes/base.py` untouched. Converged via
+  parallel reviewer + security-reviewer (2 consecutive clean rounds).
+
 ### Fixed (F9 #1117 — `PrivacyPreservingRAGNode` published nothing at runtime)
 
 - **`PrivacyPreservingRAGNode` now runs end-to-end and PUBLISHES its documented
