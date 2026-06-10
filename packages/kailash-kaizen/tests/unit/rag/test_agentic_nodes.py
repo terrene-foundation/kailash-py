@@ -182,8 +182,11 @@ class TestAgenticRAGNode:
         assert node.planning_strategy == "tree-of-thought"  # type: ignore[attr-defined]
         assert node.verification_enabled is False  # type: ignore[attr-defined]
 
-    def test_workflow_has_six_nodes_with_verification(self):
-        """With verification enabled the sub-workflow has six nodes."""
+    def test_workflow_has_nine_nodes_with_verification(self):
+        """With verification enabled the sub-workflow has nine nodes: the 6
+        original nodes plus the 3 L3 messages-composers (planner / react /
+        verifier) that render real context into each LLM stage's ``messages``
+        port."""
         wf = _build(AgenticRAGNode(verification_enabled=True))
         assert set(wf.nodes) == {
             "planner_agent",
@@ -192,14 +195,19 @@ class TestAgenticRAGNode:
             "state_manager",
             "verifier_agent",
             "result_synthesizer",
+            "planner_messages_composer",
+            "react_messages_composer",
+            "verifier_messages_composer",
         }
 
     def test_workflow_omits_verifier_when_disabled(self):
-        """With verification disabled the verifier_agent node is omitted —
-        five nodes remain."""
+        """With verification disabled the verifier_agent node AND its
+        messages-composer are omitted — seven nodes remain (5 original +
+        planner/react composers)."""
         wf = _build(AgenticRAGNode(verification_enabled=False))
         assert "verifier_agent" not in wf.nodes
-        assert len(wf.nodes) == 5
+        assert "verifier_messages_composer" not in wf.nodes
+        assert len(wf.nodes) == 7
 
     def test_max_reasoning_steps_interpolated_into_state_manager(self):
         """``max_reasoning_steps`` flows into the state_manager code template."""
@@ -277,13 +285,18 @@ class TestReasoningRAGNode:
         assert node.reasoning_depth == 5  # type: ignore[attr-defined]
         assert node.strategy == "tree_of_thought"  # type: ignore[attr-defined]
 
-    def test_workflow_has_three_nodes(self):
-        """The reasoning sub-workflow always has three nodes."""
+    def test_workflow_has_six_nodes(self):
+        """The reasoning sub-workflow always has six nodes: the 3 LLM stages
+        plus the 3 L3 messages-composers (one per LLM stage) that render real
+        context into each ``messages`` port."""
         wf = _build(ReasoningRAGNode())
         assert set(wf.nodes) == {
             "problem_decomposer",
             "step_reasoner",
             "logic_verifier",
+            "decomposer_messages_composer",
+            "step_reasoner_messages_composer",
+            "logic_verifier_messages_composer",
         }
 
     def test_strategy_and_depth_interpolated_into_decomposer_prompt(self):

@@ -36,6 +36,214 @@ _DEFAULT_LLM_MODEL = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199, query_processing.py lines 54-212, and
+# agentic.py lines 43-120).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name (`documents`, `query`, `graph_data`, ...) is read via `kwargs.get` and
+# SILENTLY DROPPED. The prior wiring in GraphRAGNode fed NO real input to two of
+# the three LLM stages (entity_extractor + query_processor had ZERO inbound
+# edges) and a phantom `graph_data` port to the third (summary_generator), so
+# every LLM stage answered from its `system_prompt` alone — the entity extractor
+# never saw the documents to extract from, the query processor never saw the
+# user's query, and the summary generator never saw the retrieved graph context
+# (the L3 "LLM ignores its input" defect).
+#
+# The context contract is HETEROGENEOUS per stage:
+#   - entity_extractor reasons over the REAL source DOCUMENT TEXT (the top-level
+#     `documents` workflow input — the same input GraphBuilderNode.run reads).
+#   - query_processor reasons over the user QUERY (the top-level `query` input —
+#     the same input result_synthesizer reads).
+#   - summary_generator reasons over the RETRIEVED GRAPH CONTEXT (the real
+#     upstream graph_retriever `graph_retrieval` output) + the query.
+# Each composer renders the REAL inputs that stage must reason over into a
+# `messages` list wired to the stage's VALID `messages` port.
+#
+# These are real module-level functions (real `return`→`result`, type-checkable,
+# no f-string brace-escaping) per the program's reference template — NOT inline
+# `code=` codegen blocks. Each is pure data rendering (the permitted
+# output-formatting exception per rules/agent-reasoning.md) — NO if-else routing
+# / keyword classification on content. The graph-construction / traversal logic
+# in GraphBuilderNode / graph_retriever is legitimate graph-algorithm code and
+# is untouched.
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): each composer renders only inputs a
+# real upstream node publishes (or a real top-level workflow input). The
+# `documents` and `query` inputs are the SAME top-level inputs the deterministic
+# Node paths (GraphBuilderNode.run / result_synthesizer) already consume — no
+# input is invented. The graph_retrieval the summary composer renders is the
+# genuine graph_retriever output.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_text(value: Any) -> str:
+    """Coerce a wired scalar input to a clean string.
+
+    The parameter injector delivers top-level inputs as plain strings; wired
+    ports may arrive None on an unwired branch.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _render_documents(documents: Any) -> str:
+    """Render the source documents into a plain-text block for entity extraction.
+
+    `documents` is the top-level workflow input — a list of document dicts (the
+    same shape GraphBuilderNode.run consumes: ``{"content": ..., "id": ...}``).
+    A document may also arrive as a bare string. Returns "" when empty.
+    """
+    if isinstance(documents, str):
+        return documents.strip()
+    if not isinstance(documents, list):
+        return ""
+    blocks = []
+    for i, doc in enumerate(documents):
+        if isinstance(doc, dict):
+            # ``doc.get("content")`` may be present-with-None; ``or ""`` covers it.
+            content = (doc.get("content") or "").strip()
+        elif isinstance(doc, str):
+            content = doc.strip()
+        else:
+            content = ""
+        if content:
+            blocks.append(f"[Document {i + 1}] {content}")
+    return "\n\n".join(blocks)
+
+
+def _render_graph_context(graph_retrieval: Any) -> str:
+    """Render the retrieved subgraph (entities + relationships + communities)
+    into a readable context block for the summary generator.
+
+    `graph_retrieval` is the graph_retriever `result` port value, i.e. the
+    ``{"graph_retrieval": {...}}`` wrapper carrying ``entities`` /
+    ``relationships`` / ``community_context``. Returns "" when the retrieval is
+    empty.
+    """
+    if isinstance(graph_retrieval, dict):
+        inner = graph_retrieval.get("graph_retrieval", graph_retrieval)
+    else:
+        inner = {}
+    if not isinstance(inner, dict):
+        return ""
+    parts: List[str] = []
+
+    entities = inner.get("entities") or []
+    if isinstance(entities, list) and entities:
+        parts.append("Key Entities:")
+        for entity in entities[:10]:
+            if not isinstance(entity, dict):
+                continue
+            name = entity.get("name", "")
+            etype = entity.get("type", "")
+            desc = entity.get("description", "") or ""
+            parts.append(f"- {name} ({etype}): {desc}")
+
+    relationships = inner.get("relationships") or []
+    if isinstance(relationships, list) and relationships:
+        parts.append("\nKey Relationships:")
+        for rel in relationships[:10]:
+            if not isinstance(rel, dict):
+                continue
+            parts.append(
+                f"- {rel.get('source', '')} {rel.get('type', '')} "
+                f"{rel.get('target', '')}"
+            )
+
+    community_context = inner.get("community_context") or {}
+    if isinstance(community_context, dict) and community_context:
+        parts.append("\nRelated Topic Clusters:")
+        for comm_id, nodes in list(community_context.items())[:3]:
+            node_list = nodes if isinstance(nodes, list) else []
+            parts.append(
+                f"- Cluster {comm_id}: {', '.join(str(n) for n in node_list[:5])}"
+            )
+
+    return "\n".join(parts).strip()
+
+
+def compose_entity_extraction_messages(documents=None):
+    """Compose the ``messages`` list for the entity_extractor LLM stage.
+
+    Embeds the REAL source DOCUMENT TEXT so the LLM extracts entities and
+    relationships FROM THE DOCUMENTS — not from its ``system_prompt`` alone.
+    Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+
+    ``documents`` is declared as a function parameter so the runtime's parameter
+    injector delivers the caller-supplied top-level ``documents`` workflow input
+    (the same input GraphBuilderNode.run reads). When no documents are wired the
+    user message is an explicit empty note so the stage still receives a
+    well-formed (non-empty) messages list.
+    """
+    rendered = _render_documents(documents)
+    content = (
+        "Extract entities and relationships from the following text:\n\n" + rendered
+        if rendered
+        else "No documents were provided to extract entities from."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_query_analysis_messages(query=""):
+    """Compose the ``messages`` list for the query_processor LLM stage.
+
+    Embeds the REAL user QUERY so the LLM analyses THE QUERY (entities,
+    relationship types, multi-hop need) — not from its ``system_prompt`` alone.
+    Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+
+    ``query`` is declared as a function parameter so the parameter injector
+    delivers the caller-supplied top-level ``query`` workflow input (the same
+    input result_synthesizer reads).
+    """
+    q = _coerce_text(query)
+    content = (
+        "Analyze the following query for graph retrieval:\n" + q
+        if q
+        else "No query was provided to analyze."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_summary_messages(graph_retrieval=None, query=""):
+    """Compose the ``messages`` list for the summary_generator LLM stage.
+
+    Embeds the REAL retrieved graph context (entities + relationships +
+    community clusters from the upstream graph_retriever) AND the user query so
+    the LLM summarises the ACTUAL retrieved subgraph — not from its
+    ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+
+    ``graph_retrieval`` is the upstream graph_retriever ``result`` port value
+    (the ``{"graph_retrieval": {...}}`` wrapper). ``query`` is the top-level
+    workflow input. When the retrieval is empty (no entities matched) the
+    composer renders an explicit empty-context note rather than fabricating
+    graph data (zero-tolerance Rule 2).
+    """
+    context = _render_graph_context(graph_retrieval)
+    q = _coerce_text(query)
+    parts: List[str] = []
+    if context:
+        parts.append("Retrieved graph context:\n" + context)
+    else:
+        parts.append(
+            "No graph context was retrieved for this query "
+            "(no entities matched the retrieved subgraph)."
+        )
+    if q:
+        parts.append("Query:\n" + q)
+    parts.append(
+        "Summarize the main themes, key entities, and important relationships."
+    )
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
 @register_node()
 class GraphRAGNode(WorkflowNode):
     """
@@ -430,32 +638,128 @@ result = {
             },
         )
 
-        # Connect workflow
+        # Messages-composer nodes (L3 fix). Each LLM stage's context is routed
+        # through a `PythonCodeNode.from_function` composer that RENDERS the real
+        # inputs (document text / query / retrieved graph context) into an
+        # OpenAI-format `messages` list wired to the LLMAgentNode `messages` port
+        # — the ONLY port LLMAgentNode reads (its `run` does `kwargs["messages"]`).
+        # The prior wiring left entity_extractor + query_processor with ZERO
+        # inbound edges and fed summary_generator a phantom `graph_data` port the
+        # node silently drops.
+        #
+        # `.from_function` is the correct primitive here (real module-level
+        # functions get real `return`→`result`, type-checkable, no f-string
+        # brace-escaping). `type: ignore[attr-defined]`: `from_function` is a
+        # classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py /
+        # query_processing.py). `_internal=True` is the SDK-internal
+        # node-construction path; it suppresses the consumer-facing instance-API
+        # advisory UserWarning (zero-tolerance Rule 1: no spurious runtime
+        # warnings).
+        entity_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_entity_extraction_messages,
+                name="entity_messages_composer",
+            ),
+            node_id="entity_messages_composer",
+            _internal=True,
+        )
+        query_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_query_analysis_messages,
+                name="query_messages_composer",
+            ),
+            node_id="query_messages_composer",
+            _internal=True,
+        )
+
+        summary_messages_composer_id: Optional[str] = None
+        if self.use_global_summary:
+            summary_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    compose_summary_messages,
+                    name="summary_messages_composer",
+                ),
+                node_id="summary_messages_composer",
+                _internal=True,
+            )
+
+        # Connect workflow.
+        #
+        # Nested-port hygiene fix (#1117/#1123 bug class): a PythonCodeNode
+        # publishes a SINGLE `result` output port carrying its whole module-scope
+        # `result` dict — the nested keys ("graph_data", "graph_retrieval",
+        # "graph_rag_results") are NOT individual ports. The prior edges read
+        # those non-existent nested ports as source outputs, so every downstream
+        # input silently bound to nothing (never surfaced because no test ran the
+        # full graph under LocalRuntime). Every PythonCodeNode source edge now
+        # reads `result.<key>`; LLMAgentNode publishes each top-level result key
+        # as a real port, so `response` stays a bare source output.
+
+        # L3 fix: entity_extractor reasons over the REAL source documents. The
+        # composer declares `documents` as a function param, so the parameter
+        # injector delivers the top-level `documents` workflow input (the same
+        # input GraphBuilderNode.run reads). Its `result.messages` feeds the
+        # entity_extractor `messages` port.
+        builder.add_connection(
+            entity_messages_composer_id,
+            "result.messages",
+            entity_extractor_id,
+            "messages",
+        )
         builder.add_connection(
             entity_extractor_id, "response", graph_builder_id, "extraction_results"
+        )
+
+        # L3 fix: query_processor reasons over the REAL user query. The composer
+        # declares `query` as a function param, so the parameter injector
+        # delivers the top-level `query` workflow input (the same input
+        # result_synthesizer reads). Its `result.messages` feeds the
+        # query_processor `messages` port.
+        builder.add_connection(
+            query_messages_composer_id,
+            "result.messages",
+            query_processor_id,
+            "messages",
         )
         builder.add_connection(
             query_processor_id, "response", graph_retriever_id, "query_analysis"
         )
+
         builder.add_connection(
-            graph_builder_id, "graph_data", graph_retriever_id, "graph_data"
+            graph_builder_id, "result.graph_data", graph_retriever_id, "graph_data"
         )
         builder.add_connection(
             graph_retriever_id,
-            "graph_retrieval",
+            "result.graph_retrieval",
             result_synthesizer_id,
             "graph_retrieval",
         )
         builder.add_connection(
-            graph_builder_id, "graph_data", result_synthesizer_id, "graph_data"
+            graph_builder_id, "result.graph_data", result_synthesizer_id, "graph_data"
         )
 
         if self.use_global_summary:
             # The same guard bound summary_generator_id above; assert pins the
             # invariant for the type checker.
             assert summary_generator_id is not None
+            assert summary_messages_composer_id is not None
+            # L3 fix: summary_generator reasons over the REAL retrieved graph
+            # context (the genuine graph_retriever output) + the query — NOT the
+            # phantom `graph_data` port the LLM drops. The composer renders both
+            # into a `messages` list on the VALID `messages` port. `query` is
+            # the top-level workflow input the parameter injector delivers.
             builder.add_connection(
-                graph_builder_id, "graph_data", summary_generator_id, "graph_data"
+                graph_retriever_id,
+                "result.graph_retrieval",
+                summary_messages_composer_id,
+                "graph_retrieval",
+            )
+            builder.add_connection(
+                summary_messages_composer_id,
+                "result.messages",
+                summary_generator_id,
+                "messages",
             )
             builder.add_connection(
                 summary_generator_id,

@@ -16,6 +16,15 @@ import os
 from typing import Any, Dict, List, Optional, Union  # noqa: F401
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+# Registering import (mirrors evaluation.py / conversational.py): the inner
+# workflows wire PythonCodeNode by STRING via `builder.add_node("PythonCodeNode",
+# ...)`, AND the L3 messages-composer fix below wraps real module-level functions
+# via `PythonCodeNode.from_function(fn)`. Importing the class runs the
+# `@register_node` side effect that populates the registry the string lookup
+# resolves against, and binds the symbol `.from_function` is called on. Do NOT
+# drop to satisfy an unused-import linter.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
@@ -40,6 +49,167 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199 and evaluation.py lines 51-229).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name (`query`, `analysis`, ...) is read via `kwargs.get` and SILENTLY DROPPED.
+# The prior wiring fed NO real input to any LLM stage in this module — each
+# `_create_workflow` added an LLMAgentNode whose ONLY inbound edge was from a
+# DOWNSTREAM consumer's perspective, so the LLM never saw the user's query. It
+# answered every expansion / decomposition / rewrite / classification / hop-plan
+# request from its `system_prompt` alone (the L3 "LLM ignores its input" defect).
+#
+# KEY DISTINCTION from the evaluation / conversational shards: these stages run
+# PRE-retrieval. The context an LLM stage must reason over is the USER QUERY
+# (and, for the query_rewriter, the upstream query_analyzer output) — NOT
+# retrieved documents. Every composer below therefore renders the REAL query
+# (delivered as the top-level `query` workflow input the parameter injector
+# auto-distributes — the same external input each node's deterministic `run()`
+# reads) into a `messages` list wired to the LLM stage's VALID `messages` port.
+#
+# These are real module-level functions (real `return`→`result`, type-checkable,
+# no f-string brace-escaping) per the program's reference template — NOT inline
+# `code=` codegen blocks. Each is pure data rendering (the permitted
+# output-formatting exception per rules/agent-reasoning.md) — NO if-else routing
+# / keyword classification on query content.
+# ---------------------------------------------------------------------------
+
+
+def _query_text(query: Any) -> str:
+    """Coerce the wired `query` input to a clean string.
+
+    The parameter injector delivers the top-level `query` workflow input; it is
+    normally a plain string but may arrive None on an unwired optional branch.
+    """
+    if isinstance(query, str):
+        return query.strip()
+    if query is None:
+        return ""
+    return str(query).strip()
+
+
+def compose_expansion_messages(query=""):
+    """Compose the ``messages`` list for the QueryExpansionNode llm_expander.
+
+    Embeds the REAL user query so the LLM generates expansions OF THE QUERY —
+    not from its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired
+    to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Generate query expansions for the following query:\n" + q
+        if q
+        else "No query was provided to expand."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_decomposition_messages(query=""):
+    """Compose the ``messages`` list for the QueryDecompositionNode
+    query_decomposer.
+
+    Embeds the REAL complex query so the LLM decomposes THE QUERY into
+    sub-questions — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Decompose the following complex query into sub-questions:\n" + q
+        if q
+        else "No query was provided to decompose."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_analysis_messages(query=""):
+    """Compose the ``messages`` list for the QueryRewritingNode query_analyzer
+    (stage 1 of the 2-stage rewrite chain).
+
+    Embeds the REAL query so the analyzer detects issues IN THE QUERY — not from
+    its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Analyze the following query for issues and improvements:\n" + q
+        if q
+        else "No query was provided to analyze."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_rewrite_messages(query="", analysis=None):
+    """Compose the ``messages`` list for the QueryRewritingNode query_rewriter
+    (stage 2 of the 2-stage rewrite chain).
+
+    Embeds the REAL query AND the upstream query_analyzer output so the rewriter
+    rewrites THE QUERY guided by the analysis — not from its ``system_prompt``
+    alone. Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages``
+    port.
+
+    ``analysis`` is the query_analyzer LLMAgentNode's ``response`` port value —
+    the parsed JSON dict the analyzer's ``system_prompt`` advertises
+    (``{"issues": [...], "suggestions": {...}}``). It is rendered as readable
+    text so the rewriter genuinely sees the analysis it must act on.
+    """
+    q = _query_text(query)
+    parts = ["Rewrite the following query for optimal retrieval."]
+    parts.append("Query:\n" + (q or "(empty)"))
+
+    if isinstance(analysis, dict) and analysis:
+        issues = analysis.get("issues")
+        suggestions = analysis.get("suggestions")
+        analysis_lines = []
+        if isinstance(issues, list) and issues:
+            analysis_lines.append(
+                "Detected issues: " + ", ".join(str(i) for i in issues)
+            )
+        if isinstance(suggestions, dict) and suggestions:
+            for key, val in suggestions.items():
+                analysis_lines.append(f"{key}: {val}")
+        if analysis_lines:
+            parts.append("Analysis of the query:\n" + "\n".join(analysis_lines))
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_intent_messages(query=""):
+    """Compose the ``messages`` list for the QueryIntentClassifierNode
+    intent_classifier.
+
+    Embeds the REAL query so the classifier classifies THE QUERY's intent — not
+    from its ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to
+    the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Classify the intent of the following query:\n" + q
+        if q
+        else "No query was provided to classify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_hop_plan_messages(query=""):
+    """Compose the ``messages`` list for the MultiHopQueryPlannerNode
+    hop_planner.
+
+    Embeds the REAL query so the planner plans a multi-hop strategy FOR THE
+    QUERY — not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``
+    wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _query_text(query)
+    content = (
+        "Plan a multi-hop retrieval strategy for the following query:\n" + q
+        if q
+        else "No query was provided to plan."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
 
 
 @register_node()
@@ -240,7 +410,37 @@ result = {
             },
         )
 
-        # Connect workflow
+        # L3 messages-composer (reference template — conversational.py /
+        # evaluation.py). The llm_expander previously received NO real input;
+        # it generated expansions from its `system_prompt` alone, never seeing
+        # the user's query. The composer renders the REAL `query` (the top-level
+        # workflow input the parameter injector delivers — the same input
+        # `run()` reads) into a `messages` list wired to the VALID `messages`
+        # port (the ONLY port LLMAgentNode reads — its `run` does
+        # `kwargs["messages"]`). type: ignore[attr-defined]: `from_function` is
+        # a classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        expansion_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_expansion_messages,
+                name="expansion_messages_composer",
+            ),
+            node_id="expansion_messages_composer",
+            _internal=True,
+        )
+
+        # Connect workflow. The composer declares `query` as a function param,
+        # so the runtime's parameter injector delivers the caller-supplied
+        # top-level `query` workflow input to it. Its `result.messages` (nested
+        # key on the single `result` port a from_function node publishes) feeds
+        # the llm_expander `messages` port.
+        builder.add_connection(
+            expansion_messages_composer_id,
+            "result.messages",
+            llm_expander_id,
+            "messages",
+        )
         builder.add_connection(
             llm_expander_id, "response", processor_id, "expansion_response"
         )
@@ -444,7 +644,27 @@ result = {"execution_plan": execution_plan}
             },
         )
 
+        # L3 messages-composer (reference template). The query_decomposer
+        # previously received NO real input — it decomposed from its
+        # `system_prompt` alone, never seeing the query. The composer renders the
+        # REAL `query` (top-level workflow input via the parameter injector) into
+        # a `messages` list wired to the VALID `messages` port.
+        decomposition_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_decomposition_messages,
+                name="decomposition_messages_composer",
+            ),
+            node_id="decomposition_messages_composer",
+            _internal=True,
+        )
+
         # Connect workflow
+        builder.add_connection(
+            decomposition_messages_composer_id,
+            "result.messages",
+            decomposer_id,
+            "messages",
+        )
         builder.add_connection(
             decomposer_id, "response", dependency_resolver_id, "decomposition_result"
         )
@@ -680,8 +900,60 @@ result = {
             },
         )
 
-        # Connect workflow
-        builder.add_connection(analyzer_id, "response", rewriter_id, "analysis")
+        # L3 messages-composers (reference template) for the 2-stage chain.
+        # PREVIOUS PHANTOM WIRING: `analyzer.response -> rewriter."analysis"` fed
+        # the analyzer's output to the rewriter on a port the LLMAgentNode
+        # SILENTLY DROPS (its `run` reads only `kwargs["messages"]`), AND neither
+        # LLM stage ever received the user's query. Both stages answered from
+        # their `system_prompt` alone.
+        #
+        # FIX: an analysis composer renders the REAL `query` into the analyzer's
+        # `messages`; a rewrite composer renders the REAL `query` PLUS the real
+        # upstream `analyzer.response` (the analysis JSON the analyzer's
+        # system_prompt advertises) into the rewriter's `messages`. The
+        # `analyzer.response -> rewriter."analysis"` phantom edge is REMOVED; the
+        # analysis now reaches the rewriter through the composer's `messages`.
+        analysis_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_analysis_messages,
+                name="analysis_messages_composer",
+            ),
+            node_id="analysis_messages_composer",
+            _internal=True,
+        )
+        rewrite_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_rewrite_messages,
+                name="rewrite_messages_composer",
+            ),
+            node_id="rewrite_messages_composer",
+            _internal=True,
+        )
+
+        # Connect workflow.
+        # Stage 1: query -> analysis composer -> analyzer.messages.
+        builder.add_connection(
+            analysis_messages_composer_id,
+            "result.messages",
+            analyzer_id,
+            "messages",
+        )
+        # Stage 2: query + analyzer.response -> rewrite composer -> rewriter.messages.
+        # (The composer declares `query` (top-level injected) AND `analysis`
+        # (wired from analyzer.response) as function params.)
+        builder.add_connection(
+            analyzer_id,
+            "response",
+            rewrite_messages_composer_id,
+            "analysis",
+        )
+        builder.add_connection(
+            rewrite_messages_composer_id,
+            "result.messages",
+            rewriter_id,
+            "messages",
+        )
+        # Combiner fan-in unchanged: it reads both LLM stages' `response` ports.
         builder.add_connection(analyzer_id, "response", combiner_id, "analysis_result")
         builder.add_connection(rewriter_id, "response", combiner_id, "rewrite_result")
 
@@ -1007,7 +1279,27 @@ result = {"routing_decision": routing_decision}
             },
         )
 
+        # L3 messages-composer (reference template). The intent_classifier
+        # previously received NO real input — it classified from its
+        # `system_prompt` alone, never seeing the query. The composer renders the
+        # REAL `query` (top-level workflow input via the parameter injector) into
+        # a `messages` list wired to the VALID `messages` port.
+        intent_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_intent_messages,
+                name="intent_messages_composer",
+            ),
+            node_id="intent_messages_composer",
+            _internal=True,
+        )
+
         # Connect workflow
+        builder.add_connection(
+            intent_messages_composer_id,
+            "result.messages",
+            classifier_id,
+            "messages",
+        )
         builder.add_connection(
             classifier_id, "response", strategy_mapper_id, "intent_classification"
         )
@@ -1270,7 +1562,27 @@ result = {"multi_hop_plan": execution_plan}
             },
         )
 
+        # L3 messages-composer (reference template). The hop_planner previously
+        # received NO real input — it planned from its `system_prompt` alone,
+        # never seeing the query. The composer renders the REAL `query`
+        # (top-level workflow input via the parameter injector) into a `messages`
+        # list wired to the VALID `messages` port.
+        hop_plan_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_hop_plan_messages,
+                name="hop_plan_messages_composer",
+            ),
+            node_id="hop_plan_messages_composer",
+            _internal=True,
+        )
+
         # Connect workflow
+        builder.add_connection(
+            hop_plan_messages_composer_id,
+            "result.messages",
+            hop_planner_id,
+            "messages",
+        )
         builder.add_connection(
             hop_planner_id, "response", execution_planner_id, "hop_plan_result"
         )
@@ -1400,7 +1712,21 @@ class AdaptiveQueryProcessorNode(Node):
         """Create adaptive query processing workflow"""
         builder = WorkflowBuilder()
 
-        # Add query analyzer
+        # L3 NOTE (no composer needed here): AdaptiveQueryProcessorNode owns NO
+        # direct LLMAgentNode stage. Its only "LLM-ish" stage is the embedded
+        # `intent_analyzer`, a QueryIntentClassifierNode wired by node-type
+        # string. When that subclass executes inside this workflow under
+        # LocalRuntime it runs its deterministic `run()` (the registry resolves
+        # the node-type to the class; LocalRuntime invokes `run()`, NOT the
+        # class's OWN inner `_create_workflow()`), so NO LLMAgentNode runs at this
+        # composition level — there is no `messages` port to wire here. The
+        # QueryIntentClassifierNode LLM stage's `messages` defect is fixed in
+        # THAT class's `_create_workflow` (intent_messages_composer above); when
+        # a caller drives the classifier through ITS inner LLM workflow, the
+        # query reaches the LLM. The adaptive composition consumes the
+        # classifier's `routing_decision` run()-contract output, so feeding the
+        # real query INTO this workflow is via the top-level `query` input the
+        # parameter injector delivers to the embedded classifier's `run()`.
         analyzer_id = builder.add_node(
             "QueryIntentClassifierNode", node_id="intent_analyzer"
         )

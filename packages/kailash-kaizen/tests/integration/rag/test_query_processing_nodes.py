@@ -751,3 +751,181 @@ class TestQueryProcessingModuleIntegration:
         wf = _build(node)
         assert isinstance(wf, Workflow)
         assert len(wf.nodes) > 0
+
+
+# ==========================================================================
+# L3 messages-wiring proof — the real query reaches every LLM stage via the
+# `messages` port (Wave 2 Shard 2).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through `messages` (its `run` reads
+# `kwargs["messages"]`); ANY other wired port is silently dropped. Pre-shard the
+# query_processing LLM stages received NO real input — they answered from their
+# `system_prompt` alone. This shard added a `*_messages_composer`
+# (PythonCodeNode.from_function) per LLM stage that renders the REAL query (+ the
+# upstream analyzer output for the rewriter) into the `messages` port.
+#
+# These tests exercise the PRODUCTION delivery path: the query is delivered as a
+# TOP-LEVEL workflow input (`parameters={"query": ...}`), so the runtime's
+# parameter injector auto-distributes it to every node declaring a `query`
+# param — including each composer. This is NOT node-keyed injection into the LLM
+# stage (the false-green trap that would bypass the composer entirely).
+#
+# Proof shape: a `_MessageCapturingLLMAgent` substitute records the `messages`
+# each LLM stage actually receives (keyed by node id) AND returns the same
+# deterministic JSON payloads so the rest of each workflow runs to completion.
+# Asserting the captured `messages` embed the literal query text proves the
+# composer ran with the real query AND the wire reached the `messages` port.
+# ==========================================================================
+
+
+# Module-level sink the capturing substitute writes into. Keyed by the LLM
+# stage's graph node_id → the `messages` list it received. Reset per test.
+_CAPTURED_MESSAGES: Dict[str, Any] = {}
+
+
+class _MessageCapturingLLMAgent(_DeterministicLLMAgent):
+    """Deterministic substitute that ADDITIONALLY records the ``messages`` each
+    LLM stage receives into the module-level ``_CAPTURED_MESSAGES`` sink.
+
+    Inherits the deterministic JSON payloads from ``_DeterministicLLMAgent`` (so
+    every downstream ``PythonCodeNode`` parses real output and each workflow runs
+    end-to-end), and overrides ``run`` to capture the ``messages`` kwarg BEFORE
+    returning the payload — proving the composer's ``result.messages`` reached
+    the VALID ``messages`` port. This is a Protocol-Satisfying Deterministic
+    Adapter (legal Tier-2 surface), NOT a mock: it inherits the real ``Node``
+    base and implements the runtime contract deterministically.
+    """
+
+    def run(self, **kwargs: Any) -> Dict[str, Any]:
+        _CAPTURED_MESSAGES[self.id] = kwargs.get("messages")
+        return super().run(**kwargs)
+
+
+@pytest.fixture
+def capturing_llm(monkeypatch: pytest.MonkeyPatch):
+    """Like ``deterministic_llm`` but substitutes the message-capturing adapter,
+    and clears the capture sink per test."""
+    from kailash.nodes.base import NodeRegistry
+
+    import kaizen.nodes.rag.query_processing as qp_mod
+
+    _CAPTURED_MESSAGES.clear()
+
+    monkeypatch.setattr(
+        qp_mod, "LLMAgentNode", _MessageCapturingLLMAgent  # type: ignore[assignment]
+    )
+    nodes_dict = NodeRegistry._nodes  # type: ignore[attr-defined]
+    prior = nodes_dict.get("LLMAgentNode")
+    nodes_dict["LLMAgentNode"] = _MessageCapturingLLMAgent
+    try:
+        yield _MessageCapturingLLMAgent
+    finally:
+        if prior is None:
+            nodes_dict.pop("LLMAgentNode", None)
+        else:
+            nodes_dict["LLMAgentNode"] = prior
+
+
+def _flatten_message_text(messages: Any) -> str:
+    """Concatenate the `content` of every message in an OpenAI-format list."""
+    assert isinstance(messages, list), f"messages must be a list, got {messages!r}"
+    return "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+
+
+class TestQueryProcessingContextReachesLLM:
+    """Every LLM stage in the query_processing module receives the REAL user
+    query through the VALID ``messages`` port — delivered via the production
+    top-level-input path (parameter injector), NOT node-keyed injection."""
+
+    _QUERY = "how do transformer attention mechanisms scale to long sequences"
+
+    def _run(self, node: Any) -> Dict[str, Any]:
+        wf = _build(node)
+        return _execute_workflow(wf, query=self._QUERY)
+
+    def test_expansion_llm_receives_query(self, capturing_llm):
+        self._run(QueryExpansionNode(name="ctx_qe"))
+        # The composer node published its `messages` AND the LLM stage received
+        # them on the `messages` port — both proven below.
+        captured = _CAPTURED_MESSAGES.get("llm_expander")
+        text = _flatten_message_text(captured)
+        assert self._QUERY in text, (
+            "llm_expander MUST receive the real query via `messages`; " f"got: {text!r}"
+        )
+
+    def test_decomposition_llm_receives_query(self, capturing_llm):
+        self._run(QueryDecompositionNode(name="ctx_qd"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_decomposer"))
+        assert self._QUERY in text
+
+    def test_rewriting_analyzer_receives_query(self, capturing_llm):
+        self._run(QueryRewritingNode(name="ctx_qr"))
+        analyzer_text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_analyzer"))
+        assert (
+            self._QUERY in analyzer_text
+        ), "query_analyzer (stage 1) MUST receive the real query via `messages`"
+
+    def test_rewriting_rewriter_receives_query_and_analysis(self, capturing_llm):
+        self._run(QueryRewritingNode(name="ctx_qr2"))
+        rewriter_text = _flatten_message_text(_CAPTURED_MESSAGES.get("query_rewriter"))
+        # The rewriter (stage 2) receives the REAL query ...
+        assert (
+            self._QUERY in rewriter_text
+        ), "query_rewriter (stage 2) MUST receive the real query via `messages`"
+        # ... AND the upstream analyzer output. The deterministic analyzer
+        # reports `issues: ["spelling_errors"]` + a `suggestions` dict; the
+        # rewrite composer renders that analysis into the rewriter's messages.
+        assert "spelling_errors" in rewriter_text, (
+            "query_rewriter MUST receive the upstream analyzer output "
+            f"(analysis) via `messages`; got: {rewriter_text!r}"
+        )
+
+    def test_intent_classifier_llm_receives_query(self, capturing_llm):
+        self._run(QueryIntentClassifierNode(name="ctx_qic"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("intent_classifier"))
+        assert self._QUERY in text
+
+    def test_multihop_planner_llm_receives_query(self, capturing_llm):
+        self._run(MultiHopQueryPlannerNode(name="ctx_mhp"))
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("hop_planner"))
+        assert self._QUERY in text
+
+    def test_composer_publishes_messages_on_result_port(self, capturing_llm):
+        """The composer is a real from_function PythonCodeNode publishing its
+        returned dict under a single `result` port; the nested `messages` key is
+        addressed `result.messages`. Assert the composer node's OWN output
+        carries the real query — proving the rendering happened in-graph (not
+        just at the captured LLM boundary)."""
+        wf = _build(QueryExpansionNode(name="ctx_qe_composer"))
+        results = _execute_workflow(wf, query=self._QUERY)
+        assert "expansion_messages_composer" in results
+        composed = results["expansion_messages_composer"]["result"]["messages"]
+        assert self._QUERY in _flatten_message_text(composed)
+
+    def test_adaptive_owns_no_direct_llm_stage_query_reaches_embedded(
+        self, capturing_llm
+    ):
+        """HONEST DISPOSITION: ``AdaptiveQueryProcessorNode`` owns NO direct
+        LLMAgentNode stage. Its embedded ``intent_analyzer`` is a
+        ``QueryIntentClassifierNode`` wired by node-type string; under
+        LocalRuntime that subclass executes its deterministic ``run()`` (NOT its
+        OWN inner LLM ``_create_workflow``), so NO LLMAgentNode runs at this
+        composition level — there is no `messages` port to capture here.
+
+        The QueryIntentClassifierNode LLM stage's `messages` defect is fixed in
+        THAT class's `_create_workflow` (covered by
+        ``test_intent_classifier_llm_receives_query`` above). Here we prove the
+        production top-level-input path still delivers the real query INTO the
+        adaptive composition: the embedded classifier's ``run()`` receives the
+        query and the adaptive plan reflects it."""
+        wf = _build(AdaptiveQueryProcessorNode(name="ctx_aqp"))
+        results = _execute_workflow(wf, query=self._QUERY)
+        # No LLMAgentNode ran at this level, so nothing was captured.
+        assert _CAPTURED_MESSAGES == {}, (
+            "AdaptiveQueryProcessorNode must NOT run an LLMAgentNode directly; "
+            f"unexpected capture: {_CAPTURED_MESSAGES!r}"
+        )
+        # The real query reached the embedded classifier's run() and flows into
+        # the adaptive plan.
+        plan = results["adaptive_processor"]["result"]["adaptive_plan"]
+        assert plan["original_query"] == self._QUERY

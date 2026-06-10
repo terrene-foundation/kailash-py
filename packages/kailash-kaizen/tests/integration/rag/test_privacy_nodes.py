@@ -1,15 +1,18 @@
 """Tier-2a integration coverage — ``kaizen.nodes.rag.privacy``.
 
 F8 shard B9a. The 3 classes under test (PrivacyPreservingRAGNode,
-SecureMultiPartyRAGNode, ComplianceRAGNode) carry the privacy-preserving
-RAG claims this shard's load-bearing value-anchor targets:
-**ε-DP / PII = a safety CLAIM never verified** (F8 plan §B B9a row).
+SecureMultiPartyRAGNode, ComplianceRAGNode) carry the privacy-aware RAG
+behavior this shard verifies.
 
-The privacy/PII-redaction/compliance behavior is advertised in docstrings
-but was not empirically validated before B9a. This file verifies the
-load-bearing claims via real ``LocalRuntime.execute(workflow.build())``
-runs against the codegen PythonCodeNodes that DO execute end-to-end —
-matching the B7 ``test_workflows_nodes.py`` precedent.
+The node's REAL, load-bearing privacy capability is best-effort, regex-based
+PII redaction (email / phone / SSN / credit-card). The differential-privacy /
+homomorphic-encryption / secure-multi-party over-claims were STRIPPED in the
+RAG provably-correct remediation (Wave 2): the module no longer advertises
+any cryptographic privacy guarantee, and SecureMultiPartyRAGNode is a
+documented NON-FUNCTIONAL simulation. This file verifies the honest behavior
+via real ``LocalRuntime.execute(workflow.build())`` runs against the codegen
+PythonCodeNodes that DO execute end-to-end — matching the B7
+``test_workflows_nodes.py`` precedent.
 
 NO mocking (``@patch`` / ``MagicMock`` / ``unittest.mock`` are BLOCKED in
 Tier 2/3 per ``rules/testing.md``). These tests use a real in-process
@@ -261,10 +264,27 @@ class TestAuditLoggingWiring:
             "query_hash",
             "privacy_measures",
             "user_consent",
-            "compliance",
+            # The former "compliance" block asserted hardcoded GDPR/CCPA/HIPAA
+            # verdicts the node never assessed. It is replaced by a factual
+            # "pii_hygiene" action descriptor.
+            "pii_hygiene",
             "data_retention",
         ):
             assert f'"{required_key}"' in code
+
+    def test_audit_logger_emits_no_fake_regulatory_verdict(self):
+        """Honest-claim guardrail: the audit record MUST NOT assert a
+        GDPR/CCPA/HIPAA compliance verdict the node never determined."""
+        wf = _build(PrivacyPreservingRAGNode())
+        audit = wf.get_node("audit_logger")
+        assert audit is not None
+        code = audit.config["code"]
+        assert "gdpr_compliant" not in code
+        assert "ccpa_compliant" not in code
+        assert "hipaa_compliant" not in code
+        # The factual descriptor + disclaimer are present instead.
+        assert "pii_redaction_attempted" in code
+        assert "NOT a GDPR/CCPA/HIPAA compliance determination" in code
 
 
 # ==========================================================================
@@ -309,6 +329,323 @@ class TestCodegenRealRuntime:
         assert "555-000-1234" not in out["processed_text"]
         assert "000-11-2222" not in out["processed_text"]
         assert "0000 0000 0000 0000" not in out["processed_text"]
+
+
+# ==========================================================================
+# Derived honest flags — no hardcoded protection/compliance verdicts
+# ==========================================================================
+
+
+def _run_codegen_function(code: str, fn_name: str, **kwargs):
+    """Execute a codegen stage under a real ``LocalRuntime`` and return ``result``.
+
+    F9 #1117: privacy.py's aggregation/formatting codegen now CALLS its inner
+    function at module scope (``result = <fn>(...)``) and ``del``\\s the helper,
+    so the PythonCodeNode's outbound port carries the dict. The prior
+    latent-defect form (function assigned a never-returned function-LOCAL
+    ``result``) is fixed — so this helper exercises the REAL execution path
+    rather than slicing the function body.
+
+    The ``fn_name`` argument is retained for call-site readability (it names the
+    stage under test); the kwargs are bound as the PythonCodeNode's input
+    parameters, exactly as the upstream wiring binds them at runtime.
+    """
+    import warnings
+
+    builder = WorkflowBuilder()
+    builder.add_node(
+        "PythonCodeNode",
+        node_id="codegen_under_runtime",
+        config={"code": code},
+    )
+    runtime = LocalRuntime()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        results, _ = runtime.execute(
+            builder.build(),
+            parameters={"codegen_under_runtime": dict(kwargs)},
+        )
+    return results["codegen_under_runtime"]["result"]
+
+
+class TestDerivedHonestFlags:
+    """Protection/compliance flags in output dicts MUST reflect what ran."""
+
+    def test_aggregator_single_doc_branch_not_marked_aggregated(self):
+        """A single-doc cluster (k=1, truncation only) MUST NOT claim
+        aggregation; the k>=2 branch MUST."""
+        wf = _build(PrivacyPreservingRAGNode())
+        aggregator = wf.get_node("secure_aggregator")
+        assert aggregator is not None
+        # Two documents with DISTINCT content → two singleton clusters (k=1).
+        result = _run_codegen_function(
+            aggregator.config["code"],
+            "aggregate_results",
+            retrieval_results={
+                "documents": [
+                    {"content": "alpha unique content one"},
+                    {"content": "beta different content two"},
+                ]
+            },
+            dp_info={"dp_scores": [0.9, 0.8]},
+        )
+        singletons = [r for r in result["secure_results"] if r["cluster_size"] == 1]
+        assert singletons, "expected at least one single-doc cluster"
+        # Honest-claim: k=1 truncation is NOT aggregation.
+        assert all(r["aggregated"] is False for r in singletons)
+        # And no surviving hardcoded privacy_protected: True claim.
+        assert all("privacy_protected" not in r for r in result["secure_results"])
+
+    def test_aggregator_multi_doc_branch_marked_aggregated(self):
+        wf = _build(PrivacyPreservingRAGNode())
+        aggregator = wf.get_node("secure_aggregator")
+        assert aggregator is not None
+        # Two docs with IDENTICAL content prefix → same cluster (k=2).
+        result = _run_codegen_function(
+            aggregator.config["code"],
+            "aggregate_results",
+            retrieval_results={
+                "documents": [
+                    {"content": "same shared prefix content here"},
+                    {"content": "same shared prefix content here"},
+                ]
+            },
+            dp_info={"dp_scores": [0.9, 0.7]},
+        )
+        clustered = [r for r in result["secure_results"] if r["cluster_size"] >= 2]
+        assert clustered, "expected a k>=2 cluster"
+        assert all(r["aggregated"] is True for r in clustered)
+
+    def test_result_formatter_anonymization_strength_derived(self):
+        """anonymization_strength MUST be derived from techniques run, never
+        a hardcoded verdict. Zero techniques → 'none'."""
+        wf = _build(PrivacyPreservingRAGNode())
+        formatter = wf.get_node("result_formatter")
+        assert formatter is not None
+        code = formatter.config["code"]
+        # The hardcoded "high" strength string must be gone from the codegen.
+        assert '"high"' not in code
+        # Nothing ran: no redaction, no anonymization, no noise, no clusters.
+        result = _run_codegen_function(
+            code,
+            "format_private_results",
+            secure_results={"secure_results": [], "clusters_formed": 0},
+            audit_record={"audit_record": {}},
+            pii_info={"redaction_applied": False},
+            anonymization_info={"anonymization_applied": False},
+            dp_info={"noise_added": False},
+        )
+        report = result["privacy_preserving_results"]["privacy_report"]
+        assert report["anonymization_strength"] == "none"
+        assert report["data_minimization"] is False
+
+    def test_result_formatter_data_minimization_true_when_redaction_ran(self):
+        wf = _build(PrivacyPreservingRAGNode())
+        formatter = wf.get_node("result_formatter")
+        assert formatter is not None
+        result = _run_codegen_function(
+            formatter.config["code"],
+            "format_private_results",
+            secure_results={"secure_results": [], "clusters_formed": 0},
+            audit_record={"audit_record": {}},
+            pii_info={"redaction_applied": True},
+            anonymization_info={"anonymization_applied": True},
+            dp_info={"noise_added": False},
+        )
+        report = result["privacy_preserving_results"]["privacy_report"]
+        assert report["data_minimization"] is True
+        # Two techniques ran → "multi-step", never a hardcoded verdict.
+        assert report["anonymization_strength"] == "multi-step"
+
+    def test_private_rag_executor_privacy_applied_derived(self):
+        """privacy_applied MUST be derived from upstream anonymization, not
+        hardcoded True on the no-hygiene path."""
+        wf = _build(PrivacyPreservingRAGNode())
+        executor = wf.get_node("private_rag_executor")
+        assert executor is not None
+        code = executor.config["code"]
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode", node_id="exec_under_runtime", config={"code": code}
+        )
+        runtime = LocalRuntime()
+        # anonymization_applied=False upstream → privacy_applied must be False.
+        results, _ = runtime.execute(
+            builder.build(),
+            parameters={
+                "exec_under_runtime": {
+                    "query": "find the report",
+                    "anonymized_query_info": {
+                        "anonymized_query": "find the report",
+                        "anonymization_applied": False,
+                    },
+                    "documents": [{"content": "the report you want"}],
+                }
+            },
+        )
+        out = results["exec_under_runtime"]["result"]["retrieval_results"]
+        assert out["privacy_applied"] is False
+
+
+# ==========================================================================
+# F9 #1117 — full PrivacyPreservingRAGNode workflow PUBLISHES end-to-end
+# ==========================================================================
+
+
+@pytest.mark.filterwarnings("ignore::SyntaxWarning")
+class TestPrivacyWorkflowPublishesEndToEnd:
+    """The full PrivacyPreservingRAGNode workflow runs end-to-end and the
+    TERMINAL node PUBLISHES a non-empty result.
+
+    SyntaxWarning is filtered because the codegen templates use legacy regex
+    escapes (``\\d``, ``\\s``) in non-raw generalization-rule string literals —
+    a PRE-EXISTING source-template concern orthogonal to the F9 #1117 fix (the
+    same filter the sibling ``TestCodegenRealRuntime`` applies).
+
+    Regression proof for the F9 #1117 publish-nothing defect: pre-fix, five
+    codegen stages (query_anonymizer, dp_noise_injector, secure_aggregator,
+    audit_logger, result_formatter) DEFINED an inner function that bound a
+    function-LOCAL ``result`` but never CALLED it at module scope, so the
+    PythonCodeNode output gate published nothing (and the workflow crashed
+    when it tried to JSON-serialize the bound function object). Post-fix each
+    stage calls its function at module scope and ``del``s the helper, so the
+    workflow runs to completion and the terminal stage publishes the
+    documented ``privacy_preserving_results`` payload.
+
+    This is a real ``LocalRuntime`` execution of the WorkflowNode's wrapped
+    workflow (NO mocking) against a real query carrying PII + sample docs +
+    consent — the literal user flow the class docstring teaches.
+    """
+
+    # Deterministic config: anonymize_queries=False removes the random word
+    # dropout (so retrieval is reproducible) while redact_pii=True keeps the
+    # load-bearing PII-redaction path; score_noise=0.0 removes the RNG
+    # perturbation so the assertions are deterministic. PII redaction is
+    # still exercised in full (the real capability under test).
+    _QUERY = "diagnosis hypertension record patient a@b.com 999-555-0123"
+    _DOCS = [
+        {"content": "patient diagnosis hypertension record details here"},
+        {"content": "patient diagnosis hypertension chart record summary"},
+    ]
+    _CONSENT = {"data_usage": True, "retention_days": 7}
+
+    def _run_full_workflow(self, node: PrivacyPreservingRAGNode) -> dict:
+        """Execute the WorkflowNode's wrapped workflow end-to-end via the
+        documented ``inputs={node_id: {...}}`` mapping (the class docstring's
+        invocation form)."""
+        return node.execute(
+            inputs={
+                "pii_detector": {"text": self._QUERY},
+                "query_anonymizer": {"query": self._QUERY},
+                "private_rag_executor": {
+                    "query": self._QUERY,
+                    "documents": self._DOCS,
+                },
+                "audit_logger": {
+                    "query": self._QUERY,
+                    "user_consent": self._CONSENT,
+                },
+            }
+        )
+
+    def test_workflow_publishes_non_empty_documented_payload(self):
+        """The terminal node publishes the documented results / privacy_report /
+        audit_record keys with real (non-empty) content.
+
+        Pre-fix this FAILS: the workflow raises ``NodeExecutionError`` because
+        ``query_anonymizer`` published an un-serializable bound function (or, on
+        a later stage, never bound ``result``). Post-fix it PASSES with a real
+        published payload.
+        """
+        node = PrivacyPreservingRAGNode(
+            anonymize_queries=False, redact_pii=True, score_noise=0.0
+        )
+        out = self._run_full_workflow(node)
+
+        # The terminal `result_formatter` (out_degree 0) publishes its `result`
+        # under the auto-mapped `result_formatter_result` key.
+        assert (
+            "result_formatter_result" in out
+        ), "terminal node published nothing — F9 #1117 publish-nothing defect"
+        payload = out["result_formatter_result"]["privacy_preserving_results"]
+
+        # The documented contract keys are all present.
+        for key in ("results", "privacy_report", "audit_record", "confidence_bounds"):
+            assert key in payload, key
+
+        # Real retrieval ran: the two matching docs were clustered + published.
+        assert isinstance(payload["results"], list)
+        assert len(payload["results"]) == 2
+
+        # The honest derived flags reach the output (Wave-2 honesty preserved).
+        report = payload["privacy_report"]
+        # PII redaction actually ran → data_minimization True, strength derived.
+        assert report["data_minimization"] is True
+        assert report["anonymization_strength"] in {"minimal", "multi-step"}
+        assert "PII redaction" in report["privacy_techniques_applied"]
+
+    def test_pii_actually_redacted_in_published_output(self):
+        """The published audit_record reflects the PII the detector found AND
+        ``pii_hygiene.pii_redaction_attempted`` mirrors ``redact_pii``."""
+        node = PrivacyPreservingRAGNode(
+            anonymize_queries=False, redact_pii=True, score_noise=0.0
+        )
+        out = self._run_full_workflow(node)
+        audit = out["result_formatter_result"]["privacy_preserving_results"][
+            "audit_record"
+        ]
+        assert audit is not None
+
+        # The synthetic email + phone in the query were detected + redacted.
+        pii_types = audit["privacy_measures"]["pii_redaction"]["pii_types_found"]
+        assert "email" in pii_types
+        assert "phone" in pii_types
+
+        # The factual hygiene descriptor mirrors redact_pii=True.
+        assert audit["pii_hygiene"]["pii_redaction_attempted"] is True
+
+    def test_pii_hygiene_flag_reflects_redact_pii_false(self):
+        """With redact_pii=False the published audit shows redaction did NOT run
+        — the derived flag is honest, never hardcoded True."""
+        node = PrivacyPreservingRAGNode(
+            anonymize_queries=False, redact_pii=False, score_noise=0.0
+        )
+        out = self._run_full_workflow(node)
+        payload = out["result_formatter_result"]["privacy_preserving_results"]
+        audit = payload["audit_record"]
+        assert audit is not None
+        # Redaction did not run → the descriptor reflects that honestly.
+        assert audit["pii_hygiene"]["pii_redaction_attempted"] is False
+        assert (
+            "PII redaction"
+            not in payload["privacy_report"]["privacy_techniques_applied"]
+        )
+
+    def test_workflow_publishes_without_audit_logging(self):
+        """With audit_logging=False the terminal node still publishes; the
+        audit_record is None (the branch never wired) but results survive —
+        the result_formatter's defensive ``audit_record`` default holds."""
+        node = PrivacyPreservingRAGNode(
+            anonymize_queries=False,
+            redact_pii=True,
+            score_noise=0.0,
+            audit_logging=False,
+        )
+        # audit_logger isn't built when audit_logging=False; omit its inputs.
+        out = node.execute(
+            inputs={
+                "pii_detector": {"text": self._QUERY},
+                "query_anonymizer": {"query": self._QUERY},
+                "private_rag_executor": {
+                    "query": self._QUERY,
+                    "documents": self._DOCS,
+                },
+            }
+        )
+        payload = out["result_formatter_result"]["privacy_preserving_results"]
+        assert len(payload["results"]) == 2
+        # audit_logging=False → no audit record published.
+        assert payload["audit_record"] is None
 
 
 # ==========================================================================
@@ -400,13 +737,14 @@ class TestComplianceEnforcement:
 class TestSecureMultiPartyWorkflowConstruction:
     """SecureMultiPartyRAGNode is a direct ``Node`` (no inner workflow).
 
-    Tier-2a does not require real cryptographic MPC; it requires that the
-    node's deterministic ``run()`` path executes against a real Python
-    runtime (the constructor + dispatch logic) and returns the documented
-    shape — proving the documented behavior empirically.
+    The node is a NON-FUNCTIONAL simulation: it performs no cryptography and
+    does NOT compute over ``party_data`` (it aggregates random placeholder
+    values). These tests pin the documented output SHAPE and the honest
+    simulation markers ONLY — they MUST NOT assert any privacy/encryption
+    guarantee, because the node provides none.
     """
 
-    def test_secret_sharing_three_parties_aggregate(self):
+    def test_secret_sharing_three_parties_aggregate_shape(self):
         node = SecureMultiPartyRAGNode(
             parties=["site_a", "site_b", "site_c"],
             protocol="secret_sharing",
@@ -422,16 +760,19 @@ class TestSecureMultiPartyWorkflowConstruction:
             computation_type="average",
         )
         assert "aggregate_result" in out
-        assert out.get("privacy_preserved") is True
-        # The party contributions enumerate every contributing site.
+        # Honest marker: simulation, NOT a privacy guarantee.
+        assert out.get("simulation") is True
+        assert "privacy_preserved" not in out
+        # The party contributions enumerate every supplied party label.
         contributions = out.get("party_contributions", {})
         assert set(contributions.keys()) == {"site_a", "site_b", "site_c"}
-        # The proof attests the protocol and the participating sites.
+        # The "proof" is a simulated record, NOT a cryptographic proof.
         proof = out.get("computation_proof", {})
-        assert proof.get("protocol") == "shamir_secret_sharing"
+        assert proof.get("protocol") == "simulated_secret_sharing"
+        assert proof.get("simulation") is True
         assert proof.get("threshold_met") is True
 
-    def test_homomorphic_workflow_produces_aggregate(self):
+    def test_homomorphic_workflow_produces_aggregate_shape(self):
         node = SecureMultiPartyRAGNode(
             parties=["site_a", "site_b"], protocol="homomorphic", threshold=1
         )
@@ -441,8 +782,10 @@ class TestSecureMultiPartyWorkflowConstruction:
             computation_type="average",
         )
         proof = out.get("computation_proof", {})
-        assert proof.get("protocol") == "homomorphic_encryption"
-        assert out.get("fully_encrypted") is True
+        # Honest label: the homomorphic path is simulated, NOT real HE.
+        assert proof.get("protocol") == "simulated_homomorphic"
+        assert out.get("simulation") is True
+        assert "fully_encrypted" not in out
 
     def test_node_construction_uses_real_python_runtime(self):
         """The node MUST register as a real PythonCodeNode-compatible node."""

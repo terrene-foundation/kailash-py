@@ -151,7 +151,13 @@ class TestQueryExpansionNode:
     def test_create_workflow_graph_shape(self):
         """The inner workflow wires llm_expander → expansion_processor."""
         wf = _build(QueryExpansionNode())
-        assert set(wf.nodes.keys()) == {"llm_expander", "expansion_processor"}
+        # L3 messages-composer fix: an `expansion_messages_composer` node now
+        # renders the real query into the llm_expander `messages` port.
+        assert set(wf.nodes.keys()) == {
+            "expansion_messages_composer",
+            "llm_expander",
+            "expansion_processor",
+        }
         edge = [
             c
             for c in wf.connections
@@ -161,6 +167,16 @@ class TestQueryExpansionNode:
         assert len(edge) == 1
         assert edge[0].source_output == "response"
         assert edge[0].target_input == "expansion_response"
+        # The composer feeds the VALID `messages` port (result.messages).
+        msg_edge = [
+            c
+            for c in wf.connections
+            if c.source_node == "expansion_messages_composer"
+            and c.target_node == "llm_expander"
+        ]
+        assert len(msg_edge) == 1
+        assert msg_edge[0].source_output == "result.messages"
+        assert msg_edge[0].target_input == "messages"
 
     def test_create_workflow_llm_expander_has_system_prompt(self):
         """The LLM expander carries a non-empty system_prompt + has the
@@ -215,7 +231,10 @@ class TestQueryDecompositionNode:
     def test_create_workflow_graph_shape(self):
         """Decomposition wires query_decomposer → dependency_resolver."""
         wf = _build(QueryDecompositionNode())
+        # L3 messages-composer fix: a `decomposition_messages_composer` node now
+        # renders the real query into the query_decomposer `messages` port.
         assert set(wf.nodes.keys()) == {
+            "decomposition_messages_composer",
             "query_decomposer",
             "dependency_resolver",
         }
@@ -228,6 +247,15 @@ class TestQueryDecompositionNode:
         assert len(edges) == 1
         assert edges[0].source_output == "response"
         assert edges[0].target_input == "decomposition_result"
+        msg_edge = [
+            c
+            for c in wf.connections
+            if c.source_node == "decomposition_messages_composer"
+            and c.target_node == "query_decomposer"
+        ]
+        assert len(msg_edge) == 1
+        assert msg_edge[0].source_output == "result.messages"
+        assert msg_edge[0].target_input == "messages"
 
     def test_create_workflow_decomposer_prompt_is_topical(self):
         wf = _build(QueryDecompositionNode())
@@ -284,18 +312,44 @@ class TestQueryRewritingNode:
     def test_create_workflow_graph_shape(self):
         """analyzer → rewriter + analyzer → combiner + rewriter → combiner."""
         wf = _build(QueryRewritingNode())
+        # L3 messages-composer fix: two composer nodes now render the real
+        # query (+ upstream analysis) into the two LLM stages' `messages`
+        # ports; the prior phantom `query_analyzer -> query_rewriter."analysis"`
+        # edge (a port LLMAgentNode drops) is REMOVED.
         assert set(wf.nodes.keys()) == {
+            "analysis_messages_composer",
+            "rewrite_messages_composer",
             "query_analyzer",
             "query_rewriter",
             "result_combiner",
         }
-        # Three connections wire the fan-in: analyzer feeds both rewriter
-        # (as ``analysis``) and combiner (as ``analysis_result``); rewriter
-        # feeds combiner (as ``rewrite_result``).
         sources = [(c.source_node, c.target_node) for c in wf.connections]
-        assert ("query_analyzer", "query_rewriter") in sources
+        # The phantom analyzer->rewriter direct edge is GONE; the analysis now
+        # reaches the rewriter through the rewrite composer's `messages`.
+        assert ("query_analyzer", "query_rewriter") not in sources
+        # Analyzer feeds the combiner (analysis_result) AND the rewrite composer.
         assert ("query_analyzer", "result_combiner") in sources
+        assert ("query_analyzer", "rewrite_messages_composer") in sources
         assert ("query_rewriter", "result_combiner") in sources
+        # Each LLM stage receives its `messages` from its composer.
+        analyzer_msg = [
+            c
+            for c in wf.connections
+            if c.source_node == "analysis_messages_composer"
+            and c.target_node == "query_analyzer"
+        ]
+        assert len(analyzer_msg) == 1
+        assert analyzer_msg[0].source_output == "result.messages"
+        assert analyzer_msg[0].target_input == "messages"
+        rewriter_msg = [
+            c
+            for c in wf.connections
+            if c.source_node == "rewrite_messages_composer"
+            and c.target_node == "query_rewriter"
+        ]
+        assert len(rewriter_msg) == 1
+        assert rewriter_msg[0].source_output == "result.messages"
+        assert rewriter_msg[0].target_input == "messages"
 
     def test_create_workflow_analyzer_and_rewriter_are_distinct_llms(self):
         """Both LLM nodes carry distinct, topical system_prompts."""
@@ -384,7 +438,13 @@ class TestQueryIntentClassifierNode:
     def test_create_workflow_graph_shape(self):
         """intent_classifier (LLM) → strategy_mapper (PythonCodeNode)."""
         wf = _build(QueryIntentClassifierNode())
-        assert set(wf.nodes.keys()) == {"intent_classifier", "strategy_mapper"}
+        # L3 messages-composer fix: an `intent_messages_composer` node now
+        # renders the real query into the intent_classifier `messages` port.
+        assert set(wf.nodes.keys()) == {
+            "intent_messages_composer",
+            "intent_classifier",
+            "strategy_mapper",
+        }
         edges = [
             c
             for c in wf.connections
@@ -393,6 +453,15 @@ class TestQueryIntentClassifierNode:
         ]
         assert len(edges) == 1
         assert edges[0].target_input == "intent_classification"
+        msg_edge = [
+            c
+            for c in wf.connections
+            if c.source_node == "intent_messages_composer"
+            and c.target_node == "intent_classifier"
+        ]
+        assert len(msg_edge) == 1
+        assert msg_edge[0].source_output == "result.messages"
+        assert msg_edge[0].target_input == "messages"
 
     def test_create_workflow_classifier_prompt_describes_taxonomy(self):
         wf = _build(QueryIntentClassifierNode())
@@ -455,7 +524,13 @@ class TestMultiHopQueryPlannerNode:
     def test_create_workflow_graph_shape(self):
         """hop_planner (LLM) → execution_planner (PythonCodeNode)."""
         wf = _build(MultiHopQueryPlannerNode())
-        assert set(wf.nodes.keys()) == {"hop_planner", "execution_planner"}
+        # L3 messages-composer fix: a `hop_plan_messages_composer` node now
+        # renders the real query into the hop_planner `messages` port.
+        assert set(wf.nodes.keys()) == {
+            "hop_plan_messages_composer",
+            "hop_planner",
+            "execution_planner",
+        }
         edges = [
             c
             for c in wf.connections
@@ -463,6 +538,15 @@ class TestMultiHopQueryPlannerNode:
         ]
         assert len(edges) == 1
         assert edges[0].target_input == "hop_plan_result"
+        msg_edge = [
+            c
+            for c in wf.connections
+            if c.source_node == "hop_plan_messages_composer"
+            and c.target_node == "hop_planner"
+        ]
+        assert len(msg_edge) == 1
+        assert msg_edge[0].source_output == "result.messages"
+        assert msg_edge[0].target_input == "messages"
 
     def test_create_workflow_hop_planner_prompt_topical(self):
         wf = _build(MultiHopQueryPlannerNode())

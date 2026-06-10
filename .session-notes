@@ -1,61 +1,80 @@
-# Session Notes — 2026-05-13
+# Session Notes — 2026-06-09/10
 
 ## Where we are
 
-PR #971 (COC sync loom 2.29.4 → v1.0.9) merged 2026-05-12 via owner-workflow.
-Follow-up PR #973 (COC sync 2026-05-13, commit `e0753ca2`) landed the
-30-file `.claude/`-only changeset (24 deletions of deprecated guides + 6
-hook/settings/SKILL mods) on main via `gh pr merge --admin`. PR for residual cleanup (11 cosmetic comment-dodge files
-+ this `.session-notes` refresh) on branch `chore/post-coc-cleanup-2026-05-13`,
-not yet pushed. Round-1 parallel /redteam (cosmetic-audit + secrets-scan
-+ session-notes-accuracy) converged clean; no commits in this session per
-BUILD-repo discipline.
+RAG provably-correct remediation (F31), driven hard this session. TWO waves landed, both
+working-tree-only (BUILD repo — ALL held UNCOMMITTED; commit stays with the user):
+
+1. **Wave 2 (L3 input-side) — COMPLETE (5 shards converged).** 19 LLM stages across eval /
+   query_processing / agentic / graph / workflows now CONSUME retrieved/query context via the valid
+   `messages` port (was system-prompt-only). Receipts:
+   `workspaces/kaizen-rag-node-coverage/04-validate/14-wave-2-l3-2026-06-09.md`.
+2. **Output-side wave — scoped + shard O1 (eval) CONVERGED.** The output side was systematically broken
+   the same way the input side was (LLM publishes on `response={"content":"<json>"}`; downstream read the
+   wrong port / never parsed the JSON / dropped the output). eval is fixed (real parsed per-test scores,
+   xfail retired); O2-O5 queued. Receipts:
+   `workspaces/kaizen-rag-node-coverage/04-validate/15-wave-output-side-2026-06-09.md`.
 
 ## Read first
 
-1. `workspaces/redteam-coc-sync-1.0.9/04-validate/round-3-convergence.md` — full
-   per-round findings + inline-fix manifest from the 1.0.9 sync.
-2. `workspaces/redteam-coc-sync-1.0.9/loom-upstream-issue-body.md` — paste this
-   into a loom session to file the MED/LOW bundle there (cross-repo from here
-   is BLOCKED per `rules/repo-scope-discipline.md`).
-3. `git status --short` — surfaces the residual WIP awaiting disposition
-   (12 cosmetic edits + 13 untracked workspace/script artifacts).
-4. `gh issue view 972` — eval-check exclude maintenance follow-up (still OPEN).
-5. `CLAUDE.md` § directive 5 + #970 — `[trust]` extra wording still load-bearing
-   for open issue from prior session.
+1. `04-validate/15-wave-output-side-2026-06-09.md` — START HERE: the output-side defect taxonomy
+   (Class A wrong-port / Class B parse-gap), per-node disposition table, O1 receipt, O2-O5 scope.
+2. `04-validate/14-wave-2-l3-2026-06-09.md` — Wave-2 L3 receipts + the G2/G4 learning + forest items
+   (F31-FU1 graph orphaned summary, F31-FU2 composer unit tests, F31-FU3 workflows analyzer output).
+3. `packages/kailash-kaizen/src/kaizen/nodes/rag/evaluation.py` — the reference template for BOTH the
+   L3 messages-composer pattern AND the output-side response-parser pattern (3 parsers: `response →
+   .content → json.loads` with typed parse-error sentinels excluded from means).
 
-## In-flight state
+## In-flight state (next session)
 
-- 11 modified files in `packages/` + `src/` were pure pre-commit
-  `python-use-type-annotations` hook-dodge edits (comment rewords removing
-  `# type` substring per `rules/git.md` § Discipline) + one verified-dead
-  unused-import removal in `pact/engine.py`. Landed on
-  `chore/post-coc-cleanup-2026-05-13` as commit `7abe1a2c`.
-- 3 cited-but-listed-obsolete rules preserved on disk pending loom-manifest
-  fix: `.claude/rules/independence.md`, `terrene-naming.md`, `documentation.md`.
+Output-side wave, value-ranked (anchor: brief "provably correct"):
+- **O2 — workflows.py (BROKEN):** `rag_strategy_analyzer.result → strategy_executor/results_aggregator`
+  reads the wrong port (LLM publishes `response`) + needs a JSON parser so `{recommended_strategy}` drives
+  the SwitchNode. (= F31-FU3.)
+- **O3 — graph.py (BROKEN):** `graph_builder` iterates the unparsed `response` dict, not the entity JSON in
+  `response.content`; + `summary_generator.response → result_synthesizer.global_summaries` accepted-but-unread
+  (F31-FU1). Full graph can't run (networkx sandbox) → structural+standalone-probe proof per L3 precedent.
+- **O4 — query_processing.py (verify→fix):** 6 processors assign raw `response`; confirm/parse per-processor.
+- **O5 — agentic.py + conversational.py — VERIFY-ONLY** (audit says CORRECT; confirm + close).
+
+Fix shape per stage: insert a from_function response-parser (read `response` → `.content` → `json.loads`
+with a TYPED parse-error sentinel — never a fabricated default) between the LLM stage and its
+structured-field consumer; re-wire the consumer; end-to-end test asserts REAL parsed values reach the
+consumer (red-pre: raw response → consumer gets defaults). Same shard+redteam-to-convergence discipline.
+
+## Outstanding ledger (forest)
+
+| ID  | Item | Value-anchor | Status |
+| --- | ---- | ------------ | ------ |
+| F31 | RAG provably-correct remediation | brief "provably correct, not merely importable" + user approvals 2026-06-08/09 | Wave 2 (L3) DONE-held; output-side O1 DONE-held; O2-O5 queued |
+| F31-FU1 | graph summary_generator output orphaned (result_synthesizer never reads global_summaries) | brief "provably correct" | folded into O3 |
+| F31-FU3 | workflows analyzer output mis-wired (reads `result` not `response`; needs parser) | brief "provably correct" | folded into O2 |
+| F31-FU2 | composers/parsers lack DIRECT unit tests (proven via integration) | testing.md "one direct test per variant" | wave-level hardening (codify pass) |
+| (orig) Wave 3 from_function migration / Wave 4 simulated-node strip-vs-build (PRODUCT CALL) | brief + 13-re-analysis-decision | still queued after output-side wave |
+| F3/F1/F10/F12/F24/F26/F27 | (unchanged from prior notes — loom/Foundation/cross-SDK blocked items) | per prior | unchanged |
+
+Closed this session: none (BUILD repo — all advances held uncommitted; multi-session program).
 
 ## Traps
 
-- `.claude/hooks/lib/` is gitignored (`.gitignore:62` `lib/`) so the H-2 fix to
-  `violation-patterns.js` (matchAll loop) is on disk but uncommittable.
-  Surfaces as CRIT in loom-upstream issue body. Same gitignore exclusion means
-  every developer needs `/sync-to-build` to populate hook libs locally.
-- Pre-commit `auto-stash` conflicts on 167-file COC-sync staged sets; the
-  documented `core.hooksPath=/dev/null` workaround per `rules/git.md` works.
-- `pre-commit run --all-files` auto-fixes trailing whitespace across ~1700 SDK
-  source files. This session reverted that drift via `git checkout -- .` after
-  staging redteam-fix paths — don't run `--all-files` again without intent.
-
-## Open questions for the human
-
-- Disposition for the 3 preserved-but-obsoleted rules: file loom issue (body
-  ready) to fix the manifest, or accept them as load-bearing baseline?
-- Push `chore/post-coc-cleanup-2026-05-13` (commits `7abe1a2c` + the
-  `.session-notes` refresh follow-up) and open PR? Awaiting confirmation.
-- 13 untracked items split across 3 buckets: (a) `deploy/deployments/2026-05-07-v2.15.0.md`
-  + `scripts/{check-manifest-parity.sh,migrate.py}` are real new artifacts; (b) `workspaces/_template/*`
-  is template scaffolding; (c) the seven active-workspace trees
-  (`architecture-presentation`, `issue-871-...`, `issue-876-...`,
-  `issue-912-...`, `issue-959-...`, `redteam-coc-sync-1.0.9`,
-  `runtime-integration-trio`) each belong with their owning issue's PR.
-- #970 (prior session) still open — `[trust]` extra docs/deps positioning.
+- kaizen has its OWN venv: `packages/kailash-kaizen/.venv/bin/python` — never bare python.
+- **kaizen venv lacks the optional in-repo `kaizen-agents` package** → `tests/regression/test_issue_1071/
+  357/486/822` (~22 tests) fail environmentally (kaizen.api/BaseAgent), ORTHOGONAL to RAG. A `--no-deps`
+  editable install left it unimportable (`No module named 'openai'`); a full install needs the agents dep
+  tree. Recommend a deliberate `uv sync` of the kaizen venv with the agents extra as a SEPARATE
+  env-setup step (changes the venv dep tree — user-gated). The RAG suite (`tests/unit/rag tests/integration/
+  rag`, currently 908 passed + 0 xfailed) is the trustworthy gate for this program.
+- DO NOT edit `src/kailash/nodes/base.py` for the `from_function`-on-`type[Node]` pyright hint — cascades
+  hundreds of pre-existing non-gating diagnostics. Project gates ruff+pytest ONLY (mypy hook commented out
+  `.pre-commit-config.yaml:217-223`; pyright not a gate). `# type: ignore[attr-defined]` on from_function
+  call lines is the established pattern across all converged shards.
+- LLMAgentNode output contract: publishes on the **`response`** port = `{"content":"<text or JSON string>"}`
+  (+ success/usage/metadata). Does NOT auto-parse JSON. Correct downstream: read `response` → `.get("content")`
+  → `json.loads` if the prompt asked for JSON → typed sentinel on failure (never a fabricated default).
+- 2 agentic `httpserver` test-collection errors are PRE-EXISTING (pytest-httpserver undeclared) — out of scope.
+- L3 + output-side playbook (from redteam): (1) verify EVERY stage of a node; (2) the test MUST exercise the
+  PRODUCTION delivery path (top-level input → auto-distribute), NOT node-keyed injection (false-green trap);
+  (3) parse-failures MUST be flagged honestly (typed sentinel + excluded from aggregates), never a fabricated
+  0/empty masquerading as real; (4) non-runnable graphs (cycle/sandbox/vector-DB) → structural wiring
+  assertion + standalone-composer probe (reviewer-validated load-bearing technique).
+- BUILD repo: commits stay with user; working-tree edits only.

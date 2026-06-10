@@ -12,22 +12,31 @@ Implements comprehensive evaluation metrics and benchmarking:
 Based on RAGAS, BEIR, and evaluation research from 2024.
 """
 
-import json
 import logging
 import os
 import random
+import secrets
 import statistics
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+import tracemalloc
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from concurrent.futures import as_completed
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+
+# Registering imports (mirrors realtime.py #1120): `_create_workflow` wires these
+# node types by STRING — `builder.add_node("PythonCodeNode" / "LLMAgentNode", ...)`
+# — so the symbols are never referenced directly, but importing the modules runs
+# their `@register_node` side effect that populates the registry the string lookup
+# resolves against. Do NOT drop these to satisfy an unused-import linter.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +47,330 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY other wired
+# port name (`test_data`, `retrieval_results`, ...) is read via `kwargs.get`
+# and SILENTLY DROPPED. The prior wiring fed every judge `test_executor`'s
+# `test_results` on the PHANTOM `test_data` port, so each judge scored from its
+# `system_prompt` alone — never seeing the query, the retrieved contexts, the
+# generated answer, or the reference answer (the L3 "judge ignores the data it
+# is supposed to judge" defect). The aggregator then computed statistics over
+# fabricated scores.
+#
+# The fix routes each judge's context through a `PythonCodeNode`
+# `.from_function`-wrapped composer that RENDERS the REAL fields into a
+# `messages` list wired to the VALID `messages` port. These are real
+# module-level functions (real `return`→`result`, type-checkable, no f-string
+# brace-escaping) per the program's reference template — NOT inline `code=`
+# codegen blocks.
+#
+# ── OUTPUT-SIDE FIX (this shard): close the parse-gap AND the batch-vs-per-test
+# limitation, honestly ───────────────────────────────────────────────────────
+# `test_executor.test_results` is a LIST of per-query result dicts, but a
+# SINGLE LLMAgentNode invocation publishes ONE `response` port (a dict shaped
+# `{"content": "<the model's text, a JSON string for these judges>", ...}`).
+# LLMAgentNode does NOT parse the model's JSON into top-level ports — the score
+# lives INSIDE `response["content"]` as a JSON string, never parsed.
+#
+# Two defects flow from that, both closed here:
+#
+#   (1) PARSE-GAP (Class-B): the prior `metric_aggregator` read
+#       `faithfulness_scores[i].get("response", {}).get("faithfulness_score", 0)`
+#       — reading the raw `response` dict then `.get("faithfulness_score")`,
+#       which is ALWAYS absent (the score is inside `response["content"]`'s JSON
+#       string). Every score defaulted to a fabricated 0. The fix routes each
+#       judge's `response` through a dedicated `from_function` response-parser
+#       (below) that reads `response` -> `.get("content")` -> `json.loads`, with
+#       a TYPED fallback that FLAGS malformed/non-JSON output (NOT a silent 0
+#       that masquerades as a real score — zero-tolerance Rule 2).
+#
+#   (2) BATCH-VS-PER-TEST: a single judge call publishes ONE `response`, but the
+#       aggregator indexes `faithfulness_scores[i]` PER TEST. Closed via the
+#       judge-returns-ARRAY architecture (Option b): each judge's system_prompt
+#       asks for a JSON ARRAY (one object per explicitly-numbered test), the
+#       composers number the tests 1..N so the array aligns 1:1, and the
+#       response-parser `json.loads` the array into the per-test list shape the
+#       aggregator indexes. No per-test score is fabricated to force the split.
+#
+# The composers below render EVERY test as an explicitly-numbered block
+# (Test 1 / Test 2 / ...) so the judge sees all the real data AND the returned
+# array aligns positionally with `test_results`.
+# ---------------------------------------------------------------------------
+
+
+def _render_contexts(retrieved_contexts: Any) -> str:
+    """Render the retrieved contexts of a single test into a text block.
+
+    `retrieved_contexts` is the caller-provided list of
+    ``{"content": str, "score": float}`` dicts (the real RAG retrieval output
+    the evaluator judges). Returns "" when no contexts exist.
+    """
+    blocks = []
+    if isinstance(retrieved_contexts, list):
+        for i, ctx in enumerate(retrieved_contexts):
+            if not isinstance(ctx, dict):
+                continue
+            # ctx.get("content") may be present-with-None; the `or ""` covers it.
+            content = (ctx.get("content") or "").strip()
+            if not content:
+                continue
+            score = ctx.get("score")
+            label = f"[Context {i + 1}"
+            if isinstance(score, (int, float)):
+                label += f", score={score:.2f}"
+            label += "]"
+            blocks.append(f"{label} {content}")
+    return "\n".join(blocks)
+
+
+def _render_test_block(test_result: Any, index: int, include_reference: bool) -> str:
+    """Render a single test_result dict into a numbered judging block.
+
+    Embeds the REAL query + retrieved contexts + generated answer (and the
+    reference answer when ``include_reference``) so the judge sees exactly the
+    data it must score — not the system_prompt alone.
+    """
+    if not isinstance(test_result, dict):
+        return f"Test {index + 1}:\n(no data)"
+    query = (test_result.get("query") or "").strip()
+    generated = (test_result.get("generated_answer") or "").strip()
+    contexts = _render_contexts(test_result.get("retrieved_contexts"))
+
+    parts = [f"Test {index + 1}:"]
+    parts.append("Query:\n" + (query or "(empty)"))
+    parts.append("Retrieved contexts:\n" + (contexts or "(none)"))
+    parts.append("Generated answer:\n" + (generated or "(empty)"))
+    if include_reference:
+        reference = (test_result.get("reference_answer") or "").strip()
+        parts.append("Reference answer:\n" + (reference or "(none provided)"))
+    return "\n".join(parts)
+
+
+def _normalize_test_results(test_results: Any) -> list:
+    """Coerce the test_executor `test_results` wire into a list of dicts.
+
+    Mirrors the ``context_evaluator`` defensive shape-handling: the wire is a
+    LIST of per-query result dicts, but a single-test call may arrive as a bare
+    dict.
+    """
+    if isinstance(test_results, list):
+        return test_results
+    if isinstance(test_results, dict):
+        return [test_results]
+    return []
+
+
+def compose_faithfulness_messages(test_results=None):
+    """Compose the ``messages`` list for the faithfulness_evaluator judge.
+
+    Embeds, per test, the REAL retrieved contexts + generated answer so the
+    judge scores whether each answer is grounded in its contexts — NOT from the
+    system_prompt alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+
+    Faithfulness does not need the reference answer (it scores grounding in the
+    retrieved contexts), so ``include_reference`` is False here.
+    """
+    tests = _normalize_test_results(test_results)
+    blocks = [
+        _render_test_block(t, i, include_reference=False) for i, t in enumerate(tests)
+    ]
+    body = (
+        "\n\n".join(blocks) if blocks else "No test results were provided to evaluate."
+    )
+    user_content = (
+        "Evaluate the faithfulness of each generated answer to its retrieved "
+        "contexts. The tests are numbered (Test 1, Test 2, ...). Return a JSON "
+        "ARRAY with exactly one object per test, in the SAME numbered order. "
+        "Each array element MUST be a JSON object with a numeric "
+        '"faithfulness_score" between 0.0 and 1.0.\n\n' + body
+    )
+    return {"messages": [{"role": "user", "content": user_content}]}
+
+
+def compose_relevance_messages(test_results=None):
+    """Compose the ``messages`` list for the relevance_evaluator judge.
+
+    Embeds, per test, the REAL query + generated answer so the judge scores
+    whether each answer is relevant to its query — NOT from the system_prompt
+    alone. Returns ``{"messages": [...]}`` wired to the LLMAgentNode
+    ``messages`` port.
+
+    Relevance scores answer-to-query, so the retrieved contexts are still
+    rendered for context but the reference answer is not needed.
+    """
+    tests = _normalize_test_results(test_results)
+    blocks = [
+        _render_test_block(t, i, include_reference=False) for i, t in enumerate(tests)
+    ]
+    body = (
+        "\n\n".join(blocks) if blocks else "No test results were provided to evaluate."
+    )
+    user_content = (
+        "Evaluate the relevance of each generated answer to its query. The "
+        "tests are numbered (Test 1, Test 2, ...). Return a JSON ARRAY with "
+        "exactly one object per test, in the SAME numbered order. Each array "
+        'element MUST be a JSON object with a numeric "relevance_score" between '
+        "0.0 and 1.0.\n\n" + body
+    )
+    return {"messages": [{"role": "user", "content": user_content}]}
+
+
+def compose_answer_quality_messages(test_results=None):
+    """Compose the ``messages`` list for the answer_quality_evaluator judge.
+
+    Embeds, per test, the REAL generated answer AND reference answer (plus the
+    query + retrieved contexts for context) so the judge compares the generated
+    answer against the ground-truth reference — NOT from the system_prompt
+    alone. Returns ``{"messages": [...]}`` wired to the LLMAgentNode
+    ``messages`` port.
+
+    This composer is wired only when ``use_reference_answers=True``; it renders
+    the reference answer that comparison requires.
+    """
+    tests = _normalize_test_results(test_results)
+    blocks = [
+        _render_test_block(t, i, include_reference=True) for i, t in enumerate(tests)
+    ]
+    body = (
+        "\n\n".join(blocks) if blocks else "No test results were provided to evaluate."
+    )
+    user_content = (
+        "Compare each generated answer with its reference answer. The tests are "
+        "numbered (Test 1, Test 2, ...). Return a JSON ARRAY with exactly one "
+        "object per test, in the SAME numbered order. Each array element MUST be "
+        'a JSON object with a numeric "overall_quality" between 0.0 and 1.0.\n\n' + body
+    )
+    return {"messages": [{"role": "user", "content": user_content}]}
+
+
+# ---------------------------------------------------------------------------
+# Response-parser functions (OUTPUT-side fix — this shard).
+#
+# `LLMAgentNode.run()` publishes the judge's answer on the `response` port as a
+# dict shaped `{"content": "<the model's text, a JSON string>", ...}`. It does
+# NOT parse that JSON into top-level ports, so the real score lives INSIDE
+# `response["content"]` and is never available to a `.get("faithfulness_score")`
+# off the raw `response` dict (the parse-gap defect).
+#
+# Each parser below is a PURE DATA TRANSFORM (the permitted tool-result-parsing
+# exception in `rules/agent-reasoning.md` § Permitted Deterministic Logic item
+# 6 — extracting structured data, NOT agent decision logic):
+#   1. read `response`, unwrap `.get("content")` (the model's JSON-string text),
+#   2. `json.loads` it,
+#   3. normalize to a LIST of per-test score dicts (the judge returns a JSON
+#      ARRAY, one element per numbered test) so the aggregator can index
+#      `faithfulness_scores[i]` per test, and
+#   4. on malformed / non-JSON / wrong-shape output, emit a TYPED FLAGGED
+#      sentinel (`{"<score_key>": None, "parse_error": "<reason>"}`) — NOT a
+#      fabricated 0 that the aggregator would treat as a real score
+#      (zero-tolerance Rule 2). The flagged sentinel is grep-able
+#      (`parse_error`) and the aggregator skips it from the numeric mean rather
+#      than counting an invented zero.
+#
+# `from_function` is the correct primitive (real module-level functions: real
+# imports, real `return`->`result`, type-checkable, no f-string brace-escaping),
+# mirroring the L3 composer pattern + agentic.py's `response`->`json.loads`
+# downstream + conversational.py's `response.get("content")` unwrap.
+# ---------------------------------------------------------------------------
+
+
+def _unwrap_response_content(response: Any) -> Any:
+    """Unwrap the LLMAgentNode `response` port into the model's text payload.
+
+    `LLMAgentNode` publishes `response` as `{"content": "<text>", ...}` (mock +
+    real providers both). A defensive caller may also pass the bare string. This
+    mirrors conversational.py's ``response.get("content", "")`` unwrap.
+    """
+    if isinstance(response, dict):
+        return response.get("content")
+    return response
+
+
+def _parse_score_array(response: Any, score_key: str) -> list:
+    """Parse a judge `response` into a per-test list of score dicts.
+
+    Reads `response` -> `.content` (a JSON string) -> ``json.loads`` -> a LIST
+    aligned 1:1 with the numbered tests. Each element is normalized to a dict
+    carrying ``score_key``. Malformed / non-JSON / wrong-shape output is FLAGGED
+    with a typed sentinel (``{"<score_key>": None, "parse_error": "<reason>"}``)
+    — never a fabricated 0 (zero-tolerance Rule 2).
+
+    Returns an empty list when the judge produced no content at all (an honest
+    "nothing to score" — the aggregator treats a missing per-test entry as a
+    flagged gap, not a real zero).
+    """
+    import json
+
+    content = _unwrap_response_content(response)
+
+    # Honest empty: the judge published nothing parseable. Surface, don't invent.
+    if content is None or (isinstance(content, str) and not content.strip()):
+        return []
+
+    # The judge may already have emitted a parsed structure (some providers do).
+    parsed: Any
+    if isinstance(content, (list, dict)):
+        parsed = content
+    elif isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            # FLAGGED, not fabricated: the judge returned non-JSON text. The
+            # whole batch is unparseable; surface a single flagged sentinel so
+            # the aggregator records a parse gap instead of inventing zeros.
+            return [
+                {
+                    score_key: None,
+                    "parse_error": "non-json-response",
+                }
+            ]
+    else:
+        return [
+            {
+                score_key: None,
+                "parse_error": "unexpected-content-type",
+            }
+        ]
+
+    # The judge-returns-array contract: a JSON list, one element per test.
+    if isinstance(parsed, list):
+        out = []
+        for elem in parsed:
+            if isinstance(elem, dict):
+                out.append(elem)
+            else:
+                out.append({score_key: None, "parse_error": "non-object-array-element"})
+        return out
+
+    # A single object (degenerate batch of one) is honest for a 1-test eval.
+    if isinstance(parsed, dict):
+        return [parsed]
+
+    # A bare scalar (e.g. the judge returned just `0.8`) — flag the shape gap.
+    return [{score_key: None, "parse_error": "non-array-non-object-json"}]
+
+
+def parse_faithfulness_response(response=None):
+    """Parse the faithfulness judge `response` into per-test score dicts."""
+    return {"scores": _parse_score_array(response, "faithfulness_score")}
+
+
+def parse_relevance_response(response=None):
+    """Parse the relevance judge `response` into per-test score dicts."""
+    return {"scores": _parse_score_array(response, "relevance_score")}
+
+
+def parse_answer_quality_response(response=None):
+    """Parse the answer-quality judge `response` into per-test score dicts."""
+    return {"scores": _parse_score_array(response, "overall_quality")}
 
 
 @register_node()
@@ -61,21 +394,36 @@ class RAGEvaluationNode(WorkflowNode):
     - Comparative analysis across strategies
     - Automated test dataset generation
 
+    Contract — judge already-run results (honest by construction):
+        A sandboxed ``PythonCodeNode`` (the inner ``test_executor``) cannot
+        invoke an arbitrary passed RAG node, so this evaluator does NOT run
+        a system-under-test. Instead each ``test_queries`` entry MUST carry
+        the RESULTS the caller already produced by running their RAG system:
+        the ``generated_answer`` string and the ``retrieved_contexts`` list.
+        The evaluator passes those real outputs through to the LLM judges
+        (faithfulness / relevance / answer-quality) and the context-precision
+        metric, which score the caller's REAL outputs. Nothing is fabricated.
+
+        To run-the-system end-to-end (execute the RAG node + measure latency
+        + throughput), use ``RAGBenchmarkNode`` — it executes the node and
+        measures real wall-clock metrics.
+
     Example:
         evaluator = RAGEvaluationNode(
             metrics=["faithfulness", "relevance", "context_precision", "answer_quality"],
             use_reference_answers=True
         )
 
-        # Evaluate a RAG system
+        # First run YOUR rag system to produce answer + contexts, then
+        # pass those real results in for judging:
+        rag_out = my_rag_node.execute(query="What is transformer architecture?")
         results = await evaluator.execute(
             test_queries=[
                 {"query": "What is transformer architecture?",
-                 "reference": "Transformers use self-attention..."},
-                {"query": "Explain BERT",
-                 "reference": "BERT is a bidirectional..."}
+                 "reference": "Transformers use self-attention...",
+                 "generated_answer": rag_out["answer"],
+                 "retrieved_contexts": rag_out["retrieved_contexts"]},
             ],
-            rag_system=my_rag_node
         )
 
         # Results include:
@@ -89,6 +437,14 @@ class RAGEvaluationNode(WorkflowNode):
         use_reference_answers: Whether to use ground truth
         llm_judge_model: Model for LLM-based evaluation
         confidence_threshold: Minimum acceptable score
+
+    Each test_queries entry:
+        query: The question that was asked (str, required)
+        generated_answer: The answer the caller's RAG system produced (str)
+        retrieved_contexts: The contexts the caller's RAG system retrieved
+            (list of {"content": str, "score": float})
+        reference: Ground-truth answer (str, optional; used when
+            use_reference_answers=True)
 
     Returns:
         scores: Detailed scores per metric
@@ -128,43 +484,63 @@ class RAGEvaluationNode(WorkflowNode):
             node_id="test_executor",
             config={
                 "code": """
-import time
-from datetime import datetime
+# Provably-correct remediation: this node JUDGES results the caller's RAG
+# system already produced — it does NOT fabricate them. Each test_queries
+# entry MUST carry the caller's real `generated_answer` + `retrieved_contexts`
+# (a sandboxed PythonCodeNode cannot invoke an arbitrary passed node; running
+# the system-under-test is RAGBenchmarkNode's job). No fabricated answers,
+# no fabricated contexts, no synthetic timings.
 
-def execute_rag_tests(test_queries, rag_system):
-    '''Execute RAG system on test queries'''
+def collect_rag_results(test_queries):
+    '''Pass through the caller-provided RAG outputs for downstream judging.'''
+    # #1118: import the datetime CLASS inside the function body — PythonCodeNode
+    # passes separate (globals, locals) to exec(), so a module-scope
+    # `from datetime import datetime as _datetime_class` binds into LOCAL
+    # namespace and is invisible to this function's closure (the `timestamp`
+    # line below would raise NameError at runtime). The metric_aggregator
+    # already imports inside its body for the same reason.
+    from datetime import datetime as _datetime_class
+
     test_results = []
+    missing = []
 
     for i, test_case in enumerate(test_queries):
         query = test_case.get("query", "")
         reference = test_case.get("reference", "")
 
-        # Time the execution
-        start_time = time.time()
+        # Honest contract: the caller ran their RAG system and supplies the
+        # real answer + contexts. Raise (not fabricate) when absent so the
+        # incoherent input fails loudly instead of judging invented data.
+        if "generated_answer" not in test_case:
+            missing.append((i, "generated_answer"))
+            continue
+        if "retrieved_contexts" not in test_case:
+            missing.append((i, "retrieved_contexts"))
+            continue
 
-        # Execute RAG (simplified - would call actual system)
-        # In production, would use rag_system.run(query=query)
-        rag_response = {
-            "answer": f"Generated answer for: {query}",
-            "retrieved_contexts": [
-                {"content": "Context 1 about transformers...", "score": 0.9},
-                {"content": "Context 2 about attention...", "score": 0.85},
-                {"content": "Context 3 about architecture...", "score": 0.8}
-            ],
-            "confidence": 0.87
-        }
-
-        execution_time = time.time() - start_time
+        generated_answer = test_case["generated_answer"]
+        retrieved_contexts = test_case["retrieved_contexts"]
+        # Optional: caller-measured latency for the answer (real, not synthetic).
+        execution_time = test_case.get("execution_time", 0.0)
 
         test_results.append({
             "test_id": i,
             "query": query,
             "reference_answer": reference,
-            "generated_answer": rag_response["answer"],
-            "retrieved_contexts": rag_response["retrieved_contexts"],
+            "generated_answer": generated_answer,
+            "retrieved_contexts": retrieved_contexts,
             "execution_time": execution_time,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": _datetime_class.now().isoformat()
         })
+
+    if missing:
+        raise ValueError(
+            "RAGEvaluationNode judges already-run RAG results: each "
+            "test_queries entry MUST carry 'generated_answer' and "
+            "'retrieved_contexts'. Missing on entries: " + repr(missing) +
+            ". Run your RAG system first (or use RAGBenchmarkNode to "
+            "execute + measure the system)."
+        )
 
     # F9 umbrella + #1117 sibling: return from function so the module-scope
     # call below binds `result` (the wire-through happens via the module
@@ -177,8 +553,8 @@ def execute_rag_tests(test_queries, rag_system):
 
 # F9: module-scope call + drop the helper so PythonCodeNode's output gate
 # sees only `result`.
-result = execute_rag_tests(test_queries, rag_system)
-del execute_rag_tests
+result = collect_rag_results(test_queries)
+del collect_rag_results
 """
             },
         )
@@ -188,23 +564,24 @@ del execute_rag_tests
             "LLMAgentNode",
             node_id="faithfulness_evaluator",
             config={
-                "system_prompt": """Evaluate the faithfulness of the generated answer to the retrieved contexts.
+                "system_prompt": """Evaluate the faithfulness of each generated answer to its retrieved contexts.
 
 Faithfulness measures whether the answer is grounded in the retrieved information.
 
-For each statement in the answer:
-1. Check if it's supported by the contexts
-2. Identify any hallucinations
-3. Rate overall faithfulness
+The user message contains one or more numbered tests (Test 1, Test 2, ...). For
+EACH test, check whether each statement in the answer is supported by that test's
+contexts, identify hallucinations, and rate overall faithfulness.
 
-Return JSON:
-{
+Return a JSON ARRAY with exactly one object per test, in the SAME numbered order:
+[
+  {
     "faithfulness_score": 0.0-1.0,
     "supported_statements": ["list of supported claims"],
     "unsupported_statements": ["list of unsupported claims"],
     "hallucinations": ["list of hallucinated information"],
     "reasoning": "explanation"
-}""",
+  }
+]""",
                 "model": self.llm_judge_model,
             },
         )
@@ -214,22 +591,25 @@ Return JSON:
             "LLMAgentNode",
             node_id="relevance_evaluator",
             config={
-                "system_prompt": """Evaluate the relevance of the answer to the query.
+                "system_prompt": """Evaluate the relevance of each answer to its query.
 
-Consider:
+The user message contains one or more numbered tests (Test 1, Test 2, ...). For
+EACH test consider:
 1. Does the answer address the query?
 2. Is it complete?
 3. Is it focused without irrelevant information?
 
-Return JSON:
-{
+Return a JSON ARRAY with exactly one object per test, in the SAME numbered order:
+[
+  {
     "relevance_score": 0.0-1.0,
     "addresses_query": true/false,
     "completeness": 0.0-1.0,
     "focus": 0.0-1.0,
     "missing_aspects": ["list of missing elements"],
     "irrelevant_content": ["list of irrelevant parts"]
-}""",
+  }
+]""",
                 "model": self.llm_judge_model,
             },
         )
@@ -259,7 +639,10 @@ def evaluate_context_precision(test_result):
 
     for k in [1, 3, 5, 10]:
         if k <= len(contexts):
-            # Simulate relevance judgment (would use LLM in production)
+            # Deterministic relevance heuristic: a context counts as relevant
+            # at k when its caller-provided retrieval score clears 0.7. This is
+            # a real threshold over real scores (NOT a fabricated judgment); the
+            # LLM-based relevance judgment is the separate relevance_evaluator.
             relevant_at_k = sum(1 for c in contexts[:k] if c.get("score", 0) > 0.7)
             precision_at_k[f"P@{k}"] = relevant_at_k / k
 
@@ -309,16 +692,18 @@ del evaluate_context_precision, _test_data
                 "LLMAgentNode",
                 node_id="answer_quality_evaluator",
                 config={
-                    "system_prompt": """Compare the generated answer with the reference answer.
+                    "system_prompt": """Compare each generated answer with its reference answer.
 
-Evaluate:
+The user message contains one or more numbered tests (Test 1, Test 2, ...). For
+EACH test evaluate:
 1. Factual accuracy
 2. Completeness
 3. Clarity and coherence
 4. Additional valuable information
 
-Return JSON:
-{
+Return a JSON ARRAY with exactly one object per test, in the SAME numbered order:
+[
+  {
     "accuracy_score": 0.0-1.0,
     "completeness_score": 0.0-1.0,
     "clarity_score": 0.0-1.0,
@@ -326,7 +711,8 @@ Return JSON:
     "overall_quality": 0.0-1.0,
     "key_differences": ["list of major differences"],
     "improvements_needed": ["list of improvements"]
-}""",
+  }
+]""",
                     "model": self.llm_judge_model,
                 },
             )
@@ -350,8 +736,27 @@ def aggregate_evaluation_metrics(test_results, faithfulness_scores, relevance_sc
     # (`datetime.now()` on the module raises AttributeError.)
     from datetime import datetime as _datetime_class
 
-    # Parse evaluation results
-    all_metrics = {{
+    # OUTPUT-side fix: the judge inputs are now PARSED per-test score LISTS
+    # (the response-parser nodes did `response -> .content -> json.loads ->
+    # list`). `faithfulness_scores` is therefore a LIST of per-test dicts like
+    # `[{{"faithfulness_score": 0.8, ...}}, ...]` aligned 1:1 with test_results.
+    # A flagged entry carries `parse_error` and `<key>: None` — that is NOT a
+    # real score, so we extract None and EXCLUDE it from the numeric mean (we
+    # do NOT count an invented 0; zero-tolerance Rule 2).
+    def _score_at(score_list, idx, key):
+        '''Real per-test score, or None when missing / flagged / malformed.'''
+        if not isinstance(score_list, list) or idx >= len(score_list):
+            return None
+        entry = score_list[idx]
+        if not isinstance(entry, dict):
+            return None
+        if entry.get("parse_error") is not None:
+            return None  # flagged — honest gap, never a fabricated 0
+        value = entry.get(key)
+        return value if isinstance(value, (int, float)) else None
+
+    # Per-test aligned lists (None marks an honest gap, NOT a real zero).
+    per_test = {{
         "faithfulness": [],
         "relevance": [],
         "context_precision": [],
@@ -360,53 +765,74 @@ def aggregate_evaluation_metrics(test_results, faithfulness_scores, relevance_sc
     }}
 
     for i, test in enumerate(test_results):
-        # Get scores for this test
-        faith_score = faithfulness_scores[i].get("response", {{}}).get("faithfulness_score", 0)
-        rel_score = relevance_scores[i].get("response", {{}}).get("relevance_score", 0)
-        ctx_score = context_metrics[i].get("context_metrics", {{}}).get("avg_relevance_score", 0)
+        per_test["faithfulness"].append(
+            _score_at(faithfulness_scores, i, "faithfulness_score")
+        )
+        per_test["relevance"].append(
+            _score_at(relevance_scores, i, "relevance_score")
+        )
+        # context_metrics is a PythonCodeNode list of `{{"context_metrics": {{...}}}}`
+        # (unchanged shape — it is computed deterministically, never judged).
+        ctx_score = None
+        if isinstance(context_metrics, list) and i < len(context_metrics):
+            ctx_entry = context_metrics[i]
+            if isinstance(ctx_entry, dict):
+                ctx_score = ctx_entry.get("context_metrics", {{}}).get(
+                    "avg_relevance_score"
+                )
+        per_test["context_precision"].append(
+            ctx_score if isinstance(ctx_score, (int, float)) else None
+        )
+        per_test["execution_time"].append(test.get("execution_time", 0))
 
-        all_metrics["faithfulness"].append(faith_score)
-        all_metrics["relevance"].append(rel_score)
-        all_metrics["context_precision"].append(ctx_score)
-        all_metrics["execution_time"].append(test.get("execution_time", 0))
+        if answer_quality_scores is not None:
+            per_test["answer_quality"].append(
+                _score_at(answer_quality_scores, i, "overall_quality")
+            )
 
-        if answer_quality_scores:
-            quality_score = answer_quality_scores[i].get("response", {{}}).get("overall_quality", 0)
-            all_metrics["answer_quality"].append(quality_score)
-
-    # Calculate aggregate statistics
+    # Calculate aggregate statistics over the REAL (non-None) scores only —
+    # a flagged/missing per-test entry is excluded from the mean rather than
+    # counted as a fabricated zero. Surface the gap count for honesty.
     aggregate_stats = {{}}
-    for metric, scores in all_metrics.items():
-        if scores:
+    flagged_counts = {{}}
+    for metric, raw in per_test.items():
+        valid = [s for s in raw if s is not None]
+        flagged = sum(1 for s in raw if s is None)
+        if flagged:
+            flagged_counts[metric] = flagged
+        if valid:
             aggregate_stats[metric] = {{
-                "mean": statistics.mean(scores),
-                "median": statistics.median(scores),
-                "std_dev": statistics.stdev(scores) if len(scores) > 1 else 0,
-                "min": min(scores),
-                "max": max(scores),
-                "scores": scores
+                "mean": statistics.mean(valid),
+                "median": statistics.median(valid),
+                "std_dev": statistics.stdev(valid) if len(valid) > 1 else 0,
+                "min": min(valid),
+                "max": max(valid),
+                "scores": valid
             }}
 
-    # Identify failure cases
+    # Identify failure cases (None-safe: a missing score does not silently
+    # become a 0 that drags the overall score below threshold).
     failure_threshold = 0.6
     failures = []
 
     for i, test in enumerate(test_results):
-        overall_score = (all_metrics["faithfulness"][i] +
-                        all_metrics["relevance"][i] +
-                        all_metrics["context_precision"][i]) / 3
+        components = [
+            ("faithfulness", per_test["faithfulness"][i]),
+            ("relevance", per_test["relevance"][i]),
+            ("context_precision", per_test["context_precision"][i]),
+        ]
+        present = [(name, val) for name, val in components if val is not None]
+        if not present:
+            # No real score for this test at all — surface, don't invent.
+            continue
+        overall_score = sum(val for _, val in present) / len(present)
 
         if overall_score < failure_threshold:
             failures.append({{
                 "test_id": i,
-                "query": test["query"],
+                "query": test.get("query"),
                 "overall_score": overall_score,
-                "weakest_metric": min(
-                    ("faithfulness", all_metrics["faithfulness"][i]),
-                    ("relevance", all_metrics["relevance"][i]),
-                    ("context_precision", all_metrics["context_precision"][i]),
-                    key=lambda x: x[1]
-                )[0]
+                "weakest_metric": min(present, key=lambda x: x[1])[0]
             }})
 
     # Generate recommendations
@@ -424,23 +850,41 @@ def aggregate_evaluation_metrics(test_results, faithfulness_scores, relevance_sc
     if aggregate_stats.get("execution_time", {{}}).get("mean", 0) > 2.0:
         recommendations.append("Reduce latency: Consider caching or parallel processing")
 
+    # Output-side honesty: roll up overall_score over ONLY the metrics that
+    # produced a REAL aggregate mean. A fully parse-gapped / absent metric is
+    # EXCLUDED — never counted as 0 (which would re-fabricate the zero this
+    # shard removes everywhere else). Mirrors the per-test `present`-filter
+    # above; overall_score is None when NO metric has a real mean.
+    _overall_component_means = [
+        aggregate_stats[_m]["mean"]
+        for _m in ("faithfulness", "relevance", "context_precision")
+        if _m in aggregate_stats and aggregate_stats[_m].get("mean") is not None
+    ]
+    overall_score_value = (
+        statistics.mean(_overall_component_means)
+        if _overall_component_means
+        else None
+    )
+
     # F9 #1117: function MUST return its aggregate dict (the prior
     # `result = {{...}}` bound a function-scope local that was never
     # returned).
     return {{
         "evaluation_summary": {{
             "aggregate_metrics": aggregate_stats,
-            "overall_score": statistics.mean([
-                aggregate_stats.get("faithfulness", {{}}).get("mean", 0),
-                aggregate_stats.get("relevance", {{}}).get("mean", 0),
-                aggregate_stats.get("context_precision", {{}}).get("mean", 0)
-            ]) if aggregate_stats else 0.0,
+            "overall_score": overall_score_value,
             "failure_analysis": {{
                 "failure_count": len(failures),
                 "failure_rate": (len(failures) / len(test_results)) if test_results else 0.0,
                 "failed_queries": failures
             }},
             "recommendations": recommendations,
+            # Honesty surface: per-metric count of per-test entries that had NO
+            # real score (judge produced fewer than N, or the response-parser
+            # FLAGGED malformed/non-JSON output). Non-empty means some judge
+            # output could not be parsed into a real score — those gaps were
+            # EXCLUDED from the means above, never counted as fabricated zeros.
+            "parse_gaps": flagged_counts,
             "evaluation_config": {{
                 "metrics_used": {self.metrics},
                 "total_tests": len(test_results),
@@ -465,37 +909,197 @@ del aggregate_evaluation_metrics, _aqs
             },
         )
 
-        # Connect workflow
+        # Messages-composer nodes (L3 fix). Each LLM judge's context is routed
+        # through a `PythonCodeNode.from_function` composer that RENDERS the real
+        # query + retrieved contexts + generated answer (+ reference answer for
+        # the answer-quality judge) into an OpenAI-format `messages` list wired
+        # to the LLMAgentNode `messages` port — the ONLY port through which
+        # LLMAgentNode consumes context (its `run` reads `kwargs["messages"]`).
+        # The prior wiring fed the phantom `test_data` port the node silently
+        # drops, so each judge scored from its `system_prompt` alone.
+        #
+        # `.from_function` is the correct primitive (real module-level
+        # functions: real imports, real `return`→`result`, type-checkable, no
+        # brace-escaping). Instances are added via `add_node_instance(...,
+        # _internal=True)` — the SDK-internal node-construction path (mirrors
+        # conversational.py's L3 fix), so the consumer-facing instance-API
+        # advisory `UserWarning` is correctly suppressed (zero-tolerance Rule 1:
+        # no spurious runtime warnings).
+        #
+        # type: ignore[attr-defined] — `from_function` is a classmethod on the
+        # concrete PythonCodeNode, but `@register_node` erases the subtype to
+        # `type[Node]` for static checkers (mirrors conversational.py).
+        faithfulness_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_faithfulness_messages,
+                name="faithfulness_messages_composer",
+            ),
+            node_id="faithfulness_messages_composer",
+            _internal=True,
+        )
+        relevance_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_relevance_messages,
+                name="relevance_messages_composer",
+            ),
+            node_id="relevance_messages_composer",
+            _internal=True,
+        )
+        answer_quality_messages_composer_id: Optional[str] = None
+        if self.use_reference_answers:
+            answer_quality_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    compose_answer_quality_messages,
+                    name="answer_quality_messages_composer",
+                ),
+                node_id="answer_quality_messages_composer",
+                _internal=True,
+            )
+
+        # Response-parser nodes (OUTPUT-side fix). Each judge's `response` port
+        # (a dict `{"content": "<JSON string>", ...}`) is routed through a
+        # `from_function` parser that reads `response` -> `.content` ->
+        # `json.loads` -> a per-test list of score dicts (the judge returns a
+        # JSON ARRAY, one element per numbered test). The aggregator then indexes
+        # the real parsed `faithfulness_score` / `relevance_score` /
+        # `overall_quality` per test, instead of `.get()`-ing off the raw
+        # `response` dict (the parse-gap that defaulted every score to a
+        # fabricated 0). Malformed / non-JSON output is FLAGGED by the parser, not
+        # silently zeroed (zero-tolerance Rule 2). Same `from_function` +
+        # `add_node_instance(_internal=True)` primitive as the composers.
+        faithfulness_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_faithfulness_response,
+                name="faithfulness_response_parser",
+            ),
+            node_id="faithfulness_response_parser",
+            _internal=True,
+        )
+        relevance_parser_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                parse_relevance_response,
+                name="relevance_response_parser",
+            ),
+            node_id="relevance_response_parser",
+            _internal=True,
+        )
+        answer_quality_parser_id: Optional[str] = None
+        if self.use_reference_answers:
+            answer_quality_parser_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    parse_answer_quality_response,
+                    name="answer_quality_response_parser",
+                ),
+                node_id="answer_quality_response_parser",
+                _internal=True,
+            )
+
+        # Connect workflow.
+        #
+        # L3 wiring-correctness: a PythonCodeNode publishes a SINGLE `result`
+        # output port carrying its whole module-scope `result` dict — the nested
+        # keys ("test_results", "context_metrics") are NOT individual ports
+        # (mirrors conversational.py's #1117/#1123 fix). The prior edges read
+        # `test_executor."test_results"` / `context_evaluator."context_metrics"`
+        # as if they were top-level ports, so every downstream input silently
+        # bound to nothing. Every PythonCodeNode source edge now reads the nested
+        # path `result.<key>`. LLMAgentNode publishes each top-level result key
+        # as a real port, so `response` is read directly.
+        #
+        # L3 context fix: feed `test_executor.result.test_results` (a LIST of
+        # per-query result dicts) INTO each judge's composer (NOT the phantom
+        # `test_data` port on the LLM stage). The composer renders the real
+        # query/contexts/answer into a `messages` list on the VALID `messages`
+        # port. `context_evaluator` is a PythonCodeNode (not an LLMAgentNode)
+        # that reads `test_data` via its module-scope code, so it consumes the
+        # same `result.test_results` source on its `test_data` input.
+        #
+        # OUTPUT-side fix (this shard): the single-`response`->list-indexed
+        # mismatch IS now closed. Each judge returns a JSON ARRAY (one element
+        # per numbered test); the response-parser nodes `json.loads` the array
+        # into the per-test list shape the aggregator indexes. The judge's
+        # `response` flows judge -> response-parser -> aggregator (NOT judge ->
+        # aggregator directly), so the aggregator reads REAL parsed per-test
+        # scores. No per-test score is fabricated.
         builder.add_connection(
-            test_executor_id, "test_results", faithfulness_evaluator_id, "test_data"
+            test_executor_id,
+            "result.test_results",
+            faithfulness_messages_composer_id,
+            "test_results",
         )
         builder.add_connection(
-            test_executor_id, "test_results", relevance_evaluator_id, "test_data"
+            faithfulness_messages_composer_id,
+            "result.messages",
+            faithfulness_evaluator_id,
+            "messages",
         )
         builder.add_connection(
-            test_executor_id, "test_results", context_evaluator_id, "test_data"
+            test_executor_id,
+            "result.test_results",
+            relevance_messages_composer_id,
+            "test_results",
+        )
+        builder.add_connection(
+            relevance_messages_composer_id,
+            "result.messages",
+            relevance_evaluator_id,
+            "messages",
+        )
+        builder.add_connection(
+            test_executor_id, "result.test_results", context_evaluator_id, "test_data"
         )
 
         if self.use_reference_answers:
             assert answer_quality_id is not None  # narrowed: bound in the branch above
+            assert answer_quality_messages_composer_id is not None
             builder.add_connection(
-                test_executor_id, "test_results", answer_quality_id, "test_data"
+                test_executor_id,
+                "result.test_results",
+                answer_quality_messages_composer_id,
+                "test_results",
             )
             builder.add_connection(
-                answer_quality_id, "response", aggregator_id, "answer_quality_scores"
+                answer_quality_messages_composer_id,
+                "result.messages",
+                answer_quality_id,
+                "messages",
+            )
+            assert answer_quality_parser_id is not None
+            # judge -> response-parser -> aggregator (parsed per-test list).
+            builder.add_connection(
+                answer_quality_id, "response", answer_quality_parser_id, "response"
+            )
+            builder.add_connection(
+                answer_quality_parser_id,
+                "result.scores",
+                aggregator_id,
+                "answer_quality_scores",
             )
 
         builder.add_connection(
-            test_executor_id, "test_results", aggregator_id, "test_results"
+            test_executor_id, "result.test_results", aggregator_id, "test_results"
+        )
+        # judge -> response-parser -> aggregator (parsed per-test score list).
+        builder.add_connection(
+            faithfulness_evaluator_id, "response", faithfulness_parser_id, "response"
         )
         builder.add_connection(
-            faithfulness_evaluator_id, "response", aggregator_id, "faithfulness_scores"
+            faithfulness_parser_id,
+            "result.scores",
+            aggregator_id,
+            "faithfulness_scores",
         )
         builder.add_connection(
-            relevance_evaluator_id, "response", aggregator_id, "relevance_scores"
+            relevance_evaluator_id, "response", relevance_parser_id, "response"
         )
         builder.add_connection(
-            context_evaluator_id, "context_metrics", aggregator_id, "context_metrics"
+            relevance_parser_id, "result.scores", aggregator_id, "relevance_scores"
+        )
+        builder.add_connection(
+            context_evaluator_id,
+            "result.context_metrics",
+            aggregator_id,
+            "context_metrics",
         )
 
         return builder.build(name="rag_evaluation_workflow")
@@ -513,12 +1117,26 @@ class RAGBenchmarkNode(Node):
     - Not ideal for: Quality evaluation (use RAGEvaluationNode)
     - Metrics: Latency, throughput, resource usage, scalability
 
+    Provably-correct measurement (no synthetic timings):
+        Each provided system is EXECUTED against the test queries via the
+        Core SDK node-execution path (``system.execute(query=...)``) and
+        every metric is MEASURED from the real run:
+        - latency: ``time.perf_counter()`` around each real query execution
+        - throughput: real queries / real elapsed wall-clock
+        - memory: ``tracemalloc`` peak across the workload
+        - concurrency: real concurrent execution via a thread pool
+        No ``time.sleep`` / ``random`` stand-ins. A provided "system" that
+        cannot be executed (no ``execute`` / not callable) raises a typed
+        error rather than falling back to fabricated numbers.
+
     Example:
         benchmark = RAGBenchmarkNode(
             workload_sizes=[10, 100, 1000],
             concurrent_users=[1, 5, 10]
         )
 
+        # rag_a / rag_b are runnable RAG nodes (Core SDK Node / WorkflowNode)
+        # or any callable accepting a query and returning a result dict.
         results = await benchmark.execute(
             rag_systems={"system_a": rag_a, "system_b": rag_b},
             test_queries=queries
@@ -529,11 +1147,18 @@ class RAGBenchmarkNode(Node):
         concurrent_users: Concurrency levels to test
         metrics_interval: How often to collect metrics
 
+    Each rag_systems value MUST be runnable, one of:
+        - a Core SDK Node / WorkflowNode (executed via ``.execute(query=...)``)
+        - a plain callable ``fn(query=...) -> result`` (executed directly)
+
+    Each test_queries entry: a dict carrying the query under a ``"query"``
+    key (or ``"q"``); the dict is forwarded to the system's execute path.
+
     Returns:
-        latency_profiles: Response time distributions
-        throughput_curves: Requests/second at different loads
-        resource_usage: Memory and compute utilization
-        scalability_analysis: How performance scales
+        latency_profiles: Response time distributions (measured)
+        throughput_curves: Requests/second at different loads (measured)
+        resource_usage: Peak memory utilization (measured via tracemalloc)
+        scalability_analysis: How performance scales under real concurrency
     """
 
     def __init__(
@@ -596,81 +1221,340 @@ class RAGBenchmarkNode(Node):
             ),
         }
 
+    @staticmethod
+    def _resolve_runner(system_name: str, system: Any) -> Callable[[dict], Any]:
+        """Return a callable that EXECUTES the provided system on one query.
+
+        Accepts a Core SDK Node / WorkflowNode (run via ``.execute(**query)``)
+        or a plain callable ``fn(**query)``. Raises a typed error for any
+        shape that cannot be executed — there is NO fabrication fallback.
+        """
+        execute = getattr(system, "execute", None)
+        if callable(execute):
+            return lambda query: execute(**query)
+        if callable(system):
+            return lambda query: system(**query)
+        raise TypeError(
+            f"RAGBenchmarkNode cannot execute system '{system_name}': "
+            f"expected a Core SDK Node/WorkflowNode with .execute(...) or a "
+            f"callable, got {type(system).__name__}. Benchmarking measures a "
+            f"REAL system run — no synthetic-metric fallback is provided."
+        )
+
+    @staticmethod
+    def _query_payload(query: Any) -> dict:
+        """Normalize a test-query entry into kwargs for the system runner."""
+        if isinstance(query, dict):
+            # Forward the dict as-is so node-declared params bind by name.
+            # A bare {"q": ...} convenience key maps to the canonical query.
+            if "query" not in query and "q" in query:
+                payload = dict(query)
+                payload["query"] = payload.pop("q")
+                return payload
+            return dict(query)
+        # A bare string/other → the canonical `query` kwarg.
+        return {"query": query}
+
+    @staticmethod
+    def _timed_call(runner: Callable[[dict], Any], payload: dict) -> float:
+        """Execute one real query and return its measured wall-clock latency."""
+        q_start = time.perf_counter()
+        runner(payload)  # real execution; raises propagate (no swallow)
+        return time.perf_counter() - q_start
+
+    def _measure_workload(
+        self,
+        runner: Callable[[dict], Any],
+        workload: List[Any],
+        timeout: Optional[float] = None,
+    ) -> Tuple[List[float], float, bool]:
+        """Run each query sequentially under a real wall-clock budget.
+
+        Each query runs in a worker future bounded by the remaining ``timeout``
+        so a single wedged provided system cannot hang the benchmark — the
+        ``duration`` budget is a TRUE wall-clock cap on this path too, not only
+        the concurrent one. Returns (per-query latencies that completed,
+        wall-clock elapsed, ``timed_out``).
+        """
+        latencies: List[float] = []
+        timed_out = False
+        deadline = (time.perf_counter() + timeout) if timeout is not None else None
+        start = time.perf_counter()
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            for query in workload:
+                remaining = (
+                    None
+                    if deadline is None
+                    else max(0.0, deadline - time.perf_counter())
+                )
+                if remaining is not None and remaining <= 0:
+                    timed_out = True
+                    break
+                payload = self._query_payload(query)
+                fut = pool.submit(self._timed_call, runner, payload)
+                try:
+                    latencies.append(fut.result(timeout=remaining))
+                except FuturesTimeoutError:
+                    timed_out = True
+                    break
+        finally:
+            # Don't block on a wedged thread: cancel queued work, don't wait
+            # for an in-flight one. The bound is real even though Python cannot
+            # kill the running thread.
+            pool.shutdown(wait=False, cancel_futures=True)
+        elapsed = time.perf_counter() - start
+        return latencies, elapsed, timed_out
+
+    def _measure_concurrent(
+        self,
+        runner: Callable[[dict], Any],
+        workload: List[Any],
+        users: int,
+        timeout: Optional[float] = None,
+    ) -> Tuple[List[float], float, bool]:
+        """Run the workload across `users` real concurrent threads.
+
+        Core SDK Nodes expose only a sync ``execute``; real concurrency uses
+        a thread pool rather than ``asyncio.gather``. ``timeout`` bounds the
+        TOTAL wall-clock wait for the concurrent batch — a wedged provided
+        system cannot hang the benchmark past it. Returns (per-query
+        latencies collected so far, wall-clock elapsed, ``timed_out``).
+        """
+        payloads = [self._query_payload(q) for q in workload]
+
+        latencies: List[float] = []
+        timed_out = False
+        start = time.perf_counter()
+        pool = ThreadPoolExecutor(max_workers=max(1, users))
+        try:
+            futures = [pool.submit(self._timed_call, runner, p) for p in payloads]
+            try:
+                # as_completed appends each result as it finishes; on timeout
+                # `latencies` already holds exactly the queries that completed
+                # within the budget — no fabrication, no indefinite hang.
+                for fut in as_completed(futures, timeout=timeout):
+                    latencies.append(fut.result())  # propagate real errors
+            except FuturesTimeoutError:
+                timed_out = True
+        finally:
+            # wait=False so a wedged thread cannot block run() past the budget;
+            # cancel_futures drops queries that never started.
+            pool.shutdown(wait=False, cancel_futures=True)
+        elapsed = time.perf_counter() - start
+        return latencies, elapsed, timed_out
+
     def run(self, **kwargs) -> Dict[str, Any]:
-        """Run performance benchmarks"""
+        """Run performance benchmarks by EXECUTING each provided system."""
         rag_systems = kwargs.get("rag_systems", {})
         test_queries = kwargs.get("test_queries", [])
         duration = kwargs.get("duration", 60)
 
+        # Correlation id binds every log line of this benchmark run together
+        # (observability.md Rule 2). `duration` is a REAL total wall-clock
+        # budget: a wedged provided system cannot hang `run()` past it.
+        bench_run_id = secrets.token_hex(8)
+        deadline = time.perf_counter() + max(1, int(duration))
+
+        def _remaining() -> float:
+            return max(0.0, deadline - time.perf_counter())
+
+        logger.info(
+            "rag_benchmark.start",
+            extra={
+                "run_id": bench_run_id,
+                "systems": list(rag_systems.keys()),
+                "num_queries": len(test_queries),
+                "workload_sizes": self.workload_sizes,
+                "concurrent_users": self.concurrent_users,
+                "duration_budget_s": duration,
+            },
+        )
+
         benchmark_results = {}
+        duration_exceeded = False
 
         for system_name, system in rag_systems.items():
-            system_results = {
+            if _remaining() <= 0:
+                duration_exceeded = True
+                logger.warning(
+                    "rag_benchmark.duration_exceeded",
+                    extra={
+                        "run_id": bench_run_id,
+                        "benchmarked": len(benchmark_results),
+                        "total_systems": len(rag_systems),
+                    },
+                )
+                break
+
+            # Resolve the real runner up front — typed error if not runnable.
+            runner = self._resolve_runner(system_name, system)
+
+            system_results: Dict[str, Any] = {
                 "latency_profiles": {},
                 "throughput_curves": {},
                 "resource_usage": {},
                 "scalability_analysis": {},
             }
 
-            # Test different workload sizes
-            for size in self.workload_sizes:
-                workload = test_queries[:size]
+            logger.info(
+                "rag_benchmark.system.start",
+                extra={"run_id": bench_run_id, "system": system_name},
+            )
 
-                # Measure latency
-                latencies = []
-                start_time = time.time()
+            # Measure real memory across the full system run via tracemalloc.
+            # try/finally guarantees we stop tracing even if a provided system
+            # raises mid-benchmark — otherwise process-global tracing leaks.
+            tracing_already_on = tracemalloc.is_tracing()
+            if not tracing_already_on:
+                tracemalloc.start()
+            else:
+                tracemalloc.reset_peak()
+            try:
+                # Test different workload sizes — REAL execution + measurement.
+                for size in self.workload_sizes:
+                    if _remaining() <= 0:
+                        duration_exceeded = True
+                        break
+                    workload = test_queries[:size]
+                    if not workload:
+                        continue
 
-                for query in workload:
-                    query_start = time.time()
-                    # Would call system.run(query=query) in production
-                    # Simulate processing
-                    time.sleep(0.1 + random.random() * 0.1)
-                    latencies.append(time.time() - query_start)
+                    latencies, elapsed, wl_timed_out = self._measure_workload(
+                        runner, workload, timeout=_remaining()
+                    )
+                    if wl_timed_out:
+                        duration_exceeded = True
+                        logger.warning(
+                            "rag_benchmark.workload_timeout",
+                            extra={
+                                "run_id": bench_run_id,
+                                "system": system_name,
+                                "size": size,
+                                "completed": len(latencies),
+                                "requested": len(workload),
+                            },
+                        )
+                    if not latencies:
+                        # Nothing completed within the budget — record nothing
+                        # rather than fabricate, and stop escalating workload size.
+                        break
 
-                system_results["latency_profiles"][f"size_{size}"] = {
-                    "p50": statistics.median(latencies),
-                    "p95": sorted(latencies)[int(len(latencies) * 0.95)],
-                    "p99": sorted(latencies)[int(len(latencies) * 0.99)],
-                    "mean": statistics.mean(latencies),
-                    "std_dev": statistics.stdev(latencies) if len(latencies) > 1 else 0,
+                    ordered = sorted(latencies)
+                    # Clamp percentile indices into range (small workloads).
+                    p95_idx = min(int(len(ordered) * 0.95), len(ordered) - 1)
+                    p99_idx = min(int(len(ordered) * 0.99), len(ordered) - 1)
+                    system_results["latency_profiles"][f"size_{size}"] = {
+                        "p50": statistics.median(latencies),
+                        "p95": ordered[p95_idx],
+                        "p99": ordered[p99_idx],
+                        "mean": statistics.mean(latencies),
+                        "std_dev": (
+                            statistics.stdev(latencies) if len(latencies) > 1 else 0.0
+                        ),
+                    }
+
+                    # Real throughput = queries actually completed / real elapsed.
+                    throughput = len(latencies) / elapsed if elapsed > 0 else 0.0
+                    system_results["throughput_curves"][f"size_{size}"] = throughput
+                    if wl_timed_out:
+                        break
+
+                # Test concurrency — REAL concurrent execution via thread pool.
+                # Use the largest available workload (capped at the largest
+                # configured workload size) so concurrency exercises real load.
+                concurrency_workload = test_queries[: max(self.workload_sizes)]
+                for users in self.concurrent_users:
+                    if not concurrency_workload:
+                        continue
+                    if _remaining() <= 0:
+                        duration_exceeded = True
+                        break
+                    conc_latencies, conc_elapsed, conc_timed_out = (
+                        self._measure_concurrent(
+                            runner,
+                            concurrency_workload,
+                            users,
+                            timeout=_remaining(),
+                        )
+                    )
+                    if conc_timed_out:
+                        duration_exceeded = True
+                        logger.warning(
+                            "rag_benchmark.concurrent_timeout",
+                            extra={
+                                "run_id": bench_run_id,
+                                "system": system_name,
+                                "users": users,
+                                "completed": len(conc_latencies),
+                                "requested": len(concurrency_workload),
+                            },
+                        )
+                    if not conc_latencies:
+                        # Nothing completed within the budget — record an honest
+                        # empty entry (no fabricated numbers) and stop escalating
+                        # concurrency for this system.
+                        system_results["scalability_analysis"][f"users_{users}"] = {
+                            "avg_latency": 0.0,
+                            "concurrent_throughput": 0.0,
+                            "parallel_speedup": 0.0,
+                            "timed_out": True,
+                        }
+                        break
+                    concurrent_throughput = (
+                        len(conc_latencies) / conc_elapsed if conc_elapsed > 0 else 0.0
+                    )
+                    system_results["scalability_analysis"][f"users_{users}"] = {
+                        "avg_latency": statistics.mean(conc_latencies),
+                        "concurrent_throughput": concurrent_throughput,
+                        # parallel_speedup: mean per-query compute time divided by
+                        # the amortized wall-clock per query. ~N under N-way
+                        # parallelism, ~1.0 when serial. HIGHER = scales better.
+                        # Measured from real timings (no synthetic stand-in).
+                        "parallel_speedup": (
+                            statistics.mean(conc_latencies)
+                            / (conc_elapsed / len(conc_latencies))
+                            if conc_elapsed > 0
+                            else 0.0
+                        ),
+                        "timed_out": conc_timed_out,
+                    }
+                    if conc_timed_out:
+                        break
+
+                # Real peak memory for this system's run (tracemalloc).
+                _, peak = tracemalloc.get_traced_memory()
+                system_results["resource_usage"] = {
+                    "memory_mb": peak / (1024 * 1024),
                 }
+            finally:
+                if not tracing_already_on:
+                    tracemalloc.stop()
 
-                # Calculate throughput
-                total_time = time.time() - start_time
-                throughput = len(workload) / total_time
-                system_results["throughput_curves"][f"size_{size}"] = throughput
-
-            # Test concurrency
-            for users in self.concurrent_users:
-                # Simulate concurrent load
-                concurrent_latencies = []
-
-                # Simplified - would use asyncio/threading in production
-                for _ in range(users * 10):
-                    query_start = time.time()
-                    time.sleep(0.1 + random.random() * 0.2 * users)
-                    concurrent_latencies.append(time.time() - query_start)
-
-                system_results["scalability_analysis"][f"users_{users}"] = {
-                    "avg_latency": statistics.mean(concurrent_latencies),
-                    "throughput_degradation": 1.0 / users,  # Simplified
-                }
-
-            # Simulate resource usage
-            system_results["resource_usage"] = {
-                "memory_mb": 100 + random.randint(0, 500),
-                "cpu_percent": 20 + random.randint(0, 60),
-                "gpu_memory_mb": (
-                    0
-                    if "gpu" not in system_name.lower()
-                    else 1000 + random.randint(0, 3000)
-                ),
-            }
+            logger.info(
+                "rag_benchmark.system.ok",
+                extra={
+                    "run_id": bench_run_id,
+                    "system": system_name,
+                    "peak_memory_mb": system_results["resource_usage"].get(
+                        "memory_mb", 0.0
+                    ),
+                },
+            )
 
             benchmark_results[system_name] = system_results
 
-        # Comparative analysis
+        # Comparative analysis over REAL measured numbers.
         comparison = self._compare_systems(benchmark_results)
+
+        logger.info(
+            "rag_benchmark.ok",
+            extra={
+                "run_id": bench_run_id,
+                "systems_benchmarked": len(benchmark_results),
+                "duration_exceeded": duration_exceeded,
+            },
+        )
 
         return {
             "benchmark_results": benchmark_results,
@@ -680,19 +1564,26 @@ class RAGBenchmarkNode(Node):
                 "concurrent_users": self.concurrent_users,
                 "duration": duration,
                 "num_queries": len(test_queries),
+                "duration_exceeded": duration_exceeded,
             },
         }
 
     def _compare_systems(self, results: Dict) -> Dict[str, Any]:
-        """Compare benchmark results across systems"""
-        comparison = {
+        """Compare benchmark results across systems (real measured numbers)."""
+        comparison: Dict[str, Any] = {
             "fastest_system": None,
             "most_scalable": None,
             "most_efficient": None,
             "recommendations": [],
         }
 
-        # Find fastest system
+        # No systems benchmarked → nothing to rank (e.g. empty rag_systems
+        # or all workloads empty). Return the null-winner shape honestly
+        # rather than crashing min/max on an empty mapping.
+        if not results:
+            return comparison
+
+        # Find fastest system — lowest mean per-query latency.
         avg_latencies = {}
         for system, data in results.items():
             latencies = [v["mean"] for v in data["latency_profiles"].values()]
@@ -704,32 +1595,39 @@ class RAGBenchmarkNode(Node):
             avg_latencies, key=lambda k: avg_latencies[k]
         )
 
-        # Find most scalable
+        # Find most scalable — HIGHEST parallel-speedup factor (best effective
+        # concurrency under real load). parallel_speedup is measured per-query
+        # mean latency over amortized wall-clock per query (~N under N-way
+        # parallelism, ~1.0 serial); HIGHER is better, so rank with max. A
+        # system with no concurrency data defaults to 0.0 (worst) so it cannot
+        # spuriously win.
         scalability_scores = {}
         for system, data in results.items():
-            # Lower degradation = better scalability
-            degradations = [
-                v["throughput_degradation"]
-                for v in data["scalability_analysis"].values()
+            speedups = [
+                v["parallel_speedup"] for v in data["scalability_analysis"].values()
             ]
-            scalability_scores[system] = (
-                statistics.mean(degradations) if degradations else 0
-            )
+            scalability_scores[system] = statistics.mean(speedups) if speedups else 0.0
 
         comparison["most_scalable"] = max(
             scalability_scores, key=lambda k: scalability_scores[k]
         )
 
-        # Find most efficient (performance per resource)
+        # Find most efficient — highest throughput per MB of peak memory.
         efficiency_scores = {}
         for system, data in results.items():
             throughput = (
                 statistics.mean(data["throughput_curves"].values())
                 if data["throughput_curves"]
-                else 1
+                else 0.0
             )
             memory = data["resource_usage"]["memory_mb"]
-            efficiency_scores[system] = throughput / memory * 1000
+            # Guard against a near-zero tracemalloc reading on a trivial
+            # deterministic system: fall back to raw throughput so the
+            # ranking stays meaningful instead of dividing by ~0.
+            if memory > 0:
+                efficiency_scores[system] = throughput / memory * 1000
+            else:
+                efficiency_scores[system] = throughput
 
         comparison["most_efficient"] = max(
             efficiency_scores, key=lambda k: efficiency_scores[k]

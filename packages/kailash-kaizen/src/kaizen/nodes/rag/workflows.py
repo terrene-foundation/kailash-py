@@ -7,9 +7,14 @@ and operations into reusable workflow patterns.
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from kailash.nodes.base import register_node
+
+# PythonCodeNode is imported for BOTH its @register_node side effect (the inner
+# workflows reference it by the string "PythonCodeNode") AND so the L3
+# messages-composer fix below can call `PythonCodeNode.from_function(fn)`.
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -30,6 +35,92 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
+
+
+# ---------------------------------------------------------------------------
+# Messages-composer function (L3 fix — same reference template as
+# conversational.py, query_processing.py, agentic.py, and graph.py).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name is read via `kwargs.get` and SILENTLY DROPPED.
+#
+# In AdaptiveRAGWorkflowNode the ONLY direct LLMAgentNode stage —
+# `rag_strategy_analyzer` — was wired `document_preprocessor.result ->
+# rag_strategy_analyzer.input`. `input` is NOT a port LLMAgentNode reads, so
+# the strategy analyzer answered from its `system_prompt` alone: it never saw
+# the document characteristics (count / average length / structure / technical
+# signals / content types) NOR the user query it is meant to analyze to select
+# the optimal RAG strategy (the L3 "LLM ignores its input" defect).
+#
+# The composer renders the REAL in-graph data characteristics the
+# `document_preprocessor` PythonCodeNode genuinely publishes (document_count,
+# avg_length, has_structure, is_technical, content_types) PLUS the real user
+# query into a `messages` list wired to the VALID `messages` port. This is pure
+# data rendering (the permitted output-formatting exception per
+# rules/agent-reasoning.md) — NO if-else routing / keyword classification on
+# content, and NO NEW deterministic agent-loop logic (the existing strategy
+# routing/orchestration in workflows.py is unchanged).
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): every field rendered is a real key
+# the `document_preprocessor` codegen publishes on its `result` (verified
+# against the `analyze_for_llm` return dict). No input is invented.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_text(value: Any) -> str:
+    """Coerce a wired input to a clean string.
+
+    The parameter injector delivers top-level inputs as plain strings; a wired
+    upstream port may arrive None on an unwired optional branch.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def compose_strategy_analyzer_messages(
+    query="",
+    document_count=0,
+    avg_length=0,
+    has_structure=False,
+    is_technical=False,
+    content_types=None,
+):
+    """Compose the ``messages`` list for AdaptiveRAGWorkflowNode's
+    ``rag_strategy_analyzer`` LLM stage.
+
+    Renders the REAL document characteristics the upstream
+    ``document_preprocessor`` publishes (``document_count`` / ``avg_length`` /
+    ``has_structure`` / ``is_technical`` / ``content_types``) AND the real user
+    ``query`` into a ``messages`` list wired to the LLMAgentNode ``messages``
+    port — so the analyzer selects the RAG strategy FROM the actual corpus +
+    query, not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``.
+
+    Mirrors the analyzer's ``prompt_template`` field shape (Count / Average
+    length / Has structure / Technical content / Content types / Query) so the
+    rendered message carries exactly the inputs the ``system_prompt`` advertises
+    it will reason over. Every value is a genuine in-graph
+    ``document_preprocessor.result`` key — none is invented.
+    """
+    q = _coerce_text(query)
+    types = content_types if isinstance(content_types, list) else []
+    types_text = ", ".join(str(t) for t in types) if types else "none detected"
+    content = (
+        "Analyze these documents for optimal RAG strategy selection:\n\n"
+        "Document Analysis:\n"
+        f"- Count: {document_count}\n"
+        f"- Average length: {avg_length} characters\n"
+        f"- Has structure (headings/sections): {has_structure}\n"
+        f"- Technical content detected: {is_technical}\n"
+        f"- Content types: {types_text}\n\n"
+        "Query (if provided): " + (q if q else "(none)") + "\n\n"
+        "Recommend the optimal RAG strategy:"
+    )
+    return {"messages": [{"role": "user", "content": content}]}
 
 
 @register_node()
@@ -537,9 +628,97 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
             },
         )
 
+        # L3 messages-composer (reference template — conversational.py /
+        # query_processing.py / agentic.py / graph.py). The
+        # `rag_strategy_analyzer` LLM stage previously received NO real input on
+        # a port LLMAgentNode reads: its only inbound edge was
+        # `document_preprocessor.result -> rag_strategy_analyzer.input`, and
+        # `input` is a port LLMAgentNode silently drops (its `run` reads only
+        # `kwargs["messages"]`). The analyzer answered from its `system_prompt`
+        # alone — it never saw the document characteristics nor the query it is
+        # meant to analyze to pick the optimal RAG strategy.
+        #
+        # The composer renders the REAL `document_preprocessor` output
+        # characteristics (delivered via the nested `result.<key>` ports a
+        # from_function node publishes — `document_count` / `avg_length` /
+        # `has_structure` / `is_technical` / `content_types`) PLUS the real
+        # top-level `query` (auto-distributed by the parameter injector) into the
+        # analyzer's VALID `messages` port. `from_function` is the correct
+        # primitive (real module-level function: real `return`→`result`,
+        # statically checkable). `type: ignore[attr-defined]`: `from_function`
+        # is a
+        # classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        strategy_analyzer_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_strategy_analyzer_messages,
+                name="strategy_analyzer_messages_composer",
+            ),
+            node_id="strategy_analyzer_messages_composer",
+            _internal=True,
+        )
+
         # Connect adaptive pipeline. SwitchNode's primary input port is
         # `input_data`; each multi-case match emits on `case_<value>`.
-        builder.add_connection(preprocessor_id, "result", llm_analyzer_id, "input")
+        #
+        # FIX: the prior `document_preprocessor.result ->
+        # rag_strategy_analyzer.input` phantom edge fed the analyzer a port
+        # LLMAgentNode drops. The composer now renders the REAL preprocessor
+        # characteristics + the real query into the analyzer's `messages` port;
+        # the phantom `input` edge is REMOVED.
+        #
+        # The real `document_preprocessor.result` characteristics reach the
+        # composer via the nested-key ports a from_function node publishes
+        # (`result.<key>`); the real `query` reaches the composer the same way —
+        # the top-level `query` is delivered into `document_preprocessor` via
+        # `input_mapping` (see __init__), the preprocessor republishes it on
+        # `result.query`, and the wired `preprocessor.result.query ->
+        # composer.query` edge below carries it in. This is the production
+        # delivery path (top-level input → in-graph wiring), NOT node-keyed
+        # injection of the analyzer's load-bearing content.
+        builder.add_connection(
+            preprocessor_id,
+            "result.document_count",
+            strategy_analyzer_messages_composer_id,
+            "document_count",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.avg_length",
+            strategy_analyzer_messages_composer_id,
+            "avg_length",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.has_structure",
+            strategy_analyzer_messages_composer_id,
+            "has_structure",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.is_technical",
+            strategy_analyzer_messages_composer_id,
+            "is_technical",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.content_types",
+            strategy_analyzer_messages_composer_id,
+            "content_types",
+        )
+        builder.add_connection(
+            preprocessor_id,
+            "result.query",
+            strategy_analyzer_messages_composer_id,
+            "query",
+        )
+        builder.add_connection(
+            strategy_analyzer_messages_composer_id,
+            "result.messages",
+            llm_analyzer_id,
+            "messages",
+        )
         builder.add_connection(llm_analyzer_id, "result", executor_id, "input_data")
         builder.add_connection(
             preprocessor_id, "result", executor_id, "preprocessed_data"

@@ -355,7 +355,13 @@ class TestGraphRAGNode:
 
     def test_create_workflow_builds_expected_nodes_with_summary(self):
         """``_create_workflow()`` with ``use_global_summary=True`` builds the
-        full 6-node graph RAG pipeline."""
+        full 9-node graph RAG pipeline.
+
+        L3 fix (Wave-2): three ``*_messages_composer`` from_function nodes were
+        added — one per LLM stage (entity_extractor / query_processor /
+        summary_generator) — so each LLM stage receives its REAL context via the
+        VALID ``messages`` port instead of a phantom (dropped) inbound port. The
+        prior 6-node set grew to 9 (6 + 3 composers)."""
         # type: ignore[attr-defined] — the @register_node decorator erases the
         # concrete subclass type to base Node, which does not declare the
         # per-node _create_workflow helper. The method exists at runtime; the
@@ -364,20 +370,26 @@ class TestGraphRAGNode:
         node_ids = set(wf.nodes.keys())
         assert node_ids == {
             "entity_extractor",
+            "entity_messages_composer",
             "graph_builder",
             "query_processor",
+            "query_messages_composer",
             "graph_retriever",
             "summary_generator",
+            "summary_messages_composer",
             "result_synthesizer",
         }
 
     def test_create_workflow_omits_summary_node_when_disabled(self):
-        """With ``use_global_summary=False`` the ``summary_generator`` node is
-        absent — a 5-node pipeline."""
+        """With ``use_global_summary=False`` the ``summary_generator`` node AND
+        its ``summary_messages_composer`` are absent — a 7-node pipeline
+        (5 original non-summary nodes + the entity & query message composers;
+        the summary composer is added only when ``use_global_summary=True``)."""
         wf = GraphRAGNode(use_global_summary=False)._create_workflow()  # type: ignore[attr-defined]
         node_ids = set(wf.nodes.keys())
         assert "summary_generator" not in node_ids
-        assert len(node_ids) == 5
+        assert "summary_messages_composer" not in node_ids
+        assert len(node_ids) == 7
 
     def test_create_workflow_entity_types_flow_into_extractor_prompt(self):
         """Custom ``entity_types`` appear in the entity_extractor's system

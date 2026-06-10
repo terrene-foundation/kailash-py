@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import time
 import typing
 
 import pytest
@@ -204,8 +205,12 @@ class TestPossiblyUnboundLocalsResolved:
             enable_summarization=False,
         )
         wf = node._create_workflow()  # type: ignore[attr-defined]
-        # Only the 5 mandatory nodes remain.
-        assert len(wf.nodes) == 5
+        # The 6 mandatory nodes remain: context_loader, context_retriever,
+        # response_messages_composer (the L3 messages-composer feeding the
+        # response_generator's `messages` port — always present, independent of
+        # the optional coreference/topic/summarization branches), the
+        # response_generator LLM stage, session_updater, and result_formatter.
+        assert len(wf.nodes) == 6
 
 
 # ==========================================================================
@@ -317,16 +322,41 @@ class TestCompareSystemsLambdaKeyFix:
     """
 
     def test_compare_systems_picks_lowest_latency_as_fastest(self):
-        """Behavioral check: when system_a has lower latencies, it's fastest."""
+        """Behavioral check: when system_a has lower latencies, it's fastest.
+
+        Benchmarking now measures REAL system runs (no synthetic-metric
+        fallback — `_resolve_runner` raises a typed error on a non-runnable
+        system rather than fabricating random latencies). So this test passes
+        two RUNNABLE systems with DETERMINISTIC latencies — `sys_a` answers
+        near-instantly, `sys_b` sleeps a measurable amount per query — and
+        asserts the ranking the test name claims: the lower-latency system is
+        ranked fastest against the real measured numbers.
+        """
+
+        def fast_system(**_query):
+            # Near-zero wall-clock latency per query.
+            return {"answer": "a"}
+
+        def slow_system(**_query):
+            # A deterministic, measurable latency strictly greater than sys_a's.
+            time.sleep(0.01)
+            return {"answer": "b"}
+
         node = RAGBenchmarkNode(workload_sizes=[2], concurrent_users=[1])
         out = node.run(
-            rag_systems={"sys_a": {}, "sys_b": {}},
+            rag_systems={"sys_a": fast_system, "sys_b": slow_system},
             test_queries=[{"q": "1"}, {"q": "2"}],
-            duration=1,
+            duration=5,
         )
         comp = out["comparison"]
-        # Both names are valid winners (random per-system latency).
-        assert comp["fastest_system"] in {"sys_a", "sys_b"}
+        # Deterministic: sys_a's measured mean latency is strictly lower, so it
+        # is ranked fastest against real numbers (the lambda-key ordering fix
+        # preserves `min`-by-value semantics).
+        assert comp["fastest_system"] == "sys_a"
+        # most_scalable / most_efficient derive from parallel-speedup and
+        # throughput-per-MB under concurrent_users=[1] (no real parallelism to
+        # separate the two systems); assert membership rather than a specific
+        # winner that would flake on thread-scheduling noise.
         assert comp["most_scalable"] in {"sys_a", "sys_b"}
         assert comp["most_efficient"] in {"sys_a", "sys_b"}
 

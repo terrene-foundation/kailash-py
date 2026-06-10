@@ -29,8 +29,13 @@ import json
 import logging
 import urllib.request
 import warnings
+from typing import Any, Dict
 
 import pytest
+from kailash.nodes.base import Node, NodeParameter
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 from kaizen.nodes.rag.agentic import (
     AgenticRAGNode,
@@ -138,11 +143,13 @@ class TestToolAugmentedRAGIntegration:
 # AgenticRAGNode — real WorkflowBuilder graph + real code= template execution
 # ===========================================================================
 class TestAgenticRAGIntegration:
-    def test_real_workflow_built_with_six_nodes(self):
-        """``_create_workflow()`` builds a real Workflow with six nodes when
-        verification is enabled."""
+    def test_real_workflow_built_with_nine_nodes(self):
+        """``_create_workflow()`` builds a real Workflow with nine nodes when
+        verification is enabled: the 6 original nodes plus the 3 L3
+        messages-composers (planner / react / verifier) that render real context
+        into each LLM stage's ``messages`` port."""
         wf = _build(AgenticRAGNode(verification_enabled=True))
-        assert len(wf.nodes) == 6
+        assert len(wf.nodes) == 9
         # The workflow carries real connections between the nodes.
         assert len(wf.connections) > 0
 
@@ -213,14 +220,19 @@ class TestAgenticRAGIntegration:
 # ReasoningRAGNode — real WorkflowBuilder graph
 # ===========================================================================
 class TestReasoningRAGIntegration:
-    def test_real_workflow_built_with_three_nodes(self):
-        """``_create_workflow()`` builds a real Workflow with three nodes and
-        real connections."""
+    def test_real_workflow_built_with_six_nodes(self):
+        """``_create_workflow()`` builds a real Workflow with six nodes and
+        real connections: the 3 LLM stages plus the 3 L3 messages-composers
+        (one per LLM stage) that render real context into each ``messages``
+        port."""
         wf = _build(ReasoningRAGNode())
         assert set(wf.nodes) == {
             "problem_decomposer",
             "step_reasoner",
             "logic_verifier",
+            "decomposer_messages_composer",
+            "step_reasoner_messages_composer",
+            "logic_verifier_messages_composer",
         }
         assert len(wf.connections) > 0
 
@@ -254,3 +266,345 @@ class TestAgenticObservability:
             "calculator" in r.message and r.levelno == logging.ERROR
             for r in caplog.records
         )
+
+
+# ===========================================================================
+# L3 messages-wiring proof — the REAL context reaches every LLM stage via the
+# `messages` port (Wave 2 Shard 3).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through `messages` (its `run` reads
+# `kwargs["messages"]`); ANY other wired port is silently dropped. Pre-shard the
+# 6 agentic LLM stages received NO real input — they answered from their
+# `system_prompt` alone (the planner never saw the query, the ReAct agent never
+# saw the observations, the verifier never saw the answer, the reasoning chain
+# never reached the step-reasoner or logic-verifier). This shard added a
+# `*_messages_composer` (PythonCodeNode.from_function) per LLM stage that renders
+# the REAL context (query and/or genuine upstream output) into the `messages`
+# port.
+#
+# Two complementary proofs, BOTH under the real ``LocalRuntime`` (no mocking):
+#
+#   1. ``ReasoningRAGNode`` is ACYCLIC, so its FULL inner workflow runs
+#      end-to-end via the production delivery path: the query is delivered as a
+#      TOP-LEVEL workflow input (``parameters={"query": ...}``) and the runtime's
+#      parameter injector auto-distributes it to every node declaring a ``query``
+#      param — including each composer. A ``_MessageCapturingLLMAgent`` records
+#      the ``messages`` each LLM stage actually receives, proving the composer →
+#      ``messages`` wiring AND the parameter-injector delivery. This is NOT
+#      node-keyed injection into the LLM stage (the false-green trap that would
+#      bypass the composer entirely).
+#
+#   2. ``AgenticRAGNode``'s ReAct loop is a GENUINE pre-existing cycle
+#      (``react_agent`` ↔ ``state_manager`` ↔ ``tool_executor``), so its full
+#      graph cannot run under a plain unmarked ``LocalRuntime`` — this predates
+#      the L3 fix (the original integration tests only exec'd individual
+#      ``code=`` templates, never the full graph). HONEST DISPOSITION: the
+#      agentic composers are proven by (a) a STRUCTURAL wiring assertion that
+#      each composer's ``result.messages`` connects to its LLM stage's
+#      ``messages`` port (load-bearing — the wiring is the production guard), AND
+#      (b) a production-delivery probe that runs each composer STANDALONE under a
+#      real ``LocalRuntime`` with the real top-level + upstream inputs the graph
+#      feeds it, asserting the rendered ``result.messages`` embed the real
+#      context.
+# ===========================================================================
+
+
+# Module-level sink the capturing substitute writes into. Keyed by the LLM
+# stage's graph node_id → the `messages` list it received. Reset per test.
+_CAPTURED_MESSAGES: Dict[str, Any] = {}
+
+
+class _MessageCapturingLLMAgent(Node):
+    """Protocol-Satisfying Deterministic Adapter (legal Tier-2 surface per
+    ``rules/testing.md`` § 3-Tier Testing) that records the ``messages`` each
+    LLM stage receives into ``_CAPTURED_MESSAGES`` AND returns deterministic
+    JSON so the rest of each workflow runs to completion.
+
+    This is NOT a mock: it inherits the real ``kailash.nodes.base.Node`` base
+    and implements the full runtime contract (``get_parameters`` + ``run``
+    returning the documented ``{"response": ...}`` shape) deterministically.
+    Dispatch is keyed on ``self.id`` (the graph node_id) so each LLM stage
+    routes to its specific payload.
+    """
+
+    _RESPONSES: Dict[str, Any] = {
+        # ReasoningRAGNode.problem_decomposer → step_reasoner composer expects
+        # the decomposition on `reasoning_plan`.
+        "problem_decomposer": {
+            "steps": [
+                {
+                    "step": 1,
+                    "goal": "Define the growth rates",
+                    "approach": "arithmetic",
+                },
+                {"step": 2, "goal": "Solve for the crossover", "approach": "algebra"},
+            ],
+            "assumptions": ["compound annual growth"],
+            "complexity": "medium",
+        },
+        # ReasoningRAGNode.step_reasoner → logic_verifier composer expects the
+        # reasoning chain on `reasoning_to_verify`.
+        "step_reasoner": {
+            "reasoning": "A compounds at 20%, B at 15% from a 50% larger base",
+            "conclusion": "A overtakes B after several years",
+        },
+        "logic_verifier": {"verified": True, "confidence": 0.9, "issues": []},
+    }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        for k in ("system_prompt", "model", "provider", "temperature"):
+            kwargs.pop(k, None)
+        super().__init__(*args, **kwargs)
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "messages": NodeParameter(
+                name="messages",
+                type=list,
+                required=False,
+                default=[],
+                description="LLM chat messages (deterministic substitute records)",
+            ),
+        }
+
+    def run(self, **kwargs: Any) -> Dict[str, Any]:
+        _CAPTURED_MESSAGES[self.id] = kwargs.get("messages")
+        return {"response": self._RESPONSES.get(self.id, {})}
+
+
+@pytest.fixture
+def capturing_llm(monkeypatch: pytest.MonkeyPatch):
+    """Substitute the ``LLMAgentNode`` registry binding with the
+    message-capturing adapter (the string-keyed registry
+    ``WorkflowBuilder.add_node("LLMAgentNode", ...)`` resolves through), and
+    clear the capture sink per test. Teardown restores the prior binding."""
+    from kailash.nodes.base import NodeRegistry
+
+    _CAPTURED_MESSAGES.clear()
+    nodes_dict = NodeRegistry._nodes  # type: ignore[attr-defined]
+    prior = nodes_dict.get("LLMAgentNode")
+    nodes_dict["LLMAgentNode"] = _MessageCapturingLLMAgent
+    try:
+        yield _MessageCapturingLLMAgent
+    finally:
+        if prior is None:
+            nodes_dict.pop("LLMAgentNode", None)
+        else:
+            nodes_dict["LLMAgentNode"] = prior
+
+
+def _flatten_message_text(messages: Any) -> str:
+    """Concatenate the `content` of every message in an OpenAI-format list."""
+    assert isinstance(messages, list), f"messages must be a list, got {messages!r}"
+    return "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+
+
+def _run_composer(node_instance, **inputs: Any) -> Any:
+    """Run a single ``from_function`` composer node STANDALONE under a real
+    ``LocalRuntime`` and return its published ``result.messages``.
+
+    This exercises the production delivery path for an agentic composer: the
+    inputs are delivered as top-level workflow inputs (the parameter injector
+    auto-distributes them to the composer's declared function params), exactly
+    as the full graph delivers `query` (top-level) + the upstream port values
+    to the composer. Used for the cyclic AgenticRAG graph whose full ReAct loop
+    cannot run under a plain unmarked ``LocalRuntime``."""
+    builder = WorkflowBuilder()
+    builder.add_node_instance(node_instance, node_id="probe_composer", _internal=True)
+    wf = builder.build(name="composer_probe")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with LocalRuntime() as rt:
+            results, _run_id = rt.execute(wf, parameters=inputs)
+    return results["probe_composer"]["result"]["messages"]
+
+
+class TestAgenticContextReachesLLM:
+    """Every LLM stage in the agentic module receives its REAL context through
+    the VALID ``messages`` port — delivered via the production top-level-input
+    path (parameter injector), NOT node-keyed injection into the LLM stage."""
+
+    _QUERY = "when will company A revenue exceed company B if A grows faster"
+
+    # -- ReasoningRAGNode: full acyclic graph runs end-to-end -----------------
+
+    def test_reasoning_decomposer_receives_problem(self, capturing_llm):
+        """problem_decomposer (stage 1) receives the REAL problem (query)."""
+        wf = _build(ReasoningRAGNode(name="ctx_rr1"))
+        with LocalRuntime() as rt:
+            rt.execute(wf, parameters={"query": self._QUERY})
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("problem_decomposer"))
+        assert self._QUERY in text, (
+            "problem_decomposer MUST receive the real query via `messages`; "
+            f"got: {text!r}"
+        )
+
+    def test_reasoning_step_reasoner_receives_query_and_decomposition(
+        self, capturing_llm
+    ):
+        """step_reasoner (stage 2) receives the REAL query AND the upstream
+        problem_decomposer output (the decomposition steps)."""
+        wf = _build(ReasoningRAGNode(name="ctx_rr2"))
+        with LocalRuntime() as rt:
+            rt.execute(wf, parameters={"query": self._QUERY})
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("step_reasoner"))
+        assert (
+            self._QUERY in text
+        ), "step_reasoner MUST receive the real query via `messages`"
+        # The deterministic decomposer returned a step with goal
+        # "Define the growth rates"; the composer renders it into the reasoner's
+        # messages — proving the REAL upstream output reached the stage.
+        assert "Define the growth rates" in text, (
+            "step_reasoner MUST receive the upstream decomposition via `messages`; "
+            f"got: {text!r}"
+        )
+
+    def test_reasoning_logic_verifier_receives_reasoning_chain(self, capturing_llm):
+        """logic_verifier (stage 3) receives the REAL step_reasoner reasoning
+        chain to verify (not its system_prompt alone)."""
+        wf = _build(ReasoningRAGNode(name="ctx_rr3"))
+        with LocalRuntime() as rt:
+            rt.execute(wf, parameters={"query": self._QUERY})
+        text = _flatten_message_text(_CAPTURED_MESSAGES.get("logic_verifier"))
+        # The deterministic step_reasoner returned a `reasoning` field; the
+        # composer renders the real chain into the verifier's messages.
+        assert "compounds at 20%" in text, (
+            "logic_verifier MUST receive the real step_reasoner reasoning chain "
+            f"via `messages`; got: {text!r}"
+        )
+
+    # -- AgenticRAGNode: cyclic graph → standalone composer probes ------------
+
+    def test_agentic_planner_composer_embeds_query(self):
+        """The planner composer renders the REAL query into the planner's
+        ``messages`` (production top-level-input delivery)."""
+        from kaizen.nodes.rag.agentic import compose_planner_messages
+
+        messages = _run_composer(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_planner_messages, name="planner_messages_composer"
+            ),
+            query=self._QUERY,
+        )
+        assert self._QUERY in _flatten_message_text(messages)
+
+    def test_agentic_react_composer_embeds_query_and_observations(self):
+        """The react composer renders the REAL query AND the real
+        state_manager observations transcript into the react agent's
+        ``messages`` (in-graph: `context_for_agent` is the genuine
+        Thought/Action/Observation transcript)."""
+        from kaizen.nodes.rag.agentic import compose_react_messages
+
+        messages = _run_composer(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_react_messages, name="react_messages_composer"
+            ),
+            query=self._QUERY,
+            context_for_agent=(
+                "Thought: search financials\n"
+                "Action: search(revenue)\n"
+                "Observation: A grew 20%, B grew 15%"
+            ),
+        )
+        text = _flatten_message_text(messages)
+        assert self._QUERY in text
+        assert "A grew 20%" in text, (
+            "react composer MUST render the real observations transcript; "
+            f"got: {text!r}"
+        )
+
+    def test_agentic_verifier_composer_embeds_answer_and_evidence(self):
+        """The verifier composer renders the generated answer AND its
+        supporting evidence (the observations across the reasoning steps,
+        carried in `reasoning_state`) into the verifier's ``messages``."""
+        from kaizen.nodes.rag.agentic import compose_verifier_messages
+
+        messages = _run_composer(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_verifier_messages, name="verifier_messages_composer"
+            ),
+            reasoning_state={
+                "steps": [
+                    {
+                        "thought": "compare growth",
+                        "action": "search(revenue)",
+                        "observation": "A grew 20%, B grew 15%",
+                    }
+                ],
+                "final_answer": "A overtakes B in 4 years",
+            },
+        )
+        text = _flatten_message_text(messages)
+        # Both the answer AND the supporting evidence (observation) are present.
+        assert "A overtakes B in 4 years" in text, "verifier MUST receive the answer"
+        assert "A grew 20%" in text, (
+            "verifier MUST receive the supporting evidence (observations); "
+            f"got: {text!r}"
+        )
+
+    # -- Structural wiring guards (load-bearing — the production edge) --------
+
+    def test_agentic_composers_wired_to_llm_messages_ports(self):
+        """STRUCTURAL: each agentic LLM stage's ``messages`` port is fed by its
+        composer's ``result.messages`` — and NO phantom inbound context port
+        (`additional_context` / `answer_to_verify`) remains. Removing a
+        composer→messages edge (the production wiring) breaks this test."""
+        wf = _build(AgenticRAGNode(verification_enabled=True))
+        edges = {
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        }
+        assert (
+            "planner_messages_composer",
+            "result.messages",
+            "planner_agent",
+            "messages",
+        ) in edges
+        assert (
+            "react_messages_composer",
+            "result.messages",
+            "react_agent",
+            "messages",
+        ) in edges
+        assert (
+            "verifier_messages_composer",
+            "result.messages",
+            "verifier_agent",
+            "messages",
+        ) in edges
+        # The phantom edges the L3 fix removed MUST be gone.
+        target_inputs = {(c.target_node, c.target_input) for c in wf.connections}
+        assert ("react_agent", "additional_context") not in target_inputs
+        assert ("verifier_agent", "answer_to_verify") not in target_inputs
+
+    def test_reasoning_composers_wired_to_llm_messages_ports(self):
+        """STRUCTURAL: each ReasoningRAGNode LLM stage's ``messages`` port is fed
+        by its composer's ``result.messages``, and the phantom
+        `reasoning_plan` / `reasoning_to_verify` LLM-input edges are gone."""
+        wf = _build(ReasoningRAGNode())
+        edges = {
+            (c.source_node, c.source_output, c.target_node, c.target_input)
+            for c in wf.connections
+        }
+        assert (
+            "decomposer_messages_composer",
+            "result.messages",
+            "problem_decomposer",
+            "messages",
+        ) in edges
+        assert (
+            "step_reasoner_messages_composer",
+            "result.messages",
+            "step_reasoner",
+            "messages",
+        ) in edges
+        assert (
+            "logic_verifier_messages_composer",
+            "result.messages",
+            "logic_verifier",
+            "messages",
+        ) in edges
+        # The phantom direct-to-LLM edges the L3 fix removed MUST be gone.
+        target_inputs = {(c.target_node, c.target_input) for c in wf.connections}
+        assert ("step_reasoner", "reasoning_plan") not in target_inputs
+        assert ("logic_verifier", "reasoning_to_verify") not in target_inputs

@@ -40,6 +40,239 @@ _DEFAULT_LLM_MODEL = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# Messages-composer functions (L3 fix — same reference template as
+# conversational.py lines 45-199 and query_processing.py lines 54-212).
+#
+# LLMAgentNode consumes context EXCLUSIVELY through its `messages` param (the
+# OpenAI chat format: a list of {"role","content"} dicts) plus `system_prompt`.
+# `LLMAgentNode.run` reads `messages = kwargs["messages"]`; ANY OTHER wired port
+# name (`additional_context`, `answer_to_verify`, `reasoning_plan`,
+# `reasoning_to_verify`, ...) is read via `kwargs.get` and SILENTLY DROPPED. The
+# prior wiring in BOTH agentic WorkflowNodes fed those phantom ports, so every
+# LLM stage answered from its `system_prompt` alone — the planner never saw the
+# user's query, the ReAct agent never saw the tool observations, the verifier
+# never saw the answer it was meant to check, and the reasoning chain never
+# reached the step-reasoner or logic-verifier (the L3 "LLM ignores its input"
+# defect).
+#
+# The context contract is HETEROGENEOUS per stage: each composer renders the
+# REAL inputs that stage must reason over (the user query and/or the genuine
+# upstream node output) into a `messages` list wired to the stage's VALID
+# `messages` port. These are real module-level functions (real `return`→
+# `result`, type-checkable, no f-string brace-escaping) per the program's
+# reference template — NOT inline `code=` codegen blocks. Each is pure data
+# rendering (the permitted output-formatting exception per
+# rules/agent-reasoning.md) — NO if-else routing / keyword classification on
+# content, and NO NEW deterministic agent-loop logic (agentic.py legitimately
+# owns ReAct/agent-loop orchestration; these composers only render context).
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): each composer renders only inputs a
+# real upstream node publishes. Where a stage's genuinely-needed input is the
+# output of an UPSTREAM LLM stage, that output is only available on the
+# upstream's `response` port (a PythonCodeNode consumer between them publishes
+# its `result`); the composer renders the REAL available port. No input is
+# invented — the ReAct loop's first-pass observations are empty in-graph (the
+# state_manager's `context_for_agent` is "" until a tool has executed), which
+# the composer renders honestly as a "no observations yet" note rather than
+# fabricating tool output.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_text(value: Any) -> str:
+    """Coerce a wired input to a clean string.
+
+    The parameter injector delivers top-level inputs as plain strings; wired
+    upstream ports may arrive None on an unwired optional branch. PythonCodeNode
+    producers may also publish their value pre-stringified.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _render_reasoning_state(reasoning_state: Any) -> str:
+    """Render the state_manager's `reasoning_state` into a readable transcript.
+
+    `reasoning_state` is the state_manager `reasoning_state` port value — the
+    dict carrying `steps` (each with thought/action/observation) and
+    `final_answer`. Returns the step-by-step trace + the final answer so a
+    verifier sees both the answer AND the supporting evidence (the observations).
+    Returns "" when no steps exist yet.
+    """
+    if not isinstance(reasoning_state, dict):
+        return ""
+    lines: List[str] = []
+    for step in reasoning_state.get("steps", []) or []:
+        if not isinstance(step, dict):
+            continue
+        if step.get("thought"):
+            lines.append(f"Thought: {step['thought']}")
+        if step.get("action"):
+            lines.append(f"Action: {step['action']}")
+        if step.get("observation") is not None:
+            lines.append(f"Observation: {step['observation']}")
+    final = reasoning_state.get("final_answer")
+    if final:
+        lines.append(f"Answer: {final}")
+    return "\n".join(lines).strip()
+
+
+def compose_planner_messages(query=""):
+    """Compose the ``messages`` list for the AgenticRAGNode planner_agent.
+
+    Embeds the REAL user query so the planner builds a step-by-step plan FOR THE
+    QUERY — not from its ``system_prompt`` alone. The available tools are already
+    rendered into the planner's ``system_prompt`` by the constructor, so the
+    query is the only per-request input this stage needs. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _coerce_text(query)
+    content = (
+        "Create a step-by-step research plan for the following query:\n" + q
+        if q
+        else "No query was provided to plan."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_react_messages(query="", context_for_agent=None):
+    """Compose the ``messages`` list for the AgenticRAGNode react_agent.
+
+    Embeds the REAL user query AND the real observations/tool-execution
+    transcript the state_manager publishes (``context_for_agent``), so the ReAct
+    agent reasons over the query plus what the tools have actually returned so
+    far — not from its ``system_prompt`` alone. Returns ``{"messages": [...]}``
+    wired to the LLMAgentNode ``messages`` port.
+
+    IN-GRAPH HONESTY: ``context_for_agent`` is the genuine accumulated
+    Thought/Action/Observation transcript the state_manager builds from real
+    tool_executor output. On the FIRST ReAct pass no tool has executed yet, so
+    the state_manager's transcript is empty — rendered here as an explicit
+    "no observations yet" note rather than fabricating tool results.
+    """
+    q = _coerce_text(query)
+    observations = _coerce_text(context_for_agent)
+    parts = ["Question:\n" + (q or "(empty)")]
+    if observations:
+        parts.append("Reasoning and observations so far:\n" + observations)
+    else:
+        parts.append("No observations gathered yet — begin reasoning.")
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_verifier_messages(reasoning_state=None):
+    """Compose the ``messages`` list for the AgenticRAGNode verifier_agent.
+
+    Embeds the generated answer AND the supporting evidence (the observations
+    accumulated across the reasoning steps) the state_manager publishes in
+    ``reasoning_state``, so the verifier fact-checks the answer AGAINST its
+    evidence — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    transcript = _render_reasoning_state(reasoning_state)
+    content = (
+        "Verify the accuracy of this answer and its supporting evidence:\n" + transcript
+        if transcript
+        else "No answer or evidence was provided to verify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_decomposer_messages(query=""):
+    """Compose the ``messages`` list for the ReasoningRAGNode problem_decomposer.
+
+    Embeds the REAL problem statement (the user query) so the decomposer breaks
+    THE PROBLEM into reasoning steps — not from its ``system_prompt`` alone.
+    Returns ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+    """
+    q = _coerce_text(query)
+    content = (
+        "Break down the following problem into reasoning steps:\n" + q
+        if q
+        else "No problem was provided to decompose."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def compose_step_reasoner_messages(query="", reasoning_plan=None):
+    """Compose the ``messages`` list for the ReasoningRAGNode step_reasoner.
+
+    Embeds the REAL problem (query) AND the upstream problem_decomposer output
+    (``reasoning_plan`` — the decomposer's ``response`` carrying the steps +
+    assumptions), so the reasoner executes the current step guided by the prior
+    decomposition — not from its ``system_prompt`` alone. Returns
+    ``{"messages": [...]}`` wired to the LLMAgentNode ``messages`` port.
+
+    ``reasoning_plan`` is the problem_decomposer LLMAgentNode's ``response``
+    port value (the parsed decomposition the decomposer's ``system_prompt``
+    advertises: ``{"steps": [...], "assumptions": [...], ...}``). It is rendered
+    as readable text so the reasoner genuinely sees the plan it must follow.
+    """
+    q = _coerce_text(query)
+    parts = ["Problem:\n" + (q or "(empty)")]
+    plan_text = _render_reasoning_plan(reasoning_plan)
+    if plan_text:
+        parts.append("Decomposition (steps to reason through):\n" + plan_text)
+    parts.append("Execute the next reasoning step.")
+    return {"messages": [{"role": "user", "content": "\n\n".join(parts)}]}
+
+
+def compose_logic_verifier_messages(reasoning_to_verify=None):
+    """Compose the ``messages`` list for the ReasoningRAGNode logic_verifier.
+
+    Embeds the REAL reasoning chain the upstream step_reasoner produced
+    (``reasoning_to_verify`` — the step_reasoner's ``response``), so the verifier
+    checks the LOGICAL CONSISTENCY of the actual reasoning — not from its
+    ``system_prompt`` alone. Returns ``{"messages": [...]}`` wired to the
+    LLMAgentNode ``messages`` port.
+    """
+    chain = _render_reasoning_plan(reasoning_to_verify)
+    content = (
+        "Verify the logical consistency of this reasoning:\n" + chain
+        if chain
+        else "No reasoning chain was provided to verify."
+    )
+    return {"messages": [{"role": "user", "content": content}]}
+
+
+def _render_reasoning_plan(value: Any) -> str:
+    """Render an upstream LLM stage's ``response`` (decomposition / reasoning
+    chain) into readable text.
+
+    The upstream LLMAgentNode publishes its parsed output on the ``response``
+    port. It may arrive as a dict (the JSON the ``system_prompt`` advertises) or
+    as a plain string. Render whichever shape is present without fabricating.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        lines: List[str] = []
+        steps = value.get("steps")
+        if isinstance(steps, list):
+            for step in steps:
+                if isinstance(step, dict):
+                    goal = step.get("goal") or step.get("question") or ""
+                    approach = step.get("approach") or step.get("contribution") or ""
+                    num = step.get("step", "")
+                    lines.append(
+                        f"Step {num}: {goal}" + (f" — {approach}" if approach else "")
+                    )
+                else:
+                    lines.append(str(step))
+        assumptions = value.get("assumptions")
+        if isinstance(assumptions, list) and assumptions:
+            lines.append("Assumptions: " + ", ".join(str(a) for a in assumptions))
+        if not lines:
+            # No recognized structured keys — render the dict faithfully rather
+            # than dropping the real upstream output.
+            return _coerce_text(value)
+        return "\n".join(lines).strip()
+    return _coerce_text(value)
+
+
 @register_node()
 class AgenticRAGNode(WorkflowNode):
     """
@@ -528,13 +761,69 @@ result = {{
             },
         )
 
+        # L3 messages-composers (reference template — conversational.py /
+        # query_processing.py). Each LLM stage previously received NO real input
+        # on a port LLMAgentNode reads (its `run` reads only `kwargs["messages"]`)
+        # — the planner/react/verifier answered from their `system_prompt` alone.
+        # Each composer renders the REAL inputs that stage must reason over into
+        # a `messages` list wired to the VALID `messages` port. `from_function`
+        # is the correct primitive (real module-level functions: real `return`→
+        # `result`, type-checkable). type: ignore[attr-defined]: `from_function`
+        # is a classmethod on concrete PythonCodeNode, erased to `type[Node]` by
+        # `@register_node` for static checkers (mirrors conversational.py).
+        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        planner_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_planner_messages,
+                name="planner_messages_composer",
+            ),
+            node_id="planner_messages_composer",
+            _internal=True,
+        )
+        react_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_react_messages,
+                name="react_messages_composer",
+            ),
+            node_id="react_messages_composer",
+            _internal=True,
+        )
+        verifier_messages_composer_id: Optional[str] = None
+        if self.verification_enabled:
+            verifier_messages_composer_id = builder.add_node_instance(
+                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                    compose_verifier_messages,
+                    name="verifier_messages_composer",
+                ),
+                node_id="verifier_messages_composer",
+                _internal=True,
+            )
+
         # Connect workflow
-        # Planning phase
+        # Planning phase. The planner composer renders the REAL top-level `query`
+        # (the parameter injector delivers it) into the planner's `messages`
+        # port; the planner's `response` feeds the state_manager `plan` input.
+        builder.add_connection(
+            planner_messages_composer_id, "result.messages", planner_id, "messages"
+        )
         builder.add_connection(planner_id, "response", state_manager_id, "plan")
 
-        # ReAct loop connections
+        # ReAct loop connections.
+        # FIX: the prior `state_manager.context_for_agent ->
+        # react_agent.additional_context` phantom edge fed the observations to a
+        # port LLMAgentNode silently drops. The react composer now renders the
+        # REAL `query` PLUS the real `state_manager.context_for_agent` (the
+        # accumulated Thought/Action/Observation transcript) into the react
+        # agent's `messages` port. The phantom `additional_context` edge is
+        # REMOVED.
         builder.add_connection(
-            state_manager_id, "context_for_agent", react_agent_id, "additional_context"
+            state_manager_id,
+            "context_for_agent",
+            react_messages_composer_id,
+            "context_for_agent",
+        )
+        builder.add_connection(
+            react_messages_composer_id, "result.messages", react_agent_id, "messages"
         )
         builder.add_connection(
             react_agent_id, "response", state_manager_id, "reasoning_response"
@@ -546,18 +835,37 @@ result = {{
             tool_executor_id, "tool_result", state_manager_id, "tool_result"
         )
 
-        # Loop control - continue if not completed
+        # Loop control - continue if not completed. This is a loop-control edge
+        # (not a context port), so it stays unchanged: it gates whether the react
+        # agent runs again, it does NOT carry reasoning context.
         builder.add_connection(
             state_manager_id, "continue_reasoning", react_agent_id, "_continue_if_true"
         )
 
-        # Verification (if enabled)
+        # Verification (if enabled).
+        # FIX: the prior `state_manager.reasoning_state ->
+        # verifier_agent.answer_to_verify` phantom edge fed the answer+evidence
+        # to a dropped port. The verifier composer now renders the generated
+        # answer AND its supporting evidence (the observations across the
+        # reasoning steps, carried in `reasoning_state`) into the verifier's
+        # `messages` port. The phantom `answer_to_verify` edge is REMOVED.
         if self.verification_enabled:
-            # verifier_id was assigned in the matching `if` block above; the
-            # assert documents that invariant and narrows the type for pyright.
+            # verifier_id + verifier_messages_composer_id were assigned in the
+            # matching `if` blocks above; the asserts document that invariant
+            # and narrow the type for pyright.
             assert verifier_id is not None
+            assert verifier_messages_composer_id is not None
             builder.add_connection(
-                state_manager_id, "reasoning_state", verifier_id, "answer_to_verify"
+                state_manager_id,
+                "reasoning_state",
+                verifier_messages_composer_id,
+                "reasoning_state",
+            )
+            builder.add_connection(
+                verifier_messages_composer_id,
+                "result.messages",
+                verifier_id,
+                "messages",
             )
             builder.add_connection(
                 verifier_id, "response", synthesizer_id, "verification"
@@ -854,14 +1162,81 @@ Rate confidence: 0.0-1.0""",
             },
         )
 
-        # Connect workflow
-        builder.add_connection(
-            decomposer_id, "response", step_reasoner_id, "reasoning_plan"
+        # L3 messages-composers (reference template). Each LLM stage previously
+        # received NO real input on a port LLMAgentNode reads (its `run` reads
+        # only `kwargs["messages"]`): the decomposer never saw the problem, the
+        # step_reasoner's `reasoning_plan` + the logic_verifier's
+        # `reasoning_to_verify` were both phantom ports the node silently drops.
+        # Each composer renders the REAL inputs (the query and/or the genuine
+        # upstream LLM `response`) into the stage's VALID `messages` port.
+        decomposer_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_decomposer_messages,
+                name="decomposer_messages_composer",
+            ),
+            node_id="decomposer_messages_composer",
+            _internal=True,
+        )
+        step_reasoner_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_step_reasoner_messages,
+                name="step_reasoner_messages_composer",
+            ),
+            node_id="step_reasoner_messages_composer",
+            _internal=True,
+        )
+        logic_verifier_messages_composer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                compose_logic_verifier_messages,
+                name="logic_verifier_messages_composer",
+            ),
+            node_id="logic_verifier_messages_composer",
+            _internal=True,
         )
 
-        # Multiple reasoning steps (simplified - would use loop in production)
+        # Connect workflow.
+        # Stage 1: the REAL top-level `query` (parameter injector) → decomposer
+        # composer → decomposer.messages.
         builder.add_connection(
-            step_reasoner_id, "response", verifier_id, "reasoning_to_verify"
+            decomposer_messages_composer_id,
+            "result.messages",
+            decomposer_id,
+            "messages",
+        )
+        # Stage 2: the REAL query + the real decomposer.response →
+        # step_reasoner composer → step_reasoner.messages. The phantom
+        # `decomposer.response -> step_reasoner.reasoning_plan` edge is REMOVED;
+        # the decomposition now reaches the reasoner through the composer's
+        # `messages`. (`query` is the top-level injected input; `reasoning_plan`
+        # is wired from decomposer.response.)
+        builder.add_connection(
+            decomposer_id,
+            "response",
+            step_reasoner_messages_composer_id,
+            "reasoning_plan",
+        )
+        builder.add_connection(
+            step_reasoner_messages_composer_id,
+            "result.messages",
+            step_reasoner_id,
+            "messages",
+        )
+        # Stage 3: the real step_reasoner.response (the reasoning chain) →
+        # logic_verifier composer → logic_verifier.messages. The phantom
+        # `step_reasoner.response -> logic_verifier.reasoning_to_verify` edge is
+        # REMOVED; the reasoning chain now reaches the verifier through
+        # `messages`.
+        builder.add_connection(
+            step_reasoner_id,
+            "response",
+            logic_verifier_messages_composer_id,
+            "reasoning_to_verify",
+        )
+        builder.add_connection(
+            logic_verifier_messages_composer_id,
+            "result.messages",
+            verifier_id,
+            "messages",
         )
 
         return builder.build(name="reasoning_rag_workflow")
