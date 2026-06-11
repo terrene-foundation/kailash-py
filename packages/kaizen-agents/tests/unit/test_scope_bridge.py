@@ -11,9 +11,8 @@ from __future__ import annotations
 import pytest
 
 from kaizen.l3.context.scope import ContextScope
-from kaizen.l3.context.types import DataClassification, ContextValue
+from kaizen.l3.context.types import DataClassification
 from kaizen_agents.orchestration.context._scope_bridge import ScopeBridge
-
 
 # ---------------------------------------------------------------------------
 # ScopeBridge.create_root
@@ -102,7 +101,9 @@ class TestScopeBridgeCreateChildScope:
     def test_child_scope_returned_is_context_scope(self) -> None:
         """create_child_scope returns a ContextScope instance."""
         bridge = ScopeBridge.create_root(owner_id="supervisor")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
         child = bridge.create_child_scope(
             child_owner_id="worker-1",
             visible_keys=["project.*"],
@@ -112,10 +113,18 @@ class TestScopeBridgeCreateChildScope:
 
     def test_child_sees_only_visible_keys(self) -> None:
         """Child with restricted visibility cannot see excluded keys."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
-        bridge.root_scope.set("project.budget", 10000, classification=DataClassification.PUBLIC)
-        bridge.root_scope.set("secrets.api_key", "sk-123", classification=DataClassification.PUBLIC)
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
+        bridge.root_scope.set(
+            "project.budget", 10000, classification=DataClassification.PUBLIC
+        )
+        bridge.root_scope.set(
+            "secrets.api_key", "sk-123", classification=DataClassification.PUBLIC
+        )
 
         child = bridge.create_child_scope(
             child_owner_id="worker-1",
@@ -139,7 +148,9 @@ class TestScopeBridgeCreateChildScope:
         )
 
         # Should succeed — key is under "results"
-        child.set("results.analysis", "complete", classification=DataClassification.PUBLIC)
+        child.set(
+            "results.analysis", "complete", classification=DataClassification.PUBLIC
+        )
         cv = child.get("results.analysis")
         assert cv is not None
         assert cv.value == "complete"
@@ -157,7 +168,9 @@ class TestScopeBridgeCreateChildScope:
 
     def test_child_default_clearance_matches_parent(self) -> None:
         """When clearance is not specified, child inherits parent's clearance."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
         child = bridge.create_child_scope(
             child_owner_id="worker-1",
             visible_keys=["**"],
@@ -176,8 +189,12 @@ class TestClassificationAccessControl:
 
     def test_low_clearance_child_cannot_see_high_classification(self) -> None:
         """A PUBLIC-clearance child cannot read CONFIDENTIAL values."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
         bridge.root_scope.set(
             "project.budget", 50000, classification=DataClassification.CONFIDENTIAL
         )
@@ -200,7 +217,9 @@ class TestClassificationAccessControl:
 
     def test_matching_clearance_can_read(self) -> None:
         """A RESTRICTED-clearance child can read RESTRICTED values."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
         bridge.root_scope.set(
             "data.report", "Q1 results", classification=DataClassification.RESTRICTED
         )
@@ -227,11 +246,19 @@ class TestScopeBridgeInjectContext:
 
     def test_inject_returns_dict_of_visible_values(self) -> None:
         """inject_context returns values for the specified keys."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
-        bridge.root_scope.set("project.stack", "Python", classification=DataClassification.PUBLIC)
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
         bridge.root_scope.set(
-            "internal.token", "secret123", classification=DataClassification.CONFIDENTIAL
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
+        bridge.root_scope.set(
+            "project.stack", "Python", classification=DataClassification.PUBLIC
+        )
+        bridge.root_scope.set(
+            "internal.token",
+            "secret123",
+            classification=DataClassification.CONFIDENTIAL,
         )
 
         result = bridge.inject_context(keys=["project.name", "project.stack"])
@@ -240,7 +267,9 @@ class TestScopeBridgeInjectContext:
     def test_inject_skips_nonexistent_keys(self) -> None:
         """Keys not present in root scope are silently omitted."""
         bridge = ScopeBridge.create_root(owner_id="supervisor")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
 
         result = bridge.inject_context(keys=["project.name", "nonexistent.key"])
         assert result == {"project.name": "Alpha"}
@@ -248,16 +277,24 @@ class TestScopeBridgeInjectContext:
     def test_inject_empty_keys_returns_empty_dict(self) -> None:
         """Empty key list returns an empty dict."""
         bridge = ScopeBridge.create_root(owner_id="supervisor")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
 
         result = bridge.inject_context(keys=[])
         assert result == {}
 
     def test_inject_all_visible_when_keys_not_specified(self) -> None:
         """When keys is None, returns all visible values from root scope."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
-        bridge.root_scope.set("project.stack", "Python", classification=DataClassification.PUBLIC)
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
+        bridge.root_scope.set(
+            "project.stack", "Python", classification=DataClassification.PUBLIC
+        )
 
         result = bridge.inject_context(keys=None)
         assert "project.name" in result
@@ -274,8 +311,12 @@ class TestScopeBridgeMergeChildResults:
 
     def test_merge_child_writes_to_parent(self) -> None:
         """Child writes are merged back into the root scope."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
-        bridge.root_scope.set("project.name", "Alpha", classification=DataClassification.PUBLIC)
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
+        bridge.root_scope.set(
+            "project.name", "Alpha", classification=DataClassification.PUBLIC
+        )
 
         child = bridge.create_child_scope(
             child_owner_id="worker-1",
@@ -302,7 +343,9 @@ class TestScopeBridgeMergeChildResults:
 
     def test_merge_returns_merged_key_names(self) -> None:
         """merge_child_results returns the list of merged key names."""
-        bridge = ScopeBridge.create_root(owner_id="supervisor", clearance="confidential")
+        bridge = ScopeBridge.create_root(
+            owner_id="supervisor", clearance="confidential"
+        )
         child = bridge.create_child_scope(
             child_owner_id="worker-1",
             visible_keys=["**"],

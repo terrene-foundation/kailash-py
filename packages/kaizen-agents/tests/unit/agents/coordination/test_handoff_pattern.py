@@ -58,7 +58,7 @@ class TestCreateHandoffPattern:
         pattern = create_handoff_pattern(model="gpt-4", temperature=0.7, num_tiers=2)
 
         # Verify all tiers use same config
-        for tier_level, agent in pattern.tiers.items():
+        for _tier_level, agent in pattern.tiers.items():
             assert agent.config.model == "gpt-4"
             assert agent.config.temperature == 0.7
 
@@ -84,9 +84,9 @@ class TestCreateHandoffPattern:
 
     def test_custom_agents_provided(self):
         """Test providing pre-built HandoffAgent instances."""
-        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen.memory import SharedMemoryPool
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen_agents.patterns.patterns.handoff import HandoffAgent
 
         shared_memory = SharedMemoryPool()
@@ -178,8 +178,8 @@ class TestHandoffPattern:
 
     def test_add_tier_method(self):
         """Test add_tier method adds new tier."""
-        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen.core.base_agent import BaseAgentConfig
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen_agents.patterns.patterns.handoff import HandoffAgent
 
         pattern = create_handoff_pattern(num_tiers=2)
@@ -327,7 +327,7 @@ class TestHandoffAgent:
         # Tier 1 should handle simple tasks
         # Note: actual behavior depends on mock, but structure should be correct
         assert evaluation["can_handle"] in ["yes", "no"]
-        assert isinstance(evaluation["complexity_score"], (int, float))
+        assert isinstance(evaluation["complexity_score"], int | float)
         assert 0.0 <= evaluation["complexity_score"] <= 1.0
 
     def test_evaluate_task_can_handle_no(self):
@@ -344,7 +344,7 @@ class TestHandoffAgent:
 
         # Structure should be correct regardless of actual decision
         assert evaluation["can_handle"] in ["yes", "no"]
-        assert isinstance(evaluation["complexity_score"], (int, float))
+        assert isinstance(evaluation["complexity_score"], int | float)
         assert 0.0 <= evaluation["complexity_score"] <= 1.0
 
     def test_execute_task_method(self):
@@ -389,7 +389,7 @@ class TestHandoffAgent:
         evaluation = agent.evaluate_task(task="Some task", context="")
 
         complexity = evaluation["complexity_score"]
-        assert isinstance(complexity, (int, float))
+        assert isinstance(complexity, int | float)
         assert 0.0 <= complexity <= 1.0
 
     def test_shared_memory_writing(self):

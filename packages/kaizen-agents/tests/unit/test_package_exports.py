@@ -64,4 +64,6 @@ class TestPatternExports:
     def test_deprecated_coordination_removed(self) -> None:
         """Verify the deprecated coordination module is removed."""
         with pytest.raises(ImportError):
-            from kaizen_agents.agents.coordination import SupervisorWorkerPattern  # noqa: F401
+            from kaizen_agents.agents.coordination import (  # noqa: F401
+                SupervisorWorkerPattern,
+            )

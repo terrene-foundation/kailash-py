@@ -5,6 +5,7 @@ Tests the Pipeline base class and .to_agent() method for composability.
 """
 
 import pytest
+
 from kaizen_agents.patterns.pipeline import Pipeline, SequentialPipeline
 
 

@@ -12,8 +12,6 @@ Tests cover:
 These are Tier 1 (Unit) tests that use mock agents and don't make real LLM calls.
 """
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,8 +24,6 @@ from kaizen.journey import (
     JourneySession,
     Pathway,
     PathwayContext,
-    PathwayManager,
-    PathwayMeta,
     PathwayResult,
     ReturnBehavior,
     ReturnToPrevious,

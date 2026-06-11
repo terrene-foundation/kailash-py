@@ -12,23 +12,21 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
+from collections.abc import AsyncIterator
 from io import StringIO
-from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.print_mode import (
     PrintResult,
     PrintRunner,
     read_prompt,
     run_print_mode,
 )
-from kaizen_agents.delegate.config.loader import KzConfig
-
 
 # ---------------------------------------------------------------------------
 # PrintResult
@@ -217,7 +215,11 @@ class TestPrintRunnerExecution:
         runner._loop.conversation.add_assistant(
             "Let me check that.",
             tool_calls=[
-                {"id": "tc1", "type": "function", "function": {"name": "bash", "arguments": "{}"}},
+                {
+                    "id": "tc1",
+                    "type": "function",
+                    "function": {"name": "bash", "arguments": "{}"},
+                },
                 {
                     "id": "tc2",
                     "type": "function",
@@ -240,7 +242,9 @@ class TestPrintRunnerExecution:
         tools = ToolRegistry()
         mock_client = AsyncMock()
 
-        runner = PrintRunner(config=config, tools=tools, max_turns=5, client=mock_client)
+        runner = PrintRunner(
+            config=config, tools=tools, max_turns=5, client=mock_client
+        )
         assert runner._loop._config.max_turns == 5
 
 
@@ -295,19 +299,21 @@ class TestRunPrintMode:
 
         captured = StringIO()
 
-        with patch("kaizen_agents.delegate.print_mode.sys.stdout", captured):
-            # We need to mock the agent loop's internal streaming
-            with patch(
+        # We need to mock the agent loop's internal streaming
+        with (
+            patch("kaizen_agents.delegate.print_mode.sys.stdout", captured),
+            patch(
                 "kaizen_agents.delegate.print_mode.PrintRunner.run",
                 new_callable=AsyncMock,
                 return_value=PrintResult(result="Test output"),
-            ):
-                exit_code = await run_print_mode(
-                    config,
-                    tools,
-                    "test prompt",
-                    client=mock_client,
-                )
+            ),
+        ):
+            exit_code = await run_print_mode(
+                config,
+                tools,
+                "test prompt",
+                client=mock_client,
+            )
 
         assert exit_code == 0
         assert "Test output" in captured.getvalue()
@@ -323,23 +329,29 @@ class TestRunPrintMode:
 
         captured = StringIO()
 
-        with patch("kaizen_agents.delegate.print_mode.sys.stdout", captured):
-            with patch(
+        with (
+            patch("kaizen_agents.delegate.print_mode.sys.stdout", captured),
+            patch(
                 "kaizen_agents.delegate.print_mode.PrintRunner.run",
                 new_callable=AsyncMock,
                 return_value=PrintResult(
                     result="JSON output",
                     tools_used=["bash"],
-                    tokens={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                    tokens={
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                        "total_tokens": 15,
+                    },
                 ),
-            ):
-                exit_code = await run_print_mode(
-                    config,
-                    tools,
-                    "test prompt",
-                    json_output=True,
-                    client=mock_client,
-                )
+            ),
+        ):
+            exit_code = await run_print_mode(
+                config,
+                tools,
+                "test prompt",
+                json_output=True,
+                client=mock_client,
+            )
 
         assert exit_code == 0
         data = json.loads(captured.getvalue())
@@ -357,8 +369,9 @@ class TestRunPrintMode:
 
         captured = StringIO()
 
-        with patch("kaizen_agents.delegate.print_mode.sys.stdout", captured):
-            with patch(
+        with (
+            patch("kaizen_agents.delegate.print_mode.sys.stdout", captured),
+            patch(
                 "kaizen_agents.delegate.print_mode.PrintRunner.run",
                 new_callable=AsyncMock,
                 return_value=PrintResult(
@@ -366,12 +379,13 @@ class TestRunPrintMode:
                     is_error=True,
                     error_message="Failed",
                 ),
-            ):
-                exit_code = await run_print_mode(
-                    config,
-                    tools,
-                    "test prompt",
-                    client=mock_client,
-                )
+            ),
+        ):
+            exit_code = await run_print_mode(
+                config,
+                tools,
+                "test prompt",
+                client=mock_client,
+            )
 
         assert exit_code == 1

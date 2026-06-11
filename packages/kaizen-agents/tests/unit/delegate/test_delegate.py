@@ -15,13 +15,12 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import math
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 
+from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.delegate import Delegate, _estimate_cost
 from kaizen_agents.delegate.events import (
     BudgetExhausted,
@@ -32,9 +31,7 @@ from kaizen_agents.delegate.events import (
     ToolCallStart,
     TurnComplete,
 )
-from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry, UsageTracker
-from kaizen_agents.delegate.config.loader import KzConfig
-
+from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers -- fake streaming adapter
@@ -351,9 +348,11 @@ class TestDelegateRun:
         """An exception during the loop yields an ErrorEvent."""
 
         class FailingAdapter:
-            async def stream_chat(self, **kwargs: Any) -> AsyncIterator[FakeStreamEvent]:
+            async def stream_chat(
+                self, **kwargs: Any
+            ) -> AsyncIterator[FakeStreamEvent]:
                 raise RuntimeError("API connection failed")
-                yield  # noqa: unreachable -- makes this an async generator
+                yield  # unreachable by design — the bare yield makes this an async generator
 
         adapter = FailingAdapter()
         d = Delegate(model="test-model", adapter=adapter)  # type: ignore[arg-type]
@@ -369,7 +368,9 @@ class TestDelegateRun:
         error_events = [e for e in events if isinstance(e, ErrorEvent)]
         assert len(error_events) == 1
         assert "RuntimeError" in error_events[0].error  # exception type is included
-        assert "API connection failed" not in error_events[0].error  # raw message is sanitized
+        assert (
+            "API connection failed" not in error_events[0].error
+        )  # raw message is sanitized
         assert error_events[0].details["exception_type"] == "RuntimeError"
 
 
@@ -390,7 +391,7 @@ def _tool_call_stream_events(
     # Turn 1: tool call
     tool_turn: list[FakeStreamEvent] = []
     # The adapter emits tool_call_start for each tool, then done with tool_calls
-    for tc in tool_calls:
+    for _ in tool_calls:
         tool_turn.append(
             FakeStreamEvent(
                 event_type="tool_call_start",
@@ -508,8 +509,12 @@ class TestDelegateToolCallEvents:
         async def tool_b_exec() -> str:
             return "result_b"
 
-        registry.register("tool_a", "A", {"type": "object", "properties": {}}, tool_a_exec)
-        registry.register("tool_b", "B", {"type": "object", "properties": {}}, tool_b_exec)
+        registry.register(
+            "tool_a", "A", {"type": "object", "properties": {}}, tool_a_exec
+        )
+        registry.register(
+            "tool_b", "B", {"type": "object", "properties": {}}, tool_b_exec
+        )
 
         d = Delegate(model="test-model", tools=registry, adapter=adapter)
 
@@ -548,7 +553,9 @@ class TestDelegateToolCallEvents:
         async def failing_tool() -> str:
             raise RuntimeError("Something broke")
 
-        registry.register("failing", "Fails", {"type": "object", "properties": {}}, failing_tool)
+        registry.register(
+            "failing", "Fails", {"type": "object", "properties": {}}, failing_tool
+        )
 
         d = Delegate(model="test-model", tools=registry, adapter=adapter)
 
@@ -608,7 +615,9 @@ class TestDelegateToolCallEvents:
 
         # Extract indices of tool events
         tool_events = [
-            (i, e) for i, e in enumerate(events) if isinstance(e, (ToolCallStart, ToolCallEnd))
+            (i, e)
+            for i, e in enumerate(events)
+            if isinstance(e, ToolCallStart | ToolCallEnd)
         ]
         start_indices = [i for i, e in tool_events if isinstance(e, ToolCallStart)]
         end_indices = [i for i, e in tool_events if isinstance(e, ToolCallEnd)]
@@ -733,24 +742,36 @@ class TestDelegateToolCallEvents:
 
         # Turn 1: tool call
         turn1: list[FakeStreamEvent] = [
-            FakeStreamEvent(event_type="tool_call_start", content="", model="test-model"),
+            FakeStreamEvent(
+                event_type="tool_call_start", content="", model="test-model"
+            ),
             FakeStreamEvent(
                 event_type="done",
                 content="",
                 tool_calls=tool_calls_1,
                 finish_reason="tool_calls",
-                usage={"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70},
+                usage={
+                    "prompt_tokens": 50,
+                    "completion_tokens": 20,
+                    "total_tokens": 70,
+                },
             ),
         ]
         # Turn 2: another tool call
         turn2: list[FakeStreamEvent] = [
-            FakeStreamEvent(event_type="tool_call_start", content="", model="test-model"),
+            FakeStreamEvent(
+                event_type="tool_call_start", content="", model="test-model"
+            ),
             FakeStreamEvent(
                 event_type="done",
                 content="",
                 tool_calls=tool_calls_2,
                 finish_reason="tool_calls",
-                usage={"prompt_tokens": 80, "completion_tokens": 30, "total_tokens": 110},
+                usage={
+                    "prompt_tokens": 80,
+                    "completion_tokens": 30,
+                    "total_tokens": 110,
+                },
             ),
         ]
         # Turn 3: text response
@@ -765,8 +786,12 @@ class TestDelegateToolCallEvents:
         async def step_two() -> str:
             return "step_two_result"
 
-        registry.register("step_one", "S1", {"type": "object", "properties": {}}, step_one)
-        registry.register("step_two", "S2", {"type": "object", "properties": {}}, step_two)
+        registry.register(
+            "step_one", "S1", {"type": "object", "properties": {}}, step_one
+        )
+        registry.register(
+            "step_two", "S2", {"type": "object", "properties": {}}, step_two
+        )
 
         d = Delegate(model="test-model", tools=registry, adapter=adapter)
 
@@ -815,7 +840,7 @@ class TestDelegateBudget:
                 events.append(event)
             return events
 
-        events = asyncio.run(_run())
+        asyncio.run(_run())
         # After a run with 100+50 tokens, some cost should be recorded
         assert d.consumed_usd > 0.0
         remaining = d.budget_remaining
@@ -941,15 +966,13 @@ class TestDelegateExports:
 
     def test_event_imports_from_delegate_package(self) -> None:
         """Event classes can be imported from kaizen_agents.delegate."""
-        from kaizen_agents.delegate import (
-            BudgetExhausted as BE,
-            DelegateEvent as DE,
-            ErrorEvent as EE,
-            TextDelta as TD,
-            ToolCallEnd as TCE,
-            ToolCallStart as TCS,
-            TurnComplete as TC,
-        )
+        from kaizen_agents.delegate import BudgetExhausted as BE
+        from kaizen_agents.delegate import DelegateEvent as DE
+        from kaizen_agents.delegate import ErrorEvent as EE
+        from kaizen_agents.delegate import TextDelta as TD
+        from kaizen_agents.delegate import ToolCallEnd as TCE
+        from kaizen_agents.delegate import ToolCallStart as TCS
+        from kaizen_agents.delegate import TurnComplete as TC
 
         assert DE is DelegateEvent
         assert TD is TextDelta

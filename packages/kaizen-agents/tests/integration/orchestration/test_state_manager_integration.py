@@ -22,20 +22,15 @@ Author: Kaizen Framework Team
 Created: 2025-11-17 (TODO-178, Phase 2: DataFlow Integration)
 """
 
-import gzip
-import json
-import os
-import tempfile
 from datetime import datetime
 
 import pytest
-import pytest_asyncio
 from dotenv import load_dotenv
 
 # Load .env BEFORE reading environment variables
 load_dotenv()
 
-from kaizen_agents.patterns.state_manager import (
+from kaizen_agents.patterns.state_manager import (  # noqa: E402 — import deliberately after load_dotenv() so DB env vars are set
     CheckpointNotFoundError,
     DatabaseConnectionError,
     OrchestrationStateManager,

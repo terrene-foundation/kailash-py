@@ -8,15 +8,13 @@ Tests the expert configuration dataclass:
 - Factory methods
 """
 
-import pytest
-
 from kaizen_agents.api.config import (
     AgentConfig,
     CheckpointConfig,
     HookConfig,
     LLMRoutingConfig,
 )
-from kaizen_agents.api.types import ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import ExecutionMode, ToolAccess
 
 
 class TestCheckpointConfig:

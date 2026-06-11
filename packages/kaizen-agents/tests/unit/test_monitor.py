@@ -15,13 +15,8 @@ import pytest
 
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
-from kaizen_agents.orchestration.planner.designer import SpawnDecision
-from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory
-from kaizen_agents.orchestration.recovery.recomposer import RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -32,15 +27,17 @@ from kaizen_agents.types import (
     PlanNode,
     PlanNodeState,
     PlanState,
+    make_envelope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- mock LLM client and agent specs
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_llm(structured_responses: list[dict[str, Any]] | None = None) -> LLMClient:
+def _make_mock_llm(
+    structured_responses: list[dict[str, Any]] | None = None,
+) -> LLMClient:
     """Create a mock LLMClient with optional sequenced structured responses.
 
     If structured_responses is provided, each call to complete_structured
@@ -116,8 +113,12 @@ def _make_three_node_linear_plan(
         for i in range(3)
     }
     edges = [
-        PlanEdge(from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY),
-        PlanEdge(from_node="node-1", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY),
+        PlanEdge(
+            from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
+        PlanEdge(
+            from_node="node-1", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
     ]
     return Plan(
         plan_id="three-node-plan",
@@ -152,10 +153,18 @@ def _make_diamond_plan(
         for i in range(4)
     }
     edges = [
-        PlanEdge(from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY),
-        PlanEdge(from_node="node-0", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY),
-        PlanEdge(from_node="node-1", to_node="node-3", edge_type=EdgeType.DATA_DEPENDENCY),
-        PlanEdge(from_node="node-2", to_node="node-3", edge_type=EdgeType.DATA_DEPENDENCY),
+        PlanEdge(
+            from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
+        PlanEdge(
+            from_node="node-0", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
+        PlanEdge(
+            from_node="node-1", to_node="node-3", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
+        PlanEdge(
+            from_node="node-2", to_node="node-3", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
     ]
     return Plan(
         plan_id="diamond-plan",
@@ -347,7 +356,9 @@ class TestNodeFailureRecovery:
                 return {"error": "Transient network timeout", "cost": 0.01}
             return {"result": "success on retry", "cost": 0.01}
 
-        result = await monitor.run_plan(plan=plan, execute_node=execute_fail_then_succeed)
+        result = await monitor.run_plan(
+            plan=plan, execute_node=execute_fail_then_succeed
+        )
 
         assert result.success is True
         assert call_count == 2
@@ -444,7 +455,9 @@ class TestNodeFailureRecovery:
                 return {"error": "Missing capability"}
             return {"result": "replacement succeeded", "cost": 0.02}
 
-        result = await monitor.run_plan(plan=plan, execute_node=execute_fail_then_succeed)
+        result = await monitor.run_plan(
+            plan=plan, execute_node=execute_fail_then_succeed
+        )
 
         assert result.success is True
         assert len(result.modifications_applied) > 0
@@ -481,7 +494,9 @@ class TestNodeFailureRecovery:
                 return {"error": "Rate limit exceeded"}
             return {"result": "success after recovery retry", "cost": 0.01}
 
-        result = await monitor.run_plan(plan=plan, execute_node=execute_fail_then_succeed)
+        result = await monitor.run_plan(
+            plan=plan, execute_node=execute_fail_then_succeed
+        )
 
         assert result.success is True
         assert call_count == 2
@@ -560,7 +575,10 @@ class TestBudgetExhaustion:
         # After second node: 1.00 (100%) -> third node should be held (above hold threshold 90%).
         # Recovery aborts -> plan fails because the third node is required.
         event_types = [e.event_type for e in result.events]
-        assert PlanEventType.NODE_HELD in event_types or PlanEventType.NODE_BLOCKED in event_types
+        assert (
+            PlanEventType.NODE_HELD in event_types
+            or PlanEventType.NODE_BLOCKED in event_types
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -786,7 +804,9 @@ class TestInternalHelpers:
     def test_classify_failure_retries_exhausted_required(self) -> None:
         mock_llm = _make_mock_llm()
         envelope = make_envelope()
-        gradient = PlanGradient(retry_budget=2, after_retry_exhaustion=GradientZone.HELD)
+        gradient = PlanGradient(
+            retry_budget=2, after_retry_exhaustion=GradientZone.HELD
+        )
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
         plan = _make_single_node_plan()
@@ -965,8 +985,14 @@ class TestApplyModification:
         assert "node-1" not in plan.nodes
         assert "node-replacement" in plan.nodes
         # Edges should be rewired
-        assert any(e.from_node == "node-0" and e.to_node == "node-replacement" for e in plan.edges)
-        assert any(e.from_node == "node-replacement" and e.to_node == "node-2" for e in plan.edges)
+        assert any(
+            e.from_node == "node-0" and e.to_node == "node-replacement"
+            for e in plan.edges
+        )
+        assert any(
+            e.from_node == "node-replacement" and e.to_node == "node-2"
+            for e in plan.edges
+        )
 
     def test_skip_node(self) -> None:
         mock_llm = _make_mock_llm()
@@ -988,7 +1014,9 @@ class TestApplyModification:
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
         plan = _make_single_node_plan()
-        new_spec = _make_agent_spec(name="updated-agent", description="Updated description")
+        new_spec = _make_agent_spec(
+            name="updated-agent", description="Updated description"
+        )
         mod = PlanModification.update_spec("node-0", new_spec)
 
         monitor._apply_modification(plan, mod)

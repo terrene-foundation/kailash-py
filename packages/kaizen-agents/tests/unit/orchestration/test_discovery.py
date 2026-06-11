@@ -12,8 +12,6 @@ Coverage:
 - UserFilteredAgentDiscovery
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -328,7 +326,7 @@ class MockAgentRegistry:
     """Mock AgentRegistry for testing discovery."""
 
     def __init__(self):
-        self._agents: Dict[str, AgentMetadata] = {}
+        self._agents: dict[str, AgentMetadata] = {}
 
     async def register_agent(self, agent, agent_id: str):
         """Register a mock agent."""

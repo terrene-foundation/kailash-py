@@ -107,8 +107,8 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
         from kaizen.memory import SharedMemoryPool
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         existing_pool = SharedMemoryPool()
 

@@ -16,7 +16,6 @@ import pytest
 from kaizen_agents.delegate.builtins import create_default_commands
 from kaizen_agents.delegate.loop import Conversation
 
-
 # ---------------------------------------------------------------------------
 # CompactionResult tests
 # ---------------------------------------------------------------------------
@@ -91,14 +90,16 @@ class TestConversationCompact:
         conv.add_system("You are a helpful assistant.")
         for i in range(user_turns):
             conv.add_user(f"User message number {i} with some content to process")
-            conv.add_assistant(f"Assistant response number {i} with detailed explanation")
+            conv.add_assistant(
+                f"Assistant response number {i} with detailed explanation"
+            )
         return conv
 
     def test_compact_preserves_system_message(self):
         """After compaction, the system message is always the first message."""
         conv = self._build_long_conversation(user_turns=10)
 
-        result = conv.compact(preserve_recent=4)
+        conv.compact(preserve_recent=4)
 
         # System message must be first
         assert conv.messages[0]["role"] == "system"
@@ -112,7 +113,7 @@ class TestConversationCompact:
         # before compaction
         original_recent = conv.messages[-8:]  # last 4 pairs = 8 messages
 
-        result = conv.compact(preserve_recent=4)
+        conv.compact(preserve_recent=4)
 
         # The tail of conversation should still contain these exact messages
         assert conv.messages[-8:] == original_recent
@@ -160,7 +161,7 @@ class TestConversationCompact:
         """Compaction replaces old messages with a summary message."""
         conv = self._build_long_conversation(user_turns=10)
 
-        result = conv.compact(preserve_recent=4)
+        conv.compact(preserve_recent=4)
 
         # After system message there should be a summary assistant message
         # before the recent messages
@@ -174,7 +175,7 @@ class TestConversationCompact:
         """preserve_recent=0 means no recent messages preserved (only system + summary)."""
         conv = self._build_long_conversation(user_turns=10)
 
-        result = conv.compact(preserve_recent=0)
+        conv.compact(preserve_recent=0)
 
         # Should have: system + summary only
         assert len(conv.messages) == 2
@@ -191,7 +192,7 @@ class TestConversationCompact:
 
         before_count = len(conv.messages)
 
-        result = conv.compact(preserve_recent=2)
+        conv.compact(preserve_recent=2)
 
         assert len(conv.messages) < before_count
         # No system message at start
@@ -211,7 +212,11 @@ class TestConversationCompact:
         conv.add_assistant(
             "",
             tool_calls=[
-                {"id": "tc1", "type": "function", "function": {"name": "test", "arguments": "{}"}}
+                {
+                    "id": "tc1",
+                    "type": "function",
+                    "function": {"name": "test", "arguments": "{}"},
+                }
             ],
         )
         conv.add_tool_result("tc1", "test", "tool output")
@@ -220,7 +225,7 @@ class TestConversationCompact:
         conv.add_assistant("You're welcome!")
 
         # Preserve enough to keep the tool interaction
-        result = conv.compact(preserve_recent=6)
+        conv.compact(preserve_recent=6)
 
         # Tool message should still be in conversation
         tool_msgs = [m for m in conv.messages if m.get("role") == "tool"]
@@ -281,8 +286,12 @@ class TestCompactHandler:
         conv = Conversation()
         conv.add_system("System.")
         for i in range(15):
-            conv.add_user(f"User message {i} with enough content to make tokens meaningful")
-            conv.add_assistant(f"Assistant reply {i} with detailed response content here")
+            conv.add_user(
+                f"User message {i} with enough content to make tokens meaningful"
+            )
+            conv.add_assistant(
+                f"Assistant reply {i} with detailed response content here"
+            )
 
         output = registry.execute("/compact", conversation=conv)
         assert output is not None

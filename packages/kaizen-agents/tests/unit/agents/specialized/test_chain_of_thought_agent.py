@@ -24,7 +24,9 @@ class TestChainOfThoughtAgentInitialization:
 
     def test_zero_config_initialization(self):
         """Test agent works with zero configuration (most important test)."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         # Should work with no parameters
         agent = ChainOfThoughtAgent(llm_provider="mock")
@@ -35,7 +37,9 @@ class TestChainOfThoughtAgentInitialization:
 
     def test_zero_config_uses_environment_variables(self):
         """Test that zero-config reads from environment variables."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         # Set environment variables - use mock provider for testing
         os.environ["KAIZEN_LLM_PROVIDER"] = "mock"
@@ -61,7 +65,9 @@ class TestChainOfThoughtAgentInitialization:
 
     def test_progressive_configuration_model_only(self):
         """Test progressive configuration - override model only."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(model="gpt-3.5-turbo")
 
@@ -71,7 +77,9 @@ class TestChainOfThoughtAgentInitialization:
 
     def test_progressive_configuration_multiple_params(self):
         """Test progressive configuration - override multiple parameters."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(
             llm_provider="anthropic",
@@ -114,7 +122,9 @@ class TestChainOfThoughtAgentInitialization:
 
     def test_config_parameter_overrides_defaults(self):
         """Test that constructor parameters override config defaults."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         # Parameter should override default
         agent = ChainOfThoughtAgent(confidence_threshold=0.9, enable_verification=False)
@@ -128,7 +138,9 @@ class TestChainOfThoughtAgentExecution:
 
     def test_run_basic_execution(self):
         """Test basic problem solving execution."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(problem="What is 2 + 2?")
@@ -140,7 +152,9 @@ class TestChainOfThoughtAgentExecution:
 
     def test_run_returns_all_steps(self):
         """Test that result contains all reasoning steps."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(problem="Calculate 15 * 23")
@@ -156,7 +170,9 @@ class TestChainOfThoughtAgentExecution:
 
     def test_run_with_context(self):
         """Test problem solving with additional context."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(
@@ -169,7 +185,9 @@ class TestChainOfThoughtAgentExecution:
 
     def test_run_empty_input_handling(self):
         """Test error handling for empty input."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(problem="")
@@ -181,7 +199,9 @@ class TestChainOfThoughtAgentExecution:
 
     def test_run_whitespace_only_input(self):
         """Test error handling for whitespace-only input."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(problem="   \t\n   ")
@@ -196,7 +216,9 @@ class TestChainOfThoughtAgentConfidenceThreshold:
 
     def test_confidence_threshold_default(self):
         """Test default confidence threshold (0.7)."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
 
@@ -204,7 +226,9 @@ class TestChainOfThoughtAgentConfidenceThreshold:
 
     def test_confidence_threshold_custom(self):
         """Test custom confidence threshold."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(confidence_threshold=0.9)
 
@@ -212,7 +236,9 @@ class TestChainOfThoughtAgentConfidenceThreshold:
 
     def test_low_confidence_warning(self):
         """Test that low confidence results include warning."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(confidence_threshold=0.9)
         result = agent.run(problem="Simple test problem")
@@ -225,7 +251,9 @@ class TestChainOfThoughtAgentConfidenceThreshold:
 
     def test_high_confidence_no_warning(self):
         """Test that high confidence results have no warning."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(confidence_threshold=0.3)
         result = agent.run(problem="What is 1+1?")
@@ -245,7 +273,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_enabled_by_default(self):
         """Test verification is enabled by default."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
 
@@ -253,7 +283,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_disabled(self):
         """Test verification can be disabled."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(enable_verification=False)
 
@@ -261,7 +293,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_flag_in_result_when_enabled(self):
         """Test verification flag appears in result when enabled."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(enable_verification=True)
         result = agent.run(problem="Test problem")
@@ -272,7 +306,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_flag_absent_when_disabled(self):
         """Test verification flag absent when disabled."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(enable_verification=False)
         result = agent.run(problem="Test problem")
@@ -282,7 +318,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_true_when_confidence_high(self):
         """Test verification is True when confidence meets threshold."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(enable_verification=True, confidence_threshold=0.5)
         result = agent.run(problem="What is 2+2?")
@@ -294,7 +332,9 @@ class TestChainOfThoughtAgentVerification:
 
     def test_verification_false_when_confidence_low(self):
         """Test verification is False when confidence below threshold."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(
             enable_verification=True,
@@ -313,7 +353,9 @@ class TestChainOfThoughtAgentConfiguration:
 
     def test_timeout_merged_into_provider_config(self):
         """Test that timeout is merged into provider_config."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(timeout=60)
 
@@ -323,7 +365,9 @@ class TestChainOfThoughtAgentConfiguration:
 
     def test_provider_config_preserved(self):
         """Test that custom provider_config is preserved."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         custom_config = {"api_key": "test-key", "organization": "test-org"}
 
@@ -335,7 +379,9 @@ class TestChainOfThoughtAgentConfiguration:
 
     def test_reasoning_steps_configurable(self):
         """Test reasoning_steps parameter is configurable."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(reasoning_steps=7)
 
@@ -343,7 +389,9 @@ class TestChainOfThoughtAgentConfiguration:
 
     def test_retry_attempts_configurable(self):
         """Test retry_attempts parameter is configurable."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(retry_attempts=5)
 
@@ -355,7 +403,9 @@ class TestChainOfThoughtAgentSignature:
 
     def test_signature_has_required_input_fields(self):
         """Test signature has required input fields."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtSignature
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtSignature,
+        )
 
         sig = ChainOfThoughtSignature()
 
@@ -365,7 +415,9 @@ class TestChainOfThoughtAgentSignature:
 
     def test_signature_has_required_output_fields(self):
         """Test signature has required output fields."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtSignature
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtSignature,
+        )
 
         sig = ChainOfThoughtSignature()
 
@@ -384,7 +436,9 @@ class TestChainOfThoughtAgentTypeHints:
 
     def test_run_returns_dict(self):
         """Test run returns Dict[str, Any]."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
         result = agent.run(problem="Test")
@@ -395,14 +449,18 @@ class TestChainOfThoughtAgentTypeHints:
         """Test ChainOfThoughtConfig is a dataclass."""
         from dataclasses import is_dataclass
 
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtConfig
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtConfig,
+        )
 
         assert is_dataclass(ChainOfThoughtConfig)
 
     def test_agent_inherits_from_base_agent(self):
         """Test ChainOfThoughtAgent inherits from BaseAgent."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
         from kaizen.core.base_agent import BaseAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent(llm_provider="mock")
 
@@ -414,21 +472,27 @@ class TestChainOfThoughtAgentDocumentation:
 
     def test_agent_class_has_docstring(self):
         """Test ChainOfThoughtAgent has comprehensive docstring."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         assert ChainOfThoughtAgent.__doc__ is not None
         assert len(ChainOfThoughtAgent.__doc__) > 100
 
     def test_run_has_docstring(self):
         """Test run method has docstring."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         assert ChainOfThoughtAgent.run.__doc__ is not None
         assert len(ChainOfThoughtAgent.run.__doc__) > 50
 
     def test_config_has_docstring(self):
         """Test ChainOfThoughtConfig has docstring."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtConfig
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtConfig,
+        )
 
         assert ChainOfThoughtConfig.__doc__ is not None
 

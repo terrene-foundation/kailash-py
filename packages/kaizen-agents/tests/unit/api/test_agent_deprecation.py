@@ -1,8 +1,10 @@
 """Regression tests for Agent API deprecation and bug fixes."""
 
 import warnings
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from kaizen_agents.api.agent import Agent
 from kaizen_agents.api.result import AgentResult
 
@@ -15,7 +17,9 @@ class TestAgentDeprecation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             Agent(model="test-model")
-            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            deprecation_warnings = [
+                x for x in w if issubclass(x.category, DeprecationWarning)
+            ]
             assert len(deprecation_warnings) >= 1
             assert "Delegate" in str(deprecation_warnings[0].message)
 

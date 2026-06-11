@@ -8,9 +8,12 @@ Tests the configuration validation for helpful error messages:
 - Full configuration validation
 """
 
-import pytest
-
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 from kaizen_agents.api.validation import (
     ConfigurationError,
     get_recommended_configuration,

@@ -223,7 +223,7 @@ class TestListPresets:
         """Test each preset has a description."""
         presets = CapabilityPresets.list_presets()
 
-        for name, description in presets.items():
+        for _name, description in presets.items():
             assert isinstance(description, str)
             assert len(description) > 0
 

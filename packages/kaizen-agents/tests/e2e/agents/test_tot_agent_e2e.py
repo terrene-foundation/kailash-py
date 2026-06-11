@@ -27,7 +27,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+    from kaizen_agents.agents.specialized.tree_of_thoughts import (
+        ToTAgent,
+        ToTAgentConfig,
+    )
 except ImportError:
     pytest.skip("ToT agent not yet implemented", allow_module_level=True)
 
@@ -101,7 +104,7 @@ def test_tot_alternative_exploration_openai():
     # Paths should be evaluated for creativity
     for evaluation in result["evaluations"]:
         assert "score" in evaluation
-        assert isinstance(evaluation["score"], (int, float))
+        assert isinstance(evaluation["score"], int | float)
 
     # Should select most creative approach
     assert "best_path" in result

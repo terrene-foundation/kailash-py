@@ -8,14 +8,10 @@ Tier 1: Unit tests using real SDK MessageRouter (no mocking of SDK primitives).
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta, timezone
-
 import pytest
 
 from kaizen.l3.messaging.dead_letters import DeadLetterReason, DeadLetterStore
 from kaizen.l3.messaging.router import MessageRouter
-
 from kaizen_agents._message_transport import MessageTransport
 from kaizen_agents.types import (
     ClarificationPayload,
@@ -28,7 +24,6 @@ from kaizen_agents.types import (
     Priority,
     ResourceSnapshot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -79,7 +74,9 @@ class TestSetupChannel:
         assert ch_fwd.capacity == 42
         assert ch_rev.capacity == 42
 
-    def test_default_capacity(self, transport: MessageTransport, router: MessageRouter) -> None:
+    def test_default_capacity(
+        self, transport: MessageTransport, router: MessageRouter
+    ) -> None:
         """Default capacity should be 100 when not specified."""
         transport.setup_channel("p", "c")
 
@@ -105,7 +102,9 @@ class TestSendDelegation:
             context_snapshot={"key": "value"},
             priority=Priority.HIGH,
         )
-        msg_id = await transport.send_delegation("parent-1", "child-1", payload, ttl_seconds=300.0)
+        msg_id = await transport.send_delegation(
+            "parent-1", "child-1", payload, ttl_seconds=300.0
+        )
 
         assert isinstance(msg_id, str)
         assert len(msg_id) > 0
@@ -125,6 +124,8 @@ class TestSendDelegation:
         msg_id = await transport.send_delegation(
             "parent-1", "child-1", payload, correlation_id="corr-abc"
         )
+        assert isinstance(msg_id, str)
+        assert len(msg_id) > 0
 
         pending = await router.pending_for("child-1")
         assert len(pending) == 1
@@ -243,7 +244,9 @@ class TestReceivePending:
     """Verify that pending SDK envelopes are converted to local L3Messages."""
 
     @pytest.mark.asyncio()
-    async def test_receive_pending_converts_delegation(self, transport: MessageTransport) -> None:
+    async def test_receive_pending_converts_delegation(
+        self, transport: MessageTransport
+    ) -> None:
         transport.setup_channel("parent-1", "child-1")
         payload = DelegationPayload(
             task_description="Analyze data",
@@ -263,14 +266,18 @@ class TestReceivePending:
         assert msg.delegation.priority == Priority.HIGH
 
     @pytest.mark.asyncio()
-    async def test_receive_pending_converts_completion(self, transport: MessageTransport) -> None:
+    async def test_receive_pending_converts_completion(
+        self, transport: MessageTransport
+    ) -> None:
         transport.setup_channel("child-1", "parent-1")
         payload = CompletionPayload(
             result={"answer": 42},
             success=True,
             resource_consumed=ResourceSnapshot(financial_spent=1.5, actions_executed=3),
         )
-        await transport.send_completion("child-1", "parent-1", payload, correlation_id="corr-x")
+        await transport.send_completion(
+            "child-1", "parent-1", payload, correlation_id="corr-x"
+        )
 
         messages = await transport.receive_pending("parent-1")
         assert len(messages) == 1
@@ -305,7 +312,9 @@ class TestReceivePending:
         assert msg.clarification.options == ["A", "B"]
 
     @pytest.mark.asyncio()
-    async def test_receive_pending_converts_escalation(self, transport: MessageTransport) -> None:
+    async def test_receive_pending_converts_escalation(
+        self, transport: MessageTransport
+    ) -> None:
         transport.setup_channel("child-1", "parent-1")
         payload = EscalationPayload(
             severity=EscalationSeverity.CRITICAL,
@@ -331,7 +340,9 @@ class TestReceivePending:
         assert messages == []
 
     @pytest.mark.asyncio()
-    async def test_receive_pending_multiple_messages(self, transport: MessageTransport) -> None:
+    async def test_receive_pending_multiple_messages(
+        self, transport: MessageTransport
+    ) -> None:
         """Multiple pending messages are all returned."""
         transport.setup_channel("parent-1", "child-1")
         for i in range(3):
@@ -408,7 +419,9 @@ class TestTTLEnforcement:
         from kaizen.l3.messaging.errors import RoutingError
 
         with pytest.raises(RoutingError) as exc_info:
-            await transport.send_delegation("parent-1", "child-1", payload, ttl_seconds=0.0)
+            await transport.send_delegation(
+                "parent-1", "child-1", payload, ttl_seconds=0.0
+            )
 
         assert exc_info.value.variant == "Expired"
         assert dead_letters.count() == 1

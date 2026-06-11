@@ -24,11 +24,11 @@ Tests cover:
 
 from __future__ import annotations
 
-import json
 import os
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -36,7 +36,6 @@ from kaizen_agents.delegate.adapters.protocol import StreamEvent, StreamingChatA
 from kaizen_agents.delegate.adapters.registry import get_adapter, get_adapter_for_model
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
-
 
 # ---------------------------------------------------------------------------
 # S8-001: StreamEvent dataclass
@@ -69,7 +68,13 @@ class TestStreamEvent:
         event = StreamEvent(
             event_type="done",
             content="Final text",
-            tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "test", "arguments": "{}"}}],
+            tool_calls=[
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "test", "arguments": "{}"},
+                }
+            ],
             finish_reason="stop",
             model="test-model",
             usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
@@ -81,7 +86,13 @@ class TestStreamEvent:
 
     def test_all_event_types(self) -> None:
         """All five event types can be constructed."""
-        types = ["text_delta", "tool_call_start", "tool_call_delta", "tool_call_end", "done"]
+        types = [
+            "text_delta",
+            "tool_call_start",
+            "tool_call_delta",
+            "tool_call_end",
+            "done",
+        ]
         for t in types:
             event = StreamEvent(event_type=t)
             assert event.event_type == t
@@ -159,7 +170,9 @@ class TestAdapterRegistry:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_get_adapter_for_model_claude_prefix(self) -> None:
         """Model starting with 'claude-' auto-detects Anthropic."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import AnthropicStreamAdapter
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            AnthropicStreamAdapter,
+        )
 
         adapter = get_adapter_for_model("claude-sonnet-4-6")
         assert isinstance(adapter, AnthropicStreamAdapter)
@@ -207,7 +220,9 @@ class TestAnthropicConversion:
 
     def test_convert_messages_separates_system(self) -> None:
         """System message is extracted from the message list."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import _convert_messages_for_anthropic
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            _convert_messages_for_anthropic,
+        )
 
         messages = [
             {"role": "system", "content": "You are helpful."},
@@ -220,10 +235,17 @@ class TestAnthropicConversion:
 
     def test_convert_messages_tool_results(self) -> None:
         """Tool result messages become user messages with tool_result blocks."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import _convert_messages_for_anthropic
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            _convert_messages_for_anthropic,
+        )
 
         messages = [
-            {"role": "tool", "tool_call_id": "call_1", "name": "search", "content": "result data"},
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "name": "search",
+                "content": "result data",
+            },
         ]
         _, msgs = _convert_messages_for_anthropic(messages)
         assert len(msgs) == 1
@@ -233,7 +255,9 @@ class TestAnthropicConversion:
 
     def test_convert_messages_assistant_with_tool_calls(self) -> None:
         """Assistant messages with tool_calls become content blocks."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import _convert_messages_for_anthropic
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            _convert_messages_for_anthropic,
+        )
 
         messages = [
             {
@@ -257,7 +281,9 @@ class TestAnthropicConversion:
 
     def test_convert_tools_format(self) -> None:
         """OpenAI tool defs are converted to Anthropic format."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import _convert_tools_for_anthropic
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            _convert_tools_for_anthropic,
+        )
 
         tools = [
             {
@@ -265,7 +291,10 @@ class TestAnthropicConversion:
                 "function": {
                     "name": "search",
                     "description": "Search the web",
-                    "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                    },
                 },
             }
         ]
@@ -277,7 +306,9 @@ class TestAnthropicConversion:
 
     def test_convert_tools_empty_returns_empty(self) -> None:
         """Empty or None tools returns empty list."""
-        from kaizen_agents.delegate.adapters.anthropic_adapter import _convert_tools_for_anthropic
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            _convert_tools_for_anthropic,
+        )
 
         assert _convert_tools_for_anthropic(None) == []
         assert _convert_tools_for_anthropic([]) == []
@@ -293,7 +324,9 @@ class TestGoogleConversion:
 
     def test_convert_messages_system_extraction(self) -> None:
         """System message is extracted for Gemini's system_instruction."""
-        from kaizen_agents.delegate.adapters.google_adapter import _convert_messages_for_gemini
+        from kaizen_agents.delegate.adapters.google_adapter import (
+            _convert_messages_for_gemini,
+        )
 
         messages = [
             {"role": "system", "content": "Be concise."},
@@ -306,7 +339,9 @@ class TestGoogleConversion:
 
     def test_convert_messages_role_mapping(self) -> None:
         """Assistant role maps to 'model' role in Gemini."""
-        from kaizen_agents.delegate.adapters.google_adapter import _convert_messages_for_gemini
+        from kaizen_agents.delegate.adapters.google_adapter import (
+            _convert_messages_for_gemini,
+        )
 
         messages = [
             {"role": "user", "content": "Hi"},
@@ -318,7 +353,9 @@ class TestGoogleConversion:
 
     def test_convert_messages_tool_results(self) -> None:
         """Tool results become function_response parts."""
-        from kaizen_agents.delegate.adapters.google_adapter import _convert_messages_for_gemini
+        from kaizen_agents.delegate.adapters.google_adapter import (
+            _convert_messages_for_gemini,
+        )
 
         messages = [
             {"role": "tool", "name": "search", "content": "results"},
@@ -328,7 +365,9 @@ class TestGoogleConversion:
 
     def test_convert_tools_format(self) -> None:
         """OpenAI tool defs become Gemini function_declarations."""
-        from kaizen_agents.delegate.adapters.google_adapter import _convert_tools_for_gemini
+        from kaizen_agents.delegate.adapters.google_adapter import (
+            _convert_tools_for_gemini,
+        )
 
         tools = [
             {
@@ -348,7 +387,9 @@ class TestGoogleConversion:
 
     def test_convert_tools_none_returns_none(self) -> None:
         """None tools returns None."""
-        from kaizen_agents.delegate.adapters.google_adapter import _convert_tools_for_gemini
+        from kaizen_agents.delegate.adapters.google_adapter import (
+            _convert_tools_for_gemini,
+        )
 
         assert _convert_tools_for_gemini(None) is None
 
@@ -363,7 +404,9 @@ class TestOllamaConversion:
 
     def test_convert_messages_passes_through(self) -> None:
         """Standard messages pass through to Ollama format."""
-        from kaizen_agents.delegate.adapters.ollama_adapter import _convert_messages_for_ollama
+        from kaizen_agents.delegate.adapters.ollama_adapter import (
+            _convert_messages_for_ollama,
+        )
 
         messages = [
             {"role": "system", "content": "Be brief."},
@@ -378,7 +421,9 @@ class TestOllamaConversion:
 
     def test_convert_messages_skips_unknown_roles(self) -> None:
         """Messages with unknown roles are skipped."""
-        from kaizen_agents.delegate.adapters.ollama_adapter import _convert_messages_for_ollama
+        from kaizen_agents.delegate.adapters.ollama_adapter import (
+            _convert_messages_for_ollama,
+        )
 
         messages = [
             {"role": "user", "content": "Hi"},
@@ -457,7 +502,9 @@ class TestOpenAIAdapterStreaming:
                     yield c
 
         adapter._client = AsyncMock()
-        adapter._client.chat.completions.create = AsyncMock(return_value=FakeStream(chunks))
+        adapter._client.chat.completions.create = AsyncMock(
+            return_value=FakeStream(chunks)
+        )
 
         events: list[StreamEvent] = []
         async for event in adapter.stream_chat(
@@ -522,21 +569,45 @@ class TestOpenAIAdapterStreaming:
 
         chunks = [
             # Tool call start
-            FakeChunk(choices=[FakeChoice(delta=FakeDelta(
-                tool_calls=[FakeToolCallDelta(
-                    index=0, id="call_1", type="function",
-                    function=FakeFunctionCall(name="search", arguments=""),
-                )]
-            ))]),
+            FakeChunk(
+                choices=[
+                    FakeChoice(
+                        delta=FakeDelta(
+                            tool_calls=[
+                                FakeToolCallDelta(
+                                    index=0,
+                                    id="call_1",
+                                    type="function",
+                                    function=FakeFunctionCall(
+                                        name="search", arguments=""
+                                    ),
+                                )
+                            ]
+                        )
+                    )
+                ]
+            ),
             # Tool call delta (arguments)
-            FakeChunk(choices=[FakeChoice(delta=FakeDelta(
-                tool_calls=[FakeToolCallDelta(
-                    index=0,
-                    function=FakeFunctionCall(arguments='{"q": "test"}'),
-                )]
-            ))]),
+            FakeChunk(
+                choices=[
+                    FakeChoice(
+                        delta=FakeDelta(
+                            tool_calls=[
+                                FakeToolCallDelta(
+                                    index=0,
+                                    function=FakeFunctionCall(
+                                        arguments='{"q": "test"}'
+                                    ),
+                                )
+                            ]
+                        )
+                    )
+                ]
+            ),
             # Finish
-            FakeChunk(choices=[FakeChoice(delta=FakeDelta(), finish_reason="tool_calls")]),
+            FakeChunk(
+                choices=[FakeChoice(delta=FakeDelta(), finish_reason="tool_calls")]
+            ),
             FakeChunk(choices=[], usage=FakeUsage()),
         ]
 
@@ -552,15 +623,23 @@ class TestOpenAIAdapterStreaming:
                     yield c
 
         adapter._client = AsyncMock()
-        adapter._client.chat.completions.create = AsyncMock(return_value=FakeStream(chunks))
+        adapter._client.chat.completions.create = AsyncMock(
+            return_value=FakeStream(chunks)
+        )
 
         events: list[StreamEvent] = []
         async for event in adapter.stream_chat(
             messages=[{"role": "user", "content": "search for test"}],
-            tools=[{
-                "type": "function",
-                "function": {"name": "search", "description": "Search", "parameters": {}},
-            }],
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search",
+                        "description": "Search",
+                        "parameters": {},
+                    },
+                }
+            ],
             model="test-model",
         ):
             events.append(event)
@@ -611,7 +690,11 @@ class TestAgentLoopAdapterWiring:
                     event_type="done",
                     content="Hello world",
                     finish_reason="stop",
-                    usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                    usage={
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                        "total_tokens": 15,
+                    },
                 )
 
         config = KzConfig(model="test-model", max_turns=10)
@@ -654,16 +737,22 @@ class TestAgentLoopAdapterWiring:
                     yield StreamEvent(
                         event_type="done",
                         content="",
-                        tool_calls=[{
-                            "id": "call_1",
-                            "type": "function",
-                            "function": {
-                                "name": "greet",
-                                "arguments": '{"name": "Alice"}',
-                            },
-                        }],
+                        tool_calls=[
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "greet",
+                                    "arguments": '{"name": "Alice"}',
+                                },
+                            }
+                        ],
                         finish_reason="tool_calls",
-                        usage={"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+                        usage={
+                            "prompt_tokens": 5,
+                            "completion_tokens": 3,
+                            "total_tokens": 8,
+                        },
                     )
                 else:
                     # Second call: text response
@@ -676,7 +765,11 @@ class TestAgentLoopAdapterWiring:
                         event_type="done",
                         content="Done!",
                         finish_reason="stop",
-                        usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                        usage={
+                            "prompt_tokens": 10,
+                            "completion_tokens": 5,
+                            "total_tokens": 15,
+                        },
                     )
 
         config = KzConfig(model="test-model", max_turns=10)
@@ -686,7 +779,8 @@ class TestAgentLoopAdapterWiring:
             return f"Hello, {name}!"
 
         tools.register(
-            "greet", "Greet someone",
+            "greet",
+            "Greet someone",
             {"type": "object", "properties": {"name": {"type": "string"}}},
             greet,
         )
@@ -712,7 +806,6 @@ class TestAgentLoopAdapterWiring:
 
     async def test_legacy_client_still_works(self) -> None:
         """AgentLoop still works with legacy AsyncOpenAI client param."""
-        from kaizen_agents.delegate.adapters.openai_stream import StreamResult
 
         @dataclass
         class FakeDelta:
@@ -745,8 +838,10 @@ class TestAgentLoopAdapterWiring:
         class FakeStream:
             def __init__(self, chunks):
                 self._chunks = chunks
+
             def __aiter__(self):
                 return self._iter()
+
             async def _iter(self):
                 for c in self._chunks:
                     yield c
@@ -784,7 +879,11 @@ class TestAgentLoopAdapterWiring:
                     event_type="done",
                     content="From adapter",
                     finish_reason="stop",
-                    usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    usage={
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                    },
                 )
 
         client = AsyncMock()
@@ -822,6 +921,7 @@ class TestStructuredLLMAdapter:
         class FakeStructured:
             def complete(self, messages, **kwargs):
                 from kaizen_agents.orchestration.adapters import StructuredResponse
+
                 return StructuredResponse(content="test")
 
             def complete_structured(self, messages, schema, **kwargs):
@@ -885,7 +985,9 @@ class TestAdapterEdgeCases:
             env = dict(os.environ)
             env.pop("OPENAI_API_KEY", None)
             with patch.dict(os.environ, env, clear=True):
-                from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+                from kaizen_agents.delegate.adapters.openai_adapter import (
+                    OpenAIStreamAdapter,
+                )
 
                 with pytest.raises(ValueError, match="No OpenAI API key"):
                     OpenAIStreamAdapter()
@@ -896,7 +998,9 @@ class TestAdapterEdgeCases:
             env = dict(os.environ)
             env.pop("ANTHROPIC_API_KEY", None)
             with patch.dict(os.environ, env, clear=True):
-                from kaizen_agents.delegate.adapters.anthropic_adapter import AnthropicStreamAdapter
+                from kaizen_agents.delegate.adapters.anthropic_adapter import (
+                    AnthropicStreamAdapter,
+                )
 
                 with pytest.raises(ValueError, match="No Anthropic API key"):
                     AnthropicStreamAdapter()
@@ -908,7 +1012,9 @@ class TestAdapterEdgeCases:
             env.pop("GOOGLE_API_KEY", None)
             env.pop("GEMINI_API_KEY", None)
             with patch.dict(os.environ, env, clear=True):
-                from kaizen_agents.delegate.adapters.google_adapter import GoogleStreamAdapter
+                from kaizen_agents.delegate.adapters.google_adapter import (
+                    GoogleStreamAdapter,
+                )
 
                 with pytest.raises(ValueError, match="No Google API key"):
                     GoogleStreamAdapter()

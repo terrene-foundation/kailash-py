@@ -24,7 +24,10 @@ import pytest
 
 # Import agent components (will be implemented after tests)
 try:
-    from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+    from kaizen_agents.agents.specialized.tree_of_thoughts import (
+        ToTAgent,
+        ToTAgentConfig,
+    )
 except ImportError:
     pytest.skip("ToT agent not yet implemented", allow_module_level=True)
 
@@ -128,7 +131,7 @@ def test_path_evaluation_scoring():
     # Each evaluation should have score
     for evaluation in result["evaluations"]:
         assert "score" in evaluation
-        assert isinstance(evaluation["score"], (int, float))
+        assert isinstance(evaluation["score"], int | float)
         assert 0 <= evaluation["score"] <= 1
 
 

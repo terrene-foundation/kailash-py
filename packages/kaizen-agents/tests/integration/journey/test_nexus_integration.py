@@ -21,7 +21,7 @@ References:
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytest
 from dotenv import load_dotenv
@@ -36,8 +36,8 @@ from kaizen.journey import (
     Pathway,
     deploy_journey_to_nexus,
 )
-from kaizen_agents.journey.behaviors import ReturnToPrevious
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.journey.behaviors import ReturnToPrevious
 
 # Load environment variables from .env
 load_dotenv()
@@ -116,7 +116,7 @@ class IntakeAgent(BaseAgent):
     def __init__(self, config: OpenAIAgentConfig):
         super().__init__(config=config, signature=IntakeSignature())
 
-    def process(self, message: str) -> Dict[str, Any]:
+    def process(self, message: str) -> dict[str, Any]:
         return self.run(message=message)
 
 

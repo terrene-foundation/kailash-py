@@ -10,12 +10,13 @@ from unittest.mock import Mock, patch
 import pytest
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 
-# Check A2A availability
+# Check A2A availability — the symbol import (not find_spec) is deliberate: it
+# verifies A2AAgentCard exists in the module, not just that the module is present.
 try:
-    from kaizen.nodes.ai.a2a import A2AAgentCard
+    from kaizen.nodes.ai.a2a import A2AAgentCard  # noqa: F401
 
     A2A_AVAILABLE = True
 except ImportError:
@@ -73,16 +74,19 @@ class MockCapability:
         """Calculate mock capability match score."""
         # Simple keyword matching for testing
         task_lower = task.lower()
-        if self.name == "coding" and any(
-            kw in task_lower for kw in ["code", "python", "function", "program"]
-        ):
-            return 0.9
-        elif self.name == "data_analysis" and any(
-            kw in task_lower for kw in ["analyze", "data", "statistics", "chart"]
-        ):
-            return 0.9
-        elif self.name == "writing" and any(
-            kw in task_lower for kw in ["write", "article", "document", "essay"]
+        if (
+            self.name == "coding"
+            and any(
+                kw in task_lower for kw in ["code", "python", "function", "program"]
+            )
+            or self.name == "data_analysis"
+            and any(
+                kw in task_lower for kw in ["analyze", "data", "statistics", "chart"]
+            )
+            or self.name == "writing"
+            and any(
+                kw in task_lower for kw in ["write", "article", "document", "essay"]
+            )
         ):
             return 0.9
         elif self.name == "general":
@@ -121,9 +125,9 @@ class TestRouterCreation:
 
         assert pipeline is not None
         assert hasattr(pipeline, "run"), "MetaControllerPipeline must have run() method"
-        assert isinstance(pipeline, Pipeline), (
-            "MetaControllerPipeline must inherit from Pipeline"
-        )
+        assert isinstance(
+            pipeline, Pipeline
+        ), "MetaControllerPipeline must inherit from Pipeline"
 
     def test_router_requires_agents_parameter(self):
         """Test that router() requires agents parameter."""
@@ -230,9 +234,9 @@ class TestRouterFallback:
 
         # Should fall back to first agent (code_expert)
         assert result is not None
-        assert mock_agents[0]._call_count == 1, (
-            "Should fall back to first agent when A2A unavailable"
-        )
+        assert (
+            mock_agents[0]._call_count == 1
+        ), "Should fall back to first agent when A2A unavailable"
 
     def test_router_fallback_on_zero_a2a_scores(self, mock_agents):
         """Test router fallback when no agent matches task (all scores = 0)."""
@@ -247,9 +251,9 @@ class TestRouterFallback:
 
         # Should fall back to first agent (code_expert)
         assert result is not None
-        assert specific_agents[0]._call_count == 1, (
-            "Should fall back to first agent when no capability match"
-        )
+        assert (
+            specific_agents[0]._call_count == 1
+        ), "Should fall back to first agent when no capability match"
 
     def test_router_fallback_round_robin_strategy(self, mock_agents):
         """Test router with explicit round-robin fallback strategy."""

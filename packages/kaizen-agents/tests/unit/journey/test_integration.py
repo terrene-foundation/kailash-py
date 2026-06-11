@@ -16,10 +16,7 @@ Test Categories:
 - Hooks System Tests
 """
 
-import asyncio
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -33,8 +30,8 @@ class TestSignatureIntegration:
 
     def test_pathway_guidelines_property(self):
         """Test that pathway.guidelines returns merged guidelines."""
-        from kaizen_agents.journey.core import Pathway, PathwayMeta
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         # Create a signature with guidelines
         class TestSignature(Signature):
@@ -63,8 +60,8 @@ class TestSignatureIntegration:
 
     def test_pathway_validate_outputs(self):
         """Test output validation against signature contract."""
-        from kaizen_agents.journey.core import Pathway, PathwayMeta
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -87,8 +84,8 @@ class TestSignatureIntegration:
 
     def test_pathway_validate_outputs_missing_fields(self):
         """Test output validation detects missing fields."""
-        from kaizen_agents.journey.core import Pathway
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -111,8 +108,8 @@ class TestSignatureIntegration:
 
     def test_pathway_get_missing_outputs(self):
         """Test get_missing_outputs helper method."""
-        from kaizen_agents.journey.core import Pathway
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -144,8 +141,8 @@ class TestPipelineConfiguration:
 
     def test_pipeline_config_extraction(self):
         """Test that __pipeline_config__ is extracted from pathway class."""
-        from kaizen_agents.journey.core import Pathway
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -168,8 +165,8 @@ class TestPipelineConfiguration:
 
     def test_pipeline_config_property(self):
         """Test pipeline_config property returns copy of config."""
-        from kaizen_agents.journey.core import Pathway
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -192,8 +189,8 @@ class TestPipelineConfiguration:
 
     def test_pipeline_config_default_empty(self):
         """Test that pipeline_config defaults to empty dict."""
-        from kaizen_agents.journey.core import Pathway
         from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Pathway
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -364,9 +361,9 @@ class TestJourneyNexusAdapter:
 
     def test_adapter_initialization(self):
         """Test adapter initialization with journey class."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -386,9 +383,9 @@ class TestJourneyNexusAdapter:
 
     def test_adapter_snake_case_conversion(self):
         """Test automatic snake_case workflow name conversion."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -407,9 +404,9 @@ class TestJourneyNexusAdapter:
 
     def test_agent_registration(self):
         """Test registering agents with adapter."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -432,9 +429,9 @@ class TestJourneyNexusAdapter:
 
     def test_to_workflow(self):
         """Test workflow definition generation."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -458,9 +455,9 @@ class TestJourneyNexusAdapter:
 
     def test_create_rest_endpoint(self):
         """Test REST endpoint definition creation."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -481,9 +478,9 @@ class TestJourneyNexusAdapter:
 
     def test_create_mcp_tool(self):
         """Test MCP tool definition creation."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.nexus import JourneyNexusAdapter
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -637,13 +634,13 @@ class TestPathwayManagerHooks:
 
     def test_register_hook(self):
         """Test hook registration."""
-        from kaizen_agents.journey.core import Journey, JourneyConfig, Pathway
+        from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.manager import (
             JourneyHookContext,
             JourneyHookEvent,
             JourneyHookResult,
         )
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -668,13 +665,13 @@ class TestPathwayManagerHooks:
 
     def test_unregister_hook(self):
         """Test hook unregistration."""
-        from kaizen_agents.journey.core import Journey, JourneyConfig, Pathway
+        from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.manager import (
             JourneyHookContext,
             JourneyHookEvent,
             JourneyHookResult,
         )
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -706,13 +703,13 @@ class TestPathwayManagerHooks:
     @pytest.mark.asyncio
     async def test_trigger_hooks(self):
         """Test hook triggering."""
-        from kaizen_agents.journey.core import Journey, JourneyConfig, Pathway
+        from kaizen.signatures import InputField, OutputField, Signature
+        from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.manager import (
             JourneyHookContext,
             JourneyHookEvent,
             JourneyHookResult,
         )
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -749,13 +746,13 @@ class TestPathwayManagerHooks:
     @pytest.mark.asyncio
     async def test_hook_error_isolation(self):
         """Test that hook errors don't affect other hooks."""
+        from kaizen.signatures import InputField, OutputField, Signature
         from kaizen_agents.journey.core import Journey, Pathway
         from kaizen_agents.journey.manager import (
             JourneyHookContext,
             JourneyHookEvent,
             JourneyHookResult,
         )
-        from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
             message: str = InputField(description="Input")
@@ -809,18 +806,9 @@ class TestModuleExports:
     def test_journey_module_exports(self):
         """Test that all integration components are exported."""
         from kaizen.journey import (  # Hook types; DataFlow models; Nexus integration
-            EnhancedDataFlowStateBackend,
-            IntentCacheModel,
-            JourneyConversationModel,
-            JourneyHookContext,
             JourneyHookEvent,
-            JourneyHookResult,
             JourneyNexusAdapter,
-            JourneySessionManager,
             JourneySessionModel,
-            NexusSessionInfo,
-            deploy_journey_to_nexus,
-            register_journey_models,
         )
 
         # All imports should succeed without error

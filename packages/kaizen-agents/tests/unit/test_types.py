@@ -8,7 +8,7 @@ validate constraints, and implement discriminated union factory methods.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
@@ -19,8 +19,6 @@ from kaizen_agents.types import (
     AgentStateData,
     ClarificationPayload,
     CompletionPayload,
-    ConstraintEnvelope,
-    make_envelope,
     DelegationPayload,
     DimensionGradient,
     EdgeType,
@@ -48,8 +46,8 @@ from kaizen_agents.types import (
     SystemSubtype,
     TerminationReason,
     WaitReason,
+    make_envelope,
 )
-
 
 # ---------------------------------------------------------------------------
 # GradientZone ordering
@@ -128,7 +126,9 @@ class TestPlanGradient:
             PlanGradient(retry_budget=-1)
 
     def test_invalid_after_retry_exhaustion_raises(self) -> None:
-        with pytest.raises(ValueError, match="after_retry_exhaustion must be HELD or BLOCKED"):
+        with pytest.raises(
+            ValueError, match="after_retry_exhaustion must be HELD or BLOCKED"
+        ):
             PlanGradient(after_retry_exhaustion=GradientZone.FLAGGED)
 
     def test_optional_node_failure_blocked_raises(self) -> None:
@@ -172,7 +172,9 @@ class TestConstraintEnvelope:
         assert ce.financial.max_spend_usd == 100.0
 
     def test_custom_operational(self) -> None:
-        ce = make_envelope(operational={"allowed": ["read", "write"], "blocked": ["delete"]})
+        ce = make_envelope(
+            operational={"allowed": ["read", "write"], "blocked": ["delete"]}
+        )
         assert "read" in ce.operational.allowed_actions
         assert "delete" in ce.operational.blocked_actions
 
@@ -307,7 +309,9 @@ class TestPlanNode:
         node = PlanNode(
             node_id="n2",
             agent_spec=spec,
-            input_mapping={"data": PlanNodeOutput(source_node="n1", output_key="result")},
+            input_mapping={
+                "data": PlanNodeOutput(source_node="n1", output_key="result")
+            },
         )
         assert "data" in node.input_mapping
         assert node.input_mapping["data"].source_node == "n1"

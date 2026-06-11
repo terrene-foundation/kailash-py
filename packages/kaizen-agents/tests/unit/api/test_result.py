@@ -9,8 +9,6 @@ Tests the AgentResult dataclass for execution results:
 - Factory methods
 """
 
-import pytest
-
 from kaizen_agents.api.result import AgentResult, ResultStatus, ToolCallRecord
 
 

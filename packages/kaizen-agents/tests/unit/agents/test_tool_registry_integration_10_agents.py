@@ -17,9 +17,16 @@ integration is implemented in coordination agents.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
+
+from kaizen.core.base_agent import BaseAgentConfig
+from kaizen.memory.shared_memory import SharedMemoryPool
+from kaizen_agents.agents.specialized.batch_processing import BatchProcessingAgent
+from kaizen_agents.agents.specialized.human_approval import HumanApprovalAgent
+from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
+from kaizen_agents.agents.specialized.resilient import ResilientAgent, ResilientConfig
 from kaizen_agents.patterns.patterns import (
     AggregatorAgent,
     JudgeAgent,
@@ -28,19 +35,13 @@ from kaizen_agents.patterns.patterns import (
     ProposerAgent,
     VoterAgent,
 )
-from kaizen_agents.agents.specialized.batch_processing import BatchProcessingAgent
-from kaizen_agents.agents.specialized.human_approval import HumanApprovalAgent
-from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
-from kaizen_agents.agents.specialized.resilient import ResilientAgent, ResilientConfig
-from kaizen.core.base_agent import BaseAgentConfig
-from kaizen.memory.shared_memory import SharedMemoryPool
 
 
 @dataclass
 class MockToolRegistry:
     """Mock tool registry for testing."""
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """Return mock tools list."""
         return [
             {
@@ -479,6 +480,6 @@ class TestAllAgentsToolRegistryIntegration:
         all_agents = specialized_agents + coordination_agents
 
         for agent in all_agents:
-            assert agent is not None, (
-                f"{agent.__class__.__name__} should have None tool_registry by default"
-            )
+            assert (
+                agent is not None
+            ), f"{agent.__class__.__name__} should have None tool_registry by default"

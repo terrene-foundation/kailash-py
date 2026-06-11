@@ -14,28 +14,28 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory, FailureDiagnosis
+from kaizen_agents.orchestration.recovery.diagnoser import (
+    FailureCategory,
+    FailureDiagnosis,
+)
 from kaizen_agents.orchestration.recovery.recomposer import (
     RECOVERY_SCHEMA,
+    Recomposer,
     RecoveryPlan,
     RecoveryStrategy,
-    Recomposer,
     _build_recovery_system_prompt,
     _build_recovery_user_prompt,
 )
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
     EdgeType,
     Plan,
     PlanEdge,
     PlanGradient,
-    PlanModification,
     PlanModificationType,
     PlanNode,
     PlanNodeState,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- mock LLM and test fixtures
@@ -348,7 +348,9 @@ class TestRecomposeRetry:
         original_node_count = len(plan.nodes)
         diagnosis = _make_diagnosis(category=FailureCategory.TRANSIENT)
 
-        recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+        recomposer.recompose(
+            plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+        )
 
         assert len(plan.nodes) == original_node_count
 
@@ -448,7 +450,9 @@ class TestRecomposeReplace:
         diagnosis = _make_diagnosis(category=FailureCategory.CONFIGURATION)
 
         with pytest.raises(ValueError, match="replacement_spec"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_replace_empty_name_raises(self) -> None:
         response = _replace_response()
@@ -459,7 +463,9 @@ class TestRecomposeReplace:
         diagnosis = _make_diagnosis(category=FailureCategory.CONFIGURATION)
 
         with pytest.raises(ValueError, match="name.*description"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +478,9 @@ class TestRecomposeSkip:
         mock_llm = _make_mock_llm(_skip_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan(failed_node_optional=True)
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -489,7 +497,9 @@ class TestRecomposeSkip:
         mock_llm = _make_mock_llm(_skip_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan(failed_node_optional=True)
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -503,7 +513,9 @@ class TestRecomposeSkip:
         mock_llm = _make_mock_llm(_skip_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan(failed_node_optional=True)
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -518,7 +530,9 @@ class TestRecomposeSkip:
         mock_llm = _make_mock_llm(response)
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan(failed_node_optional=True)
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -598,7 +612,9 @@ class TestRecomposeRestructure:
         # The second new node should connect to finalize-node
         second_add = recovery.modifications[2]
         assert second_add.edges is not None
-        to_edges = [e for e in second_add.edges if e.from_node == second_add.node.node_id]
+        to_edges = [
+            e for e in second_add.edges if e.from_node == second_add.node.node_id
+        ]
         to_node_ids = [e.to_node for e in to_edges]
         assert "finalize-node" in to_node_ids
 
@@ -630,7 +646,9 @@ class TestRecomposeRestructure:
         diagnosis = _make_diagnosis(category=FailureCategory.DEPENDENCY)
 
         with pytest.raises(ValueError, match="alternative_nodes"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_restructure_empty_nodes_raises(self) -> None:
         response = _restructure_response()
@@ -641,7 +659,9 @@ class TestRecomposeRestructure:
         diagnosis = _make_diagnosis(category=FailureCategory.DEPENDENCY)
 
         with pytest.raises(ValueError, match="at least one"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_restructure_invalid_node_entry_raises(self) -> None:
         response = _restructure_response()
@@ -652,7 +672,9 @@ class TestRecomposeRestructure:
         diagnosis = _make_diagnosis(category=FailureCategory.DEPENDENCY)
 
         with pytest.raises(ValueError, match="not a dict"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_restructure_node_missing_name_raises(self) -> None:
         response = _restructure_response()
@@ -663,7 +685,9 @@ class TestRecomposeRestructure:
         diagnosis = _make_diagnosis(category=FailureCategory.DEPENDENCY)
 
         with pytest.raises(ValueError, match="name.*description"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_restructure_ignores_edges_to_nonexistent_nodes(self) -> None:
         response = _restructure_response()
@@ -679,7 +703,9 @@ class TestRecomposeRestructure:
 
         # The edge to a nonexistent node should be silently dropped
         first_add = recovery.modifications[1]
-        from_edges = [e for e in (first_add.edges or []) if e.to_node == first_add.node.node_id]
+        from_edges = [
+            e for e in (first_add.edges or []) if e.to_node == first_add.node.node_id
+        ]
         from_node_ids = [e.from_node for e in from_edges]
         assert "nonexistent-node" not in from_node_ids
 
@@ -694,7 +720,9 @@ class TestRecomposeAbort:
         mock_llm = _make_mock_llm(_abort_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan()
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -707,7 +735,9 @@ class TestRecomposeAbort:
         mock_llm = _make_mock_llm(_abort_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan()
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         recovery = recomposer.recompose(
             plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
@@ -728,7 +758,9 @@ class TestRecomposerLLMInteraction:
         plan = _make_three_node_plan()
         diagnosis = _make_diagnosis()
 
-        recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+        recomposer.recompose(
+            plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+        )
 
         mock_llm.complete_structured.assert_called_once()
         call_args = mock_llm.complete_structured.call_args
@@ -742,7 +774,9 @@ class TestRecomposerLLMInteraction:
         diagnosis = _make_diagnosis()
 
         with pytest.raises(KeyError):
-            recomposer.recompose(plan=plan, failed_node_id="nonexistent", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="nonexistent", diagnosis=diagnosis
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -760,7 +794,9 @@ class TestRecomposerValidation:
         diagnosis = _make_diagnosis()
 
         with pytest.raises(ValueError, match="Invalid recovery strategy"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
     def test_empty_rationale_raises(self) -> None:
         response = _retry_response()
@@ -771,7 +807,9 @@ class TestRecomposerValidation:
         diagnosis = _make_diagnosis()
 
         with pytest.raises(ValueError, match="rationale"):
-            recomposer.recompose(plan=plan, failed_node_id="failed-node", diagnosis=diagnosis)
+            recomposer.recompose(
+                plan=plan, failed_node_id="failed-node", diagnosis=diagnosis
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -796,7 +834,9 @@ class TestRecomposerDAGValidation:
         mock_llm = _make_mock_llm(_skip_response())
         recomposer = Recomposer(llm_client=mock_llm)
         plan = _make_three_node_plan(failed_node_optional=True)
-        diagnosis = _make_diagnosis(category=FailureCategory.PERMANENT, recoverable=False)
+        diagnosis = _make_diagnosis(
+            category=FailureCategory.PERMANENT, recoverable=False
+        )
 
         # Should not raise
         recovery = recomposer.recompose(

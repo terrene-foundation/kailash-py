@@ -327,7 +327,9 @@ class TestBackwardCompatibilityAliases:
 
     def test_chain_of_thought_has_run_method(self):
         """Test that ChainOfThoughtAgent has run() method (standard interface)."""
-        from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
+        from kaizen_agents.agents.specialized.chain_of_thought import (
+            ChainOfThoughtAgent,
+        )
 
         agent = ChainOfThoughtAgent()
 
@@ -376,7 +378,6 @@ class TestDualRegistrationConsistency:
     def test_agent_api_and_node_registry_consistent(self):
         """Test that Agent API and NodeRegistry have consistent registrations."""
         from kailash.nodes import NodeRegistry
-
         from kaizen.agents import list_agent_type_names
 
         agent_types = list_agent_type_names()

@@ -10,7 +10,6 @@ import pytest
 
 from kaizen_agents.governance.cost_model import CostModel
 
-
 # =========================================================================
 # Construction and validation
 # =========================================================================
@@ -27,17 +26,25 @@ class TestCostModelConstruction:
     def test_rejects_nan_rate_in_defaults(self) -> None:
         """NaN rates in custom_costs must be rejected per PACT NaN/Inf rule."""
         with pytest.raises(ValueError, match="finite and non-negative"):
-            CostModel(custom_costs={"bad-model": {"prompt": float("nan"), "completion": 10.0}})
+            CostModel(
+                custom_costs={"bad-model": {"prompt": float("nan"), "completion": 10.0}}
+            )
 
     def test_rejects_inf_rate(self) -> None:
         """Inf rates must be rejected."""
         with pytest.raises(ValueError, match="finite and non-negative"):
-            CostModel(custom_costs={"bad-model": {"prompt": float("inf"), "completion": 10.0}})
+            CostModel(
+                custom_costs={"bad-model": {"prompt": float("inf"), "completion": 10.0}}
+            )
 
     def test_rejects_negative_inf_rate(self) -> None:
         """Negative infinity rates must be rejected."""
         with pytest.raises(ValueError, match="finite and non-negative"):
-            CostModel(custom_costs={"bad-model": {"prompt": float("-inf"), "completion": 10.0}})
+            CostModel(
+                custom_costs={
+                    "bad-model": {"prompt": float("-inf"), "completion": 10.0}
+                }
+            )
 
     def test_rejects_negative_rate(self) -> None:
         """Negative rates must be rejected."""
@@ -46,7 +53,9 @@ class TestCostModelConstruction:
 
     def test_rejects_nan_default_prompt_rate(self) -> None:
         """NaN in default_prompt_rate must be rejected."""
-        with pytest.raises(ValueError, match="default_prompt_rate must be finite and non-negative"):
+        with pytest.raises(
+            ValueError, match="default_prompt_rate must be finite and non-negative"
+        ):
             CostModel(default_prompt_rate=float("nan"))
 
     def test_rejects_negative_default_completion_rate(self) -> None:

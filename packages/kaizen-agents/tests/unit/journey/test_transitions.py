@@ -11,13 +11,10 @@ Tests cover:
 These are Tier 1 (Unit) tests that don't require LLM calls.
 """
 
-from typing import Any, Dict
-
 import pytest
 
 from kaizen_agents.journey.transitions import (
     AlwaysTrigger,
-    BaseTrigger,
     ConditionTrigger,
     IntentTrigger,
     Transition,

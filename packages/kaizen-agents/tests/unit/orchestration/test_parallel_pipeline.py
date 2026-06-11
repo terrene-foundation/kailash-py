@@ -8,9 +8,10 @@ Written BEFORE implementation (TDD approach).
 import time
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # ============================================================================
 # Test Fixtures
@@ -94,9 +95,9 @@ class TestParallelCreation:
 
     def test_parallel_factory_method_exists(self):
         """Test that Pipeline.parallel() factory method exists."""
-        assert hasattr(Pipeline, "parallel"), (
-            "Pipeline.parallel() factory method not found"
-        )
+        assert hasattr(
+            Pipeline, "parallel"
+        ), "Pipeline.parallel() factory method not found"
         assert callable(Pipeline.parallel), "Pipeline.parallel is not callable"
 
     def test_parallel_creates_parallel_pipeline(self, mock_agents):
@@ -105,9 +106,9 @@ class TestParallelCreation:
 
         assert pipeline is not None
         assert hasattr(pipeline, "run"), "ParallelPipeline must have run() method"
-        assert isinstance(pipeline, Pipeline), (
-            "ParallelPipeline must inherit from Pipeline"
-        )
+        assert isinstance(
+            pipeline, Pipeline
+        ), "ParallelPipeline must inherit from Pipeline"
 
     def test_parallel_requires_agents_parameter(self):
         """Test that parallel() requires agents parameter."""
@@ -149,9 +150,9 @@ class TestParallelConcurrentExecution:
         result = pipeline.run(input="test_data")
 
         # All agents should be executed
-        assert all(agent._call_count == 1 for agent in mock_agents), (
-            "All agents should be executed once"
-        )
+        assert all(
+            agent._call_count == 1 for agent in mock_agents
+        ), "All agents should be executed once"
 
         # Result should contain all outputs
         assert "results" in result
@@ -170,9 +171,9 @@ class TestParallelConcurrentExecution:
         duration = time.time() - start
 
         # Should complete in ~0.1s (parallel), not 0.4s (sequential)
-        assert duration < 0.2, (
-            f"Execution took {duration:.3f}s (should be <0.2s for parallel)"
-        )
+        assert (
+            duration < 0.2
+        ), f"Execution took {duration:.3f}s (should be <0.2s for parallel)"
         assert duration > 0.09, "Execution should take at least 0.1s (agent delay)"
 
         # Verify all agents executed

@@ -15,11 +15,9 @@ Pattern: Real BaseAgent instances + Real AsyncLocalRuntime execution
 No mocking - uses actual workflow execution and agent processing.
 """
 
-import asyncio
-from typing import List
-
 import pytest
 import pytest_asyncio
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen_agents.patterns.runtime import (
@@ -51,7 +49,9 @@ async def orchestration_runtime():
 
     yield runtime
 
-    await runtime.shutdown(mode="immediate")
+    # shutdown() takes graceful/timeout (no `mode` kwarg — pre-existing drift
+    # from the #75 structural split); immediate == non-graceful cancel.
+    await runtime.shutdown(graceful=False)
 
 
 @pytest_asyncio.fixture
@@ -217,8 +217,9 @@ async def test_execute_multi_agent_workflow_error_handling_graceful(
     assert results["completed_tasks"] >= 0  # At least some may succeed
     assert results["failed_tasks"] >= 0  # At least some may fail
 
-    # Verify results contain both completed and failed
+    # Verify every result carries a valid status field
     statuses = {result["status"] for result in results["results"]}
+    assert statuses <= {"completed", "failed"}, f"unexpected statuses: {statuses}"
 
     # Should have results for all tasks
     assert len(results["results"]) == 3

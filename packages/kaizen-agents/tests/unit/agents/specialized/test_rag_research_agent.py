@@ -105,7 +105,10 @@ class TestRAGResearchAgentInitialization:
 
     def test_full_config_object_initialization(self):
         """Test initialization with full config object."""
-        from kaizen_agents.agents.specialized.rag_research import RAGConfig, RAGResearchAgent
+        from kaizen_agents.agents.specialized.rag_research import (
+            RAGConfig,
+            RAGResearchAgent,
+        )
 
         config = RAGConfig(
             llm_provider="openai",
@@ -195,7 +198,7 @@ class TestRAGResearchAgentExecution:
         assert hasattr(agent, "run")
         # research method may or may not exist - run() is the primary API
         if hasattr(agent, "research"):
-            assert callable(getattr(agent, "research"))
+            assert callable(agent.research)
 
     def test_run_returns_dict(self):
         """Test that run method returns a dictionary."""
@@ -329,7 +332,7 @@ class TestRAGResearchAgentExecution:
         assert isinstance(result, dict)
         # Confidence may or may not be in result with mock provider
         if "confidence" in result and result["confidence"] is not None:
-            assert isinstance(result["confidence"], (int, float))
+            assert isinstance(result["confidence"], int | float)
             assert 0 <= result["confidence"] <= 1
 
     def test_retrieval_quality_metric(self):
@@ -342,7 +345,7 @@ class TestRAGResearchAgentExecution:
         # Should have retrieval quality metric if documents were retrieved
         if result.get("sources"):
             assert "retrieval_quality" in result
-            assert isinstance(result["retrieval_quality"], (int, float))
+            assert isinstance(result["retrieval_quality"], int | float)
 
     def test_session_id_support(self):
         """Test that session_id parameter is accepted."""
@@ -471,8 +474,8 @@ class TestRAGResearchAgentSignature:
 
     def test_signature_inherits_from_base(self):
         """Test that signature inherits from Signature base class."""
-        from kaizen_agents.agents.specialized.rag_research import RAGSignature
         from kaizen.signatures import Signature
+        from kaizen_agents.agents.specialized.rag_research import RAGSignature
 
         assert issubclass(RAGSignature, Signature)
 
@@ -557,8 +560,8 @@ class TestRAGResearchAgentErrorHandling:
 
     def test_no_documents_in_vector_store(self):
         """Test handling when vector store has no documents."""
-        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
         from kaizen.retrieval.vector_store import SimpleVectorStore
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
         # Create empty vector store
         empty_store = SimpleVectorStore()
@@ -713,8 +716,8 @@ class TestRAGResearchAgentVectorStore:
 
     def test_vector_store_can_be_provided(self):
         """Test that custom vector store can be provided."""
-        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
         from kaizen.retrieval.vector_store import SimpleVectorStore
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
         custom_store = SimpleVectorStore(embedding_model="custom-model")
         agent = RAGResearchAgent(vector_store=custom_store)
@@ -829,8 +832,8 @@ class TestRAGResearchAgentMemory:
 
     def test_vector_memory_used_when_enabled(self):
         """Test that VectorMemory is used when enabled."""
-        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
         from kaizen.memory.vector import VectorMemory
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
         memory_config = {"enabled": True, "top_k": 5, "similarity_threshold": 0.7}
 
@@ -897,8 +900,8 @@ class TestRAGResearchAgentBaseAgentIntegration:
 
     def test_agent_inherits_from_base_agent(self):
         """Test RAGResearchAgent inherits from BaseAgent."""
-        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
         from kaizen.core.base_agent import BaseAgent
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
         agent = RAGResearchAgent()
 
@@ -906,8 +909,8 @@ class TestRAGResearchAgentBaseAgentIntegration:
 
     def test_agent_uses_async_single_shot_strategy(self):
         """Test that agent uses MultiCycleStrategy by default."""
-        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
         from kaizen.strategies.multi_cycle import MultiCycleStrategy
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
         agent = RAGResearchAgent(llm_provider="mock")
 

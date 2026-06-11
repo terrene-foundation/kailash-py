@@ -120,8 +120,8 @@ class TestReActAgentInitialization:
 
     def test_uses_multi_cycle_strategy(self):
         """Test that ReActAgent uses MultiCycleStrategy (NOT AsyncSingleShotStrategy)."""
-        from kaizen_agents.agents.specialized.react import ReActAgent
         from kaizen.strategies.multi_cycle import MultiCycleStrategy
+        from kaizen_agents.agents.specialized.react import ReActAgent
 
         agent = ReActAgent()
 
@@ -441,8 +441,8 @@ class TestReActAgentTypeHints:
 
     def test_agent_inherits_from_base_agent(self):
         """Test ReActAgent inherits from BaseAgent."""
-        from kaizen_agents.agents.specialized.react import ReActAgent
         from kaizen.core.base_agent import BaseAgent
+        from kaizen_agents.agents.specialized.react import ReActAgent
 
         agent = ReActAgent()
 

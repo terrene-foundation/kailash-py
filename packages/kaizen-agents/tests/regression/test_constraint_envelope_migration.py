@@ -13,8 +13,6 @@ Validates that:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from kailash.trust.pact.config import (
@@ -25,7 +23,6 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. Backward-compatible import
@@ -181,7 +178,9 @@ class TestGovernedSupervisorEnvelopeIntegration:
         from kailash.trust import ConfidentialityLevel
         from kaizen_agents.supervisor import GovernedSupervisor
 
-        sup = GovernedSupervisor(model="test-model", budget_usd=5.0, data_clearance="restricted")
+        sup = GovernedSupervisor(
+            model="test-model", budget_usd=5.0, data_clearance="restricted"
+        )
         env = sup.envelope
         assert env.confidentiality_clearance == ConfidentialityLevel.RESTRICTED
 

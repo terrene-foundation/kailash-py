@@ -25,7 +25,10 @@ import os
 import pytest
 
 try:
-    from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+    from kaizen_agents.agents.specialized.tree_of_thoughts import (
+        ToTAgent,
+        ToTAgentConfig,
+    )
 except ImportError:
     pytest.skip("ToT agent not yet implemented", allow_module_level=True)
 
@@ -116,7 +119,7 @@ def test_tot_evaluation_accuracy_openai():
     # Each evaluation should have valid score
     for evaluation in result["evaluations"]:
         assert "score" in evaluation
-        assert isinstance(evaluation["score"], (int, float))
+        assert isinstance(evaluation["score"], int | float)
         assert 0 <= evaluation["score"] <= 1
 
     # Best path should have highest score
