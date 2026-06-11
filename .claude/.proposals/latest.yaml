@@ -1,6 +1,13 @@
 source_repo: kailash-py
 codify_date: '2026-05-18'
-status: pending_review
+status: reviewed
+reviewed_date: 2026-06-11
+# Gate-1 review (2026-06-11, loom): user-approved classification.
+# 19 entries: 13 GLOBAL, 2 VARIANT-py (ml-doc-real-api adopted; featurestore-cutover SUPERSEDED), 4 deferred/withdrawn. verify-claims authored as NEW path-scoped rule (git.md-extension duplicate superseded); doc-api rule folded into spec-accuracy.md (tool deferred to cross-SDK issue).
+# Disclosure: surface scrubbed to 0 findings (receipts in loom session);
+# placement lands via loom feat/gate1-ingest-2026-06-11; status flips to
+# `distributed` when the next /sync cycle carries the placed artifacts.
+
 codify_session: 'Session 2026-05-18 — /codify of issue #1086 ("4 root-cause fixes from
 
   Wave C SessionEnd hook noise audit"). Originating evidence:

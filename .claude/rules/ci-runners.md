@@ -126,7 +126,7 @@ on:
 
 ### 6. Zombie-Job Cancellation Protocol
 
-When a job on a self-hosted runner (e.g. `jacks-mac-studio`, `esperies-mini`, `esperie-linux-arm`) remains `in_progress` for >2× its normal completion time, it is a zombie — the runner process is stuck (network drop, hung test, pip/poetry lock) or the worker crashed without reporting to the dispatcher. From the dispatcher's perspective the runner slot stays `busy: true`, blocking every subsequent job queued for that runner's label.
+When a job on a self-hosted runner (e.g. `<runner-host-1>`, `<runner-host-2>`, `<runner-label-arm>`) remains `in_progress` for >2× its normal completion time, it is a zombie — the runner process is stuck (network drop, hung test, pip/poetry lock) or the worker crashed without reporting to the dispatcher. From the dispatcher's perspective the runner slot stays `busy: true`, blocking every subsequent job queued for that runner's label.
 
 ```bash
 # DO — diagnose then cancel, kickstart if the worker itself is wedged
@@ -240,7 +240,7 @@ jobs:
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' &&
        github.event.inputs.target == 'publish-wheels')
-    runs-on: esperie-linux-arm
+    runs-on: <runner-label-arm>
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -265,7 +265,7 @@ on:
     tags: ["v*"]
 jobs:
   publish-wheels:
-    runs-on: esperie-linux-arm
+    runs-on: <runner-label-arm>
     steps:
       - uses: actions/checkout@v4
       - run: python -m build --wheel
