@@ -181,6 +181,9 @@ class WorkflowServer:
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
+        # Per-workflow API wrappers, tracked so their runtimes are released on
+        # close() (issue #1285 — each WorkflowAPI builds its own AsyncLocalRuntime).
+        self._workflow_apis: dict[str, "WorkflowAPI"] = {}
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.runtime = runtime
         self._rate_limiter = _SignalQueryRateLimiter()
@@ -595,6 +598,25 @@ class WorkflowServer:
                     content={"error": "Workflow or query not found"},
                 )
 
+    def close(self) -> None:
+        """Release per-workflow API runtimes (issue #1285).
+
+        Each ``register_workflow`` builds a ``WorkflowAPI`` that owns its own
+        ``AsyncLocalRuntime``; without this teardown those runtimes leak and emit
+        ``ResourceWarning: Unclosed AsyncLocalRuntime`` at GC. Idempotent.
+        """
+        for name, workflow_api in getattr(self, "_workflow_apis", {}).items():
+            try:
+                workflow_api.close()
+            except Exception as exc:  # pragma: no cover - teardown best-effort
+                logger.debug(
+                    "Error closing WorkflowAPI for '%s': %s: %s",
+                    name,
+                    type(exc).__name__,
+                    exc,
+                )
+        self._workflow_apis = {}
+
     def register_workflow(
         self,
         name: str,
@@ -626,6 +648,8 @@ class WorkflowServer:
 
         # Create workflow API wrapper
         workflow_api = WorkflowAPI(workflow)
+        # Track it so its runtime is released on close() (issue #1285).
+        self._workflow_apis[name] = workflow_api
 
         # Register workflow endpoints with prefix
         prefix = f"/workflows/{name}"

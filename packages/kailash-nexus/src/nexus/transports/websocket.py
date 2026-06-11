@@ -252,12 +252,22 @@ class WebSocketTransport(Transport):
         self._connections.clear()
 
         # Release shared runtime (same pattern as MCPTransport)
+        self.close()
+
+        self._server = None
+
+    def close(self) -> None:
+        """Synchronously release the lazily-acquired shared runtime (#1285).
+
+        ``_get_shared_runtime`` acquires/creates ``_shared_runtime`` during
+        handler dispatch; without this sync release the runtime leaks when the
+        owning Nexus is torn down via ``close()`` rather than ``stop()``.
+        Idempotent.
+        """
         if self._shared_runtime is not None:
             if hasattr(self._shared_runtime, "release"):
                 self._shared_runtime.release()
             self._shared_runtime = None
-
-        self._server = None
         logger.info("WebSocketTransport stopped")
 
     def on_handler_registered(self, handler_def: HandlerDef) -> None:

@@ -116,10 +116,20 @@ class MCPTransport(Transport):
             self._thread = None
         self._server = None
         # Release shared runtime (NX-01 fix: prevent connection leak)
-        if hasattr(self, "_shared_runtime") and self._shared_runtime is not None:
+        self.close()
+        logger.info("MCPTransport stopped")
+
+    def close(self) -> None:
+        """Synchronously release the lazily-acquired shared runtime (#1285).
+
+        ``_get_shared_runtime`` acquires/creates ``_shared_runtime`` on first
+        tool invocation; without this sync release the runtime leaks when the
+        owning Nexus is torn down via ``close()`` rather than ``stop()``.
+        Idempotent.
+        """
+        if getattr(self, "_shared_runtime", None) is not None:
             self._shared_runtime.release()
             self._shared_runtime = None
-        logger.info("MCPTransport stopped")
 
     def on_handler_registered(self, handler_def: HandlerDef) -> None:
         """Hot-register a new MCP tool for a handler added at runtime."""

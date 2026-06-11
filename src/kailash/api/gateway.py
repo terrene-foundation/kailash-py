@@ -142,6 +142,10 @@ class WorkflowAPIGateway:
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
+        # Per-workflow API wrappers, tracked so their runtimes are released on
+        # shutdown/close() (issue #1285 — each WorkflowAPI builds its own
+        # AsyncLocalRuntime that otherwise leaks at GC).
+        self._workflow_apis: dict[str, "WorkflowAPI"] = {}
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
         # Proxy HTTP client (created lazily on first proxied request)
@@ -169,6 +173,7 @@ class WorkflowAPIGateway:
             await drive_router_lifespan_shutdown(app)
             if self._proxy_client:
                 await self._proxy_client.aclose()
+            self._close_workflow_apis()
             self.executor.shutdown(wait=True)
 
         self.app = FastAPI(
@@ -240,6 +245,28 @@ class WorkflowAPIGateway:
             logger.warning(f"MCP health check failed for {name}: {exc}")
             return "unhealthy"
         return "unknown"
+
+    def _close_workflow_apis(self) -> None:
+        """Release per-workflow API runtimes (issue #1285). Idempotent."""
+        for name, workflow_api in getattr(self, "_workflow_apis", {}).items():
+            try:
+                workflow_api.close()
+            except Exception as exc:  # pragma: no cover - teardown best-effort
+                logger.debug(
+                    "Error closing WorkflowAPI for '%s': %s: %s",
+                    name,
+                    type(exc).__name__,
+                    exc,
+                )
+        self._workflow_apis = {}
+
+    def close(self) -> None:
+        """Synchronously release per-workflow API runtimes (issue #1285).
+
+        The async lifespan shutdown also performs this release; ``close()`` is
+        the teardown path for a gateway constructed but never served.
+        """
+        self._close_workflow_apis()
 
     def _register_root_endpoints(self):
         """Register gateway-level endpoints."""
@@ -452,6 +479,8 @@ class WorkflowAPIGateway:
             version=version,
             description=description or f"Workflow: {name}",
         )
+        # Track it so its runtime is released on shutdown/close() (issue #1285).
+        self._workflow_apis[name] = workflow_api
 
         # Mount the workflow app as a sub-application
         self.app.mount(f"/{name}", workflow_api.app)

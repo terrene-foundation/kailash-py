@@ -166,7 +166,13 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         self._register_enterprise_endpoints()
 
     def close(self) -> None:
-        """Release runtime reference."""
+        """Release runtime reference and cascade to per-workflow API runtimes.
+
+        Closes child ``WorkflowAPI`` wrappers first (issue #1285), then releases
+        this server's own acquired runtime reference.
+        """
+        # Cascade to per-workflow API runtimes (base WorkflowServer.close()).
+        super().close()
         if hasattr(self, "_async_runtime") and self._async_runtime is not None:
             if self._owns_runtime:
                 self._async_runtime.close()
