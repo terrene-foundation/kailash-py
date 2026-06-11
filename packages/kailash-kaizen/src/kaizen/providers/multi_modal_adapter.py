@@ -520,8 +520,13 @@ def get_multi_modal_adapter(
         ValueError: If no adapter available
     """
     # Check cache — kwargs participate so adapters configured differently
-    # (e.g. different models) do not collide on one cache slot.
-    cache_key = f"{provider}:{prefer_local}:{sorted(kwargs.items())!r}"
+    # (e.g. different models) do not collide on one cache slot. api_key is
+    # excluded: it must never be embedded in a plain-string key (it is also
+    # popped from kwargs before adapter construction below).
+    cache_key = (
+        f"{provider}:{prefer_local}:"
+        f"{sorted((k, v) for k, v in kwargs.items() if k != 'api_key')!r}"
+    )
     if cache_key in _adapter_cache:
         return _adapter_cache[cache_key]
 
