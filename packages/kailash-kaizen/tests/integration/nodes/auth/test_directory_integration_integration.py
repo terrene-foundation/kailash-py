@@ -19,6 +19,7 @@ import json
 import os
 
 import pytest
+
 from kaizen.nodes.auth.directory_integration import DirectoryIntegrationNode
 
 # Skip if USE_REAL_PROVIDERS is not enabled
@@ -530,11 +531,16 @@ class TestDirectoryIntegrationNodeIntegration:
 
         Cost: ~$0.000 (tests error path) | Expected Duration: 1-2 seconds
         """
+        # provider= is passed explicitly: detect_provider now FAILS CLOSED on
+        # unrecognized models (ProviderUndetectable at construction), and this
+        # test's intent is the RUNTIME fallback path — construction must
+        # succeed so the AI-search error path is actually exercised.
         node = DirectoryIntegrationNode(
             name="test_dir_fallback",
             directory_type="ldap",
-            ai_model="invalid-model-name",  # Will cause error
+            ai_model="invalid-model-name",  # Will cause error at AI-call time
             ai_temperature=0.3,
+            provider="mock",
         )
 
         # This should fall back to default search
