@@ -9,12 +9,15 @@ Following Phase 4 requirements: Provider abstraction, auto-selection, cost track
 """
 
 import inspect
+import logging
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from kaizen.signatures.multi_modal import AudioField, ImageField
+
+logger = logging.getLogger(__name__)
 
 
 class MultiModalAdapter(ABC):
@@ -427,8 +430,8 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
         # Process image
         if image is not None:
             if self.warn_before_call:
-                print(
-                    f"⚠️  OpenAI API call: ~${self.VISION_COST_PER_IMAGE:.3f} for vision"
+                logger.warning(
+                    "OpenAI API call: ~$%.3f for vision", self.VISION_COST_PER_IMAGE
                 )
             results.update(
                 self._call_openai_vision(image, prompt or "Describe", **kwargs)
@@ -437,8 +440,8 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
         # Process audio
         if audio is not None:
             if self.warn_before_call:
-                print(
-                    f"⚠️  OpenAI API call: ~${self.AUDIO_COST_PER_MINUTE:.3f}/min for audio"
+                logger.warning(
+                    "OpenAI API call: ~$%.3f/min for audio", self.AUDIO_COST_PER_MINUTE
                 )
             results.update(self._call_openai_whisper(audio, **kwargs))
 

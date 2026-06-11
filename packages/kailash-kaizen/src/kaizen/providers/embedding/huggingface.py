@@ -123,7 +123,12 @@ class HuggingFaceProvider(EmbeddingProvider):
             return embeddings
 
         except Exception as e:
-            logger.error("HuggingFace API error: %s", e, exc_info=True)
+            # Log the SANITIZED message (defense-in-depth: the raw exception
+            # could embed the Bearer header; the propagated error already
+            # routes through the sanitizer).
+            logger.error(
+                "HuggingFace API error: %s", sanitize_provider_error(e, "HuggingFace")
+            )
             raise RuntimeError(sanitize_provider_error(e, "HuggingFace"))
 
     def _embed_local(
