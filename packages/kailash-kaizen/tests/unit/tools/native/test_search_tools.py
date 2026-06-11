@@ -398,18 +398,27 @@ class TestWebFetchToolTextExtraction:
         # Should not contain script content in clean extraction
         # (depends on beautifulsoup availability)
 
-    def test_extract_text_beautifulsoup_not_installed(self):
-        """Test fallback when beautifulsoup not installed."""
-        tool = WebFetchTool()
+    def test_extract_text_beautifulsoup_not_installed(self, monkeypatch):
+        """bs4 missing raises a typed ImportError with install hint (#814).
+
+        The pre-#814 contract (silent fallback to raw HTML) was deliberately
+        inverted to a loud failure; this mirrors the canonical regression at
+        tests/regression/test_issue_814_bs4_loud_failure.py.
+        """
+        from kaizen.tools.native import search_tools
+
+        monkeypatch.setattr(search_tools, "_BeautifulSoup", None)
+        # Resolve WebFetchTool from the SAME module instance the patch
+        # targets: the sibling tools/native conftest purges
+        # kaizen.tools.native.* from sys.modules around other tests, so the
+        # file-top import and a fresh in-test import can be different module
+        # epochs (patching one while instantiating the other never raises).
+        tool = search_tools.WebFetchTool()
 
         html = "<html><body>Content</body></html>"
 
-        with patch("builtins.__import__", side_effect=ImportError):
-            with patch.dict("sys.modules", {"bs4": None}):
-                result = tool._extract_text(html)
-
-        # Should return raw HTML when bs4 not available
-        assert result == html
+        with pytest.raises(ImportError, match=r"kailash-kaizen\[web-search\]"):
+            tool._extract_text(html)
 
 
 class TestWebFetchToolContentLimits:

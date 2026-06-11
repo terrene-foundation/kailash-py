@@ -271,7 +271,13 @@ class TestWorkflowAdapter:
                 break
 
         assert agent_node is not None
-        assert "temperature" in agent_node.config
+        # temperature is routed into the declared generation_config dict by
+        # BaseAgent.to_workflow (top-level temperature is not a declared
+        # NodeParameter on LLMAgentNode and fails validation).
+        assert (
+            agent_node.config.get("generation_config", {}).get("temperature")
+            is not None
+        )
 
 
 class TestSystemPromptBuilding:

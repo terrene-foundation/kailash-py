@@ -96,7 +96,9 @@ class HuggingFaceProvider(EmbeddingProvider):
 
             api_key = os.getenv("HUGGINGFACE_API_KEY")
             headers = {"Authorization": f"Bearer {api_key}"}
-            api_url = f"https://api-inference.huggingface.co/models/{model}"
+            # Legacy api-inference.huggingface.co host is decommissioned (DNS
+            # NXDOMAIN); the router's hf-inference provider serves the same contract.
+            api_url = f"https://router.huggingface.co/hf-inference/models/{model}"
 
             embeddings = []
             for text in texts:

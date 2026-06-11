@@ -290,11 +290,10 @@ def test_huggingface_from_env_preset_shape(
     dep = huggingface_from_env_preset()
     assert dep.wire == WireProtocol.HuggingFaceInference
     assert dep.preset_name == "huggingface"
-    # Rust `presets.rs:459`:
-    #   `Endpoint::new("https://api-inference.huggingface.co")`.
-    assert (
-        str(dep.endpoint.base_url).rstrip("/") == "https://api-inference.huggingface.co"
-    )
+    # Legacy api-inference.huggingface.co was decommissioned (DNS NXDOMAIN);
+    # the preset now targets the Inference Providers router. Cross-SDK note:
+    # the Rust SDK preset pins the dead legacy host and needs the same fix.
+    assert str(dep.endpoint.base_url).rstrip("/") == "https://router.huggingface.co"
 
 
 def test_groq_from_env_preset_shape(

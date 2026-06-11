@@ -272,7 +272,7 @@ def test_perplexity_preset_free_function_matches_classmethod() -> None:
 def test_huggingface_preset_shape() -> None:
     d = LlmDeployment.huggingface("k", model="meta-llama/Llama-3.1-8B-Instruct")
     assert d.wire == WireProtocol.HuggingFaceInference
-    assert str(d.endpoint.base_url).startswith("https://api-inference.huggingface.co")
+    assert str(d.endpoint.base_url).startswith("https://router.huggingface.co")
     assert d.default_model == "meta-llama/Llama-3.1-8B-Instruct"
     assert isinstance(d.auth, ApiKeyBearer)
     assert d.auth.kind == ApiKeyHeaderKind.Authorization_Bearer

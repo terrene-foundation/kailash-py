@@ -456,13 +456,16 @@ def huggingface_preset(
     api_key: str,
     model: str,
     *,
-    base_url: str = "https://api-inference.huggingface.co",
-    path_prefix: str = "",
+    base_url: str = "https://router.huggingface.co",
+    path_prefix: str = "/hf-inference",
 ) -> LlmDeployment:
-    """HuggingFace Inference API.
+    """HuggingFace Inference API (Inference Providers router).
 
     Wire:     `HuggingFaceInference`
-    Endpoint: `https://api-inference.huggingface.co`
+    Endpoint: `https://router.huggingface.co/hf-inference` (the legacy
+              `api-inference.huggingface.co` host was decommissioned and no
+              longer resolves in DNS; the hf-inference provider on the
+              router serves the same `/models/{model}` contract)
     Auth:     `Authorization: Bearer <key>`
     """
     _validate_required_str(api_key, name="huggingface_preset.api_key")

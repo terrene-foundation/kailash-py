@@ -459,8 +459,10 @@ class TestAWSKMSKeyManager:
             with pytest.raises(ImportError, match="boto3 is required"):
                 AWSKMSKeyManager()
         else:
-            # boto3 present: init succeeds and wires a real KMS client
-            key_manager = AWSKMSKeyManager()
+            # boto3 present: init succeeds and wires a real KMS client.
+            # Explicit region keeps the test hermetic (no ambient AWS region
+            # or EC2 metadata lookup); client creation needs no credentials.
+            key_manager = AWSKMSKeyManager(region_name="us-east-1")
             assert key_manager._kms_client is not None
 
     def test_init_stores_pending_deletion_days(self):
