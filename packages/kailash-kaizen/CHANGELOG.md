@@ -2,6 +2,29 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased]
+
+### Changed — env-model discipline: provider config getters use documented default-model constants
+
+- **The nine `get_*_config()` functions in `kaizen.config.providers` no longer
+  hold inline hardcoded `default_model` literals** (`rules/env-models.md`,
+  FNEW-5). Each provider's final fallback is now a documented module-level
+  `DEFAULT_<PROVIDER>_MODEL` constant — provider-intrinsic (the caller has already
+  chosen the provider, so the default carries no lock-in), overridable via
+  `KAIZEN_<PROVIDER>_MODEL`, and deliberately **not** chained to the
+  provider-agnostic `KAIZEN_DEFAULT_MODEL` (chaining would reintroduce the 2.25.0
+  provider/model mismatch — e.g. a `claude-*` model returned under
+  `provider="openai"`). Zero-config `auto_detect_provider()` is unchanged.
+- **User-visible default refresh:** the stale Anthropic default
+  `claude-3-haiku-20240307` is refreshed to `claude-haiku-4-5`. Callers using the
+  bare `get_anthropic_config()` default (no `model=` arg AND no
+  `KAIZEN_ANTHROPIC_MODEL` env) now receive `claude-haiku-4-5`. Set
+  `KAIZEN_ANTHROPIC_MODEL` or pass `model=` to pin a specific model. Non-breaking
+  (signature and resolution order unchanged; only the final-fallback value moved).
+- New regression suite (`tests/regression/test_issue_fnew5_provider_intrinsic_defaults.py`)
+  locks default resolution, `KAIZEN_<PROVIDER>_MODEL` / `model=` precedence, and
+  the `KAIZEN_DEFAULT_MODEL` no-leak invariant across all nine providers.
+
 ## [2.25.1] — 2026-06-11 — hotfix: slim-core import contract for the autonomy hook system
 
 ### Fixed

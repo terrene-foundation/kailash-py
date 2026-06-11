@@ -68,6 +68,9 @@ class OpenAIVisionProvider(BaseDocumentProvider):
     """
 
     COST_PER_PAGE = 0.068  # $0.068 per page (approx for gpt-4o-mini)
+    # Provider-intrinsic default (FNEW-5 disposition, see config/providers.py):
+    # this provider IS OpenAI vision, so the pinned default carries no provider
+    # lock-in and is overridable via the `model=` constructor arg.
     DEFAULT_MODEL = "gpt-4o-mini"
 
     def __init__(

@@ -40,6 +40,43 @@ ProviderType = Literal[
 ]
 
 
+# ---------------------------------------------------------------------------
+# Provider-intrinsic default models (FNEW-5 disposition)
+#
+# These are the per-provider sensible defaults applied ONLY when a caller passes
+# no ``model=`` AND the per-provider override ``KAIZEN_<PROVIDER>_MODEL`` is unset.
+# They are NOT an ``env-models.md`` violation, for three structural reasons:
+#
+#   1. Provider-INTRINSIC — the caller has already selected the provider
+#      (``get_openai_config`` IS OpenAI), so the default carries no provider
+#      lock-in. The lock-in failure mode ``env-models.md`` targets lives in
+#      provider-AGNOSTIC code (the auth/security/compliance nodes), and was
+#      removed there by FNEW-4 (``nodes/_env_model.py::resolve_default_model``).
+#   2. Env-OVERRIDABLE — ``KAIZEN_<PROVIDER>_MODEL`` takes precedence, so
+#      per-environment selection and provider-version rotation are fully
+#      supported without touching code.
+#   3. NOT chained to ``KAIZEN_DEFAULT_MODEL`` — that variable is
+#      provider-agnostic; applying it inside a provider-specific getter would
+#      reintroduce the exact provider/model mismatch FNEW-4 eliminated (e.g. a
+#      ``claude-*`` model returned under ``provider="openai"`` → 401 on the wire).
+#      Embedding providers (cohere, huggingface) further require a non-chat
+#      default, so a global chat default would be wrong for them regardless.
+#
+# The module's zero-config contract (``auto_detect_provider``) depends on these
+# defaults resolving WITHOUT raising. Keep each value current; it is the one half
+# of the env-models concern (model-version rot) the env override cannot mitigate.
+# ---------------------------------------------------------------------------
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"  # fast, cost-effective
+DEFAULT_OLLAMA_MODEL = "llama3.2"  # commonly available local model
+DEFAULT_AZURE_MODEL = "gpt-4o"  # common Azure deployment
+DEFAULT_DOCKER_MODEL = "ai/llama3.2"  # local GPU-accelerated
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"  # fast, cost-effective
+DEFAULT_COHERE_MODEL = "embed-english-v3.0"  # embeddings (chat default N/A)
+DEFAULT_HUGGINGFACE_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # local embeddings
+DEFAULT_GOOGLE_MODEL = "gemini-2.0-flash"  # fast, efficient
+DEFAULT_PERPLEXITY_MODEL = "sonar"  # lightweight web-search model
+
+
 @dataclass
 class ProviderConfig:
     """Configuration for a specific LLM provider."""
@@ -256,10 +293,9 @@ def get_openai_config(
         )
     base_url = _validate_base_url(base_url)
 
-    default_model = "gpt-4o-mini"  # Fast, cost-effective model
     return ProviderConfig(
         provider="openai",
-        model=model or os.getenv("KAIZEN_OPENAI_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
         api_key=api_key,
         base_url=base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "30")),
@@ -289,14 +325,13 @@ def get_ollama_config(
             "Ollama is not available. Install and start Ollama: https://ollama.ai"
         )
 
-    default_model = "llama3.2"  # Using llama3.2 as it's more commonly available
     resolved_base_url = base_url or os.getenv(
         "OLLAMA_BASE_URL", "http://localhost:11434"
     )
 
     return ProviderConfig(
         provider="ollama",
-        model=model or os.getenv("KAIZEN_OLLAMA_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
         base_url=resolved_base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),  # Ollama may need more time
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -345,10 +380,9 @@ def get_azure_config(
             "environment variables, or pass api_key and base_url parameters."
         )
 
-    default_model = "gpt-4o"  # Common Azure deployment
     return ProviderConfig(
         provider="azure",
-        model=model or os.getenv("KAIZEN_AZURE_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_AZURE_MODEL", DEFAULT_AZURE_MODEL),
         api_key=resolved_api_key,
         base_url=resolved_base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),
@@ -376,7 +410,6 @@ def get_docker_config(model: Optional[str] = None) -> ProviderConfig:
             "docker desktop enable model-runner --tcp 12434"
         )
 
-    default_model = "ai/llama3.2"
     base_url = os.getenv(
         "DOCKER_MODEL_RUNNER_URL",
         "http://localhost:12434/engines/llama.cpp/v1",
@@ -384,7 +417,7 @@ def get_docker_config(model: Optional[str] = None) -> ProviderConfig:
 
     return ProviderConfig(
         provider="docker",
-        model=model or os.getenv("KAIZEN_DOCKER_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_DOCKER_MODEL", DEFAULT_DOCKER_MODEL),
         base_url=base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "120")),  # Local models may be slower
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -398,7 +431,7 @@ def get_anthropic_config(
     """Get Anthropic provider configuration.
 
     Args:
-        model: Optional model override (default: claude-3-haiku-20240307)
+        model: Optional model override (default: claude-haiku-4-5)
         api_key: Optional API key override (default: reads from ANTHROPIC_API_KEY env var)
     """
     api_key = _validate_api_key(api_key) or os.getenv("ANTHROPIC_API_KEY")
@@ -408,10 +441,9 @@ def get_anthropic_config(
             "or pass api_key parameter."
         )
 
-    default_model = "claude-3-haiku-20240307"  # Fast, cost-effective
     return ProviderConfig(
         provider="anthropic",
-        model=model or os.getenv("KAIZEN_ANTHROPIC_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL),
         api_key=api_key,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "30")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -435,10 +467,9 @@ def get_cohere_config(
             "or pass api_key parameter."
         )
 
-    default_model = "embed-english-v3.0"
     return ProviderConfig(
         provider="cohere",
-        model=model or os.getenv("KAIZEN_COHERE_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_COHERE_MODEL", DEFAULT_COHERE_MODEL),
         api_key=api_key,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "30")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -455,11 +486,10 @@ def get_huggingface_config(
         model: Optional model override
         api_key: Optional API key override (default: reads from HUGGINGFACE_API_KEY)
     """
-    default_model = "sentence-transformers/all-MiniLM-L6-v2"
     resolved_api_key = _validate_api_key(api_key) or os.getenv("HUGGINGFACE_API_KEY")
     return ProviderConfig(
         provider="huggingface",
-        model=model or os.getenv("KAIZEN_HUGGINGFACE_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_HUGGINGFACE_MODEL", DEFAULT_HUGGINGFACE_MODEL),
         api_key=resolved_api_key,  # Optional for local
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -496,10 +526,9 @@ def get_google_config(
             "or GOOGLE_CLOUD_PROJECT environment variable, or pass api_key parameter."
         )
 
-    default_model = "gemini-2.0-flash"  # Fast, efficient model
     return ProviderConfig(
         provider="google",
-        model=model or os.getenv("KAIZEN_GOOGLE_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_GOOGLE_MODEL", DEFAULT_GOOGLE_MODEL),
         api_key=api_key,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "30")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
@@ -533,10 +562,9 @@ def get_perplexity_config(
             "or pass api_key parameter."
         )
 
-    default_model = "sonar"  # Lightweight, fast model
     return ProviderConfig(
         provider="perplexity",
-        model=model or os.getenv("KAIZEN_PERPLEXITY_MODEL", default_model),
+        model=model or os.getenv("KAIZEN_PERPLEXITY_MODEL", DEFAULT_PERPLEXITY_MODEL),
         api_key=api_key,
         base_url="https://api.perplexity.ai",
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),  # Web search may take longer

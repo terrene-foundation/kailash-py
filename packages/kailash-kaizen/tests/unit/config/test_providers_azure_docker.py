@@ -26,27 +26,44 @@ class TestCheckAzureAvailable:
     """Tests for check_azure_available function."""
 
     def test_returns_true_with_both_credentials(self, monkeypatch):
-        """Should return True when both env vars set."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        """Should return True when both canonical env vars set."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         assert check_azure_available() is True
 
     def test_returns_false_missing_endpoint(self, monkeypatch):
-        """Should return False when endpoint missing."""
-        monkeypatch.delenv("AZURE_AI_INFERENCE_ENDPOINT", raising=False)
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        """Should return False when endpoint missing (all endpoint variants)."""
+        for var in (
+            "AZURE_ENDPOINT",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_AI_INFERENCE_ENDPOINT",
+        ):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         assert check_azure_available() is False
 
     def test_returns_false_missing_api_key(self, monkeypatch):
-        """Should return False when API key missing."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.delenv("AZURE_AI_INFERENCE_API_KEY", raising=False)
+        """Should return False when API key missing (all key variants)."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        for var in (
+            "AZURE_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_AI_INFERENCE_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
         assert check_azure_available() is False
 
     def test_returns_false_both_missing(self, monkeypatch):
-        """Should return False when both missing."""
-        monkeypatch.delenv("AZURE_AI_INFERENCE_ENDPOINT", raising=False)
-        monkeypatch.delenv("AZURE_AI_INFERENCE_API_KEY", raising=False)
+        """Should return False when both missing (all variants cleared)."""
+        for var in (
+            "AZURE_ENDPOINT",
+            "AZURE_API_KEY",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_AI_INFERENCE_ENDPOINT",
+            "AZURE_AI_INFERENCE_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
         assert check_azure_available() is False
 
 
@@ -109,9 +126,9 @@ class TestGetAzureConfig:
     """Tests for get_azure_config function."""
 
     def test_success_with_credentials(self, monkeypatch):
-        """Should return valid config when credentials set."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        """Should return valid config when canonical credentials set."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         config = get_azure_config()
         assert config.provider == "azure"
@@ -121,25 +138,50 @@ class TestGetAzureConfig:
 
     def test_custom_model(self, monkeypatch):
         """Should use custom model when specified."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         config = get_azure_config(model="gpt-4-turbo")
         assert config.model == "gpt-4-turbo"
 
     def test_model_from_env(self, monkeypatch):
         """Should use model from environment variable."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.setenv("KAIZEN_AZURE_MODEL", "llama-3.1-70b")
 
         config = get_azure_config()
         assert config.model == "llama-3.1-70b"
 
+    def test_legacy_env_vars_emit_deprecation_warning(self, monkeypatch):
+        """Legacy AZURE_AI_INFERENCE_* vars still resolve, but MUST warn.
+
+        Asserts the deprecation contract explicitly (and consumes the warning so
+        it does not pollute the suite warning summary). Canonical vars are cleared
+        so resolution falls through to the legacy names.
+        """
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_API_KEY", raising=False)
+        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            config = get_azure_config()
+        assert config.provider == "azure"
+        assert config.base_url == "https://test.azure.com"
+        assert config.api_key == "test-key"
+
     def test_raises_without_credentials(self, monkeypatch):
         """Should raise ConfigurationError when credentials missing."""
-        monkeypatch.delenv("AZURE_AI_INFERENCE_ENDPOINT", raising=False)
-        monkeypatch.delenv("AZURE_AI_INFERENCE_API_KEY", raising=False)
+        for var in (
+            "AZURE_ENDPOINT",
+            "AZURE_API_KEY",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_AI_INFERENCE_ENDPOINT",
+            "AZURE_AI_INFERENCE_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
 
         with pytest.raises(ConfigurationError, match="Azure not configured"):
             get_azure_config()
@@ -227,8 +269,8 @@ class TestGetProviderConfig:
 
     def test_azure_provider(self, monkeypatch):
         """Should return Azure config when specified."""
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         config = get_provider_config(provider="azure")
         assert config.provider == "azure"
@@ -274,8 +316,8 @@ class TestAutoDetectProvider:
     def test_detection_order_azure_second(self, monkeypatch):
         """Should detect Azure second when OpenAI not available."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.setenv("AZURE_AI_INFERENCE_ENDPOINT", "https://test.azure.com")
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         config = auto_detect_provider()
         assert config.provider == "azure"
