@@ -373,6 +373,362 @@ def parse_answer_quality_response(response=None):
     return {"scores": _parse_score_array(response, "overall_quality")}
 
 
+# ---------------------------------------------------------------------------
+# Deterministic COMPUTE functions (#1117/#1123/#1118 root-cause fix — Wave 3
+# Shard S3). These replace the prior code-string PythonCodeNode codegen the
+# RAGEvaluationNode inlined for test_executor / context_evaluator /
+# metric_aggregator. Each is a real module-level function wired via
+# `PythonCodeNode.from_function(...)`: the node publishes its `return` value on
+# the FLAT `result` port (the runtime resolves dotted downstream reads like
+# `result.test_results` into the published dict), so:
+#
+#   - #1117 (publish-nothing): a real `return {...}` always binds the published
+#     `result` port — no module-scope-assignment + `del` gymnastics.
+#   - #1123 (f-string brace-escape): no `{{ }}` escaping; real dict literals.
+#   - #1118 (import-trap): `from datetime import datetime` / `import statistics`
+#     run as REAL imports inside the function body — no separate-(globals,locals)
+#     exec() namespace split that hid module-scope imports from the closure.
+#
+# These are deterministic metric computation + honest pass-through (NOT agent
+# decision-making per rules/agent-reasoning.md): no LLM reasoning, no if-else
+# intent routing. The LLM judges score; these helpers aggregate the parsed
+# scores. Missing inputs resolve to HONEST raises / empty defaults
+# (zero-tolerance Rule 2) — never fabricated answers or scores.
+# ---------------------------------------------------------------------------
+
+
+def collect_rag_results(test_queries=None):
+    """Pass through the caller-provided RAG outputs for downstream judging.
+
+    Provably-correct remediation: this JUDGES results the caller's RAG system
+    already produced — it does NOT fabricate them. Each ``test_queries`` entry
+    MUST carry the caller's real ``generated_answer`` + ``retrieved_contexts``
+    (a sandboxed node cannot invoke an arbitrary passed RAG node; running the
+    system-under-test is ``RAGBenchmarkNode``'s job). No fabricated answers, no
+    fabricated contexts, no synthetic timings.
+
+    Returns ``{"test_results", "total_tests", "avg_execution_time"}`` on the flat
+    ``result`` port. Raises ``ValueError`` (does NOT fabricate) when a test entry
+    is missing the real answer / contexts so incoherent input fails loudly.
+    """
+    from datetime import datetime as _datetime_class
+
+    if not isinstance(test_queries, list):
+        test_queries = []
+
+    test_results = []
+    missing = []
+
+    for i, test_case in enumerate(test_queries):
+        if not isinstance(test_case, dict):
+            missing.append((i, "non-dict-test-case"))
+            continue
+        query = test_case.get("query", "")
+        reference = test_case.get("reference", "")
+
+        # Honest contract: the caller ran their RAG system and supplies the real
+        # answer + contexts. Raise (not fabricate) when absent.
+        if "generated_answer" not in test_case:
+            missing.append((i, "generated_answer"))
+            continue
+        if "retrieved_contexts" not in test_case:
+            missing.append((i, "retrieved_contexts"))
+            continue
+
+        generated_answer = test_case["generated_answer"]
+        retrieved_contexts = test_case["retrieved_contexts"]
+        execution_time = test_case.get("execution_time", 0.0)
+
+        test_results.append(
+            {
+                "test_id": i,
+                "query": query,
+                "reference_answer": reference,
+                "generated_answer": generated_answer,
+                "retrieved_contexts": retrieved_contexts,
+                "execution_time": execution_time,
+                "timestamp": _datetime_class.now().isoformat(),
+            }
+        )
+
+    if missing:
+        raise ValueError(
+            "RAGEvaluationNode judges already-run RAG results: each "
+            "test_queries entry MUST carry 'generated_answer' and "
+            "'retrieved_contexts'. Missing on entries: " + repr(missing) + ". "
+            "Run your RAG system first (or use RAGBenchmarkNode to execute + "
+            "measure the system)."
+        )
+
+    return {
+        "test_results": test_results,
+        "total_tests": len(test_queries),
+        "avg_execution_time": (
+            sum(r["execution_time"] for r in test_results) / len(test_results)
+            if test_results
+            else 0.0
+        ),
+    }
+
+
+def _evaluate_context_precision(test_result: Any) -> dict:
+    """Evaluate the precision of one test's retrieved contexts.
+
+    Deterministic retrieval-quality heuristic over the caller's REAL retrieval
+    scores (P@k, MRR, diversity, avg-relevance). NOT an LLM judgment — the
+    LLM-based relevance judgment is the separate relevance_evaluator. Returns the
+    per-test ``{"context_metrics": {...}}`` dict (or the zeroed early-exit shape
+    when no contexts exist).
+    """
+    if not isinstance(test_result, dict):
+        test_result = {}
+    contexts = test_result.get("retrieved_contexts", []) or []
+    if not isinstance(contexts, list):
+        contexts = []
+
+    if not contexts:
+        return {
+            "context_precision": 0.0,
+            "context_recall": 0.0,
+            "context_ranking_quality": 0.0,
+        }
+
+    # Deterministic relevance heuristic: a context counts as relevant at k when
+    # its caller-provided retrieval score clears 0.7 (a real threshold over real
+    # scores, NOT a fabricated judgment).
+    precision_at_k = {}
+    for k in [1, 3, 5, 10]:
+        if k <= len(contexts):
+            relevant_at_k = sum(
+                1
+                for c in contexts[:k]
+                if isinstance(c, dict) and c.get("score", 0) > 0.7
+            )
+            precision_at_k[f"P@{k}"] = relevant_at_k / k
+
+    # MRR (Mean Reciprocal Rank).
+    first_relevant_rank = None
+    for i, ctx in enumerate(contexts):
+        if isinstance(ctx, dict) and ctx.get("score", 0) > 0.7:
+            first_relevant_rank = i + 1
+            break
+    mrr = 1.0 / first_relevant_rank if first_relevant_rank else 0.0
+
+    # Context diversity.
+    unique_terms: set = set()
+    for ctx in contexts:
+        if isinstance(ctx, dict):
+            unique_terms.update((ctx.get("content") or "").lower().split()[:20])
+    diversity_score = len(unique_terms) / (len(contexts) * 20) if contexts else 0
+
+    avg_relevance_score = sum(
+        c.get("score", 0) for c in contexts if isinstance(c, dict)
+    ) / len(contexts)
+
+    return {
+        "context_metrics": {
+            "precision_at_k": precision_at_k,
+            "mrr": mrr,
+            "diversity_score": diversity_score,
+            "avg_relevance_score": avg_relevance_score,
+            "context_count": len(contexts),
+        }
+    }
+
+
+def evaluate_context_metrics(test_data=None):
+    """Map ``_evaluate_context_precision`` over every test in ``test_data``.
+
+    ``test_data`` is the ``test_executor`` ``result.test_results`` LIST. Returns
+    ``{"context_metrics": [...]}`` on the flat ``result`` port — a LIST of per-test
+    context-metric dicts the aggregator indexes positionally. A single-test
+    arrival as a bare dict is normalized to a one-element list.
+    """
+    if isinstance(test_data, list):
+        rows = test_data
+    elif test_data is None:
+        rows = []
+    else:
+        rows = [test_data]
+    context_metrics = [
+        _evaluate_context_precision(t).get("context_metrics", {}) for t in rows
+    ]
+    return {"context_metrics": context_metrics}
+
+
+def aggregate_evaluation_metrics(
+    test_results=None,
+    faithfulness_scores=None,
+    relevance_scores=None,
+    context_metrics=None,
+    answer_quality_scores=None,
+    metrics=None,
+):
+    """Aggregate all evaluation metrics over the PARSED per-test score lists.
+
+    The judge inputs are PARSED per-test score LISTS (the response-parser nodes
+    did ``response -> .content -> json.loads -> list``). ``faithfulness_scores``
+    is therefore a LIST of per-test dicts like ``[{"faithfulness_score": 0.8},
+    ...]`` aligned 1:1 with ``test_results``. A flagged entry carries
+    ``parse_error`` + ``<key>: None`` — that is NOT a real score, so it is
+    EXCLUDED from the numeric mean (never counted as a fabricated 0 —
+    zero-tolerance Rule 2). ``metrics`` is the build-time RAGEvaluationNode config
+    bound through a thin closure. Returns ``{"evaluation_summary": {...}}``.
+    """
+    import statistics
+    from datetime import datetime as _datetime_class
+
+    if not isinstance(test_results, list):
+        test_results = []
+    if metrics is None:
+        metrics = []
+
+    def _score_at(score_list, idx, key):
+        """Real per-test score, or None when missing / flagged / malformed."""
+        if not isinstance(score_list, list) or idx >= len(score_list):
+            return None
+        entry = score_list[idx]
+        if not isinstance(entry, dict):
+            return None
+        if entry.get("parse_error") is not None:
+            return None  # flagged — honest gap, never a fabricated 0
+        value = entry.get(key)
+        return value if isinstance(value, (int, float)) else None
+
+    per_test = {
+        "faithfulness": [],
+        "relevance": [],
+        "context_precision": [],
+        "answer_quality": [],
+        "execution_time": [],
+    }
+
+    for i, test in enumerate(test_results):
+        per_test["faithfulness"].append(
+            _score_at(faithfulness_scores, i, "faithfulness_score")
+        )
+        per_test["relevance"].append(_score_at(relevance_scores, i, "relevance_score"))
+        ctx_score = None
+        if isinstance(context_metrics, list) and i < len(context_metrics):
+            ctx_entry = context_metrics[i]
+            if isinstance(ctx_entry, dict):
+                ctx_score = ctx_entry.get("context_metrics", {}).get(
+                    "avg_relevance_score"
+                )
+                if ctx_score is None:
+                    # context_metrics may already be the inner dict (flat shape).
+                    ctx_score = ctx_entry.get("avg_relevance_score")
+        per_test["context_precision"].append(
+            ctx_score if isinstance(ctx_score, (int, float)) else None
+        )
+        per_test["execution_time"].append(
+            test.get("execution_time", 0) if isinstance(test, dict) else 0
+        )
+
+        if answer_quality_scores is not None:
+            per_test["answer_quality"].append(
+                _score_at(answer_quality_scores, i, "overall_quality")
+            )
+
+    # Aggregate statistics over the REAL (non-None) scores only — a flagged /
+    # missing per-test entry is excluded from the mean rather than counted as a
+    # fabricated zero. Surface the gap count for honesty.
+    aggregate_stats = {}
+    flagged_counts = {}
+    for metric, raw in per_test.items():
+        valid = [s for s in raw if s is not None]
+        flagged = sum(1 for s in raw if s is None)
+        if flagged:
+            flagged_counts[metric] = flagged
+        if valid:
+            aggregate_stats[metric] = {
+                "mean": statistics.mean(valid),
+                "median": statistics.median(valid),
+                "std_dev": statistics.stdev(valid) if len(valid) > 1 else 0,
+                "min": min(valid),
+                "max": max(valid),
+                "scores": valid,
+            }
+
+    # Identify failure cases (None-safe).
+    failure_threshold = 0.6
+    failures = []
+    for i, test in enumerate(test_results):
+        components = [
+            ("faithfulness", per_test["faithfulness"][i]),
+            ("relevance", per_test["relevance"][i]),
+            ("context_precision", per_test["context_precision"][i]),
+        ]
+        present = [(name, val) for name, val in components if val is not None]
+        if not present:
+            continue
+        overall_score = sum(val for _, val in present) / len(present)
+        if overall_score < failure_threshold:
+            failures.append(
+                {
+                    "test_id": i,
+                    "query": test.get("query") if isinstance(test, dict) else None,
+                    "overall_score": overall_score,
+                    "weakest_metric": min(present, key=lambda x: x[1])[0],
+                }
+            )
+
+    # Recommendations.
+    recommendations = []
+    if aggregate_stats.get("faithfulness", {}).get("mean", 1) < 0.7:
+        recommendations.append(
+            "Improve grounding: Ensure answers strictly follow retrieved content"
+        )
+    if aggregate_stats.get("relevance", {}).get("mean", 1) < 0.7:
+        recommendations.append(
+            "Enhance relevance: Better query understanding and targeted responses"
+        )
+    if aggregate_stats.get("context_precision", {}).get("mean", 1) < 0.7:
+        recommendations.append(
+            "Optimize retrieval: Improve document ranking and selection"
+        )
+    if aggregate_stats.get("execution_time", {}).get("mean", 0) > 2.0:
+        recommendations.append(
+            "Reduce latency: Consider caching or parallel processing"
+        )
+
+    # Roll up overall_score over ONLY the metrics that produced a REAL aggregate
+    # mean — a fully parse-gapped / absent metric is EXCLUDED (never counted as 0).
+    _overall_component_means = [
+        aggregate_stats[_m]["mean"]
+        for _m in ("faithfulness", "relevance", "context_precision")
+        if _m in aggregate_stats and aggregate_stats[_m].get("mean") is not None
+    ]
+    overall_score_value = (
+        statistics.mean(_overall_component_means) if _overall_component_means else None
+    )
+
+    return {
+        "evaluation_summary": {
+            "aggregate_metrics": aggregate_stats,
+            "overall_score": overall_score_value,
+            "failure_analysis": {
+                "failure_count": len(failures),
+                "failure_rate": (
+                    (len(failures) / len(test_results)) if test_results else 0.0
+                ),
+                "failed_queries": failures,
+            },
+            "recommendations": recommendations,
+            # Honesty surface: per-metric count of per-test entries with NO real
+            # score (judge produced fewer than N, or the parser FLAGGED malformed
+            # output). Non-empty means some judge output could not be parsed —
+            # those gaps were EXCLUDED from the means, never fabricated zeros.
+            "parse_gaps": flagged_counts,
+            "evaluation_config": {
+                "metrics_used": metrics,
+                "total_tests": len(test_results),
+                "timestamp": _datetime_class.now().isoformat(),
+            },
+        }
+    }
+
+
 @register_node()
 class RAGEvaluationNode(WorkflowNode):
     """
@@ -479,84 +835,22 @@ class RAGEvaluationNode(WorkflowNode):
         answer_quality_id: Optional[str] = None
 
         # Test executor - runs RAG on test queries
-        test_executor_id = builder.add_node(
-            "PythonCodeNode",
+        # Test executor — passes through caller-provided RAG results for judging.
+        #
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `collect_rag_results` function wired via `PythonCodeNode.from_function`.
+        # No build-time config to bind (no closure needed). `from datetime import
+        # datetime` runs as a real import inside the function body. The function
+        # returns `{"test_results", "total_tests", "avg_execution_time"}`, so the
+        # downstream `result.test_results` edges resolve unchanged. It RAISES (does
+        # NOT fabricate) when a test entry lacks the caller's real answer/contexts.
+        test_executor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                collect_rag_results,
+                name="test_executor",
+            ),
             node_id="test_executor",
-            config={
-                "code": """
-# Provably-correct remediation: this node JUDGES results the caller's RAG
-# system already produced — it does NOT fabricate them. Each test_queries
-# entry MUST carry the caller's real `generated_answer` + `retrieved_contexts`
-# (a sandboxed PythonCodeNode cannot invoke an arbitrary passed node; running
-# the system-under-test is RAGBenchmarkNode's job). No fabricated answers,
-# no fabricated contexts, no synthetic timings.
-
-def collect_rag_results(test_queries):
-    '''Pass through the caller-provided RAG outputs for downstream judging.'''
-    # #1118: import the datetime CLASS inside the function body — PythonCodeNode
-    # passes separate (globals, locals) to exec(), so a module-scope
-    # `from datetime import datetime as _datetime_class` binds into LOCAL
-    # namespace and is invisible to this function's closure (the `timestamp`
-    # line below would raise NameError at runtime). The metric_aggregator
-    # already imports inside its body for the same reason.
-    from datetime import datetime as _datetime_class
-
-    test_results = []
-    missing = []
-
-    for i, test_case in enumerate(test_queries):
-        query = test_case.get("query", "")
-        reference = test_case.get("reference", "")
-
-        # Honest contract: the caller ran their RAG system and supplies the
-        # real answer + contexts. Raise (not fabricate) when absent so the
-        # incoherent input fails loudly instead of judging invented data.
-        if "generated_answer" not in test_case:
-            missing.append((i, "generated_answer"))
-            continue
-        if "retrieved_contexts" not in test_case:
-            missing.append((i, "retrieved_contexts"))
-            continue
-
-        generated_answer = test_case["generated_answer"]
-        retrieved_contexts = test_case["retrieved_contexts"]
-        # Optional: caller-measured latency for the answer (real, not synthetic).
-        execution_time = test_case.get("execution_time", 0.0)
-
-        test_results.append({
-            "test_id": i,
-            "query": query,
-            "reference_answer": reference,
-            "generated_answer": generated_answer,
-            "retrieved_contexts": retrieved_contexts,
-            "execution_time": execution_time,
-            "timestamp": _datetime_class.now().isoformat()
-        })
-
-    if missing:
-        raise ValueError(
-            "RAGEvaluationNode judges already-run RAG results: each "
-            "test_queries entry MUST carry 'generated_answer' and "
-            "'retrieved_contexts'. Missing on entries: " + repr(missing) +
-            ". Run your RAG system first (or use RAGBenchmarkNode to "
-            "execute + measure the system)."
-        )
-
-    # F9 umbrella + #1117 sibling: return from function so the module-scope
-    # call below binds `result` (the wire-through happens via the module
-    # namespace, not the function's local scope).
-    return {
-        "test_results": test_results,
-        "total_tests": len(test_queries),
-        "avg_execution_time": sum(r["execution_time"] for r in test_results) / len(test_results) if test_results else 0.0
-    }
-
-# F9: module-scope call + drop the helper so PythonCodeNode's output gate
-# sees only `result`.
-result = collect_rag_results(test_queries)
-del collect_rag_results
-"""
-            },
+            _internal=True,
         )
 
         # Faithfulness evaluator
@@ -615,75 +909,23 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
         )
 
         # Context precision evaluator
-        context_evaluator_id = builder.add_node(
-            "PythonCodeNode",
+        # Context precision evaluator.
+        #
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `evaluate_context_metrics` function wired via
+        # `PythonCodeNode.from_function`. It maps `_evaluate_context_precision`
+        # over the `test_data` LIST (the test_executor `result.test_results`) and
+        # returns `{"context_metrics": [...]}` (a per-test list) on the flat
+        # `result` port, so the downstream `result.context_metrics` edge resolves
+        # unchanged. No build-time config to bind. This is a PythonCodeNode (not an
+        # LLMAgentNode); it reads `test_data` directly via its declared param.
+        context_evaluator_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                evaluate_context_metrics,
+                name="context_evaluator",
+            ),
             node_id="context_evaluator",
-            config={
-                "code": """
-def evaluate_context_precision(test_result):
-    '''Evaluate the precision of retrieved contexts'''
-
-    contexts = test_result.get("retrieved_contexts", [])
-    query = test_result.get("query", "")
-
-    if not contexts:
-        return {
-            "context_precision": 0.0,
-            "context_recall": 0.0,
-            "context_ranking_quality": 0.0
-        }
-
-    # Calculate precision at different k values
-    precision_at_k = {}
-    relevant_count = 0
-
-    for k in [1, 3, 5, 10]:
-        if k <= len(contexts):
-            # Deterministic relevance heuristic: a context counts as relevant
-            # at k when its caller-provided retrieval score clears 0.7. This is
-            # a real threshold over real scores (NOT a fabricated judgment); the
-            # LLM-based relevance judgment is the separate relevance_evaluator.
-            relevant_at_k = sum(1 for c in contexts[:k] if c.get("score", 0) > 0.7)
-            precision_at_k[f"P@{k}"] = relevant_at_k / k
-
-    # Calculate MRR (Mean Reciprocal Rank)
-    first_relevant_rank = None
-    for i, ctx in enumerate(contexts):
-        if ctx.get("score", 0) > 0.7:
-            first_relevant_rank = i + 1
-            break
-
-    mrr = 1.0 / first_relevant_rank if first_relevant_rank else 0.0
-
-    # Context diversity
-    unique_terms = set()
-    for ctx in contexts:
-        unique_terms.update(ctx.get("content", "").lower().split()[:20])
-
-    diversity_score = len(unique_terms) / (len(contexts) * 20) if contexts else 0
-
-    # F9 #1117: function MUST return its computed metrics (was bound to
-    # a function-scope `result` local but never returned).
-    return {
-        "context_metrics": {
-            "precision_at_k": precision_at_k,
-            "mrr": mrr,
-            "diversity_score": diversity_score,
-            "avg_relevance_score": sum(c.get("score", 0) for c in contexts) / len(contexts),
-            "context_count": len(contexts)
-        }
-    }
-
-# F9 #1117: module-scope call. `test_data` is the wire from
-# test_executor.test_results (a LIST). Aggregator expects `context_metrics`
-# to be a LIST; map the per-result evaluation. Then `del` the non-JSON
-# helpers so PythonCodeNode's output-validation gate sees only `result`.
-_test_data = test_data if isinstance(test_data, list) else [test_data]
-context_metrics = [evaluate_context_precision(t).get("context_metrics", {}) for t in _test_data]
-result = {"context_metrics": context_metrics}
-del evaluate_context_precision, _test_data
-"""
-            },
+            _internal=True,
         )
 
         # Answer quality evaluator (if reference available)
@@ -718,195 +960,48 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
             )
 
         # Metric aggregator
-        aggregator_id = builder.add_node(
-            "PythonCodeNode",
-            node_id="metric_aggregator",
-            config={
-                "code": f"""
-import statistics
+        # Metric aggregator.
+        #
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `aggregate_evaluation_metrics` function wired via
+        # `PythonCodeNode.from_function`. The build-time `metrics` list is bound
+        # through a thin closure (keeps test_results / faithfulness_scores /
+        # relevance_scores / context_metrics / answer_quality_scores as the
+        # declared inputs). `import statistics` + `from datetime import datetime`
+        # run as real imports inside the function body. `answer_quality_scores`
+        # has a `None` default so the from_function node is valid in BOTH
+        # use_reference_answers configurations — on the disabled path that input is
+        # never wired and the default applies (no NameError, unlike the prior
+        # exec-namespace try/except). Returns `{"evaluation_summary": {...}}`.
+        _metrics = self.metrics
 
-def aggregate_evaluation_metrics(test_results, faithfulness_scores, relevance_scores,
-                               context_metrics, answer_quality_scores=None):
-    '''Aggregate all evaluation metrics'''
-    # F9 #1118: import the datetime CLASS inside the function body —
-    # PythonCodeNode passes separate (globals, locals) to exec() so a
-    # module-scope `from datetime import datetime` rebind binds the alias
-    # into LOCAL namespace and is invisible to this function's closure.
-    # Importing here makes the class lookup resolve cleanly.
-    # (`datetime.now()` on the module raises AttributeError.)
-    from datetime import datetime as _datetime_class
-
-    # OUTPUT-side fix: the judge inputs are now PARSED per-test score LISTS
-    # (the response-parser nodes did `response -> .content -> json.loads ->
-    # list`). `faithfulness_scores` is therefore a LIST of per-test dicts like
-    # `[{{"faithfulness_score": 0.8, ...}}, ...]` aligned 1:1 with test_results.
-    # A flagged entry carries `parse_error` and `<key>: None` — that is NOT a
-    # real score, so we extract None and EXCLUDE it from the numeric mean (we
-    # do NOT count an invented 0; zero-tolerance Rule 2).
-    def _score_at(score_list, idx, key):
-        '''Real per-test score, or None when missing / flagged / malformed.'''
-        if not isinstance(score_list, list) or idx >= len(score_list):
-            return None
-        entry = score_list[idx]
-        if not isinstance(entry, dict):
-            return None
-        if entry.get("parse_error") is not None:
-            return None  # flagged — honest gap, never a fabricated 0
-        value = entry.get(key)
-        return value if isinstance(value, (int, float)) else None
-
-    # Per-test aligned lists (None marks an honest gap, NOT a real zero).
-    per_test = {{
-        "faithfulness": [],
-        "relevance": [],
-        "context_precision": [],
-        "answer_quality": [],
-        "execution_time": []
-    }}
-
-    for i, test in enumerate(test_results):
-        per_test["faithfulness"].append(
-            _score_at(faithfulness_scores, i, "faithfulness_score")
-        )
-        per_test["relevance"].append(
-            _score_at(relevance_scores, i, "relevance_score")
-        )
-        # context_metrics is a PythonCodeNode list of `{{"context_metrics": {{...}}}}`
-        # (unchanged shape — it is computed deterministically, never judged).
-        ctx_score = None
-        if isinstance(context_metrics, list) and i < len(context_metrics):
-            ctx_entry = context_metrics[i]
-            if isinstance(ctx_entry, dict):
-                ctx_score = ctx_entry.get("context_metrics", {{}}).get(
-                    "avg_relevance_score"
-                )
-        per_test["context_precision"].append(
-            ctx_score if isinstance(ctx_score, (int, float)) else None
-        )
-        per_test["execution_time"].append(test.get("execution_time", 0))
-
-        if answer_quality_scores is not None:
-            per_test["answer_quality"].append(
-                _score_at(answer_quality_scores, i, "overall_quality")
+        def _aggregate_evaluation_metrics_bound(
+            test_results=None,
+            faithfulness_scores=None,
+            relevance_scores=None,
+            context_metrics=None,
+            answer_quality_scores=None,
+        ) -> dict:
+            return aggregate_evaluation_metrics(
+                test_results=test_results,
+                faithfulness_scores=faithfulness_scores,
+                relevance_scores=relevance_scores,
+                context_metrics=context_metrics,
+                answer_quality_scores=answer_quality_scores,
+                metrics=_metrics,
             )
 
-    # Calculate aggregate statistics over the REAL (non-None) scores only —
-    # a flagged/missing per-test entry is excluded from the mean rather than
-    # counted as a fabricated zero. Surface the gap count for honesty.
-    aggregate_stats = {{}}
-    flagged_counts = {{}}
-    for metric, raw in per_test.items():
-        valid = [s for s in raw if s is not None]
-        flagged = sum(1 for s in raw if s is None)
-        if flagged:
-            flagged_counts[metric] = flagged
-        if valid:
-            aggregate_stats[metric] = {{
-                "mean": statistics.mean(valid),
-                "median": statistics.median(valid),
-                "std_dev": statistics.stdev(valid) if len(valid) > 1 else 0,
-                "min": min(valid),
-                "max": max(valid),
-                "scores": valid
-            }}
-
-    # Identify failure cases (None-safe: a missing score does not silently
-    # become a 0 that drags the overall score below threshold).
-    failure_threshold = 0.6
-    failures = []
-
-    for i, test in enumerate(test_results):
-        components = [
-            ("faithfulness", per_test["faithfulness"][i]),
-            ("relevance", per_test["relevance"][i]),
-            ("context_precision", per_test["context_precision"][i]),
-        ]
-        present = [(name, val) for name, val in components if val is not None]
-        if not present:
-            # No real score for this test at all — surface, don't invent.
-            continue
-        overall_score = sum(val for _, val in present) / len(present)
-
-        if overall_score < failure_threshold:
-            failures.append({{
-                "test_id": i,
-                "query": test.get("query"),
-                "overall_score": overall_score,
-                "weakest_metric": min(present, key=lambda x: x[1])[0]
-            }})
-
-    # Generate recommendations
-    recommendations = []
-
-    if aggregate_stats.get("faithfulness", {{}}).get("mean", 1) < 0.7:
-        recommendations.append("Improve grounding: Ensure answers strictly follow retrieved content")
-
-    if aggregate_stats.get("relevance", {{}}).get("mean", 1) < 0.7:
-        recommendations.append("Enhance relevance: Better query understanding and targeted responses")
-
-    if aggregate_stats.get("context_precision", {{}}).get("mean", 1) < 0.7:
-        recommendations.append("Optimize retrieval: Improve document ranking and selection")
-
-    if aggregate_stats.get("execution_time", {{}}).get("mean", 0) > 2.0:
-        recommendations.append("Reduce latency: Consider caching or parallel processing")
-
-    # Output-side honesty: roll up overall_score over ONLY the metrics that
-    # produced a REAL aggregate mean. A fully parse-gapped / absent metric is
-    # EXCLUDED — never counted as 0 (which would re-fabricate the zero this
-    # shard removes everywhere else). Mirrors the per-test `present`-filter
-    # above; overall_score is None when NO metric has a real mean.
-    _overall_component_means = [
-        aggregate_stats[_m]["mean"]
-        for _m in ("faithfulness", "relevance", "context_precision")
-        if _m in aggregate_stats and aggregate_stats[_m].get("mean") is not None
-    ]
-    overall_score_value = (
-        statistics.mean(_overall_component_means)
-        if _overall_component_means
-        else None
-    )
-
-    # F9 #1117: function MUST return its aggregate dict (the prior
-    # `result = {{...}}` bound a function-scope local that was never
-    # returned).
-    return {{
-        "evaluation_summary": {{
-            "aggregate_metrics": aggregate_stats,
-            "overall_score": overall_score_value,
-            "failure_analysis": {{
-                "failure_count": len(failures),
-                "failure_rate": (len(failures) / len(test_results)) if test_results else 0.0,
-                "failed_queries": failures
-            }},
-            "recommendations": recommendations,
-            # Honesty surface: per-metric count of per-test entries that had NO
-            # real score (judge produced fewer than N, or the response-parser
-            # FLAGGED malformed/non-JSON output). Non-empty means some judge
-            # output could not be parsed into a real score — those gaps were
-            # EXCLUDED from the means above, never counted as fabricated zeros.
-            "parse_gaps": flagged_counts,
-            "evaluation_config": {{
-                "metrics_used": {self.metrics},
-                "total_tests": len(test_results),
-                "timestamp": _datetime_class.now().isoformat()
-            }}
-        }}
-    }}
-
-# F9 #1117: module-scope call. answer_quality_scores is wired in only
-# when self.use_reference_answers=True; defensive try/except so the code
-# is valid in either configuration. `del` non-JSON helpers so
-# PythonCodeNode's output gate sees only `result`.
-try:
-    _aqs = answer_quality_scores
-except NameError:
-    _aqs = None
-result = aggregate_evaluation_metrics(
-    test_results, faithfulness_scores, relevance_scores, context_metrics, _aqs
-)
-del aggregate_evaluation_metrics, _aqs
-"""
-            },
+        _aggregate_evaluation_metrics_bound.__name__ = "metric_aggregator"
+        _aggregate_evaluation_metrics_bound.__doc__ = (
+            aggregate_evaluation_metrics.__doc__
+        )
+        aggregator_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _aggregate_evaluation_metrics_bound,
+                name="metric_aggregator",
+            ),
+            node_id="metric_aggregator",
+            _internal=True,
         )
 
         # Messages-composer nodes (L3 fix). Each LLM judge's context is routed
@@ -930,7 +1025,7 @@ del aggregate_evaluation_metrics, _aqs
         # concrete PythonCodeNode, but `@register_node` erases the subtype to
         # `type[Node]` for static checkers (mirrors conversational.py).
         faithfulness_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_faithfulness_messages,
                 name="faithfulness_messages_composer",
             ),
@@ -938,7 +1033,7 @@ del aggregate_evaluation_metrics, _aqs
             _internal=True,
         )
         relevance_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_relevance_messages,
                 name="relevance_messages_composer",
             ),
@@ -948,7 +1043,7 @@ del aggregate_evaluation_metrics, _aqs
         answer_quality_messages_composer_id: Optional[str] = None
         if self.use_reference_answers:
             answer_quality_messages_composer_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     compose_answer_quality_messages,
                     name="answer_quality_messages_composer",
                 ),
@@ -968,7 +1063,7 @@ del aggregate_evaluation_metrics, _aqs
         # silently zeroed (zero-tolerance Rule 2). Same `from_function` +
         # `add_node_instance(_internal=True)` primitive as the composers.
         faithfulness_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_faithfulness_response,
                 name="faithfulness_response_parser",
             ),
@@ -976,7 +1071,7 @@ del aggregate_evaluation_metrics, _aqs
             _internal=True,
         )
         relevance_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_relevance_response,
                 name="relevance_response_parser",
             ),
@@ -986,7 +1081,7 @@ del aggregate_evaluation_metrics, _aqs
         answer_quality_parser_id: Optional[str] = None
         if self.use_reference_answers:
             answer_quality_parser_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     parse_answer_quality_response,
                     name="answer_quality_response_parser",
                 ),

@@ -265,21 +265,34 @@ class TestWorkflowCodegenRealExecution:
         assert "structured" in result["content_types"]
 
     def test_runtime_executes_codegen_node_in_isolation(self):
-        """A real LocalRuntime executes a single-node workflow of the codegen.
+        """A real LocalRuntime executes a single-node workflow of the lifted fn.
 
-        This proves the content:None-guarded codegen runs under the real
-        runtime — not only the node's direct execute() path.
+        This proves the content:None-guarded analyzer LOGIC runs under the real
+        runtime — not only the node's direct execute() path. Post-migration the
+        ``quality_analyzer`` is a ``PythonCodeNode.from_function(_analyze_documents)``
+        node (its prior ``config["code"]`` string is gone — ``config.get("code")``
+        is None), so this exercises the SAME production function via
+        ``from_function`` in an isolated single-node workflow, preserving the
+        original assertion intent (the lifted analyzer's logic yields
+        ``total_docs == 3`` against the mixed corpus under a real LocalRuntime).
         """
+        from kailash.nodes.code.python import PythonCodeNode
         from kailash.workflow.builder import WorkflowBuilder
 
-        analyzer_code = _node(
-            _wf(AdvancedRAGWorkflowNode()), "quality_analyzer"
-        ).config["code"]
+        from kaizen.nodes.rag.workflows import _analyze_documents
+
+        # The migrated node no longer carries a `code` string to re-exec.
+        analyzer_node = _node(_wf(AdvancedRAGWorkflowNode()), "quality_analyzer")
+        assert analyzer_node.config.get("code") is None
+
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                _analyze_documents,
+                name="analyzer",
+            ),
             node_id="analyzer",
-            config={"code": analyzer_code},
+            _internal=True,
         )
         runtime = LocalRuntime()
         results, _ = runtime.execute(

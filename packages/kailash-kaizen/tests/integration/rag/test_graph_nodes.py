@@ -193,8 +193,15 @@ class TestGraphRAGNodeIntegration:
 
     def test_create_workflow_builds_real_connected_workflow(self):
         """``_create_workflow()`` returns a real built workflow whose nodes
-        are wired — the PythonCodeNode graph_builder/graph_retriever bodies
-        and the LLM nodes are all present and connected."""
+        are wired — the from_function graph_builder/graph_retriever compute nodes
+        and the LLM nodes are all present and connected.
+
+        Wave-3 migration: graph_builder / graph_retriever / result_synthesizer are
+        now ``PythonCodeNode.from_function`` nodes (the prior f-string ``code=``
+        codegen is gone). The graph-algorithm behavior is asserted directly
+        against ``build_knowledge_graph`` / ``retrieve_from_graph`` /
+        ``synthesize_results`` (see the Wave-3 unit tests + the end-to-end probes
+        below); here we assert structural connectivity + the migrated node shape."""
         # type: ignore[attr-defined] — the @register_node decorator erases the
         # concrete subclass type to base Node, which does not declare the
         # per-node _create_workflow helper. The method exists at runtime; the
@@ -206,17 +213,73 @@ class TestGraphRAGNodeIntegration:
         # global_summary_parser — see TestGraphContextReachesLLM +
         # TestGraphOutputReachesConsumers).
         assert len(wf.nodes) == 12
-        # The graph_builder PythonCodeNode carries a real code template.
-        builder_code = wf.nodes["graph_builder"].config["code"]
-        assert "build_knowledge_graph" in builder_code
-        assert "nx.MultiDiGraph" in builder_code
+        # The graph_builder is now a from_function PythonCodeNode (its `code`
+        # config is None — the f-string template is gone, lifted to the module
+        # function).
+        assert wf.nodes["graph_builder"].config.get("code") is None
+        assert wf.nodes["graph_retriever"].config.get("code") is None
+        assert wf.nodes["result_synthesizer"].config.get("code") is None
 
-    def test_create_workflow_retriever_code_carries_max_hops(self):
-        """``max_hops`` is interpolated into the real graph_retriever code
-        template the sub-workflow executes."""
+    def test_graph_builder_runs_under_real_local_runtime(self):
+        """ROOT-CAUSE FIX (Wave-3): with graph_builder lifted to from_function,
+        `import networkx` runs OUTSIDE the PythonCodeNode sandbox — so the
+        graph_builder node NOW runs end-to-end under a REAL LocalRuntime (the
+        prior `code=` block was BLOCKED by the sandbox's "Import of module
+        'networkx' is not allowed"). Proven by running the production from_function
+        node standalone and asserting a real graph is built."""
+        from kailash.nodes.code.python import PythonCodeNode as _PCN
+        from kailash.runtime.local import LocalRuntime as _RT
+        from kailash.workflow.builder import WorkflowBuilder as _WB
+
+        from kaizen.nodes.rag.graph import build_knowledge_graph
+
+        b = _WB()
+        b.add_node_instance(
+            _PCN.from_function(  # type: ignore[attr-defined]
+                lambda extraction_results=None: build_knowledge_graph(
+                    extraction_results=extraction_results,
+                    community_algorithm="connected_components",
+                ),
+                name="gb",
+            ),
+            node_id="gb",
+            _internal=True,
+        )
+        wf = b.build(name="gb_runtime_probe")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with _RT() as rt:
+                results, _ = rt.execute(
+                    wf,
+                    parameters={
+                        "extraction_results": [
+                            {
+                                "entities": [
+                                    {
+                                        "name": "BERT",
+                                        "type": "technology",
+                                        "description": "e",
+                                    }
+                                ],
+                                "relationships": [],
+                            }
+                        ]
+                    },
+                )
+        gd = results["gb"]["result"]["graph_data"]
+        # A REAL networkx graph was built under LocalRuntime — the sandbox no
+        # longer blocks the networkx import (it runs in the from_function body).
+        assert gd["stats"]["num_entities"] == 1
+        G = nx.node_link_graph(gd["graph"])
+        assert "bert" in set(G.nodes())
+
+    def test_create_workflow_retriever_carries_max_hops(self):
+        """``max_hops`` is bound into the graph_retriever from_function closure
+        (Wave-3 migration). The migrated node has no ``code=`` template; the BFS
+        depth bound is asserted behaviorally against ``retrieve_from_graph`` in the
+        unit suite. Here we confirm the migrated node shape."""
         wf = GraphRAGNode(max_hops=3)._create_workflow()  # type: ignore[attr-defined]
-        retriever_code = wf.nodes["graph_retriever"].config["code"]
-        assert "depth >= 3" in retriever_code
+        assert wf.nodes["graph_retriever"].config.get("code") is None
 
     def test_create_workflow_summary_disabled_drops_node_and_connections(self):
         """With ``use_global_summary=False`` the real workflow has 9 nodes and
@@ -571,6 +634,7 @@ from kaizen.nodes.rag.graph import (  # noqa: E402
     parse_entity_extraction,
     parse_global_summary,
     parse_query_analysis,
+    synthesize_results,
 )
 
 
@@ -805,11 +869,19 @@ class TestGraphOutputReachesConsumers:
         """Build the load-bearing OUTPUT-side subgraph: a deterministic
         summary-LLM-shaped source publishing ``response`` →
         ``global_summary_parser`` (the real production parser) →
-        ``result_synthesizer`` (the real production synthesizer code, summary
-        path). The result_synthesizer is plain Python (NO networkx) so it RUNS
-        under real LocalRuntime; the graph_retrieval + graph_data inputs are
-        delivered as top-level workflow inputs (parameter-injector auto-
-        distribute), exactly as the full graph delivers them."""
+        ``result_synthesizer`` (the REAL production ``synthesize_results``
+        function, summary-enabled path, wired via from_function exactly as
+        ``_create_workflow`` wires it).
+
+        Wave-3 migration: ``result_synthesizer`` is now a from_function node (the
+        prior ``code=`` template is gone). This subgraph wires the genuine
+        production ``synthesize_results`` (bound with ``use_global_summary=True``,
+        mirroring the enabled-path closure in ``_create_workflow``) — so it is a
+        STRICTLY more faithful end-to-end test than reconstructing a code string.
+        ``synthesize_results`` is plain Python (NO networkx) so it RUNS under real
+        LocalRuntime; the graph_retrieval + graph_data inputs are delivered as
+        top-level workflow inputs (parameter-injector auto-distribute), exactly as
+        the full graph delivers them."""
         builder = WorkflowBuilder()
         builder.add_node_instance(
             PythonCodeNode.from_function(  # type: ignore[attr-defined]
@@ -827,17 +899,27 @@ class TestGraphOutputReachesConsumers:
             node_id="global_summary_parser",
             _internal=True,
         )
-        # The real production result_synthesizer code (summary-enabled path).
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            full_wf = GraphRAGNode(
-                use_global_summary=True
-            )._create_workflow()  # type: ignore[attr-defined]
-        synth_code = full_wf.nodes["result_synthesizer"].config["code"]
-        builder.add_node(
-            "PythonCodeNode",
+
+        # The REAL production synthesizer fn, bound enabled-path (use_global_summary
+        # =True) exactly as _create_workflow's closure binds it.
+        def _synth_bound(
+            graph_retrieval=None, query="", graph_data=None, global_summaries=None
+        ) -> dict:
+            return synthesize_results(
+                graph_retrieval=graph_retrieval,
+                query=query,
+                graph_data=graph_data,
+                global_summaries=global_summaries,
+                use_global_summary=True,
+            )
+
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                _synth_bound,
+                name="result_synthesizer",
+            ),
             node_id="result_synthesizer",
-            config={"code": synth_code},
+            _internal=True,
         )
         builder.add_connection(
             "fake_summary_response",
@@ -908,29 +990,51 @@ class TestGraphOutputReachesConsumers:
         assert synth["global_summary"] is None
 
     def test_summary_disabled_path_synthesizer_has_no_nameerror(self):
-        """CONDITIONAL-WIRING (Option i): with ``use_global_summary=False`` the
-        synthesizer body references NO ``global_summaries`` input (it is unwired),
-        so running it under real LocalRuntime does NOT raise NameError, and
-        ``graph_rag_results.global_summary`` is ``None`` honestly."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            full_wf = GraphRAGNode(
-                use_global_summary=False
-            )._create_workflow()  # type: ignore[attr-defined]
-        synth_code = full_wf.nodes["result_synthesizer"].config["code"]
-        # The disabled-path body MUST NOT reference `global_summaries` (the
-        # unwired name) — referencing it would NameError at exec.
-        assert "global_summaries" not in synth_code
+        """CONDITIONAL-BEHAVIOR PRESERVATION (Wave-3 migration of the Wave-2.5
+        Option-i conditional): with ``use_global_summary=False`` the migrated
+        ``synthesize_results`` from_function node is bound ``use_global_summary=
+        False`` and the ``global_summaries`` input is NEVER wired. Because a
+        from_function node tolerates a missing declared input (its
+        ``global_summaries=None`` default applies), running the disabled-path
+        synthesizer under real LocalRuntime WITHOUT wiring ``global_summaries``
+        does NOT raise (the prior ``code=`` exec namespace raised NameError on a
+        bare unwired reference — which is why the conditional codegen existed; the
+        from_function default replaces that conditional entirely), and
+        ``graph_rag_results.global_summary`` is ``None`` honestly.
+
+        This builds the REAL production ``synthesize_results`` bound exactly as
+        ``_create_workflow``'s disabled-path closure binds it
+        (``use_global_summary=False``), then runs it standalone with ONLY
+        ``graph_retrieval`` / ``graph_data`` / ``query`` wired (no
+        ``global_summaries`` — mirroring the disabled-path graph topology)."""
+
+        def _synth_disabled(
+            graph_retrieval=None, query="", graph_data=None, global_summaries=None
+        ) -> dict:
+            return synthesize_results(
+                graph_retrieval=graph_retrieval,
+                query=query,
+                graph_data=graph_data,
+                global_summaries=global_summaries,
+                use_global_summary=False,
+            )
+
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                _synth_disabled,
+                name="result_synthesizer",
+            ),
             node_id="result_synthesizer",
-            config={"code": synth_code},
+            _internal=True,
         )
         wf = builder.build(name="disabled_synth_probe")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             with LocalRuntime() as runtime:
+                # NOTE: `global_summaries` is deliberately NOT in parameters — the
+                # disabled-path graph never wires it; the from_function default
+                # applies and there is no NameError.
                 results, _ = runtime.execute(
                     wf,
                     parameters={

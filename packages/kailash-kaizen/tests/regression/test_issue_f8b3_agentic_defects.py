@@ -31,113 +31,106 @@ Defect 4 — ToolAugmentedRAGNode non-dict tool-output crash.
   callables with no return-shape contract) raised ``TypeError``.
   Fix: ``not isinstance(output, dict) or "error" not in output``.
 
-Defects 1 + 2 are ``_create_workflow()`` codegen-template defects; defects
+Defects 1 + 2 were ``_create_workflow()`` codegen-template defects; defects
 3 + 4 are ``run()``-path defects. Per the B1 two-path lesson, both the
 ``run()`` paths and the codegen templates were grepped for each pattern.
 
-All tests are behavioral — they call ``run()`` / exec the real codegen
-template and assert success / typed outputs, not source-grep.
+POST-MIGRATION (S6b — #1117/#1123 root-cause fix): the ``tool_executor`` /
+``state_manager`` / ``result_synthesizer`` COMPUTE stages were lifted from
+inline ``code=`` codegen to the module-level functions ``execute_tool_action``
+and the ``_make_state_manager`` / ``_make_result_synthesizer`` closure factories,
+wired via ``PythonCodeNode.from_function``. Defects 1 + 2 are now exercised
+BEHAVIORALLY by calling those lifted functions directly (the structural
+successor of exec'ing the codegen template) — same assertion intent, preserved.
+
+All tests are behavioral — they call ``run()`` / the lifted COMPUTE function and
+assert success / typed outputs, not source-grep.
 """
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
-from kaizen.nodes.rag.agentic import AgenticRAGNode, ToolAugmentedRAGNode
+from kaizen.nodes.rag.agentic import (
+    AgenticRAGNode,
+    ToolAugmentedRAGNode,
+    _make_result_synthesizer,
+    execute_tool_action,
+)
 
 pytestmark = pytest.mark.regression
 
 
-def _template(node, node_id):
-    """Return a built sub-workflow node's code= template, silencing the
-    cosmetic PythonCodeNode line-count UserWarnings."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return node._create_workflow().nodes[node_id].config["code"]
-
-
 # ---------------------------------------------------------------------------
-# Defect 1 — tool_executor codegen None-content / non-dict crash
+# Defect 1 — tool_executor None-content / non-dict crash (lifted COMPUTE fn)
 # ---------------------------------------------------------------------------
 def test_tool_executor_none_content_does_not_crash():
     """The tool_executor search branch must tolerate a document whose
     ``content`` key is present-but-None."""
-    code = _template(AgenticRAGNode(), "tool_executor")
-    ns = {
-        "reasoning_state": {"current_action": 'search("transformer")'},
-        "documents": [{"id": "n", "content": None}],
-    }
-    exec(code, ns)
-    assert ns["result"]["tool_result"]["tool"] == "search"
-    assert ns["result"]["tool_result"]["count"] == 0
+    out = execute_tool_action(
+        reasoning_state={"current_action": 'search("transformer")'},
+        documents=[{"id": "n", "content": None}],
+    )
+    assert out["tool_result"]["tool"] == "search"
+    assert out["tool_result"]["count"] == 0
 
 
 def test_tool_executor_none_title_does_not_crash():
     """A present-but-None ``title`` must not crash the search branch."""
-    code = _template(AgenticRAGNode(), "tool_executor")
-    ns = {
-        "reasoning_state": {"current_action": 'search("transformer")'},
-        "documents": [{"id": "n", "content": "transformer model", "title": None}],
-    }
-    exec(code, ns)
-    assert ns["result"]["tool_result"]["count"] == 1
+    out = execute_tool_action(
+        reasoning_state={"current_action": 'search("transformer")'},
+        documents=[{"id": "n", "content": "transformer model", "title": None}],
+    )
+    assert out["tool_result"]["count"] == 1
 
 
 def test_tool_executor_non_dict_document_is_skipped():
     """A non-dict element in ``documents`` is skipped, not crashed on."""
-    code = _template(AgenticRAGNode(), "tool_executor")
-    ns = {
-        "reasoning_state": {"current_action": 'search("transformer")'},
-        "documents": ["not a dict", {"id": "g", "content": "transformer here"}],
-    }
-    exec(code, ns)
-    assert ns["result"]["tool_result"]["count"] == 1
+    out = execute_tool_action(
+        reasoning_state={"current_action": 'search("transformer")'},
+        documents=["not a dict", {"id": "g", "content": "transformer here"}],
+    )
+    assert out["tool_result"]["count"] == 1
 
 
 def test_tool_executor_none_content_does_not_poison_sibling():
     """A None-content document must not block a well-formed sibling from
     matching the search query."""
-    code = _template(AgenticRAGNode(), "tool_executor")
-    ns = {
-        "reasoning_state": {"current_action": 'search("transformer")'},
-        "documents": [
+    out = execute_tool_action(
+        reasoning_state={"current_action": 'search("transformer")'},
+        documents=[
             {"id": "bad", "content": None},
             {"id": "good", "content": "the transformer model"},
         ],
-    }
-    exec(code, ns)
-    assert ns["result"]["tool_result"]["count"] == 1
-    assert ns["result"]["tool_result"]["results"][0]["id"] == "good"
+    )
+    assert out["tool_result"]["count"] == 1
+    assert out["tool_result"]["results"][0]["id"] == "good"
 
 
 # ---------------------------------------------------------------------------
-# Defect 2 — result_synthesizer codegen NameError
+# Defect 2 — result_synthesizer NameError (was literal {self.x}); now the
+# lifted `_make_result_synthesizer` closure binds the build-time config.
 # ---------------------------------------------------------------------------
-def test_result_synthesizer_template_does_not_raise_nameerror():
-    """The result_synthesizer ``code=`` template must execute without a
-    NameError — it was once a plain string with literal {self.x}."""
-    code = _template(AgenticRAGNode(), "result_synthesizer")
-    ns = {
-        "reasoning_state": {"steps": [], "final_answer": "x", "completed": True},
-        "query": "q",
-    }
-    exec(code, ns)  # must not raise NameError: name 'self' is not defined
-    assert "agentic_rag_result" in ns["result"]
+def test_result_synthesizer_does_not_raise_nameerror():
+    """The result_synthesizer must produce its dict without a NameError — the
+    prior plain-string codegen carried literal {self.x} placeholders."""
+    synth = _make_result_synthesizer("react", 5)
+    out = synth(
+        reasoning_state={"steps": [], "final_answer": "x", "completed": True},
+        query="q",
+    )
+    assert "agentic_rag_result" in out
 
 
-def test_result_synthesizer_interpolates_constructor_config():
+def test_result_synthesizer_binds_constructor_config():
     """The metadata block carries the real constructor config values, not
     the literal placeholder strings."""
-    node = AgenticRAGNode(planning_strategy="tree-of-thought", max_reasoning_steps=11)
-    code = _template(node, "result_synthesizer")
-    ns = {
-        "reasoning_state": {"steps": [], "final_answer": "x", "completed": True},
-        "query": "q",
-    }
-    exec(code, ns)
-    meta = ns["result"]["agentic_rag_result"]["metadata"]
+    synth = _make_result_synthesizer("tree-of-thought", 11)
+    out = synth(
+        reasoning_state={"steps": [], "final_answer": "x", "completed": True},
+        query="q",
+    )
+    meta = out["agentic_rag_result"]["metadata"]
     assert meta["planning_strategy"] == "tree-of-thought"
     assert meta["max_steps"] == 11
     # The literal placeholder must NOT survive into the output.

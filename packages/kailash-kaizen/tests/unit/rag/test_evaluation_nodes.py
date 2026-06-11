@@ -32,6 +32,10 @@ from kaizen.nodes.rag.evaluation import (
     RAGBenchmarkNode,
     RAGEvaluationNode,
     TestDatasetGeneratorNode,
+    _evaluate_context_precision,
+    aggregate_evaluation_metrics,
+    collect_rag_results,
+    evaluate_context_metrics,
 )
 
 pytestmark = pytest.mark.unit
@@ -260,13 +264,25 @@ class TestRAGEvaluationGraphShape:
         assert len(inbound) == 5
 
     def test_metric_aggregator_carries_configured_metrics(self):
-        """The metrics list is baked into the aggregator's code template."""
+        """The metrics list is bound into the aggregator ``from_function`` closure
+        (Wave-3 migration) and surfaces in the aggregator's output
+        ``evaluation_config.metrics_used`` — proven directly against
+        ``aggregate_evaluation_metrics`` (the lifted fn; no ``code=`` config to
+        inspect anymore)."""
         wf = _build(RAGEvaluationNode(metrics=["faithfulness", "relevance"]))
         aggregator = wf.get_node("metric_aggregator")
         assert aggregator is not None
-        code = aggregator.config.get("code", "")
-        # The metrics list is interpolated into the source via {self.metrics}.
-        assert "['faithfulness', 'relevance']" in code
+        # The migrated node is a from_function PythonCodeNode — no `code=` config.
+        assert aggregator.config.get("code") is None
+        # The metrics list reaches the output through the bound closure.
+        out = aggregate_evaluation_metrics(
+            test_results=[],
+            metrics=["faithfulness", "relevance"],
+        )
+        assert out["evaluation_summary"]["evaluation_config"]["metrics_used"] == [
+            "faithfulness",
+            "relevance",
+        ]
 
     def test_llm_judge_model_baked_into_evaluator_configs(self):
         """The llm_judge_model kwarg flows into the LLM-judge node configs."""
@@ -285,47 +301,24 @@ class TestRAGEvaluationGraphShape:
 
 
 class TestContextPrecisionMetricCorrectness:
-    """The context_evaluator codegen template implements P@k, MRR, diversity.
+    """``_evaluate_context_precision`` (the lifted Wave-3 fn) implements P@k, MRR,
+    diversity over a single test's REAL retrieval scores.
 
     Value-anchor per F8 plan §B B9b row: "metric correctness + real storage
-    read-back" — this class exercises the metric-correctness half by
-    extracting the codegen function from the workflow node, executing it
-    against a known-fixture retrieval result, and asserting deterministic
-    metric values match the documented formulas.
-
-    The codegen DEFINES ``evaluate_context_precision`` but never CALLS it at
-    module scope. We extract the function and call it directly, mirroring
-    the B9a integration-test ``_run_pii_detector`` helper precedent.
+    read-back" — this class exercises the metric-correctness half by calling the
+    lifted module-level function DIRECTLY against known-fixture retrieval results
+    and asserting deterministic values match the documented formulas. (The prior
+    f-string ``code=`` codegen is gone; the from_function node has no ``code``
+    config to extract — the function is called directly.)
     """
 
     @staticmethod
-    def _run_context_evaluator(code: str, test_result: dict) -> dict:
-        """Exec the codegen against a single ``test_result`` fixture.
-
-        F9 #1117 fixed the codegen: the function returns its dict, the
-        codegen invokes ``result = ...`` at module scope iterating
-        ``test_data``, then `del`s the helper so PythonCodeNode's output
-        gate sees only `result`. For unit tests we strip the `del` line
-        so the inner function survives exec, then call it directly on the
-        caller's fixture for per-test-result assertions.
-        """
-        # Strip the F9 #1117 cleanup line so the helper survives exec.
-        code_no_del = "\n".join(
-            line
-            for line in code.splitlines()
-            if not line.startswith("del evaluate_context_precision")
-        )
-        ns: dict = {"test_data": [test_result]}
-        exec(code_no_del, ns)
-        return ns["evaluate_context_precision"](test_result)
+    def _run_context_evaluator(test_result: dict) -> dict:
+        """Call the lifted ``_evaluate_context_precision`` directly."""
+        return _evaluate_context_precision(test_result)
 
     def test_empty_contexts_returns_zero_precision(self):
-        wf = _build(RAGEvaluationNode())
-        evaluator = wf.get_node("context_evaluator")
-        assert evaluator is not None
-        out = self._run_context_evaluator(
-            evaluator.config["code"], {"retrieved_contexts": [], "query": "x"}
-        )
+        out = self._run_context_evaluator({"retrieved_contexts": [], "query": "x"})
         # The early-exit branch returns precision=recall=ranking_quality=0.
         assert out["context_precision"] == 0.0
         assert out["context_recall"] == 0.0
@@ -333,18 +326,12 @@ class TestContextPrecisionMetricCorrectness:
 
     def test_p_at_k_with_all_relevant_contexts(self):
         """3 contexts all scoring > 0.7 → P@1=P@3=1.0."""
-        wf = _build(RAGEvaluationNode())
-        evaluator = wf.get_node("context_evaluator")
-        assert evaluator is not None
         ctxs = [
             {"content": "a b c d e", "score": 0.95},
             {"content": "f g h i j", "score": 0.90},
             {"content": "k l m n o", "score": 0.80},
         ]
-        out = self._run_context_evaluator(
-            evaluator.config["code"],
-            {"retrieved_contexts": ctxs, "query": "test"},
-        )
+        out = self._run_context_evaluator({"retrieved_contexts": ctxs, "query": "test"})
         ctx_metrics = out["context_metrics"]
         assert ctx_metrics["precision_at_k"]["P@1"] == 1.0
         assert ctx_metrics["precision_at_k"]["P@3"] == 1.0
@@ -354,18 +341,12 @@ class TestContextPrecisionMetricCorrectness:
 
     def test_p_at_k_with_mixed_relevance(self):
         """First two contexts < 0.7 → P@1 = 0, MRR = 1/3."""
-        wf = _build(RAGEvaluationNode())
-        evaluator = wf.get_node("context_evaluator")
-        assert evaluator is not None
         ctxs = [
             {"content": "a", "score": 0.5},
             {"content": "b", "score": 0.6},
             {"content": "c", "score": 0.9},
         ]
-        out = self._run_context_evaluator(
-            evaluator.config["code"],
-            {"retrieved_contexts": ctxs, "query": "test"},
-        )
+        out = self._run_context_evaluator({"retrieved_contexts": ctxs, "query": "test"})
         ctx_metrics = out["context_metrics"]
         assert ctx_metrics["precision_at_k"]["P@1"] == 0.0
         # 1 relevant in top-3 → P@3 = 1/3.
@@ -374,33 +355,48 @@ class TestContextPrecisionMetricCorrectness:
         assert ctx_metrics["mrr"] == pytest.approx(1 / 3)
 
     def test_mrr_zero_when_no_relevant_contexts(self):
-        wf = _build(RAGEvaluationNode())
-        evaluator = wf.get_node("context_evaluator")
-        assert evaluator is not None
         ctxs = [{"content": "x", "score": 0.1}, {"content": "y", "score": 0.2}]
-        out = self._run_context_evaluator(
-            evaluator.config["code"],
-            {"retrieved_contexts": ctxs, "query": "q"},
-        )
+        out = self._run_context_evaluator({"retrieved_contexts": ctxs, "query": "q"})
         ctx_metrics = out["context_metrics"]
         assert ctx_metrics["mrr"] == 0.0
 
     def test_avg_relevance_is_arithmetic_mean(self):
         """avg_relevance_score = sum(scores) / len(scores)."""
-        wf = _build(RAGEvaluationNode())
-        evaluator = wf.get_node("context_evaluator")
-        assert evaluator is not None
         ctxs = [
             {"content": "a", "score": 0.8},
             {"content": "b", "score": 0.6},
             {"content": "c", "score": 0.4},
         ]
-        out = self._run_context_evaluator(
-            evaluator.config["code"],
-            {"retrieved_contexts": ctxs, "query": "q"},
-        )
+        out = self._run_context_evaluator({"retrieved_contexts": ctxs, "query": "q"})
         # (0.8 + 0.6 + 0.4) / 3 = 0.6.
         assert out["context_metrics"]["avg_relevance_score"] == pytest.approx(0.6)
+
+    def test_none_content_does_not_crash(self):
+        """Honest edge: a context with present-None content is coerced to "",
+        no AttributeError on .lower()."""
+        out = self._run_context_evaluator(
+            {"retrieved_contexts": [{"content": None, "score": 0.9}], "query": "q"}
+        )
+        assert out["context_metrics"]["context_count"] == 1
+
+    def test_map_over_test_data_list(self):
+        """``evaluate_context_metrics`` maps the per-test fn over the list and
+        returns ``{"context_metrics": [...]}`` (the wire shape the aggregator
+        indexes)."""
+        out = evaluate_context_metrics(
+            [
+                {"retrieved_contexts": [{"content": "a", "score": 0.9}], "query": "q1"},
+                {"retrieved_contexts": [], "query": "q2"},
+            ]
+        )
+        assert isinstance(out["context_metrics"], list)
+        assert len(out["context_metrics"]) == 2
+        # First test has a real context; second is the empty early-exit shape.
+        assert out["context_metrics"][0]["context_count"] == 1
+
+    def test_evaluate_context_metrics_none_input(self):
+        out = evaluate_context_metrics(None)
+        assert out["context_metrics"] == []
 
 
 # ==========================================================================
@@ -409,42 +405,25 @@ class TestContextPrecisionMetricCorrectness:
 
 
 class TestTestExecutorPassThrough:
-    """The test_executor codegen judges caller-provided results, not invented ones.
+    """The lifted ``collect_rag_results`` (Wave-3 fn) judges caller-provided
+    results, not invented ones.
 
-    Provably-correct remediation: the inner ``collect_rag_results`` MUST pass
-    the caller's real ``generated_answer`` + ``retrieved_contexts`` through
-    (no ``f"Generated answer for: {query}"`` fabrication, no hardcoded
-    contexts) and MUST raise when those fields are absent.
-    """
+    Provably-correct remediation: ``collect_rag_results`` MUST pass the caller's
+    real ``generated_answer`` + ``retrieved_contexts`` through (no
+    ``f"Generated answer for: {query}"`` fabrication, no hardcoded contexts) and
+    MUST raise when those fields are absent. Called DIRECTLY (the prior ``code=``
+    codegen is gone; the from_function node has no ``code`` config)."""
 
-    @staticmethod
-    def _exec_collector(code: str, test_queries: list) -> dict:
-        """Exec the codegen with the helper preserved; return module `result`."""
-        # Strip the F9 cleanup `del` so we can also assert on the namespace.
-        code_no_del = "\n".join(
-            line
-            for line in code.splitlines()
-            if not line.startswith("del collect_rag_results")
-        )
-        ns: dict = {"test_queries": test_queries}
-        exec(code_no_del, ns)
-        return ns["result"]
-
-    def test_codegen_no_longer_fabricates_answers(self):
-        """The fabrication template MUST be gone from the source."""
+    def test_node_no_longer_carries_codegen(self):
+        """The migrated test_executor is a from_function node — no ``code=``
+        config, so no f-string fabrication template can lurk in source."""
         wf = _build(RAGEvaluationNode())
         executor = wf.get_node("test_executor")
         assert executor is not None
-        code = executor.config["code"]
-        assert 'f"Generated answer for: {query}"' not in code
-        assert "Context 1 about transformers" not in code
+        assert executor.config.get("code") is None
 
     def test_passes_through_caller_provided_results(self):
-        wf = _build(RAGEvaluationNode())
-        executor = wf.get_node("test_executor")
-        assert executor is not None
-        out = self._exec_collector(
-            executor.config["code"],
+        out = collect_rag_results(
             [
                 {
                     "query": "What is BERT?",
@@ -465,26 +444,25 @@ class TestTestExecutorPassThrough:
         ]
         assert tr["query"] == "What is BERT?"
         assert tr["reference_answer"] == "BERT is bidirectional..."
+        assert "timestamp" in tr
 
     def test_missing_generated_answer_raises(self):
-        wf = _build(RAGEvaluationNode())
-        executor = wf.get_node("test_executor")
-        assert executor is not None
         with pytest.raises(ValueError, match="generated_answer"):
-            self._exec_collector(
-                executor.config["code"],
-                [{"query": "q", "retrieved_contexts": []}],
-            )
+            collect_rag_results([{"query": "q", "retrieved_contexts": []}])
 
     def test_missing_retrieved_contexts_raises(self):
-        wf = _build(RAGEvaluationNode())
-        executor = wf.get_node("test_executor")
-        assert executor is not None
         with pytest.raises(ValueError, match="retrieved_contexts"):
-            self._exec_collector(
-                executor.config["code"],
-                [{"query": "q", "generated_answer": "a"}],
-            )
+            collect_rag_results([{"query": "q", "generated_answer": "a"}])
+
+    def test_empty_queries_returns_zero_tests(self):
+        out = collect_rag_results([])
+        assert out["total_tests"] == 0
+        assert out["test_results"] == []
+        assert out["avg_execution_time"] == 0.0
+
+    def test_none_input_returns_zero_tests(self):
+        out = collect_rag_results(None)
+        assert out["total_tests"] == 0
 
 
 # ==========================================================================
@@ -782,3 +760,258 @@ def test_module_all_exports_three_classes():
         "RAGBenchmarkNode",
         "TestDatasetGeneratorNode",
     }
+
+
+# ==========================================================================
+# F31-FU2 Shard C — direct-call Tier-1 coverage of the pure parser / composer
+# `from_function` targets in `evaluation.py` (the O1 OUTPUT-side judge-response
+# parsers + the judge-message composers). These are pure data rendering /
+# tool-result parsing (the permitted deterministic exceptions per
+# rules/agent-reasoning.md #3 + #6) — NOT agent decision-making. Called DIRECTLY
+# (no LocalRuntime, no mocking — they are pure functions).
+#
+# CRITICAL per-file contract (zero-tolerance Rule 2): the EVALUATION parsers
+# return PER-TEST SCORE ARRAYS shaped `{"scores": [<per-test dict>, ...]}`. The
+# judge returns a JSON ARRAY, one object per numbered test, and the parser keeps
+# them positionally aligned. The honest defaults here DIFFER from the other RAG
+# parsers:
+#   * empty / None response -> `{"scores": []}` — an HONEST "nothing to score"
+#     (NO `parse_error` sentinel; the aggregator treats a missing per-test entry
+#     as a flagged gap, never a fabricated zero).
+#   * non-json / unexpected-content-type / bare-scalar -> a ONE-element list with
+#     a typed `parse_error` sentinel + the score value None (the whole batch is
+#     unparseable).
+#   * non-dict array element -> per-element `parse_error: "non-object-array-element"`.
+#   * already-parsed list/dict content -> passed through (provider pre-parsed).
+# No malformed case is zero-padded; the flagged sentinel carries None, never 0.
+# ==========================================================================
+
+import json
+
+from kaizen.nodes.rag.evaluation import (
+    _parse_score_array,
+    _unwrap_response_content,
+    compose_answer_quality_messages,
+    compose_faithfulness_messages,
+    compose_relevance_messages,
+    parse_answer_quality_response,
+    parse_faithfulness_response,
+    parse_relevance_response,
+)
+
+
+def _wrap(obj) -> dict:
+    """Build the LLMAgentNode `response` port shape with a JSON-string content."""
+    return {"content": json.dumps(obj)}
+
+
+class TestEvaluationUnwrapResponseContent:
+    """`_unwrap_response_content`: dict -> .content, bare value -> passthrough."""
+
+    def test_unwrap_dict_returns_content(self):
+        assert _unwrap_response_content({"content": "hello"}) == "hello"
+
+    def test_unwrap_dict_missing_content_returns_none(self):
+        assert _unwrap_response_content({"other": "x"}) is None
+
+    def test_unwrap_bare_string_passthrough(self):
+        assert _unwrap_response_content("raw string") == "raw string"
+
+    def test_unwrap_none_passthrough(self):
+        assert _unwrap_response_content(None) is None
+
+
+class TestParseScoreArray:
+    """`_parse_score_array`: per-test list, honest [] on empty, flagged sentinels.
+
+    This is the shared core of all three judge parsers; its honest-default
+    contract is asserted directly here (zero-tolerance Rule 2) and re-asserted
+    through each public parser below.
+    """
+
+    def test_valid_array_returns_per_test_dicts(self):
+        arr = [{"faithfulness_score": 0.9}, {"faithfulness_score": 0.5}]
+        result = _parse_score_array(_wrap(arr), "faithfulness_score")
+        assert result == arr
+
+    def test_already_list_content_passthrough(self):
+        # Provider pre-parsed: content is already a list of dicts.
+        arr = [{"relevance_score": 0.3}]
+        result = _parse_score_array({"content": arr}, "relevance_score")
+        assert result == arr
+
+    def test_single_object_content_wrapped_in_list(self):
+        # A degenerate batch-of-one: a single JSON object -> [parsed].
+        obj = {"overall_quality": 0.7}
+        result = _parse_score_array(_wrap(obj), "overall_quality")
+        assert result == [obj]
+
+    def test_none_response_returns_empty_list_no_sentinel(self):
+        # Honest "nothing to score" — NO parse_error, NEVER a fabricated zero.
+        assert _parse_score_array(None, "faithfulness_score") == []
+
+    def test_empty_content_returns_empty_list_no_sentinel(self):
+        assert _parse_score_array({"content": ""}, "faithfulness_score") == []
+
+    def test_whitespace_content_returns_empty_list_no_sentinel(self):
+        assert _parse_score_array({"content": "   "}, "faithfulness_score") == []
+
+    def test_non_json_content_returns_flagged_sentinel(self):
+        result = _parse_score_array({"content": "not json{"}, "faithfulness_score")
+        assert result == [
+            {"faithfulness_score": None, "parse_error": "non-json-response"}
+        ]
+
+    def test_unexpected_content_type_returns_flagged_sentinel(self):
+        result = _parse_score_array({"content": 42}, "faithfulness_score")
+        assert result == [
+            {"faithfulness_score": None, "parse_error": "unexpected-content-type"}
+        ]
+
+    def test_bare_scalar_json_returns_flagged_sentinel(self):
+        # Valid JSON that is neither array nor object (a number).
+        result = _parse_score_array({"content": "0.8"}, "faithfulness_score")
+        assert result == [
+            {"faithfulness_score": None, "parse_error": "non-array-non-object-json"}
+        ]
+
+    def test_non_dict_array_element_flagged_per_element(self):
+        # Array whose elements are not objects -> per-element flagged sentinel.
+        result = _parse_score_array({"content": "[1, 2]"}, "faithfulness_score")
+        assert result == [
+            {"faithfulness_score": None, "parse_error": "non-object-array-element"},
+            {"faithfulness_score": None, "parse_error": "non-object-array-element"},
+        ]
+
+
+class TestParseFaithfulnessResponse:
+    def test_valid_returns_scores_with_faithfulness_key(self):
+        arr = [{"faithfulness_score": 0.9}, {"faithfulness_score": 0.4}]
+        result = parse_faithfulness_response(_wrap(arr))
+        assert result == {"scores": arr}
+
+    def test_none_returns_empty_scores_no_sentinel(self):
+        result = parse_faithfulness_response(None)
+        assert result == {"scores": []}
+
+    def test_empty_content_returns_empty_scores(self):
+        result = parse_faithfulness_response({"content": ""})
+        assert result == {"scores": []}
+
+    def test_non_json_returns_flagged_faithfulness_sentinel(self):
+        result = parse_faithfulness_response({"content": "not json{"})
+        assert result == {
+            "scores": [{"faithfulness_score": None, "parse_error": "non-json-response"}]
+        }
+
+    def test_bad_content_type_returns_flagged_sentinel(self):
+        result = parse_faithfulness_response({"content": 42})
+        assert result == {
+            "scores": [
+                {"faithfulness_score": None, "parse_error": "unexpected-content-type"}
+            ]
+        }
+
+
+class TestParseRelevanceResponse:
+    def test_valid_returns_scores_with_relevance_key(self):
+        arr = [{"relevance_score": 0.8}]
+        result = parse_relevance_response(_wrap(arr))
+        assert result == {"scores": arr}
+
+    def test_none_returns_empty_scores_no_sentinel(self):
+        result = parse_relevance_response(None)
+        assert result == {"scores": []}
+
+    def test_non_json_returns_flagged_relevance_sentinel(self):
+        result = parse_relevance_response({"content": "not json{"})
+        assert result == {
+            "scores": [{"relevance_score": None, "parse_error": "non-json-response"}]
+        }
+
+
+class TestParseAnswerQualityResponse:
+    def test_valid_returns_scores_with_overall_quality_key(self):
+        arr = [{"overall_quality": 0.6}, {"overall_quality": 0.95}]
+        result = parse_answer_quality_response(_wrap(arr))
+        assert result == {"scores": arr}
+
+    def test_none_returns_empty_scores_no_sentinel(self):
+        result = parse_answer_quality_response(None)
+        assert result == {"scores": []}
+
+    def test_non_json_returns_flagged_overall_quality_sentinel(self):
+        result = parse_answer_quality_response({"content": "not json{"})
+        assert result == {
+            "scores": [{"overall_quality": None, "parse_error": "non-json-response"}]
+        }
+
+
+# --------------------------------------------------------------------------
+# Composers — VALID interpolation (real per-test data rendered) + EMPTY input
+# (well-formed messages, honest "No test results" body). Each returns a
+# {"messages": [{"role","content"}, ...]} shape.
+# --------------------------------------------------------------------------
+
+
+def _assert_messages_shape(result):
+    """Assert the composer return is a well-formed OpenAI chat `messages` list."""
+    assert isinstance(result, dict)
+    assert "messages" in result
+    msgs = result["messages"]
+    assert isinstance(msgs, list) and len(msgs) >= 1
+    for m in msgs:
+        assert isinstance(m, dict)
+        assert "role" in m and "content" in m
+    return msgs
+
+
+_ONE_TEST = [
+    {
+        "query": "What is BERT?",
+        "generated_answer": "A bidirectional transformer.",
+        "retrieved_contexts": [{"content": "BERT is bidirectional.", "score": 0.91}],
+        "reference_answer": "BERT is a bidirectional encoder.",
+    }
+]
+
+
+class TestComposeFaithfulnessMessages:
+    def test_valid_interpolates_real_test_data(self):
+        msgs = _assert_messages_shape(compose_faithfulness_messages(_ONE_TEST))
+        content = msgs[0]["content"]
+        # The REAL query + answer + context are rendered into the judge prompt.
+        assert "What is BERT?" in content
+        assert "A bidirectional transformer." in content
+        assert "BERT is bidirectional." in content
+        # Faithfulness does not render the reference answer.
+        assert "BERT is a bidirectional encoder." not in content
+
+    def test_empty_returns_wellformed_no_results_body(self):
+        msgs = _assert_messages_shape(compose_faithfulness_messages([]))
+        assert "No test results were provided to evaluate." in msgs[0]["content"]
+
+
+class TestComposeRelevanceMessages:
+    def test_valid_interpolates_real_test_data(self):
+        msgs = _assert_messages_shape(compose_relevance_messages(_ONE_TEST))
+        content = msgs[0]["content"]
+        assert "What is BERT?" in content
+        assert "A bidirectional transformer." in content
+
+    def test_empty_returns_wellformed_no_results_body(self):
+        msgs = _assert_messages_shape(compose_relevance_messages([]))
+        assert "No test results were provided to evaluate." in msgs[0]["content"]
+
+
+class TestComposeAnswerQualityMessages:
+    def test_valid_interpolates_real_test_data_with_reference(self):
+        msgs = _assert_messages_shape(compose_answer_quality_messages(_ONE_TEST))
+        content = msgs[0]["content"]
+        assert "A bidirectional transformer." in content
+        # answer_quality DOES render the reference answer (it compares against it).
+        assert "BERT is a bidirectional encoder." in content
+
+    def test_empty_returns_wellformed_no_results_body(self):
+        msgs = _assert_messages_shape(compose_answer_quality_messages([]))
+        assert "No test results were provided to evaluate." in msgs[0]["content"]

@@ -236,6 +236,289 @@ def _unwrap_response_content(response: Any) -> Any:
     return response
 
 
+# ---------------------------------------------------------------------------
+# COMPUTE-stage functions (#1117/#1123/#1118 root-cause fix).
+#
+# Each function below was lifted verbatim from a prior PythonCodeNode `"code"`
+# string body and is wired via `PythonCodeNode.from_function(fn)`. A
+# from_function node publishes its `return` on the SINGLE flat `result` port
+# (NOT the top-level keys the f-string codegen assembled), so every downstream
+# `add_connection(..., "<node_id>", ...)` reading a top-level key was rewired to
+# read the nested `result.<key>` port. The lift makes the bodies statically
+# checkable real functions (real `return` -> `result`) and closes the
+# brace-escape / import-trap / publish-nothing defect classes. Mirrors the
+# reference template landed in optimized.py / graph.py / evaluation.py /
+# query_processing.py + the strategy parser/composer above in this file.
+#
+# IN-GRAPH HONESTY (zero-tolerance Rule 2): each function's computation is
+# behavior-equivalent to the prior codegen; honest defaults on edge inputs
+# (a cache-miss / unwired-optional branch arriving None), never fabricated data.
+# ---------------------------------------------------------------------------
+
+
+def _analyze_documents(documents=None) -> dict:
+    """Analyze document quality and recommend a RAG strategy.
+
+    AdvancedRAGWorkflowNode entry stage (was the ``quality_analyzer`` ``code``
+    string). Filters non-dict elements, computes corpus characteristics, and
+    selects a strategy. Publishes ``{"analysis": <dict>, "documents": <list>}``
+    on the from_function ``result`` port — the SwitchNode router + the validator
+    read ``result.analysis`` / ``result.documents``.
+    """
+
+    def _content(doc):
+        # `_content` filters a present-but-None `content` key (dict.get returns
+        # None, so `or ""` is required); non-dict elements are filtered out by
+        # the comprehension below before this is reached.
+        return (doc.get("content") or "") if isinstance(doc, dict) else ""
+
+    documents = [d for d in (documents or []) if isinstance(d, dict)]
+    analysis = {
+        "total_docs": len(documents),
+        "avg_length": (
+            sum(len(_content(doc)) for doc in documents) / len(documents)
+            if documents
+            else 0
+        ),
+        "has_structure": any("section" in doc or "heading" in doc for doc in documents),
+        "is_technical": any(
+            keyword in _content(doc).lower()
+            for doc in documents
+            for keyword in ["code", "function", "algorithm", "api", "class"]
+        ),
+        "recommended_strategy": "semantic",  # Default
+    }
+
+    # Determine best strategy based on analysis
+    if analysis["has_structure"] and analysis["avg_length"] > 2000:
+        analysis["recommended_strategy"] = "hierarchical"
+    elif analysis["is_technical"]:
+        analysis["recommended_strategy"] = "statistical"
+    elif analysis["total_docs"] > 100:
+        analysis["recommended_strategy"] = "hybrid"
+
+    return {"analysis": analysis, "documents": documents}
+
+
+def _validate_rag_results(rag_results=None, analysis=None) -> dict:
+    """Validate RAG strategy output against quality thresholds.
+
+    AdvancedRAGWorkflowNode terminal stage (was the ``quality_validator``
+    ``code`` string). ``rag_results`` arrives from whichever strategy pipeline
+    fired (``output`` port); ``analysis`` from the quality analyzer. Honest
+    defaults (empty dict) when an upstream branch did not fire. Publishes the
+    full validation envelope on the from_function ``result`` port.
+    """
+    results = rag_results if isinstance(rag_results, dict) else {}
+    analysis = analysis if isinstance(analysis, dict) else {}
+
+    scores = results.get("scores") or []
+    validation = {
+        "results_count": len(results.get("documents", [])),
+        "avg_score": (sum(scores) / len(scores)) if scores else 0,
+        "quality_score": 0.0,
+        "passed": False,
+    }
+
+    # Calculate quality score
+    if validation["results_count"] > 0:
+        validation["quality_score"] = validation["avg_score"] * (
+            validation["results_count"] / 5.0
+        )
+        validation["passed"] = validation["quality_score"] > 0.5
+
+    return {
+        "results": results,
+        "validation": validation,
+        "strategy_used": analysis.get("recommended_strategy"),
+        "final_status": "passed" if validation["passed"] else "needs_improvement",
+    }
+
+
+def _analyze_for_llm(documents=None, query="") -> dict:
+    """Compute document characteristics for AdaptiveRAGWorkflowNode's LLM analyzer.
+
+    Entry stage (was the ``document_preprocessor`` ``code`` string). Filters
+    non-dict elements, derives corpus characteristics + content types, and
+    echoes the ``query`` + filtered ``documents``. Publishes the FLAT analysis
+    dict on the from_function ``result`` port — the strategy-analyzer messages
+    composer reads ``result.document_count`` / ``result.avg_length`` /
+    ``result.has_structure`` / ``result.is_technical`` / ``result.content_types``
+    / ``result.query``; the SwitchNode executor + aggregator read ``result`` as
+    ``preprocessed_data``.
+
+    (The prior codegen carried an ``import re`` that the body never used; it is
+    dropped in the lift — zero behavioral change, no vestigial import.)
+    """
+
+    def _content(doc):
+        # Filter a present-but-None `content` key (dict.get returns None ->
+        # `or ""`); non-dict elements are removed by the comprehension below.
+        return (doc.get("content") or "") if isinstance(doc, dict) else ""
+
+    documents = [d for d in (documents or []) if isinstance(d, dict)]
+    if not documents:
+        return {
+            "document_count": 0,
+            "avg_length": 0,
+            "has_structure": False,
+            "is_technical": False,
+            "content_types": [],
+            "query": query,
+        }
+
+    # Analyze documents
+    total_length = sum(len(_content(doc)) for doc in documents)
+    avg_length = total_length / len(documents)
+
+    # Check for structure
+    has_structure = any(
+        any(
+            keyword in _content(doc).lower()
+            for keyword in ["# ", "## ", "### ", "heading", "section", "chapter"]
+        )
+        for doc in documents
+    )
+
+    # Check for technical content
+    technical_keywords = [
+        "code",
+        "function",
+        "class",
+        "algorithm",
+        "api",
+        "import",
+        "def ",
+        "return",
+        "variable",
+    ]
+    is_technical = any(
+        any(keyword in _content(doc).lower() for keyword in technical_keywords)
+        for doc in documents
+    )
+
+    # Determine content types
+    content_types = []
+    if has_structure:
+        content_types.append("structured")
+    if is_technical:
+        content_types.append("technical")
+    if avg_length > 2000:
+        content_types.append("long_form")
+    if len(documents) > 50:
+        content_types.append("large_collection")
+
+    return {
+        "document_count": len(documents),
+        "avg_length": int(avg_length),
+        "has_structure": has_structure,
+        "is_technical": is_technical,
+        "content_types": content_types,
+        "query": query,
+        "documents": documents,
+    }
+
+
+def _aggregate_adaptive_results(
+    rag_results=None, llm_decision=None, preprocessed_data=None
+) -> dict:
+    """Aggregate the AdaptiveRAGWorkflowNode terminal output.
+
+    Terminal stage (was the ``results_aggregator`` ``code`` string).
+    ``rag_results`` arrives from whichever strategy pipeline fired (``output``
+    port); ``llm_decision`` from the strategy-decision parser's ``result`` port
+    (the PARSED ``{recommended_strategy, reasoning, confidence,
+    fallback_strategy}`` decision); ``preprocessed_data`` from the
+    preprocessor's ``result`` port. Honest defaults (empty dict) when an
+    upstream branch did not fire. Publishes the aggregate envelope on the flat
+    ``result`` port.
+    """
+    llm_decision = llm_decision if isinstance(llm_decision, dict) else {}
+    preprocessed_data = preprocessed_data if isinstance(preprocessed_data, dict) else {}
+
+    return {
+        "results": rag_results,
+        "strategy_used": llm_decision.get("recommended_strategy"),
+        "llm_reasoning": llm_decision.get("reasoning"),
+        "confidence": llm_decision.get("confidence"),
+        "document_analysis": {
+            "count": preprocessed_data.get("document_count"),
+            "avg_length": preprocessed_data.get("avg_length"),
+            "content_types": preprocessed_data.get("content_types"),
+        },
+        "adaptive_metadata": {
+            # F9 #1126: the actual model is read from the upstream LLMAgentNode
+            # config; emit a documented sentinel here (this aggregate does not
+            # carry the build-time model name).
+            "llm_model_used": "<env-default>",
+            "strategy_selection_method": "llm_analysis",
+            "fallback_available": llm_decision.get("fallback_strategy"),
+        },
+    }
+
+
+def _make_config_processor(
+    *,
+    default_strategy: str,
+    chunk_size: int,
+    chunk_overlap: int,
+    embedding_model: str,
+    retrieval_k: int,
+):
+    """Build a from_function-compatible ``config_processor`` bound to build-time
+    RAGConfig values for RAGPipelineWorkflowNode.
+
+    This is the closure-bound factory (#1118 import-trap / #1123 brace-escape
+    root-cause fix): the prior ``config_processor`` was an f-STRING codegen
+    interpolating ``repr()``-escaped RAGConfig literals into the ``code`` body
+    (doubled ``{{`` braces, `repr()` injection-hardening). Lifting to a real
+    function with the literals captured in a closure removes the f-string +
+    brace-escape surface entirely while preserving the SAME injection-safety
+    invariant — the values are bound as Python objects (already typed-coerced by
+    the caller), never re-rendered into source text.
+
+    The returned function declares ``documents`` / ``query`` / ``strategy`` as
+    its explicit inputs (the same ports the prior codegen read as locals) and
+    returns the flat ``processed_config`` dict on the from_function ``result``
+    port. The SwitchNode dispatcher reads ``strategy`` as a top-level key of that
+    dict; the formatter reads the whole dict as ``config``.
+    """
+
+    def _process_config(documents=None, query="", strategy="") -> dict:
+        return {
+            "strategy": strategy if strategy else default_strategy,
+            "documents": documents,
+            "query": query if query else "",
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+            "embedding_model": embedding_model,
+            "retrieval_k": retrieval_k,
+        }
+
+    _process_config.__name__ = "config_processor"
+    _process_config.__doc__ = "Build the RAGPipelineWorkflowNode processed_config."
+    return _process_config
+
+
+def _format_pipeline_results(strategy_results=None, processed_config=None) -> dict:
+    """Format the RAGPipelineWorkflowNode terminal output.
+
+    Terminal stage (was the ``results_formatter`` ``code`` string).
+    ``strategy_results`` arrives from whichever strategy pipeline fired
+    (``output`` port); ``processed_config`` from the ``config_processor``'s
+    ``result``. Honest default (empty dict) when no config flowed. Publishes the
+    formatted envelope on the flat ``result`` port.
+    """
+    config = processed_config if isinstance(processed_config, dict) else {}
+    return {
+        "results": strategy_results,
+        "strategy_used": config.get("strategy"),
+        "configuration": config,
+        "pipeline_type": "configurable",
+        "success": True if strategy_results else False,
+    }
+
+
 @register_node()
 class SimpleRAGWorkflowNode(WorkflowNode):
     """
@@ -350,45 +633,25 @@ class AdvancedRAGWorkflowNode(WorkflowNode):
         """Create advanced RAG workflow with quality checks and monitoring"""
         builder = WorkflowBuilder()
 
-        # Document quality analyzer
-        quality_analyzer_id = builder.add_node(
-            "PythonCodeNode",
+        # Document quality analyzer.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_analyze_documents` function wired via `PythonCodeNode.from_function`.
+        # The node publishes its return on the flat `result` port carrying
+        # `{"analysis": {...}, "documents": [...]}`; the downstream router +
+        # validator now read the nested `result.analysis` port (the SwitchNode
+        # `condition_field: "recommended_strategy"` resolves against the analysis
+        # dict's top-level key). `_internal=True` suppresses the consumer-facing
+        # instance-API advisory (SDK-internal construction; mirrors optimized.py).
+        # `type: ignore[attr-defined]`: `from_function` is a classmethod on
+        # concrete PythonCodeNode, erased to `type[Node]` by `@register_node`.
+        quality_analyzer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _analyze_documents,
+                name="quality_analyzer",
+            ),
             node_id="quality_analyzer",
-            config={
-                "code": """
-# Analyze document quality and determine best RAG strategy
-def analyze_documents(documents):
-    # `_content` is a nested local (PythonCodeNode execs the body in a scope
-    # where module-level defs are not visible to nested genexprs). A
-    # present-but-None `content` key returns None from dict.get(..., ""), so
-    # `or ""` is required; non-dict elements are filtered out first.
-    def _content(doc):
-        return (doc.get("content") or "") if isinstance(doc, dict) else ""
-
-    documents = [d for d in (documents or []) if isinstance(d, dict)]
-    analysis = {
-        "total_docs": len(documents),
-        "avg_length": sum(len(_content(doc)) for doc in documents) / len(documents) if documents else 0,
-        "has_structure": any("section" in doc or "heading" in doc for doc in documents),
-        "is_technical": any(keyword in _content(doc).lower()
-                          for doc in documents
-                          for keyword in ["code", "function", "algorithm", "api", "class"]),
-        "recommended_strategy": "semantic"  # Default
-    }
-
-    # Determine best strategy based on analysis
-    if analysis["has_structure"] and analysis["avg_length"] > 2000:
-        analysis["recommended_strategy"] = "hierarchical"
-    elif analysis["is_technical"]:
-        analysis["recommended_strategy"] = "statistical"
-    elif analysis["total_docs"] > 100:
-        analysis["recommended_strategy"] = "hybrid"
-
-    return analysis
-
-result = {"analysis": analyze_documents(documents), "documents": documents}
-"""
-            },
+            _internal=True,
         )
 
         # Strategy router using switch node.
@@ -437,40 +700,37 @@ result = {"analysis": analyze_documents(documents), "documents": documents}
             config={"workflow": hierarchical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
-        # Quality validator
-        validator_id = builder.add_node(
-            "PythonCodeNode",
+        # Quality validator.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_validate_rag_results` function wired via
+        # `PythonCodeNode.from_function`. Its `rag_results` input arrives from
+        # whichever strategy pipeline fired (`output` port); `analysis` from the
+        # quality analyzer's nested `result.analysis` port. The node publishes
+        # the validation envelope on the flat `result` port.
+        validator_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _validate_rag_results,
+                name="quality_validator",
+            ),
             node_id="quality_validator",
-            config={
-                "code": """
-def validate_rag_results(results, analysis):
-    validation = {
-        "results_count": len(results.get("documents", [])),
-        "avg_score": sum(results.get("scores", [])) / len(results.get("scores", [])) if results.get("scores") else 0,
-        "quality_score": 0.0,
-        "passed": False
-    }
-
-    # Calculate quality score
-    if validation["results_count"] > 0:
-        validation["quality_score"] = validation["avg_score"] * (validation["results_count"] / 5.0)
-        validation["passed"] = validation["quality_score"] > 0.5
-
-    return {
-        "results": results,
-        "validation": validation,
-        "strategy_used": analysis.get("recommended_strategy"),
-        "final_status": "passed" if validation["passed"] else "needs_improvement"
-    }
-
-result = validate_rag_results(rag_results, analysis)
-"""
-            },
+            _internal=True,
         )
 
         # Connect the advanced pipeline. SwitchNode's primary input port is
         # `input_data`; each multi-case match emits on `case_<value>`.
-        builder.add_connection(quality_analyzer_id, "result", router_id, "input_data")
+        #
+        # PHANTOM-PORT FIX: the SwitchNode `condition_field` reads
+        # `recommended_strategy` as a TOP-LEVEL key of `input_data`, but
+        # `_analyze_documents` publishes it nested inside `result.analysis`
+        # (the flat `result` port carries `{"analysis": {...}, "documents": ...}`).
+        # The edge now reads the nested `result.analysis` port so the SwitchNode
+        # switches on the REAL strategy the analyzer selected (the pre-migration
+        # edge fed the whole wrapper dict, whose top-level had no
+        # `recommended_strategy` key).
+        builder.add_connection(
+            quality_analyzer_id, "result.analysis", router_id, "input_data"
+        )
 
         # Connect router to all strategy pipelines via the per-case output ports.
         builder.add_connection(router_id, "case_semantic", semantic_id, "input")
@@ -483,7 +743,13 @@ result = validate_rag_results(rag_results, analysis)
         builder.add_connection(statistical_id, "output", validator_id, "rag_results")
         builder.add_connection(hybrid_id, "output", validator_id, "rag_results")
         builder.add_connection(hierarchical_id, "output", validator_id, "rag_results")
-        builder.add_connection(quality_analyzer_id, "result", validator_id, "analysis")
+        # PHANTOM-PORT FIX: feed the validator the nested `result.analysis` dict
+        # (so `analysis.get("recommended_strategy")` resolves to the real
+        # strategy) rather than the whole `result` wrapper. The strategy
+        # pipelines publish their RAG output on `output`, wired to `rag_results`.
+        builder.add_connection(
+            quality_analyzer_id, "result.analysis", validator_id, "analysis"
+        )
 
         return builder.build(name="advanced_rag_workflow")
 
@@ -595,76 +861,24 @@ Recommend the optimal RAG strategy:""",
             },
         )
 
-        # Document preprocessor for LLM analysis
-        preprocessor_id = builder.add_node(
-            "PythonCodeNode",
+        # Document preprocessor for LLM analysis.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_analyze_for_llm` function wired via `PythonCodeNode.from_function`.
+        # The node publishes the FLAT analysis dict on the `result` port; the
+        # nested `result.<key>` ports (`document_count` / `avg_length` /
+        # `has_structure` / `is_technical` / `content_types` / `query`) feed the
+        # strategy-analyzer messages composer (already wired below), and the
+        # whole `result` feeds the SwitchNode executor + aggregator as
+        # `preprocessed_data`. `_internal=True` suppresses the consumer-facing
+        # instance-API advisory.
+        preprocessor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _analyze_for_llm,
+                name="document_preprocessor",
+            ),
             node_id="document_preprocessor",
-            config={
-                "code": """
-import re
-
-def analyze_for_llm(documents, query=""):
-    # `_content` is a nested local (PythonCodeNode execs the body in a scope
-    # where module-level defs are not visible to nested genexprs). A
-    # present-but-None `content` key returns None from dict.get(..., ""), so
-    # `or ""` is required; non-dict elements are filtered out first.
-    def _content(doc):
-        return (doc.get("content") or "") if isinstance(doc, dict) else ""
-
-    documents = [d for d in (documents or []) if isinstance(d, dict)]
-    if not documents:
-        return {
-            "document_count": 0,
-            "avg_length": 0,
-            "has_structure": False,
-            "is_technical": False,
-            "content_types": [],
-            "query": query
-        }
-
-    # Analyze documents
-    total_length = sum(len(_content(doc)) for doc in documents)
-    avg_length = total_length / len(documents)
-
-    # Check for structure
-    has_structure = any(
-        any(keyword in _content(doc).lower()
-            for keyword in ["# ", "## ", "### ", "heading", "section", "chapter"])
-        for doc in documents
-    )
-
-    # Check for technical content
-    technical_keywords = ["code", "function", "class", "algorithm", "api", "import", "def ", "return", "variable"]
-    is_technical = any(
-        any(keyword in _content(doc).lower()
-            for keyword in technical_keywords)
-        for doc in documents
-    )
-
-    # Determine content types
-    content_types = []
-    if has_structure:
-        content_types.append("structured")
-    if is_technical:
-        content_types.append("technical")
-    if avg_length > 2000:
-        content_types.append("long_form")
-    if len(documents) > 50:
-        content_types.append("large_collection")
-
-    return {
-        "document_count": len(documents),
-        "avg_length": int(avg_length),
-        "has_structure": has_structure,
-        "is_technical": is_technical,
-        "content_types": content_types,
-        "query": query,
-        "documents": documents
-    }
-
-result = analyze_for_llm(documents, query)
-"""
-            },
+            _internal=True,
         )
 
         # Strategy executor with switch
@@ -707,38 +921,23 @@ result = analyze_for_llm(documents, query)
             config={"workflow": hierarchical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
-        # Results aggregator
-        aggregator_id = builder.add_node(
-            "PythonCodeNode",
+        # Results aggregator.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_aggregate_adaptive_results` function wired via
+        # `PythonCodeNode.from_function`. `llm_decision` reads the PARSED
+        # strategy-decision dict (republished on `strategy_decision_parser.result`
+        # — see the OUTPUT-side wiring below); `preprocessed_data` reads the
+        # preprocessor's `result`; `rag_results` reads the fired strategy
+        # pipeline's `output`. The node publishes the aggregate envelope on the
+        # flat `result` port.
+        aggregator_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _aggregate_adaptive_results,
+                name="results_aggregator",
+            ),
             node_id="results_aggregator",
-            config={
-                "code": """
-def aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data):
-    return {
-        "results": rag_results,
-        "strategy_used": llm_decision.get("recommended_strategy"),
-        "llm_reasoning": llm_decision.get("reasoning"),
-        "confidence": llm_decision.get("confidence"),
-        "document_analysis": {
-            "count": preprocessed_data.get("document_count"),
-            "avg_length": preprocessed_data.get("avg_length"),
-            "content_types": preprocessed_data.get("content_types")
-        },
-        "adaptive_metadata": {
-            # F9 #1126: this dict lives inside a PythonCodeNode codegen
-            # body exec'd in a fresh namespace; the workflows.py
-            # module-scope `_DEFAULT_LLM_MODEL` is NOT visible inside the
-            # exec scope. Emit a documented sentinel; downstream consumers
-            # read the actual model from the upstream LLMAgentNode config.
-            "llm_model_used": "<env-default>",
-            "strategy_selection_method": "llm_analysis",
-            "fallback_available": llm_decision.get("fallback_strategy")
-        }
-    }
-
-result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data)
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composer (reference template — conversational.py /
@@ -764,7 +963,7 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
         # `@register_node` for static checkers (mirrors conversational.py).
         # `_internal=True` suppresses the consumer-facing instance-API advisory.
         strategy_analyzer_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_strategy_analyzer_messages,
                 name="strategy_analyzer_messages_composer",
             ),
@@ -784,7 +983,7 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
         # connections below). Malformed output yields a typed parse-error
         # sentinel, NOT a fabricated strategy (zero-tolerance Rule 2).
         strategy_decision_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_strategy_decision,
                 name="strategy_decision_parser",
             ),
@@ -1001,32 +1200,32 @@ class RAGPipelineWorkflowNode(WorkflowNode):
         # dict). Every invocation raised ``NameError: name 'kwargs' is
         # not defined`` at the entry node.
         #
-        # The fix constructs the config dict directly without the wrapper
-        # function + undefined ``**kwargs`` unpacking. The default values
-        # (chunk_size / overlap / embedding_model / retrieval_k) are
-        # interpolated from ``self.rag_config`` at workflow-build time,
-        # matching the original codegen's behavior when no override is
-        # supplied. PythonCodeNode does not expose a kwargs dict, so the
-        # original codegen's "user can override chunk_size at runtime"
-        # contract was never reachable through this PythonCodeNode anyway
-        # — the override path is via ``config: RAGConfig`` at construction
-        # time, which IS preserved.
-        # Security round-1 (H1, M2): RAGConfig values + default_strategy
-        # are interpolated into a PythonCodeNode `code` string at workflow
-        # build time. To prevent code injection if RAGConfig is ever
-        # constructed from untrusted bytes (e.g. a Nexus endpoint that
-        # accepts RAGConfig kwargs), every interpolated value is forced
-        # through a typed coercion + `repr()` (which emits a syntactically
-        # safe Python literal — any embedded quotes / backslashes are
-        # escaped, control characters are encoded, and arbitrary
-        # subclass-`__str__`-override attacks are neutralized because the
-        # repr is computed on the coerced value).
+        # #1117/#1123/#1118 root-cause fix: the prior ``config_processor`` was an
+        # f-STRING codegen interpolating ``repr()``-escaped RAGConfig literals
+        # into the ``code`` body (doubled ``{{`` braces — the #1123 brace-escape
+        # surface). It is lifted to the module-level ``_make_config_processor``
+        # closure factory wired via ``PythonCodeNode.from_function``: the
+        # build-time RAGConfig values are captured as typed Python objects in the
+        # closure, NEVER re-rendered into source text. This removes the f-string +
+        # brace-escape surface entirely while preserving the SAME injection-safety
+        # invariant the prior ``repr()`` hardening provided (the values are bound
+        # objects, already typed-coerced below, so no source-injection path
+        # exists). The returned function declares ``documents`` / ``query`` /
+        # ``strategy`` as its explicit input ports (the same locals the prior
+        # codegen read) and returns the flat ``processed_config`` dict on the
+        # ``result`` port — the SwitchNode dispatcher reads ``strategy`` as a
+        # top-level key, the formatter reads the whole dict as ``config``.
         #
-        # Strategy enum validation (M2): `default_strategy` MUST be one of
-        # the SwitchNode's declared cases. An unknown strategy would silently
-        # fall through to no case match — converting that into a typed
-        # ValueError surfaces misuse at construction instead of producing a
-        # confusing empty workflow output at runtime.
+        # PythonCodeNode does not expose a kwargs dict, so the original codegen's
+        # "user can override chunk_size at runtime" contract was never reachable
+        # through this node anyway — the override path is via ``config: RAGConfig``
+        # at construction time, which IS preserved (the closure captures it).
+        #
+        # Strategy enum validation (M2): `default_strategy` MUST be one of the
+        # SwitchNode's declared cases. An unknown strategy would silently fall
+        # through to no case match — converting that into a typed ValueError
+        # surfaces misuse at construction instead of producing a confusing empty
+        # workflow output at runtime.
         _ALLOWED_STRATEGIES = ("semantic", "statistical", "hybrid", "hierarchical")
         if self.default_strategy not in _ALLOWED_STRATEGIES:
             raise ValueError(
@@ -1035,30 +1234,23 @@ class RAGPipelineWorkflowNode(WorkflowNode):
                 f"SwitchNode would never dispatch to a matching case."
             )
 
-        _default_strategy_lit = repr(self.default_strategy)
-        _chunk_size_lit = repr(int(self.rag_config.chunk_size))
-        _chunk_overlap_lit = repr(int(self.rag_config.chunk_overlap))
-        _embedding_model_lit = repr(str(self.rag_config.embedding_model))
-        _retrieval_k_lit = repr(int(self.rag_config.retrieval_k))
-
-        config_processor_id = builder.add_node(
-            "PythonCodeNode",
+        # Typed coercion of every build-time value before binding into the
+        # closure (mirrors the prior ``repr(int(...))`` / ``repr(str(...))``
+        # coercion — neutralizes a subclass-``__str__``/``__int__`` override
+        # smuggling a non-literal value).
+        config_processor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _make_config_processor(
+                    default_strategy=str(self.default_strategy),
+                    chunk_size=int(self.rag_config.chunk_size),
+                    chunk_overlap=int(self.rag_config.chunk_overlap),
+                    embedding_model=str(self.rag_config.embedding_model),
+                    retrieval_k=int(self.rag_config.retrieval_k),
+                ),
+                name="config_processor",
+            ),
             node_id="config_processor",
-            config={
-                "code": f"""
-processed_config = {{
-    "strategy": strategy if strategy else {_default_strategy_lit},
-    "documents": documents,
-    "query": query if query else "",
-    "chunk_size": {_chunk_size_lit},
-    "chunk_overlap": {_chunk_overlap_lit},
-    "embedding_model": {_embedding_model_lit},
-    "retrieval_k": {_retrieval_k_lit},
-}}
-
-result = processed_config
-"""
-            },
+            _internal=True,
         )
 
         # Strategy dispatcher
@@ -1088,24 +1280,21 @@ result = processed_config
             )
             strategy_ids[strategy_name] = strategy_id
 
-        # Results formatter
-        formatter_id = builder.add_node(
-            "PythonCodeNode",
+        # Results formatter.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_format_pipeline_results` function wired via
+        # `PythonCodeNode.from_function`. `strategy_results` arrives from
+        # whichever strategy pipeline fired (`output` port); `processed_config`
+        # from the `config_processor`'s `result`. The node publishes the
+        # formatted envelope on the flat `result` port.
+        formatter_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _format_pipeline_results,
+                name="results_formatter",
+            ),
             node_id="results_formatter",
-            config={
-                "code": """
-def format_pipeline_results(results, config):
-    return {
-        "results": results,
-        "strategy_used": config.get("strategy"),
-        "configuration": config,
-        "pipeline_type": "configurable",
-        "success": True if results else False
-    }
-
-result = format_pipeline_results(strategy_results, processed_config)
-"""
-            },
+            _internal=True,
         )
 
         # Connect configurable pipeline. SwitchNode's primary input port is

@@ -508,6 +508,350 @@ def parse_global_summary(response=None):
     return {"result": {"global_summary": None, "parse_error": "non-string-content"}}
 
 
+# ---------------------------------------------------------------------------
+# Deterministic graph-algorithm COMPUTE functions (#1117/#1123/#1118 root-cause
+# fix — Wave 3 Shard S3). These replace the prior f-string code-string
+# PythonCodeNode codegen the GraphRAGNode inlined for graph_builder / graph_retriever /
+# result_synthesizer. Each is a real module-level function wired via
+# `PythonCodeNode.from_function(...)`: a from_function node publishes its `return`
+# value on the FLAT `result` port (the runtime resolves dotted downstream reads
+# like `result.graph_data` into the published dict), so:
+#
+#   - #1117 (publish-nothing): a real `return {...}` always binds the published
+#     `result` port — no column-0 module-scope-assignment AST gymnastics.
+#   - #1123 (f-string brace-escape): no `{{ }}` escaping; real dict literals.
+#   - #1118 (import-trap): `import networkx` / `from collections import deque` run
+#     as REAL top-level imports inside the function body — outside the
+#     PythonCodeNode `exec()` sandbox that BLOCKED `import networkx` for the prior
+#     `code=` blocks. (The pre-Wave-3 inner graph could NOT run end-to-end under a
+#     plain LocalRuntime for exactly this reason; from_function closes that gap.)
+#
+# These are legitimate graph-algorithm code (construction / traversal / synthesis)
+# — NOT agent decision-making (rules/agent-reasoning.md): no LLM reasoning, no
+# if-else intent routing. The LLM stages reason; these deterministic helpers run
+# the networkx algorithms over the LLM-parsed entities/relationships. Malformed /
+# edge inputs resolve to HONEST empty graphs / defaults (zero-tolerance Rule 2) —
+# never fabricated entities.
+# ---------------------------------------------------------------------------
+
+
+def build_knowledge_graph(extraction_results=None, community_algorithm="louvain"):
+    """Build a networkx ``MultiDiGraph`` from parsed entity/relationship extractions.
+
+    ``extraction_results`` is the ``entity_extraction_parser`` ``result`` — a LIST
+    of per-doc extraction objects (the single LLM call returns one merged
+    extraction wrapped in a one-element list). Each object carries ``entities`` +
+    ``relationships`` lists. ``community_algorithm`` is the build-time
+    GraphRAGNode config bound through a thin closure (see ``_create_workflow``).
+
+    Returns ``{"graph_data": {...}}`` on the flat ``result`` port. An empty /
+    malformed ``extraction_results`` builds an EMPTY graph honestly — never
+    fabricated entities (zero-tolerance Rule 2).
+    """
+    from collections import defaultdict
+
+    import networkx as nx
+
+    if not isinstance(extraction_results, list):
+        extraction_results = []
+
+    G = nx.MultiDiGraph()
+    all_entities = []
+    all_relationships = []
+
+    for doc_extraction in extraction_results:
+        if not isinstance(doc_extraction, dict):
+            continue
+        entities = doc_extraction.get("entities") or []
+        relationships = doc_extraction.get("relationships") or []
+
+        for entity in entities:
+            if not isinstance(entity, dict) or "name" not in entity:
+                continue
+            node_id = str(entity["name"]).lower()
+            G.add_node(
+                node_id,
+                name=entity["name"],
+                type=entity.get("type", ""),
+                description=entity.get("description", ""),
+                documents=set(),
+            )
+            all_entities.append(entity)
+
+        for rel in relationships:
+            if not isinstance(rel, dict) or "source" not in rel or "target" not in rel:
+                continue
+            source = str(rel["source"]).lower()
+            target = str(rel["target"]).lower()
+            G.add_edge(
+                source,
+                target,
+                type=rel.get("type", ""),
+                description=rel.get("description", ""),
+            )
+            all_relationships.append(rel)
+
+    # Detect communities over the real graph.
+    if len(G) > 0:
+        if community_algorithm == "louvain":
+            import community
+
+            communities = community.best_partition(G.to_undirected())
+        else:
+            communities = {}
+            for i, comp in enumerate(nx.weakly_connected_components(G)):
+                for node in comp:
+                    communities[node] = i
+    else:
+        communities = {}
+
+    community_nodes = defaultdict(list)
+    for node, comm_id in communities.items():
+        community_nodes[comm_id].append(node)
+
+    return {
+        "graph_data": {
+            "graph": nx.node_link_data(G),
+            "entities": all_entities,
+            "relationships": all_relationships,
+            "communities": communities,
+            "community_nodes": dict(community_nodes),
+            "stats": {
+                "num_entities": len(G),
+                "num_relationships": len(G.edges()),
+                "num_communities": (
+                    len(set(communities.values())) if communities else 0
+                ),
+            },
+        }
+    }
+
+
+def retrieve_from_graph(graph_data=None, query_analysis=None, max_hops=2):
+    """Retrieve a relevant subgraph from ``graph_data`` driven by ``query_analysis``.
+
+    ``graph_data`` is the ``graph_builder`` ``result.graph_data`` value;
+    ``query_analysis`` is the ``query_analysis_parser`` ``result`` (the parsed
+    ``{entities, relationship_types, requires_multi_hop, reasoning_type}`` dict).
+    ``max_hops`` is the build-time GraphRAGNode config bound through a thin
+    closure (see ``_create_workflow``).
+
+    Returns ``{"graph_retrieval": {...}}`` on the flat ``result`` port. Absent /
+    malformed inputs yield an honest EMPTY subgraph — the retriever's per-field
+    ``.get()`` defaults already tolerate missing keys (zero-tolerance Rule 2).
+    """
+    from collections import deque
+
+    import networkx as nx
+
+    if not isinstance(graph_data, dict):
+        graph_data = {}
+    if not isinstance(query_analysis, dict):
+        query_analysis = {}
+
+    serialized = graph_data.get("graph")
+    if serialized:
+        G = nx.node_link_graph(serialized)
+    else:
+        G = nx.MultiDiGraph()
+
+    query_entities = [str(e).lower() for e in query_analysis.get("entities", [])]
+    relationship_types = query_analysis.get("relationship_types", [])
+    requires_multi_hop = query_analysis.get("requires_multi_hop", False)
+
+    # Find relevant nodes (fuzzy substring match against query entities).
+    relevant_nodes = set()
+    for entity in query_entities:
+        for node in G.nodes():
+            if entity in node or node in entity:
+                relevant_nodes.add(node)
+
+    # Multi-hop expansion (BFS up to max_hops) when the analysis asks for it.
+    if requires_multi_hop and relevant_nodes:
+        expanded_nodes = set(relevant_nodes)
+        for start_node in relevant_nodes:
+            visited = {start_node}
+            queue = deque([(start_node, 0)])
+            while queue:
+                node, depth = queue.popleft()
+                if depth >= max_hops:
+                    continue
+                for neighbor in G.neighbors(node):
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        expanded_nodes.add(neighbor)
+                        queue.append((neighbor, depth + 1))
+        relevant_nodes = expanded_nodes
+
+    if relevant_nodes:
+        subgraph = G.subgraph(relevant_nodes).copy()
+
+        relevant_edges = []
+        for u, v, data in subgraph.edges(data=True):
+            if not relationship_types or data.get("type") in relationship_types:
+                relevant_edges.append(
+                    {
+                        "source": u,
+                        "target": v,
+                        "type": data.get("type"),
+                        "description": data.get("description"),
+                    }
+                )
+
+        relevant_entities = []
+        for node in relevant_nodes:
+            node_data = G.nodes[node]
+            relevant_entities.append(
+                {
+                    "name": node_data.get("name", node),
+                    "type": node_data.get("type"),
+                    "description": node_data.get("description"),
+                    "centrality": nx.degree_centrality(subgraph).get(node, 0),
+                }
+            )
+
+        relevant_entities.sort(key=lambda x: x["centrality"], reverse=True)
+    else:
+        relevant_entities = []
+        relevant_edges = []
+
+    # Community context for the relevant nodes.
+    communities = graph_data.get("communities", {})
+    community_context = {}
+    for node in relevant_nodes:
+        comm_id = communities.get(node)
+        if comm_id is not None:
+            comm_nodes = graph_data.get("community_nodes", {}).get(str(comm_id), [])
+            community_context[comm_id] = comm_nodes
+
+    return {
+        "graph_retrieval": {
+            "entities": relevant_entities[:20],
+            "relationships": relevant_edges[:30],
+            "subgraph_stats": {
+                "nodes": len(relevant_nodes),
+                "edges": len(relevant_edges),
+            },
+            "community_context": community_context,
+            "query_entities_found": len(
+                [e for e in query_entities if any(e in n for n in relevant_nodes)]
+            ),
+        }
+    }
+
+
+def _render_synthesis_context(graph_retrieval: Any) -> str:
+    """Render the retrieved subgraph into a readable context block for synthesis.
+
+    Shared rendering for ``synthesize_results``; pure data formatting (the
+    permitted output-formatting exception per rules/agent-reasoning.md).
+    """
+    parts: List[str] = []
+    entities = graph_retrieval.get("entities") or []
+    if entities:
+        parts.append("Key Entities:")
+        for entity in entities[:10]:
+            if not isinstance(entity, dict):
+                continue
+            parts.append(
+                f"- {entity.get('name', '')} ({entity.get('type', '')}): "
+                f"{entity.get('description', '')}"
+            )
+
+    relationships = graph_retrieval.get("relationships") or []
+    if relationships:
+        parts.append("\nKey Relationships:")
+        for rel in relationships[:10]:
+            if not isinstance(rel, dict):
+                continue
+            parts.append(
+                f"- {rel.get('source', '')} {rel.get('type', '')} "
+                f"{rel.get('target', '')}"
+            )
+
+    community_context = graph_retrieval.get("community_context") or {}
+    if community_context:
+        parts.append("\nRelated Topic Clusters:")
+        for comm_id, nodes in list(community_context.items())[:3]:
+            node_list = nodes if isinstance(nodes, list) else []
+            parts.append(
+                f"- Cluster {comm_id}: " f"{', '.join(str(n) for n in node_list[:5])}"
+            )
+    return "\n".join(parts)
+
+
+def synthesize_results(
+    graph_retrieval=None,
+    query="",
+    graph_data=None,
+    global_summaries=None,
+    use_global_summary=True,
+):
+    """Combine the retrieved subgraph + query + (conditional) global summary.
+
+    ``graph_retrieval`` is the ``graph_retriever`` ``result.graph_retrieval``;
+    ``graph_data`` the ``graph_builder`` ``result.graph_data``; ``global_summaries``
+    the ``global_summary_parser`` ``result`` (the parsed ``{"global_summary":
+    <text or None>}`` dict) — wired ONLY when ``use_global_summary=True``.
+    ``use_global_summary`` is the build-time GraphRAGNode config bound through a
+    thin closure (see ``_create_workflow``).
+
+    CONDITIONAL-BEHAVIOR PRESERVATION (Wave-2.5 O3/F31-FU1): the global-summary
+    read fires ONLY on the enabled path. On the disabled path ``global_summaries``
+    is never wired AND ``use_global_summary`` is False, so ``global_summary`` is
+    ``None`` honestly — the from_function ``global_summaries=None`` default makes
+    the unwired input safe (a from_function node tolerates a missing declared
+    input, unlike the `code=` exec namespace that raised NameError on a bare
+    reference — which is why the prior codegen had to emit the read-lines
+    conditionally). Returns ``{"graph_rag_results": {...}}`` on ``result``.
+    """
+    if not isinstance(graph_retrieval, dict):
+        graph_retrieval = {}
+    if not isinstance(graph_data, dict):
+        graph_data = {}
+
+    # O3 DEFECT 2: read the REAL parsed global summary ONLY on the enabled path.
+    global_summary = None
+    if use_global_summary and isinstance(global_summaries, dict):
+        global_summary = global_summaries.get("global_summary")
+
+    context = _render_synthesis_context(graph_retrieval)
+
+    # Reasoning-path visualization over the retrieved entities.
+    reasoning_path = []
+    entities = graph_retrieval.get("entities") or []
+    if len(entities) > 1:
+        for i in range(min(3, len(entities) - 1)):
+            reasoning_path.append(
+                {
+                    "hop": i + 1,
+                    "from": entities[i].get("name", ""),
+                    "to": entities[i + 1].get("name", ""),
+                    "connection": "related through graph structure",
+                }
+            )
+
+    community_context = graph_retrieval.get("community_context") or {}
+    stats = graph_data.get("stats", {})
+
+    return {
+        "graph_rag_results": {
+            "query": query,
+            "retrieved_entities": entities,
+            "retrieved_relationships": graph_retrieval.get("relationships") or [],
+            "graph_context": context,
+            "global_summary": global_summary,
+            "reasoning_path": reasoning_path,
+            "subgraph_size": graph_retrieval.get("subgraph_stats", {}),
+            "community_info": {
+                "num_communities": len(community_context),
+                "communities_accessed": list(community_context.keys()),
+            },
+            "global_graph_stats": stats,
+        }
+    }
+
+
 @register_node()
 class GraphRAGNode(WorkflowNode):
     """
@@ -617,81 +961,34 @@ class GraphRAGNode(WorkflowNode):
             },
         )
 
-        # Graph builder
-        graph_builder_id = builder.add_node(
-            "PythonCodeNode",
+        # Graph builder.
+        #
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted from the prior f-string
+        # `code=` codegen to the module-level `build_knowledge_graph` function
+        # wired via `PythonCodeNode.from_function`. The build-time
+        # `community_algorithm` is bound through a thin closure (keeps
+        # `extraction_results` as the declared input). `import networkx` now runs
+        # OUTSIDE the PythonCodeNode sandbox (which BLOCKED it for the prior
+        # `code=` block — the reason the full inner graph could not run
+        # end-to-end). The function returns `{"graph_data": {...}}`, so the
+        # downstream `result.graph_data` edges resolve unchanged.
+        _community_algorithm = self.community_algorithm
+
+        def _build_knowledge_graph_bound(extraction_results=None) -> dict:
+            return build_knowledge_graph(
+                extraction_results=extraction_results,
+                community_algorithm=_community_algorithm,
+            )
+
+        _build_knowledge_graph_bound.__name__ = "graph_builder"
+        _build_knowledge_graph_bound.__doc__ = build_knowledge_graph.__doc__
+        graph_builder_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _build_knowledge_graph_bound,
+                name="graph_builder",
+            ),
             node_id="graph_builder",
-            config={
-                "code": f"""
-import networkx as nx
-from collections import defaultdict
-
-def build_knowledge_graph(extraction_results):
-    '''Build NetworkX graph from extracted entities and relationships'''
-    G = nx.MultiDiGraph()
-
-    # Add all entities as nodes
-    all_entities = []
-    all_relationships = []
-
-    for doc_extraction in extraction_results:
-        entities = doc_extraction.get("entities", [])
-        relationships = doc_extraction.get("relationships", [])
-
-        # Add entities
-        for entity in entities:
-            node_id = entity["name"].lower()
-            G.add_node(node_id,
-                      name=entity["name"],
-                      type=entity["type"],
-                      description=entity.get("description", ""),
-                      documents=set())
-            all_entities.append(entity)
-
-        # Add relationships
-        for rel in relationships:
-            source = rel["source"].lower()
-            target = rel["target"].lower()
-            G.add_edge(source, target,
-                      type=rel["type"],
-                      description=rel.get("description", ""))
-            all_relationships.append(rel)
-
-    # Detect communities
-    if len(G) > 0:
-        if "{self.community_algorithm}" == "louvain":
-            import community
-            communities = community.best_partition(G.to_undirected())
-        else:
-            # Simple connected components
-            communities = {{}}
-            for i, comp in enumerate(nx.weakly_connected_components(G)):
-                for node in comp:
-                    communities[node] = i
-    else:
-        communities = {{}}
-
-    # Build community summaries
-    community_nodes = defaultdict(list)
-    for node, comm_id in communities.items():
-        community_nodes[comm_id].append(node)
-
-    graph_data = {{
-        "graph": nx.node_link_data(G),
-        "entities": all_entities,
-        "relationships": all_relationships,
-        "communities": communities,
-        "community_nodes": dict(community_nodes),
-        "stats": {{
-            "num_entities": len(G),
-            "num_relationships": len(G.edges()),
-            "num_communities": len(set(communities.values())) if communities else 0
-        }}
-    }}
-
-result = {{"graph_data": build_knowledge_graph(extraction_results)}}
-"""
-            },
+            _internal=True,
         )
 
         # Query processor for graph
@@ -716,111 +1013,33 @@ result = {{"graph_data": build_knowledge_graph(extraction_results)}}
             },
         )
 
-        # Graph traversal and retrieval
-        graph_retriever_id = builder.add_node(
-            "PythonCodeNode",
+        # Graph traversal and retrieval.
+        #
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `retrieve_from_graph` function wired via `PythonCodeNode.from_function`.
+        # The build-time `max_hops` is bound through a thin closure (keeps
+        # `graph_data` + `query_analysis` as the declared inputs). `import networkx`
+        # / `from collections import deque` now run OUTSIDE the PythonCodeNode
+        # sandbox. The function returns `{"graph_retrieval": {...}}`, so the
+        # downstream `result.graph_retrieval` edges resolve unchanged.
+        _max_hops = self.max_hops
+
+        def _retrieve_from_graph_bound(graph_data=None, query_analysis=None) -> dict:
+            return retrieve_from_graph(
+                graph_data=graph_data,
+                query_analysis=query_analysis,
+                max_hops=_max_hops,
+            )
+
+        _retrieve_from_graph_bound.__name__ = "graph_retriever"
+        _retrieve_from_graph_bound.__doc__ = retrieve_from_graph.__doc__
+        graph_retriever_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _retrieve_from_graph_bound,
+                name="graph_retriever",
+            ),
             node_id="graph_retriever",
-            config={
-                "code": f"""
-import networkx as nx
-from collections import deque
-
-def retrieve_from_graph(graph_data, query_analysis):
-    '''Retrieve relevant subgraph based on query analysis'''
-    # Reconstruct graph
-    G = nx.node_link_graph(graph_data["graph"])
-
-    query_entities = [e.lower() for e in query_analysis.get("entities", [])]
-    relationship_types = query_analysis.get("relationship_types", [])
-    requires_multi_hop = query_analysis.get("requires_multi_hop", False)
-
-    # Find relevant nodes
-    relevant_nodes = set()
-    for entity in query_entities:
-        # Fuzzy match entities
-        for node in G.nodes():
-            if entity in node or node in entity:
-                relevant_nodes.add(node)
-
-    # Multi-hop expansion if needed
-    if requires_multi_hop and relevant_nodes:
-        expanded_nodes = set(relevant_nodes)
-        for start_node in relevant_nodes:
-            # BFS up to max_hops
-            visited = {{start_node}}
-            queue = deque([(start_node, 0)])
-
-            while queue:
-                node, depth = queue.popleft()
-                if depth >= {self.max_hops}:
-                    continue
-
-                # Check neighbors
-                for neighbor in G.neighbors(node):
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        expanded_nodes.add(neighbor)
-                        queue.append((neighbor, depth + 1))
-
-        relevant_nodes = expanded_nodes
-
-    # Extract subgraph
-    if relevant_nodes:
-        subgraph = G.subgraph(relevant_nodes).copy()
-
-        # Get relevant relationships
-        relevant_edges = []
-        for u, v, data in subgraph.edges(data=True):
-            if not relationship_types or data.get("type") in relationship_types:
-                relevant_edges.append({{
-                    "source": u,
-                    "target": v,
-                    "type": data.get("type"),
-                    "description": data.get("description")
-                }})
-
-        # Get node details
-        relevant_entities = []
-        for node in relevant_nodes:
-            node_data = G.nodes[node]
-            relevant_entities.append({{
-                "name": node_data.get("name", node),
-                "type": node_data.get("type"),
-                "description": node_data.get("description"),
-                "centrality": nx.degree_centrality(subgraph).get(node, 0)
-            }})
-
-        # Sort by centrality
-        relevant_entities.sort(key=lambda x: x["centrality"], reverse=True)
-
-    else:
-        relevant_entities = []
-        relevant_edges = []
-        subgraph = nx.DiGraph()
-
-    # Get community context if available
-    communities = graph_data.get("communities", {{}})
-    community_context = {{}}
-    for node in relevant_nodes:
-        comm_id = communities.get(node)
-        if comm_id is not None:
-            community_nodes = graph_data.get("community_nodes", {{}}).get(str(comm_id), [])
-            community_context[comm_id] = community_nodes
-
-    retrieval_result = {{
-        "entities": relevant_entities[:20],  # Top 20 by centrality
-        "relationships": relevant_edges[:30],  # Top 30 relationships
-        "subgraph_stats": {{
-            "nodes": len(relevant_nodes),
-            "edges": len(relevant_edges)
-        }},
-        "community_context": community_context,
-        "query_entities_found": len([e for e in query_entities if any(e in n for n in relevant_nodes)])
-    }}
-
-result = {{"graph_retrieval": retrieval_result}}
-"""
-            },
+            _internal=True,
         )
 
         # Global summary generator (if enabled)
@@ -838,108 +1057,45 @@ result = {{"graph_retrieval": retrieval_result}}
 
         # Result synthesizer.
         #
-        # O3 DEFECT 2 fix (F31-FU1): the synthesizer now READS the parsed
-        # `global_summary` and incorporates it into `graph_rag_results` —
-        # previously `global_summaries` was an accepted-but-unread documented
-        # input (zero-tolerance Rule 3c).
+        # Wave-3 #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `synthesize_results` function wired via `PythonCodeNode.from_function`.
+        # The build-time `use_global_summary` is bound through a thin closure
+        # (keeps `graph_retrieval` / `query` / `graph_data` / `global_summaries`
+        # as the declared inputs). The function returns `{"graph_rag_results":
+        # {...}}` on the flat `result` port.
         #
-        # CONDITIONAL-WIRING CARE (the chosen Option (i) — see _create_workflow
-        # connection block): the `global_summaries` edge only exists when
-        # `use_global_summary=True`. A PythonCodeNode `code=` body references its
-        # inputs as bare locals injected from `kwargs`; an UNWIRED input name is
-        # absent from the exec local namespace and a bare reference raises
-        # NameError (confirmed against PythonCodeNode.execute_code, which does
-        # `local_namespace.update(sanitized_inputs)` with NO defaults). So the
-        # `global_summaries`-reading lines are emitted ONLY when
-        # `use_global_summary=True`; on the disabled path the field is `None`
-        # honestly. Option (i) was chosen over Option (ii) (a default-source
-        # node feeding `{"global_summary": None}`) because it adds ZERO new
-        # topology — no extra node, no extra always-on edge — keeping the
-        # disabled-path graph identical to its prior shape.
-        if self.use_global_summary:
-            global_summary_read = """
-# O3 DEFECT 2: read the REAL parsed global summary (wired only on this path).
-# `global_summaries` is the parse_global_summary `result` dict:
-# {"global_summary": <text or None>, ["parse_error": ...]}.
-global_summary = None
-if isinstance(global_summaries, dict):
-    global_summary = global_summaries.get("global_summary")
-"""
-        else:
-            # Disabled path: no global_summaries input is wired; reference NOTHING
-            # by that name so the exec body cannot raise NameError.
-            global_summary_read = """
-# use_global_summary=False: no summary stage; field is None honestly.
-global_summary = None
-"""
+        # CONDITIONAL-BEHAVIOR PRESERVATION (Wave-2.5 O3/F31-FU1): the
+        # `global_summary` read fires ONLY when `use_global_summary=True` AND a
+        # `global_summaries` dict was wired. On the disabled path the
+        # `global_summaries` input is never wired; a from_function node tolerates
+        # a missing declared input (its `global_summaries=None` default applies),
+        # so there is NO NameError risk — the prior `code=` body had to emit the
+        # read-lines CONDITIONALLY precisely because an unwired name raised
+        # NameError in the exec namespace. from_function's parameter defaults make
+        # the single unified function safe on BOTH paths; `global_summary` is
+        # `None` honestly on the disabled path.
+        _use_global_summary = self.use_global_summary
 
-        result_synthesizer_code = (
-            """
-# Combine all graph information
-graph_retrieval = graph_retrieval
-query = query
-graph_data = graph_data
-"""
-            + global_summary_read
-            + """
-# Build context from retrieved subgraph
-context_parts = []
+        def _synthesize_results_bound(
+            graph_retrieval=None, query="", graph_data=None, global_summaries=None
+        ) -> dict:
+            return synthesize_results(
+                graph_retrieval=graph_retrieval,
+                query=query,
+                graph_data=graph_data,
+                global_summaries=global_summaries,
+                use_global_summary=_use_global_summary,
+            )
 
-# Add entity information
-if graph_retrieval["entities"]:
-    context_parts.append("Key Entities:")
-    for entity in graph_retrieval["entities"][:10]:
-        context_parts.append(f"- {entity['name']} ({entity['type']}): {entity['description']}")
-
-# Add relationship information
-if graph_retrieval["relationships"]:
-    context_parts.append("\\nKey Relationships:")
-    for rel in graph_retrieval["relationships"][:10]:
-        context_parts.append(f"- {rel['source']} {rel['type']} {rel['target']}")
-
-# Add community context
-if graph_retrieval["community_context"]:
-    context_parts.append("\\nRelated Topic Clusters:")
-    for comm_id, nodes in list(graph_retrieval["community_context"].items())[:3]:
-        context_parts.append(f"- Cluster {comm_id}: {', '.join(nodes[:5])}")
-
-context = "\\n".join(context_parts)
-
-# Create reasoning path visualization
-reasoning_path = []
-entities = graph_retrieval["entities"]
-if len(entities) > 1:
-    # Simple path representation
-    for i in range(min(3, len(entities)-1)):
-        reasoning_path.append({
-            "hop": i + 1,
-            "from": entities[i]["name"],
-            "to": entities[i+1]["name"],
-            "connection": "related through graph structure"
-        })
-
-result = {
-    "graph_rag_results": {
-        "query": query,
-        "retrieved_entities": graph_retrieval["entities"],
-        "retrieved_relationships": graph_retrieval["relationships"],
-        "graph_context": context,
-        "global_summary": global_summary,
-        "reasoning_path": reasoning_path,
-        "subgraph_size": graph_retrieval["subgraph_stats"],
-        "community_info": {
-            "num_communities": len(graph_retrieval["community_context"]),
-            "communities_accessed": list(graph_retrieval["community_context"].keys())
-        },
-        "global_graph_stats": graph_data["stats"]
-    }
-}
-"""
-        )
-        result_synthesizer_id = builder.add_node(
-            "PythonCodeNode",
+        _synthesize_results_bound.__name__ = "result_synthesizer"
+        _synthesize_results_bound.__doc__ = synthesize_results.__doc__
+        result_synthesizer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _synthesize_results_bound,
+                name="result_synthesizer",
+            ),
             node_id="result_synthesizer",
-            config={"code": result_synthesizer_code},
+            _internal=True,
         )
 
         # Messages-composer nodes (L3 fix). Each LLM stage's context is routed
@@ -961,7 +1117,7 @@ result = {
         # advisory UserWarning (zero-tolerance Rule 1: no spurious runtime
         # warnings).
         entity_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_entity_extraction_messages,
                 name="entity_messages_composer",
             ),
@@ -969,7 +1125,7 @@ result = {
             _internal=True,
         )
         query_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_query_analysis_messages,
                 name="query_messages_composer",
             ),
@@ -980,7 +1136,7 @@ result = {
         summary_messages_composer_id: Optional[str] = None
         if self.use_global_summary:
             summary_messages_composer_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     compose_summary_messages,
                     name="summary_messages_composer",
                 ),
@@ -997,7 +1153,7 @@ result = {
         # iterates — the prior edge fed the raw response dict straight in, so the
         # builder iterated the dict's string KEYS.
         entity_extraction_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_entity_extraction,
                 name="entity_extraction_parser",
             ),
@@ -1014,7 +1170,7 @@ result = {
         # empty subgraph regardless of the LLM's analysis. query_processor is
         # built unconditionally, so this parser is too.
         query_analysis_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_query_analysis,
                 name="query_analysis_parser",
             ),
@@ -1029,7 +1185,7 @@ result = {
         global_summary_parser_id: Optional[str] = None
         if self.use_global_summary:
             global_summary_parser_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     parse_global_summary,
                     name="global_summary_parser",
                 ),

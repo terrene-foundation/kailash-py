@@ -200,6 +200,527 @@ def compose_summary_messages(conversation_context=None):
     return {"messages": [{"role": "user", "content": content}]}
 
 
+# ---------------------------------------------------------------------------
+# COMPUTE-stage functions (S6a — root-cause fix for #1117 publish-nothing /
+# #1123 brace-escape / #1118 import-trap).
+#
+# The five COMPUTE stages of the ConversationalRAGNode workflow were inline
+# `code=` PythonCodeNode codegen blocks. They are now module-level functions
+# wired via `PythonCodeNode.from_function`, the same reference template as the
+# composers above and as optimized.py / evaluation.py / query_processing.py.
+#
+# A `from_function` node publishes its `return` value on the FLAT `result`
+# port — the structural successor of the prior codegen's module-scope
+# `result =` assignment. Each downstream edge reads `result` and the consumer
+# unwraps the nested key it needs (`session_context` / `topic_analysis` /
+# `contextual_retrieval` / `session_update`), so the wiring is unchanged.
+#
+# `from_function` removes the three defect classes the inline codegen carried:
+#   - #1117 publish-nothing: the prior inner `def ...(): result = {...}` bound
+#     a FUNCTION-LOCAL `result` that was never returned, so the module-scope
+#     output port saw nothing. A real `return` publishes on `result`.
+#   - #1123 brace-escape: the f-string `code=` form doubled every literal
+#     brace (`{{...}}`), an error-prone hand-escape. Real functions carry
+#     real dict literals.
+#   - #1118 import-trap: `PythonCodeNode` passes separate (globals, locals) to
+#     `exec()`, so a module-scope import bound into the LOCAL namespace and was
+#     invisible to a nested function's closure (`datetime.now()` raised
+#     AttributeError). A real module-level function closes over real
+#     module-scope imports (`datetime`) natively.
+#
+# Build-time config (`max_context_turns` + the result-formatter flags) is bound
+# through thin closure factories below (mirrors optimized.py's
+# `_decide_cache_use_bound`) so the lifted functions stay pure + testable while
+# the per-instance config interpolates at workflow-construction time.
+# ---------------------------------------------------------------------------
+
+
+def _load_conversation_context(
+    session_id, sessions_store=None, max_context_turns: int = 10
+) -> dict:
+    """Load conversation context for a session (lifted context_loader stage).
+
+    Returns ``{"session_context": {...}}`` on the flat ``result`` port that
+    ``context_retriever`` / ``topic_tracker`` / the composers unwrap.
+    `session_id` is an external workflow input; `sessions_store` is an internal
+    per-run store defaulted to an empty dict when the caller does not wire one.
+    """
+    if sessions_store is None:
+        sessions_store = {}
+
+    if session_id not in sessions_store:
+        # Create new session.
+        session = {
+            "id": session_id,
+            "created_at": datetime.now().isoformat(),
+            "turns": [],
+            "summary": "",
+            "current_topic": None,
+            "user_preferences": {},
+            "metrics": {
+                "turn_count": 0,
+                "topics_discussed": [],
+                "avg_response_length": 0,
+            },
+        }
+        sessions_store[session_id] = session
+
+    session = sessions_store[session_id]
+
+    # Get recent context (sliding window).
+    recent_turns = session["turns"][-max_context_turns:]
+
+    # Format context for processing.
+    context_text = ""
+    for turn in recent_turns:
+        context_text += f"User: {turn['query']}\n"
+        context_text += f"Assistant: {turn['response']}\n\n"
+
+    return {
+        "session_context": {
+            "session_id": session_id,
+            "recent_turns": recent_turns,
+            "context_text": context_text,
+            "summary": session.get("summary", ""),
+            "current_topic": session.get("current_topic"),
+            "turn_count": len(session["turns"]),
+            "user_preferences": session.get("user_preferences", {}),
+        }
+    }
+
+
+def _track_conversation_topic(current_query="", session_context=None) -> dict:
+    """Track and identify topic changes (lifted topic_tracker stage).
+
+    Returns ``{"topic_analysis": {...}}`` on the flat ``result`` port that
+    `context_retriever` / `session_updater` / `result_formatter` unwrap.
+    `current_query` is an external workflow input; `session_context` is wired
+    from `context_loader`'s `result` port (the whole ``{"session_context":
+    ...}`` dict) and unwrapped to the inner dict here.
+    """
+    inner = {}
+    if isinstance(session_context, dict):
+        inner = session_context.get("session_context", session_context)
+    if not isinstance(inner, dict):
+        inner = {}
+
+    current_topic = inner.get("current_topic")
+
+    # Extract key terms from current query.
+    query_terms = set((current_query or "").lower().split())
+
+    # Define topic keywords (simplified - use NER/classification in production).
+    topics = {
+        "transformers": [
+            "transformer",
+            "attention",
+            "self-attention",
+            "encoder",
+            "decoder",
+        ],
+        "bert": ["bert", "bidirectional", "masked", "mlm", "pretraining"],
+        "gpt": ["gpt", "generative", "autoregressive", "language model"],
+        "training": ["training", "optimization", "learning rate", "batch", "epoch"],
+        "architecture": ["architecture", "layer", "network", "model", "structure"],
+    }
+
+    # Identify current query topic.
+    query_topics = []
+    for topic, keywords in topics.items():
+        if any(keyword in query_terms for keyword in keywords):
+            query_topics.append(topic)
+
+    # Determine if topic changed.
+    topic_changed = False
+    transition_type = "continuation"
+
+    if not current_topic and query_topics:
+        # First topic.
+        new_topic = query_topics[0]
+        transition_type = "new_conversation"
+    elif query_topics and query_topics[0] != current_topic:
+        # Topic switch.
+        new_topic = query_topics[0]
+        topic_changed = True
+        transition_type = "topic_switch"
+    elif query_topics:
+        # Same topic.
+        new_topic = query_topics[0]
+        transition_type = "deep_dive"
+    else:
+        # No clear topic.
+        new_topic = current_topic or "general"
+        transition_type = "clarification"
+
+    # Check for explicit transitions.
+    transition_phrases = {
+        "now tell me about": "explicit_switch",
+        "switching to": "explicit_switch",
+        "different topic": "explicit_switch",
+        "another question": "soft_switch",
+        "related to this": "expansion",
+        "furthermore": "continuation",
+        "however": "contrast",
+    }
+
+    for phrase, trans_type in transition_phrases.items():
+        if phrase in (current_query or "").lower():
+            transition_type = trans_type
+            break
+
+    return {
+        "topic_analysis": {
+            "current_topic": new_topic,
+            "previous_topic": current_topic,
+            "topic_changed": topic_changed,
+            "transition_type": transition_type,
+            "identified_topics": query_topics,
+            "confidence": 0.8 if query_topics else 0.3,
+        }
+    }
+
+
+def _retrieve_with_context(
+    query="", documents=None, session_context=None, topic_info=None, resolved_query=None
+) -> dict:
+    """Retrieve documents considering conversation context (lifted
+    context_retriever stage).
+
+    Returns ``{"contextual_retrieval": {...}}`` on the flat ``result`` port
+    that `response_messages_composer` / `result_formatter` unwrap.
+
+    Wiring shapes the inputs receive:
+      - `query` + `documents` are external workflow inputs.
+      - `session_context` is wired from `context_loader`'s `result` port (the
+        whole ``{"session_context": ...}`` dict) and unwrapped to the inner
+        dict here.
+      - `topic_info` is wired from `topic_tracker`'s `result` port (already the
+        ``{"topic_analysis": ...}`` shape) — passed through WITHOUT unwrap.
+      - `resolved_query` (optional) is the coreference_resolver (LLMAgentNode)
+        `response` port value — an inner message dict keyed by "content"; when
+        present its content overrides the raw query string.
+    """
+    if documents is None:
+        documents = []
+
+    inner_context = {}
+    if isinstance(session_context, dict):
+        inner_context = session_context.get("session_context", session_context)
+    if not isinstance(inner_context, dict):
+        inner_context = {}
+
+    # The resolved query (from the coreference stage) overrides the raw query.
+    effective_query = query
+    if isinstance(resolved_query, dict) and resolved_query.get("content"):
+        effective_query = resolved_query["content"]
+    elif isinstance(resolved_query, str) and resolved_query:
+        effective_query = resolved_query
+
+    # Combine current query with context.
+    recent_context = inner_context.get("context_text", "")
+
+    # Build enhanced query.
+    enhanced_query = effective_query
+    current_topic = None
+
+    # Add topic context if available.
+    if topic_info and topic_info.get("topic_analysis"):
+        current_topic = topic_info["topic_analysis"].get("current_topic")
+        if current_topic:
+            enhanced_query = f"{current_topic} context: {effective_query}"
+
+    # Add conversation context keywords.
+    if recent_context:
+        # Extract key terms from recent context.
+        context_words = set(recent_context.lower().split())
+        important_words = [w for w in context_words if len(w) > 4][:5]
+        enhanced_query += " " + " ".join(important_words)
+
+    # Score documents with context awareness.
+    scored_docs = []
+    query_words = set(enhanced_query.lower().split())
+
+    for doc in documents:
+        content = doc.get("content", "").lower()
+        doc_words = set(content.split())
+
+        # Base relevance score.
+        if query_words:
+            relevance = len(query_words & doc_words) / len(query_words)
+        else:
+            relevance = 0
+
+        # Boost score for topic-relevant documents.
+        if topic_info and current_topic in content:
+            relevance *= 1.3
+
+        # Boost for documents related to recent context.
+        if recent_context and any(
+            turn.get("response", "") in content
+            for turn in inner_context.get("recent_turns", [])
+        ):
+            relevance *= 1.2
+
+        scored_docs.append(
+            {
+                "document": doc,
+                "score": min(1.0, relevance),
+                "context_boosted": (
+                    relevance > len(query_words & doc_words) / len(query_words)
+                    if query_words
+                    else False
+                ),
+            }
+        )
+
+    # Sort by score.
+    scored_docs.sort(key=lambda x: x["score"], reverse=True)
+
+    return {
+        "contextual_retrieval": {
+            "documents": [d["document"] for d in scored_docs[:10]],
+            "scores": [d["score"] for d in scored_docs[:10]],
+            "enhanced_query": enhanced_query,
+            "context_influence": (
+                sum(1 for d in scored_docs[:10] if d["context_boosted"])
+                / min(10, len(scored_docs))
+                if scored_docs
+                else 0
+            ),
+        }
+    }
+
+
+def _update_session(
+    session_id,
+    query="",
+    response=None,
+    topic_info=None,
+    summary=None,
+    sessions_store=None,
+    max_context_turns: int = 10,
+) -> dict:
+    """Update the session with a new turn (lifted session_updater stage).
+
+    Returns ``{"session_update": {...}}`` on the flat ``result`` port that
+    `result_formatter` unwraps.
+
+    Wiring shapes the inputs receive:
+      - `session_id` + `query` are external workflow inputs.
+      - `response` is the response_generator (LLMAgentNode) `response` port
+        value — an inner message dict keyed by "content".
+      - `topic_info` is the topic_tracker `result` port (``{"topic_analysis":
+        ...}``); absent on a False optional-branch.
+      - `summary` is the context_summarizer `response` port value (inner
+        message dict keyed by "content") when summarization is enabled.
+      - `sessions_store` is the internal per-run store (defaulted empty).
+
+    PythonCodeNode runs each node with an independent copy of its inputs, so the
+    `sessions_store` mutation context_loader performed is NOT visible here. Seed
+    the session if absent (same shape context_loader creates) so this turn is
+    recorded against a real session record rather than crashing with KeyError.
+    Cross-execution persistence is owned by the WorkflowNode's own
+    `self.sessions` store (see create_session), not this per-run store.
+    """
+    if sessions_store is None:
+        sessions_store = {}
+
+    if session_id not in sessions_store:
+        sessions_store[session_id] = {
+            "id": session_id,
+            "created_at": datetime.now().isoformat(),
+            "turns": [],
+            "summary": "",
+            "current_topic": None,
+            "user_preferences": {},
+            "metrics": {
+                "turn_count": 0,
+                "topics_discussed": [],
+                "avg_response_length": 0,
+            },
+        }
+
+    session = sessions_store[session_id]
+
+    # Add new turn. `response` is the LLMAgentNode `response` port value — an
+    # inner message dict keyed by "content" (NOT "response").
+    new_turn = {
+        "turn_number": len(session["turns"]) + 1,
+        "timestamp": datetime.now().isoformat(),
+        "query": query,
+        "response": (
+            response.get("content", "")
+            if isinstance(response, dict)
+            else (response or "")
+        ),
+        "topic": (
+            topic_info.get("topic_analysis", {}).get("current_topic")
+            if isinstance(topic_info, dict)
+            else None
+        ),
+    }
+
+    session["turns"].append(new_turn)
+
+    # Update summary if provided. `summary` is the context_summarizer
+    # (LLMAgentNode) `response` port value — an inner message dict keyed by
+    # "content" (NOT "response").
+    if isinstance(summary, dict) and summary.get("content"):
+        session["summary"] = summary["content"]
+
+    # Update current topic.
+    if topic_info and topic_info.get("topic_analysis"):
+        session["current_topic"] = topic_info["topic_analysis"]["current_topic"]
+
+        # Track topics discussed.
+        topic = topic_info["topic_analysis"]["current_topic"]
+        if topic and topic not in session["metrics"]["topics_discussed"]:
+            session["metrics"]["topics_discussed"].append(topic)
+
+    # Update metrics.
+    session["metrics"]["turn_count"] = len(session["turns"])
+    total_response_length = sum(
+        len(turn.get("response", "")) for turn in session["turns"]
+    )
+    session["metrics"]["avg_response_length"] = (
+        total_response_length / len(session["turns"]) if session["turns"] else 0
+    )
+
+    # Trim old turns if exceeds max + buffer for summarization.
+    if len(session["turns"]) > max_context_turns * 1.5:
+        # Keep recent turns and rely on summary for older context.
+        session["turns"] = session["turns"][-max_context_turns:]
+
+    # Coherence proxy: topic consistency. Fewer DISTINCT topics across the turns
+    # => the conversation stayed on-topic => more coherent. Derived from the
+    # real session signal (NOT a hardcoded score); single-topic = 1.0.
+    _distinct_topics = len(session["metrics"]["topics_discussed"])
+    _coherence_turns = max(1, session["metrics"]["turn_count"])
+    coherence_score = max(
+        0.0, min(1.0, 1.0 - (max(0, _distinct_topics - 1) / _coherence_turns))
+    )
+
+    # Calculate conversation health metrics.
+    conversation_metrics = {
+        "coherence_score": coherence_score,  # derived from topic consistency
+        "engagement_level": min(1.0, len(session["turns"]) / 10),  # higher w/ turns
+        "topic_diversity": (
+            len(session["metrics"]["topics_discussed"])
+            / max(1, session["metrics"]["turn_count"])
+        ),
+        "avg_turn_length": session["metrics"]["avg_response_length"],
+    }
+
+    return {
+        "session_update": {
+            "session_id": session_id,
+            "turn_added": new_turn["turn_number"],
+            "total_turns": len(session["turns"]),
+            "current_topic": session["current_topic"],
+            "conversation_metrics": conversation_metrics,
+        }
+    }
+
+
+def _format_conversational_result(
+    response=None,
+    session_update=None,
+    topic_info=None,
+    contextual_retrieval=None,
+    max_context_turns: int = 10,
+    enable_summarization: bool = True,
+    coreference_resolution: bool = True,
+    personalization_enabled: bool = True,
+) -> dict:
+    """Format the terminal conversational response (lifted result_formatter
+    stage — publishes the WorkflowNode's documented
+    ``conversational_response``).
+
+    Every wired input arrives as its PRODUCER's published port value:
+      - `response`             <- response_generator.response (LLMAgentNode
+                                  port value = inner message dict keyed by
+                                  "content")
+      - `session_update`       <- session_updater.result ({"session_update"})
+      - `topic_info`           <- topic_tracker.result ({"topic_analysis"})
+      - `contextual_retrieval` <- context_retriever.result
+                                  ({"contextual_retrieval"})
+    so each is unwrapped to the nested shape this formatter consumes. Optional
+    inputs may be unwired on a False optional-branch (topic_tracking off leaves
+    `topic_info` unbound), so each is defaulted to a benign empty value.
+
+    The per-instance config flags (`max_context_turns`, `enable_summarization`,
+    `coreference_resolution`, `personalization_enabled`) are bound at
+    workflow-construction time through the closure factory — the structural
+    successor of the prior f-string `{self.*}` interpolation (#1123 fix).
+    """
+    if topic_info is None:
+        topic_info = {}
+    if session_update is None:
+        session_update = {}
+    if contextual_retrieval is None:
+        contextual_retrieval = {}
+    if response is None:
+        response = {}
+
+    # Format conversational response. `response` is the LLMAgentNode `response`
+    # port value (inner message dict keyed by "content", NOT "response").
+    response_text = (
+        response.get("content", "") if isinstance(response, dict) else (response or "")
+    )
+    session_update = (
+        session_update.get("session_update", {})
+        if isinstance(session_update, dict)
+        else {}
+    )
+    topic_info = (
+        topic_info.get("topic_analysis", {}) if isinstance(topic_info, dict) else {}
+    )
+    contextual_retrieval = (
+        contextual_retrieval.get("contextual_retrieval", {})
+        if isinstance(contextual_retrieval, dict)
+        else {}
+    )
+
+    # Build session state summary.
+    session_state = {
+        "session_id": session_update.get("session_id"),
+        "turn_number": session_update.get("turn_added"),
+        "total_turns": session_update.get("total_turns"),
+        "context_window": max_context_turns,
+        "summary_available": enable_summarization,
+    }
+
+    # Topic information.
+    topic_summary = {
+        "current_topic": topic_info.get("current_topic"),
+        "topic_changed": topic_info.get("topic_changed", False),
+        "transition_type": topic_info.get("transition_type", "continuation"),
+        "topics_discussed": session_update.get("conversation_metrics", {}).get(
+            "topic_diversity", 0
+        ),
+    }
+
+    # Conversation metrics.
+    metrics = session_update.get("conversation_metrics", {})
+    metrics["retrieval_context_influence"] = contextual_retrieval.get(
+        "context_influence", 0
+    )
+
+    return {
+        "conversational_response": {
+            "response": response_text,
+            "session_state": session_state,
+            "topic_info": topic_summary,
+            "conversation_metrics": metrics,
+            "metadata": {
+                "coreference_resolution": coreference_resolution,
+                "personalization": personalization_enabled,
+                "context_enhanced_retrieval": True,
+            },
+        }
+    }
+
+
 @register_node()
 class ConversationalRAGNode(WorkflowNode):
     """
@@ -292,76 +813,36 @@ class ConversationalRAGNode(WorkflowNode):
         topic_tracker_id: Optional[str] = None
         summarizer_id: Optional[str] = None
 
-        # Session context loader
-        context_loader_id = builder.add_node(
-            "PythonCodeNode",
+        # Session context loader.
+        #
+        # S6a #1117/#1123/#1118 root-cause fix: lifted from the prior f-string
+        # codegen to the module-level `_load_conversation_context` function
+        # wired via `PythonCodeNode.from_function`. The build-time
+        # `max_context_turns` is bound through a thin closure (keeps
+        # `session_id` + `sessions_store` as the declared inputs). The node
+        # publishes the SAME flat `result` port carrying
+        # `{"session_context": {...}}`, so the downstream edges resolve
+        # unchanged. `_internal=True` suppresses the consumer-facing
+        # instance-API advisory (SDK-internal construction path, mirrors the
+        # composers above + optimized.py).
+        _max_context_turns = self.max_context_turns
+
+        def _load_conversation_context_bound(session_id, sessions_store=None) -> dict:
+            return _load_conversation_context(
+                session_id=session_id,
+                sessions_store=sessions_store,
+                max_context_turns=_max_context_turns,
+            )
+
+        _load_conversation_context_bound.__name__ = "context_loader"
+        _load_conversation_context_bound.__doc__ = _load_conversation_context.__doc__
+        context_loader_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _load_conversation_context_bound,
+                name="context_loader",
+            ),
             node_id="context_loader",
-            config={
-                "code": f"""
-def load_conversation_context(session_id, sessions_store):
-    '''Load conversation context for session'''
-    # F9 #1118 sibling: import inside the function body. PythonCodeNode passes
-    # separate (globals, locals) to exec(), so a module-scope import binds into
-    # the LOCAL namespace and is invisible to this function's closure
-    # (`datetime.now()` on the module raises AttributeError otherwise).
-    from datetime import datetime as _datetime_class
-
-    if session_id not in sessions_store:
-        # Create new session
-        session = {{
-            "id": session_id,
-            "created_at": _datetime_class.now().isoformat(),
-            "turns": [],
-            "summary": "",
-            "current_topic": None,
-            "user_preferences": {{}},
-            "metrics": {{
-                "turn_count": 0,
-                "topics_discussed": [],
-                "avg_response_length": 0
-            }}
-        }}
-        sessions_store[session_id] = session
-
-    session = sessions_store[session_id]
-
-    # Get recent context (sliding window)
-    recent_turns = session["turns"][-{self.max_context_turns}:]
-
-    # Format context for processing
-    context_text = ""
-    for turn in recent_turns:
-        context_text += f"User: {{turn['query']}}\\n"
-        context_text += f"Assistant: {{turn['response']}}\\n\\n"
-
-    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
-    # bound a function-scope local that was never returned, so the session
-    # context never reached the module-scope `session_context` output.
-    return {{
-        "session_context": {{
-            "session_id": session_id,
-            "recent_turns": recent_turns,
-            "context_text": context_text,
-            "summary": session.get("summary", ""),
-            "current_topic": session.get("current_topic"),
-            "turn_count": len(session["turns"]),
-            "user_preferences": session.get("user_preferences", {{}})
-        }}
-    }}
-
-# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
-# (carrying {{"session_context": ...}}) that downstream nodes unwrap. `session_id`
-# is an external workflow input; `sessions_store` is an internal per-run store —
-# default it to an empty dict when the caller does not wire one. `del` the helper
-# so the output gate sees only `result`.
-try:
-    sessions_store
-except NameError:
-    sessions_store = {{}}
-result = load_conversation_context(session_id, sessions_store)
-del load_conversation_context
-"""
-            },
+            _internal=True,
         )
 
         # Coreference resolver
@@ -393,208 +874,48 @@ If no coreferences found, return the original query.""",
                 },
             )
 
-        # Topic tracker
+        # Topic tracker.
+        #
+        # S6a #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_track_conversation_topic` function wired via
+        # `PythonCodeNode.from_function` (BARE — no build-time config to bind).
+        # `current_query` is an external workflow input; `session_context` is
+        # wired from context_loader's `result` port (the whole
+        # `{"session_context": ...}` dict) — the function unwraps the inner dict
+        # internally (the prior codegen unwrapped at the module-scope call
+        # site). The node publishes the SAME flat `result` port carrying
+        # `{"topic_analysis": {...}}`.
         if self.topic_tracking:
-            topic_tracker_id = builder.add_node(
-                "PythonCodeNode",
+            topic_tracker_id = builder.add_node_instance(
+                PythonCodeNode.from_function(
+                    _track_conversation_topic,
+                    name="topic_tracker",
+                ),
                 node_id="topic_tracker",
-                config={
-                    "code": """
-def track_conversation_topic(current_query, session_context):
-    '''Track and identify topic changes in conversation'''
-
-    current_topic = session_context.get("current_topic")
-    recent_turns = session_context.get("recent_turns", [])
-
-    # Extract key terms from current query
-    query_terms = set(current_query.lower().split())
-
-    # Define topic keywords (simplified - use NER/classification in production)
-    topics = {
-        "transformers": ["transformer", "attention", "self-attention", "encoder", "decoder"],
-        "bert": ["bert", "bidirectional", "masked", "mlm", "pretraining"],
-        "gpt": ["gpt", "generative", "autoregressive", "language model"],
-        "training": ["training", "optimization", "learning rate", "batch", "epoch"],
-        "architecture": ["architecture", "layer", "network", "model", "structure"]
-    }
-
-    # Identify current query topic
-    query_topics = []
-    for topic, keywords in topics.items():
-        if any(keyword in query_terms for keyword in keywords):
-            query_topics.append(topic)
-
-    # Determine if topic changed
-    topic_changed = False
-    transition_type = "continuation"
-
-    if not current_topic and query_topics:
-        # First topic
-        new_topic = query_topics[0]
-        transition_type = "new_conversation"
-    elif query_topics and query_topics[0] != current_topic:
-        # Topic switch
-        new_topic = query_topics[0]
-        topic_changed = True
-        transition_type = "topic_switch"
-    elif query_topics:
-        # Same topic
-        new_topic = query_topics[0]
-        transition_type = "deep_dive"
-    else:
-        # No clear topic
-        new_topic = current_topic or "general"
-        transition_type = "clarification"
-
-    # Check for explicit transitions
-    transition_phrases = {
-        "now tell me about": "explicit_switch",
-        "switching to": "explicit_switch",
-        "different topic": "explicit_switch",
-        "another question": "soft_switch",
-        "related to this": "expansion",
-        "furthermore": "continuation",
-        "however": "contrast"
-    }
-
-    for phrase, trans_type in transition_phrases.items():
-        if phrase in current_query.lower():
-            transition_type = trans_type
-            break
-
-    # F9 #1117: function MUST return its dict; the prior `result = {...}`
-    # bound a function-scope local that was never returned, so the topic
-    # analysis never reached the module-scope `topic_analysis` output.
-    return {
-        "topic_analysis": {
-            "current_topic": new_topic,
-            "previous_topic": current_topic,
-            "topic_changed": topic_changed,
-            "transition_type": transition_type,
-            "identified_topics": query_topics,
-            "confidence": 0.8 if query_topics else 0.3
-        }
-    }
-
-# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
-# (carrying {"topic_analysis": ...}) that context_retriever / session_updater /
-# result_formatter unwrap. `current_query` is an external workflow input;
-# `session_context` is wired from context_loader (unwrapped below).
-result = track_conversation_topic(current_query, session_context.get("session_context", session_context))
-del track_conversation_topic
-"""
-                },
+                _internal=True,
             )
 
-        # Context-aware retriever
-        context_retriever_id = builder.add_node(
-            "PythonCodeNode",
+        # Context-aware retriever.
+        #
+        # S6a #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_retrieve_with_context` function wired via
+        # `PythonCodeNode.from_function` (BARE — no build-time config to bind).
+        # The function declares ALL of `query` / `documents` / `session_context`
+        # / `topic_info` / `resolved_query` as explicit parameters so the
+        # runtime injector + the wired edges deliver each. The function unwraps
+        # `session_context` internally (the prior codegen unwrapped at the
+        # module-scope call site) and folds the prior module-scope
+        # `resolved_query` override logic into the function body — passing
+        # through WITHOUT unwrap for `topic_info` (already the
+        # `{"topic_analysis": ...}` shape). The node publishes the SAME flat
+        # `result` port carrying `{"contextual_retrieval": {...}}`.
+        context_retriever_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _retrieve_with_context,
+                name="context_retriever",
+            ),
             node_id="context_retriever",
-            config={
-                "code": """
-def retrieve_with_context(query, documents, session_context, topic_info=None):
-    '''Retrieve documents considering conversation context'''
-
-    # Combine current query with context
-    context_summary = session_context.get("summary", "")
-    recent_context = session_context.get("context_text", "")
-
-    # Build enhanced query
-    enhanced_query = query
-
-    # Add topic context if available
-    if topic_info and topic_info.get("topic_analysis"):
-        current_topic = topic_info["topic_analysis"].get("current_topic")
-        if current_topic:
-            enhanced_query = f"{current_topic} context: {query}"
-
-    # Add conversation context keywords
-    if recent_context:
-        # Extract key terms from recent context
-        context_words = set(recent_context.lower().split())
-        important_words = [w for w in context_words if len(w) > 4][:5]
-        enhanced_query += " " + " ".join(important_words)
-
-    # Score documents with context awareness
-    scored_docs = []
-    query_words = set(enhanced_query.lower().split())
-
-    for doc in documents:
-        content = doc.get("content", "").lower()
-        doc_words = set(content.split())
-
-        # Base relevance score
-        if query_words:
-            relevance = len(query_words & doc_words) / len(query_words)
-        else:
-            relevance = 0
-
-        # Boost score for topic-relevant documents
-        if topic_info and current_topic in content:
-            relevance *= 1.3
-
-        # Boost for documents related to recent context
-        if recent_context and any(turn.get("response", "") in content for turn in session_context.get("recent_turns", [])):
-            relevance *= 1.2
-
-        scored_docs.append({
-            "document": doc,
-            "score": min(1.0, relevance),
-            "context_boosted": relevance > len(query_words & doc_words) / len(query_words) if query_words else False
-        })
-
-    # Sort by score
-    scored_docs.sort(key=lambda x: x["score"], reverse=True)
-
-    # F9 #1117: function MUST return its dict; the prior `result = {...}`
-    # bound a function-scope local that was never returned, so the contextual
-    # retrieval never reached the module-scope `contextual_retrieval` output.
-    return {
-        "contextual_retrieval": {
-            "documents": [d["document"] for d in scored_docs[:10]],
-            "scores": [d["score"] for d in scored_docs[:10]],
-            "enhanced_query": enhanced_query,
-            "context_influence": sum(1 for d in scored_docs[:10] if d["context_boosted"]) / min(10, len(scored_docs)) if scored_docs else 0
-        }
-    }
-
-# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
-# (carrying {"contextual_retrieval": ...}) that response_generator /
-# result_formatter unwrap. `query` and `documents` are external workflow inputs.
-# `session_context` is wired from context_loader's `result` port (the whole
-# {"session_context": ...} dict), so unwrap the inner dict the function body's
-# .get("summary")/.get("context_text") calls expect. `topic_info` is wired from
-# topic_tracker's `result` port (already the {"topic_analysis": ...} shape the
-# function's .get("topic_analysis") expects) — passed through WITHOUT unwrap.
-# `resolved_query` (optional) is the coreference_resolver (LLMAgentNode)
-# `response` port value — an inner message dict keyed by "content"; when present
-# its content overrides the raw query string. Default optionals so a False
-# optional-branch leaves the call well-formed.
-try:
-    documents
-except NameError:
-    documents = []
-try:
-    topic_info
-except NameError:
-    topic_info = None
-_effective_query = query
-try:
-    if isinstance(resolved_query, dict) and resolved_query.get("content"):
-        _effective_query = resolved_query["content"]
-    elif isinstance(resolved_query, str) and resolved_query:
-        _effective_query = resolved_query
-except NameError:
-    pass
-result = retrieve_with_context(
-    _effective_query,
-    documents,
-    session_context.get("session_context", session_context),
-    topic_info,
-)
-del retrieve_with_context
-"""
-            },
+            _internal=True,
         )
 
         # Response generator with context
@@ -650,220 +971,103 @@ This will be used to maintain context in future turns.""",
                 },
             )
 
-        # Session updater
-        session_updater_id = builder.add_node(
-            "PythonCodeNode",
+        # Session updater.
+        #
+        # S6a #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_update_session` function wired via `PythonCodeNode.from_function`.
+        # The build-time `max_context_turns` is bound through a thin closure
+        # (keeps `session_id` / `query` / `response` / `topic_info` / `summary`
+        # as the declared inputs the wired edges + injector deliver). Optional
+        # inputs (`topic_info` / `summary`) default to None inside the function
+        # so a False optional-branch leaves the call well-formed. The node
+        # publishes the SAME flat `result` port carrying
+        # `{"session_update": {...}}`.
+        def _update_session_bound(
+            session_id,
+            query="",
+            response=None,
+            topic_info=None,
+            summary=None,
+            sessions_store=None,
+        ) -> dict:
+            return _update_session(
+                session_id=session_id,
+                query=query,
+                response=response,
+                topic_info=topic_info,
+                summary=summary,
+                sessions_store=sessions_store,
+                max_context_turns=_max_context_turns,
+            )
+
+        _update_session_bound.__name__ = "session_updater"
+        _update_session_bound.__doc__ = _update_session.__doc__
+        session_updater_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _update_session_bound,
+                name="session_updater",
+            ),
             node_id="session_updater",
-            config={
-                "code": f"""
-def update_session(session_id, sessions_store, query, response, topic_info, summary=None):
-    '''Update session with new turn'''
-    # F9 #1118 sibling: import inside the function body (separate exec ns).
-    from datetime import datetime as _datetime_class
-
-    # PythonCodeNode runs each node with an independent copy of its inputs, so
-    # the `sessions_store` mutation context_loader performed is NOT visible
-    # here. Seed the session if absent (same shape context_loader creates) so
-    # this turn is recorded against a real session record rather than crashing
-    # with KeyError. Cross-execution persistence is owned by the WorkflowNode's
-    # own `self.sessions` store (see create_session), not this per-run store.
-    if session_id not in sessions_store:
-        sessions_store[session_id] = {{
-            "id": session_id,
-            "created_at": _datetime_class.now().isoformat(),
-            "turns": [],
-            "summary": "",
-            "current_topic": None,
-            "user_preferences": {{}},
-            "metrics": {{
-                "turn_count": 0,
-                "topics_discussed": [],
-                "avg_response_length": 0
-            }}
-        }}
-
-    session = sessions_store[session_id]
-
-    # Add new turn. `response` is the response_generator (LLMAgentNode) `response`
-    # port value — an inner message dict keyed by "content" (NOT "response").
-    new_turn = {{
-        "turn_number": len(session["turns"]) + 1,
-        "timestamp": _datetime_class.now().isoformat(),
-        "query": query,
-        "response": response.get("content", "") if isinstance(response, dict) else (response or ""),
-        "topic": topic_info.get("topic_analysis", {{}}).get("current_topic") if isinstance(topic_info, dict) else None
-    }}
-
-    session["turns"].append(new_turn)
-
-    # Update summary if provided. `summary` is the context_summarizer
-    # (LLMAgentNode) `response` port value — an inner message dict keyed by
-    # "content" (NOT "response").
-    if isinstance(summary, dict) and summary.get("content"):
-        session["summary"] = summary["content"]
-
-    # Update current topic
-    if topic_info and topic_info.get("topic_analysis"):
-        session["current_topic"] = topic_info["topic_analysis"]["current_topic"]
-
-        # Track topics discussed
-        topic = topic_info["topic_analysis"]["current_topic"]
-        if topic and topic not in session["metrics"]["topics_discussed"]:
-            session["metrics"]["topics_discussed"].append(topic)
-
-    # Update metrics
-    session["metrics"]["turn_count"] = len(session["turns"])
-    total_response_length = sum(len(turn.get("response", "")) for turn in session["turns"])
-    session["metrics"]["avg_response_length"] = total_response_length / len(session["turns"]) if session["turns"] else 0
-
-    # Trim old turns if exceeds max + buffer for summarization
-    if len(session["turns"]) > {self.max_context_turns} * 1.5:
-        # Keep recent turns and rely on summary for older context
-        session["turns"] = session["turns"][-{self.max_context_turns}:]
-
-    # Coherence proxy: topic consistency. Fewer DISTINCT topics across the
-    # turns => the conversation stayed on-topic => more coherent. Derived from
-    # the real session signal (NOT a hardcoded score); single-topic = 1.0.
-    _distinct_topics = len(session["metrics"]["topics_discussed"])
-    _coherence_turns = max(1, session["metrics"]["turn_count"])
-    coherence_score = max(0.0, min(1.0, 1.0 - (max(0, _distinct_topics - 1) / _coherence_turns)))
-
-    # Calculate conversation health metrics
-    conversation_metrics = {{
-        "coherence_score": coherence_score,  # derived from topic consistency
-        "engagement_level": min(1.0, len(session["turns"]) / 10),  # Higher with more turns
-        "topic_diversity": len(session["metrics"]["topics_discussed"]) / max(1, session["metrics"]["turn_count"]),
-        "avg_turn_length": session["metrics"]["avg_response_length"]
-    }}
-
-    # F9 #1117: function MUST return its dict; the prior `result = {{...}}`
-    # bound a function-scope local that was never returned, so the session
-    # update never reached the module-scope `session_update` output.
-    return {{
-        "session_update": {{
-            "session_id": session_id,
-            "turn_added": new_turn["turn_number"],
-            "total_turns": len(session["turns"]),
-            "current_topic": session["current_topic"],
-            "conversation_metrics": conversation_metrics
-        }}
-    }}
-
-# F9 #1117: module-scope call so PythonCodeNode publishes the `result` port
-# (carrying {{"session_update": ...}}) that result_formatter unwraps.
-# `session_id` + `query` are external workflow inputs; `sessions_store` bound via
-# config/inputs; `response` <- response_generator.response (LLMAgentNode);
-# `topic_info` <- topic_tracker.result ({{"topic_analysis": ...}}); `summary` <-
-# context_summarizer.response when enable_summarization (else default None).
-# `del` the helper so the output gate sees only `result`.
-try:
-    topic_info
-except NameError:
-    topic_info = None
-try:
-    summary
-except NameError:
-    summary = None
-try:
-    sessions_store
-except NameError:
-    sessions_store = {{}}
-result = update_session(
-    session_id, sessions_store, query, response, topic_info, summary
-)
-del update_session
-"""
-            },
+            _internal=True,
         )
 
         # Result formatter (TERMINAL node — publishes the WorkflowNode's
         # documented `conversational_response` output).
         #
-        # F9 #1123: this config is now an f-string so the {{self.*}} config
-        # flags interpolate to literal Python values. The prior NON-f-string
-        # form left `{{self.max_context_turns}}` etc. as runtime set-literals
-        # referencing undefined names — the terminal node crashed with
-        # NameError, so the whole workflow published nothing.
+        # S6a #1117/#1123/#1118 root-cause fix: lifted to the module-level
+        # `_format_conversational_result` function wired via
+        # `PythonCodeNode.from_function`. The four build-time config flags
+        # (`max_context_turns`, `enable_summarization`, `coreference_resolution`,
+        # `personalization_enabled`) are bound through a thin closure — the
+        # structural successor of the prior f-string `{self.*}` interpolation
+        # (#1123 fix). The function declares `response` / `session_update` /
+        # `topic_info` / `contextual_retrieval` as the explicit inputs the wired
+        # edges deliver, defaulting each to a benign empty value so a False
+        # optional-branch leaves the TERMINAL node well-formed. The node
+        # publishes the SAME flat `result` port carrying
+        # `{"conversational_response": {...}}`.
         #
-        # Every wired input here arrives as its PRODUCER's published port value:
+        # Every wired input arrives as its PRODUCER's published port value:
         #   - `response`             <- response_generator.response (LLMAgentNode
         #                               port value = inner message dict keyed by
         #                               "content")
-        #   - `session_update`       <- session_updater.result ({{"session_update"}})
-        #   - `topic_info`           <- topic_tracker.result ({{"topic_analysis"}})
+        #   - `session_update`       <- session_updater.result ({"session_update"})
+        #   - `topic_info`           <- topic_tracker.result ({"topic_analysis"})
         #   - `contextual_retrieval` <- context_retriever.result
-        #                               ({{"contextual_retrieval"}})
-        # so each is unwrapped to the nested shape this formatter consumes.
-        result_formatter_id = builder.add_node(
-            "PythonCodeNode",
+        #                               ({"contextual_retrieval"})
+        # so the function unwraps each to the nested shape it consumes.
+        _enable_summarization = self.enable_summarization
+        _coreference_resolution = self.coreference_resolution
+        _personalization_enabled = self.personalization_enabled
+
+        def _format_conversational_result_bound(
+            response=None,
+            session_update=None,
+            topic_info=None,
+            contextual_retrieval=None,
+        ) -> dict:
+            return _format_conversational_result(
+                response=response,
+                session_update=session_update,
+                topic_info=topic_info,
+                contextual_retrieval=contextual_retrieval,
+                max_context_turns=_max_context_turns,
+                enable_summarization=_enable_summarization,
+                coreference_resolution=_coreference_resolution,
+                personalization_enabled=_personalization_enabled,
+            )
+
+        _format_conversational_result_bound.__name__ = "result_formatter"
+        _format_conversational_result_bound.__doc__ = (
+            _format_conversational_result.__doc__
+        )
+        result_formatter_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _format_conversational_result_bound,
+                name="result_formatter",
+            ),
             node_id="result_formatter",
-            config={
-                "code": f"""
-# Optional inputs may be unwired on a False optional-branch (topic_tracking off
-# leaves `topic_info` unbound). Default each to a benign empty value so the
-# TERMINAL node still publishes a well-formed conversational_response.
-try:
-    topic_info
-except NameError:
-    topic_info = {{}}
-try:
-    session_update
-except NameError:
-    session_update = {{}}
-try:
-    contextual_retrieval
-except NameError:
-    contextual_retrieval = {{}}
-try:
-    response
-except NameError:
-    response = {{}}
-
-# Format conversational response. `response` is the LLMAgentNode `response`
-# port value (inner message dict keyed by "content", NOT "response").
-response_text = response.get("content", "") if isinstance(response, dict) else (response or "")
-session_update = session_update.get("session_update", {{}}) if isinstance(session_update, dict) else {{}}
-topic_info = topic_info.get("topic_analysis", {{}}) if isinstance(topic_info, dict) else {{}}
-contextual_retrieval = contextual_retrieval.get("contextual_retrieval", {{}}) if isinstance(contextual_retrieval, dict) else {{}}
-
-# Build session state summary
-session_state = {{
-    "session_id": session_update.get("session_id"),
-    "turn_number": session_update.get("turn_added"),
-    "total_turns": session_update.get("total_turns"),
-    "context_window": {self.max_context_turns},
-    "summary_available": {self.enable_summarization}
-}}
-
-# Topic information
-topic_summary = {{
-    "current_topic": topic_info.get("current_topic"),
-    "topic_changed": topic_info.get("topic_changed", False),
-    "transition_type": topic_info.get("transition_type", "continuation"),
-    "topics_discussed": session_update.get("conversation_metrics", {{}}).get("topic_diversity", 0)
-}}
-
-# Conversation metrics
-metrics = session_update.get("conversation_metrics", {{}})
-metrics["retrieval_context_influence"] = contextual_retrieval.get("context_influence", 0)
-
-# F9 #1117/#1123: module-scope `result =` so this TERMINAL node publishes the
-# documented `conversational_response` the WorkflowNode promises.
-result = {{
-    "conversational_response": {{
-        "response": response_text,
-        "session_state": session_state,
-        "topic_info": topic_summary,
-        "conversation_metrics": metrics,
-        "metadata": {{
-            "coreference_resolution": {self.coreference_resolution},
-            "personalization": {self.personalization_enabled},
-            "context_enhanced_retrieval": True
-        }}
-    }}
-}}
-"""
-            },
+            _internal=True,
         )
 
         # Messages-composer nodes (L3 fix). Each LLM stage's context is routed

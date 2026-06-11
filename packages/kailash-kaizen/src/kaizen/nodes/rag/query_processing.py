@@ -427,6 +427,350 @@ def parse_hop_plan_response(response=None):
     }
 
 
+# ---------------------------------------------------------------------------
+# COMPUTE processors (#1117 / #1123 / #1118 root-cause fix — same reference
+# template as optimized.py S1/S2 + graph.py/evaluation.py S3).
+#
+# These are the 6 terminal PROCESSOR stages of the query_processing inner
+# workflows. Each consumes the parsed dict its upstream `parse_<stage>`
+# from_function node publishes (the {expansions,...} / {sub_questions,...} /
+# {rewrites,...} / {query_type,...} / {hops,...} dicts) PLUS the top-level
+# `query` input, and produces the node's final documented result.
+#
+# Pre-migration each was an inline `code=` codegen block (an f-string-free
+# triple-quoted string `PythonCodeNode` config). Those blocks suffered the
+# #1117 publish-nothing class (a string-`code` PythonCodeNode publishes on the
+# flat `result` port, but brace-escaping + import-trap hazards made the codegen
+# fragile). Lifting each to a real module-level `def ... -> dict` (real
+# `return`, type-checkable, no brace-escaping, no import trap) and wiring via
+# `PythonCodeNode.from_function(fn)` is the structural fix: the node publishes
+# the SAME flat `result` port carrying the returned dict.
+#
+# Each is pure post-LLM tool-result FORMATTING (the permitted deterministic
+# exception per rules/agent-reasoning.md #3 / #6 — assembling the LLM's parsed
+# decision into the documented output shape). NO if-else routing / keyword
+# classification on query content is added: the LLM already made the expansion
+# / decomposition / rewrite / intent / hop reasoning upstream; these stages
+# only render it.
+#
+# HONESTY (zero-tolerance Rule 2): each defaults to the upstream parser's
+# empty-sentinel (a typed-but-empty dict) on missing/malformed input (an empty
+# expansion set / empty plan / original-query-only rewrite), NEVER a fabricated
+# value. Each
+# input param maps 1:1 to a real `add_connection` edge or the top-level
+# `query` injection — no vestigial params (zero-tolerance Rule 3c).
+# ---------------------------------------------------------------------------
+
+
+def _process_expansions(query: str = "", expansion_response=None) -> dict:
+    """Assemble the QueryExpansionNode ``expanded_query`` result.
+
+    Consumes ``expansion_response`` (the ``{expansions, keywords, concepts}``
+    dict ``expansion_parser`` publishes) + the top-level ``query``. Combines +
+    dedups all terms into the documented ``expanded_query`` shape. Honest
+    default: a missing/non-dict ``expansion_response`` yields empty lists (the
+    parser's empty-sentinel propagates), never fabricated expansions.
+    """
+    original_query = query
+    expansion_result = (
+        expansion_response if isinstance(expansion_response, dict) else {}
+    )
+
+    expansions = expansion_result.get("expansions", []) or []
+    keywords = expansion_result.get("keywords", []) or []
+    concepts = expansion_result.get("concepts", []) or []
+
+    # Combine and deduplicate.
+    all_terms = set()
+    all_terms.add(original_query)
+    all_terms.update(expansions)
+    all_terms.update(keywords)
+
+    return {
+        "expanded_query": {
+            "original": original_query,
+            "expansions": list(expansions),
+            "keywords": list(keywords),
+            "concepts": list(concepts),
+            "all_terms": list(all_terms),
+            "expansion_count": len(all_terms) - 1,
+        }
+    }
+
+
+def _resolve_dependencies(decomposition_result=None) -> dict:
+    """Build the QueryDecompositionNode ``execution_plan`` result.
+
+    Consumes ``decomposition_result`` (the ``{sub_questions,
+    composition_strategy}`` dict ``decomposition_parser`` publishes). Reads each
+    sub-question's ``depends_on`` field (the key the decomposer system_prompt
+    advertises — F25 Shard E), builds the dependency graph, and topologically
+    sorts it into an execution order. Honest default: a missing/non-dict
+    ``decomposition_result`` yields an empty plan, never fabricated
+    sub-questions.
+    """
+    decomposition = (
+        decomposition_result if isinstance(decomposition_result, dict) else {}
+    )
+    sub_questions = decomposition.get("sub_questions", []) or []
+
+    # Build dependency graph. Each sub-question may be a dict carrying
+    # `depends_on` (the field the system_prompt advertises) or a bare value.
+    dependency_graph: Dict[int, List[int]] = {}
+    for i, sq in enumerate(sub_questions):
+        deps = sq.get("depends_on", []) if isinstance(sq, dict) else []
+        dependency_graph[i] = deps
+
+    # Topological sort for execution order.
+    def topological_sort(graph: Dict[int, List[int]]) -> List[int]:
+        visited = set()
+        stack: List[int] = []
+
+        def dfs(node: int) -> None:
+            visited.add(node)
+            for dep in graph.get(node, []):
+                if dep not in visited:
+                    dfs(dep)
+            stack.append(node)
+
+        for node in graph:
+            if node not in visited:
+                dfs(node)
+
+        return stack[::-1]
+
+    execution_order = topological_sort(dependency_graph)
+
+    execution_plan = {
+        "sub_questions": sub_questions,
+        "execution_order": execution_order,
+        "composition_strategy": decomposition.get("composition_strategy", "sequential"),
+        "total_questions": len(sub_questions),
+    }
+
+    return {"execution_plan": execution_plan}
+
+
+def _combine_rewrites(
+    query: str = "", analysis_result=None, rewrite_result=None
+) -> dict:
+    """Assemble the QueryRewritingNode ``rewritten_queries`` result.
+
+    Consumes the top-level ``query`` plus the two parsed LLM-stage dicts:
+    ``analysis_result`` (``{issues, suggestions}`` from ``analysis_parser``) and
+    ``rewrite_result`` (``{rewrites, recommended}`` from ``rewrite_parser``).
+    Merges the original query + all rewrite versions, dedups preserving order,
+    and surfaces the analyzer's issues. Honest defaults: missing parsed dicts
+    yield no issues + only the original query, never fabricated rewrites.
+    """
+    original_query = query
+    analysis = analysis_result if isinstance(analysis_result, dict) else {}
+    rewrites = rewrite_result if isinstance(rewrite_result, dict) else {}
+
+    rewrite_dict = rewrites.get("rewrites", {}) or {}
+
+    all_versions = [original_query]
+    if isinstance(rewrite_dict, dict):
+        all_versions.extend(rewrite_dict.values())
+
+    # Remove duplicates while preserving order.
+    seen = set()
+    unique_versions = []
+    for v in all_versions:
+        if v and v not in seen:
+            seen.add(v)
+            unique_versions.append(v)
+
+    return {
+        "rewritten_queries": {
+            "original": original_query,
+            "issues_found": analysis.get("issues", []),
+            "versions": rewrite_dict,
+            "recommended": rewrites.get("recommended", original_query),
+            "all_unique_versions": unique_versions,
+            "improvement_count": len(unique_versions) - 1,
+        }
+    }
+
+
+def _map_strategy(intent_classification=None) -> dict:
+    """Build the QueryIntentClassifierNode ``routing_decision`` result.
+
+    Consumes ``intent_classification`` (the ``{query_type, domain, complexity,
+    requirements, suggested_strategy}`` dict ``intent_parser`` publishes). Maps
+    the LLM's classification to a retrieval strategy via a static lookup +
+    requirement-aware adjustment (post-LLM tool-result formatting — the LLM
+    made the classification; the map only renders it). Honest default: a
+    missing/non-dict input falls to the documented low-confidence defaults
+    (the parser's None-``query_type`` sentinel surfaces as the ``factual`` /
+    ``simple`` defaults), never a fabricated classification.
+    """
+    intent = intent_classification if isinstance(intent_classification, dict) else {}
+
+    query_type = intent.get("query_type") or "factual"
+    # NOTE: the original strategy_mapper codegen read `domain` into a local that
+    # the strategy logic never consumed (dead in the codegen too); the map keys
+    # on (query_type, complexity) + requirements only. `domain` is intentionally
+    # NOT read here — reading it would be a vestigial input (zero-tolerance 3c).
+    complexity = intent.get("complexity") or "simple"
+    requirements = intent.get("requirements", []) or []
+
+    # Strategy mapping rules.
+    strategy_map = {
+        ("factual", "simple"): "sparse",
+        ("factual", "moderate"): "hybrid",
+        ("analytical", "complex"): "hierarchical",
+        ("comparative", "moderate"): "multi_vector",
+        ("exploratory", "complex"): "self_correcting",
+        ("procedural", "moderate"): "semantic",
+    }
+
+    # Determine base strategy.
+    base_strategy = strategy_map.get((query_type, complexity), "hybrid")
+
+    # Adjust based on requirements.
+    if "needs_recent" in requirements:
+        # Prefer strategies that can handle temporal information.
+        if base_strategy == "sparse":
+            base_strategy = "hybrid"
+    elif "needs_authoritative" in requirements:
+        # Prefer strategies with quality filtering.
+        base_strategy = "self_correcting"
+    elif "needs_examples" in requirements:
+        # Prefer semantic strategies.
+        if base_strategy == "sparse":
+            base_strategy = "semantic"
+
+    routing_decision = {
+        "intent_analysis": intent,
+        "recommended_strategy": base_strategy,
+        "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
+        "confidence": 0.85 if (query_type, complexity) in strategy_map else 0.6,
+        "reasoning": (
+            f"Query type '{query_type}' with '{complexity}' complexity "
+            f"suggests '{base_strategy}' strategy"
+        ),
+    }
+
+    return {"routing_decision": routing_decision}
+
+
+def _plan_execution(hop_plan_result=None) -> dict:
+    """Build the MultiHopQueryPlannerNode ``multi_hop_plan`` result.
+
+    Consumes ``hop_plan_result`` (the ``{hops, combination_strategy,
+    total_hops}`` dict ``hop_plan_parser`` publishes). Validates inter-hop
+    dependencies and groups hops into parallelizable execution batches. Honest
+    default: a missing/non-dict input yields a zero-hop, zero-batch plan, never
+    fabricated hops.
+    """
+    hop_plan = hop_plan_result if isinstance(hop_plan_result, dict) else {}
+    hops = hop_plan.get("hops", []) or []
+
+    # Validate dependencies.
+    hop_dict = {
+        h["hop_number"]: h for h in hops if isinstance(h, dict) and "hop_number" in h
+    }
+    for hop in hops:
+        if not isinstance(hop, dict):
+            continue
+        deps = hop.get("depends_on", [])
+        for dep in deps:
+            if dep not in hop_dict:
+                logger.warning(
+                    f"Hop {hop.get('hop_number')} depends on non-existent hop {dep}"
+                )
+
+    # Create execution batches (hops that can run in parallel).
+    batches = []
+    processed: set = set()
+
+    while len(processed) < len(hops):
+        batch = []
+        for hop in hops:
+            if not isinstance(hop, dict):
+                continue
+            hop_num = hop.get("hop_number")
+            if hop_num not in processed:
+                deps = set(hop.get("depends_on", []))
+                if deps.issubset(processed):
+                    batch.append(hop)
+
+        if not batch:
+            # Circular dependency or error.
+            logger.error("Cannot create valid execution order")
+            break
+
+        batches.append(batch)
+        for hop in batch:
+            processed.add(hop["hop_number"])
+
+    execution_plan = {
+        "batches": batches,
+        "total_hops": len(hops),
+        "parallel_opportunities": len([b for b in batches if len(b) > 1]),
+        "combination_strategy": hop_plan.get("combination_strategy", "sequential"),
+        "estimated_time": len(batches) * 2,  # Rough estimate in seconds
+    }
+
+    return {"multi_hop_plan": execution_plan}
+
+
+def _adaptive_process(query: str = "", routing_decision=None) -> dict:
+    """Build the AdaptiveQueryProcessorNode ``adaptive_plan`` result.
+
+    Consumes the top-level ``query`` plus ``routing_decision`` (the embedded
+    QueryIntentClassifierNode's ``run()``-contract output, wired
+    ``intent_analyzer.routing_decision`` -> here). Derives the processing-step
+    plan from the classifier's intent analysis (post-LLM tool-result
+    formatting — the classifier made the intent decision upstream). Honest
+    default: a missing/non-dict ``routing_decision`` yields the ``factual`` /
+    ``simple`` defaults + a single ``rewrite`` step, never fabricated intent.
+    """
+    routing = routing_decision if isinstance(routing_decision, dict) else {}
+    # The wired value is the classifier's full run() dict, which nests the
+    # routing_decision under the same key (the classifier's contract).
+    routing = routing.get("routing_decision", {}) if isinstance(routing, dict) else {}
+    intent = routing.get("intent_analysis", {}) if isinstance(routing, dict) else {}
+
+    complexity = intent.get("complexity", "simple")
+    query_type = intent.get("query_type", "factual")
+
+    # Determine which processing steps to apply (rendering the LLM's intent
+    # decision to a step plan — NOT classifying the query here).
+    processing_steps = []
+
+    # Always apply basic rewriting.
+    processing_steps.append("rewrite")
+
+    # Apply expansion for exploratory queries.
+    if query_type in ["exploratory", "analytical"]:
+        processing_steps.append("expand")
+
+    # Apply decomposition for complex queries.
+    if complexity == "complex":
+        processing_steps.append("decompose")
+
+    # Apply multi-hop planning for comparative or complex analytical.
+    if query_type == "comparative" or (
+        query_type == "analytical" and complexity == "complex"
+    ):
+        processing_steps.append("multi_hop")
+
+    processing_plan = {
+        "original_query": query,
+        "intent": intent,
+        "recommended_strategy": routing.get("recommended_strategy", "hybrid"),
+        "processing_steps": processing_steps,
+        "rationale": (
+            f"Query type '{query_type}' with complexity '{complexity}' requires "
+            f"{len(processing_steps)} processing steps"
+        ),
+    }
+
+    return {"adaptive_plan": processing_plan}
+
+
 @register_node()
 class QueryExpansionNode(Node):
     """
@@ -589,40 +933,27 @@ class QueryExpansionNode(Node):
             },
         )
 
-        # Add expansion processor
-        processor_id = builder.add_node(
-            "PythonCodeNode",
+        # Add expansion processor.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_process_expansions` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"expanded_query": {...}}` (a string-`code`
+        # PythonCodeNode also published on `result` via its local `result`
+        # variable — the runtime result shape `result["expanded_query"]` is
+        # unchanged). It reads `query` (top-level injection) + `expansion_response`
+        # (wired from expansion_parser.result). `_internal=True` suppresses the
+        # consumer-facing instance-API advisory. type: ignore[attr-defined]:
+        # `from_function` is a classmethod on concrete PythonCodeNode, erased to
+        # `type[Node]` by `@register_node` for static checkers (mirrors the
+        # composer/parser nodes above).
+        processor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _process_expansions,
+                name="expansion_processor",
+            ),
             node_id="expansion_processor",
-            config={
-                "code": """
-# Process expansions
-original_query = query
-expansion_result = expansion_response
-
-# Extract all components
-expansions = expansion_result.get("expansions", [])
-keywords = expansion_result.get("keywords", [])
-concepts = expansion_result.get("concepts", [])
-
-# Combine and deduplicate
-all_terms = set()
-all_terms.add(original_query)
-all_terms.update(expansions)
-all_terms.update(keywords)
-
-# Create structured output
-result = {
-    "expanded_query": {
-        "original": original_query,
-        "expansions": list(expansions),
-        "keywords": list(keywords),
-        "concepts": list(concepts),
-        "all_terms": list(all_terms),
-        "expansion_count": len(all_terms) - 1
-    }
-}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composer (reference template — conversational.py /
@@ -637,7 +968,7 @@ result = {
         # `@register_node` for static checkers (mirrors conversational.py).
         # `_internal=True` suppresses the consumer-facing instance-API advisory.
         expansion_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_expansion_messages,
                 name="expansion_messages_composer",
             ),
@@ -652,7 +983,7 @@ result = {
         # `.get("expansions")` resolved to []. type: ignore[attr-defined] per
         # the composer note above.
         expansion_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_expansion_response,
                 name="expansion_parser",
             ),
@@ -825,58 +1156,25 @@ class QueryDecompositionNode(Node):
             },
         )
 
-        # Add dependency resolver
-        dependency_resolver_id = builder.add_node(
-            "PythonCodeNode",
+        # Add dependency resolver.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_resolve_dependencies` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"execution_plan": {...}}` (runtime result
+        # shape `result["execution_plan"]` unchanged). It reads
+        # `decomposition_result` (wired from decomposition_parser.result). The
+        # F25 Shard E `depends_on` contract (the LLM system_prompt advertises
+        # `depends_on` as the dependency field) is preserved verbatim in
+        # `_resolve_dependencies`. type: ignore[attr-defined] per the
+        # composer/parser note above.
+        dependency_resolver_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _resolve_dependencies,
+                name="dependency_resolver",
+            ),
             node_id="dependency_resolver",
-            config={
-                "code": """
-# Resolve dependencies and create execution order
-# F25 Shard E: the LLM system_prompt for query_decomposer advertises
-# `depends_on` as the per-sub-question dependency field (aligning with
-# MultiHopQueryPlannerNode's hop_planner convention). The resolver MUST
-# read the same key the prompt advertises — reading a different key
-# silently produces an empty dependency graph regardless of LLM output.
-decomposition = decomposition_result
-sub_questions = decomposition.get("sub_questions", [])
-
-# Build dependency graph
-dependency_graph = {}
-for i, sq in enumerate(sub_questions):
-    deps = sq.get("depends_on", [])
-    dependency_graph[i] = deps
-
-# Topological sort for execution order
-def topological_sort(graph):
-    visited = set()
-    stack = []
-
-    def dfs(node):
-        visited.add(node)
-        for dep in graph.get(node, []):
-            if dep not in visited:
-                dfs(dep)
-        stack.append(node)
-
-    for node in graph:
-        if node not in visited:
-            dfs(node)
-
-    return stack[::-1]
-
-execution_order = topological_sort(dependency_graph)
-
-# Create ordered execution plan
-execution_plan = {
-    "sub_questions": sub_questions,
-    "execution_order": execution_order,
-    "composition_strategy": decomposition.get("composition_strategy", "sequential"),
-    "total_questions": len(sub_questions)
-}
-
-result = {"execution_plan": execution_plan}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composer (reference template). The query_decomposer
@@ -885,7 +1183,7 @@ result = {"execution_plan": execution_plan}
         # REAL `query` (top-level workflow input via the parameter injector) into
         # a `messages` list wired to the VALID `messages` port.
         decomposition_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_decomposition_messages,
                 name="decomposition_messages_composer",
             ),
@@ -898,7 +1196,7 @@ result = {"execution_plan": execution_plan}
         # dependency_resolver `.get`s. Pre-O4 the raw `response` reached the
         # resolver, so `.get("sub_questions")` resolved to [].
         decomposition_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_decomposition_response,
                 name="decomposition_parser",
             ),
@@ -1117,42 +1415,24 @@ class QueryRewritingNode(Node):
             },
         )
 
-        # Add result combiner
-        combiner_id = builder.add_node(
-            "PythonCodeNode",
+        # Add result combiner.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_combine_rewrites` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"rewritten_queries": {...}}` (runtime result
+        # shape `result["rewritten_queries"]` unchanged). It reads `query`
+        # (top-level injection) + `analysis_result` (wired from
+        # analysis_parser.result) + `rewrite_result` (wired from
+        # rewrite_parser.result) — the 3-way fan-in. type: ignore[attr-defined]
+        # per the composer/parser note above.
+        combiner_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _combine_rewrites,
+                name="result_combiner",
+            ),
             node_id="result_combiner",
-            config={
-                "code": """
-# Combine analysis and rewrites
-original_query = query
-analysis = analysis_result
-rewrites = rewrite_result
-
-# Create comprehensive output
-all_versions = [original_query]
-rewrite_dict = rewrites.get("rewrites", {})
-all_versions.extend(rewrite_dict.values())
-
-# Remove duplicates while preserving order
-seen = set()
-unique_versions = []
-for v in all_versions:
-    if v and v not in seen:
-        seen.add(v)
-        unique_versions.append(v)
-
-result = {
-    "rewritten_queries": {
-        "original": original_query,
-        "issues_found": analysis.get("issues", []),
-        "versions": rewrite_dict,
-        "recommended": rewrites.get("recommended", original_query),
-        "all_unique_versions": unique_versions,
-        "improvement_count": len(unique_versions) - 1
-    }
-}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composers (reference template) for the 2-stage chain.
@@ -1169,7 +1449,7 @@ result = {
         # `analyzer.response -> rewriter."analysis"` phantom edge is REMOVED; the
         # analysis now reaches the rewriter through the composer's `messages`.
         analysis_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_analysis_messages,
                 name="analysis_messages_composer",
             ),
@@ -1177,7 +1457,7 @@ result = {
             _internal=True,
         )
         rewrite_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_rewrite_messages,
                 name="rewrite_messages_composer",
             ),
@@ -1194,7 +1474,7 @@ result = {
         # BOTH the rewrite composer AND the combiner so the analysis reaches the
         # rewriter (via its `messages`) AND surfaces in the combined output.
         analysis_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_analysis_response,
                 name="analysis_parser",
             ),
@@ -1202,7 +1482,7 @@ result = {
             _internal=True,
         )
         rewrite_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_rewrite_response,
                 name="rewrite_parser",
             ),
@@ -1515,58 +1795,22 @@ class QueryIntentClassifierNode(Node):
             },
         )
 
-        # Add strategy mapper
-        strategy_mapper_id = builder.add_node(
-            "PythonCodeNode",
+        # Add strategy mapper.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_map_strategy` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"routing_decision": {...}}` (runtime result
+        # shape `result["routing_decision"]` unchanged). It reads
+        # `intent_classification` (wired from intent_parser.result). type:
+        # ignore[attr-defined] per the composer/parser note above.
+        strategy_mapper_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _map_strategy,
+                name="strategy_mapper",
+            ),
             node_id="strategy_mapper",
-            config={
-                "code": """
-# Map intent to retrieval strategy
-intent = intent_classification
-
-query_type = intent.get("query_type", "factual")
-domain = intent.get("domain", "general")
-complexity = intent.get("complexity", "simple")
-requirements = intent.get("requirements", [])
-
-# Strategy mapping rules
-strategy_map = {
-    ("factual", "simple"): "sparse",
-    ("factual", "moderate"): "hybrid",
-    ("analytical", "complex"): "hierarchical",
-    ("comparative", "moderate"): "multi_vector",
-    ("exploratory", "complex"): "self_correcting",
-    ("procedural", "moderate"): "semantic"
-}
-
-# Determine base strategy
-base_strategy = strategy_map.get((query_type, complexity), "hybrid")
-
-# Adjust based on requirements
-if "needs_recent" in requirements:
-    # Prefer strategies that can handle temporal information
-    if base_strategy == "sparse":
-        base_strategy = "hybrid"
-elif "needs_authoritative" in requirements:
-    # Prefer strategies with quality filtering
-    base_strategy = "self_correcting"
-elif "needs_examples" in requirements:
-    # Prefer semantic strategies
-    if base_strategy == "sparse":
-        base_strategy = "semantic"
-
-# Create routing decision
-routing_decision = {
-    "intent_analysis": intent,
-    "recommended_strategy": base_strategy,
-    "alternative_strategies": ["hybrid", "semantic", "hierarchical"],
-    "confidence": 0.85 if (query_type, complexity) in strategy_map else 0.6,
-    "reasoning": f"Query type '{query_type}' with '{complexity}' complexity suggests '{base_strategy}' strategy"
-}
-
-result = {"routing_decision": routing_decision}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composer (reference template). The intent_classifier
@@ -1575,7 +1819,7 @@ result = {"routing_decision": routing_decision}
         # REAL `query` (top-level workflow input via the parameter injector) into
         # a `messages` list wired to the VALID `messages` port.
         intent_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_intent_messages,
                 name="intent_messages_composer",
             ),
@@ -1589,7 +1833,7 @@ result = {"routing_decision": routing_decision}
         # `response` reached the mapper, so every `.get(...)` fell to its default
         # and the strategy_map lookup ran on fabricated-default keys.
         intent_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_intent_response,
                 name="intent_parser",
             ),
@@ -1814,58 +2058,26 @@ class MultiHopQueryPlannerNode(Node):
             },
         )
 
-        # Add execution planner
-        execution_planner_id = builder.add_node(
-            "PythonCodeNode",
+        # Add execution planner.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_plan_execution` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"multi_hop_plan": {...}}` (runtime result
+        # shape `result["multi_hop_plan"]` unchanged). It reads
+        # `hop_plan_result` (wired from hop_plan_parser.result). The
+        # circular-dependency `logger.warning`/`logger.error` observability is
+        # preserved (the module-level function closes over the module `logger`,
+        # whereas the codegen relied on `logger` being injected into the exec
+        # namespace — the function form is the more robust binding). type:
+        # ignore[attr-defined] per the composer/parser note above.
+        execution_planner_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _plan_execution,
+                name="execution_planner",
+            ),
             node_id="execution_planner",
-            config={
-                "code": """
-# Create executable plan
-hop_plan = hop_plan_result
-hops = hop_plan.get("hops", [])
-
-# Validate dependencies
-hop_dict = {h["hop_number"]: h for h in hops}
-for hop in hops:
-    deps = hop.get("depends_on", [])
-    for dep in deps:
-        if dep not in hop_dict:
-            logger.warning(f"Hop {hop['hop_number']} depends on non-existent hop {dep}")
-
-# Create execution batches (hops that can run in parallel)
-batches = []
-processed = set()
-
-while len(processed) < len(hops):
-    batch = []
-    for hop in hops:
-        hop_num = hop["hop_number"]
-        if hop_num not in processed:
-            deps = set(hop.get("depends_on", []))
-            if deps.issubset(processed):
-                batch.append(hop)
-
-    if not batch:
-        # Circular dependency or error
-        logger.error("Cannot create valid execution order")
-        break
-
-    batches.append(batch)
-    for hop in batch:
-        processed.add(hop["hop_number"])
-
-# Create final execution plan
-execution_plan = {
-    "batches": batches,
-    "total_hops": len(hops),
-    "parallel_opportunities": len([b for b in batches if len(b) > 1]),
-    "combination_strategy": hop_plan.get("combination_strategy", "sequential"),
-    "estimated_time": len(batches) * 2  # Rough estimate in seconds
-}
-
-result = {"multi_hop_plan": execution_plan}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composer (reference template). The hop_planner previously
@@ -1874,7 +2086,7 @@ result = {"multi_hop_plan": execution_plan}
         # (top-level workflow input via the parameter injector) into a `messages`
         # list wired to the VALID `messages` port.
         hop_plan_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_hop_plan_messages,
                 name="hop_plan_messages_composer",
             ),
@@ -1887,7 +2099,7 @@ result = {"multi_hop_plan": execution_plan}
         # execution_planner `.get`s. Pre-O4 the raw `response` reached the
         # planner, so `.get("hops")` resolved to [] (zero batches, zero hops).
         hop_plan_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_hop_plan_response,
                 name="hop_plan_parser",
             ),
@@ -2054,50 +2266,26 @@ class AdaptiveQueryProcessorNode(Node):
             "QueryIntentClassifierNode", node_id="intent_analyzer"
         )
 
-        # Add adaptive processor
-        adaptive_processor_id = builder.add_node(
-            "PythonCodeNode",
+        # Add adaptive processor.
+        #
+        # #1117/#1123/#1118 root-cause fix: lifted from the inline `code=`
+        # codegen to the module-level `_adaptive_process` function wired via
+        # `PythonCodeNode.from_function`. The node publishes the SAME flat
+        # `result` port carrying `{"adaptive_plan": {...}}` (runtime result
+        # shape `result["adaptive_plan"]` unchanged). It reads `query`
+        # (top-level injection) + `routing_decision` (wired from
+        # intent_analyzer.routing_decision — the embedded
+        # QueryIntentClassifierNode's run()-contract output, which nests the
+        # routing_decision under the same key; `_adaptive_process` unwraps it
+        # exactly as the codegen did). type: ignore[attr-defined] per the
+        # composer/parser note above.
+        adaptive_processor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _adaptive_process,
+                name="adaptive_processor",
+            ),
             node_id="adaptive_processor",
-            config={
-                "code": """
-# Adaptively apply query processing based on intent
-query = query
-routing_decision = routing_decision.get("routing_decision", {})
-intent = routing_decision.get("intent_analysis", {})
-
-# Determine which processing steps to apply
-processing_steps = []
-
-complexity = intent.get("complexity", "simple")
-query_type = intent.get("query_type", "factual")
-
-# Always apply basic rewriting
-processing_steps.append("rewrite")
-
-# Apply expansion for exploratory queries
-if query_type in ["exploratory", "analytical"]:
-    processing_steps.append("expand")
-
-# Apply decomposition for complex queries
-if complexity == "complex":
-    processing_steps.append("decompose")
-
-# Apply multi-hop planning for comparative or complex analytical
-if query_type == "comparative" or (query_type == "analytical" and complexity == "complex"):
-    processing_steps.append("multi_hop")
-
-# Create processing plan
-processing_plan = {
-    "original_query": query,
-    "intent": intent,
-    "recommended_strategy": routing_decision.get("recommended_strategy", "hybrid"),
-    "processing_steps": processing_steps,
-    "rationale": f"Query type '{query_type}' with complexity '{complexity}' requires {len(processing_steps)} processing steps"
-}
-
-result = {"adaptive_plan": processing_plan}
-"""
-            },
+            _internal=True,
         )
 
         # Connect workflow
