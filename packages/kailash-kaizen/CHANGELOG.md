@@ -2,9 +2,9 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [Unreleased]
+## [2.26.0] — 2026-06-11 — env-model discipline: provider config getters use documented default-model constants
 
-### Changed — env-model discipline: provider config getters use documented default-model constants
+### Changed
 
 - **The nine `get_*_config()` functions in `kaizen.config.providers` no longer
   hold inline hardcoded `default_model` literals** (`rules/env-models.md`,
