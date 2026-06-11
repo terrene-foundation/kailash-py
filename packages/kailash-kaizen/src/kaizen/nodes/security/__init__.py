@@ -21,16 +21,14 @@ from kaizen.nodes.security import AIBehaviorAnalysisNode, AIThreatDetectionNode
 
 # AI-enhanced behavior analysis
 workflow.add_node("ai_behavior", AIBehaviorAnalysisNode(
-    provider="openai",
-    model="gpt-4o-mini",
+    # provider/model default to auto-detect + the KAIZEN_DEFAULT_MODEL env var
     enable_explanations=True,
     risk_threshold=0.7
 ))
 
 # AI-powered threat detection
 workflow.add_node("ai_threat", AIThreatDetectionNode(
-    provider="openai",
-    model="gpt-4o-mini",
+    # provider/model default to auto-detect + the KAIZEN_DEFAULT_MODEL env var
     threat_intelligence=True,
     contextual_assessment=True
 ))

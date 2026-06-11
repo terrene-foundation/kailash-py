@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from kailash.nodes.base import Node
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
 
+from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,7 @@ class AIThreatDetectionNode(Node):
     from kaizen.nodes.security import AIThreatDetectionNode
 
     workflow.add_node("ai_threat", AIThreatDetectionNode(
-        provider="openai",
-        model="gpt-4o-mini",
+        # provider/model default to auto-detect + the KAIZEN_DEFAULT_MODEL env var
         enable_intelligence=True,
         enable_narratives=True,
         # Core SDK parameters
@@ -72,8 +72,8 @@ class AIThreatDetectionNode(Node):
         self,
         name: str = "ai_threat_detection",
         # AI Enhancement Parameters
-        provider: str = "openai",
-        model: str = "gpt-4o-mini",
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
         enable_intelligence: bool = True,
         enable_narratives: bool = True,
         enable_recommendations: bool = True,
@@ -92,8 +92,10 @@ class AIThreatDetectionNode(Node):
 
         Args:
             name: Node identifier
-            provider: LLM provider ("openai", "anthropic", "ollama")
-            model: Model name (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
+            provider: LLM provider ("openai", "anthropic", "ollama"). If None,
+                auto-detected from the resolved model name.
+            model: Model name. Defaults to the KAIZEN_DEFAULT_MODEL env var per
+                rules/env-models.md; raises EnvModelMissing when neither is set.
             enable_intelligence: Generate threat intelligence correlation
             enable_narratives: Generate natural language threat reports
             enable_recommendations: Generate response recommendations
@@ -107,8 +109,11 @@ class AIThreatDetectionNode(Node):
         """
         super().__init__(name=name, **kwargs)
 
-        # AI Enhancement Configuration
-        self.provider = provider
+        # AI Enhancement Configuration — model from caller or
+        # KAIZEN_DEFAULT_MODEL (rules/env-models.md); provider auto-detected
+        # from the resolved model when not given.
+        model = resolve_default_model("AIThreatDetectionNode", model)
+        self.provider = provider if provider is not None else detect_provider(model)
         self.model = model
         self.enable_intelligence = enable_intelligence
         self.enable_narratives = enable_narratives

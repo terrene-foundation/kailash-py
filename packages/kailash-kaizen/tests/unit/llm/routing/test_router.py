@@ -127,7 +127,7 @@ class TestLLMRouterCreation:
 
     def test_create_default(self):
         """Test creating with defaults."""
-        router = LLMRouter()
+        router = LLMRouter(default_model="gpt-4")
 
         assert router.default_model == "gpt-4"
         assert "gpt-4" in router.available_models
@@ -205,7 +205,7 @@ class TestLLMRouterRules:
 
     def test_add_complexity_rule(self):
         """Test adding complexity threshold rule."""
-        router = LLMRouter(available_models=["gpt-4", "o1"])
+        router = LLMRouter(available_models=["gpt-4", "o1"], default_model="gpt-4")
 
         router.add_complexity_rule(
             min_complexity=TaskComplexity.HIGH,
@@ -317,6 +317,7 @@ class TestLLMRouterComplexityRouting:
         """Test high complexity task routes to high quality model."""
         router = LLMRouter(
             available_models=["gpt-4", "gpt-3.5-turbo", "o1"],
+            default_model="gpt-4",
         )
 
         decision = router.route(
@@ -332,6 +333,7 @@ class TestLLMRouterComplexityRouting:
         """Test low complexity task can use cheaper model."""
         router = LLMRouter(
             available_models=["gpt-4", "gpt-3.5-turbo"],
+            default_model="gpt-4",
         )
 
         decision = router.route(

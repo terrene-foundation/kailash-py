@@ -12,12 +12,13 @@ For rule-based directory integration only, use the Core SDK version:
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.directory_integration import (
     DirectoryIntegrationNode as CoreDirectoryIntegrationNode,
 )
 
+from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class DirectoryIntegrationNode(CoreDirectoryIntegrationNode):
             name="ai_directory",
             directory_type="ldap",
             auto_provisioning=True,  # Enable AI-powered provisioning
-            ai_model="gpt-4o-mini",  # AI model for intelligent analysis
+            # ai_model defaults to the KAIZEN_DEFAULT_MODEL env var
             ai_temperature=0.3,  # Higher temperature for creative search
         )
         ```
@@ -55,7 +56,7 @@ class DirectoryIntegrationNode(CoreDirectoryIntegrationNode):
     def __init__(
         self,
         name: str = "ai_directory",
-        ai_model: str = "gpt-4o-mini",
+        ai_model: Optional[str] = None,
         ai_temperature: float = 0.3,
         provider: str = None,
         **kwargs,
@@ -65,21 +66,20 @@ class DirectoryIntegrationNode(CoreDirectoryIntegrationNode):
 
         Args:
             name: Node name
-            ai_model: AI model for intelligent search and provisioning
+            ai_model: AI model for intelligent search and provisioning.
+                Defaults to the KAIZEN_DEFAULT_MODEL env var per rules/env-models.md;
+                raises EnvModelMissing when neither is set.
             ai_temperature: Temperature for AI model (0.0-1.0, higher = more creative)
             provider: LLM provider (openai, anthropic, etc.). If None, auto-detected from model name
             **kwargs: Additional parameters passed to Core SDK DirectoryIntegrationNode
         """
         super().__init__(name=name, **kwargs)
 
-        # Auto-detect provider from model name if not specified
+        # Model from caller or KAIZEN_DEFAULT_MODEL (rules/env-models.md);
+        # provider auto-detected from the resolved model when not given.
+        ai_model = resolve_default_model("DirectoryIntegrationNode", ai_model)
         if provider is None:
-            if "gpt" in ai_model.lower() or "o1" in ai_model.lower():
-                provider = "openai"
-            elif "claude" in ai_model.lower():
-                provider = "anthropic"
-            else:
-                provider = "mock"  # Default for testing
+            provider = detect_provider(ai_model)
 
         # Store provider and model for later use in LLM calls
         self.ai_provider = provider

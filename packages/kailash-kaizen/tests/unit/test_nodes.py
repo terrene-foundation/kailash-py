@@ -41,19 +41,21 @@ class TestKaizenNode:
         assert node.signature is signature
         assert node.model == "gpt-4"
 
-    def test_kaizen_node_defaults(self):
-        """Test default values for KaizenNode."""
+    def test_kaizen_node_defaults(self, monkeypatch):
+        """Test default values for KaizenNode (model from KAIZEN_DEFAULT_MODEL)."""
+        monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "env-resolved-model")
         node = KaizenNode()
 
-        assert node.model == "gpt-3.5-turbo"
+        assert node.model == "env-resolved-model"
         assert node.temperature == 0.7
         assert node.max_tokens == 1000
         assert node.timeout == 30
         assert node._optimization_enabled is False
         assert node._memory_enabled is False
 
-    def test_get_parameters(self):
+    def test_get_parameters(self, monkeypatch):
         """Test parameter definition."""
+        monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "env-resolved-model")
         node = KaizenNode()
 
         params = node.get_parameters()
@@ -73,7 +75,7 @@ class TestKaizenNode:
         model_param = params["model"]
         assert model_param.type == str
         assert model_param.required is False
-        assert model_param.default == "gpt-3.5-turbo"
+        assert model_param.default == "env-resolved-model"
 
     def test_get_parameters_with_signature(self):
         """Test parameter definition with signature."""

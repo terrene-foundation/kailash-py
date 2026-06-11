@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from kailash.nodes.base import Node
 from kailash.nodes.security.behavior_analysis import BehaviorAnalysisNode
 
+from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,7 @@ class AIBehaviorAnalysisNode(Node):
     from kaizen.nodes.security import AIBehaviorAnalysisNode
 
     workflow.add_node("ai_behavior", AIBehaviorAnalysisNode(
-        provider="openai",
-        model="gpt-4o-mini",
+        # provider/model default to auto-detect + the KAIZEN_DEFAULT_MODEL env var
         enable_explanations=True,
         risk_threshold=0.7,
         # Core SDK parameters
@@ -70,8 +70,8 @@ class AIBehaviorAnalysisNode(Node):
         self,
         name: str = "ai_behavior_analysis",
         # AI Enhancement Parameters
-        provider: str = "openai",
-        model: str = "gpt-4o-mini",
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
         enable_explanations: bool = True,
         enable_recommendations: bool = True,
         explanation_depth: str = "detailed",  # "brief", "detailed", "technical"
@@ -90,8 +90,10 @@ class AIBehaviorAnalysisNode(Node):
 
         Args:
             name: Node identifier
-            provider: LLM provider ("openai", "anthropic", "ollama")
-            model: Model name (e.g., "gpt-4o-mini", "claude-3-5-sonnet-20241022")
+            provider: LLM provider ("openai", "anthropic", "ollama"). If None,
+                auto-detected from the resolved model name.
+            model: Model name. Defaults to the KAIZEN_DEFAULT_MODEL env var per
+                rules/env-models.md; raises EnvModelMissing when neither is set.
             enable_explanations: Generate natural language explanations
             enable_recommendations: Generate security recommendations
             explanation_depth: Level of detail in explanations
@@ -105,8 +107,11 @@ class AIBehaviorAnalysisNode(Node):
         """
         super().__init__(name=name, **kwargs)
 
-        # AI Enhancement Configuration
-        self.provider = provider
+        # AI Enhancement Configuration — model from caller or
+        # KAIZEN_DEFAULT_MODEL (rules/env-models.md); provider auto-detected
+        # from the resolved model when not given.
+        model = resolve_default_model("AIBehaviorAnalysisNode", model)
+        self.provider = provider if provider is not None else detect_provider(model)
         self.model = model
         self.enable_explanations = enable_explanations
         self.enable_recommendations = enable_recommendations
