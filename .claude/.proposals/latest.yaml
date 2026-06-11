@@ -1,6 +1,9 @@
 source_repo: kailash-py
 codify_date: '2026-05-18'
-status: reviewed
+status: pending_review
+# RESET reviewed -> pending_review 2026-06-11 (later) per artifact-flow append-rule:
+# env-models provider-intrinsic carve-out appended as the final changes entry. Prior
+# entries were Gate-1 reviewed on reviewed_date below; the appended entry is NEW + unreviewed.
 reviewed_date: 2026-06-11
 # Gate-1 review (2026-06-11, loom): user-approved classification.
 # 19 entries: 13 GLOBAL, 2 VARIANT-py (ml-doc-real-api adopted; featurestore-cutover SUPERSEDED), 4 deferred/withdrawn. verify-claims authored as NEW path-scoped rule (git.md-extension duplicate superseded); doc-api rule folded into spec-accuracy.md (tool deferred to cross-SDK issue).
@@ -760,6 +763,47 @@ changes:
     (not synced) — durable as-is. README/MIGRATION/docs/guides are kailash-ml PACKAGE docs
     (BUILD-owned, durable on PR merge, not COC artifacts). Verify post-adopt with
     tools/check_doc_api_examples.py. /redteam converged R1-R4 (journal 0007).
+- type: rule_update
+  artifact: env-models
+  files:
+  - .claude/rules/env-models.md
+  classification_suggestion: global
+  origin: build
+  context: |
+    2026-06-11 append - kaizen 2.26.0 / FNEW-5 (terrene-foundation/kailash-py PRs
+    #1292 fix + #1294 release). ADDS one carve-out section to env-models.md:
+    "### Carve-Out: Provider-Intrinsic Named-Constant Defaults".
+
+    Lesson: env-models.md "NEVER Hardcode Model Names" flags any literal model
+    string, but a module-level DEFAULT_<PROVIDER>_MODEL constant is COMPLIANT (not
+    a violation) when ALL THREE hold: (1) documented module-level named constant,
+    not an inline literal at a call site; (2) overridable via a <PROVIDER>-scoped
+    env var (e.g. KAIZEN_ANTHROPIC_MODEL); (3) NOT chained to the provider-agnostic
+    default-model variable (chaining leaks a claude-* model under provider="openai").
+
+    Evidence: kaizen.config.providers defines 9 DEFAULT_<PROVIDER>_MODEL constants
+    (e.g. DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"). FNEW-5 moved the nine
+    get_*_config() getters from inline literals to these documented constants;
+    without a rule carve-out a future /redteam re-flags them. The caller has already
+    chosen the provider, so the constant carries no lock-in.
+
+    Status: the carve-out is ALREADY LANDED in loom canonical env-models.md (loom
+    issue esperie-enterprise/loom#485, applied 2026-06-11). This entry records the
+    proposal-pipeline provenance so it rides Gate-1 rather than living only as a loom
+    issue. loom-side processor: VERIFY the landed text matches this carve-out; no
+    rule files were edited in this kailash-py session.
+
+    Trust Posture Wiring: this is a carve-out (narrowing) of an existing
+    grandfathered rule, not a NEW MUST clause - it adds no enforcement surface and no
+    new violation class, so no new Wiring section is required. If the loom-side
+    processor judges the carve-out /codify-touches env-models.md enough to trigger
+    the trust-posture grandfather-cutoff, it emits canonical 8-field Wiring then.
+
+    Receipts:
+      - loom#485 (env-models carve-out request, esperie-enterprise/loom)
+      - kailash-py PRs #1292 (FNEW-5 fix), #1294 (kaizen 2.26.0 release)
+      - Workspace journal: workspaces/kaizen-rag-node-coverage/journal/0012
+      - Deploy record: deploy/deployments/2026-06-11-kaizen-v2.26.0-fnew5.md
 deferred:
 - id: issue-1086-candidate-3
   summary: 'SessionEnd hook dedup-by-source_commit. Two .pending/ files for
