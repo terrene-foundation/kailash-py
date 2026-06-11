@@ -2,7 +2,7 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [Unreleased]
+## [2.25.0] — 2026-06-11 — env-model discipline: fail-closed provider detection + HF preset router + multi-modal adapter fixes
 
 ### Changed — BREAKING (migration): AI-node model defaults now resolve from `KAIZEN_DEFAULT_MODEL`
 
