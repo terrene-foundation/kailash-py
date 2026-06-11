@@ -7,8 +7,8 @@ execution MUST be resumable from the exact suspension point. This module
 provides the wire-level types that capture WHY a plan suspended and the
 execution frontier needed to resume.
 
-Cross-SDK parity reference:
-``/Users/esperie/repos/loom/kailash-rs/crates/kailash-kaizen/src/l3/core/plan/types.rs``
+Cross-SDK parity reference (kailash-rs repo):
+``crates/kailash-kaizen/src/l3/core/plan/types.rs``
 lines 267-396 (``SuspensionReason`` + ``SuspensionRecord``). Field
 shapes, tag spelling, and label strings MUST match the Rust contract for
 a serialized SuspensionRecord round-tripped between SDKs to compare

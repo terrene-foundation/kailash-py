@@ -21,9 +21,20 @@ The stub returns the same default list the keyword classifier returned for
 
 from __future__ import annotations
 
+import os
 from typing import List
 
 import pytest
+
+# Unit-tier deterministic model default (issue-822 pattern): agent/framework
+# construction resolves the model from the environment and raises
+# kaizen.errors.EnvModelMissing otherwise. No CI lane or committed .env
+# supplies KAIZEN_DEFAULT_MODEL, so unit tests that construct agents without
+# an explicit model fail on clean environments. setdefault preserves any
+# operator/.env value; the env-model discipline tests
+# (test_kaizen_default_model_env.py) monkeypatch.delenv/setenv per test and
+# are unaffected.
+os.environ.setdefault("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")
 
 _DEFAULT_TIER1_TRAITS: List[str] = ["professional", "reliable", "adaptive"]
 

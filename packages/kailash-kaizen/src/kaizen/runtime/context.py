@@ -9,7 +9,7 @@ through the metadata field.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -70,7 +70,7 @@ class ToolCallRecord:
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(UTC)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
