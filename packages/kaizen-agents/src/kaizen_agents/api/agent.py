@@ -24,7 +24,7 @@ import asyncio
 import uuid
 import warnings
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from kaizen_agents.api.config import AgentConfig
@@ -41,10 +41,7 @@ from kaizen_agents.api.types import (
     MemoryDepth,
     ToolAccess,
 )
-from kaizen_agents.api.validation import (
-    ConfigurationError,
-    validate_configuration,
-)
+from kaizen_agents.api.validation import ConfigurationError, validate_configuration
 
 
 class Agent:
@@ -385,7 +382,7 @@ class Agent:
             else:
                 print(f"Error: {result.error}")
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         self._is_running = True
 
         try:
@@ -406,7 +403,7 @@ class Agent:
                 result = await self._execute_single(runtime, exec_context)
 
             # Update timing
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             result.duration_ms = int((end_time - start_time).total_seconds() * 1000)
             result.completed_at = end_time.isoformat()
             result.session_id = self._session_id
@@ -709,7 +706,7 @@ class Agent:
                 {
                     "user": context["task"],
                     "assistant": result.text,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
 

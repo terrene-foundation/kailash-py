@@ -13,7 +13,7 @@ results back to local ConstraintEnvelope objects.
 
 from __future__ import annotations
 
-import math
+import inspect
 
 import pytest
 
@@ -24,7 +24,6 @@ from kaizen_agents.policy.envelope_allocator import (
     Subtask,
 )
 from kaizen_agents.types import ConstraintEnvelope, make_envelope
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,7 +38,11 @@ def _make_parent_envelope(
     """Create a parent ConstraintEnvelope with depletable dimensions populated."""
     return make_envelope(
         financial={"limit": financial_limit},
-        operational={"allowed": ["search", "write"], "blocked": [], "action_limit": action_limit},
+        operational={
+            "allowed": ["search", "write"],
+            "blocked": [],
+            "action_limit": action_limit,
+        },
         temporal={"limit_seconds": temporal_limit_seconds},
         data_access={"ceiling": "internal", "scopes": ["read"]},
         communication={"recipients": ["parent"], "channels": ["internal"]},
@@ -74,7 +77,7 @@ class TestAllocateWithSdkProducesCorrectChildEnvelopes:
         assert len(children) == 2
 
         # Each child should get 45% of parent (0.90 available / 2 children)
-        for child_id, child_env in children:
+        for _child_id, child_env in children:
             assert isinstance(child_env, ConstraintEnvelope)
             assert child_env.financial.max_spend_usd == pytest.approx(45.0, abs=0.01)
             # temporal limit_seconds not applicable in ConstraintEnvelopeConfig
@@ -102,9 +105,13 @@ class TestAllocateWithSdkProducesCorrectChildEnvelopes:
         assert "light" in child_map
 
         # heavy gets 70% of available (0.9), so 0.63 of parent
-        assert child_map["heavy"].financial.max_spend_usd == pytest.approx(200.0 * 0.63, abs=0.1)
+        assert child_map["heavy"].financial.max_spend_usd == pytest.approx(
+            200.0 * 0.63, abs=0.1
+        )
         # light gets 30% of available (0.9), so 0.27 of parent
-        assert child_map["light"].financial.max_spend_usd == pytest.approx(200.0 * 0.27, abs=0.1)
+        assert child_map["light"].financial.max_spend_usd == pytest.approx(
+            200.0 * 0.27, abs=0.1
+        )
 
     def test_child_envelopes_are_constraint_envelope_instances(self) -> None:
         """Returned child envelopes must be proper ConstraintEnvelope instances."""
@@ -137,7 +144,9 @@ class TestReservePercentageRespected:
         """Sum of all child financial limits + reserve must not exceed parent."""
         policy = BudgetPolicy(reserve_pct=0.20)
         allocator = EnvelopeAllocator(policy=policy)
-        parent = _make_parent_envelope(financial_limit=1000.0, temporal_limit_seconds=10000.0)
+        parent = _make_parent_envelope(
+            financial_limit=1000.0, temporal_limit_seconds=10000.0
+        )
         subtasks = [
             Subtask(child_id=f"child-{i}", description=f"Task {i}", complexity=1.0)
             for i in range(4)
@@ -154,7 +163,9 @@ class TestReservePercentageRespected:
         """With 0% reserve, children get the full parent budget."""
         policy = BudgetPolicy(reserve_pct=0.0)
         allocator = EnvelopeAllocator(policy=policy)
-        parent = _make_parent_envelope(financial_limit=100.0, temporal_limit_seconds=3600.0)
+        parent = _make_parent_envelope(
+            financial_limit=100.0, temporal_limit_seconds=3600.0
+        )
         subtasks = [
             Subtask(child_id="a", description="Task A", complexity=0.5),
             Subtask(child_id="b", description="Task B", complexity=0.5),
@@ -169,7 +180,9 @@ class TestReservePercentageRespected:
         """With 50% reserve, children split the remaining 50%."""
         policy = BudgetPolicy(reserve_pct=0.50)
         allocator = EnvelopeAllocator(policy=policy)
-        parent = _make_parent_envelope(financial_limit=100.0, temporal_limit_seconds=3600.0)
+        parent = _make_parent_envelope(
+            financial_limit=100.0, temporal_limit_seconds=3600.0
+        )
         subtasks = [
             Subtask(child_id="x", description="Task X", complexity=1.0),
         ]
@@ -229,13 +242,17 @@ class TestAllDepletableDimensionsAllocated:
         child_map = {cid: env for cid, env in children}
 
         # small gets 30% of parent (no reserve)
-        assert child_map["small"].financial.max_spend_usd == pytest.approx(300.0, abs=0.1)
+        assert child_map["small"].financial.max_spend_usd == pytest.approx(
+            300.0, abs=0.1
+        )
         # temporal limit_seconds not applicable in ConstraintEnvelopeConfig
         # action_limit mapped to max_actions_per_day in new model
         # assert child_map["small"].operational.max_actions_per_day == 60  # int(200 * 0.3)
 
         # large gets 70% of parent
-        assert child_map["large"].financial.max_spend_usd == pytest.approx(700.0, abs=0.1)
+        assert child_map["large"].financial.max_spend_usd == pytest.approx(
+            700.0, abs=0.1
+        )
         # temporal limit_seconds not applicable in ConstraintEnvelopeConfig
         # action_limit mapped to max_actions_per_day in new model
         # assert child_map["large"].operational.max_actions_per_day == 140  # int(200 * 0.7)
@@ -332,7 +349,9 @@ class TestRoundTripConsistency:
         children = allocator.allocate_with_sdk(parent, subtasks)
 
         # temporal limit_seconds splitting not applicable in ConstraintEnvelopeConfig
-        # (TemporalConstraintConfig uses active_hours, not depletable seconds)
+        # (TemporalConstraintConfig uses active_hours, not depletable seconds) —
+        # assert allocation shape only, mirroring test_action_limit_round_trip
+        assert len(children) == 2
 
     def test_action_limit_round_trip(self) -> None:
         """Sum of child action_limits is approximately parent action_limit * (1 - reserve).
@@ -364,7 +383,9 @@ class TestRoundTripConsistency:
             action_limit=1000,
         )
         subtasks = [
-            Subtask(child_id=f"worker-{i}", description=f"Work {i}", complexity=float(i + 1))
+            Subtask(
+                child_id=f"worker-{i}", description=f"Work {i}", complexity=float(i + 1)
+            )
             for i in range(10)
         ]
 
@@ -385,15 +406,26 @@ class TestRoundTripConsistency:
 
 
 class TestNoDuplicateGradientZone:
-    """Verify that envelope_allocator imports GradientZone from types,
-    not defining its own duplicate."""
+    """Verify that envelope_allocator never defines a local GradientZone
+    duplicate — IF it references one, it must be the kaizen_agents.types
+    enum. (The module legitimately dropped its GradientZone usage in the
+    PactEngine v0.4.0 type-alignment refactor; absence satisfies the
+    no-duplicate contract vacuously.)"""
 
     def test_gradient_zone_is_from_types_module(self) -> None:
-        """The GradientZone used in envelope_allocator must be the one from types."""
-        from kaizen_agents.policy.envelope_allocator import GradientZone as AllocatorGZ
+        """Any GradientZone on envelope_allocator must be the types enum."""
+        import kaizen_agents.policy.envelope_allocator as allocator_module
         from kaizen_agents.types import GradientZone as TypesGZ
 
-        assert AllocatorGZ is TypesGZ, (
-            "GradientZone in envelope_allocator must be imported from kaizen_agents.types, "
-            "not defined locally as a duplicate"
-        )
+        allocator_gz = getattr(allocator_module, "GradientZone", None)
+        if allocator_gz is not None:
+            assert allocator_gz is TypesGZ, (
+                "GradientZone in envelope_allocator must be imported from "
+                "kaizen_agents.types, not defined locally as a duplicate"
+            )
+        else:
+            # No reference at all — the duplicate-definition regression
+            # cannot exist. Guard that a local redefinition hasn't been
+            # smuggled in under another name pattern.
+            src = inspect.getsource(allocator_module)
+            assert "class GradientZone" not in src
