@@ -5,6 +5,17 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.10] — 2026-06-11 — enforce the slim-core import fix via the kailash-kaizen floor
+
+### Changed
+
+- **`kailash-kaizen` floor raised to `>=2.25.1`.** The slim-core
+  `import kaizen_agents.patterns` contract claimed in 0.9.9 is only actually
+  satisfied by kailash-kaizen 2.25.1, which lazy-loads the optional-extra autonomy
+  hooks (`structlog` / `prometheus-client` / `opentelemetry`). Pinning the floor
+  guarantees a fresh `pip install kaizen-agents` receives the fixed kaizen. No
+  kaizen-agents source change.
+
 ## [0.9.9] — 2026-06-11 — slim-core import contract + ruff-clean test dirs + deprecation fixes
 
 ### Fixed

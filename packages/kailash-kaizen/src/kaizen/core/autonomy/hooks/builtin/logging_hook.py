@@ -10,8 +10,6 @@ SECURITY: Supports sensitive data redaction (Finding #4 fix).
 import logging
 from typing import ClassVar, Optional
 
-import structlog
-
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
 
@@ -90,6 +88,18 @@ class LoggingHook(BaseHook):
 
         # Configure logger based on format
         if format == "json":
+            # structlog is an optional observability dependency (slim core).
+            # Import it lazily so the text format (default) and merely importing
+            # this module never require it; raise a clear, actionable error only
+            # when JSON output is actually requested without the extra installed.
+            try:
+                import structlog
+            except ImportError as exc:
+                raise ImportError(
+                    "LoggingHook(format='json') requires structlog. Install the "
+                    "observability extra: pip install 'kailash-kaizen[observability]'"
+                ) from exc
+
             # Configure structlog for JSON output
             structlog.configure(
                 processors=[
