@@ -25,6 +25,7 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
@@ -2670,7 +2671,12 @@ class NodeRegistry:
         logging.info("Cleared all registered nodes")
 
 
-def register_node(alias: str | None = None):
+_NodeT = TypeVar("_NodeT", bound=Node)
+
+
+def register_node(
+    alias: str | None = None,
+) -> Callable[[type[_NodeT]], type[_NodeT]]:
     """Decorator to register a node class.
 
     Provides a convenient decorator pattern for automatic node
@@ -2717,7 +2723,7 @@ def register_node(alias: str | None = None):
         ...         return pd.read_csv(file)
     """
 
-    def decorator(node_class: type[Node]):
+    def decorator(node_class: type[_NodeT]) -> type[_NodeT]:
         """Inner decorator that performs registration.
 
         Args:
