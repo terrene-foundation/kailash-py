@@ -21,6 +21,12 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   `GDPRComplianceNode` requires a model only when `ai_analysis=True` and keeps the
   `"ollama:<model>"` prefix convention. New shared helper:
   `kaizen.nodes._env_model.{resolve_default_model, detect_provider}`.
+  Provider auto-detection now covers four families (`gpt-*`/`o1-*`/`davinci-*` →
+  openai, `claude-*` → anthropic, `llama`/`mistral`/`mixtral`/`bakllava` → ollama,
+  `gemini-*` → google) and **fails closed**: an unrecognized model raises the new
+  typed `kaizen.errors.ProviderUndetectable` instead of silently routing to the
+  mock provider (a fail-open in security/auth/compliance nodes). Pass
+  `provider="mock"` explicitly for test contexts.
 
 ### Fixed
 
