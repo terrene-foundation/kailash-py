@@ -147,18 +147,24 @@ def test_sparse_codegen_template_handles_none_content():
     assert len(sparse_results["results"]) == 1
 
 
-def test_colbert_codegen_template_handles_none_content():
-    """ColBERTRetrievalNode._create_workflow()'s token_embedder PythonCodeNode
-    template (get_token_embeddings) must not crash on None-content docs."""
-    wf = ColBERTRetrievalNode()._create_workflow()  # type: ignore[attr-defined]
-    code = wf.nodes["token_embedder"].config["code"]
-    corpus = [_NONE_DOC, {"content": "machine learning", "id": "g"}]
-    result = _run_codegen_template(
-        code, input_data={"query": "machine learning", "documents": corpus}
-    )
-    token_data = result["token_data"]
-    # Both docs are tokenised; the None-content doc yields an empty token list.
-    assert len(token_data["doc_token_embeddings"]) == 2
+def test_colbert_run_handles_none_content():
+    """ColBERTRetrievalNode.run()'s lexical late-interaction retrieval must not
+    crash on a None-content doc (content key present, value None).
+
+    Ported from the former codegen-template test: F31 Wave 4 removed the dead,
+    never-called ``_create_workflow`` (it generated random embeddings) and the
+    real retrieval path is ``run()`` (token-overlap MaxSim), so the None-content
+    guard is verified behaviourally against the surviving entry point."""
+    node = ColBERTRetrievalNode()
+    corpus = [_NONE_DOC, {"content": "machine learning models", "id": "g"}]
+    result = node.run(query="machine learning", documents=corpus)
+    # No crash, no error path; the None-content doc tokenises to empty and is
+    # excluded (score 0), while the well-formed doc still ranks.
+    assert "error" not in result
+    assert result["retrieval_method"] == "colbert"
+    result_ids = [r["id"] for r in result["results"]]
+    assert "g" in result_ids
+    assert "none-content" not in result_ids
 
 
 def test_multivector_codegen_template_handles_none_content():

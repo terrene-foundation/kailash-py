@@ -36,24 +36,23 @@ logger = logging.getLogger(__name__)
 @register_node()
 class FederatedRAGNode(WorkflowNode):
     """
-    Federated RAG for Distributed Data Sources
+    Federated RAG Aggregation Pattern (in-process simulation)
 
-    Implements RAG that operates across multiple distributed data sources
-    without requiring data centralization, preserving data locality and privacy.
+    Demonstrates the federated-RAG aggregation pattern over in-process
+    simulated nodes. It does NOT perform real distributed network queries —
+    the per-node responses are generated in-process (no actual cross-host
+    federation, no network calls). Use this node to demonstrate the
+    aggregation + health-reporting shape of a federated-RAG pipeline.
 
     When to use:
-    - Best for: Multi-organization data, edge computing, privacy-critical scenarios
-    - Not ideal for: Small datasets, single-source data
-    - Performance: 2-10 seconds depending on federation size
-    - Privacy: Data never leaves source organizations
+    - Best for: prototyping the federated-RAG aggregation/health-reporting shape
+    - Not ideal for: production federation requiring real cross-host queries
 
     Key features:
-    - Distributed query execution across federated nodes
-    - Local computation with global aggregation
-    - Heterogeneous data source support
-    - Communication-efficient protocols
-    - Fault tolerance for node failures
-    - Secure aggregation of results
+    - Aggregation of per-node responses (weighted/strategy-based)
+    - Federation-health reporting over the simulated node set
+    - Heterogeneous-source aggregation shape
+    - Minimum-participating-nodes gating
 
     Example:
         federated_rag = FederatedRAGNode(

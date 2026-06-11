@@ -1,14 +1,17 @@
 """
 Multimodal RAG Implementation
 
-Implements RAG with support for multiple modalities:
-- Text + Image retrieval and generation
-- Cross-modal similarity search
-- Visual question answering
-- Image-augmented responses
-- Document understanding with visuals
+Wires a real LLM query-analysis + response-generation pipeline over a
+lexical/hash-based placeholder encoder. The encoder is a deterministic
+hash/character-code heuristic, NOT a learned vision model (no CLIP, no BLIP-2,
+no image-pixel understanding). The LLM stages (query analysis, response
+generation) are genuine; the cross-modal "encoding" is a stand-in that lets the
+pipeline run end-to-end without a vision backend.
 
-Based on CLIP, BLIP-2, and multimodal research from 2024.
+Pipeline stages:
+- Real LLM query analysis (modality detection)
+- Lexical/hash-based placeholder encoding for text + image references
+- Real LLM response generation over the assembled context
 """
 
 import logging
@@ -38,51 +41,62 @@ _DEFAULT_LLM_MODEL = os.environ.get(
     "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
 )
 
+# Vision-capable model for the response-generation stage. Env-resolved so no
+# provider-locked model string is hardcoded (env-models compliance); falls back
+# to the general default LLM model when OPENAI_VISION_MODEL is unset.
+_DEFAULT_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", _DEFAULT_LLM_MODEL)
+
 
 @register_node()
 class MultimodalRAGNode(WorkflowNode):
     """
-    Multimodal RAG with Text + Image Support
+    Multimodal RAG with Text + Image References
 
-    Implements RAG that can process and retrieve from both text and images,
-    enabling richer responses with visual context.
+    Wires a real LLM query-analysis + response-generation pipeline over a
+    lexical/hash-based placeholder encoder. The encoder is a deterministic
+    hash/character-code heuristic — it does NOT run a learned vision model
+    (no CLIP, no BLIP-2) and cannot understand image pixels. Use this node to
+    demonstrate the multimodal-RAG composition pattern; the genuine
+    capabilities are the LLM query-analysis and response-generation stages.
 
     When to use:
-    - Best for: Technical documentation with diagrams, e-commerce, medical imaging
-    - Not ideal for: Audio/video heavy content, pure text scenarios
-    - Performance: 1-3 seconds for retrieval, 2-5 seconds for generation
-    - Quality improvement: 40-60% for visual questions
+    - Best for: prototyping a multimodal-RAG pipeline shape where the LLM
+      stages carry the value and the encoder is a stand-in
+    - Not ideal for: production visual retrieval requiring a real vision model
 
     Key features:
-    - Cross-modal retrieval (text→image, image→text)
-    - Visual question answering
-    - Diagram and chart understanding
-    - Multi-modal fusion for responses
-    - Support for various image formats
+    - Real LLM query analysis (modality detection)
+    - Lexical/hash-based placeholder encoding for text + image references
+    - Real LLM response generation over the assembled context
+    - Support for various image-reference formats (as metadata, not pixels)
 
     Example:
         multimodal_rag = MultimodalRAGNode(
-            image_encoder="clip-base",
+            image_encoder="placeholder",  # informational label only; no model is loaded
             enable_ocr=True
         )
 
         # Query: "Show me the architecture diagram for transformers"
-        # Will retrieve:
-        # 1. Text descriptions of transformer architecture
-        # 2. Architecture diagrams and visualizations
-        # 3. Code implementations with visual outputs
-        # 4. Combine into comprehensive answer with images
+        # The pipeline:
+        # 1. Real LLM analyses the query for required modalities
+        # 2. Placeholder encoder scores text docs + image-reference metadata
+        #    (captions/alt-text/paths) lexically — it does NOT read pixels
+        # 3. Real LLM generates the answer over the assembled text context
+        # Image "results" are the matched image-reference records, not visual
+        # understanding of the images themselves.
 
         result = await multimodal_rag.execute(
-            documents=mixed_media_docs,  # Contains text and image paths
+            documents=mixed_media_docs,  # text docs + image-reference records
             query="Show me the architecture diagram for transformers"
         )
 
     Parameters:
-        image_encoder: Model for image encoding (clip, blip, etc.)
-        text_encoder: Model for text encoding
-        enable_ocr: Extract text from images
-        fusion_strategy: How to combine modalities
+        image_encoder: Informational label for the placeholder image encoder
+            (no vision model is loaded)
+        text_encoder: Informational label for the placeholder text encoder
+        enable_ocr: Attach a placeholder OCR field to image references
+            (no real OCR engine runs)
+        fusion_strategy: How to combine text and image-reference scores
 
     Returns:
         text_results: Retrieved text documents
@@ -176,7 +190,7 @@ def preprocess_documents(documents):
 
             # If OCR is enabled, we'd extract text here
             if {self.enable_ocr} and image_path:
-                # Simulated OCR result
+                # Placeholder OCR result (no real OCR engine is invoked)
                 image_doc["ocr_text"] = f"[OCR text from {{image_path}}]"
 
             image_docs.append(image_doc)
@@ -217,7 +231,9 @@ from typing import List, Dict
 def encode_multimodal(text_docs, image_docs, query, modality_analysis):
     '''Encode documents and query for multimodal retrieval'''
 
-    # Simulated encoding (would use CLIP/BLIP in production)
+    # Deterministic hash/character-code placeholder encoder — NOT a learned
+    # vision/CLIP model. Produces stable numeric vectors from raw bytes so the
+    # pipeline runs end-to-end without a vision backend.
     def text_encoder(text):
         # Documents are arbitrary user input; a present-but-None content/title
         # would crash `text[:10]`. Coerce non-strings to "" at the boundary.
@@ -228,7 +244,7 @@ def encode_multimodal(text_docs, image_docs, query, modality_analysis):
     def image_encoder(image_path):
         # A present-but-None image path would crash `.lower()`. Coerce here.
         image_path = image_path if isinstance(image_path, str) else ""
-        # Simulated image encoding
+        # Deterministic keyword-based placeholder encoding (no vision model)
         if "architecture" in image_path.lower():
             return [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
         elif "diagram" in image_path.lower():
@@ -387,7 +403,7 @@ Relevant Images:
 - Image 2: [description and relevance]
 
 [Integration of visual and textual insights]""",
-                "model": "gpt-4-vision",  # Vision-capable model
+                "model": _DEFAULT_VISION_MODEL,  # env-resolved vision model
             },
         )
 
@@ -459,13 +475,14 @@ class VisualQuestionAnsweringNode(Node):
     """
     Visual Question Answering (VQA) Node
 
-    Specialized node for answering questions about images.
+    **DEPRECATED (removal: next minor).** This node returns a keyword-derived
+    placeholder answer and a fixed confidence; it does NOT run a
+    vision-language model and cannot read image pixels. No VQA backend is
+    implemented. Remove this node from workflows; there is no real VQA
+    capability to migrate to.
 
     When to use:
-    - Best for: Direct questions about image content
-    - Not ideal for: Abstract reasoning about images
-    - Performance: 1-2 seconds per image
-    - Accuracy: High for descriptive questions
+    - Do not use in production; the answer is a keyword-based placeholder.
 
     Example:
         vqa = VisualQuestionAnsweringNode()
@@ -476,15 +493,14 @@ class VisualQuestionAnsweringNode(Node):
         )
 
     Parameters:
-        model: VQA model to use (blip2, flamingo, etc.)
-        enable_captioning: Generate image captions
-        confidence_threshold: Minimum confidence for answers
+        model: informational label only (no model is loaded)
+        enable_captioning: placeholder flag
 
     Returns:
-        answer: Answer to the visual question
-        confidence: Model confidence
-        image_caption: Generated caption if enabled
-        detected_objects: Objects found in image
+        answer: keyword-derived placeholder answer (not from a vision model)
+        confidence: fixed placeholder value (not a real model confidence)
+        image_caption: placeholder caption if enabled
+        detected_objects: placeholder list
     """
 
     def __init__(
@@ -493,6 +509,16 @@ class VisualQuestionAnsweringNode(Node):
         model: str = "blip2-base",
         enable_captioning: bool = True,
     ):
+        import warnings
+
+        warnings.warn(
+            "VisualQuestionAnsweringNode is deprecated and will be removed in "
+            "the next minor release. Its output is a keyword-based placeholder, "
+            "not a real vision-language model; no VQA backend is implemented. "
+            "See CHANGELOG.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             model=model,
@@ -552,7 +578,8 @@ class VisualQuestionAnsweringNode(Node):
         image_path = kwargs.get("image_path") or ""
         question = kwargs.get("question") or ""
 
-        # Simulated VQA (would use real model in production)
+        # Keyword-based placeholder answer — NOT a vision-language model; it
+        # scores the question text only and cannot read image pixels.
         # Analyze question type
         question_lower = question.lower()
 
@@ -616,13 +643,13 @@ class ImageTextMatchingNode(Node):
     """
     Image-Text Matching Node
 
-    Finds the best matching images for text queries or vice versa.
+    **DEPRECATED (removal: next minor).** This node's match scores are
+    keyword-derived placeholders, NOT CLIP/ALIGN image-text similarity. It does
+    not load or run any image-text model. Remove this node from workflows;
+    there is no real image-text matching capability to migrate to.
 
     When to use:
-    - Best for: Finding relevant visuals for content
-    - Not ideal for: Exact image search
-    - Performance: 200-500ms per comparison
-    - Use cases: Documentation, e-commerce, content creation
+    - Do not use in production; scores are keyword-derived placeholders.
 
     Example:
         matcher = ImageTextMatchingNode()
@@ -633,13 +660,13 @@ class ImageTextMatchingNode(Node):
         )
 
     Parameters:
-        matching_model: Model for similarity (clip, align, etc.)
-        bidirectional: Support both text→image and image→text
+        matching_model: informational label only (no model is loaded)
+        bidirectional: Support both text→image and image→text directions
         top_k: Number of matches to return
 
     Returns:
-        matches: Ranked list of matches
-        similarity_scores: Score for each match
+        matches: Ranked list of matches (keyword-derived)
+        similarity_scores: keyword-derived placeholder scores (not model similarity)
         match_type: Type of matching performed
     """
 
@@ -649,6 +676,15 @@ class ImageTextMatchingNode(Node):
         matching_model: str = "clip",
         bidirectional: bool = True,
     ):
+        import warnings
+
+        warnings.warn(
+            "ImageTextMatchingNode is deprecated and will be removed in the "
+            "next minor release. Its match scores are keyword-derived "
+            "placeholders, not CLIP/ALIGN similarity. See CHANGELOG.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             name=name,
             matching_model=matching_model,
