@@ -2,6 +2,23 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.25.1] — 2026-06-11 — hotfix: slim-core import contract for the autonomy hook system
+
+### Fixed
+
+- **`import kaizen_agents.patterns` (and any `kaizen.core.autonomy.hooks` import)
+  no longer requires the optional `observability` extra on a clean install.**
+  `LoggingHook`, `MetricsHook`, and `TracingHook` eagerly pulled `structlog`,
+  `prometheus-client`, and `opentelemetry` (all `[observability]`-extra deps) at
+  module-import time through the hook package's eager re-exports, so a slim-core
+  `pip install kailash-kaizen` raised `ModuleNotFoundError` the moment anything
+  imported the hook system (e.g. for `HookManager`). The three observability
+  hooks are now lazy-loaded via PEP 562 `__getattr__`: importing the hook system
+  stays slim-core clean, and accessing one of those hooks without the extra raises
+  a clear `ImportError` pointing at `pip install 'kailash-kaizen[observability]'`.
+  `LoggingHook(format="text")` (the default) now works without `structlog`. Caught
+  by the 2.25.0 clean-venv install-verification gate.
+
 ## [2.25.0] — 2026-06-11 — env-model discipline: fail-closed provider detection + HF preset router + multi-modal adapter fixes
 
 ### Changed — BREAKING (migration): AI-node model defaults now resolve from `KAIZEN_DEFAULT_MODEL`
