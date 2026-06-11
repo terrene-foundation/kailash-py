@@ -12,9 +12,9 @@ import json
 
 import pytest
 
-from kaizen_agents.delegate.loop import Conversation, UsageTracker
 from kaizen_agents.delegate.config.effort import EffortLevel
 from kaizen_agents.delegate.config.loader import KzConfig
+from kaizen_agents.delegate.loop import Conversation, UsageTracker
 from kaizen_agents.delegate.session import SessionManager
 
 
@@ -112,7 +112,9 @@ class TestSaveSession:
     def test_save_sanitizes_name(self, manager, conversation, usage, config):
         path = manager.save_session("../../etc/passwd", conversation, usage, config)
         # Should NOT escape the sessions directory
-        assert manager.sessions_dir in path.parents or path.parent == manager.sessions_dir
+        assert (
+            manager.sessions_dir in path.parents or path.parent == manager.sessions_dir
+        )
         assert ".." not in path.name
 
 

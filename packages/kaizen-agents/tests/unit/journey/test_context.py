@@ -12,7 +12,7 @@ Tests cover:
 These are Tier 1 (Unit) tests that don't require real infrastructure.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -90,7 +90,7 @@ class TestAccumulatedField:
 
     def test_create_accumulated_field(self):
         """Test creating AccumulatedField."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         field = AccumulatedField(
             name="customer_name",
             value="Alice",
@@ -111,7 +111,7 @@ class TestAccumulatedField:
             name="test",
             value="value",
             source_pathway="path",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         assert field.version == 1
 
@@ -126,7 +126,7 @@ class TestContextSnapshot:
 
     def test_create_context_snapshot(self):
         """Test creating ContextSnapshot."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = {"name": "Alice", "email": "alice@example.com"}
 
         snapshot = ContextSnapshot(

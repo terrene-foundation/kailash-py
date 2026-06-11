@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.context.injector import (
     CONTEXT_SELECTION_SCHEMA,
     ContextInjector,
@@ -20,8 +21,6 @@ from kaizen_agents.orchestration.context.summarizer import (
     ContextSummarizer,
     _estimate_token_count,
 )
-from kaizen_agents.llm import LLMClient
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock LLM client

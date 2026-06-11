@@ -782,12 +782,12 @@ class TestEdgeCases:
         """Manager tries multiple fallbacks."""
 
         class FailingAuthority(LocalTimestampAuthority):
-            async def get_timestamp(self, hash_value, nonce=None):
+            async def get_timestamp(self, hash_value, nonce=None, *, alg_id=None):
                 raise RuntimeError("Failed")
 
         class SuccessAuthority(LocalTimestampAuthority):
-            async def get_timestamp(self, hash_value, nonce=None):
-                response = await super().get_timestamp(hash_value, nonce)
+            async def get_timestamp(self, hash_value, nonce=None, *, alg_id=None):
+                response = await super().get_timestamp(hash_value, nonce, alg_id=alg_id)
                 return response
 
         primary = FailingAuthority()

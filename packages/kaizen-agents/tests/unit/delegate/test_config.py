@@ -7,15 +7,13 @@ from typing import Any
 
 import pytest
 
-from kaizen_agents.delegate.config.effort import EffortLevel, EffortPreset, get_effort_preset
+from kaizen_agents.delegate.config.effort import EffortLevel, get_effort_preset
 from kaizen_agents.delegate.config.loader import (
-    KzConfig,
     _deep_merge,
     load_config,
     load_kzignore,
     matches_kzignore,
 )
-
 
 # =====================================================================
 # Effort levels
@@ -29,6 +27,7 @@ class TestEffortLevel:
     def _reset_presets(self) -> Any:
         """Reset the global preset cache before and after each test."""
         import kaizen_agents.delegate.config.effort as effort_mod
+
         original = effort_mod._PRESETS
         effort_mod._PRESETS = None
         yield
@@ -37,6 +36,7 @@ class TestEffortLevel:
     def test_low_preset_returns_fast_model(self, monkeypatch: Any) -> None:
         # Reset cached presets so env changes take effect
         import kaizen_agents.delegate.config.effort as effort_mod
+
         monkeypatch.setattr(effort_mod, "_PRESETS", None)
         monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
         monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
@@ -50,6 +50,7 @@ class TestEffortLevel:
 
     def test_medium_preset_is_default(self, monkeypatch: Any) -> None:
         import kaizen_agents.delegate.config.effort as effort_mod
+
         monkeypatch.setattr(effort_mod, "_PRESETS", None)
         monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
         monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
@@ -63,6 +64,7 @@ class TestEffortLevel:
 
     def test_high_preset_returns_best_model(self, monkeypatch: Any) -> None:
         import kaizen_agents.delegate.config.effort as effort_mod
+
         monkeypatch.setattr(effort_mod, "_PRESETS", None)
         monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
         monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
@@ -76,6 +78,7 @@ class TestEffortLevel:
 
     def test_presets_read_from_env(self, monkeypatch: Any) -> None:
         import kaizen_agents.delegate.config.effort as effort_mod
+
         monkeypatch.setattr(effort_mod, "_PRESETS", None)
         monkeypatch.setenv("DEFAULT_LLM_MODEL", "gpt-5-chat-latest")
         monkeypatch.setenv("OPENAI_DEV_MODEL", "gpt-5-mini")
@@ -230,7 +233,9 @@ class TestLoadConfig:
         config = load_config(project_root=proj, user_home=tmp_path / "fakehome")
         assert config.effort_level is EffortLevel.HIGH
 
-    def test_effort_level_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_effort_level_from_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("KZ_EFFORT_LEVEL", "low")
         config = load_config(project_root=tmp_path, user_home=tmp_path / "fakehome")
         assert config.effort_level is EffortLevel.LOW
@@ -247,7 +252,9 @@ class TestLoadConfig:
         assert config.tools_allow == ["file_*", "glob"]
         assert config.tools_deny == ["bash"]
 
-    def test_temperature_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_temperature_from_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("KZ_TEMPERATURE", "0.8")
         config = load_config(project_root=tmp_path, user_home=tmp_path / "fakehome")
         assert config.temperature == 0.8
@@ -278,7 +285,9 @@ class TestKzIgnore:
         assert matches_kzignore("src/foo.py", ["*.pyc"]) is False
 
     def test_directory_pattern(self) -> None:
-        assert matches_kzignore("node_modules/package/index.js", ["node_modules"]) is True
+        assert (
+            matches_kzignore("node_modules/package/index.js", ["node_modules"]) is True
+        )
 
     def test_negation(self) -> None:
         patterns = ["*.log", "!important.log"]

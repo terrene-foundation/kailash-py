@@ -8,16 +8,8 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
-from kaizen_agents.delegate.builtins import _plan_handler, _format_plan, _plan_preview
-from kaizen_agents.types import (
-    AgentSpec,
-    Plan,
-    PlanNode,
-    PlanNodeState,
-)
-
+from kaizen_agents.delegate.builtins import _format_plan, _plan_handler, _plan_preview
+from kaizen_agents.types import AgentSpec, Plan, PlanNode, PlanNodeState
 
 # ---------------------------------------------------------------------------
 # _plan_handler
@@ -235,12 +227,20 @@ class TestFormatPlan:
 
         nodes = {
             "n1": PlanNode(
-                node_id="n1", agent_spec=spec_done, state=PlanNodeState.COMPLETED, output="ok"
+                node_id="n1",
+                agent_spec=spec_done,
+                state=PlanNodeState.COMPLETED,
+                output="ok",
             ),
             "n2": PlanNode(
-                node_id="n2", agent_spec=spec_fail, state=PlanNodeState.FAILED, error="boom"
+                node_id="n2",
+                agent_spec=spec_fail,
+                state=PlanNodeState.FAILED,
+                error="boom",
             ),
-            "n3": PlanNode(node_id="n3", agent_spec=spec_held, state=PlanNodeState.HELD),
+            "n3": PlanNode(
+                node_id="n3", agent_spec=spec_held, state=PlanNodeState.HELD
+            ),
         }
 
         class FakeResult:
@@ -272,7 +272,7 @@ class TestFormatPlan:
         output = _format_plan(FakeResult())
         # The output preview should be truncated to 80 chars
         lines = output.split("\n")
-        preview_lines = [l for l in lines if "->" in l]
+        preview_lines = [line for line in lines if "->" in line]
         assert len(preview_lines) == 1
         # The preview should not contain the full 200-char string
         assert long_output not in output

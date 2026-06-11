@@ -96,7 +96,9 @@ class HuggingFaceProvider(EmbeddingProvider):
 
             api_key = os.getenv("HUGGINGFACE_API_KEY")
             headers = {"Authorization": f"Bearer {api_key}"}
-            api_url = f"https://api-inference.huggingface.co/models/{model}"
+            # Legacy api-inference.huggingface.co host is decommissioned (DNS
+            # NXDOMAIN); the router's hf-inference provider serves the same contract.
+            api_url = f"https://router.huggingface.co/hf-inference/models/{model}"
 
             embeddings = []
             for text in texts:
@@ -121,7 +123,12 @@ class HuggingFaceProvider(EmbeddingProvider):
             return embeddings
 
         except Exception as e:
-            logger.error("HuggingFace API error: %s", e, exc_info=True)
+            # Log the SANITIZED message (defense-in-depth: the raw exception
+            # could embed the Bearer header; the propagated error already
+            # routes through the sanitizer).
+            logger.error(
+                "HuggingFace API error: %s", sanitize_provider_error(e, "HuggingFace")
+            )
             raise RuntimeError(sanitize_provider_error(e, "HuggingFace"))
 
     def _embed_local(

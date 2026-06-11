@@ -131,8 +131,8 @@ class TestCreateConsensusPattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.patterns.patterns import create_consensus_pattern
         from kaizen.memory import SharedMemoryPool
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         existing_pool = SharedMemoryPool()
 
@@ -696,7 +696,7 @@ class TestVoterAgent:
         vote_result = voter.vote(proposal)
 
         confidence = vote_result["confidence"]
-        assert isinstance(confidence, (int, float))
+        assert isinstance(confidence, int | float)
         assert 0.0 <= confidence <= 1.0
 
     def test_vote_signature_used(self):

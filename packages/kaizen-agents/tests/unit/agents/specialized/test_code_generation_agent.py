@@ -188,7 +188,7 @@ class TestCodeGenerationAgentExecution:
         agent = CodeGenerationAgent()
 
         assert hasattr(agent, "run")
-        assert callable(getattr(agent, "generate_code"))
+        assert callable(agent.generate_code)
 
     def test_run_returns_dict(self):
         """Test that run method returns a dictionary."""
@@ -486,8 +486,8 @@ class TestCodeGenerationAgentSignature:
 
     def test_signature_inherits_from_base(self):
         """Test that signature inherits from Signature base class."""
-        from kaizen_agents.agents.specialized.code_generation import CodeGenSignature
         from kaizen.signatures import Signature
+        from kaizen_agents.agents.specialized.code_generation import CodeGenSignature
 
         assert issubclass(CodeGenSignature, Signature)
 
@@ -916,8 +916,8 @@ class TestCodeGenerationAgentBaseAgentIntegration:
 
     def test_agent_inherits_from_base_agent(self):
         """Test CodeGenerationAgent inherits from BaseAgent."""
-        from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
         from kaizen.core.base_agent import BaseAgent
+        from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
 
         agent = CodeGenerationAgent()
 
@@ -925,8 +925,8 @@ class TestCodeGenerationAgentBaseAgentIntegration:
 
     def test_agent_uses_async_single_shot_strategy(self):
         """Test that agent uses MultiCycleStrategy by default."""
-        from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
         from kaizen.strategies.multi_cycle import MultiCycleStrategy
+        from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
 
         agent = CodeGenerationAgent(llm_provider="mock")
 

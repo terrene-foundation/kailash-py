@@ -11,7 +11,7 @@ For real LLM tests, see tests/integration/journey/test_intent_detection_integrat
 """
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -478,8 +478,11 @@ class TestIntentDetectorLLMFallback:
                 context={},
             )
 
-            # LLM should be called
+            # LLM should be called and its match returned to the caller
             mock_llm.assert_called_once()
+            assert result is not None
+            assert result.intent == "refund"
+            assert result.detection_method == "llm"
 
     @pytest.mark.asyncio
     async def test_no_llm_when_use_llm_fallback_false(self, detector, no_llm_trigger):
@@ -514,13 +517,15 @@ class TestIntentDetectorLLMFallback:
         ) as mock_llm:
             mock_llm.return_value = llm_result
 
-            # First call - LLM invoked
+            # First call - LLM invoked, match returned directly (not from cache)
             result1 = await detector.detect_intent(
                 message="I want my purchase returned",
                 available_triggers=[refund_trigger],
                 context={},
             )
             assert mock_llm.call_count == 1
+            assert result1 is not None
+            assert result1.intent == "refund"
 
             # Second call - should hit cache
             result2 = await detector.detect_intent(
@@ -535,15 +540,12 @@ class TestIntentDetectorLLMFallback:
 
     @pytest.mark.asyncio
     async def test_confidence_threshold_filtering(self, detector, refund_trigger):
-        """Test results below confidence threshold are rejected."""
-        low_confidence_result = IntentMatch(
-            intent="refund",
-            confidence=0.5,  # Below 0.7 threshold
-            reasoning="Low confidence match",
-            trigger=refund_trigger,
-            detection_method="llm",
-        )
+        """Test results below confidence threshold are rejected.
 
+        Note: threshold filtering happens INSIDE _llm_classify (which returns
+        None for sub-threshold matches), so the mock returns None to mirror
+        that contract; detect_intent must propagate the rejection as None.
+        """
         with patch.object(
             detector, "_llm_classify", new_callable=AsyncMock
         ) as mock_llm:

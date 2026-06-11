@@ -15,14 +15,13 @@ from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.recovery.diagnoser import (
     DIAGNOSIS_SCHEMA,
     FailureCategory,
-    FailureDiagnosis,
     FailureDiagnoser,
+    FailureDiagnosis,
     _build_diagnosis_system_prompt,
     _build_diagnosis_user_prompt,
 )
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
     EdgeType,
     Plan,
     PlanEdge,
@@ -30,7 +29,6 @@ from kaizen_agents.types import (
     PlanNode,
     PlanNodeState,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- mock LLM client
@@ -90,26 +88,40 @@ def _make_plan_with_failed_node(
 
     # Upstream nodes
     for up_id, up_state in upstream_nodes or []:
-        up_spec = _make_agent_spec(name=f"agent-{up_id}", description=f"Upstream {up_id}")
-        output = {"result": f"output from {up_id}"} if up_state == PlanNodeState.COMPLETED else None
+        up_spec = _make_agent_spec(
+            name=f"agent-{up_id}", description=f"Upstream {up_id}"
+        )
+        output = (
+            {"result": f"output from {up_id}"}
+            if up_state == PlanNodeState.COMPLETED
+            else None
+        )
         nodes[up_id] = PlanNode(
             node_id=up_id,
             agent_spec=up_spec,
             state=up_state,
             output=output,
         )
-        edges.append(PlanEdge(from_node=up_id, to_node=node_id, edge_type=EdgeType.DATA_DEPENDENCY))
+        edges.append(
+            PlanEdge(
+                from_node=up_id, to_node=node_id, edge_type=EdgeType.DATA_DEPENDENCY
+            )
+        )
 
     # Downstream nodes
     for down_id in downstream_nodes or []:
-        down_spec = _make_agent_spec(name=f"agent-{down_id}", description=f"Downstream {down_id}")
+        down_spec = _make_agent_spec(
+            name=f"agent-{down_id}", description=f"Downstream {down_id}"
+        )
         nodes[down_id] = PlanNode(
             node_id=down_id,
             agent_spec=down_spec,
             state=PlanNodeState.PENDING,
         )
         edges.append(
-            PlanEdge(from_node=node_id, to_node=down_id, edge_type=EdgeType.DATA_DEPENDENCY)
+            PlanEdge(
+                from_node=node_id, to_node=down_id, edge_type=EdgeType.DATA_DEPENDENCY
+            )
         )
 
     return Plan(
@@ -259,7 +271,9 @@ class TestDiagnosisPromptBuilding:
     def test_user_prompt_includes_error(self) -> None:
         plan = _make_plan_with_failed_node(error="Connection timed out after 30s")
         node = plan.nodes["research-node"]
-        prompt = _build_diagnosis_user_prompt(node, "Connection timed out after 30s", plan, {})
+        prompt = _build_diagnosis_user_prompt(
+            node, "Connection timed out after 30s", plan, {}
+        )
         assert "Connection timed out after 30s" in prompt
 
     def test_user_prompt_includes_node_details(self) -> None:
@@ -438,7 +452,9 @@ class TestDiagnoseConfiguration:
     def test_wrong_tools_diagnosed_as_configuration(self) -> None:
         mock_llm = _make_mock_llm(_configuration_diagnosis())
         diagnoser = FailureDiagnoser(llm_client=mock_llm)
-        plan = _make_plan_with_failed_node(error="ToolNotFoundError: web_browser is not available")
+        plan = _make_plan_with_failed_node(
+            error="ToolNotFoundError: web_browser is not available"
+        )
 
         diagnosis = diagnoser.diagnose(
             node_id="research-node",
@@ -541,7 +557,9 @@ class TestDiagnoserValidation:
         diagnoser = FailureDiagnoser(llm_client=mock_llm)
         plan = _make_plan_with_failed_node(error="error")
 
-        diagnosis = diagnoser.diagnose(node_id="research-node", error="error", plan=plan)
+        diagnosis = diagnoser.diagnose(
+            node_id="research-node", error="error", plan=plan
+        )
         assert diagnosis.confidence == 1.0
 
     def test_negative_confidence_clamped(self) -> None:
@@ -551,7 +569,9 @@ class TestDiagnoserValidation:
         diagnoser = FailureDiagnoser(llm_client=mock_llm)
         plan = _make_plan_with_failed_node(error="error")
 
-        diagnosis = diagnoser.diagnose(node_id="research-node", error="error", plan=plan)
+        diagnosis = diagnoser.diagnose(
+            node_id="research-node", error="error", plan=plan
+        )
         assert diagnosis.confidence == 0.0
 
     def test_non_list_suggested_actions_treated_as_empty(self) -> None:
@@ -561,7 +581,9 @@ class TestDiagnoserValidation:
         diagnoser = FailureDiagnoser(llm_client=mock_llm)
         plan = _make_plan_with_failed_node(error="error")
 
-        diagnosis = diagnoser.diagnose(node_id="research-node", error="error", plan=plan)
+        diagnosis = diagnoser.diagnose(
+            node_id="research-node", error="error", plan=plan
+        )
         assert diagnosis.suggested_actions == []
 
     def test_non_numeric_confidence_defaults(self) -> None:
@@ -571,7 +593,9 @@ class TestDiagnoserValidation:
         diagnoser = FailureDiagnoser(llm_client=mock_llm)
         plan = _make_plan_with_failed_node(error="error")
 
-        diagnosis = diagnoser.diagnose(node_id="research-node", error="error", plan=plan)
+        diagnosis = diagnoser.diagnose(
+            node_id="research-node", error="error", plan=plan
+        )
         assert diagnosis.confidence == 0.5
 
 

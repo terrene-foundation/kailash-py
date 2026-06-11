@@ -23,8 +23,6 @@ from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kaizen_agents.orchestration.planner.designer import SpawnDecision
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
     EdgeType,
     MemoryConfig,
     Plan,
@@ -32,8 +30,8 @@ from kaizen_agents.types import (
     PlanNode,
     PlanNodeOutput,
     PlanState,
+    make_envelope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -260,7 +258,9 @@ class TestPlanValidatorStructure:
         node = PlanNode(node_id="a", agent_spec=_sample_spec())
         plan = Plan(
             nodes={"a": node},
-            edges=[PlanEdge(from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY)],
+            edges=[
+                PlanEdge(from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY)
+            ],
         )
         validator = PlanValidator()
 
@@ -272,7 +272,11 @@ class TestPlanValidatorStructure:
         node = PlanNode(node_id="a", agent_spec=_sample_spec())
         plan = Plan(
             nodes={"a": node},
-            edges=[PlanEdge(from_node="ghost", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY)],
+            edges=[
+                PlanEdge(
+                    from_node="ghost", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                )
+            ],
         )
         validator = PlanValidator()
 
@@ -284,7 +288,11 @@ class TestPlanValidatorStructure:
         node = PlanNode(node_id="a", agent_spec=_sample_spec())
         plan = Plan(
             nodes={"a": node},
-            edges=[PlanEdge(from_node="a", to_node="ghost", edge_type=EdgeType.DATA_DEPENDENCY)],
+            edges=[
+                PlanEdge(
+                    from_node="a", to_node="ghost", edge_type=EdgeType.DATA_DEPENDENCY
+                )
+            ],
         )
         validator = PlanValidator()
 
@@ -330,8 +338,12 @@ class TestPlanValidatorStructure:
         plan = Plan(
             nodes={"a": node_a, "b": node_b},
             edges=[
-                PlanEdge(from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="b", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="b", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -341,13 +353,22 @@ class TestPlanValidatorStructure:
         assert "CYCLE_DETECTED" in codes
 
     def test_three_node_cycle_detected(self) -> None:
-        nodes = {f"n{i}": PlanNode(node_id=f"n{i}", agent_spec=_sample_spec()) for i in range(3)}
+        nodes = {
+            f"n{i}": PlanNode(node_id=f"n{i}", agent_spec=_sample_spec())
+            for i in range(3)
+        }
         plan = Plan(
             nodes=nodes,
             edges=[
-                PlanEdge(from_node="n0", to_node="n1", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="n1", to_node="n2", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="n2", to_node="n0", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="n0", to_node="n1", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="n1", to_node="n2", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="n2", to_node="n0", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -358,12 +379,19 @@ class TestPlanValidatorStructure:
         assert "NO_ROOT_NODE" in codes
 
     def test_valid_linear_chain(self) -> None:
-        nodes = {f"n{i}": PlanNode(node_id=f"n{i}", agent_spec=_sample_spec()) for i in range(3)}
+        nodes = {
+            f"n{i}": PlanNode(node_id=f"n{i}", agent_spec=_sample_spec())
+            for i in range(3)
+        }
         plan = Plan(
             nodes=nodes,
             edges=[
-                PlanEdge(from_node="n0", to_node="n1", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="n1", to_node="n2", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="n0", to_node="n1", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="n1", to_node="n2", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -374,15 +402,24 @@ class TestPlanValidatorStructure:
     def test_valid_diamond_dag(self) -> None:
         """Diamond shape: a -> b, a -> c, b -> d, c -> d."""
         nodes = {
-            nid: PlanNode(node_id=nid, agent_spec=_sample_spec()) for nid in ["a", "b", "c", "d"]
+            nid: PlanNode(node_id=nid, agent_spec=_sample_spec())
+            for nid in ["a", "b", "c", "d"]
         }
         plan = Plan(
             nodes=nodes,
             edges=[
-                PlanEdge(from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="a", to_node="c", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="b", to_node="d", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="c", to_node="d", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="a", to_node="c", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="b", to_node="d", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="c", to_node="d", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -397,8 +434,12 @@ class TestPlanValidatorStructure:
         plan = Plan(
             nodes={"a": node_a, "b": node_b},
             edges=[
-                PlanEdge(from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="b", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="a", to_node="b", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="b", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -426,9 +467,15 @@ class TestPlanValidatorStructure:
         plan = Plan(
             nodes={"a": node},
             edges=[
-                PlanEdge(from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="ghost1", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="a", to_node="ghost2", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="ghost1", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
+                PlanEdge(
+                    from_node="a", to_node="ghost2", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
         )
         validator = PlanValidator()
@@ -511,7 +558,7 @@ class TestPlanValidatorEnvelopes:
             name="Child",
             description="test",
             envelope=make_envelope(
-            financial={"limit": 3.0},
+                financial={"limit": 3.0},
                 operational={"allowed": [], "blocked": []},  # Missing parent's "delete"
             ),
         )
@@ -520,7 +567,7 @@ class TestPlanValidatorEnvelopes:
             nodes=nodes,
             edges=[],
             envelope=make_envelope(
-            financial={"limit": 10.0},
+                financial={"limit": 10.0},
                 operational={"allowed": [], "blocked": ["delete"]},
             ),
         )
@@ -536,7 +583,7 @@ class TestPlanValidatorEnvelopes:
             name="Child",
             description="test",
             envelope=make_envelope(
-            financial={"limit": 3.0},
+                financial={"limit": 3.0},
                 operational={"allowed": ["read", "write", "admin"], "blocked": []},
             ),
         )
@@ -545,7 +592,7 @@ class TestPlanValidatorEnvelopes:
             nodes=nodes,
             edges=[],
             envelope=make_envelope(
-            financial={"limit": 10.0},
+                financial={"limit": 10.0},
                 operational={"allowed": ["read", "write"], "blocked": []},
             ),
         )
@@ -612,7 +659,9 @@ class TestPlanValidatorCombined:
         plan = Plan(
             nodes={"a": node_a},
             edges=[
-                PlanEdge(from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY
+                ),
             ],
             envelope=make_envelope(financial={"limit": 10.0}),
         )
@@ -690,7 +739,9 @@ class TestPlanComposer:
         composer = PlanComposer(llm_client=mock_llm)
         parent_envelope = make_envelope(financial={"limit": 100.0})
 
-        plan = composer.compose(subtasks=subtasks, specs=specs, parent_envelope=parent_envelope)
+        plan = composer.compose(
+            subtasks=subtasks, specs=specs, parent_envelope=parent_envelope
+        )
 
         # node-1 should have input mapping from node-0
         node_1 = plan.nodes["node-1"]
@@ -725,7 +776,9 @@ class TestPlanComposer:
         composer = PlanComposer(llm_client=mock_llm)
         parent_envelope = make_envelope(financial={"limit": 42.0})
 
-        plan = composer.compose(subtasks=subtasks, specs=specs, parent_envelope=parent_envelope)
+        plan = composer.compose(
+            subtasks=subtasks, specs=specs, parent_envelope=parent_envelope
+        )
 
         assert plan.envelope is parent_envelope
         assert plan.envelope.financial.max_spend_usd == 42.0
@@ -744,7 +797,9 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         with pytest.raises(ValueError, match="Mismatch"):
-            composer.compose(subtasks=subtasks, specs=specs, parent_envelope=make_envelope())
+            composer.compose(
+                subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
+            )
 
     def test_empty_subtasks_raises(self) -> None:
         mock_llm = _make_mock_llm({"edges": [], "input_mappings": []})
@@ -800,7 +855,11 @@ class TestPlanComposerEdgeCases:
         llm_response = {
             "edges": [
                 {"from_index": 0, "to_index": 1, "edge_type": "data_dependency"},
-                {"from_index": 0, "to_index": 1, "edge_type": "data_dependency"},  # Duplicate
+                {
+                    "from_index": 0,
+                    "to_index": 1,
+                    "edge_type": "data_dependency",
+                },  # Duplicate
             ],
             "input_mappings": [],
         }
@@ -981,7 +1040,9 @@ class TestPlanComposerComposeAndValidate:
 class TestPlanComposerEdgeTypes:
     def test_completion_dependency_edges(self) -> None:
         subtasks = [
-            _sample_subtask(description="Main work", depends_on=[], output_keys=["result"]),
+            _sample_subtask(
+                description="Main work", depends_on=[], output_keys=["result"]
+            ),
             _sample_subtask(description="Cleanup", depends_on=[0]),
         ]
         specs = [
@@ -1083,7 +1144,9 @@ class TestParseEdgeType:
         assert _parse_edge_type("data_dependency") == EdgeType.DATA_DEPENDENCY
 
     def test_completion_dependency(self) -> None:
-        assert _parse_edge_type("completion_dependency") == EdgeType.COMPLETION_DEPENDENCY
+        assert (
+            _parse_edge_type("completion_dependency") == EdgeType.COMPLETION_DEPENDENCY
+        )
 
     def test_co_start(self) -> None:
         assert _parse_edge_type("co_start") == EdgeType.CO_START

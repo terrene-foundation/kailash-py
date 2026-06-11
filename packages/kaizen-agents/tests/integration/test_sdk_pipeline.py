@@ -23,16 +23,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kaizen_agents._sdk_compat import (
-    plan_from_sdk,
-    plan_to_sdk,
-)
+from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
+from kaizen.l3.plan.types import PlanState as SdkPlanState
+from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
+from kaizen_agents._sdk_compat import plan_from_sdk, plan_to_sdk
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -43,13 +41,8 @@ from kaizen_agents.types import (
     PlanNodeOutput,
     PlanNodeState,
     PlanState,
+    make_envelope,
 )
-from kaizen.l3.plan.types import (
-    PlanNodeState as SdkPlanNodeState,
-    PlanState as SdkPlanState,
-)
-from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -180,10 +173,13 @@ class TestFullSdkPipeline:
 
         # Step 3: Validate with SDK PlanValidator
         structure_errors = SdkPlanValidator.validate_structure(sdk_plan)
-        assert len(structure_errors) == 0, f"SDK structural validation errors: {structure_errors}"
+        assert (
+            len(structure_errors) == 0
+        ), f"SDK structural validation errors: {structure_errors}"
         envelope_errors = SdkPlanValidator.validate_envelopes(sdk_plan)
         # Envelope errors may exist if node-level envelopes are not set in SDK format
-        # but structural validation must pass
+        # but structural validation must pass; the call must return the list contract
+        assert isinstance(envelope_errors, list)
 
         # Step 4: Convert back to local
         local_plan = plan_from_sdk(sdk_plan, agent_specs=specs)
@@ -198,7 +194,9 @@ class TestFullSdkPipeline:
         assert "data" in local_plan.nodes["node-1"].input_mapping
         assert local_plan.nodes["node-1"].input_mapping["data"].source_node == "node-0"
         assert "analysis" in local_plan.nodes["node-2"].input_mapping
-        assert local_plan.nodes["node-2"].input_mapping["analysis"].source_node == "node-1"
+        assert (
+            local_plan.nodes["node-2"].input_mapping["analysis"].source_node == "node-1"
+        )
 
         # Step 5: Execute via PlanMonitor
         llm = _make_mock_llm()
@@ -210,11 +208,15 @@ class TestFullSdkPipeline:
 
         call_log: list[str] = []
 
-        async def mock_execute(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+        async def mock_execute(
+            spec: AgentSpec, inputs: dict[str, Any]
+        ) -> dict[str, Any]:
             call_log.append(spec.name)
             return {"result": f"output-from-{spec.name}", "cost": 0.5}
 
-        result = asyncio.run(monitor.run_plan(plan=local_plan, execute_node=mock_execute))
+        result = asyncio.run(
+            monitor.run_plan(plan=local_plan, execute_node=mock_execute)
+        )
 
         # Step 6: Verify execution results
         assert isinstance(result, PlanResult)
@@ -259,12 +261,16 @@ class TestFullSdkPipeline:
             ),
         )
 
-        async def failing_at_node_1(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+        async def failing_at_node_1(
+            spec: AgentSpec, inputs: dict[str, Any]
+        ) -> dict[str, Any]:
             if spec.name == "analyze":
                 return {"error": "Analysis failed: invalid data format"}
             return {"result": f"output-from-{spec.name}", "cost": 0.5}
 
-        result = asyncio.run(monitor.run_plan(plan=plan, execute_node=failing_at_node_1))
+        result = asyncio.run(
+            monitor.run_plan(plan=plan, execute_node=failing_at_node_1)
+        )
 
         # Plan should have failed
         assert result.success is False
@@ -308,7 +314,9 @@ class TestFullSdkPipeline:
         assert len(errors) == 0, f"Validation errors: {errors}"
 
         # Execute the validated plan
-        async def success_callback(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+        async def success_callback(
+            spec: AgentSpec, inputs: dict[str, Any]
+        ) -> dict[str, Any]:
             return {"result": f"done-{spec.name}", "cost": 0.1}
 
         result = asyncio.run(monitor.run_plan(plan=plan, execute_node=success_callback))
@@ -336,7 +344,9 @@ class TestFullSdkPipeline:
             ),
         )
 
-        async def fail_node_1(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+        async def fail_node_1(
+            spec: AgentSpec, inputs: dict[str, Any]
+        ) -> dict[str, Any]:
             if spec.name == "analyze":
                 return {"error": "timeout"}
             return {"result": "ok", "cost": 0.1}
@@ -376,7 +386,9 @@ class TestFullSdkPipeline:
 
         assert "analysis" in local_plan.nodes["node-2"].input_mapping
         node2_mapping = local_plan.nodes["node-2"].input_mapping["analysis"]
-        assert node2_mapping.source_node == original_node2_mapping["analysis"].source_node
+        assert (
+            node2_mapping.source_node == original_node2_mapping["analysis"].source_node
+        )
         assert node2_mapping.output_key == original_node2_mapping["analysis"].output_key
 
     def test_pipeline_gradient_preserved_through_round_trip(self) -> None:
@@ -388,10 +400,23 @@ class TestFullSdkPipeline:
         local_plan = plan_from_sdk(sdk_plan, agent_specs=specs)
 
         assert local_plan.gradient.retry_budget == original_gradient.retry_budget
-        assert local_plan.gradient.resolution_timeout == original_gradient.resolution_timeout
         assert (
-            local_plan.gradient.after_retry_exhaustion == original_gradient.after_retry_exhaustion
+            local_plan.gradient.resolution_timeout
+            == original_gradient.resolution_timeout
         )
-        assert local_plan.gradient.optional_node_failure == original_gradient.optional_node_failure
-        assert local_plan.gradient.budget_flag_threshold == original_gradient.budget_flag_threshold
-        assert local_plan.gradient.budget_hold_threshold == original_gradient.budget_hold_threshold
+        assert (
+            local_plan.gradient.after_retry_exhaustion
+            == original_gradient.after_retry_exhaustion
+        )
+        assert (
+            local_plan.gradient.optional_node_failure
+            == original_gradient.optional_node_failure
+        )
+        assert (
+            local_plan.gradient.budget_flag_threshold
+            == original_gradient.budget_flag_threshold
+        )
+        assert (
+            local_plan.gradient.budget_hold_threshold
+            == original_gradient.budget_hold_threshold
+        )

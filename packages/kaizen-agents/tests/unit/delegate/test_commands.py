@@ -10,16 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from kaizen_agents.delegate.commands import CommandRegistry, SlashCommand
-from kaizen_agents.delegate.builtins import (
-    EXIT_SIGNAL,
-    register_builtins,
-    create_default_commands,
-)
-from kaizen_agents.delegate.loop import Conversation, UsageTracker
-from kaizen_agents.delegate.config.loader import KzConfig
+from kaizen_agents.delegate.builtins import EXIT_SIGNAL, create_default_commands
+from kaizen_agents.delegate.commands import CommandRegistry
 from kaizen_agents.delegate.config.effort import EffortLevel
-
+from kaizen_agents.delegate.config.loader import KzConfig
+from kaizen_agents.delegate.loop import Conversation, UsageTracker
 
 # -----------------------------------------------------------------------
 # CommandRegistry basics
@@ -56,7 +51,9 @@ class TestCommandRegistry:
 
     def test_alias_resolution(self):
         reg = CommandRegistry()
-        reg.register("exit", "Exit", handler=lambda args, **kw: "bye", aliases=["q", "quit"])
+        reg.register(
+            "exit", "Exit", handler=lambda args, **kw: "bye", aliases=["q", "quit"]
+        )
 
         assert reg.parse("/exit") == ("exit", "")
         assert reg.parse("/q") == ("exit", "")

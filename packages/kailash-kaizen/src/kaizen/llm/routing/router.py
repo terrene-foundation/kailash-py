@@ -24,6 +24,7 @@ from kaizen.llm.routing.capabilities import (
     LLMCapabilities,
     get_model_capabilities,
 )
+from kaizen.nodes._env_model import resolve_default_model
 
 logger = logging.getLogger(__name__)
 
@@ -131,18 +132,21 @@ class LLMRouter:
     def __init__(
         self,
         available_models: Optional[List[str]] = None,
-        default_model: str = "gpt-4",
+        default_model: Optional[str] = None,
         analyzer: Optional[TaskAnalyzer] = None,
     ):
         """Initialize LLMRouter.
 
         Args:
             available_models: List of available model identifiers
-            default_model: Default model if no routing applies
+            default_model: Default model if no routing applies. Defaults to
+                the KAIZEN_DEFAULT_MODEL env var per rules/env-models.md;
+                raises EnvModelMissing when neither is set.
             analyzer: TaskAnalyzer instance (created if not provided)
         """
         self._available_models = set(available_models or [])
-        self._default_model = default_model
+        # Model from caller or KAIZEN_DEFAULT_MODEL (rules/env-models.md).
+        self._default_model = resolve_default_model("LLMRouter", default_model)
         self._analyzer = analyzer or TaskAnalyzer()
         self._rules: List[RoutingRule] = []
 

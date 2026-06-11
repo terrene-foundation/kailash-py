@@ -10,10 +10,11 @@ Reference: ADR-018 Pipeline Pattern Architecture
 """
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # ============================================================================
 # Test Fixtures
@@ -164,9 +165,9 @@ class TestSupervisorWorkerFactoryWrapper:
 
         assert pattern is not None
         assert hasattr(pattern, "delegate"), "Should have delegate() method"
-        assert hasattr(pattern, "aggregate_results"), (
-            "Should have aggregate_results() method"
-        )
+        assert hasattr(
+            pattern, "aggregate_results"
+        ), "Should have aggregate_results() method"
         assert pattern.supervisor == supervisor
         assert pattern.workers == workers
 
@@ -218,12 +219,12 @@ class TestConsensusFactoryWrapper:
         )
 
         assert pattern is not None
-        assert hasattr(pattern, "create_proposal"), (
-            "Should have create_proposal() method"
-        )
-        assert hasattr(pattern, "determine_consensus"), (
-            "Should have determine_consensus() method"
-        )
+        assert hasattr(
+            pattern, "create_proposal"
+        ), "Should have create_proposal() method"
+        assert hasattr(
+            pattern, "determine_consensus"
+        ), "Should have determine_consensus() method"
         # Note: create_consensus_pattern creates its own voter agents internally
         assert hasattr(pattern, "voters")
 
@@ -310,9 +311,9 @@ class TestHandoffFactoryWrapper:
         pattern = Pipeline.handoff(agents=mock_agents[:3])  # Creates 3-tier handoff
 
         assert pattern is not None
-        assert hasattr(pattern, "execute_with_handoff"), (
-            "Should have execute_with_handoff() method"
-        )
+        assert hasattr(
+            pattern, "execute_with_handoff"
+        ), "Should have execute_with_handoff() method"
         # Note: create_handoff_pattern creates its own tier agents internally
         assert hasattr(pattern, "tiers")
 
@@ -403,7 +404,9 @@ class TestBackwardCompatibility:
         from kaizen_agents.patterns.patterns.consensus import create_consensus_pattern
         from kaizen_agents.patterns.patterns.debate import create_debate_pattern
         from kaizen_agents.patterns.patterns.handoff import create_handoff_pattern
-        from kaizen_agents.patterns.patterns.sequential import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns.sequential import (
+            create_sequential_pipeline,
+        )
         from kaizen_agents.patterns.patterns.supervisor_worker import (
             create_supervisor_worker_pattern,
         )

@@ -6,9 +6,8 @@ Uses mocked LLM (Tier 1 — unit tests may mock external services).
 
 from __future__ import annotations
 
-import json
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,8 +19,7 @@ from kaizen_agents.orchestration.planner.decomposer import (
     _build_system_prompt,
     _build_user_prompt,
 )
-from kaizen_agents.types import ConstraintEnvelope, make_envelope
-
+from kaizen_agents.types import make_envelope
 
 # ---------------------------------------------------------------------------
 # Helpers — mock LLM client
@@ -159,7 +157,10 @@ class TestTaskDecomposer:
         )
 
         assert len(subtasks) == 3
-        assert subtasks[0].description == "Research authentication providers (OAuth2, SAML, OIDC)"
+        assert (
+            subtasks[0].description
+            == "Research authentication providers (OAuth2, SAML, OIDC)"
+        )
         assert subtasks[0].estimated_complexity == 2
         assert subtasks[0].depends_on == []
         assert subtasks[1].depends_on == [0]
@@ -179,7 +180,9 @@ class TestTaskDecomposer:
         mock_llm.complete_structured.assert_called_once()
         call_args = mock_llm.complete_structured.call_args
         messages = (
-            call_args.kwargs.get("messages") or call_args[1].get("messages") or call_args[0][0]
+            call_args.kwargs.get("messages")
+            or call_args[1].get("messages")
+            or call_args[0][0]
         )
         system_msg = messages[0]["content"]
         assert "$50.0" in system_msg

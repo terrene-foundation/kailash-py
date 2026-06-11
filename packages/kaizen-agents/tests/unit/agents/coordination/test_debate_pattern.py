@@ -110,8 +110,8 @@ class TestCreateDebatePattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.patterns.patterns import create_debate_pattern
         from kaizen.memory import SharedMemoryPool
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         existing_pool = SharedMemoryPool()
 
@@ -550,7 +550,7 @@ class TestProponentAgent:
 
         strength = rebuttal["strength"]
         # Should be float
-        assert isinstance(strength, (int, float))
+        assert isinstance(strength, int | float)
         # Should be 0.0-1.0
         strength_float = float(strength)
         assert 0.0 <= strength_float <= 1.0
@@ -812,7 +812,7 @@ class TestOpponentAgent:
 
         strength = rebuttal["strength"]
         # Should be float
-        assert isinstance(strength, (int, float))
+        assert isinstance(strength, int | float)
         # Should be 0.0-1.0
         strength_float = float(strength)
         assert 0.0 <= strength_float <= 1.0
@@ -969,7 +969,7 @@ class TestJudgeAgent:
 
         confidence = judgment["confidence"]
         # Should be float
-        assert isinstance(confidence, (int, float))
+        assert isinstance(confidence, int | float)
         # Should be 0.0-1.0
         confidence_float = float(confidence)
         assert 0.0 <= confidence_float <= 1.0

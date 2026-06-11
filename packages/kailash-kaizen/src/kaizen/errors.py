@@ -52,4 +52,33 @@ class EnvModelMissing(RuntimeError):
         )
 
 
-__all__ = ["EnvModelMissing"]
+class ProviderUndetectable(RuntimeError):
+    """No LLM provider could be inferred from a model identifier.
+
+    Raised by :func:`kaizen.nodes._env_model.detect_provider` when a model
+    name matches no known provider family AND the caller did not pass an
+    explicit ``provider=``. Falling back silently (to a mock provider or an
+    arbitrary real one) is BLOCKED in production node constructors — for
+    security/auth/compliance nodes a silent mock route is a fail-open
+    (``rules/zero-tolerance.md`` Rule 3).
+
+    Attributes:
+        model: The model identifier that could not be classified.
+        component: Short identifier for the component that raised.
+    """
+
+    def __init__(self, model: str, component: str = "") -> None:
+        self.model = model
+        self.component = component
+        location = f" ({component})" if component else ""
+        super().__init__(
+            f"Could not detect an LLM provider for model {model!r}{location}. "
+            f"Pass an explicit provider= argument (e.g. provider='openai', "
+            f"'anthropic', 'ollama', 'google', or 'mock' for tests). Known "
+            f"auto-detected families: gpt-*/o1-*/davinci-* -> openai, "
+            f"claude-* -> anthropic, llama/mistral/mixtral/bakllava -> ollama, "
+            f"gemini-* -> google."
+        )
+
+
+__all__ = ["EnvModelMissing", "ProviderUndetectable"]

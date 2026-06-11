@@ -21,7 +21,6 @@ from kaizen_agents.governance.clearance import (
 from kaizen_agents.governance.dereliction import DerelictionDetector
 from kaizen_agents.governance.vacancy import VacancyManager
 
-
 # =========================================================================
 # P2-02: D/T/R Accountability
 # =========================================================================
@@ -131,8 +130,12 @@ class TestClearanceEnforcer:
 
     def test_register_and_filter(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("public", "hello", DataClassification.PUBLIC))
-        enforcer.register_value(ClassifiedValue("secret", "sk-123", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("public", "hello", DataClassification.PUBLIC)
+        )
+        enforcer.register_value(
+            ClassifiedValue("secret", "sk-123", DataClassification.SECRET)
+        )
 
         visible = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         assert "public" in visible
@@ -140,8 +143,12 @@ class TestClearanceEnforcer:
 
     def test_higher_clearance_sees_more(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("internal", "data", DataClassification.RESTRICTED))
-        enforcer.register_value(ClassifiedValue("secret", "key", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("internal", "data", DataClassification.RESTRICTED)
+        )
+        enforcer.register_value(
+            ClassifiedValue("secret", "key", DataClassification.SECRET)
+        )
 
         c1 = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         c3 = enforcer.filter_for_clearance(DataClassification.SECRET)
@@ -150,26 +157,38 @@ class TestClearanceEnforcer:
 
     def test_monotonic_floor_prevents_downgrade(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("key", "val", DataClassification.SECRET)
+        )
         with pytest.raises(ValueError, match="Monotonic floor"):
-            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.RESTRICTED))
+            enforcer.register_value(
+                ClassifiedValue("key", "val", DataClassification.RESTRICTED)
+            )
 
     def test_monotonic_floor_allows_upgrade(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.RESTRICTED))
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("key", "val", DataClassification.RESTRICTED)
+        )
+        enforcer.register_value(
+            ClassifiedValue("key", "val", DataClassification.SECRET)
+        )
         assert enforcer.get_classification("key") == DataClassification.SECRET
 
     def test_is_visible(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("data", "x", DataClassification.CONFIDENTIAL))
+        enforcer.register_value(
+            ClassifiedValue("data", "x", DataClassification.CONFIDENTIAL)
+        )
         assert enforcer.is_visible("data", DataClassification.CONFIDENTIAL) is True
         assert enforcer.is_visible("data", DataClassification.RESTRICTED) is False
         assert enforcer.is_visible("data", DataClassification.SECRET) is True
 
     def test_is_visible_unknown_key(self) -> None:
         enforcer = ClearanceEnforcer()
-        assert enforcer.is_visible("nonexistent", DataClassification.TOP_SECRET) is False
+        assert (
+            enforcer.is_visible("nonexistent", DataClassification.TOP_SECRET) is False
+        )
 
 
 class TestClassificationAssigner:
@@ -233,7 +252,9 @@ class TestCascadeManager:
         mgr.register("child", "root", {"financial": {"limit": 50.0}})
         events = mgr.tighten_envelope("root", {"financial": {"limit": 30.0}})
 
-        tightened = [e for e in events if e.event_type == CascadeEventType.ENVELOPE_TIGHTENED]
+        tightened = [
+            e for e in events if e.event_type == CascadeEventType.ENVELOPE_TIGHTENED
+        ]
         re_intersected = [
             e for e in events if e.event_type == CascadeEventType.CHILD_RE_INTERSECTED
         ]
@@ -265,7 +286,9 @@ class TestCascadeManager:
         mgr.register("grandchild", "child", {})
 
         events = mgr.cascade_terminate("root")
-        terminated = [e for e in events if e.event_type == CascadeEventType.CASCADE_TERMINATE]
+        terminated = [
+            e for e in events if e.event_type == CascadeEventType.CASCADE_TERMINATE
+        ]
         # grandchild, child, root
         assert len(terminated) == 3
         assert mgr.get_envelope("root") is None
@@ -279,7 +302,9 @@ class TestCascadeManager:
         mgr.record_consumption("child", 10.0)
 
         events = mgr.cascade_terminate("root")
-        reclaimed = [e for e in events if e.event_type == CascadeEventType.BUDGET_RECLAIMED]
+        reclaimed = [
+            e for e in events if e.event_type == CascadeEventType.BUDGET_RECLAIMED
+        ]
         assert len(reclaimed) == 1
         assert reclaimed[0].details["amount"] == 20.0  # 30 - 10 = 20
 
@@ -316,7 +341,7 @@ class TestCascadeManager:
             "root",
             {"operational": {"allowed": ["read", "write"]}},
         )
-        events = mgr.tighten_envelope(
+        mgr.tighten_envelope(
             "root",
             {"operational": {"allowed": ["read"]}},
         )

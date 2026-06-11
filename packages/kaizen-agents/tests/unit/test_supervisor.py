@@ -9,18 +9,8 @@ from typing import Any
 import pytest
 
 from kaizen_agents.governance.cost_model import CostModel
-from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
-from kaizen_agents.types import (
-    AgentSpec,
-    ConstraintEnvelope,
-    EdgeType,
-    Plan,
-    PlanEdge,
-    PlanGradient,
-    PlanNode,
-    PlanNodeOutput,
-)
-
+from kaizen_agents.supervisor import GovernedSupervisor
+from kaizen_agents.types import AgentSpec, Plan, PlanEdge, PlanNode, PlanNodeOutput
 
 # ---------------------------------------------------------------------------
 # Test executors (mock LLM via callback)
@@ -139,7 +129,9 @@ class TestGovernedSupervisorLayer2:
         supervisor = GovernedSupervisor(budget_usd=1.0, warning_threshold=0.50)
         result = await supervisor.run("Task", execute_node=success_executor)
         # cost=0.50, budget=1.0 → 50% utilization, matches 0.50 threshold
-        warning_events = [e for e in result.events if e.event_type.value == "envelope_warning"]
+        warning_events = [
+            e for e in result.events if e.event_type.value == "envelope_warning"
+        ]
         assert len(warning_events) >= 1
 
     def test_nan_budget_rejected(self) -> None:
@@ -212,7 +204,9 @@ class TestGovernedSupervisorMultiNode:
         supervisor = GovernedSupervisor(budget_usd=10.0)
 
         # Build a 3-node linear plan: A → B → C
-        spec_a = AgentSpec(spec_id="a", name="research", description="Research the topic")
+        spec_a = AgentSpec(
+            spec_id="a", name="research", description="Research the topic"
+        )
         spec_b = AgentSpec(spec_id="b", name="analyze", description="Analyze findings")
         spec_c = AgentSpec(spec_id="c", name="report", description="Write report")
 
@@ -278,11 +272,15 @@ class TestGovernedSupervisorMultiNode:
             nodes={
                 "ok": PlanNode(
                     node_id="ok",
-                    agent_spec=AgentSpec(spec_id="ok", name="ok-task", description="ok"),
+                    agent_spec=AgentSpec(
+                        spec_id="ok", name="ok-task", description="ok"
+                    ),
                 ),
                 "fail": PlanNode(
                     node_id="fail",
-                    agent_spec=AgentSpec(spec_id="f", name="fail-task", description="fail"),
+                    agent_spec=AgentSpec(
+                        spec_id="f", name="fail-task", description="fail"
+                    ),
                 ),
             },
             edges=[],
@@ -308,7 +306,9 @@ class TestGovernedSupervisorMultiNode:
                 ),
                 "optional": PlanNode(
                     node_id="optional",
-                    agent_spec=AgentSpec(spec_id="o", name="fail-task", description="o"),
+                    agent_spec=AgentSpec(
+                        spec_id="o", name="fail-task", description="o"
+                    ),
                     optional=True,
                 ),
             },
@@ -334,7 +334,9 @@ async def token_executor(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, A
     }
 
 
-async def token_executor_with_cost(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+async def token_executor_with_cost(
+    spec: AgentSpec, inputs: dict[str, Any]
+) -> dict[str, Any]:
     """Executor that returns both explicit cost and token counts."""
     return {
         "result": f"output:{spec.name}",

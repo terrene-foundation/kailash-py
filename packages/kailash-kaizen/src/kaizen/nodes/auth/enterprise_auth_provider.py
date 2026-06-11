@@ -13,12 +13,13 @@ For rule-based authentication only, use the Core SDK version:
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.enterprise_auth_provider import (
     EnterpriseAuthProviderNode as CoreEnterpriseAuthNode,
 )
 
+from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class EnterpriseAuthProviderNode(CoreEnterpriseAuthNode):
             name="ai_enterprise_auth",
             enabled_methods=["sso", "mfa", "directory"],
             fraud_detection_enabled=True,  # Enable AI-powered fraud detection
-            ai_model="gpt-4o-mini",  # AI model for fraud detection
+            # ai_model defaults to the KAIZEN_DEFAULT_MODEL env var
             ai_temperature=0.2,  # Lower temperature for consistent security decisions
         )
         ```
@@ -56,7 +57,7 @@ class EnterpriseAuthProviderNode(CoreEnterpriseAuthNode):
     def __init__(
         self,
         name: str = "ai_enterprise_auth",
-        ai_model: str = "gpt-4o-mini",
+        ai_model: Optional[str] = None,
         ai_temperature: float = 0.2,
         provider: str = None,
         **kwargs,
@@ -66,21 +67,20 @@ class EnterpriseAuthProviderNode(CoreEnterpriseAuthNode):
 
         Args:
             name: Node name
-            ai_model: AI model for fraud detection and risk assessment
+            ai_model: AI model for fraud detection and risk assessment.
+                Defaults to the KAIZEN_DEFAULT_MODEL env var per rules/env-models.md;
+                raises EnvModelMissing when neither is set.
             ai_temperature: Temperature for AI model (0.0-1.0, lower = more deterministic)
             provider: LLM provider (openai, anthropic, etc.). If None, auto-detected from model name
             **kwargs: Additional parameters passed to Core SDK EnterpriseAuthProviderNode
         """
         super().__init__(name=name, **kwargs)
 
-        # Auto-detect provider from model name if not specified
+        # Model from caller or KAIZEN_DEFAULT_MODEL (rules/env-models.md);
+        # provider auto-detected from the resolved model when not given.
+        ai_model = resolve_default_model("EnterpriseAuthProviderNode", ai_model)
         if provider is None:
-            if "gpt" in ai_model.lower() or "o1" in ai_model.lower():
-                provider = "openai"
-            elif "claude" in ai_model.lower():
-                provider = "anthropic"
-            else:
-                provider = "mock"  # Default for testing
+            provider = detect_provider(ai_model, "EnterpriseAuthProviderNode")
 
         # Store provider and model for later use in LLM calls
         self.ai_provider = provider

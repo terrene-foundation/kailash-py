@@ -13,16 +13,12 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
-import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
-import pytest
-
-from kaizen_agents.delegate.loop import AgentLoop, Conversation, ToolRegistry
 from kaizen_agents.delegate.config.loader import KzConfig
-
+from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers -- fake OpenAI streaming responses (reuse patterns from test_loop.py)
@@ -143,7 +139,9 @@ def _tool_call_chunks(
     if text_before:
         for i in range(0, len(text_before), 5):
             chunk_text = text_before[i : i + 5]
-            chunks.append(FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=chunk_text))]))
+            chunks.append(
+                FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=chunk_text))])
+            )
 
     # Tool call deltas
     for idx, tc in enumerate(tool_calls):
@@ -158,7 +156,9 @@ def _tool_call_chunks(
                                     index=idx,
                                     id=tc["id"],
                                     type="function",
-                                    function=FakeFunctionCall(name=tc["name"], arguments=""),
+                                    function=FakeFunctionCall(
+                                        name=tc["name"], arguments=""
+                                    ),
                                 )
                             ]
                         )
@@ -176,7 +176,9 @@ def _tool_call_chunks(
                             tool_calls=[
                                 FakeToolCallDelta(
                                     index=idx,
-                                    function=FakeFunctionCall(arguments=tc["arguments"]),
+                                    function=FakeFunctionCall(
+                                        arguments=tc["arguments"]
+                                    ),
                                 )
                             ]
                         )
@@ -240,14 +242,18 @@ class TestIncrementalStreaming:
         config = _make_config()
         tools = ToolRegistry()
 
-        loop = AgentLoop(config=config, tools=tools, client=client, system_prompt="Test")
+        loop = AgentLoop(
+            config=config, tools=tools, client=client, system_prompt="Test"
+        )
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Hi"):
             collected.append(chunk)
 
         # Multiple chunks were yielded (not a single blob)
-        assert len(collected) > 1, f"Expected multiple chunks, got {len(collected)}: {collected}"
+        assert (
+            len(collected) > 1
+        ), f"Expected multiple chunks, got {len(collected)}: {collected}"
 
         # Each chunk should be small (at most chunk_size characters)
         for chunk in collected:
@@ -449,7 +455,9 @@ class TestToolCallStreaming:
         full_text = "".join(collected)
 
         # The pre-tool-call thinking text should be in the output
-        assert thinking_text in full_text, f"Pre-tool-call text not found in output: {full_text!r}"
+        assert (
+            thinking_text in full_text
+        ), f"Pre-tool-call text not found in output: {full_text!r}"
         # The final text response should also be there
         assert final_text in full_text
 
@@ -517,7 +525,9 @@ class TestToolCallStreaming:
             failing_tool,
         )
 
-        tool_chunks = _tool_call_chunks([{"id": "call_fail", "name": "failing", "arguments": "{}"}])
+        tool_chunks = _tool_call_chunks(
+            [{"id": "call_fail", "name": "failing", "arguments": "{}"}]
+        )
         final_chunks = _text_chunks("The tool encountered an error.", chunk_size=10)
 
         client = _make_fake_client(tool_chunks, final_chunks)
@@ -588,7 +598,13 @@ class TestStreamingEdgeCases:
         for i in range(5):
             responses.append(
                 _tool_call_chunks(
-                    [{"id": f"call_{i}", "name": "echo", "arguments": f'{{"text": "turn {i}"}}'}]
+                    [
+                        {
+                            "id": f"call_{i}",
+                            "name": "echo",
+                            "arguments": f'{{"text": "turn {i}"}}',
+                        }
+                    ]
                 )
             )
 
@@ -636,7 +652,9 @@ class TestStreamingEdgeCases:
         config = _make_config()
         tools = ToolRegistry()
 
-        loop = AgentLoop(config=config, tools=tools, client=client, system_prompt="System")
+        loop = AgentLoop(
+            config=config, tools=tools, client=client, system_prompt="System"
+        )
 
         # Turn 1
         chunks1: list[str] = []

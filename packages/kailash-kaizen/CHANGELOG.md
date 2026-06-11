@@ -4,6 +4,51 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+### Changed — BREAKING (migration): AI-node model defaults now resolve from `KAIZEN_DEFAULT_MODEL`
+
+- **AI-enhanced node constructors no longer ship hardcoded model defaults**
+  (`rules/env-models.md`). `SSOAuthenticationNode`, `DirectoryIntegrationNode`,
+  `EnterpriseAuthProviderNode`, `AIThreatDetectionNode`, `AIBehaviorAnalysisNode`,
+  `GDPRComplianceNode`, `LLMRouter`, and `KaizenNode` previously defaulted to
+  hardcoded literals (`gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`,
+  `ollama:llama3.2:3b`). They now resolve: explicit `model=`/`ai_model=` argument →
+  `KAIZEN_DEFAULT_MODEL` env var → typed `kaizen.errors.EnvModelMissing` naming the
+  env var (the established `CoreAgent` contract).
+  **Migration:** set `KAIZEN_DEFAULT_MODEL` in your `.env` (or pass the model
+  explicitly). The security nodes' hardcoded `provider="openai"` defaults are also
+  gone — the provider is auto-detected from the resolved model (`gpt-*`/`o1-*` →
+  openai, `claude-*` → anthropic) and an explicit `provider=` still wins.
+  `GDPRComplianceNode` requires a model only when `ai_analysis=True` and keeps the
+  `"ollama:<model>"` prefix convention. New shared helper:
+  `kaizen.nodes._env_model.{resolve_default_model, detect_provider}`.
+  Provider auto-detection now covers four families (`gpt-*`/`o1-*`/`davinci-*` →
+  openai, `claude-*` → anthropic, `llama`/`mistral`/`mixtral`/`bakllava` → ollama,
+  `gemini-*` → google) and **fails closed**: an unrecognized model raises the new
+  typed `kaizen.errors.ProviderUndetectable` instead of silently routing to the
+  mock provider (a fail-open in security/auth/compliance nodes). Pass
+  `provider="mock"` explicitly for test contexts.
+
+### Fixed
+
+- **HuggingFace preset targeted the decommissioned `api-inference.huggingface.co`
+  host** (DNS NXDOMAIN — the SSRF guard correctly rejected every construction, so
+  the preset was unusable). `huggingface_preset` now targets the Inference
+  Providers router (`https://router.huggingface.co` + `path_prefix="/hf-inference"`;
+  the wire protocol's `/models/{model}` contract is unchanged). The embedding
+  provider sibling (`providers/embedding/huggingface.py`) is fixed in the same
+  change.
+- **`get_multi_modal_adapter` raised `TypeError` for any caller with an OpenAI key
+  set**: provider-agnostic kwargs (e.g. `model=`, `whisper_model=`) were forwarded
+  verbatim into `OpenAIMultiModalAdapter`, which does not accept them. Kwargs are
+  now signature-filtered per adapter at all construction sites; the adapter cache
+  key includes the (api_key-excluded) kwargs so differently-configured adapters no
+  longer collide on one cache slot.
+- **Cross-suite test-state pollution eliminated**: in-process `sys.modules` purges
+  in the import-performance and registering-import tests re-imported fresh class
+  objects mid-process (silently discarding the test conftest's mock-provider patch
+  and breaking exception class identity). All converted to subprocess checks; the
+  import-performance targets re-pinned to honest cold-import measurements.
+
 ## [2.24.6] — 2026-06-10 — RAG nodes provably correct end-to-end
 
 ### Fixed — RAG output-side wiring (F31 Wave 2.5): every LLM stage's OUTPUT now reaches its consumer parsed

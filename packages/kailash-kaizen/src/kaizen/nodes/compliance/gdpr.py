@@ -20,6 +20,7 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
 
+from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         auto_anonymize: bool = True,
         retention_policies: Optional[Dict[str, str]] = None,
         ai_analysis: bool = True,
-        ai_model: str = "ollama:llama3.2:3b",
+        ai_model: Optional[str] = None,
         **kwargs,
     ):
         """Initialize GDPR compliance node with AI-powered analysis.
@@ -187,7 +188,11 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             auto_anonymize: Enable automatic data anonymization
             retention_policies: Data retention policies by data type
             ai_analysis: Enable AI-powered compliance analysis
-            ai_model: AI model for compliance analysis
+            ai_model: AI model for compliance analysis. Accepts an optional
+                "ollama:<model>" prefix to pin the ollama provider. Defaults
+                to the KAIZEN_DEFAULT_MODEL env var per rules/env-models.md;
+                raises EnvModelMissing when neither is set and ai_analysis
+                is enabled.
             **kwargs: Additional node parameters
 
         Note:
@@ -200,6 +205,10 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self.auto_anonymize = auto_anonymize
         self.retention_policies = retention_policies or {}
         self.ai_analysis = ai_analysis
+        # Model from caller or KAIZEN_DEFAULT_MODEL (rules/env-models.md);
+        # only required when the AI analysis path is enabled.
+        if self.ai_analysis:
+            ai_model = resolve_default_model("GDPRComplianceNode", ai_model)
         self.ai_model = ai_model
 
         # Initialize parent classes
@@ -207,10 +216,19 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         # Initialize AI agent for compliance analysis
         if self.ai_analysis:
+            # "ollama:<model>" prefix pins the ollama provider; otherwise the
+            # provider is auto-detected from the resolved model name.
+            if ai_model.startswith("ollama:"):
+                provider, model = "ollama", ai_model.split(":", 1)[1]
+            else:
+                provider, model = (
+                    detect_provider(ai_model, "GDPRComplianceNode"),
+                    ai_model,
+                )
             self.ai_agent = LLMAgentNode(
                 name=f"{name}_ai_agent",
-                provider="ollama",
-                model=ai_model.replace("ollama:", ""),
+                provider=provider,
+                model=model,
                 temperature=0.1,  # Low temperature for consistent analysis
             )
         else:

@@ -14,16 +14,20 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
-from kaizen_agents.delegate.loop import AgentLoop, Conversation, ToolRegistry, UsageTracker
 from kaizen_agents.delegate.config.loader import KzConfig
-
+from kaizen_agents.delegate.loop import (
+    AgentLoop,
+    Conversation,
+    ToolRegistry,
+    UsageTracker,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers — fake OpenAI streaming responses
@@ -124,7 +128,9 @@ def _tool_call_chunks(
 
     # Optional text content
     if text_before:
-        chunks.append(FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=text_before))]))
+        chunks.append(
+            FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=text_before))])
+        )
 
     # Tool call deltas
     for idx, tc in enumerate(tool_calls):
@@ -139,7 +145,9 @@ def _tool_call_chunks(
                                     index=idx,
                                     id=tc["id"],
                                     type="function",
-                                    function=FakeFunctionCall(name=tc["name"], arguments=""),
+                                    function=FakeFunctionCall(
+                                        name=tc["name"], arguments=""
+                                    ),
                                 )
                             ]
                         )
@@ -157,7 +165,9 @@ def _tool_call_chunks(
                             tool_calls=[
                                 FakeToolCallDelta(
                                     index=idx,
-                                    function=FakeFunctionCall(arguments=tc["arguments"]),
+                                    function=FakeFunctionCall(
+                                        arguments=tc["arguments"]
+                                    ),
                                 )
                             ]
                         )
@@ -333,7 +343,11 @@ class TestConversation:
         """Assistant messages with tool calls include both content and calls."""
         conv = Conversation()
         tool_calls = [
-            {"id": "tc_1", "type": "function", "function": {"name": "test", "arguments": "{}"}}
+            {
+                "id": "tc_1",
+                "type": "function",
+                "function": {"name": "test", "arguments": "{}"},
+            }
         ]
         conv.add_assistant("Let me check.", tool_calls=tool_calls)
         msg = conv.messages[-1]
@@ -399,7 +413,9 @@ class TestAgentLoopTextResponse:
         config = _make_config()
         tools = ToolRegistry()
 
-        loop = AgentLoop(config=config, tools=tools, client=client, system_prompt="Test system")
+        loop = AgentLoop(
+            config=config, tools=tools, client=client, system_prompt="Test system"
+        )
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Hi there"):
@@ -521,10 +537,16 @@ class TestAgentLoopToolCalls:
             return f"result_b({y})"
 
         tools.register(
-            "tool_a", "Tool A", {"type": "object", "properties": {"x": {"type": "string"}}}, tool_a
+            "tool_a",
+            "Tool A",
+            {"type": "object", "properties": {"x": {"type": "string"}}},
+            tool_a,
         )
         tools.register(
-            "tool_b", "Tool B", {"type": "object", "properties": {"y": {"type": "string"}}}, tool_b
+            "tool_b",
+            "Tool B",
+            {"type": "object", "properties": {"y": {"type": "string"}}},
+            tool_b,
         )
 
         # Model requests both tools in one response
@@ -565,7 +587,10 @@ class TestAgentLoopToolCalls:
             raise RuntimeError("Something went wrong")
 
         tools.register(
-            "failing", "A failing tool", {"type": "object", "properties": {}}, failing_tool
+            "failing",
+            "A failing tool",
+            {"type": "object", "properties": {}},
+            failing_tool,
         )
 
         tool_chunks = _tool_call_chunks(
@@ -590,7 +615,9 @@ class TestAgentLoopToolCalls:
         tool_msg = next(m for m in loop.conversation.messages if m["role"] == "tool")
         assert "error" in tool_msg["content"].lower()
         assert "RuntimeError" in tool_msg["content"]  # exception type is included
-        assert "Something went wrong" not in tool_msg["content"]  # raw message is sanitized
+        assert (
+            "Something went wrong" not in tool_msg["content"]
+        )  # raw message is sanitized
 
     async def test_unknown_tool_handled(self) -> None:
         """Unknown tool names in model responses are handled gracefully."""
@@ -638,7 +665,9 @@ class TestAgentLoopToolCalls:
                                     index=0,
                                     id="call_bad",
                                     type="function",
-                                    function=FakeFunctionCall(name="my_tool", arguments=""),
+                                    function=FakeFunctionCall(
+                                        name="my_tool", arguments=""
+                                    ),
                                 )
                             ]
                         )
@@ -654,7 +683,9 @@ class TestAgentLoopToolCalls:
                             tool_calls=[
                                 FakeToolCallDelta(
                                     index=0,
-                                    function=FakeFunctionCall(arguments="{not valid json"),
+                                    function=FakeFunctionCall(
+                                        arguments="{not valid json"
+                                    ),
                                 )
                             ]
                         )
@@ -663,7 +694,9 @@ class TestAgentLoopToolCalls:
             )
         )
         chunks.append(
-            FakeChunk(choices=[FakeChoice(delta=FakeDelta(), finish_reason="tool_calls")])
+            FakeChunk(
+                choices=[FakeChoice(delta=FakeDelta(), finish_reason="tool_calls")]
+            )
         )
         chunks.append(FakeChunk(choices=[], usage=FakeUsage()))
 
@@ -712,7 +745,11 @@ class TestAgentLoopMaxTurns:
             tool_responses.append(
                 _tool_call_chunks(
                     [
-                        {"id": f"call_{i}", "name": "echo", "arguments": f'{{"text": "turn {i}"}}'},
+                        {
+                            "id": f"call_{i}",
+                            "name": "echo",
+                            "arguments": f'{{"text": "turn {i}"}}',
+                        },
                     ]
                 )
             )
@@ -769,7 +806,10 @@ class TestAgentLoopInterrupt:
             return f"result({x})"
 
         tools.register(
-            "my_tool", "test", {"type": "object", "properties": {"x": {"type": "string"}}}, my_tool
+            "my_tool",
+            "test",
+            {"type": "object", "properties": {"x": {"type": "string"}}},
+            my_tool,
         )
 
         # First call: tool call. Second call would be a text response, but
@@ -835,7 +875,9 @@ class TestAgentLoopMultiTurn:
         config = _make_config()
         tools = ToolRegistry()
 
-        loop = AgentLoop(config=config, tools=tools, client=client, system_prompt="System")
+        loop = AgentLoop(
+            config=config, tools=tools, client=client, system_prompt="System"
+        )
 
         # Turn 1
         async for _ in loop.run_turn("Question 1"):

@@ -12,7 +12,6 @@ Tests cover:
 These are Tier 1 (Unit) tests that use mock agents and don't make real LLM calls.
 """
 
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,11 +20,11 @@ from kaizen.journey import (
     Journey,
     JourneyConfig,
     Pathway,
-    PathwayContext,
     PathwayResult,
     ReturnToPrevious,
     ReturnToSpecific,
 )
+from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents.journey.errors import (
     MaxPathwayDepthError,
     PathwayNotFoundError,
@@ -33,7 +32,6 @@ from kaizen_agents.journey.errors import (
 )
 from kaizen_agents.journey.manager import JourneyResponse, PathwayManager
 from kaizen_agents.journey.transitions import IntentTrigger, Transition
-from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
 # Test Fixtures

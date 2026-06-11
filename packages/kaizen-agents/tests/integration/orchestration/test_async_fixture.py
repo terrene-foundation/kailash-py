@@ -6,7 +6,6 @@ correctly initializes in async context and uses AsyncLocalRuntime.
 """
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.mark.asyncio

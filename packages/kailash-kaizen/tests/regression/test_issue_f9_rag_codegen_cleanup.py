@@ -195,18 +195,33 @@ def test_issue_1120_registering_import_keeps_vectordatabase_visible():
     """The `kailash.nodes.data.streaming` import in realtime.py is a
     load-bearing registering import — removing it broke
     `VectorDatabaseNode` registration. The F9 acceptance criterion's OR
-    clause permits keeping the import with a comment."""
-    # Fresh registry state — import only the rag subtree, assert
-    # VectorDatabaseNode resolves.
+    clause permits keeping the import with a comment.
+
+    Runs in a fresh subprocess: the registry must be observed from a clean
+    import. The prior in-process `del sys.modules[...]` purge re-imported
+    fresh class objects mid-process, silently discarding conftest provider
+    patches and breaking exception class identity for every later test
+    (the FNEW-1 cross-suite pollution class).
+    """
+    import os
+    import subprocess
     import sys
 
-    for mod in [m for m in sys.modules if "kaizen" in m or "kailash" in m]:
-        del sys.modules[mod]
-    from kailash.nodes.base import NodeRegistry  # noqa: I001
-
-    import kaizen.nodes.rag  # noqa: F401
-
-    assert "VectorDatabaseNode" in NodeRegistry._nodes
+    snippet = (
+        "from kailash.nodes.base import NodeRegistry; "
+        "import kaizen.nodes.rag; "
+        "assert 'VectorDatabaseNode' in NodeRegistry._nodes; "
+        "print('REGISTERED_OK')"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", snippet],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=os.environ.copy(),
+    )
+    assert proc.returncode == 0, f"fresh-registry check failed: {proc.stderr}"
+    assert "REGISTERED_OK" in proc.stdout
 
 
 # ==========================================================================

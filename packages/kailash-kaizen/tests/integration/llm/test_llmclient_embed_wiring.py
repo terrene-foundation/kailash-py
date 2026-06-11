@@ -31,7 +31,6 @@ from kaizen.llm import LlmClient
 from kaizen.llm.deployment import LlmDeployment
 from kaizen.llm.errors import EndpointError
 
-
 # ---------------------------------------------------------------------------
 # Real OpenAI
 # ---------------------------------------------------------------------------
@@ -42,9 +41,10 @@ from kaizen.llm.errors import EndpointError
 async def test_llmclient_embed_openai_real() -> None:
     """End-to-end: LlmClient.embed() returns a real vector from OpenAI."""
     api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    if not api_key or not api_key.startswith("sk-"):
         pytest.skip(
-            "OPENAI_API_KEY not set; real OpenAI wiring test requires credential"
+            "OPENAI_API_KEY missing or placeholder; real OpenAI wiring test "
+            "requires a real credential"
         )
     model = os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 

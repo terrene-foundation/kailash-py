@@ -7,7 +7,7 @@ Uses mocked LLM (Tier 1 — unit tests may mock external services).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -32,14 +32,12 @@ from kaizen_agents.orchestration.protocols.escalation import (
 )
 from kaizen_agents.types import (
     CompletionPayload,
-    ConstraintEnvelope,
-    make_envelope,
     EscalationPayload,
     EscalationSeverity,
     Priority,
     ResourceSnapshot,
+    make_envelope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock LLM client
@@ -110,7 +108,7 @@ class TestDelegationComposition:
         )
 
         protocol = DelegationProtocol(llm_client=llm)
-        deadline = datetime.now(timezone.utc) + timedelta(hours=1)
+        deadline = datetime.now(UTC) + timedelta(hours=1)
 
         payload = protocol.compose_delegation(
             subtask_description="Urgent task",
@@ -402,7 +400,11 @@ class TestClarificationQuestion:
                     "both OAuth2 and API key authentication. Which approach should be "
                     "used for user-facing endpoints?"
                 ),
-                "options": ["OAuth2", "API Keys", "Both (OAuth2 for users, API keys for services)"],
+                "options": [
+                    "OAuth2",
+                    "API Keys",
+                    "Both (OAuth2 for users, API keys for services)",
+                ],
                 "blocking": True,
             }
         )
@@ -809,7 +811,10 @@ class TestEscalationDecision:
         escalation = EscalationPayload(
             severity=EscalationSeverity.CRITICAL,
             problem_description="Budget exhausted at all levels",
-            attempted_mitigations=["Reduced scope", "Requested more budget from parent"],
+            attempted_mitigations=[
+                "Reduced scope",
+                "Requested more budget from parent",
+            ],
         )
 
         action, details = protocol.decide_action(

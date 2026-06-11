@@ -8,12 +8,16 @@ Provides unified interface for:
 Following Phase 4 requirements: Provider abstraction, auto-selection, cost tracking.
 """
 
+import inspect
+import logging
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from kaizen.signatures.multi_modal import AudioField, ImageField
+
+logger = logging.getLogger(__name__)
 
 
 class MultiModalAdapter(ABC):
@@ -426,8 +430,8 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
         # Process image
         if image is not None:
             if self.warn_before_call:
-                print(
-                    f"⚠️  OpenAI API call: ~${self.VISION_COST_PER_IMAGE:.3f} for vision"
+                logger.warning(
+                    "OpenAI API call: ~$%.3f for vision", self.VISION_COST_PER_IMAGE
                 )
             results.update(
                 self._call_openai_vision(image, prompt or "Describe", **kwargs)
@@ -436,8 +440,8 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
         # Process audio
         if audio is not None:
             if self.warn_before_call:
-                print(
-                    f"⚠️  OpenAI API call: ~${self.AUDIO_COST_PER_MINUTE:.3f}/min for audio"
+                logger.warning(
+                    "OpenAI API call: ~$%.3f/min for audio", self.AUDIO_COST_PER_MINUTE
                 )
             results.update(self._call_openai_whisper(audio, **kwargs))
 
@@ -488,6 +492,19 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
 _adapter_cache: Dict[str, MultiModalAdapter] = {}
 
 
+def _filter_adapter_kwargs(adapter_cls: type, kwargs: dict) -> dict:
+    """Filter caller kwargs to the adapter constructor's accepted parameters.
+
+    The factory accepts provider-agnostic **kwargs (callers like
+    MultiModalAgent pass Ollama-shaped kwargs such as model/whisper_model/
+    auto_download); forwarding them verbatim into an adapter whose __init__
+    does not accept them raises TypeError whenever provider selection picks
+    the other branch (e.g. OPENAI_API_KEY present -> OpenAI adapter).
+    """
+    accepted = set(inspect.signature(adapter_cls.__init__).parameters) - {"self"}
+    return {k: v for k, v in kwargs.items() if k in accepted}
+
+
 def get_multi_modal_adapter(
     provider: Optional[str] = None, prefer_local: bool = True, **kwargs
 ) -> MultiModalAdapter:
@@ -505,8 +522,14 @@ def get_multi_modal_adapter(
     Raises:
         ValueError: If no adapter available
     """
-    # Check cache
-    cache_key = f"{provider}:{prefer_local}"
+    # Check cache — kwargs participate so adapters configured differently
+    # (e.g. different models) do not collide on one cache slot. api_key is
+    # excluded: it must never be embedded in a plain-string key (it is also
+    # popped from kwargs before adapter construction below).
+    cache_key = (
+        f"{provider}:{prefer_local}:"
+        f"{sorted((k, v) for k, v in kwargs.items() if k != 'api_key')!r}"
+    )
     if cache_key in _adapter_cache:
         return _adapter_cache[cache_key]
 
@@ -516,7 +539,9 @@ def get_multi_modal_adapter(
 
         if not OLLAMA_AVAILABLE:
             raise ValueError("Ollama not available")
-        adapter = OllamaMultiModalAdapter(**kwargs)
+        adapter = OllamaMultiModalAdapter(
+            **_filter_adapter_kwargs(OllamaMultiModalAdapter, kwargs)
+        )
         _adapter_cache[cache_key] = adapter
         return adapter
 
@@ -524,7 +549,10 @@ def get_multi_modal_adapter(
         api_key = kwargs.pop("api_key", None) or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OpenAI API key not available")
-        adapter = OpenAIMultiModalAdapter(api_key=api_key, **kwargs)
+        adapter = OpenAIMultiModalAdapter(
+            api_key=api_key,
+            **_filter_adapter_kwargs(OpenAIMultiModalAdapter, kwargs),
+        )
         _adapter_cache[cache_key] = adapter
         return adapter
 
@@ -535,7 +563,9 @@ def get_multi_modal_adapter(
             from kaizen.providers import OLLAMA_AVAILABLE
 
             if OLLAMA_AVAILABLE:
-                adapter = OllamaMultiModalAdapter(**kwargs)
+                adapter = OllamaMultiModalAdapter(
+                    **_filter_adapter_kwargs(OllamaMultiModalAdapter, kwargs)
+                )
                 _adapter_cache[cache_key] = adapter
                 return adapter
         except ImportError:
@@ -544,14 +574,20 @@ def get_multi_modal_adapter(
         # Fallback to OpenAI
         api_key = kwargs.pop("api_key", None) or os.getenv("OPENAI_API_KEY")
         if api_key:
-            adapter = OpenAIMultiModalAdapter(api_key=api_key, **kwargs)
+            adapter = OpenAIMultiModalAdapter(
+                api_key=api_key,
+                **_filter_adapter_kwargs(OpenAIMultiModalAdapter, kwargs),
+            )
             _adapter_cache[cache_key] = adapter
             return adapter
     else:
         # Try OpenAI first
         api_key = kwargs.pop("api_key", None) or os.getenv("OPENAI_API_KEY")
         if api_key:
-            adapter = OpenAIMultiModalAdapter(api_key=api_key, **kwargs)
+            adapter = OpenAIMultiModalAdapter(
+                api_key=api_key,
+                **_filter_adapter_kwargs(OpenAIMultiModalAdapter, kwargs),
+            )
             _adapter_cache[cache_key] = adapter
             return adapter
 
@@ -560,7 +596,9 @@ def get_multi_modal_adapter(
             from kaizen.providers import OLLAMA_AVAILABLE
 
             if OLLAMA_AVAILABLE:
-                adapter = OllamaMultiModalAdapter(**kwargs)
+                adapter = OllamaMultiModalAdapter(
+                    **_filter_adapter_kwargs(OllamaMultiModalAdapter, kwargs)
+                )
                 _adapter_cache[cache_key] = adapter
                 return adapter
         except ImportError:

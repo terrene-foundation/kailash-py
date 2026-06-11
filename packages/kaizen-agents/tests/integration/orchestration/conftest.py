@@ -21,7 +21,6 @@ Solution:
 - DataFlow v0.9.5+ correctly detects async context → AsyncLocalRuntime
 """
 
-import asyncio
 import os
 import tempfile
 
@@ -70,7 +69,6 @@ async def state_manager():
         Issue: Session-scoped runtime captures first test's event loop
     """
     from kaizen_agents.patterns.state_manager import OrchestrationStateManager
-
     from tests.integration.orchestration.manual_table_creation import (
         initialize_orchestration_tables,
     )

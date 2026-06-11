@@ -27,14 +27,7 @@ from kaizen_agents.governance.clearance import (
 )
 from kaizen_agents.governance.vacancy import VacancyManager
 from kaizen_agents.supervisor import GovernedSupervisor
-from kaizen_agents.types import (
-    AgentSpec,
-    Plan,
-    PlanEdge,
-    PlanNode,
-    PlanNodeOutput,
-)
-
+from kaizen_agents.types import AgentSpec, Plan, PlanEdge, PlanNode, PlanNodeOutput
 
 # ---------------------------------------------------------------------------
 # Shared test executors
@@ -76,16 +69,22 @@ class TestPlanLifecycle:
             nodes={
                 "research": PlanNode(
                     node_id="research",
-                    agent_spec=AgentSpec(spec_id="r", name="research", description="Research"),
+                    agent_spec=AgentSpec(
+                        spec_id="r", name="research", description="Research"
+                    ),
                 ),
                 "analyze": PlanNode(
                     node_id="analyze",
-                    agent_spec=AgentSpec(spec_id="a", name="analyze", description="Analyze"),
+                    agent_spec=AgentSpec(
+                        spec_id="a", name="analyze", description="Analyze"
+                    ),
                     input_mapping={"data": PlanNodeOutput("research", "result")},
                 ),
                 "report": PlanNode(
                     node_id="report",
-                    agent_spec=AgentSpec(spec_id="w", name="report", description="Report"),
+                    agent_spec=AgentSpec(
+                        spec_id="w", name="report", description="Report"
+                    ),
                     input_mapping={"analysis": PlanNodeOutput("analyze", "result")},
                 ),
             },
@@ -101,7 +100,9 @@ class TestPlanLifecycle:
         assert result.budget_consumed > 0
 
         # Verify audit trail contains genesis
-        genesis_records = [r for r in result.audit_trail if r["record_type"] == "genesis"]
+        genesis_records = [
+            r for r in result.audit_trail if r["record_type"] == "genesis"
+        ]
         assert len(genesis_records) >= 1
 
 
@@ -155,7 +156,7 @@ class TestBudgetLifecycle:
         tracker.allocate("a", 15.0, parent_id="root")
         tracker.allocate("b", 15.0, parent_id="root")
 
-        for i in range(10):
+        for _ in range(10):
             tracker.record_consumption("a", 1.0)
             tracker.record_consumption("b", 1.0)
 
@@ -183,8 +184,12 @@ class TestGovernanceEnforcement:
         audit.record_genesis("root", {"clearance": "C3"})
 
         # Register classified values
-        enforcer.register_value(ClassifiedValue("public_data", "hello", DataClassification.PUBLIC))
-        enforcer.register_value(ClassifiedValue("api_key", "sk-secret", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("public_data", "hello", DataClassification.PUBLIC)
+        )
+        enforcer.register_value(
+            ClassifiedValue("api_key", "sk-secret", DataClassification.SECRET)
+        )
 
         # Child with C1 clearance
         tracker.register_child("child", "root")
@@ -220,11 +225,21 @@ class TestCascadeLifecycle:
         mgr = CascadeManager()
 
         # Build hierarchy
-        mgr.register("ceo", None, {"financial": {"limit": 1000.0}}, budget_allocated=1000.0)
-        mgr.register("vp", "ceo", {"financial": {"limit": 500.0}}, budget_allocated=500.0)
-        mgr.register("lead", "vp", {"financial": {"limit": 200.0}}, budget_allocated=200.0)
-        mgr.register("dev-1", "lead", {"financial": {"limit": 50.0}}, budget_allocated=50.0)
-        mgr.register("dev-2", "lead", {"financial": {"limit": 50.0}}, budget_allocated=50.0)
+        mgr.register(
+            "ceo", None, {"financial": {"limit": 1000.0}}, budget_allocated=1000.0
+        )
+        mgr.register(
+            "vp", "ceo", {"financial": {"limit": 500.0}}, budget_allocated=500.0
+        )
+        mgr.register(
+            "lead", "vp", {"financial": {"limit": 200.0}}, budget_allocated=200.0
+        )
+        mgr.register(
+            "dev-1", "lead", {"financial": {"limit": 50.0}}, budget_allocated=50.0
+        )
+        mgr.register(
+            "dev-2", "lead", {"financial": {"limit": 50.0}}, budget_allocated=50.0
+        )
 
         # CEO tightens envelope
         events = mgr.tighten_envelope("ceo", {"financial": {"limit": 300.0}})
@@ -242,10 +257,14 @@ class TestCascadeLifecycle:
         # Terminate lead → dev-1 and dev-2 cascade
         mgr.record_consumption("dev-1", 20.0)
         events = mgr.cascade_terminate("lead")
-        terminated = [e for e in events if e.event_type == CascadeEventType.CASCADE_TERMINATE]
+        terminated = [
+            e for e in events if e.event_type == CascadeEventType.CASCADE_TERMINATE
+        ]
         assert len(terminated) == 3  # dev-1, dev-2, lead
 
-        reclaimed = [e for e in events if e.event_type == CascadeEventType.BUDGET_RECLAIMED]
+        reclaimed = [
+            e for e in events if e.event_type == CascadeEventType.BUDGET_RECLAIMED
+        ]
         assert len(reclaimed) >= 1  # at least dev-1 had unused budget
 
     def test_no_orphaned_agents(self) -> None:
@@ -280,7 +299,9 @@ class TestVacancyLifecycle:
         # VP terminates → Lead gets CEO as acting parent
         events = mgr.handle_parent_termination("vp")
         orphan_events = [e for e in events if e.event_type == "orphan_detected"]
-        acting_events = [e for e in events if e.event_type == "acting_parent_designated"]
+        acting_events = [
+            e for e in events if e.event_type == "acting_parent_designated"
+        ]
         assert len(orphan_events) == 1  # lead is orphaned
         assert len(acting_events) == 1  # ceo auto-designated
         assert acting_events[0].details["acting_parent"] == "ceo"

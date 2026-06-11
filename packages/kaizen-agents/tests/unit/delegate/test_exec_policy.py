@@ -12,17 +12,12 @@ Tests cover:
 
 from __future__ import annotations
 
-from typing import Any
-
-import pytest
-
 from kaizen_agents.delegate.config.exec_policy import (
     ExecPolicy,
     PolicyResult,
     load_exec_policy,
     split_compound_command,
 )
-
 
 # ---------------------------------------------------------------------------
 # PolicyResult
@@ -36,7 +31,9 @@ class TestPolicyResult:
         assert r.reason == ""
 
     def test_blocked(self) -> None:
-        r = PolicyResult(allowed=False, reason="Blocked by rule", blocked_segment="rm -rf /")
+        r = PolicyResult(
+            allowed=False, reason="Blocked by rule", blocked_segment="rm -rf /"
+        )
         assert not r.allowed
         assert "Blocked" in r.reason
         assert r.blocked_segment == "rm -rf /"

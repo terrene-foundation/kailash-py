@@ -16,13 +16,11 @@ from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kaizen_agents.orchestration.planner.designer import (
     AGENT_DESIGN_SCHEMA,
     AgentDesigner,
-    CapabilityMatch,
     CapabilityMatcher,
     SpawnDecision,
     SpawnPolicy,
 )
-from kaizen_agents.types import AgentSpec, ConstraintEnvelope, make_envelope, MemoryConfig
-
+from kaizen_agents.types import AgentSpec, MemoryConfig, make_envelope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,7 +47,9 @@ def _sample_subtask(
         description=description,
         estimated_complexity=complexity,
         required_capabilities=(
-            capabilities if capabilities is not None else ["code-review", "security-analysis"]
+            capabilities
+            if capabilities is not None
+            else ["code-review", "security-analysis"]
         ),
         suggested_tools=tools if tools is not None else ["code_search", "file_read"],
         depends_on=depends_on if depends_on is not None else [],
@@ -479,7 +479,9 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = make_envelope(operational={"allowed": [], "blocked": ["delete", "drop_table"]})
+        parent = make_envelope(
+            operational={"allowed": [], "blocked": ["delete", "drop_table"]}
+        )
 
         spec, _ = designer.design(subtask, parent, [])
         assert "delete" in spec.envelope.operational.blocked_actions
@@ -490,7 +492,9 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = make_envelope(operational={"allowed": ["read", "write"], "blocked": []})
+        parent = make_envelope(
+            operational={"allowed": ["read", "write"], "blocked": []}
+        )
 
         spec, _ = designer.design(subtask, parent, [])
         # Child's allowed must be subset of parent's allowed
@@ -502,7 +506,9 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = make_envelope(data_access={"ceiling": "confidential", "scopes": ["project-x"]})
+        parent = make_envelope(
+            data_access={"ceiling": "confidential", "scopes": ["project-x"]}
+        )
 
         spec, _ = designer.design(subtask, parent, [])
         # Data access is inherited from parent via typed sub-models

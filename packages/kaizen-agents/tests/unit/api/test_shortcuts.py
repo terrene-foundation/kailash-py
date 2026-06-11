@@ -13,8 +13,6 @@ import pytest
 
 from kaizen_agents.api.shortcuts import (
     MEMORY_SHORTCUTS,
-    MODEL_ALIASES,
-    RUNTIME_SHORTCUTS,
     get_available_shortcuts,
     resolve_execution_mode,
     resolve_memory_shortcut,

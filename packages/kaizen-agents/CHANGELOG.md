@@ -5,6 +5,27 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`import kaizen_agents.patterns` no longer requires optional heavy
+  dependencies** (F31-FU5 sibling): `patterns/runtime.py` and
+  `patterns/state_manager.py` moved runtime-optional type references behind
+  `from __future__ import annotations`, completing the slim-core import contract
+  (pinned by the kailash-kaizen FU5 subprocess regression suite).
+- `datetime.utcnow()` → `datetime.now(UTC)` in `api/result.py`, `api/agent.py`,
+  and `runtime_adapters/types.py` (DeprecationWarning class).
+- Pre-existing integration fixture drift: the `orchestration_runtime` teardown
+  called `shutdown(mode="immediate")` — a kwarg `OrchestrationRuntime.shutdown`
+  never had (drift from the #75 structural split); now `shutdown(graceful=False)`.
+
+### Changed
+
+- All test directories (`tests/{unit,integration,e2e}`) are ruff-clean
+  (394 findings → 0), enabling lint-gating kaizen-agents tests in CI. Adapter
+  unit-test dependencies (`anthropic`, `google-generativeai`) declared in `[dev]`.
+
 ## [0.9.8] — 2026-06-01 — persistent/learning memory shortcut repair + pyright drift (#855)
 
 ### Fixed

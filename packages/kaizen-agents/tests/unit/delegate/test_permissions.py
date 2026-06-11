@@ -19,10 +19,9 @@ from kaizen_agents.delegate.config.permissions import (
     PermissionAction,
     PermissionEngine,
     PermissionRule,
-    load_permission_rules,
     _serialize_arguments,
+    load_permission_rules,
 )
-
 
 # ---------------------------------------------------------------------------
 # PermissionAction
@@ -218,8 +217,14 @@ class TestPermissionEngineArguments:
                 ),
             ]
         )
-        assert engine.evaluate("file_write", {"path": "/etc/passwd"}) == PermissionAction.DENY
-        assert engine.evaluate("file_write", {"path": "/tmp/test"}) == PermissionAction.ALLOW
+        assert (
+            engine.evaluate("file_write", {"path": "/etc/passwd"})
+            == PermissionAction.DENY
+        )
+        assert (
+            engine.evaluate("file_write", {"path": "/tmp/test"})
+            == PermissionAction.ALLOW
+        )
 
     def test_args_contain_multiple_patterns(self) -> None:
         engine = PermissionEngine(
@@ -231,9 +236,18 @@ class TestPermissionEngineArguments:
                 ),
             ]
         )
-        assert engine.evaluate("file_write", {"path": "/etc/config"}) == PermissionAction.DENY
-        assert engine.evaluate("file_write", {"path": "/usr/bin/x"}) == PermissionAction.DENY
-        assert engine.evaluate("file_write", {"path": "/home/user"}) == PermissionAction.ALLOW
+        assert (
+            engine.evaluate("file_write", {"path": "/etc/config"})
+            == PermissionAction.DENY
+        )
+        assert (
+            engine.evaluate("file_write", {"path": "/usr/bin/x"})
+            == PermissionAction.DENY
+        )
+        assert (
+            engine.evaluate("file_write", {"path": "/home/user"})
+            == PermissionAction.ALLOW
+        )
 
     def test_args_contain_case_insensitive(self) -> None:
         engine = PermissionEngine(

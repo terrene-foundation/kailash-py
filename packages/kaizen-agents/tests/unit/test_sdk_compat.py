@@ -6,12 +6,20 @@ Unit tests for kaizen_agents._sdk_compat — bidirectional SDK type converters.
 Tier 1: Unit tests, no external dependencies.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from kaizen.l3.envelope.types import GradientZone as SdkGradientZone
+from kaizen.l3.plan.types import EdgeType as SdkEdgeType
+from kaizen.l3.plan.types import Plan as SdkPlan
+from kaizen.l3.plan.types import PlanEdge as SdkPlanEdge
+from kaizen.l3.plan.types import PlanNode as SdkPlanNode
+from kaizen.l3.plan.types import PlanNodeOutput as SdkPlanNodeOutput
+from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
+from kaizen.l3.plan.types import PlanState as SdkPlanState
 from kaizen_agents._sdk_compat import (
     edge_type_from_sdk,
     edge_type_to_sdk,
@@ -32,33 +40,24 @@ from kaizen_agents._sdk_compat import (
     plan_state_to_sdk,
     plan_to_sdk,
 )
-from kaizen_agents.types import (
-    AgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
-    DimensionGradient as LocalDimensionGradient,
-    EdgeType as LocalEdgeType,
-    GradientZone as LocalGradientZone,
-    MemoryConfig,
-    Plan as LocalPlan,
-    PlanEdge as LocalPlanEdge,
-    PlanGradient as LocalPlanGradient,
-    PlanNode as LocalPlanNode,
-    PlanNodeOutput as LocalPlanNodeOutput,
-    PlanNodeState as LocalPlanNodeState,
-    PlanState as LocalPlanState,
-)
-from kaizen.l3.envelope.types import GradientZone as SdkGradientZone
-from kaizen.l3.plan.types import (
-    EdgeType as SdkEdgeType,
-    Plan as SdkPlan,
-    PlanEdge as SdkPlanEdge,
-    PlanNode as SdkPlanNode,
-    PlanNodeOutput as SdkPlanNodeOutput,
-    PlanNodeState as SdkPlanNodeState,
-    PlanState as SdkPlanState,
-)
 
+# isort: off  (isort and the pre-commit-pinned ruff 0.3.4 disagree on the
+# canonical placement of the lowercase `make_envelope` among the aliased
+# class imports — each "fixes" the other's output in an endless ping-pong)
+from kaizen_agents.types import AgentSpec, ConstraintEnvelope
+from kaizen_agents.types import DimensionGradient as LocalDimensionGradient
+from kaizen_agents.types import EdgeType as LocalEdgeType
+from kaizen_agents.types import GradientZone as LocalGradientZone
+from kaizen_agents.types import Plan as LocalPlan
+from kaizen_agents.types import PlanEdge as LocalPlanEdge
+from kaizen_agents.types import PlanGradient as LocalPlanGradient
+from kaizen_agents.types import PlanNode as LocalPlanNode
+from kaizen_agents.types import PlanNodeOutput as LocalPlanNodeOutput
+from kaizen_agents.types import PlanNodeState as LocalPlanNodeState
+from kaizen_agents.types import PlanState as LocalPlanState
+from kaizen_agents.types import make_envelope
+
+# isort: on
 
 # ---------------------------------------------------------------------------
 # GradientZone converters
@@ -77,7 +76,9 @@ class TestGradientZoneConverters:
             (LocalGradientZone.BLOCKED, "BLOCKED"),
         ],
     )
-    def test_to_sdk_all_zones(self, local_zone: LocalGradientZone, expected_sdk_name: str) -> None:
+    def test_to_sdk_all_zones(
+        self, local_zone: LocalGradientZone, expected_sdk_name: str
+    ) -> None:
         sdk = gradient_zone_to_sdk(local_zone)
         assert isinstance(sdk, SdkGradientZone)
         assert sdk.name == expected_sdk_name
@@ -91,7 +92,9 @@ class TestGradientZoneConverters:
             (SdkGradientZone.BLOCKED, "BLOCKED"),
         ],
     )
-    def test_from_sdk_all_zones(self, sdk_zone: SdkGradientZone, expected_local_name: str) -> None:
+    def test_from_sdk_all_zones(
+        self, sdk_zone: SdkGradientZone, expected_local_name: str
+    ) -> None:
         local = gradient_zone_from_sdk(sdk_zone)
         assert isinstance(local, LocalGradientZone)
         assert local.name == expected_local_name
@@ -126,7 +129,9 @@ class TestEdgeTypeConverters:
             (LocalEdgeType.CO_START, "CO_START"),
         ],
     )
-    def test_to_sdk_all_types(self, local_edge: LocalEdgeType, expected_sdk_name: str) -> None:
+    def test_to_sdk_all_types(
+        self, local_edge: LocalEdgeType, expected_sdk_name: str
+    ) -> None:
         sdk = edge_type_to_sdk(local_edge)
         assert isinstance(sdk, SdkEdgeType)
         assert sdk.name == expected_sdk_name
@@ -161,7 +166,9 @@ class TestPlanNodeStateConverters:
             LocalPlanNodeState.SKIPPED,
         ],
     )
-    def test_round_trip_all_shared_states(self, local_state: LocalPlanNodeState) -> None:
+    def test_round_trip_all_shared_states(
+        self, local_state: LocalPlanNodeState
+    ) -> None:
         sdk = plan_node_state_to_sdk(local_state)
         assert isinstance(sdk, SdkPlanNodeState)
         result = plan_node_state_from_sdk(sdk)
@@ -482,8 +489,12 @@ class TestEnvelopeConverters:
         original = self._make_envelope()
         result = envelope_from_dict(envelope_to_dict(original))
         assert result.financial == original.financial
-        assert result.operational.allowed_actions == original.operational.allowed_actions
-        assert result.operational.blocked_actions == original.operational.blocked_actions
+        assert (
+            result.operational.allowed_actions == original.operational.allowed_actions
+        )
+        assert (
+            result.operational.blocked_actions == original.operational.blocked_actions
+        )
 
     def test_from_dict_empty(self) -> None:
         """Empty dict produces default envelope."""
@@ -547,8 +558,8 @@ class TestPlanConverters:
                 ),
             ],
             state=LocalPlanState.EXECUTING,
-            created_at=datetime(2026, 3, 23, 10, 0, 0, tzinfo=timezone.utc),
-            modified_at=datetime(2026, 3, 23, 10, 5, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 23, 10, 0, 0, tzinfo=UTC),
+            modified_at=datetime(2026, 3, 23, 10, 5, 0, tzinfo=UTC),
         )
 
     def test_to_sdk_plan_structure(self) -> None:
@@ -583,8 +594,8 @@ class TestPlanConverters:
     def test_to_sdk_plan_timestamps_preserved(self) -> None:
         local = self._make_local_plan()
         sdk = plan_to_sdk(local)
-        assert sdk.created_at == datetime(2026, 3, 23, 10, 0, 0, tzinfo=timezone.utc)
-        assert sdk.modified_at == datetime(2026, 3, 23, 10, 5, 0, tzinfo=timezone.utc)
+        assert sdk.created_at == datetime(2026, 3, 23, 10, 0, 0, tzinfo=UTC)
+        assert sdk.modified_at == datetime(2026, 3, 23, 10, 5, 0, tzinfo=UTC)
 
     def test_from_sdk_plan_round_trip(self) -> None:
         local = self._make_local_plan()

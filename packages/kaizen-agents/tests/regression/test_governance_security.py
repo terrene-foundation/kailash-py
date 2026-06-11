@@ -8,9 +8,6 @@ invalid transitions. All error paths must fail-closed.
 
 from __future__ import annotations
 
-import math
-from typing import Any
-
 import pytest
 
 from kaizen_agents.governance.budget import BudgetTracker
@@ -25,7 +22,6 @@ from kaizen_agents.governance.clearance import (
 from kaizen_agents.governance.dereliction import DerelictionDetector
 from kaizen_agents.governance.vacancy import VacancyManager
 from kaizen_agents.supervisor import GovernedSupervisor
-
 
 # =========================================================================
 # NaN/Inf Injection Tests
@@ -168,14 +164,20 @@ class TestClassificationBypass:
     def test_monotonic_floor_enforced(self) -> None:
         """Cannot lower classification once set."""
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("key", "val", DataClassification.SECRET)
+        )
         with pytest.raises(ValueError, match="Monotonic floor"):
-            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.PUBLIC))
+            enforcer.register_value(
+                ClassifiedValue("key", "val", DataClassification.PUBLIC)
+            )
 
     def test_hidden_api_key_in_text(self) -> None:
         """API key embedded in free text is still classified as secret."""
         assigner = ClassificationAssigner()
-        text = "The config says api_key = sk-abc123def456ghi789jklmnop and that's the key"
+        text = (
+            "The config says api_key = sk-abc123def456ghi789jklmnop and that's the key"
+        )
         level = assigner.classify("config_text", text)
         assert level >= DataClassification.SECRET
 
@@ -188,7 +190,9 @@ class TestClassificationBypass:
     def test_c1_agent_cannot_see_c3(self) -> None:
         """C1-cleared agent cannot access C3 data through filter."""
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("secret", "data", DataClassification.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("secret", "data", DataClassification.SECRET)
+        )
         visible = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         assert "secret" not in visible
 
@@ -196,7 +200,9 @@ class TestClassificationBypass:
         """C0 agent only sees C0 data."""
         enforcer = ClearanceEnforcer()
         enforcer.register_value(ClassifiedValue("pub", "x", DataClassification.PUBLIC))
-        enforcer.register_value(ClassifiedValue("int", "y", DataClassification.RESTRICTED))
+        enforcer.register_value(
+            ClassifiedValue("int", "y", DataClassification.RESTRICTED)
+        )
         enforcer.register_value(ClassifiedValue("sec", "z", DataClassification.SECRET))
         visible = enforcer.filter_for_clearance(DataClassification.PUBLIC)
         assert visible == {"pub": "x"}

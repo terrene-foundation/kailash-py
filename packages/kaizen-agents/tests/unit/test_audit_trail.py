@@ -9,14 +9,10 @@ hash chain integrity, bounded collection, query by agent, and export.
 
 from __future__ import annotations
 
-import hashlib
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
-import pytest
-
 from kaizen_agents.audit.trail import AuditRecord, AuditTrail
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -234,7 +230,9 @@ class TestHashChainIntegrity:
         """A trail with multiple records should have a valid hash chain."""
         trail = AuditTrail()
         trail.record_genesis(agent_id="root", envelope=_make_envelope())
-        trail.record_delegation(parent_id="root", child_id="child-1", envelope=_make_envelope())
+        trail.record_delegation(
+            parent_id="root", child_id="child-1", envelope=_make_envelope()
+        )
         trail.record_action(agent_id="child-1", action="search", details={"q": "test"})
         trail.record_termination(
             agent_id="child-1", reason="completed", budget_consumed={"cost": 1.0}
@@ -297,7 +295,10 @@ class TestBoundedCollection:
 
         assert len(trail._records) == 100
         # The genesis record should have been evicted
-        assert trail._records[0].record_type != "genesis" or trail._records[0].action != "genesis"
+        assert (
+            trail._records[0].record_type != "genesis"
+            or trail._records[0].action != "genesis"
+        )
 
     def test_default_maxlen_is_10000(self) -> None:
         """Default maxlen should be 10000 per trust-plane-security rules."""
@@ -317,10 +318,14 @@ class TestQueryByAgent:
         """Querying for an agent should return only that agent's records."""
         trail = AuditTrail()
         trail.record_genesis(agent_id="agent-A", envelope=_make_envelope())
-        trail.record_delegation(parent_id="agent-A", child_id="agent-B", envelope=_make_envelope())
+        trail.record_delegation(
+            parent_id="agent-A", child_id="agent-B", envelope=_make_envelope()
+        )
         trail.record_action(agent_id="agent-A", action="search", details={})
         trail.record_action(agent_id="agent-B", action="write", details={})
-        trail.record_termination(agent_id="agent-B", reason="completed", budget_consumed={})
+        trail.record_termination(
+            agent_id="agent-B", reason="completed", budget_consumed={}
+        )
 
         a_records = trail.query_by_agent("agent-A")
         b_records = trail.query_by_agent("agent-B")

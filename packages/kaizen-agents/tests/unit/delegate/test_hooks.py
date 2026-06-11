@@ -9,15 +9,12 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 import stat
-import sys
 import textwrap
 
 import pytest
 
 from kaizen_agents.delegate.hooks import HookEvent, HookManager, HookResult
-
 
 # -----------------------------------------------------------------------
 # HookEvent basics
@@ -63,7 +60,9 @@ class TestHookResult:
         assert r.error is True
 
     def test_error_on_other_exit_codes(self, tmp_path):
-        r = HookResult(event=HookEvent.PRE_MODEL, script=tmp_path / "x.js", exit_code=127)
+        r = HookResult(
+            event=HookEvent.PRE_MODEL, script=tmp_path / "x.js", exit_code=127
+        )
         assert r.allowed is False
         assert r.blocked is False
         assert r.error is True

@@ -89,7 +89,10 @@ class TestMemoryAgentInitialization:
 
     def test_full_config_object_initialization(self):
         """Test initialization with full config object."""
-        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent, MemoryConfig
+        from kaizen_agents.agents.specialized.memory_agent import (
+            MemoryAgent,
+            MemoryConfig,
+        )
 
         config = MemoryConfig(
             llm_provider="openai",
@@ -111,7 +114,10 @@ class TestMemoryAgentInitialization:
 
     def test_config_object_overrides_kwargs(self):
         """Test that config object takes precedence over kwargs."""
-        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent, MemoryConfig
+        from kaizen_agents.agents.specialized.memory_agent import (
+            MemoryAgent,
+            MemoryConfig,
+        )
 
         config = MemoryConfig(model="gpt-4", temperature=0.3, max_history_turns=5)
 
@@ -173,7 +179,7 @@ class TestMemoryAgentExecution:
         agent = MemoryAgent()
 
         assert hasattr(agent, "run")
-        assert callable(getattr(agent, "chat"))
+        assert callable(agent.chat)
 
     def test_run_returns_dict(self):
         """Test that run method returns a dictionary."""
@@ -423,8 +429,8 @@ class TestMemoryAgentSignature:
 
     def test_signature_inherits_from_base(self):
         """Test that signature inherits from Signature base class."""
-        from kaizen_agents.agents.specialized.memory_agent import ConversationSignature
         from kaizen.signatures import Signature
+        from kaizen_agents.agents.specialized.memory_agent import ConversationSignature
 
         assert issubclass(ConversationSignature, Signature)
 
@@ -1086,8 +1092,8 @@ class TestMemoryAgentBaseAgentIntegration:
 
     def test_agent_inherits_from_base_agent(self):
         """Test MemoryAgent inherits from BaseAgent."""
-        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
         from kaizen.core.base_agent import BaseAgent
+        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
 
         agent = MemoryAgent()
 
@@ -1095,8 +1101,8 @@ class TestMemoryAgentBaseAgentIntegration:
 
     def test_agent_uses_async_single_shot_strategy(self):
         """Test that agent uses AsyncSingleShotStrategy by default."""
-        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
         from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
+        from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
 
         agent = MemoryAgent()
 

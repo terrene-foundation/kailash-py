@@ -14,8 +14,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
-
+from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
+from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
 from kaizen_agents._sdk_compat import (
     plan_from_sdk,
     plan_node_state_from_sdk,
@@ -27,8 +27,6 @@ from kaizen_agents.orchestration.monitor import PlanMonitor
 from kaizen_agents.orchestration.planner.composer import PlanComposer
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -38,10 +36,8 @@ from kaizen_agents.types import (
     PlanNodeOutput,
     PlanNodeState,
     PlanState,
+    make_envelope,
 )
-from kaizen.l3.plan.types import PlanNodeState as SdkPlanNodeState
-from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -112,8 +108,12 @@ def _make_valid_three_node_plan() -> Plan:
         ),
     }
     edges = [
-        PlanEdge(from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY),
-        PlanEdge(from_node="node-1", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY),
+        PlanEdge(
+            from_node="node-0", to_node="node-1", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
+        PlanEdge(
+            from_node="node-1", to_node="node-2", edge_type=EdgeType.DATA_DEPENDENCY
+        ),
     ]
     return Plan(
         plan_id="valid-3-node",
@@ -193,8 +193,16 @@ class TestValidatePlanWithSdk:
                 "node-b": PlanNode(node_id="node-b", agent_spec=spec_b),
             },
             edges=[
-                PlanEdge(from_node="node-a", to_node="node-b", edge_type=EdgeType.DATA_DEPENDENCY),
-                PlanEdge(from_node="node-b", to_node="node-a", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="node-a",
+                    to_node="node-b",
+                    edge_type=EdgeType.DATA_DEPENDENCY,
+                ),
+                PlanEdge(
+                    from_node="node-b",
+                    to_node="node-a",
+                    edge_type=EdgeType.DATA_DEPENDENCY,
+                ),
             ],
             state=PlanState.DRAFT,
             envelope=make_envelope(financial={"limit": 10.0}),
@@ -230,7 +238,9 @@ class TestValidatePlanWithSdk:
         errors = monitor.validate_plan_with_sdk(plan)
 
         for error in errors:
-            assert isinstance(error, str), f"Error should be str, got {type(error)}: {error}"
+            assert isinstance(
+                error, str
+            ), f"Error should be str, got {type(error)}: {error}"
 
     def test_self_edge_detected(self) -> None:
         """A plan with a self-edge should produce validation errors."""
@@ -248,7 +258,11 @@ class TestValidatePlanWithSdk:
                 "node-x": PlanNode(node_id="node-x", agent_spec=spec),
             },
             edges=[
-                PlanEdge(from_node="node-x", to_node="node-x", edge_type=EdgeType.DATA_DEPENDENCY),
+                PlanEdge(
+                    from_node="node-x",
+                    to_node="node-x",
+                    edge_type=EdgeType.DATA_DEPENDENCY,
+                ),
             ],
             state=PlanState.DRAFT,
             envelope=make_envelope(financial={"limit": 10.0}),
@@ -359,7 +373,7 @@ class TestHeldMappingRoundTrip:
 
         import asyncio
 
-        result = asyncio.run(monitor.run_plan(plan=plan, execute_node=failing_callback))
+        asyncio.run(monitor.run_plan(plan=plan, execute_node=failing_callback))
 
         # The node should be in FAILED state (local has no HELD)
         assert plan.nodes["node-fail"].state == PlanNodeState.FAILED
@@ -522,4 +536,5 @@ class TestComposerSdkValidation:
 
         assert len(structure_errors) == 0, f"SDK structural errors: {structure_errors}"
         # Envelope errors may or may not be zero depending on per-node envelope data
-        # but structure must be clean
+        # but structure must be clean and the envelope check must return its list contract
+        assert isinstance(envelope_errors, list)

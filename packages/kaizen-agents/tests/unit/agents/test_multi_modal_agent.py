@@ -10,8 +10,7 @@ import pytest
 
 # Test infrastructure
 try:
-    from kaizen_agents.agents.multi_modal import MultiModalAgent, MultiModalConfig
-    from kaizen.providers.multi_modal_adapter import (
+    from kaizen.providers.multi_modal_adapter import (  # noqa: F401 — availability probe; verifies the symbol exists for the skipif gate
         MultiModalAdapter,
         OllamaMultiModalAdapter,
     )
@@ -23,6 +22,7 @@ try:
         Signature,
     )
     from kaizen.signatures.multi_modal import MultiModalSignature as MultiModalMixin
+    from kaizen_agents.agents.multi_modal import MultiModalAgent, MultiModalConfig
 
     IMPORTS_AVAILABLE = True
 except ImportError:

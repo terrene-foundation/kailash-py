@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -25,7 +25,6 @@ from kaizen_agents.delegate.mcp import (
     load_mcp_server_configs,
     register_mcp_tools,
 )
-
 
 # ---------------------------------------------------------------------------
 # McpServerConfig
@@ -93,7 +92,11 @@ class TestLoadMcpServerConfigs:
                 "servers": {
                     "filesystem": {
                         "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+                        "args": [
+                            "-y",
+                            "@modelcontextprotocol/server-filesystem",
+                            "/tmp",
+                        ],
                     },
                     "github": {
                         "command": "npx",
@@ -235,9 +238,17 @@ class TestMcpClientWithMockedProcess:
                 return
 
             if "error" in result_data:
-                response = {"jsonrpc": "2.0", "id": req_id, "error": result_data["error"]}
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": result_data["error"],
+                }
             elif "result" in result_data:
-                response = {"jsonrpc": "2.0", "id": req_id, "result": result_data["result"]}
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": result_data["result"],
+                }
             else:
                 response = {"jsonrpc": "2.0", "id": req_id, "result": result_data}
 
@@ -253,7 +264,7 @@ class TestMcpClientWithMockedProcess:
         async def mock_readline() -> bytes:
             try:
                 return await asyncio.wait_for(response_queue.get(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return b""
 
         mock_stdout = AsyncMock()
@@ -451,4 +462,6 @@ class TestRegisterMcpTools:
         assert len(tools) == 2
         assert "mcp_testserver_read_file" in registered
         assert "mcp_testserver_list_dir" in registered
-        assert "[MCP:testserver]" in registered["mcp_testserver_read_file"]["description"]
+        assert (
+            "[MCP:testserver]" in registered["mcp_testserver_read_file"]["description"]
+        )

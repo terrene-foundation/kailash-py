@@ -48,7 +48,7 @@ def test_initial_plan_creation():
 
     # Verify initial plan created
     assert "plan" in result
-    assert isinstance(result["plan"], dict) or isinstance(result["plan"], list)
+    assert isinstance(result["plan"], dict | list)
 
 
 def test_plan_refinement_based_on_feedback():

@@ -16,23 +16,14 @@ from typing import Any
 import pytest
 
 from kaizen.l3.factory.factory import AgentFactory
-from kaizen.l3.factory.instance import (
-    AgentInstance as SdkAgentInstance,
-    AgentLifecycleState,
-    TerminationReason as SdkTerminationReason,
-    _StateTag,
-)
+from kaizen.l3.factory.instance import AgentInstance as SdkAgentInstance
+from kaizen.l3.factory.instance import TerminationReason as SdkTerminationReason
+from kaizen.l3.factory.instance import _StateTag
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec as SdkAgentSpec
-
 from kaizen_agents._agent_lifecycle import AgentLifecycleManager
-from kaizen_agents.types import (
-    AgentSpec as LocalAgentSpec,
-    ConstraintEnvelope,
-    make_envelope,
-    MemoryConfig,
-)
-
+from kaizen_agents.types import AgentSpec as LocalAgentSpec
+from kaizen_agents.types import ConstraintEnvelope, MemoryConfig, make_envelope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +52,8 @@ def _make_local_spec(
         capabilities=capabilities or ["test"],
         tool_ids=tool_ids or [],
         envelope=envelope or make_envelope(financial={"limit": 5.0}),
-        memory_config=memory_config or MemoryConfig(session=True, shared=False, persistent=False),
+        memory_config=memory_config
+        or MemoryConfig(session=True, shared=False, persistent=False),
         max_lifetime=max_lifetime,
         max_children=max_children,
         max_depth=max_depth,
@@ -71,7 +63,9 @@ def _make_local_spec(
     )
 
 
-def _make_lifecycle_manager() -> tuple[AgentLifecycleManager, AgentFactory, AgentInstanceRegistry]:
+def _make_lifecycle_manager() -> (
+    tuple[AgentLifecycleManager, AgentFactory, AgentInstanceRegistry]
+):
     """Create an AgentLifecycleManager with fresh factory and registry."""
     registry = AgentInstanceRegistry()
     factory = AgentFactory(registry)
@@ -162,7 +156,9 @@ class TestTerminateAgent:
         instance = await manager.spawn_agent(spec)
         await manager.mark_running(instance.instance_id)
 
-        await manager.terminate_agent(instance.instance_id, reason="explicit_termination")
+        await manager.terminate_agent(
+            instance.instance_id, reason="explicit_termination"
+        )
 
         fetched = await registry.get(instance.instance_id)
         assert fetched.is_terminal
@@ -182,7 +178,9 @@ class TestTerminateAgent:
         await manager.mark_running(child.instance_id)
 
         grandchild_spec = _make_local_spec(spec_id="spec-grandchild", name="grandchild")
-        grandchild = await manager.spawn_agent(grandchild_spec, parent_id=child.instance_id)
+        grandchild = await manager.spawn_agent(
+            grandchild_spec, parent_id=child.instance_id
+        )
         await manager.mark_running(grandchild.instance_id)
 
         # Terminate root — should cascade to child and grandchild
@@ -197,8 +195,14 @@ class TestTerminateAgent:
         assert grandchild_fetched.is_terminal
 
         # Children should have PARENT_TERMINATED reason
-        assert child_fetched.state.termination_reason == SdkTerminationReason.PARENT_TERMINATED
-        assert grandchild_fetched.state.termination_reason == SdkTerminationReason.PARENT_TERMINATED
+        assert (
+            child_fetched.state.termination_reason
+            == SdkTerminationReason.PARENT_TERMINATED
+        )
+        assert (
+            grandchild_fetched.state.termination_reason
+            == SdkTerminationReason.PARENT_TERMINATED
+        )
 
     async def test_terminate_with_explicit_reason(self) -> None:
         """Termination reason should be propagated to the terminated instance."""
@@ -207,10 +211,15 @@ class TestTerminateAgent:
         instance = await manager.spawn_agent(spec)
         await manager.mark_running(instance.instance_id)
 
-        await manager.terminate_agent(instance.instance_id, reason="explicit_termination")
+        await manager.terminate_agent(
+            instance.instance_id, reason="explicit_termination"
+        )
 
         fetched = await registry.get(instance.instance_id)
-        assert fetched.state.termination_reason == SdkTerminationReason.EXPLICIT_TERMINATION
+        assert (
+            fetched.state.termination_reason
+            == SdkTerminationReason.EXPLICIT_TERMINATION
+        )
 
     async def test_terminate_with_timeout_reason(self) -> None:
         """Termination with 'timeout' reason should use TerminationReason.TIMEOUT."""
@@ -231,10 +240,15 @@ class TestTerminateAgent:
         instance = await manager.spawn_agent(spec)
         await manager.mark_running(instance.instance_id)
 
-        await manager.terminate_agent(instance.instance_id, reason="some_unknown_reason")
+        await manager.terminate_agent(
+            instance.instance_id, reason="some_unknown_reason"
+        )
 
         fetched = await registry.get(instance.instance_id)
-        assert fetched.state.termination_reason == SdkTerminationReason.EXPLICIT_TERMINATION
+        assert (
+            fetched.state.termination_reason
+            == SdkTerminationReason.EXPLICIT_TERMINATION
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +399,9 @@ class TestGetLineage:
         await manager.mark_running(child.instance_id)
 
         grandchild_spec = _make_local_spec(spec_id="spec-gc", name="grandchild")
-        grandchild = await manager.spawn_agent(grandchild_spec, parent_id=child.instance_id)
+        grandchild = await manager.spawn_agent(
+            grandchild_spec, parent_id=child.instance_id
+        )
 
         lineage = await manager.get_lineage(grandchild.instance_id)
         assert lineage == [root.instance_id, child.instance_id, grandchild.instance_id]
@@ -425,7 +441,9 @@ class TestSpecConversion:
             financial={"limit": 50.0},
             operational={"allowed": ["search"], "blocked": ["delete"]},
         )
-        local = _make_local_spec(spec_id="spec-env", name="env-agent", envelope=envelope)
+        local = _make_local_spec(
+            spec_id="spec-env", name="env-agent", envelope=envelope
+        )
 
         sdk_spec = manager._convert_spec(local)
 
@@ -438,7 +456,9 @@ class TestSpecConversion:
         """MemoryConfig should be serialized to a plain dict with session/shared/persistent keys."""
         manager, _, _ = _make_lifecycle_manager()
         mem = MemoryConfig(session=True, shared=True, persistent=False)
-        local = _make_local_spec(spec_id="spec-mem", name="mem-agent", memory_config=mem)
+        local = _make_local_spec(
+            spec_id="spec-mem", name="mem-agent", memory_config=mem
+        )
 
         sdk_spec = manager._convert_spec(local)
 
@@ -463,7 +483,9 @@ class TestSpecConversion:
     async def test_none_max_lifetime_stays_none(self) -> None:
         """None max_lifetime should remain None."""
         manager, _, _ = _make_lifecycle_manager()
-        local = _make_local_spec(spec_id="spec-no-lt", name="no-lt-agent", max_lifetime=None)
+        local = _make_local_spec(
+            spec_id="spec-no-lt", name="no-lt-agent", max_lifetime=None
+        )
 
         sdk_spec = manager._convert_spec(local)
 

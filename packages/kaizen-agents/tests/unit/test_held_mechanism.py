@@ -9,23 +9,14 @@ and supports resolve_hold() for human-in-the-loop approval/rejection.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
-from kaizen_agents.supervisor import GovernedSupervisor, GovernanceHeldError, HoldRecord
-from kaizen_agents.types import (
-    AgentSpec,
-    Plan,
-    PlanEdge,
-    PlanEvent,
-    PlanEventType,
-    PlanNode,
-    PlanNodeState,
-    PlanState,
-)
 from kailash.trust.pact.verdict import GovernanceVerdict
+from kaizen_agents.supervisor import GovernanceHeldError, GovernedSupervisor, HoldRecord
+from kaizen_agents.types import AgentSpec, Plan, PlanEventType, PlanNode, PlanNodeState
 
 
 def _make_held_error(reason: str) -> GovernanceHeldError:
@@ -44,7 +35,9 @@ def _make_held_error(reason: str) -> GovernanceHeldError:
 # ---------------------------------------------------------------------------
 
 
-async def governance_held_executor(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+async def governance_held_executor(
+    spec: AgentSpec, inputs: dict[str, Any]
+) -> dict[str, Any]:
     """Executor that raises GovernanceHeldError (simulating external governance hold)."""
     raise _make_held_error("clearance_required")
 
@@ -54,7 +47,9 @@ async def success_executor(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str,
     return {"result": f"output:{spec.name}", "cost": 0.10}
 
 
-async def mixed_held_executor(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+async def mixed_held_executor(
+    spec: AgentSpec, inputs: dict[str, Any]
+) -> dict[str, Any]:
     """Executor that holds 'held-task' nodes and succeeds on others."""
     if spec.name == "held-task":
         raise _make_held_error("needs_human_approval")
@@ -97,7 +92,7 @@ class TestHoldRecord:
             node_id="node-1",
             reason="clearance_required",
             details={"level": "held"},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         assert record.node_id == "node-1"
         assert record.reason == "clearance_required"
@@ -111,7 +106,7 @@ class TestHoldRecord:
             node_id="node-1",
             reason="test",
             details={},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         assert not record.event.is_set()
 
@@ -121,7 +116,7 @@ class TestHoldRecord:
             node_id="n",
             reason="r",
             details={},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         assert record.approved is None
 
@@ -138,23 +133,31 @@ class TestRunCatchesGovernanceHeldError:
     async def test_governance_held_sets_node_held(self) -> None:
         """When executor raises GovernanceHeldError, node transitions to HELD."""
         supervisor = GovernedSupervisor(model="test", budget_usd=10.0)
-        result = await supervisor.run("test objective", execute_node=governance_held_executor)
+        result = await supervisor.run(
+            "test objective", execute_node=governance_held_executor
+        )
 
         # The plan should not be fully successful since the node is HELD (not COMPLETED)
         assert result.success is False
         assert result.plan is not None
 
         # The single node should be in HELD state
-        held_nodes = [n for n in result.plan.nodes.values() if n.state == PlanNodeState.HELD]
+        held_nodes = [
+            n for n in result.plan.nodes.values() if n.state == PlanNodeState.HELD
+        ]
         assert len(held_nodes) == 1
 
     @pytest.mark.asyncio
     async def test_governance_held_emits_node_held_event(self) -> None:
         """When GovernanceHeldError is caught, a NODE_HELD event is emitted."""
         supervisor = GovernedSupervisor(model="test", budget_usd=10.0)
-        result = await supervisor.run("test objective", execute_node=governance_held_executor)
+        result = await supervisor.run(
+            "test objective", execute_node=governance_held_executor
+        )
 
-        held_events = [e for e in result.events if e.event_type == PlanEventType.NODE_HELD]
+        held_events = [
+            e for e in result.events if e.event_type == PlanEventType.NODE_HELD
+        ]
         assert len(held_events) == 1
         assert held_events[0].node_id == "task-0"
 
@@ -175,7 +178,9 @@ class TestRunCatchesGovernanceHeldError:
     async def test_governance_held_records_audit(self) -> None:
         """When GovernanceHeldError is caught, the hold is recorded in audit trail."""
         supervisor = GovernedSupervisor(model="test", budget_usd=10.0)
-        result = await supervisor.run("test objective", execute_node=governance_held_executor)
+        result = await supervisor.run(
+            "test objective", execute_node=governance_held_executor
+        )
 
         # Find audit records related to the hold
         held_records = [r for r in result.audit_trail if r.get("record_type") == "held"]
@@ -215,7 +220,9 @@ class TestRunPlanCatchesGovernanceHeldError:
         result = await supervisor.run_plan(plan, execute_node=governance_held_executor)
 
         assert result.success is False
-        held_nodes = [n for n in result.plan.nodes.values() if n.state == PlanNodeState.HELD]
+        held_nodes = [
+            n for n in result.plan.nodes.values() if n.state == PlanNodeState.HELD
+        ]
         assert len(held_nodes) == 1
 
     @pytest.mark.asyncio
@@ -277,7 +284,9 @@ class TestRunPlanCatchesGovernanceHeldError:
 
         result = await supervisor.run_plan(plan, execute_node=governance_held_executor)
 
-        held_events = [e for e in result.events if e.event_type == PlanEventType.NODE_HELD]
+        held_events = [
+            e for e in result.events if e.event_type == PlanEventType.NODE_HELD
+        ]
         assert len(held_events) == 1
         assert held_events[0].node_id == "n1"
 
@@ -298,7 +307,7 @@ class TestResolveHold:
             node_id="test_node",
             reason="governance_hold",
             details={"source": "governance"},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         supervisor._held_nodes["test_node"] = record
 
@@ -316,7 +325,7 @@ class TestResolveHold:
             node_id="test_node",
             reason="governance_hold",
             details={},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         supervisor._held_nodes["test_node"] = record
 
@@ -333,7 +342,7 @@ class TestResolveHold:
             node_id="test_node",
             reason="test",
             details={},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         supervisor._held_nodes["test_node"] = record
 
@@ -373,7 +382,7 @@ class TestHeldNodesProperty:
             node_id="n1",
             reason="test",
             details={},
-            held_at=datetime.now(timezone.utc),
+            held_at=datetime.now(UTC),
         )
         supervisor._held_nodes["n1"] = record
 

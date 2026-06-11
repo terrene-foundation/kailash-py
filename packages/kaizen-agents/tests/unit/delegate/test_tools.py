@@ -5,12 +5,12 @@ All file-based tests use pytest's ``tmp_path`` fixture for real filesystem opera
 
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 
 import pytest
 
+from kaizen_agents.delegate.tools import create_default_tools
 from kaizen_agents.delegate.tools.base import Tool, ToolRegistry, ToolResult
 from kaizen_agents.delegate.tools.bash_tool import BashTool
 from kaizen_agents.delegate.tools.file_edit import FileEditTool
@@ -18,8 +18,6 @@ from kaizen_agents.delegate.tools.file_read import FileReadTool
 from kaizen_agents.delegate.tools.file_write import FileWriteTool
 from kaizen_agents.delegate.tools.glob_tool import GlobTool
 from kaizen_agents.delegate.tools.grep_tool import GrepTool
-from kaizen_agents.delegate.tools import create_default_tools
-
 
 # =====================================================================
 # ToolResult
@@ -461,7 +459,7 @@ class TestGrepTool:
             output_mode="files_with_matches",
             head_limit=3,
         )
-        lines = [l for l in result.output.strip().split("\n") if l]
+        lines = [line for line in result.output.strip().split("\n") if line]
         assert len(lines) == 3
 
     def test_glob_filter(self, tmp_path: Path) -> None:

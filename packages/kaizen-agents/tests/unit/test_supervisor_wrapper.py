@@ -17,7 +17,6 @@ from kaizen_agents.patterns.llm_routing import LLMBased
 from kaizen_agents.supervisor_wrapper import SupervisorWrapper
 from kaizen_agents.wrapper_base import WrapperBase
 
-
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------

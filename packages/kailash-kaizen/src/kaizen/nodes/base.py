@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 from kailash.nodes.base import NodeParameter, register_node
 
 from ..signatures import Signature
+from ._env_model import resolve_default_model
 from .base_advanced import AINodeBase
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class KaizenNode(AINodeBase):
     def __init__(
         self,
         signature: Optional[Signature] = None,
-        model: str = "gpt-3.5-turbo",
+        model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: int = 30,
@@ -57,7 +58,9 @@ class KaizenNode(AINodeBase):
 
         Args:
             signature: Optional signature for declarative programming
-            model: LLM model to use
+            model: LLM model to use. Defaults to the KAIZEN_DEFAULT_MODEL env
+                var per rules/env-models.md; raises EnvModelMissing when
+                neither is set.
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             timeout: Request timeout in seconds
@@ -66,7 +69,9 @@ class KaizenNode(AINodeBase):
             id: Optional node identifier (auto-generated if not provided)
             **kwargs: Additional configuration parameters
         """
-        # Store Kaizen-specific configuration
+        # Store Kaizen-specific configuration — model from caller or
+        # KAIZEN_DEFAULT_MODEL (rules/env-models.md).
+        model = resolve_default_model("KaizenNode", model)
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
