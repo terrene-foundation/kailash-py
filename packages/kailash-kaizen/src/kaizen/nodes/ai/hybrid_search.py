@@ -8,18 +8,24 @@ This module provides advanced search capabilities that combine:
 - Performance-weighted ranking
 """
 
+from __future__ import annotations
+
 import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
-import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+from kaizen.nodes._optional import require_numpy
 
 from .a2a import A2AAgentCard
 from .semantic_memory import SimpleEmbeddingProvider
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @dataclass
@@ -128,6 +134,7 @@ class TFIDFVectorizer:
 
     def transform(self, documents: List[str]) -> np.ndarray:
         """Transform documents to TF-IDF vectors."""
+        np = require_numpy("TF-IDF vectorization")
         vectors = []
 
         for doc in documents:
@@ -147,6 +154,7 @@ class TFIDFVectorizer:
 
     def cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """Calculate cosine similarity between two vectors."""
+        np = require_numpy("cosine similarity")
         if np.linalg.norm(vec1) == 0 or np.linalg.norm(vec2) == 0:
             return 0.0
         return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
@@ -597,6 +605,7 @@ class SemanticHybridSearchNode(Node):
         self, req_text: str, agent_texts: List[str]
     ) -> List[float]:
         """Calculate semantic similarity scores."""
+        np = require_numpy("semantic similarity scoring")
         try:
             # Generate embeddings
             all_texts = [req_text] + agent_texts
