@@ -76,3 +76,15 @@ class Transport(ABC):
             handler_def: The newly registered handler definition.
         """
         pass
+
+    def close(self) -> None:
+        """Synchronously release runtime references held by this transport.
+
+        Called by ``Nexus.close()`` on the synchronous teardown path (issue
+        #1285). The async ``stop()`` releases the same resources during a normal
+        served lifecycle; ``close()`` covers teardown WITHOUT a prior ``start()``
+        (e.g. a transport that lazily acquired a shared runtime on a tool
+        invocation and is then closed synchronously). Default is a no-op for
+        transports that hold no releasable runtime reference. Must be idempotent.
+        """
+        pass

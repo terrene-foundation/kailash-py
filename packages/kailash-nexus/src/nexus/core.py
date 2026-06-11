@@ -3679,6 +3679,29 @@ Check the documentation or explore available resources.
                 except Exception:
                     pass
 
+        # Close the HTTP gateway (EnterpriseWorkflowServer). It acquires a
+        # reference to self.runtime at construction and owns the per-workflow
+        # WorkflowAPI runtimes; without this, both leak and emit
+        # ResourceWarning: Unclosed AsyncLocalRuntime at GC (issue #1285).
+        gateway = getattr(getattr(self, "_http_transport", None), "gateway", None)
+        if gateway is not None and hasattr(gateway, "close"):
+            try:
+                gateway.close()
+            except Exception:
+                pass
+
+        # Release runtime refs held by transports (MCP/WS lazily acquire a
+        # _shared_runtime on tool invocation and release it only in async
+        # stop(); this sync close() covers teardown without a prior stop()).
+        # The HTTP transport inherits the base no-op close(), so the gateway
+        # closed above is not double-closed (issue #1285).
+        for transport in getattr(self, "_transports", []) or []:
+            if hasattr(transport, "close"):
+                try:
+                    transport.close()
+                except Exception:
+                    pass
+
         # Release or close the runtime itself
         if hasattr(self, "runtime") and self.runtime is not None:
             self.runtime.release()
