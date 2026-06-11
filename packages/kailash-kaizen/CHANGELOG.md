@@ -2,6 +2,46 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.27.0] — 2026-06-11 — RAG node honesty: strip simulated-capability over-claims
+
+### Deprecated
+
+- **`VisualQuestionAnsweringNode`** (`kaizen.nodes.rag.multimodal`) — its answer is
+  a keyword-derived placeholder and its confidence is a fixed value; it does NOT run a
+  vision-language model and cannot read image pixels. No VQA backend is implemented.
+  Constructing it now emits a `DeprecationWarning`. **Scheduled for removal in the next
+  minor release.** Migration: remove the node from workflows — there is no real VQA
+  backend to migrate to.
+- **`ImageTextMatchingNode`** (`kaizen.nodes.rag.multimodal`) — its match scores are
+  keyword-derived placeholders, not CLIP/ALIGN image-text similarity; no image-text
+  model is loaded. Constructing it now emits a `DeprecationWarning`. **Scheduled for
+  removal in the next minor release.** Migration: remove the node from workflows — no
+  real image-text matching backend is provided.
+
+### Changed
+
+- **`MultimodalRAGNode`** docstrings corrected to stop advertising real CLIP/BLIP-2
+  vision models. The node wires real LLM query-analysis + response-generation stages
+  over a lexical/hash-based placeholder encoder (a deterministic hash heuristic, NOT a
+  learned vision model). The hardcoded `gpt-4-vision` model string at the
+  response-generation stage is replaced with an env-resolved `OPENAI_VISION_MODEL`
+  (falling back to the default LLM model) for `rules/env-models.md` compliance. Removed
+  the unverifiable "40-60% quality improvement" / "1-3 seconds" performance claims.
+  Runtime behavior unchanged.
+- **`FederatedRAGNode`** docstrings corrected to stop advertising real distributed
+  cross-host federation. The node demonstrates the federated-RAG aggregation pattern
+  over in-process simulated nodes — it does NOT perform real distributed network
+  queries. Removed the "2-10 seconds depending on federation size" performance claim.
+  Runtime behavior unchanged.
+- **`ColBERTRetrievalNode`** docstrings corrected to stop advertising a real
+  BERT/ColBERT model. The node is a lexical late-interaction approximation
+  (token-overlap MaxSim heuristic), NOT a learned-embedding model; `token_model` is an
+  informational label only and loads no model. Removed the "0.92+ accuracy" / "~500ms"
+  claims. Also removed the dead, never-called `_create_workflow` method whose
+  `token_embedder` generated random `np.random.randn(768)` embeddings (unreachable
+  fabrication — the node's `run()` is the only entry point). Runtime behavior of `run()`
+  unchanged.
+
 ## [2.26.0] — 2026-06-11 — env-model discipline: provider config getters use documented default-model constants
 
 ### Changed

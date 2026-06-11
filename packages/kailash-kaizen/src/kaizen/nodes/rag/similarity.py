@@ -537,43 +537,42 @@ result = {{
 @register_node()
 class ColBERTRetrievalNode(Node):
     """
-    ColBERT-style Late Interaction Retrieval
+    Lexical Late-Interaction Approximation (token-overlap MaxSim heuristic)
 
-    Implements token-level similarity matching for fine-grained retrieval.
-    Uses MaxSim operation for each query token across document tokens.
+    Approximates ColBERT-style late interaction using a lexical token-overlap
+    MaxSim heuristic — exact-match tokens score 1.0, substring overlaps score
+    0.5. It is NOT a real BERT/ColBERT model: there are no learned token
+    embeddings, no neural late interaction. The class name is retained for API
+    compatibility; the behavior is a deterministic lexical approximation.
 
     When to use:
-    - Best for: Complex queries with multiple concepts, fine-grained matching
-    - Not ideal for: Simple lookups, when speed is critical
-    - Performance: ~500ms per query (computationally intensive)
-    - Accuracy: Highest precision for multi-faceted queries (0.92+)
+    - Best for: lightweight token-overlap matching with no model dependency
+    - Not ideal for: workloads needing true learned-embedding retrieval
 
     Key features:
-    - Token-level interaction for precise matching
+    - Token-overlap MaxSim heuristic (exact-match 1.0, substring 0.5)
     - Handles queries with multiple independent concepts
-    - Better than dense retrieval for specific details
-    - Preserves word importance in context
+    - No model load, no embeddings — pure lexical scoring
 
     Example:
         colbert = ColBERTRetrievalNode(
             token_model="bert-base-uncased"
         )
 
-        # Excellent for queries with multiple specific requirements
         results = await colbert.execute(
             query="transformer architecture with attention mechanism for NLP tasks",
             documents=research_papers
         )
 
     Parameters:
-        token_model: BERT model for token embeddings
+        token_model: informational label only — does NOT load a model
         max_query_length: Maximum query tokens (default: 32)
         max_doc_length: Maximum document tokens (default: 256)
 
     Returns:
-        results: Documents ranked by token-level similarity
-        scores: MaxSim aggregated scores
-        token_interactions: Token-level similarity matrix
+        results: Documents ranked by lexical token-overlap score
+        scores: aggregated token-overlap MaxSim scores
+        retrieval_method: "colbert"
     """
 
     def __init__(
@@ -686,131 +685,6 @@ class ColBERTRetrievalNode(Node):
                 "retrieval_method": "colbert",
                 "error": str(e),
             }
-
-    def _create_workflow(self) -> Workflow:
-        """Create ColBERT-style retrieval workflow"""
-        builder = WorkflowBuilder()
-
-        # Add token embedder
-        token_embedder_id = builder.add_node(
-            "PythonCodeNode",
-            node_id="token_embedder",
-            config={
-                "code": f"""
-# Simplified token embedding for demonstration
-# In production, would use actual BERT tokenizer and model
-
-def get_token_embeddings(text, model="{self.token_model}"):
-    '''Generate token-level embeddings'''
-    # For demonstration, using word embeddings
-    tokens = text.lower().split()
-
-    # Simplified: generate random embeddings for each token
-    # In production: use actual BERT model
-    import numpy as np
-    np.random.seed(hash(text) % 2**32)
-
-    embeddings = []
-    for token in tokens:
-        # Generate consistent embedding for each token
-        np.random.seed(hash(token) % 2**32)
-        embedding = np.random.randn(768)  # BERT dimension
-        embedding = embedding / np.linalg.norm(embedding)
-        embeddings.append(embedding)
-
-    return {{
-        "tokens": tokens,
-        "embeddings": embeddings
-    }}
-
-# Process query and documents
-query = input_data.get("query", "")
-documents = input_data.get("documents", [])
-
-query_tokens = get_token_embeddings(query)
-doc_token_embeddings = []
-
-for doc in documents:
-    doc_tokens = get_token_embeddings(doc.get("content") or "")
-    doc_token_embeddings.append(doc_tokens)
-
-result = {{
-    "token_data": {{
-        "query_tokens": query_tokens,
-        "doc_token_embeddings": doc_token_embeddings,
-        "documents": documents
-    }}
-}}
-"""
-            },
-        )
-
-        # Add late interaction scorer
-        late_interaction_id = builder.add_node(
-            "PythonCodeNode",
-            node_id="late_interaction_scorer",
-            config={
-                "code": """
-import numpy as np
-
-def maxsim_score(query_embeddings, doc_embeddings):
-    '''Calculate MaxSim score for late interaction'''
-    total_score = 0
-
-    # For each query token
-    for q_emb in query_embeddings:
-        # Find max similarity with any document token
-        max_sim = -1
-        for d_emb in doc_embeddings:
-            sim = np.dot(q_emb, d_emb)  # Cosine similarity (normalized embeddings)
-            max_sim = max(max_sim, sim)
-        total_score += max_sim
-
-    return total_score / len(query_embeddings) if query_embeddings else 0
-
-# Calculate scores for all documents
-token_data = token_data
-query_tokens = token_data["query_tokens"]
-doc_token_embeddings = token_data["doc_token_embeddings"]
-documents = token_data["documents"]
-
-scores = []
-for doc_tokens in doc_token_embeddings:
-    score = maxsim_score(
-        query_tokens["embeddings"],
-        doc_tokens["embeddings"]
-    )
-    scores.append(score)
-
-# Sort and return results
-indexed_scores = list(enumerate(scores))
-indexed_scores.sort(key=lambda x: x[1], reverse=True)
-
-results = []
-result_scores = []
-for idx, score in indexed_scores[:10]:  # Top 10
-    results.append(documents[idx])
-    result_scores.append(score)
-
-result = {
-    "colbert_results": {
-        "results": results,
-        "scores": result_scores,
-        "method": "late_interaction",
-        "query_token_count": len(query_tokens["tokens"]),
-        "avg_doc_token_count": sum(len(dt["tokens"]) for dt in doc_token_embeddings) / len(doc_token_embeddings)
-    }
-}
-"""
-            },
-        )
-
-        # Connect workflow
-        builder.add_connection(
-            token_embedder_id, "token_data", late_interaction_id, "token_data"
-        )
-
-        return builder.build(name="colbert_retrieval_workflow")
 
 
 @register_node()
