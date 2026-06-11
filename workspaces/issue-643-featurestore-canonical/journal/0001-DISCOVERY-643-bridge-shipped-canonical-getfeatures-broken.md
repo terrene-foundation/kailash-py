@@ -52,3 +52,15 @@ issue was ~90% shipped a month before being flagged "actionable." Verifying the 
 claims against PyPI + source (≈6 commands) before committing to a "bridge release cycle" prevented
 re-implementing an already-published warning and a redundant test. Mirrors value-prioritization
 MUST-3 (re-validate deferred items) + zero-tolerance Rule 1c (post-context-boundary claims unprovable).
+
+---
+
+## FOLLOW-UP DISCOVERY (2026-06-03, post-1.7.5 release) — no-timestamp path skips latest-per-entity dedup
+
+The published-wheel end-to-end walk (build-repo-release-discipline Rule 2 + user-flow-validation) caught a semantic bug the unit/integration/regression gates missed: `get_features(schema)` with NO timestamp returned ALL rows including duplicate entities (`u1` twice) instead of the latest row per entity. The `get_features` contract (store.py docstring) states "When timestamp is None the latest values are returned." The adapter's as-of dedup was gated on `point_in_time is not None`, so the no-timestamp "latest" case skipped dedup.
+
+Root of the test gap: every happy-path test used ONE row per entity, so dedup-vs-no-dedup was unobservable. The published-wheel walk used 2 rows for `u1` and exposed it.
+
+Fix (1.7.6): dedup-to-latest-per-entity whenever `timestamp_column` exists (both the timestamp-given as-of case AND the no-timestamp latest case); the window filter (`ts <= T`) still applies only when `point_in_time` is given. Tests strengthened to use multiple rows per entity.
+
+1.7.5 (on PyPI) is correct for the timestamp-given case + single-row-per-entity tables; 1.7.6 supersedes it for the no-timestamp multi-row case.
