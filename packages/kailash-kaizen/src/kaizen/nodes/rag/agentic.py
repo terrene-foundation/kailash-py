@@ -442,6 +442,417 @@ def parse_reasoning_chain_response(response=None):
     return {"reasoning_to_verify": _coerce_text(content)}
 
 
+# ---------------------------------------------------------------------------
+# COMPUTE-stage functions (#1117 / #1123 / #1118 root-cause fix — same
+# reference template as optimized.py / graph.py / query_processing.py).
+#
+# The AgenticRAGNode sub-workflow's three PythonCodeNode COMPUTE stages
+# (tool_executor / state_manager / result_synthesizer) were previously inline
+# `code=` codegen blocks. An inline `code=` PythonCodeNode publishes ONLY a flat
+# `result` port (the module-scope `result = {...}` dict is wrapped as
+# `{"result": {...}}` — its keys are NOT promoted to top-level ports), so every
+# downstream edge reading a top-level key (`tool_result`, `reasoning_state`,
+# `context_for_agent`, `continue_reasoning`) was a PHANTOM port the runtime
+# silently dropped (#1117 publish-nothing). The state_manager block was further
+# an f-string carrying doubled `{{ }}` literal braces (#1123 brace-escape) and
+# the tool_executor block carried a raw-string regex (escape-trap risk).
+#
+# These functions lift each block to a real module-level `def` with a `return`
+# (the structural successor of the codegen's module-scope `result =`). Wired via
+# `PythonCodeNode.from_function`, each publishes the SAME flat `result` port; the
+# downstream edges are rewritten to `result.<key>` so the previously-phantom
+# ports resolve. They are pure tool-result computation (the permitted exception
+# per rules/agent-reasoning.md — no agent decisions, no content classification:
+# the ReAct/agent-loop orchestration semantics live UNCHANGED in the line-parser
+# and the cyclic graph wiring).
+# ---------------------------------------------------------------------------
+
+
+def execute_tool_action(reasoning_state=None, documents=None) -> dict:
+    """Execute the current ReAct action against the documents.
+
+    Parses ``reasoning_state["current_action"]`` (e.g. ``search("query")``) and
+    dispatches to the matching tool (search / calculate / database / verify),
+    returning ``{"tool_result": <observation>, "timestamp": <iso>}``. This is the
+    lifted ``tool_executor`` COMPUTE block — the regex action-parser and the
+    AST-walked safe arithmetic evaluator (no eval/exec) are preserved verbatim.
+    """
+    import re
+    from datetime import datetime
+
+    def _execute_tool(action_string, documents, context):
+        """Execute tool based on action string"""
+        # Parse action
+        match = re.match(r"(\w+)\((.*)\)", action_string.strip())
+        if not match:
+            return {"error": "Invalid action format"}
+
+        tool_name = match.group(1)
+        params = match.group(2).strip("\"'")
+
+        results = {}
+
+        if tool_name == "search":
+            # Search through documents
+            query_words = set(params.lower().split())
+            search_results = []
+
+            for doc in documents[:50]:  # Limit for performance
+                if not isinstance(doc, dict):
+                    continue  # skip malformed non-dict document elements
+                # `.get("content", "")` only defaults a MISSING key; a present
+                # key with a None value would still yield None, so coerce.
+                content = (doc.get("content") or "").lower()
+                title = (doc.get("title") or "").lower()
+
+                # Score based on word overlap
+                doc_words = set(content.split())
+                title_words = set(title.split())
+
+                content_score = (
+                    len(query_words & doc_words) / len(query_words)
+                    if query_words
+                    else 0
+                )
+                title_score = (
+                    len(query_words & title_words) / len(query_words)
+                    if query_words
+                    else 0
+                )
+
+                total_score = content_score + (
+                    title_score * 2
+                )  # Title matches weighted higher
+
+                if total_score > 0:
+                    search_results.append(
+                        {
+                            "title": doc.get("title", "Untitled"),
+                            "excerpt": content[:200] + "...",
+                            "score": total_score,
+                            "id": doc.get("id", "unknown"),
+                        }
+                    )
+
+            # Sort by score
+            search_results.sort(key=lambda x: x["score"], reverse=True)
+            results = {
+                "tool": "search",
+                "query": params,
+                "results": search_results[:5],
+                "count": len(search_results),
+            }
+
+        elif tool_name == "calculate":
+            # Safe calculation — AST-walked arithmetic only. `params` is
+            # LLM-generated; eval()/regex-substitution sandboxes are bypassable,
+            # so this whitelists ast node types instead (no eval, no exec, no
+            # regex).
+            import ast
+            import math
+            import operator
+
+            _BINOPS = {
+                ast.Add: operator.add,
+                ast.Sub: operator.sub,
+                ast.Mult: operator.mul,
+                ast.Div: operator.truediv,
+                ast.Pow: operator.pow,
+                ast.Mod: operator.mod,
+                ast.FloorDiv: operator.floordiv,
+            }
+            _UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+            _FUNCS = {
+                "abs": abs,
+                "round": round,
+                "min": min,
+                "max": max,
+                "pow": pow,
+                "sqrt": math.sqrt,
+                "sin": math.sin,
+                "cos": math.cos,
+                "tan": math.tan,
+                "log": math.log,
+                "exp": math.exp,
+            }
+            _CONSTS = {"pi": math.pi, "e": math.e}
+
+            def _safe_arith(node):
+                if isinstance(node, ast.Expression):
+                    return _safe_arith(node.body)
+                if isinstance(node, ast.Constant):
+                    if isinstance(node.value, (int, float)) and not isinstance(
+                        node.value, bool
+                    ):
+                        return node.value
+                    raise ValueError("non-numeric constant")
+                if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
+                    return _BINOPS[type(node.op)](
+                        _safe_arith(node.left), _safe_arith(node.right)
+                    )
+                if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
+                    return _UNARYOPS[type(node.op)](_safe_arith(node.operand))
+                if isinstance(node, ast.Name) and node.id in _CONSTS:
+                    return _CONSTS[node.id]
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in _FUNCS
+                    and not node.keywords
+                ):
+                    return _FUNCS[node.func.id](*[_safe_arith(a) for a in node.args])
+                raise ValueError("disallowed expression element")
+
+            try:
+                try:
+                    calc_result = ast.literal_eval(params)
+                except (ValueError, SyntaxError):
+                    calc_result = _safe_arith(ast.parse(params, mode="eval"))
+                results = {
+                    "tool": "calculate",
+                    "expression": params,
+                    "result": calc_result,
+                }
+            except Exception:
+                results = {
+                    "tool": "calculate",
+                    "error": f"Cannot evaluate expression: {params}",
+                }
+
+        elif tool_name == "database":
+            # Simulated database query
+            if "revenue" in params.lower():
+                # Mock financial data
+                results = {
+                    "tool": "database",
+                    "query": params,
+                    "results": [
+                        {
+                            "company": "TechCorp",
+                            "revenue_2022": 100,
+                            "revenue_2023": 120,
+                        },
+                        {"company": "DataInc", "revenue_2022": 80, "revenue_2023": 95},
+                        {"company": "CloudCo", "revenue_2022": 60, "revenue_2023": 85},
+                    ],
+                }
+            else:
+                results = {"tool": "database", "query": params, "results": []}
+
+        elif tool_name == "verify":
+            # Fact verification (simplified)
+            confidence = 0.85 if "true" not in params.lower() else 0.95
+            results = {
+                "tool": "verify",
+                "claim": params,
+                "verified": confidence > 0.8,
+                "confidence": confidence,
+                "sources": ["Document analysis", "Cross-reference check"],
+            }
+
+        else:
+            results = {"error": f"Unknown tool: {tool_name}"}
+
+        return results
+
+    # Execute current action
+    state = reasoning_state if isinstance(reasoning_state, dict) else {}
+    docs = documents if isinstance(documents, list) else []
+
+    current_action = state.get("current_action", "")
+    if current_action:
+        observation = _execute_tool(current_action, docs, state)
+    else:
+        observation = {"error": "No action specified"}
+
+    return {
+        "tool_result": observation,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _make_state_manager(max_reasoning_steps: int):
+    """Build a from_function-compatible state-manager bound to the step cap.
+
+    The build-time ``max_reasoning_steps`` is bound through a thin closure (the
+    f-string's only interpolation), keeping ``plan`` / ``reasoning_response`` /
+    ``tool_result`` as the declared inputs the parser/loop ports wire to. The
+    returned function manages the ReAct reasoning state across iterations and
+    publishes ``{"reasoning_state", "context_for_agent", "continue_reasoning"}``
+    on the flat ``result`` port — the doubled-brace f-string codegen (#1123) is
+    eliminated; the line-parser semantics are preserved verbatim.
+    """
+
+    def update_reasoning_state(plan=None, reasoning_response=None, tool_result=None):
+        """Update the ReAct reasoning state with the latest LLM response."""
+
+        def _update(state, new_response, tool_res=None):
+            if not state:
+                state = {
+                    "steps": [],
+                    "current_step": 0,
+                    "completed": False,
+                    "final_answer": None,
+                }
+
+            # Parse response for thought/action/answer
+            lines = new_response.strip().split("\n")
+            current_thought = None
+            current_action = None
+            final_answer = None
+
+            for line in lines:
+                if line.startswith("Thought:"):
+                    current_thought = line[8:].strip()
+                elif line.startswith("Action:"):
+                    current_action = line[7:].strip()
+                elif line.startswith("Answer:"):
+                    final_answer = line[7:].strip()
+                    state["completed"] = True
+
+            # Add step
+            step = {
+                "step_number": state["current_step"] + 1,
+                "thought": current_thought,
+                "action": current_action,
+                "observation": tool_res.get("tool_result") if tool_res else None,
+            }
+
+            state["steps"].append(step)
+            state["current_step"] += 1
+            state["current_action"] = current_action
+            state["final_answer"] = final_answer
+
+            # Check if we've reached max steps
+            if state["current_step"] >= max_reasoning_steps:
+                state["completed"] = True
+                if not state["final_answer"]:
+                    state["final_answer"] = (
+                        "Reached maximum reasoning steps. "
+                        "Based on gathered information..."
+                    )
+
+            return state
+
+        # Process current iteration. `plan` arrives from the plan parser as the
+        # parsed planner dict; `reasoning_response` arrives from the reasoning
+        # parser as the ReAct prose STRING (the parsers already unwrapped
+        # `response.content` upstream, so NO further `.get("response")` unwrap is
+        # needed). `reasoning_response` may still be a non-str on a defensive
+        # path; coerce so the line parser never crashes.
+        if not isinstance(reasoning_response, str):
+            reasoning_response = (
+                "" if reasoning_response is None else str(reasoning_response)
+            )
+
+        state = _update(None, reasoning_response, tool_result)
+
+        # Record the planner's parsed plan onto the reasoning state so it is
+        # surfaced downstream (the planner → plan_parser → state_manager `plan`
+        # edge is the Wave-2.5 O5 wiring; the prior codegen accepted `plan` but
+        # dropped it — recording it here consumes the input honestly per
+        # zero-tolerance Rule 3c without inventing agent-decision logic).
+        if plan is not None:
+            state["plan"] = plan
+
+        # Prepare context for next iteration
+        context_for_agent = ""
+        for step in state["steps"]:
+            if step["thought"]:
+                context_for_agent += f"\nThought: {step['thought']}"
+            if step["action"]:
+                context_for_agent += f"\nAction: {step['action']}"
+            if step["observation"]:
+                context_for_agent += f"\nObservation: {step['observation']}"
+
+        return {
+            "reasoning_state": state,
+            "context_for_agent": context_for_agent,
+            "continue_reasoning": not state["completed"],
+        }
+
+    return update_reasoning_state
+
+
+def _make_result_synthesizer(planning_strategy: str, max_reasoning_steps: int):
+    """Build a from_function-compatible synthesizer bound to the build config.
+
+    The build-time ``planning_strategy`` / ``max_reasoning_steps`` (the only
+    f-string interpolations in the original codegen) are bound through a thin
+    closure, keeping ``reasoning_state`` / ``verification`` / ``query`` as the
+    declared inputs. Returns the final ``{"agentic_rag_result": {...}}`` dict on
+    the flat ``result`` port — the doubled-brace f-string codegen (#1123) is
+    eliminated; the confidence/trace computation is preserved verbatim.
+    """
+
+    def synthesize_agentic_result(reasoning_state=None, verification=None, query=""):
+        """Synthesize the final agentic-RAG result dict."""
+        state = reasoning_state if isinstance(reasoning_state, dict) else {}
+        steps = state.get("steps", []) if isinstance(state, dict) else []
+
+        # Extract tool usage
+        tools_used = []
+        for step in steps:
+            obs = step.get("observation") if isinstance(step, dict) else None
+            if isinstance(obs, dict) and "tool" in obs:
+                tools_used.append(obs["tool"])
+
+        # Calculate confidence. `verification` arrives from the verification
+        # parser as the PARSED verifier dict (or a parse-error sentinel carrying
+        # `{"parse_error": ...}`) — already unwrapped from `response.content` +
+        # json.loads upstream. A flagged parse-error sentinel carries no real
+        # confidence, so it is treated as "no usable verdict" (NOT a fabricated
+        # 0.8) and confidence is left unadjusted — honest, per zero-tolerance
+        # Rule 2.
+        base_confidence = 0.7
+        confidence_boost = min(0.3, len(tools_used) * 0.1)
+        _has_verdict = (
+            isinstance(verification, dict)
+            and "confidence" in verification
+            and verification.get("parse_error") is None
+        )
+        if _has_verdict:
+            verification_confidence = verification.get("confidence", 0.8)
+            final_confidence = (
+                base_confidence + confidence_boost
+            ) * verification_confidence
+        else:
+            final_confidence = base_confidence + confidence_boost
+
+        # Build reasoning trace
+        reasoning_trace = []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            reasoning_trace.append(
+                {
+                    "step": step.get("step_number"),
+                    "thought": step.get("thought"),
+                    "action": step.get("action"),
+                    "observation": step.get("observation"),
+                }
+            )
+
+        return {
+            "agentic_rag_result": {
+                "query": query,
+                "answer": state.get("final_answer"),
+                "reasoning_trace": reasoning_trace,
+                "tools_used": list(set(tools_used)),
+                "confidence": final_confidence,
+                "total_steps": len(steps),
+                "verification": verification if _has_verdict else None,
+                "metadata": {
+                    "planning_strategy": planning_strategy,
+                    "max_steps": max_reasoning_steps,
+                    "completed_successfully": state.get("completed", False),
+                },
+            }
+        }
+
+    return synthesize_agentic_result
+
+
 @register_node()
 class AgenticRAGNode(WorkflowNode):
     """
@@ -568,276 +979,24 @@ Maximum steps: {self.max_reasoning_steps}""",
         )
 
         # Tool executor
-        tool_executor_id = builder.add_node(
-            "PythonCodeNode",
+        tool_executor_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                execute_tool_action,
+                name="tool_executor",
+            ),
             node_id="tool_executor",
-            config={
-                "code": r"""
-import re
-import json
-from datetime import datetime
-
-def execute_tool(action_string, documents, context):
-    '''Execute tool based on action string'''
-    # Parse action
-    match = re.match(r'(\w+)\((.*)\)', action_string.strip())
-    if not match:
-        return {"error": "Invalid action format"}
-
-    tool_name = match.group(1)
-    params = match.group(2).strip('"\'')
-
-    results = {}
-
-    if tool_name == "search":
-        # Search through documents
-        query_words = set(params.lower().split())
-        search_results = []
-
-        for doc in documents[:50]:  # Limit for performance
-            if not isinstance(doc, dict):
-                continue  # skip malformed non-dict document elements
-            # `.get("content", "")` only defaults a MISSING key; a present
-            # key with a None value would still yield None, so coerce.
-            content = (doc.get("content") or "").lower()
-            title = (doc.get("title") or "").lower()
-
-            # Score based on word overlap
-            doc_words = set(content.split())
-            title_words = set(title.split())
-
-            content_score = len(query_words & doc_words) / len(query_words) if query_words else 0
-            title_score = len(query_words & title_words) / len(query_words) if query_words else 0
-
-            total_score = content_score + (title_score * 2)  # Title matches weighted higher
-
-            if total_score > 0:
-                search_results.append({
-                    "title": doc.get("title", "Untitled"),
-                    "excerpt": content[:200] + "...",
-                    "score": total_score,
-                    "id": doc.get("id", "unknown")
-                })
-
-        # Sort by score
-        search_results.sort(key=lambda x: x["score"], reverse=True)
-        results = {
-            "tool": "search",
-            "query": params,
-            "results": search_results[:5],
-            "count": len(search_results)
-        }
-
-    elif tool_name == "calculate":
-        # Safe calculation — AST-walked arithmetic only. `params` is
-        # LLM-generated; eval()/regex-substitution sandboxes are bypassable, so
-        # this whitelists ast node types instead (no eval, no exec, no regex).
-        import ast
-        import math
-        import operator
-
-        _BINOPS = {
-            ast.Add: operator.add, ast.Sub: operator.sub,
-            ast.Mult: operator.mul, ast.Div: operator.truediv,
-            ast.Pow: operator.pow, ast.Mod: operator.mod,
-            ast.FloorDiv: operator.floordiv,
-        }
-        _UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
-        _FUNCS = {
-            "abs": abs, "round": round, "min": min, "max": max, "pow": pow,
-            "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-            "tan": math.tan, "log": math.log, "exp": math.exp,
-        }
-        _CONSTS = {"pi": math.pi, "e": math.e}
-
-        def _safe_arith(node):
-            if isinstance(node, ast.Expression):
-                return _safe_arith(node.body)
-            if isinstance(node, ast.Constant):
-                if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
-                    return node.value
-                raise ValueError("non-numeric constant")
-            if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
-                return _BINOPS[type(node.op)](
-                    _safe_arith(node.left), _safe_arith(node.right)
-                )
-            if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
-                return _UNARYOPS[type(node.op)](_safe_arith(node.operand))
-            if isinstance(node, ast.Name) and node.id in _CONSTS:
-                return _CONSTS[node.id]
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in _FUNCS
-                and not node.keywords
-            ):
-                return _FUNCS[node.func.id](
-                    *[_safe_arith(a) for a in node.args]
-                )
-            raise ValueError("disallowed expression element")
-
-        try:
-            try:
-                result = ast.literal_eval(params)
-            except (ValueError, SyntaxError):
-                result = _safe_arith(ast.parse(params, mode="eval"))
-            results = {
-                "tool": "calculate",
-                "expression": params,
-                "result": result,
-            }
-        except Exception:
-            results = {
-                "tool": "calculate",
-                "error": f"Cannot evaluate expression: {params}",
-            }
-
-    elif tool_name == "database":
-        # Simulated database query
-        if "revenue" in params.lower():
-            # Mock financial data
-            results = {
-                "tool": "database",
-                "query": params,
-                "results": [
-                    {"company": "TechCorp", "revenue_2022": 100, "revenue_2023": 120},
-                    {"company": "DataInc", "revenue_2022": 80, "revenue_2023": 95},
-                    {"company": "CloudCo", "revenue_2022": 60, "revenue_2023": 85}
-                ]
-            }
-        else:
-            results = {
-                "tool": "database",
-                "query": params,
-                "results": []
-            }
-
-    elif tool_name == "verify":
-        # Fact verification (simplified)
-        confidence = 0.85 if "true" not in params.lower() else 0.95
-        results = {
-            "tool": "verify",
-            "claim": params,
-            "verified": confidence > 0.8,
-            "confidence": confidence,
-            "sources": ["Document analysis", "Cross-reference check"]
-        }
-
-    else:
-        results = {"error": f"Unknown tool: {tool_name}"}
-
-    return results
-
-# Execute current action
-reasoning_state = reasoning_state
-documents = documents
-
-current_action = reasoning_state.get("current_action", "")
-if current_action:
-    observation = execute_tool(current_action, documents, reasoning_state)
-else:
-    observation = {"error": "No action specified"}
-
-result = {
-    "tool_result": observation,
-    "timestamp": datetime.now().isoformat()
-}
-"""
-            },
+            _internal=True,
         )
 
         # Reasoning state manager
-        state_manager_id = builder.add_node(
-            "PythonCodeNode",
+        _state_manager_fn = _make_state_manager(self.max_reasoning_steps)
+        state_manager_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _state_manager_fn,
+                name="state_manager",
+            ),
             node_id="state_manager",
-            config={
-                "code": f"""
-# Manage reasoning state across iterations
-import json
-
-def update_reasoning_state(state, new_response, tool_result=None):
-    '''Update state with new reasoning step'''
-    if not state:
-        state = {{
-            "steps": [],
-            "current_step": 0,
-            "completed": False,
-            "final_answer": None
-        }}
-
-    # Parse response for thought/action/answer
-    lines = new_response.strip().split('\\n')
-    current_thought = None
-    current_action = None
-    final_answer = None
-
-    for line in lines:
-        if line.startswith("Thought:"):
-            current_thought = line[8:].strip()
-        elif line.startswith("Action:"):
-            current_action = line[7:].strip()
-        elif line.startswith("Answer:"):
-            final_answer = line[7:].strip()
-            state["completed"] = True
-
-    # Add step
-    step = {{
-        "step_number": state["current_step"] + 1,
-        "thought": current_thought,
-        "action": current_action,
-        "observation": tool_result.get("tool_result") if tool_result else None
-    }}
-
-    state["steps"].append(step)
-    state["current_step"] += 1
-    state["current_action"] = current_action
-    state["final_answer"] = final_answer
-
-    # Check if we've reached max steps
-    if state["current_step"] >= {self.max_reasoning_steps}:
-        state["completed"] = True
-        if not state["final_answer"]:
-            state["final_answer"] = "Reached maximum reasoning steps. Based on gathered information..."
-
-    return state
-
-# Process current iteration. `plan` arrives from the plan parser as the
-# parsed planner dict; `reasoning_response` arrives from the reasoning parser
-# as the ReAct prose STRING (the parsers already unwrapped `response.content`
-# upstream, so NO further `.get("response")` unwrap is needed — and would be
-# wrong, the inner dict has no `response` key). `reasoning_response` may still
-# be a non-str on a defensive path; coerce so the line parser never crashes.
-if not isinstance(reasoning_response, str):
-    reasoning_response = "" if reasoning_response is None else str(reasoning_response)
-tool_result = tool_result if "tool_result" in locals() else None
-
-# Initialize or update state
-if "reasoning_state" not in locals() or not reasoning_state:
-    reasoning_state = None
-
-reasoning_state = update_reasoning_state(
-    reasoning_state,
-    reasoning_response,
-    tool_result
-)
-
-# Prepare context for next iteration
-context_for_agent = ""
-for step in reasoning_state["steps"]:
-    if step["thought"]:
-        context_for_agent += f"\\nThought: {{step['thought']}}"
-    if step["action"]:
-        context_for_agent += f"\\nAction: {{step['action']}}"
-    if step["observation"]:
-        context_for_agent += f"\\nObservation: {{step['observation']}}"
-
-result = {{
-    "reasoning_state": reasoning_state,
-    "context_for_agent": context_for_agent,
-    "continue_reasoning": not reasoning_state["completed"]
-}}
-"""
-            },
+            _internal=True,
         )
 
         # Verification agent (if enabled)
@@ -866,76 +1025,22 @@ Return JSON:
                 },
             )
 
-        # Result synthesizer
-        # NB: this code template is an f-string because the metadata block
-        # interpolates the constructor config (planning_strategy / max steps).
-        # Literal Python braces inside the sandboxed code are doubled ({{ }}).
-        synthesizer_id = builder.add_node(
-            "PythonCodeNode",
+        # Result synthesizer (#1117/#1123 root-cause fix: lifted from the prior
+        # doubled-brace f-string codegen to `_make_result_synthesizer`, with the
+        # build-time planning_strategy / max_reasoning_steps bound through the
+        # closure). Publishes the SAME flat `result` port carrying
+        # `{"agentic_rag_result": {...}}` — it is the terminal synthesis node, so
+        # the WorkflowNode surfaces its output unchanged.
+        _result_synthesizer_fn = _make_result_synthesizer(
+            self.planning_strategy, self.max_reasoning_steps
+        )
+        synthesizer_id = builder.add_node_instance(
+            PythonCodeNode.from_function(
+                _result_synthesizer_fn,
+                name="result_synthesizer",
+            ),
             node_id="result_synthesizer",
-            config={
-                "code": f"""
-# Synthesize final results
-reasoning_state = reasoning_state
-verification = verification if "verification" in locals() else None
-query = query
-
-# Extract tool usage
-tools_used = []
-for step in reasoning_state["steps"]:
-    if step["observation"] and "tool" in step["observation"]:
-        tools_used.append(step["observation"]["tool"])
-
-# Calculate confidence. `verification` arrives from the verification parser
-# as the PARSED verifier dict ({{"verified", "confidence", "issues", ...}} or a
-# parse-error sentinel carrying {{"parse_error": ...}}) — already unwrapped from
-# `response.content` + json.loads upstream. The prior `.get("response")` read a
-# non-existent key off the inner content dict, so the verdict was always
-# dropped. A flagged parse-error sentinel carries no real confidence, so it is
-# treated as "no usable verdict" (NOT a fabricated 0.8) and confidence is left
-# unadjusted — honest, per zero-tolerance Rule 2.
-base_confidence = 0.7
-confidence_boost = min(0.3, len(tools_used) * 0.1)
-_has_verdict = (
-    isinstance(verification, dict)
-    and "confidence" in verification
-    and verification.get("parse_error") is None
-)
-if _has_verdict:
-    verification_confidence = verification.get("confidence", 0.8)
-    final_confidence = (base_confidence + confidence_boost) * verification_confidence
-else:
-    final_confidence = base_confidence + confidence_boost
-
-# Build reasoning trace
-reasoning_trace = []
-for step in reasoning_state["steps"]:
-    trace_entry = {{
-        "step": step["step_number"],
-        "thought": step["thought"],
-        "action": step["action"],
-        "observation": step["observation"]
-    }}
-    reasoning_trace.append(trace_entry)
-
-result = {{
-    "agentic_rag_result": {{
-        "query": query,
-        "answer": reasoning_state["final_answer"],
-        "reasoning_trace": reasoning_trace,
-        "tools_used": list(set(tools_used)),
-        "confidence": final_confidence,
-        "total_steps": len(reasoning_state["steps"]),
-        "verification": verification if _has_verdict else None,
-        "metadata": {{
-            "planning_strategy": "{self.planning_strategy}",
-            "max_steps": {self.max_reasoning_steps},
-            "completed_successfully": reasoning_state["completed"]
-        }}
-    }}
-}}
-"""
-            },
+            _internal=True,
         )
 
         # L3 messages-composers (reference template — conversational.py /
@@ -945,12 +1050,13 @@ result = {{
         # Each composer renders the REAL inputs that stage must reason over into
         # a `messages` list wired to the VALID `messages` port. `from_function`
         # is the correct primitive (real module-level functions: real `return`→
-        # `result`, type-checkable). type: ignore[attr-defined]: `from_function`
-        # is a classmethod on concrete PythonCodeNode, erased to `type[Node]` by
-        # `@register_node` for static checkers (mirrors conversational.py).
-        # `_internal=True` suppresses the consumer-facing instance-API advisory.
+        # `result`, type-checkable). The call is BARE (no `# type: ignore`): the
+        # `from_function` unknown-attr pyright diagnostic is non-gating (gates =
+        # ruff + pytest) and the suppression is normalized away across the rag
+        # from_function sites. `_internal=True` suppresses the consumer-facing
+        # instance-API advisory.
         planner_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_planner_messages,
                 name="planner_messages_composer",
             ),
@@ -958,7 +1064,7 @@ result = {{
             _internal=True,
         )
         react_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_react_messages,
                 name="react_messages_composer",
             ),
@@ -968,7 +1074,7 @@ result = {{
         verifier_messages_composer_id: Optional[str] = None
         if self.verification_enabled:
             verifier_messages_composer_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     compose_verifier_messages,
                     name="verifier_messages_composer",
                 ),
@@ -982,7 +1088,7 @@ result = {{
         # consumer reads PARSED fields — NOT the raw `{"content": ...}` wrapper
         # off which the prior `.get("response")` read a non-existent key.
         plan_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_plan_response,
                 name="plan_parser",
             ),
@@ -990,7 +1096,7 @@ result = {{
             _internal=True,
         )
         reasoning_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_reasoning_response,
                 name="reasoning_parser",
             ),
@@ -1000,7 +1106,7 @@ result = {{
         verification_parser_id: Optional[str] = None
         if self.verification_enabled:
             verification_parser_id = builder.add_node_instance(
-                PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                PythonCodeNode.from_function(
                     parse_verification_response,
                     name="verification_parser",
                 ),
@@ -1027,9 +1133,12 @@ result = {{
         # accumulated Thought/Action/Observation transcript) into the react
         # agent's `messages` port. The phantom `additional_context` edge is
         # REMOVED.
+        # PHANTOM-PORT FIX: state_manager is now a `from_function` node, which
+        # publishes ONLY a flat `result` port — `context_for_agent` is a KEY of
+        # that dict, NOT a top-level port. The edge reads `result.context_for_agent`.
         builder.add_connection(
             state_manager_id,
-            "context_for_agent",
+            "result.context_for_agent",
             react_messages_composer_id,
             "context_for_agent",
         )
@@ -1048,18 +1157,28 @@ result = {{
             state_manager_id,
             "reasoning_response",
         )
+        # PHANTOM-PORT FIX (cyclic edges): both state_manager and tool_executor
+        # are `from_function` nodes publishing a flat `result` port, so each
+        # cycle edge reads `result.<key>`. `reasoning_state` / `tool_result` are
+        # KEYS of the respective `result` dict, not top-level ports.
         builder.add_connection(
-            state_manager_id, "reasoning_state", tool_executor_id, "reasoning_state"
+            state_manager_id,
+            "result.reasoning_state",
+            tool_executor_id,
+            "reasoning_state",
         )
         builder.add_connection(
-            tool_executor_id, "tool_result", state_manager_id, "tool_result"
+            tool_executor_id, "result.tool_result", state_manager_id, "tool_result"
         )
 
-        # Loop control - continue if not completed. This is a loop-control edge
-        # (not a context port), so it stays unchanged: it gates whether the react
-        # agent runs again, it does NOT carry reasoning context.
+        # Loop control - continue if not completed. `continue_reasoning` is a KEY
+        # of the state_manager `result` dict (from_function flat port), so the
+        # loop-control edge reads `result.continue_reasoning`.
         builder.add_connection(
-            state_manager_id, "continue_reasoning", react_agent_id, "_continue_if_true"
+            state_manager_id,
+            "result.continue_reasoning",
+            react_agent_id,
+            "_continue_if_true",
         )
 
         # Verification (if enabled).
@@ -1078,7 +1197,7 @@ result = {{
             assert verification_parser_id is not None
             builder.add_connection(
                 state_manager_id,
-                "reasoning_state",
+                "result.reasoning_state",
                 verifier_messages_composer_id,
                 "reasoning_state",
             )
@@ -1101,9 +1220,13 @@ result = {{
                 "verification",
             )
 
-        # Final synthesis
+        # Final synthesis. `reasoning_state` is a KEY of the state_manager
+        # `from_function` `result` dict, so the edge reads `result.reasoning_state`.
         builder.add_connection(
-            state_manager_id, "reasoning_state", synthesizer_id, "reasoning_state"
+            state_manager_id,
+            "result.reasoning_state",
+            synthesizer_id,
+            "reasoning_state",
         )
 
         return builder.build(name="agentic_rag_workflow")
@@ -1400,7 +1523,7 @@ Rate confidence: 0.0-1.0""",
         # Each composer renders the REAL inputs (the query and/or the genuine
         # upstream LLM `response`) into the stage's VALID `messages` port.
         decomposer_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_decomposer_messages,
                 name="decomposer_messages_composer",
             ),
@@ -1408,7 +1531,7 @@ Rate confidence: 0.0-1.0""",
             _internal=True,
         )
         step_reasoner_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_step_reasoner_messages,
                 name="step_reasoner_messages_composer",
             ),
@@ -1416,7 +1539,7 @@ Rate confidence: 0.0-1.0""",
             _internal=True,
         )
         logic_verifier_messages_composer_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 compose_logic_verifier_messages,
                 name="logic_verifier_messages_composer",
             ),
@@ -1432,7 +1555,7 @@ Rate confidence: 0.0-1.0""",
         # wrapper, which `_render_reasoning_plan` would otherwise stringify
         # (the steps/assumptions never extracted).
         decomposition_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_decomposition_response,
                 name="decomposition_parser",
             ),
@@ -1440,7 +1563,7 @@ Rate confidence: 0.0-1.0""",
             _internal=True,
         )
         reasoning_chain_parser_id = builder.add_node_instance(
-            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+            PythonCodeNode.from_function(
                 parse_reasoning_chain_response,
                 name="reasoning_chain_parser",
             ),

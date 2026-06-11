@@ -23,6 +23,7 @@ import tracemalloc
 
 import pytest
 from kailash.nodes.base import Node
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
@@ -31,6 +32,8 @@ from kaizen.nodes.rag.evaluation import (
     RAGBenchmarkNode,
     RAGEvaluationNode,
     TestDatasetGeneratorNode,
+    aggregate_evaluation_metrics,
+    evaluate_context_metrics,
 )
 
 pytestmark = pytest.mark.integration
@@ -47,30 +50,35 @@ def _build(node: RAGEvaluationNode) -> Workflow:
 
 
 class TestContextPrecisionUnderRealRuntime:
-    """The context_evaluator runs under a real LocalRuntime executor.
+    """The context_evaluator (migrated to ``evaluate_context_metrics`` via
+    ``PythonCodeNode.from_function`` — Wave-3) runs under a real LocalRuntime
+    executor.
 
-    Mirrors B9a's ``TestCodegenRealRuntime`` precedent: extract codegen
-    from the workflow node, embed it in a fresh single-node builder, run
-    it through LocalRuntime against a real input dict. The patched
-    function adds the missing ``return result`` + module-scope call so
-    PythonCodeNode binds a top-level ``result``.
+    Wave-3 migration: the prior f-string ``code=`` codegen is gone. This builds
+    the REAL production ``evaluate_context_metrics`` from_function node (the same
+    one ``_create_workflow`` wires as ``context_evaluator``), embeds it in a
+    single-node builder, and runs it through LocalRuntime against a real
+    ``test_data`` dict — exercising the genuine production node end-to-end and
+    asserting the documented ``context_metrics`` list shape + numeric correctness.
     """
 
-    @pytest.mark.filterwarnings("ignore::SyntaxWarning")
     def test_context_evaluator_under_runtime_returns_documented_shape(self):
+        # The migrated context_evaluator is a from_function node — no `code=`
+        # config to extract; wire the production fn directly (identical to
+        # _create_workflow's `context_evaluator` registration).
         wf = _build(RAGEvaluationNode())
         evaluator = wf.get_node("context_evaluator")
         assert evaluator is not None
-        # F9 #1117: codegen now returns its dict AND iterates `test_data`
-        # at module scope. Embed verbatim; LocalRuntime binds `test_data`
-        # from `parameters` and publishes the module-scope `result`.
-        code = evaluator.config["code"]
+        assert evaluator.config.get("code") is None
 
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                evaluate_context_metrics,
+                name="ctx_under_runtime",
+            ),
             node_id="ctx_under_runtime",
-            config={"code": code},
+            _internal=True,
         )
         runtime = LocalRuntime()
         results, _ = runtime.execute(
@@ -92,7 +100,7 @@ class TestContextPrecisionUnderRealRuntime:
         )
         out = results["ctx_under_runtime"]["result"]
         # The shape MUST carry the documented context_metrics list (one
-        # entry per input test_data row after the codegen iterates).
+        # entry per input test_data row after the fn maps).
         assert "context_metrics" in out
         ctx_list = out["context_metrics"]
         assert isinstance(ctx_list, list)
@@ -127,29 +135,45 @@ class TestMetricAggregatorUnderRealRuntime:
     the aggregate values match the formulas.
     """
 
-    @pytest.mark.filterwarnings("ignore::SyntaxWarning")
     def test_metric_aggregator_under_runtime_computes_means(self):
-        wf = _build(RAGEvaluationNode(use_reference_answers=False))
+        # Wave-3 migration: the aggregator is now an
+        # `aggregate_evaluation_metrics` from_function node bound with `metrics`
+        # via closure (no `code=` config). Build the production fn bound exactly
+        # as _create_workflow binds it (the `metrics` list of the constructed
+        # node), and run it under real LocalRuntime against the same fixed
+        # per-test PARSED score lists the response-parser nodes feed it.
+        node = RAGEvaluationNode(use_reference_answers=False)
+        wf = _build(node)
         aggregator = wf.get_node("metric_aggregator")
         assert aggregator is not None
-        # F9 #1117 + #1118: codegen now imports the `datetime` class
-        # explicitly, returns its aggregate dict, AND calls
-        # `aggregate_evaluation_metrics(...)` at module scope. Embed the
-        # codegen verbatim; LocalRuntime binds the wired inputs from
-        # `parameters` and publishes the module-scope `result`.
-        #
-        # OUTPUT-side fix: the aggregator now receives PARSED per-test score
-        # LISTS (the response-parser nodes already did `response -> .content ->
-        # json.loads`). So `faithfulness_scores` is a bare list of per-test score
-        # dicts `[{"faithfulness_score": 0.9}, ...]` — NO `{"response": {...}}`
-        # wrapper (that wrapper was the parse-gap the parser nodes now strip).
-        code = aggregator.config["code"]
+        assert aggregator.config.get("code") is None
+
+        _metrics = node.metrics
+
+        def _agg_bound(
+            test_results=None,
+            faithfulness_scores=None,
+            relevance_scores=None,
+            context_metrics=None,
+            answer_quality_scores=None,
+        ) -> dict:
+            return aggregate_evaluation_metrics(
+                test_results=test_results,
+                faithfulness_scores=faithfulness_scores,
+                relevance_scores=relevance_scores,
+                context_metrics=context_metrics,
+                answer_quality_scores=answer_quality_scores,
+                metrics=_metrics,
+            )
 
         builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
+        builder.add_node_instance(
+            PythonCodeNode.from_function(  # type: ignore[attr-defined]
+                _agg_bound,
+                name="agg_under_runtime",
+            ),
             node_id="agg_under_runtime",
-            config={"code": code},
+            _internal=True,
         )
         runtime = LocalRuntime()
         results, _ = runtime.execute(

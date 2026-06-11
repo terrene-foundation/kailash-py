@@ -119,6 +119,7 @@ dev = [
     "fakeredis>=2.20.0",
     "respx>=0.21.0",
     "pytest-benchmark>=4.0.0",
+    "pymongo>=4.6.0",  # tests/utils/docker_config.py MongoDB health check
 ]
 # AWS Bedrock preset (#498 Session 3, S4b-i) -- botocore owns SigV4
 # canonicalization; inlined hmac.new in kaizen.llm.auth.aws is BLOCKED.

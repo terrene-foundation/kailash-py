@@ -2513,11 +2513,16 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
         parameters = {f"comm_response_{target_agent.name}": {"prompt": message}}
         results, run_id = self.kaizen.execute(workflow.build(), parameters)
 
-        # Extract response
+        # Extract response — LLMAgentNode publishes "response" as a nested
+        # dict {"content": ..., "role": ...}; legacy providers may emit a flat
+        # string (same dual-shape contract as _extract_intelligent_response)
         agent_result = results.get(f"comm_response_{target_agent.name}", {})
-        response_text = str(
-            agent_result.get("response", agent_result.get("content", "No response"))
+        raw_response = agent_result.get(
+            "response", agent_result.get("content", "No response")
         )
+        if isinstance(raw_response, dict):
+            raw_response = raw_response.get("content", "No response")
+        response_text = str(raw_response)
 
         # Create response structure
         response = {

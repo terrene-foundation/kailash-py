@@ -107,11 +107,25 @@ class TestCreateHybridRagWorkflow:
         wf = create_hybrid_rag_workflow(RAGConfig())
         assert isinstance(wf, WorkflowNode)
 
-    def test_workflow_graph_has_four_nodes(self):
-        """The hybrid graph is source + dense + sparse + fuse = 4 nodes."""
+    def test_workflow_graph_has_expected_nodes(self):
+        """The hybrid graph is source + dense + sparse + fuse + 3 projectors.
+
+        Post-migration the COMPUTE stages (source / fuse) are
+        ``PythonCodeNode.from_function`` nodes publishing a flat ``result`` port;
+        three thin projector nodes index the fuse ``result`` dict's keys so the
+        WorkflowNode ``output_mapping`` (flat-key resolution) can surface the
+        ``results`` / ``scores`` / ``metadata`` consumed contract."""
         wf = create_hybrid_rag_workflow(RAGConfig())
         node_ids = set(wf._workflow.nodes.keys())  # type: ignore[union-attr]
-        assert node_ids == {"source", "dense", "sparse", "fuse"}
+        assert node_ids == {
+            "source",
+            "dense",
+            "sparse",
+            "fuse",
+            "proj_results",
+            "proj_scores",
+            "proj_metadata",
+        }
 
     def test_workflow_is_not_empty(self):
         """Regression guard against the shipped empty-nodes placeholder."""

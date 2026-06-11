@@ -1,39 +1,38 @@
-"""Tier-2a integration coverage — ``kaizen.nodes.rag.optimized``.
+"""Tier-2 integration coverage — ``kaizen.nodes.rag.optimized``.
 
-F8 shard B9c. Real interpreter execution of the 4 optimized RAG
-classes' codegen templates — covering the **cache/stream/batch
-correctness** value-anchor that the resurrection floor never verified.
+F8 shard B9c + Wave-3 S1 ``from_function`` migration. Real ``LocalRuntime``
+execution of the Cache + AsyncParallel optimized RAG node spines — covering the
+**cache/parallel correctness** value-anchor that the resurrection floor never
+verified, now through the PRODUCTION path (real workflow execution, real
+``from_function`` nodes publishing real ``result`` ports).
 
-Value-anchor (F8 plan §B B9c row): "**cache/stream correctness of
-preserved nodes**". This file lifts the cache + parallel + batch
-correctness half by exercising:
+Wave-3 S1 migrated CacheOptimizedRAGNode + AsyncParallelRAGNode from brittle
+f-string ``"code"``-string ``PythonCodeNode`` codegen to
+``PythonCodeNode.from_function`` (#1117 publish-nothing / #1123 brace-escape /
+#1118 import-trap root-cause fix). These tests run the REAL inner-workflow nodes
+(from ``_create_workflow()``) under a real ``LocalRuntime`` and assert the
+computed output reaches the documented downstream consumer.
 
-  - CacheOptimizedRAGNode's cache_key + semantic-cache codegen
-    templates under real interpreter execution; cache hit / miss /
-    bounded-state semantics.
-  - AsyncParallelRAGNode's parallel_executor + result_combiner
-    codegen templates; multi-strategy fusion correctness on fixed
-    score fixtures.
-  - StreamingRAGNode's progressive_retriever codegen template;
-    iterative chunked output semantics.
-  - BatchOptimizedRAGNode's batch_organizer + processor codegen
-    templates; multi-query batch processing correctness.
+Scoping (mirrors the original B9c integration scope): the strategy RAG nodes
+(``SemanticRAGNode`` etc.) and the ``HybridRAGNode`` rag_processor carry a
+SEPARATE, PRE-EXISTING config-shape defect (``config={"config": {...}}`` passes
+a dict where a ``RAGConfig`` is expected) that blocks the full multi-node graph
+and is out of scope for this migration shard. The cache-decision spine
+(key-gen → CacheNode → manager → aggregator) and the parallel
+executor → combiner spine — the surfaces this shard migrated — are exercised in
+full through the real production path.
 
-NO mocking (``@patch`` / ``MagicMock`` / ``unittest.mock`` are BLOCKED
-in Tier 2/3 per ``rules/testing.md``). The PythonCodeNode sandbox
-uses two-scope exec which hides module imports from nested function
-lookups (F9 ledger class) — so the codegen templates are exercised
-through `exec` in a single namespace (real Python interpreter, no
-sandbox), the same pattern B9b used for the metric_aggregator and
-context_evaluator tests.
+NO mocking (``@patch`` / ``MagicMock`` / ``unittest.mock`` are BLOCKED in Tier
+2/3 per ``rules/testing.md``). CacheNode uses a deterministic in-memory backend.
 """
 
 from __future__ import annotations
 
-import time
 from typing import Any, Dict, List
 
 import pytest
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 from kaizen.nodes.rag.optimized import (
     AsyncParallelRAGNode,
@@ -45,700 +44,503 @@ from kaizen.nodes.rag.optimized import (
 pytestmark = pytest.mark.integration
 
 
-def _exec_codegen(code: str, ns_seed: Dict[str, Any]) -> Dict[str, Any]:
-    """Exec codegen in a single-namespace real Python interpreter.
-
-    The PythonCodeNode sandbox uses two-scope exec which breaks nested
-    function lookups for module-level imports (F9 ledger class). The
-    test runs the codegen through a real `exec` call — Python's normal
-    one-namespace semantics restore the closure behavior.
-    """
-    ns: dict = dict(ns_seed)
-    exec(code, ns)
-    return ns["result"]
+def _real_cache_nodes() -> Dict[str, Any]:
+    """The real from_function node instances the fixed ``_create_workflow``
+    produces — no re-authoring."""
+    wf = CacheOptimizedRAGNode(similarity_threshold=0.95)._create_workflow()  # type: ignore[attr-defined]
+    return {nid: wf.get_node(nid) for nid in wf.nodes}
 
 
-# ==========================================================================
-# CacheOptimizedRAGNode — cache_key_generator codegen correctness
-# ==========================================================================
-
-
-class TestCacheKeyGenerator:
-    """The cache_key_generator codegen produces deterministic keys."""
-
-    def test_same_query_produces_same_cache_key(self):
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        key_gen = wf.get_node("cache_key_generator")
-        assert key_gen is not None
-        code = key_gen.config["code"]
-        out_a = _exec_codegen(code, {"query": "what is deep learning"})
-        out_b = _exec_codegen(code, {"query": "what is deep learning"})
-        # Same query → same cache key (deterministic hash).
-        assert out_a["cache_keys"]["exact"] == out_b["cache_keys"]["exact"]
-        assert out_a["cache_keys"]["semantic"] == out_b["cache_keys"]["semantic"]
-        # Both keys are documented-format strings.
-        assert isinstance(out_a["cache_keys"]["exact"], str)
-        assert out_a["cache_keys"]["semantic"].startswith("semantic_")
-
-    def test_different_queries_produce_different_keys(self):
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        key_gen = wf.get_node("cache_key_generator")
-        assert key_gen is not None
-        code = key_gen.config["code"]
-        out_a = _exec_codegen(code, {"query": "alpha"})
-        out_b = _exec_codegen(code, {"query": "beta"})
-        # Different queries → different cache keys.
-        assert out_a["cache_keys"]["exact"] != out_b["cache_keys"]["exact"]
+def _real_parallel_nodes(strategies: List[str]) -> Dict[str, Any]:
+    wf = AsyncParallelRAGNode(strategies=strategies)._create_workflow()  # type: ignore[attr-defined]
+    return {nid: wf.get_node(nid) for nid in wf.nodes}
 
 
 # ==========================================================================
-# CacheOptimizedRAGNode — semantic_cache_manager hit/miss correctness
+# CacheOptimizedRAGNode — cache-decision spine end-to-end (production path)
 # ==========================================================================
 
 
-class TestSemanticCacheManager:
-    """The semantic_cache_manager codegen routes on CacheNode's real hit/value.
+class TestCacheDecisionSpineEndToEnd:
+    """key-gen → CacheNode.get → semantic_cache_manager → result_aggregator
+    runs end-to-end under a real LocalRuntime, with the REAL from_function nodes
+    and the REAL dotted-path wiring (``result.cache_keys.exact``,
+    ``result.use_cache``, ``result``)."""
 
-    F9 #1117/#1123 contract-alignment: the node reads CacheNode.get's flat
-    ``cache_hit`` / ``cache_value`` ports (NOT the fabricated
-    ``cache_check_result`` nested dict with ``exact_hit`` / ``exact_result``
-    keys CacheNode never produced). ``semantic_candidates`` is hardcoded ``{}``
-    in the node because no candidate-store node feeds it — the semantic-cache
-    branch is honest-but-dormant; the workflow is a real exact-match cache.
-    """
-
-    def test_exact_hit_returns_cached_result(self):
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        sem_mgr = wf.get_node("semantic_cache_manager")
-        assert sem_mgr is not None
-        code = sem_mgr.config["code"]
-        # CacheNode.get hit shape: cache_hit=True, cache_value=<cached doc>.
-        out = _exec_codegen(
-            code,
-            {
-                "query": "anything",
-                "cache_hit": True,
-                "cache_value": {"results": ["cached_doc"]},
-            },
-        )
-        assert out["use_cache"] is True
-        assert out["cache_type"] == "exact"
-        assert out["cached_result"] == {"results": ["cached_doc"]}
-
-    def test_no_exact_no_semantic_returns_cache_miss(self):
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        sem_mgr = wf.get_node("semantic_cache_manager")
-        assert sem_mgr is not None
-        code = sem_mgr.config["code"]
-        # CacheNode.get miss shape: cache_hit=False, cache_value=None.
-        out = _exec_codegen(
-            code,
-            {
-                "query": "completely different",
-                "cache_hit": False,
-                "cache_value": None,
-            },
-        )
-        assert out["use_cache"] is False
-        assert out["cache_type"] is None
-
-    def test_falsy_cache_hit_routes_to_miss(self):
-        """A falsy ``cache_hit`` (the CacheNode miss signal) routes to a cache
-        miss regardless of any stale ``cache_value``."""
-        node = CacheOptimizedRAGNode(similarity_threshold=0.95)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        sem_mgr = wf.get_node("semantic_cache_manager")
-        assert sem_mgr is not None
-        code = sem_mgr.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "query": "alpha beta gamma",
-                "cache_hit": False,
-                "cache_value": None,
-            },
-        )
-        assert out["use_cache"] is False
-        assert out["cache_type"] is None
-
-    def test_semantic_branch_dormant_without_candidate_store(self):
-        """The semantic-similarity branch is dormant by design: no node feeds
-        ``semantic_candidates`` (hardcoded ``{}``), so a non-hit always routes
-        to a miss — an honest exact-match cache, not a fabricated semantic hit.
-        """
-        node = CacheOptimizedRAGNode(similarity_threshold=0.5)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        sem_mgr = wf.get_node("semantic_cache_manager")
-        assert sem_mgr is not None
-        code = sem_mgr.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "query": "alpha beta gamma",
-                "cache_hit": False,
-                "cache_value": None,
-            },
-        )
-        # No candidate store wired → no semantic hit possible → miss.
-        assert out["use_cache"] is False
-        assert out["cache_type"] is None
-
-
-# ==========================================================================
-# CacheOptimizedRAGNode — hit/miss/eviction state semantics through facade
-# ==========================================================================
-
-
-class TestCacheHitMissReadback:
-    """State read-back: same cache_key_generator invocation produces the
-    same key, AND the same query parameters return the same key across
-    invocations — the cache-hit detection invariant."""
-
-    def test_hit_detection_via_repeated_key_generation(self):
-        """Two invocations with the same query produce IDENTICAL cache
-        keys — the cache lookup contract is built on this invariant."""
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        key_gen = wf.get_node("cache_key_generator")
-        assert key_gen is not None
-        code = key_gen.config["code"]
-        # Call 1: first cache lookup for this query.
-        out_call_1 = _exec_codegen(code, {"query": "deep learning intro"})
-        # Call 2: second cache lookup for the SAME query — would hit cache.
-        out_call_2 = _exec_codegen(code, {"query": "deep learning intro"})
-        # Same key → cache would return the hit.
-        assert out_call_1["cache_keys"]["exact"] == out_call_2["cache_keys"]["exact"]
-
-    def test_miss_distinct_queries_distinct_keys(self):
-        """Distinct queries → distinct cache keys → cache misses."""
-        node = CacheOptimizedRAGNode()
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        key_gen = wf.get_node("cache_key_generator")
-        assert key_gen is not None
-        code = key_gen.config["code"]
-        # 5 distinct queries should produce 5 distinct cache keys.
-        queries = ["one", "two", "three", "four", "five"]
-        keys = set()
-        for q in queries:
-            out = _exec_codegen(code, {"query": q})
-            keys.add(out["cache_keys"]["exact"])
-        assert len(keys) == 5  # all distinct → all would miss the cache.
-
-
-# ==========================================================================
-# AsyncParallelRAGNode — parallel fusion correctness
-# ==========================================================================
-
-
-class TestParallelExecutorAndCombiner:
-    """The parallel_executor produces an execution plan; the result_combiner
-    fuses per-strategy results into a single ranked list."""
-
-    def test_parallel_executor_publishes_strategy_configs(self):
-        node = AsyncParallelRAGNode(strategies=["semantic", "hybrid"])
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        exec_node = wf.get_node("parallel_executor")
-        assert exec_node is not None
-        code = exec_node.config["code"]
-        out = _exec_codegen(
-            code,
-            {"query": "test query", "documents": [{"content": "doc one"}]},
-        )
-        # The execution_plan carries the strategy list + parallel count.
-        assert out["execution_plan"]["strategies"] == ["semantic", "hybrid"]
-        assert out["execution_plan"]["parallel_count"] == 2
-        # strategy_configs carries per-strategy config dicts.
-        assert set(out["strategy_configs"].keys()) == {"semantic", "hybrid"}
-        for cfg in out["strategy_configs"].values():
-            assert cfg["enabled"] is True
-            assert cfg["timeout"] == 5.0
-            assert cfg["fallback"] == "hybrid"
-
-    def test_result_combiner_fuses_per_strategy_results(self):
-        """Combiner aggregates per-strategy scores into a single ranked list."""
-        from datetime import datetime
-
-        node = AsyncParallelRAGNode(strategies=["semantic", "hybrid"])
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        combiner = wf.get_node("result_combiner")
-        assert combiner is not None
-        code = combiner.config["code"]
-        # Each strategy provides results with the documented shape.
-        strategy_a_results = {
-            "results": [
-                {"id": "doc1", "content": "alpha"},
-                {"id": "doc2", "content": "beta"},
-            ],
-            "scores": [0.9, 0.7],
-        }
-        strategy_b_results = {
-            "results": [
-                {"id": "doc1", "content": "alpha"},
-                {"id": "doc3", "content": "gamma"},
-            ],
-            "scores": [0.8, 0.6],
-        }
-        out = _exec_codegen(
-            code,
-            {
-                "execution_plan": {
-                    "strategies": ["semantic", "hybrid"],
-                    "query": "test",
-                    "start_time": datetime.now().isoformat(),
-                    "parallel_count": 2,
-                },
-                "semantic_results": strategy_a_results,
-                "hybrid_results": strategy_b_results,
-            },
-        )
-        parallel = out["parallel_results"]
-        # Documented shape carries results / scores / metadata.
-        assert "results" in parallel
-        assert "scores" in parallel
-        assert "metadata" in parallel
-        # All 3 unique docs end up in the fused result.
-        result_ids = {r["id"] for r in parallel["results"]}
-        assert result_ids == {"doc1", "doc2", "doc3"}
-        # The strategy_agreements counter records how many docs were
-        # returned by ALL strategies — doc1 by both, doc2/doc3 by one.
-        assert parallel["metadata"]["strategy_agreements"] == 1
-        # The strategies_used list is the input strategies.
-        assert set(parallel["metadata"]["strategies_used"]) == {"semantic", "hybrid"}
-
-    def test_combiner_doc1_first_when_appearing_in_both_strategies(self):
-        """A doc returned by BOTH strategies has aggregated higher score
-        than one returned by only one — should rank first."""
-        from datetime import datetime
-
-        node = AsyncParallelRAGNode(strategies=["semantic", "hybrid"])
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        combiner = wf.get_node("result_combiner")
-        assert combiner is not None
-        code = combiner.config["code"]
-        # doc1: in both with mean 0.85; doc2: in one with mean 0.7;
-        # doc3: in one with mean 0.6.
-        out = _exec_codegen(
-            code,
-            {
-                "execution_plan": {
-                    "strategies": ["semantic", "hybrid"],
-                    "query": "q",
-                    "start_time": datetime.now().isoformat(),
-                    "parallel_count": 2,
-                },
-                "semantic_results": {
-                    "results": [
-                        {"id": "doc1", "content": "x"},
-                        {"id": "doc2", "content": "y"},
-                    ],
-                    "scores": [0.9, 0.7],
-                },
-                "hybrid_results": {
-                    "results": [
-                        {"id": "doc1", "content": "x"},
-                        {"id": "doc3", "content": "z"},
-                    ],
-                    "scores": [0.8, 0.6],
-                },
-            },
-        )
-        parallel = out["parallel_results"]
-        # doc1 has mean (0.9+0.8)/2=0.85 — should rank first.
-        assert parallel["results"][0]["id"] == "doc1"
-        assert parallel["scores"][0] == pytest.approx(0.85)
-
-
-# ==========================================================================
-# StreamingRAGNode — progressive_retriever chunked output correctness
-# ==========================================================================
-
-
-class TestStreamingProgressiveRetriever:
-    """The progressive_retriever codegen scans a doc batch and produces
-    initial-stage chunked results — the documented stream contract."""
-
-    def test_progressive_retriever_returns_initial_stage_shape(self):
-        node = StreamingRAGNode(chunk_size=5)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        retriever = wf.get_node("progressive_retriever")
-        assert retriever is not None
-        code = retriever.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "streaming_plan": {
-                    "stages": [
-                        {"name": "initial", "k": 3, "fast": True},
-                        {"name": "refined", "k": 5, "fast": False},
-                    ],
-                },
-                "query": "machine learning",
-                "documents": [
-                    {"content": "machine learning is great"},
-                    {"content": "deep learning rocks"},
-                    {"content": "unrelated content here"},
-                    {"content": "another machine learning text"},
-                ],
-            },
-        )
-        prog = out["progressive_results"]
-        # The initial stage results carry the documented shape.
-        assert "initial" in prog
-        assert "has_more" in prog
-        assert "next_stage" in prog
-        assert "metadata" in prog
-        # 3 docs match on either "machine" or "learning"; initial-stage
-        # k=3 caps results to 3.
-        assert len(prog["initial"]) <= 3
-        # next_stage signals refinement is available.
-        assert prog["next_stage"] == "refined"
-        # docs_scanned reports how many docs were inspected.
-        assert prog["metadata"]["docs_scanned"] == 4
-
-    def test_progressive_retriever_results_ranked_by_overlap(self):
-        node = StreamingRAGNode(chunk_size=5)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        retriever = wf.get_node("progressive_retriever")
-        assert retriever is not None
-        code = retriever.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "streaming_plan": {
-                    "stages": [{"name": "initial", "k": 3, "fast": True}],
-                },
-                "query": "machine learning algorithms",
-                "documents": [
-                    # 1/3 overlap.
-                    {"content": "machine drilled holes"},
-                    # 3/3 overlap.
-                    {"content": "machine learning algorithms are great"},
-                    # 2/3 overlap.
-                    {"content": "deep learning algorithms exist"},
-                ],
-            },
-        )
-        results = out["progressive_results"]["initial"]
-        # Top-ranked by overlap: 3/3 → 2/3 → 1/3.
-        scores = [r["score"] for r in results]
-        assert scores == sorted(scores, reverse=True)
-        # First result has highest possible score (3/3 = 1.0).
-        assert scores[0] == pytest.approx(1.0)
-
-
-# ==========================================================================
-# BatchOptimizedRAGNode — batch organization + processing correctness
-# ==========================================================================
-
-
-class TestBatchOrganizerAndProcessor:
-    """The batch_organizer batches queries; the batch_processor scores
-    each batch's queries against a shared document set."""
-
-    def test_batch_organizer_splits_queries_into_documented_batches(self):
-        node = BatchOptimizedRAGNode(batch_size=3)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        organizer = wf.get_node("batch_organizer")
-        assert organizer is not None
-        code = organizer.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "queries": [
-                    "machine learning a",
-                    "machine learning b",
-                    "deep learning c",
-                    "deep learning d",
-                    "unrelated e",
-                ],
-            },
-        )
-        plan = out["batch_plan"]
-        assert plan["total_queries"] == 5
-        assert plan["batch_size"] == 3
-        # 5 queries / 3 per batch → 2 batches (3 + 2).
-        assert plan["num_batches"] == 2
-        # optimization_applied=True when len(queries) > 1.
-        assert plan["optimization_applied"] is True
-        # Every batch carries the documented shape.
-        for batch in plan["batches"]:
-            assert "batch_id" in batch
-            assert "queries" in batch
-            assert "size" in batch
-
-    def test_batch_organizer_single_query_no_optimization(self):
-        node = BatchOptimizedRAGNode(batch_size=3)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        organizer = wf.get_node("batch_organizer")
-        assert organizer is not None
-        code = organizer.config["code"]
-        out = _exec_codegen(
-            code,
-            {"queries": ["only one query"]},
-        )
-        plan = out["batch_plan"]
-        # 1 query → 1 batch, optimization NOT applied.
-        assert plan["total_queries"] == 1
-        assert plan["num_batches"] == 1
-        assert plan["optimization_applied"] is False
-
-    def test_batch_organizer_string_input_wraps_as_single_query(self):
-        """The codegen accepts a single string and wraps it in a 1-item list."""
-        node = BatchOptimizedRAGNode(batch_size=3)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        organizer = wf.get_node("batch_organizer")
-        assert organizer is not None
-        code = organizer.config["code"]
-        out = _exec_codegen(code, {"queries": "single str query"})
-        assert out["batch_plan"]["total_queries"] == 1
-
-    def test_batch_processor_scores_across_all_queries_in_batch(self):
-        """The batch_processor scores every query in every batch against
-        the document set — the throughput claim's correctness floor."""
-        node = BatchOptimizedRAGNode(batch_size=2)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        processor = wf.get_node("batch_processor")
-        assert processor is not None
-        code = processor.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "batch_plan": {
-                    "total_queries": 3,
-                    "batch_size": 2,
-                    "num_batches": 2,
-                    "batches": [
-                        {
-                            "batch_id": 0,
-                            "queries": ["machine learning", "deep learning"],
-                            "size": 2,
-                        },
-                        {
-                            "batch_id": 1,
-                            "queries": ["unrelated"],
-                            "size": 1,
-                        },
-                    ],
-                    "optimization_applied": True,
-                },
-                "documents": [
-                    {"content": "machine learning is good"},
-                    {"content": "deep learning is also good"},
-                    {"content": "completely separate topic"},
-                ],
-            },
-        )
-        batch_out = out["batch_results"]
-        # 2 batches processed.
-        assert len(batch_out["results"]) == 2
-        # Statistics carry the documented shape.
-        stats = batch_out["statistics"]
-        assert stats["total_queries_processed"] == 3
-        assert stats["batches_processed"] == 2
-        # Each batch result has per-query scores.
-        for br in batch_out["results"]:
-            assert "batch_id" in br
-            assert "query_results" in br
-            assert "batch_size" in br
-
-
-# ==========================================================================
-# Real-time stream-mode iteration through StreamingRAGNode (chunked)
-# ==========================================================================
-
-
-class TestStreamingChunkedOutput:
-    """StreamingRAGNode emits chunked stream-formatted output (the
-    documented stream contract)."""
-
-    def test_stream_formatter_yields_per_result_chunks_plus_metadata(self):
-        node = StreamingRAGNode(chunk_size=5)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        formatter = wf.get_node("stream_formatter")
-        assert formatter is not None
-        code = formatter.config["code"]
-        out = _exec_codegen(
-            code,
-            {
-                "progressive_results": {
-                    "initial": [
-                        {
-                            "doc": {"content": "alpha"},
-                            "stage": "initial",
-                            "score": 0.9,
-                        },
-                        {
-                            "doc": {"content": "beta"},
-                            "stage": "initial",
-                            "score": 0.7,
-                        },
-                    ],
-                    "has_more": True,
-                    "next_stage": "refined",
-                    "metadata": {"docs_scanned": 10, "matches_found": 2},
-                },
-            },
-        )
-        # The stream_chunks list carries one chunk per result + 1 metadata
-        # chunk = 3 total.
-        chunks = out["stream_chunks"]
-        result_chunks = [c for c in chunks if c["type"] == "result"]
-        metadata_chunks = [c for c in chunks if c["type"] == "metadata"]
-        assert len(result_chunks) == 2
-        assert len(metadata_chunks) == 1
-        # Per-result chunks carry chunk_id + score + stage.
-        for i, rc in enumerate(result_chunks):
-            assert rc["chunk_id"] == i
-            assert "score" in rc
-            assert rc["stage"] == "initial"
-        # streaming_metadata reports chunk + result counts and bp support.
-        meta = out["streaming_metadata"]
-        assert meta["total_chunks"] == 3
-        assert meta["result_chunks"] == 2
-        assert meta["supports_backpressure"] is True
-
-
-# ==========================================================================
-# F9 #1117/#1123 — CacheOptimizedRAGNode semantic_cache_manager publishes +
-# wires end-to-end through a REAL LocalRuntime (no mocking).
-# ==========================================================================
-
-
-class TestSemanticCacheManagerEndToEnd:
-    """End-to-end proof that ``semantic_cache_manager`` publishes a real
-    ``result`` port AND that its edges read ports the upstream nodes actually
-    publish.
-
-    Pre-fix defects (all confirmed to fail this test):
-
-    1. ``cache_key_generator`` publishes only the ``result`` port (code-mode
-       PythonCodeNode), so the edge reading a non-existent ``cache_keys`` port
-       raised "Source output 'cache_keys' not found ... Available: ['result']".
-    2. The edge read CacheNode's non-existent ``result`` port (CacheNode.get
-       publishes flat ``hit`` / ``value`` ports).
-    3. ``semantic_cache_manager`` read ``exact_hit`` / ``exact_result`` from
-       the cache result, but CacheNode.get publishes ``hit`` / ``value`` — so a
-       real cache hit was ALWAYS treated as a miss (``use_cache`` stuck False).
-
-    The test builds a cache subgraph from the REAL node configs the fixed
-    ``_create_workflow`` produces (no re-authoring of codegen), then runs it
-    under a real ``LocalRuntime`` — NO mocking, deterministic in-memory
-    CacheNode backend. The orthogonal ``rag_processor`` (HybridRAGNode) is
-    excluded because it carries a separate, pre-existing config-shape defect
-    (``config={"config": {...}}`` passes a dict where a ``RAGConfig`` is
-    expected) that blocks the full 5-node graph and is out of scope for this
-    ``semantic_cache_manager`` shard. The cache-decision subgraph the fix
-    repaired is exercised in full.
-    """
-
-    @staticmethod
-    def _real_node_codes() -> Dict[str, str]:
-        node = CacheOptimizedRAGNode(similarity_threshold=0.95)
-        wf = node._create_workflow()  # type: ignore[attr-defined]
-        return {
-            "cache_key_generator": wf.get_node("cache_key_generator").config["code"],
-            "semantic_cache_manager": wf.get_node("semantic_cache_manager").config[
-                "code"
-            ],
-        }
-
-    def test_cache_miss_subgraph_runs_end_to_end_and_publishes_result(self):
-        """key-gen -> CacheNode.get (miss) -> semantic_cache_manager runs
-        end-to-end under LocalRuntime and publishes the documented decision."""
-        from kailash.runtime.local import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
-        codes = self._real_node_codes()
-        builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
+    def _build_cache_spine(self) -> WorkflowBuilder:
+        nodes = _real_cache_nodes()
+        b = WorkflowBuilder()
+        for nid in (
             "cache_key_generator",
-            {"code": codes["cache_key_generator"]},
-        )
-        builder.add_node(
+            "semantic_cache_manager",
+            "result_aggregator",
+        ):
+            b.add_node_instance(nodes[nid], node_id=nid, _internal=True)
+        b.add_node(
             "CacheNode", "cache_checker", {"operation": "get", "backend": "memory"}
         )
-        builder.add_node(
-            "PythonCodeNode",
-            "semantic_cache_manager",
-            {"code": codes["semantic_cache_manager"]},
-        )
-        # The exact wiring the fix produced: flat exact-key string -> CacheNode
-        # `key`; CacheNode flat `hit`/`value` ports -> the manager's inputs.
-        builder.add_connection(
+        # The exact wiring _create_workflow produces.
+        b.add_connection(
             "cache_key_generator", "result.cache_keys.exact", "cache_checker", "key"
         )
-        builder.add_connection(
-            "cache_checker", "hit", "semantic_cache_manager", "cache_hit"
-        )
-        builder.add_connection(
+        b.add_connection("cache_checker", "hit", "semantic_cache_manager", "cache_hit")
+        b.add_connection(
             "cache_checker", "value", "semantic_cache_manager", "cache_value"
         )
-
-        runtime = LocalRuntime()
-        results, _run_id = runtime.execute(
-            builder.build(),
-            parameters={
-                "cache_key_generator": {"query": "what is deep learning"},
-                "semantic_cache_manager": {"query": "what is deep learning"},
-            },
+        b.add_connection(
+            "semantic_cache_manager", "result", "result_aggregator", "cache_decision"
         )
+        return b
 
-        # semantic_cache_manager published a NON-EMPTY result with the
-        # documented keys (empty cache -> miss).
-        published = results["semantic_cache_manager"]["result"]
-        assert published, "semantic_cache_manager published an empty result"
-        assert published["use_cache"] is False
-        assert published["cache_type"] is None
+    def test_cache_miss_spine_publishes_real_output(self):
+        """Empty cache → miss → aggregator publishes a real fresh-source result
+        end-to-end. Pre-migration the manager could publish nothing (#1117);
+        this proves the real ``result`` port flows to the documented consumer."""
+        b = self._build_cache_spine()
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                parameters={
+                    "cache_key_generator": {"query": "what is deep learning"},
+                    "semantic_cache_manager": {"query": "what is deep learning"},
+                },
+            )
+        decision = results["semantic_cache_manager"]["result"]
+        assert decision, "semantic_cache_manager published an empty result"
+        assert decision["use_cache"] is False
+        assert decision["cache_type"] is None
+        # The aggregator (documented downstream consumer) received the decision.
+        aggregated = results["result_aggregator"]["result"]["optimized_results"]
+        assert aggregated["metadata"]["source"] == "fresh"
+        assert aggregated["performance"]["cache_hit"] is False
 
     def test_cache_hit_detected_from_real_cachenode_shape(self):
-        """The contract-alignment fix: semantic_cache_manager reads CacheNode's
-        REAL ``hit`` / ``value`` ports, so a populated cache yields an exact
-        hit. Pre-fix (reading ``exact_hit`` / ``exact_result``) this returned a
-        miss for every real CacheNode get — the load-bearing regression."""
-        from kailash.runtime.local import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
-        codes = self._real_node_codes()
-        builder = WorkflowBuilder()
-        builder.add_node(
-            "PythonCodeNode",
-            "semantic_cache_manager",
-            {"code": codes["semantic_cache_manager"]},
+        """The contract-alignment fix: the manager reads CacheNode's REAL
+        ``hit`` / ``value`` ports, so a populated cache yields an exact hit that
+        flows through to the aggregator's cache-source output."""
+        nodes = _real_cache_nodes()
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["semantic_cache_manager"],
+            node_id="semantic_cache_manager",
+            _internal=True,
         )
-        runtime = LocalRuntime()
-        # Feed CacheNode.get's real hit-shape ports directly.
-        results, _run_id = runtime.execute(
-            builder.build(),
-            parameters={
-                "semantic_cache_manager": {
-                    "cache_hit": True,
-                    "cache_value": {"results": ["cached_doc"], "scores": [0.99]},
-                    "query": "what is deep learning",
-                }
-            },
+        b.add_node_instance(
+            nodes["result_aggregator"], node_id="result_aggregator", _internal=True
         )
-        published = results["semantic_cache_manager"]["result"]
-        assert published["use_cache"] is True
-        assert published["cache_type"] == "exact"
-        assert published["cached_result"] == {
-            "results": ["cached_doc"],
-            "scores": [0.99],
-        }
+        b.add_connection(
+            "semantic_cache_manager", "result", "result_aggregator", "cache_decision"
+        )
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                parameters={
+                    "semantic_cache_manager": {
+                        "cache_hit": True,
+                        "cache_value": {
+                            "results": ["cached_doc"],
+                            "scores": [0.99],
+                        },
+                        "query": "what is deep learning",
+                    }
+                },
+            )
+        decision = results["semantic_cache_manager"]["result"]
+        assert decision["use_cache"] is True
+        assert decision["cache_type"] == "exact"
+        aggregated = results["result_aggregator"]["result"]["optimized_results"]
+        assert aggregated["metadata"]["source"] == "cache"
+        assert aggregated["results"] == ["cached_doc"]
+        assert aggregated["performance"]["cache_hit"] is True
 
-    def test_semantic_cache_manager_binds_module_scope_result(self):
-        """F9 #1117 acceptance criterion: the codegen ends with a module-scope
-        (column-0) ``result =`` so PythonCodeNode publishes the ``result``
-        port. Pre-fix the assignment lived only inside if/else branches (never
-        at column 0)."""
-        import re
+    def test_red_pre_stripping_cache_wiring_breaks_aggregation(self):
+        """RED-PRE receipt: if the manager→aggregator edge is STRIPPED, the
+        aggregator cannot receive the decision and produces the honest empty
+        default (source=fresh, empty results) — proving the wiring is
+        load-bearing, not decorative. With the edge present (above tests) the
+        decision flows; without it the cached output never reaches the
+        consumer."""
+        nodes = _real_cache_nodes()
+        b = WorkflowBuilder()
+        # Manager produces a cache HIT, but the edge to the aggregator is OMITTED.
+        b.add_node_instance(
+            nodes["result_aggregator"], node_id="result_aggregator", _internal=True
+        )
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                # No cache_decision wired → honest empty default.
+                parameters={"result_aggregator": {}},
+            )
+        aggregated = results["result_aggregator"]["result"]["optimized_results"]
+        # Without the wiring, the cached result NEVER reaches the consumer.
+        assert aggregated["results"] == []
+        assert aggregated["performance"]["cache_hit"] is False
 
-        codes = self._real_node_codes()
-        code = codes["semantic_cache_manager"]
-        assert re.search(
-            r"^result\s*=", code, re.M
-        ), "semantic_cache_manager codegen does not bind `result` at module scope"
+
+# ==========================================================================
+# AsyncParallelRAGNode — executor → combiner spine end-to-end (production path)
+# ==========================================================================
+
+
+class TestParallelSpineEndToEnd:
+    """parallel_executor → result_combiner runs end-to-end under a real
+    LocalRuntime, with the REAL from_function nodes and the REAL
+    ``result.execution_plan`` wiring (the latent #1117 nested-port defect this
+    migration closed)."""
+
+    def _build_parallel_spine(self, strategies: List[str]) -> WorkflowBuilder:
+        nodes = _real_parallel_nodes(strategies)
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["parallel_executor"], node_id="parallel_executor", _internal=True
+        )
+        b.add_node_instance(
+            nodes["result_combiner"], node_id="result_combiner", _internal=True
+        )
+        # The exact wiring _create_workflow produces: executor publishes
+        # `result.execution_plan`, NOT a phantom `execution_plan` port.
+        b.add_connection(
+            "parallel_executor",
+            "result.execution_plan",
+            "result_combiner",
+            "execution_plan",
+        )
+        return b
+
+    def test_executor_plan_reaches_combiner_and_fuses(self):
+        """The executor's plan flows to the combiner via ``result.execution_plan``
+        AND the per-strategy results fuse into a single ranked list — the full
+        migrated spine end-to-end."""
+        b = self._build_parallel_spine(["semantic", "hybrid"])
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                parameters={
+                    "parallel_executor": {
+                        "query": "q",
+                        "documents": [{"id": "d1", "content": "x"}],
+                    },
+                    "result_combiner": {
+                        "semantic_results": {
+                            "results": [
+                                {"id": "doc1", "content": "a"},
+                                {"id": "doc2", "content": "b"},
+                            ],
+                            "scores": [0.9, 0.7],
+                        },
+                        "hybrid_results": {
+                            "results": [
+                                {"id": "doc1", "content": "a"},
+                                {"id": "doc3", "content": "c"},
+                            ],
+                            "scores": [0.8, 0.6],
+                        },
+                    },
+                },
+            )
+        parallel = results["result_combiner"]["result"]["parallel_results"]
+        assert {r["id"] for r in parallel["results"]} == {"doc1", "doc2", "doc3"}
+        # doc1 (in both, mean 0.85) ranks first.
+        assert parallel["results"][0]["id"] == "doc1"
+        assert parallel["scores"][0] == pytest.approx(0.85)
+        assert parallel["metadata"]["strategy_agreements"] == 1
+        assert set(parallel["metadata"]["strategies_used"]) == {"semantic", "hybrid"}
+
+    def test_executor_publishes_real_plan_port(self):
+        """The executor publishes a real, non-empty plan on the flat ``result``
+        port (pre-migration the edge read a phantom port that never existed)."""
+        nodes = _real_parallel_nodes(["semantic", "hybrid"])
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["parallel_executor"], node_id="parallel_executor", _internal=True
+        )
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                parameters={
+                    "parallel_executor": {
+                        "query": "q",
+                        "documents": [{"id": "d1", "content": "x"}],
+                    }
+                },
+            )
+        published = results["parallel_executor"]["result"]
+        assert published["execution_plan"]["strategies"] == ["semantic", "hybrid"]
+        assert published["execution_plan"]["parallel_count"] == 2
+
+    def test_red_pre_phantom_port_wiring_drops_plan_silently(self, caplog):
+        """RED-PRE receipt: the executor publishes its plan ONLY on the flat
+        ``result`` port. Wiring the combiner to the OLD phantom ``execution_plan``
+        source port (the pre-migration edge) silently DROPS the plan — the
+        runtime logs "Source output 'execution_plan' not found ... Available
+        outputs: ['result']" and the combiner receives ``execution_plan=None``
+        (honest 0.0 default). With the correct ``result.execution_plan`` wiring
+        (``test_executor_plan_reaches_combiner_and_fuses``) the plan flows. This
+        IS the #1117 silent-drop failure mode the migration's re-wiring closed."""
+        import logging
+
+        nodes = _real_parallel_nodes(["semantic"])
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["parallel_executor"], node_id="parallel_executor", _internal=True
+        )
+        b.add_node_instance(
+            nodes["result_combiner"], node_id="result_combiner", _internal=True
+        )
+        # The PRE-FIX phantom edge: executor publishes only `result`, never a
+        # top-level `execution_plan` port.
+        b.add_connection(
+            "parallel_executor", "execution_plan", "result_combiner", "execution_plan"
+        )
+        with caplog.at_level(logging.WARNING):
+            with LocalRuntime() as rt:
+                results, _ = rt.execute(
+                    b.build(),
+                    parameters={
+                        "parallel_executor": {
+                            "query": "q",
+                            "documents": [{"id": "d1", "content": "x"}],
+                        },
+                        "result_combiner": {
+                            "semantic_results": {
+                                "results": [{"id": "doc1", "content": "a"}],
+                                "scores": [0.9],
+                            }
+                        },
+                    },
+                )
+        # The runtime surfaced the missing source output (the #1117 signature).
+        assert any(
+            "execution_plan" in rec.getMessage() and "not found" in rec.getMessage()
+            for rec in caplog.records
+        ), "expected a missing-source-output log for the phantom execution_plan port"
+        # The plan never reached the combiner → honest 0.0 total-time default
+        # (a real plan would carry a parseable start_time).
+        parallel = results["result_combiner"]["result"]["parallel_results"]
+        assert parallel["metadata"]["total_execution_time"] == 0.0
+
+    def test_unknown_strategy_results_wire_via_dynamic_signature(self):
+        """The dynamic-signature factory declares a ``<strategy>_results`` input
+        for an arbitrary (unknown) strategy name, so its results wire and fuse —
+        the dynamic-strategy case the prior ``locals()`` codegen handled."""
+        b = self._build_parallel_spine(["unknown_strategy"])
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                b.build(),
+                parameters={
+                    "parallel_executor": {
+                        "query": "q",
+                        "documents": [{"id": "d1", "content": "x"}],
+                    },
+                    "result_combiner": {
+                        "unknown_strategy_results": {
+                            "results": [{"id": "docU", "content": "u"}],
+                            "scores": [0.5],
+                        }
+                    },
+                },
+            )
+        parallel = results["result_combiner"]["result"]["parallel_results"]
+        assert [r["id"] for r in parallel["results"]] == ["docU"]
+        assert parallel["metadata"]["strategies_used"] == ["unknown_strategy"]
+
+
+# ==========================================================================
+# StreamingRAGNode — full streaming spine end-to-end (production path)
+# ==========================================================================
+
+
+class TestStreamingSpineEndToEnd:
+    """The FULL streaming workflow (stream_controller → progressive_retriever →
+    stream_formatter) runs end-to-end under a real LocalRuntime via the
+    PRODUCTION ``_create_workflow()`` graph — every node is a real
+    ``from_function`` node, and the wiring is the REAL dotted-path
+    ``result.streaming_plan`` / ``result.progressive_results`` (the latent #1117
+    nested-port defect this migration closed)."""
+
+    def _streaming_workflow(self, chunk_size: int = 100):
+        """The real production workflow the node builds (no re-authoring)."""
+        return StreamingRAGNode(chunk_size=chunk_size)._create_workflow()  # type: ignore[attr-defined]
+
+    def test_full_streaming_spine_publishes_real_chunks(self):
+        """The controller's plan flows to the retriever (``result.streaming_plan``),
+        the retriever's results flow to the formatter
+        (``result.progressive_results``), and the formatter publishes real
+        stream chunks — the full migrated spine end-to-end through the
+        production graph. Pre-migration the edges read phantom top-level ports
+        that never existed (#1117), so nothing reached the formatter."""
+        wf = self._streaming_workflow(chunk_size=100)
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                wf,
+                parameters={
+                    "progressive_retriever": {
+                        "query": "deep learning",
+                        "documents": [
+                            {"id": "d1", "content": "deep learning models"},
+                            {"id": "d2", "content": "unrelated topic"},
+                        ],
+                    }
+                },
+            )
+        # The controller bound chunk_size through the closure.
+        plan = results["stream_controller"]["result"]["streaming_plan"]
+        assert plan["chunk_size"] == 100
+        # The retriever found exactly the one overlapping doc.
+        prog = results["progressive_retriever"]["result"]["progressive_results"]
+        assert prog["metadata"]["matches_found"] == 1
+        # The formatter (documented downstream consumer) published real chunks.
+        formatted = results["stream_formatter"]["result"]
+        assert [c["type"] for c in formatted["stream_chunks"]] == [
+            "result",
+            "metadata",
+        ]
+        assert formatted["streaming_metadata"]["result_chunks"] == 1
+        assert formatted["streaming_metadata"]["supports_backpressure"] is True
+
+    def test_red_pre_phantom_port_drops_streaming_plan_silently(self, caplog):
+        """RED-PRE receipt: the controller publishes its plan ONLY on the flat
+        ``result`` port. Wiring the retriever to the OLD phantom
+        ``streaming_plan`` source port (the pre-migration edge) silently DROPS
+        the plan — the runtime logs the missing source output and the retriever
+        falls back to its honest default k of 3. This IS the #1117 silent-drop
+        failure mode the migration's re-wiring closed (with the correct
+        ``result.streaming_plan`` wiring above, the plan flows)."""
+        import logging
+
+        src = self._streaming_workflow(chunk_size=100)
+        nodes = {nid: src.get_node(nid) for nid in src.nodes}
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["stream_controller"], node_id="stream_controller", _internal=True
+        )
+        b.add_node_instance(
+            nodes["progressive_retriever"],
+            node_id="progressive_retriever",
+            _internal=True,
+        )
+        # The PRE-FIX phantom edge: controller publishes only `result`, never a
+        # top-level `streaming_plan` port.
+        b.add_connection(
+            "stream_controller",
+            "streaming_plan",
+            "progressive_retriever",
+            "streaming_plan",
+        )
+        with caplog.at_level(logging.WARNING):
+            with LocalRuntime() as rt:
+                results, _ = rt.execute(
+                    b.build(),
+                    parameters={
+                        "progressive_retriever": {
+                            "query": "a b c d",
+                            "documents": [
+                                {"id": str(i), "content": "a b c d"} for i in range(5)
+                            ],
+                        }
+                    },
+                )
+        # The runtime surfaced the missing source output (the #1117 signature).
+        assert any(
+            "streaming_plan" in rec.getMessage() and "not found" in rec.getMessage()
+            for rec in caplog.records
+        ), "expected a missing-source-output log for the phantom streaming_plan port"
+        # The plan never reached the retriever → honest default k of 3 applied.
+        prog = results["progressive_retriever"]["result"]["progressive_results"]
+        assert len(prog["initial"]) == 3
+
+
+# ==========================================================================
+# BatchOptimizedRAGNode — full batch spine end-to-end (production path)
+# ==========================================================================
+
+
+class TestBatchSpineEndToEnd:
+    """The FULL batch workflow (batch_organizer → batch_processor →
+    result_formatter, plus organizer → formatter) runs end-to-end under a real
+    LocalRuntime via the PRODUCTION ``_create_workflow()`` graph — every node is
+    a real ``from_function`` node, and the wiring is the REAL dotted-path
+    ``result.batch_plan`` / ``result.batch_results`` (the latent #1117
+    nested-port defect this migration closed)."""
+
+    def _batch_workflow(self, batch_size: int = 2):
+        return BatchOptimizedRAGNode(batch_size=batch_size)._create_workflow()  # type: ignore[attr-defined]
+
+    def test_full_batch_spine_maps_results_per_query(self):
+        """The organizer's plan flows to the processor + formatter
+        (``result.batch_plan``), the processor's scores flow to the formatter
+        (``result.batch_results``), and the formatter publishes per-query
+        documents — the full migrated spine end-to-end through the production
+        graph."""
+        documents = [
+            {"id": "d1", "content": "alpha beta"},
+            {"id": "d2", "content": "gamma"},
+        ]
+        wf = self._batch_workflow(batch_size=2)
+        with LocalRuntime() as rt:
+            results, _ = rt.execute(
+                wf,
+                parameters={
+                    "batch_organizer": {"queries": ["alpha", "beta"]},
+                    "batch_processor": {"documents": documents},
+                    "result_formatter": {"documents": documents},
+                },
+            )
+        # The organizer bound batch_size through the closure.
+        assert results["batch_organizer"]["result"]["batch_plan"]["batch_size"] == 2
+        # The processor scored both queries.
+        proc_stats = results["batch_processor"]["result"]["batch_results"]["statistics"]
+        assert proc_stats["total_queries_processed"] == 2
+        # The formatter (documented downstream consumer) mapped scores back to
+        # per-query documents.
+        final = results["result_formatter"]["result"]["final_batch_results"]
+        assert set(final["processing_order"]) == {"alpha", "beta"}
+        # "alpha" overlaps d1 only (positive-score filter).
+        assert final["query_results"]["alpha"]["results"] == [
+            {"id": "d1", "content": "alpha beta"}
+        ]
+
+    def test_red_pre_phantom_port_drops_batch_plan_silently(self, caplog):
+        """RED-PRE receipt: the organizer publishes its plan ONLY on the flat
+        ``result`` port. Wiring the processor to the OLD phantom ``batch_plan``
+        source port (the pre-migration edge) silently DROPS the plan — the
+        runtime logs the missing source output and the processor falls back to
+        its honest zero-query default. This IS the #1117 silent-drop failure
+        mode the migration's re-wiring closed (with the correct
+        ``result.batch_plan`` wiring above, the plan flows)."""
+        import logging
+
+        src = self._batch_workflow(batch_size=2)
+        nodes = {nid: src.get_node(nid) for nid in src.nodes}
+        b = WorkflowBuilder()
+        b.add_node_instance(
+            nodes["batch_organizer"], node_id="batch_organizer", _internal=True
+        )
+        b.add_node_instance(
+            nodes["batch_processor"], node_id="batch_processor", _internal=True
+        )
+        # The PRE-FIX phantom edge: organizer publishes only `result`, never a
+        # top-level `batch_plan` port.
+        b.add_connection(
+            "batch_organizer", "batch_plan", "batch_processor", "batch_plan"
+        )
+        with caplog.at_level(logging.WARNING):
+            with LocalRuntime() as rt:
+                results, _ = rt.execute(
+                    b.build(),
+                    parameters={
+                        "batch_organizer": {"queries": ["alpha", "beta"]},
+                        "batch_processor": {
+                            "documents": [{"id": "d1", "content": "alpha"}]
+                        },
+                    },
+                )
+        # The runtime surfaced the missing source output (the #1117 signature).
+        assert any(
+            "batch_plan" in rec.getMessage() and "not found" in rec.getMessage()
+            for rec in caplog.records
+        ), "expected a missing-source-output log for the phantom batch_plan port"
+        # The plan never reached the processor → honest zero-query default.
+        proc_stats = results["batch_processor"]["result"]["batch_results"]["statistics"]
+        assert proc_stats["total_queries_processed"] == 0

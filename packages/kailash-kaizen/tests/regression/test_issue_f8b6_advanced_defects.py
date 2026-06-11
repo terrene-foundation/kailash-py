@@ -76,9 +76,12 @@ class TestAS2HybridWorkflowImplemented:
         assert isinstance(wf, WorkflowNode)
 
     def test_workflow_is_not_empty(self):
-        """The pre-B6 placeholder shipped nodes=[]; the real one has 4 nodes."""
+        """The pre-B6 placeholder shipped nodes=[]; the real one carries the
+        full retrieval pipeline (source + dense + sparse + fuse + the three
+        from_function projector nodes the post-migration output_mapping needs)."""
         wf = create_hybrid_rag_workflow(RAGConfig())
-        assert len(wf._workflow.nodes) == 4  # type: ignore[union-attr]
+        node_ids = set(wf._workflow.nodes.keys())  # type: ignore[union-attr]
+        assert {"source", "dense", "sparse", "fuse"} <= node_ids
 
     def test_workflow_runs_and_returns_consumed_contract(self):
         """The pre-B6 placeholder ImportError'd; the real one executes."""

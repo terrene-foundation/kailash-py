@@ -116,45 +116,73 @@ def test_issue_1116_session_id_uses_secrets_token_hex():
 
 @pytest.mark.regression
 def test_issue_1117_evaluation_codegen_binds_module_scope_result():
-    """The context_evaluator + metric_aggregator + test_executor codegen
-    bodies MUST execute their inner functions at module scope so the
-    PythonCodeNode outbound port carries the computed dict."""
-    from kaizen.nodes.rag.evaluation import RAGEvaluationNode
+    """The context_evaluator + metric_aggregator + test_executor stages MUST
+    publish their computed dict on the PythonCodeNode outbound port.
+
+    Post-S3 these stages are ``PythonCodeNode.from_function`` nodes (the inline
+    ``code=`` codegen was lifted to the module-level functions
+    ``collect_rag_results`` / ``_evaluate_context_precision`` /
+    ``aggregate_evaluation_metrics``). A from_function node publishes its
+    ``return`` value on the flat ``result`` port — the structural successor of
+    the codegen's module-scope ``result =`` assignment. This test preserves the
+    ORIGINAL intent (the outbound port carries the computed dict) by (a)
+    asserting the production from_function nodes resolve in the built workflow
+    AND (b) calling each lifted function directly and asserting it returns a
+    dict (the value the from_function node publishes on ``result``)."""
+    from kaizen.nodes.rag.evaluation import (
+        RAGEvaluationNode,
+        _evaluate_context_precision,
+        aggregate_evaluation_metrics,
+        collect_rag_results,
+    )
 
     wf = RAGEvaluationNode(use_reference_answers=False)._create_workflow()  # type: ignore[attr-defined]
     for node_id in ("test_executor", "context_evaluator", "metric_aggregator"):
         node = wf.get_node(node_id)
         assert node is not None, node_id
-        code = node.config["code"]
-        # The codegen MUST end with a module-scope `result =` assignment
-        # (per the issue acceptance criterion).
-        assert re.search(
-            r"^result\s*=", code, re.M
-        ), f"{node_id} codegen does not bind `result` at module scope"
+        # The from_function nodes are real PythonCodeNode instances; their
+        # outbound port is the flat `result` carrying the function return.
+        assert type(node).__name__ == "PythonCodeNode", node_id
+
+    # The lifted functions return the dict the from_function `result` port
+    # publishes — the structural successor of the codegen's module-scope
+    # `result =`. Honest empty inputs → honest empty (non-fabricated) dicts.
+    test_out = collect_rag_results(test_queries=[])
+    assert isinstance(test_out, dict) and "test_results" in test_out
+
+    ctx_out = _evaluate_context_precision(
+        {"retrieved_contexts": [], "reference_answer": ""}
+    )
+    assert isinstance(ctx_out, dict)
+
+    agg_out = aggregate_evaluation_metrics(test_results=[], metrics=["faithfulness"])
+    assert isinstance(agg_out, dict) and "evaluation_summary" in agg_out
 
 
 @pytest.mark.regression
 def test_issue_1118_metric_aggregator_uses_datetime_class_not_module():
-    """The metric_aggregator codegen MUST call `_datetime_class.now()`
-    (the imported datetime class) — NOT `datetime.now()` against the
-    module, which raises AttributeError."""
-    from kaizen.nodes.rag.evaluation import RAGEvaluationNode
+    """The metric_aggregator stage MUST call ``_datetime_class.now()`` (the
+    imported datetime CLASS) — NOT ``datetime.now()`` against the module, which
+    raises ``AttributeError: module 'datetime' has no attribute 'now'``.
 
-    wf = RAGEvaluationNode()._create_workflow()  # type: ignore[attr-defined]
-    aggregator = wf.get_node("metric_aggregator")
-    assert aggregator is not None
-    code = aggregator.config["code"]
-    # The codegen MUST import the class (under any alias) AND MUST invoke
-    # via the class symbol, not the module.
-    assert "from datetime import datetime" in code
-    assert "_datetime_class.now()" in code
-    # The bare `datetime.now()` invocation OUTSIDE comments / docstrings
-    # is gone. Strip comments (everything from `#` to EOL) before checking.
-    code_no_comments = re.sub(r"#.*$", "", code, flags=re.M)
-    # Strip backtick-quoted spans (used in module docstrings).
-    code_no_quotes = re.sub(r"`[^`]*`", "", code_no_comments)
-    bare_call_count = len(re.findall(r"(?<!_)datetime\.now\s*\(", code_no_quotes))
-    assert bare_call_count == 0
+    Post-S3 the stage is a ``PythonCodeNode.from_function`` node wrapping
+    ``aggregate_evaluation_metrics`` (the inline ``code=`` codegen was lifted).
+    This test preserves the ORIGINAL intent BEHAVIORALLY (per
+    ``rules/testing.md`` § Behavioral Regression Tests Over Source-Grep): it
+    CALLS ``aggregate_evaluation_metrics`` and asserts the emitted timestamp is
+    a valid ISO-8601 string. A bare ``datetime.now()`` against the module would
+    raise ``AttributeError`` before the dict is built — so a parseable
+    timestamp proves the class-symbol invocation works."""
+    from datetime import datetime
+
+    from kaizen.nodes.rag.evaluation import aggregate_evaluation_metrics
+
+    out = aggregate_evaluation_metrics(test_results=[], metrics=["faithfulness"])
+    timestamp = out["evaluation_summary"]["evaluation_config"]["timestamp"]
+    # `datetime.fromisoformat` raises ValueError on a non-ISO string; a clean
+    # parse proves `_datetime_class.now().isoformat()` ran (no AttributeError).
+    parsed = datetime.fromisoformat(timestamp)
+    assert parsed.year >= 2020
 
 
 # ==========================================================================

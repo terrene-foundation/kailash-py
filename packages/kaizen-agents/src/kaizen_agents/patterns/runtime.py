@@ -67,6 +67,8 @@ Created: 2025-11-05 (Phase 4, Orchestration Runtime)
 Reference: Based on kaizen-specialist analysis and existing coordination patterns
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import inspect
@@ -743,7 +745,7 @@ class OrchestrationRuntime:
 
     async def execute_workflow(
         self,
-        workflow: "Workflow",
+        workflow: Workflow,
         inputs: dict[str, Any] | None = None,
         workflow_id: str | None = None,
     ) -> dict[str, Any]:

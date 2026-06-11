@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
+
 from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -1546,7 +1547,17 @@ Format your response as JSON with keys: risk_level, legal_implications, best_pra
             result = self.ai_agent.execute(prompt=prompt)
 
             if result and result.get("success"):
-                response_text = result.get("response", "")
+                # LLMAgentNode returns nested structure:
+                # {"response": {"content": "<text>", ...}, ...}
+                response = result.get("response", "")
+                if isinstance(response, dict):
+                    response_text = response.get("content")
+                else:
+                    response_text = response
+                if not response_text or not isinstance(response_text, str):
+                    # Fail closed: malformed/missing envelope routes to the
+                    # documented None degrade in the except branch
+                    raise ValueError("LLM result missing nested response.content")
                 return self._parse_ai_compliance_response(response_text)
             return None
 

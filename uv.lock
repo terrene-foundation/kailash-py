@@ -1772,7 +1772,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.28.4"
+version = "2.29.3"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2052,7 +2052,7 @@ provides-extras = ["server", "http-client", "db-postgres", "db-mysql", "db-sqlit
 
 [[package]]
 name = "kailash-align"
-version = "0.7.1"
+version = "0.7.2"
 source = { editable = "packages/kailash-align" }
 dependencies = [
     { name = "accelerate" },
@@ -2079,8 +2079,8 @@ requires-dist = [
     { name = "kailash", specifier = ">=2.16.0" },
     { name = "kailash-align", extras = ["rlhf", "eval", "serve", "online", "rl-bridge"], marker = "extra == 'all'" },
     { name = "kailash-kaizen", specifier = ">=2.7.5" },
-    { name = "kailash-ml", specifier = ">=0.11.0" },
-    { name = "kailash-ml", extras = ["rl"], marker = "extra == 'rl-bridge'", specifier = ">=1.1,<2.0" },
+    { name = "kailash-ml", specifier = ">=1.1" },
+    { name = "kailash-ml", extras = ["rl"], marker = "extra == 'rl-bridge'", specifier = ">=1.1" },
     { name = "llama-cpp-python", marker = "extra == 'serve'", specifier = ">=0.3" },
     { name = "lm-eval", marker = "extra == 'eval'", specifier = ">=0.4,<1.0" },
     { name = "peft", specifier = ">=0.10" },
@@ -2097,7 +2097,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.10.3"
+version = "2.11.3"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2305,7 +2305,7 @@ provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server
 
 [[package]]
 name = "kailash-ml"
-version = "1.7.4"
+version = "2.0.1"
 source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2347,8 +2347,8 @@ requires-dist = [
     { name = "kailash-align", marker = "extra == 'alignment'", specifier = ">=0.6" },
     { name = "kailash-dataflow", specifier = ">=2.0.11" },
     { name = "kailash-kaizen", marker = "extra == 'agents'", specifier = ">=2.7.5" },
-    { name = "kailash-kaizen", marker = "extra == 'kaizen-judges'", specifier = ">=2.7" },
-    { name = "kailash-kaizen", marker = "extra == 'kaizen-observability'", specifier = ">=2.7" },
+    { name = "kailash-kaizen", marker = "extra == 'kaizen-judges'", specifier = ">=2.7.5" },
+    { name = "kailash-kaizen", marker = "extra == 'kaizen-observability'", specifier = ">=2.7.5" },
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'dl-gpu'" },
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'rl'" },
     { name = "kailash-ml", extras = ["dl", "xgb", "catboost", "stats", "rl", "rl-offline", "rl-envpool", "rl-distributed", "grpc", "automl-bayes", "agents", "hpo", "mlflow", "huggingface", "dashboard", "interop", "imbalance", "explain"], marker = "extra == 'all'" },

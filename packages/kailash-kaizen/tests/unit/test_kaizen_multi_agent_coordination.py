@@ -21,6 +21,14 @@ import pytest
 from tests.fixtures.consolidated_test_fixtures import consolidated_fixtures
 
 
+@pytest.fixture(autouse=True)
+def _default_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Framework-creating tests resolve the model from the environment
+    (kaizen.errors.EnvModelMissing otherwise); the unit tier supplies a
+    deterministic value — same pattern as test_issue_822_*."""
+    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")
+
+
 # Test multi-agent workflow templates
 class TestMultiAgentWorkflowTemplates:
     """Test multi-agent workflow template creation and configuration."""
@@ -210,9 +218,17 @@ class TestAgentCommunication:
         """Test agent communication creates appropriate workflow for execution."""
         import kaizen
 
-        # Mock runtime execution
+        # Mock runtime execution — production LLMAgentNode publishes
+        # "response" as a NESTED dict {"content": ..., "role": ...}
+        # (llm_agent.py:995); flat-string doubles are the F31 wrong-shape
+        # false-green class.
         mock_execute.return_value = (
-            {"comm_response_agent_b": {"response": "Hello from agent B"}},
+            {
+                "comm_response_agent_b": {
+                    "success": True,
+                    "response": {"content": "Hello from agent B", "role": "assistant"},
+                }
+            },
             "test_run_id",
         )
 
@@ -243,10 +259,12 @@ class TestAgentCommunication:
         assert "context" in response
         assert "timestamp" in response
 
-        # Verify response content
+        # Verify response content — equality, not substring: under the
+        # pre-fix parse the message was the dict repr of the nested response
+        # (which CONTAINS the text), so substring would false-green.
         assert response["sender"] == "agent_b"
         assert response["receiver"] == "agent_a"
-        assert "Hello from agent B" in response["message"]
+        assert response["message"] == "Hello from agent B"
 
     def test_agent_communication_tracks_conversation_history(self, performance_tracker):
         """Test agent communication maintains conversation history."""

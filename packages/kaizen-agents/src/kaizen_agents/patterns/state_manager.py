@@ -235,7 +235,7 @@ class OrchestrationStateManager:
         # (e.g. a LocalRuntime acquired from a pool) lacks that method, so when
         # one is supplied we warn and fall back to an owned AsyncLocalRuntime
         # rather than rejecting it (callers passing a sync runtime keep working).
-        self.runtime: "AsyncLocalRuntime"
+        self.runtime: AsyncLocalRuntime
         if runtime is not None:
             acquired = runtime.acquire()
             if hasattr(acquired, "execute_workflow_async"):

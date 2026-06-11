@@ -41,6 +41,9 @@ from kaizen.nodes.rag.agentic import (
     AgenticRAGNode,
     ReasoningRAGNode,
     ToolAugmentedRAGNode,
+    _make_result_synthesizer,
+    _make_state_manager,
+    execute_tool_action,
 )
 
 pytestmark = pytest.mark.integration
@@ -155,47 +158,38 @@ class TestAgenticRAGIntegration:
         # The workflow carries real connections between the nodes.
         assert len(wf.connections) > 0
 
-    def test_tool_executor_template_runs_real_search(self):
-        """The tool_executor ``code=`` template executes a real keyword
-        search and ranks documents by overlap score."""
-        wf = _build(AgenticRAGNode())
-        code = wf.nodes["tool_executor"].config["code"]
-        ns = {
-            "reasoning_state": {"current_action": 'search("transformer attention")'},
-            "documents": [
+    def test_tool_executor_fn_runs_real_search(self):
+        """The lifted ``execute_tool_action`` executes a real keyword search and
+        ranks documents by overlap score (post-S6b from_function migration)."""
+        out = execute_tool_action(
+            reasoning_state={"current_action": 'search("transformer attention")'},
+            documents=[
                 {"id": "hit", "content": "the transformer uses attention heavily"},
                 {"id": "miss", "content": "completely unrelated text"},
             ],
-        }
-        exec(code, ns)
-        tr = ns["result"]["tool_result"]
+        )
+        tr = out["tool_result"]
         assert tr["tool"] == "search"
         assert tr["count"] == 1
         # The matching document scored above zero and ranks first.
         assert tr["results"][0]["id"] == "hit"
         assert tr["results"][0]["score"] > 0
 
-    def test_tool_executor_template_calculate_real_arithmetic(self):
-        """The tool_executor ``calculate`` action evaluates real arithmetic
-        via the AST-walked safe evaluator."""
-        wf = _build(AgenticRAGNode())
-        code = wf.nodes["tool_executor"].config["code"]
-        ns = {
-            "reasoning_state": {"current_action": "calculate((100 - 80) / 80 * 100)"},
-            "documents": [],
-        }
-        exec(code, ns)
-        assert ns["result"]["tool_result"]["result"] == pytest.approx(25.0)
-
-    def test_result_synthesizer_template_interpolates_real_config(self):
-        """The result_synthesizer template runs and the constructor config
-        is interpolated into the real metadata block."""
-        wf = _build(
-            AgenticRAGNode(planning_strategy="tree-of-thought", max_reasoning_steps=9)
+    def test_tool_executor_fn_calculate_real_arithmetic(self):
+        """The lifted ``execute_tool_action`` ``calculate`` action evaluates real
+        arithmetic via the AST-walked safe evaluator."""
+        out = execute_tool_action(
+            reasoning_state={"current_action": "calculate((100 - 80) / 80 * 100)"},
+            documents=[],
         )
-        code = wf.nodes["result_synthesizer"].config["code"]
-        ns = {
-            "reasoning_state": {
+        assert out["tool_result"]["result"] == pytest.approx(25.0)
+
+    def test_result_synthesizer_fn_binds_real_config(self):
+        """The lifted ``_make_result_synthesizer`` closure binds the constructor
+        config into the real metadata block and computes the trace."""
+        synth = _make_result_synthesizer("tree-of-thought", 9)
+        out = synth(
+            reasoning_state={
                 "steps": [
                     {
                         "step_number": 1,
@@ -207,10 +201,8 @@ class TestAgenticRAGIntegration:
                 "final_answer": "the answer",
                 "completed": True,
             },
-            "query": "compare revenue",
-        }
-        exec(code, ns)
-        out = ns["result"]["agentic_rag_result"]
+            query="compare revenue",
+        )["agentic_rag_result"]
         assert out["answer"] == "the answer"
         assert out["tools_used"] == ["search"]
         assert out["metadata"]["planning_strategy"] == "tree-of-thought"
@@ -660,11 +652,11 @@ class TestAgenticOutputSideParsed:
     read a non-existent key (state_manager crashed on `None.strip()`; the
     verifier verdict was silently dropped)."""
 
-    def _build_codes(self, **kw):
-        wf = _build(AgenticRAGNode(**kw))
-        return wf
-
     # -- state_manager consumes the PARSED ReAct prose (read-back) ------------
+    # Post-S6b the state_manager COMPUTE stage is the lifted
+    # `_make_state_manager(...)` closure (a `PythonCodeNode.from_function` node).
+    # The O5 parsed-output contract is exercised by calling the lifted function
+    # directly with the parser OUTPUT shapes the production edges wire to.
 
     def test_state_manager_parses_react_answer_from_parsed_prose(self):
         """The state_manager line parser receives the reasoning_parser's
@@ -672,19 +664,18 @@ class TestAgenticOutputSideParsed:
         extracts the Answer, and publishes it in `reasoning_state`. RED pre-O5:
         the consumer read `reasoning_response.get("response")` off the inner
         `{"content": ...}` dict -> None -> `None.strip()` AttributeError."""
-        wf = self._build_codes()
-        code = wf.nodes["state_manager"].config["code"]
-        ns = {
+        sm = _make_state_manager(5)
+        out = sm(
+            # plan_parser publishes `result.plan` = parsed planner dict.
+            plan={"plan": [], "complexity": "simple"},
             # reasoning_parser publishes `result.reasoning_text` = bare prose str.
-            "reasoning_response": (
+            reasoning_response=(
                 "Thought: compare growth\nAction: search(revenue)\n"
                 "Answer: A overtakes B in 4 years"
             ),
-            # plan_parser publishes `result.plan` = parsed planner dict.
-            "plan": {"plan": [], "complexity": "simple"},
-        }
-        exec(code, ns)
-        rs = ns["result"]["reasoning_state"]
+            tool_result=None,
+        )
+        rs = out["reasoning_state"]
         assert rs["final_answer"] == "A overtakes B in 4 years", (
             "state_manager MUST parse the ReAct Answer from the parsed prose; "
             f"got: {rs['final_answer']!r}"
@@ -696,11 +687,9 @@ class TestAgenticOutputSideParsed:
         """When the reasoning_parser emits "" (the honest "no reasoning yet"
         on an empty/missing `response.content`), the state_manager records an
         empty step WITHOUT crashing — no fabricated answer."""
-        wf = self._build_codes()
-        code = wf.nodes["state_manager"].config["code"]
-        ns = {"reasoning_response": "", "plan": {}}
-        exec(code, ns)
-        rs = ns["result"]["reasoning_state"]
+        sm = _make_state_manager(5)
+        out = sm(plan={}, reasoning_response="", tool_result=None)
+        rs = out["reasoning_state"]
         # No Answer line -> final_answer stays None (honest), no crash.
         assert rs["final_answer"] is None
         assert rs["steps"][0]["thought"] is None
@@ -713,10 +702,9 @@ class TestAgenticOutputSideParsed:
         and applies its confidence. RED pre-O5: `verification.get("response")`
         off the inner `{"content": ...}` dict -> None -> verdict silently
         dropped, confidence never adjusted (stuck at base+boost)."""
-        wf = self._build_codes()
-        code = wf.nodes["result_synthesizer"].config["code"]
-        ns = {
-            "reasoning_state": {
+        synth = _make_result_synthesizer("react", 5)
+        out = synth(
+            reasoning_state={
                 "steps": [
                     {
                         "step_number": 1,
@@ -729,11 +717,9 @@ class TestAgenticOutputSideParsed:
                 "completed": True,
             },
             # verification_parser publishes `result.verification` = parsed dict.
-            "verification": {"verified": True, "confidence": 0.5, "issues": []},
-            "query": "q",
-        }
-        exec(code, ns)
-        out = ns["result"]["agentic_rag_result"]
+            verification={"verified": True, "confidence": 0.5, "issues": []},
+            query="q",
+        )["agentic_rag_result"]
         # (base 0.7 + boost 0.1) * verdict 0.5 = 0.4 — the verdict WAS applied.
         assert out["confidence"] == pytest.approx(0.4), (
             "synthesizer MUST apply the parsed verifier confidence; "
@@ -751,10 +737,9 @@ class TestAgenticOutputSideParsed:
         typed `{"parse_error": ...}` sentinel, the synthesizer leaves confidence
         UNADJUSTED and publishes `verification: None` — it does NOT fabricate a
         0.8 verdict (zero-tolerance Rule 2)."""
-        wf = self._build_codes()
-        code = wf.nodes["result_synthesizer"].config["code"]
-        ns = {
-            "reasoning_state": {
+        synth = _make_result_synthesizer("react", 5)
+        out = synth(
+            reasoning_state={
                 "steps": [
                     {
                         "step_number": 1,
@@ -766,11 +751,9 @@ class TestAgenticOutputSideParsed:
                 "final_answer": "A",
                 "completed": True,
             },
-            "verification": {"parse_error": "non-json-response"},
-            "query": "q",
-        }
-        exec(code, ns)
-        out = ns["result"]["agentic_rag_result"]
+            verification={"parse_error": "non-json-response"},
+            query="q",
+        )["agentic_rag_result"]
         # base 0.7 + boost 0.1 = 0.8, UNADJUSTED (no usable verdict).
         assert out["confidence"] == pytest.approx(0.8)
         assert out["verification"] is None

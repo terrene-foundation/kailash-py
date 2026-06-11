@@ -17,6 +17,11 @@ import os
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+# PythonCodeNode is imported for its `from_function` classmethod (the COMPUTE
+# stages of create_hybrid_rag_workflow are wired via
+# `PythonCodeNode.from_function(...)`) AND for its @register_node side effect.
+from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -58,6 +63,106 @@ class RAGConfig:
         self.retrieval_k = kwargs.get("retrieval_k", 5)
 
 
+# ---------------------------------------------------------------------------
+# COMPUTE-stage functions for create_hybrid_rag_workflow (#1117 / #1123
+# root-cause fix — same reference template as optimized.py / graph.py).
+#
+# The two PythonCodeNode COMPUTE stages (`source` fan-out + `fuse` RRF) were
+# inline `code=` codegen blocks; the fuse block was a doubled-brace f-string
+# (#1123). They are lifted to real module-level functions wired via
+# `PythonCodeNode.from_function`, each publishing the SAME flat `result` port.
+#
+# OUTPUT-PORT SHAPE: an inline `code=` block with multiple module-scope `results
+# = ...; scores = ...; metadata = ...` assignments promotes EACH to a top-level
+# output port, which the WorkflowNode `output_mapping` read directly. A
+# `from_function` node publishes ONLY a flat `result` port (the returned dict's
+# keys are NOT promoted). `WorkflowNode.output_mapping` resolves an `output` key
+# against the node's published ports with a FLAT lookup (no `result.<key>`
+# nesting), so the fuse `result` dict's three keys are surfaced to the top-level
+# consumed contract via three thin from_function PROJECTOR nodes — each indexes
+# one key off the fuse `result` and returns the BARE value, which output_mapping
+# then surfaces under the `results` / `scores` / `metadata` contract names. The
+# projectors are pure data projection (the permitted output-formatting exception
+# per rules/agent-reasoning.md — no agent decisions).
+# ---------------------------------------------------------------------------
+
+
+def _hybrid_source_fanout(documents=None, query=None) -> dict:
+    """Entry node: hold ``documents`` + ``query`` and fan them out.
+
+    Lifted ``source`` COMPUTE block. Publishes ``{"documents", "query"}`` on the
+    flat ``result`` port; the existing ``result.documents`` / ``result.query``
+    fan-out edges resolve unchanged.
+    """
+    return {"documents": documents, "query": query}
+
+
+def _make_rrf_fuse(retrieval_k: int):
+    """Build a from_function-compatible RRF fuse bound to ``retrieval_k``.
+
+    The build-time ``retrieval_k`` (the f-string's only interpolation) is bound
+    through the closure, keeping ``dense_result`` / ``sparse_result`` as the
+    declared inputs the DenseRetrievalNode / SparseRetrievalNode ``results``
+    ports wire to. Returns the three-key fusion dict on the flat ``result`` port
+    — the doubled-brace f-string codegen (#1123) is eliminated; the RRF
+    computation is preserved verbatim.
+    """
+
+    def fuse_dense_sparse(dense_result=None, sparse_result=None) -> dict:
+        """Reciprocal Rank Fusion over the dense + sparse result lists."""
+
+        def _reciprocal_rank_fusion(doc_lists, k=60, top_k=retrieval_k):
+            fused_scores = {}
+            doc_info = {}
+            for documents in doc_lists:
+                for rank, doc in enumerate(documents or []):
+                    if not isinstance(doc, dict):
+                        continue
+                    doc_id = doc.get("id") or str(hash((doc.get("content") or "")[:50]))
+                    fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (
+                        k + rank + 1
+                    )
+                    doc_info[doc_id] = doc
+            ordered = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+            docs = [doc_info[d] for d, _ in ordered[:top_k]]
+            scores_out = [s for _, s in ordered[:top_k]]
+            return docs, scores_out
+
+        # dense_result / sparse_result are the `results` output lists of the
+        # DenseRetrievalNode / SparseRetrievalNode (a list of document dicts).
+        _dense = dense_result if isinstance(dense_result, list) else []
+        _sparse = sparse_result if isinstance(sparse_result, list) else []
+        _docs, _scores = _reciprocal_rank_fusion([_dense, _sparse])
+        return {
+            "results": _docs,
+            "scores": _scores,
+            "metadata": {
+                "fusion_method": "rrf",
+                "retrieval_modes": ["dense", "sparse"],
+                "retrieval_k": retrieval_k,
+                "dense_count": len(_dense),
+                "sparse_count": len(_sparse),
+            },
+        }
+
+    return fuse_dense_sparse
+
+
+def _project_fused_results(fused=None) -> list:
+    """Project the ``results`` list off the fuse ``result`` dict (bare value)."""
+    return (fused or {}).get("results", []) if isinstance(fused, dict) else []
+
+
+def _project_fused_scores(fused=None) -> list:
+    """Project the ``scores`` list off the fuse ``result`` dict (bare value)."""
+    return (fused or {}).get("scores", []) if isinstance(fused, dict) else []
+
+
+def _project_fused_metadata(fused=None) -> dict:
+    """Project the ``metadata`` dict off the fuse ``result`` dict (bare value)."""
+    return (fused or {}).get("metadata", {}) if isinstance(fused, dict) else {}
+
+
 def create_hybrid_rag_workflow(config: RAGConfig) -> WorkflowNode:
     """Build a genuine hybrid-RAG retrieval workflow.
 
@@ -68,18 +173,27 @@ def create_hybrid_rag_workflow(config: RAGConfig) -> WorkflowNode:
     ``StepBackRAGNode``) via ``self.base_rag_workflow.run(documents=...,
     query=..., operation="retrieve")``.
 
-    Graph shape (4 nodes)::
+    Graph shape (7 nodes)::
 
         source ──documents/query──┬──> dense  ──results──┐
-                                  └──> sparse ──results──┴──> fuse
+                                  └──> sparse ──results──┴──> fuse ──result──┬──> proj_results
+                                                                             ├──> proj_scores
+                                                                             └──> proj_metadata
 
-    - ``source`` (``PythonCodeNode``) — entry node; receives ``documents`` and
-      ``query`` via the WorkflowNode ``input_mapping`` and fans them out.
+    - ``source`` (``PythonCodeNode.from_function``) — entry node; receives
+      ``documents`` and ``query`` via the WorkflowNode ``input_mapping`` and
+      fans them out on the flat ``result`` port.
     - ``dense`` (``DenseRetrievalNode``) — embedding-similarity retrieval; with
       no LLM key configured it runs its deterministic keyword-overlap fallback.
     - ``sparse`` (``SparseRetrievalNode``) — keyword / term-frequency retrieval.
-    - ``fuse`` (``PythonCodeNode``) — Reciprocal Rank Fusion over the dense and
-      sparse result lists; emits ``results`` / ``scores`` / ``metadata``.
+    - ``fuse`` (``PythonCodeNode.from_function``) — Reciprocal Rank Fusion over
+      the dense and sparse result lists; returns ``{"results", "scores",
+      "metadata"}`` on the flat ``result`` port.
+    - ``proj_results`` / ``proj_scores`` / ``proj_metadata``
+      (``PythonCodeNode.from_function``) — thin projector nodes that index one
+      key off the fuse ``result`` dict and return its BARE value, so the
+      WorkflowNode ``output_mapping`` (flat-key resolution, no ``result.<key>``
+      nesting) can surface each under the top-level consumed-contract name.
 
     The returned :class:`WorkflowNode` exposes the consumed contract: a
     ``.run(documents=..., query=..., operation="retrieve")`` call returns a
@@ -98,10 +212,10 @@ def create_hybrid_rag_workflow(config: RAGConfig) -> WorkflowNode:
     builder = WorkflowBuilder()
 
     # Entry node: holds documents + query, fans them out to both retrievers.
-    source_id = builder.add_node(
-        "PythonCodeNode",
+    source_id = builder.add_node_instance(
+        PythonCodeNode.from_function(_hybrid_source_fanout, name="source"),
         node_id="source",
-        config={"code": 'result = {"documents": documents, "query": query}'},
+        _internal=True,
     )
 
     # Dense retrieval (embedding similarity; deterministic fallback when no key).
@@ -118,47 +232,31 @@ def create_hybrid_rag_workflow(config: RAGConfig) -> WorkflowNode:
         config={},
     )
 
-    # Reciprocal Rank Fusion of the dense and sparse result lists.
-    fuse_id = builder.add_node(
-        "PythonCodeNode",
+    # Reciprocal Rank Fusion of the dense and sparse result lists (the build-time
+    # retrieval_k is bound through the closure).
+    fuse_id = builder.add_node_instance(
+        PythonCodeNode.from_function(_make_rrf_fuse(retrieval_k), name="fuse"),
         node_id="fuse",
-        config={
-            "code": f"""
-def _reciprocal_rank_fusion(doc_lists, k=60, top_k={retrieval_k}):
-    fused_scores = {{}}
-    doc_info = {{}}
-    for documents in doc_lists:
-        for rank, doc in enumerate(documents or []):
-            if not isinstance(doc, dict):
-                continue
-            doc_id = doc.get("id") or str(hash((doc.get("content") or "")[:50]))
-            fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
-            doc_info[doc_id] = doc
-    ordered = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
-    docs = [doc_info[d] for d, _ in ordered[:top_k]]
-    scores_out = [s for _, s in ordered[:top_k]]
-    return docs, scores_out
+        _internal=True,
+    )
 
-
-# dense_result / sparse_result are the `results` output lists of the
-# DenseRetrievalNode / SparseRetrievalNode (a list of document dicts).
-_dense = dense_result if isinstance(dense_result, list) else []
-_sparse = sparse_result if isinstance(sparse_result, list) else []
-_docs, _scores = _reciprocal_rank_fusion([_dense, _sparse])
-results = _docs
-scores = _scores
-# `results`, `scores`, `metadata` are surfaced as separate node outputs so
-# the WorkflowNode output_mapping can flatten them to the top level of the
-# consumed contract.
-metadata = {{
-    "fusion_method": "rrf",
-    "retrieval_modes": ["dense", "sparse"],
-    "retrieval_k": {retrieval_k},
-    "dense_count": len(_dense),
-    "sparse_count": len(_sparse),
-}}
-"""
-        },
+    # Projector nodes — index one key off the fuse `result` dict and return the
+    # BARE value so the flat-resolution output_mapping can surface each under the
+    # top-level consumed-contract name.
+    proj_results_id = builder.add_node_instance(
+        PythonCodeNode.from_function(_project_fused_results, name="proj_results"),
+        node_id="proj_results",
+        _internal=True,
+    )
+    proj_scores_id = builder.add_node_instance(
+        PythonCodeNode.from_function(_project_fused_scores, name="proj_scores"),
+        node_id="proj_scores",
+        _internal=True,
+    )
+    proj_metadata_id = builder.add_node_instance(
+        PythonCodeNode.from_function(_project_fused_metadata, name="proj_metadata"),
+        node_id="proj_metadata",
+        _internal=True,
     )
 
     # Fan documents + query from the source node to both retrievers.
@@ -167,9 +265,19 @@ metadata = {{
     builder.add_connection(source_id, "result.documents", sparse_id, "documents")
     builder.add_connection(source_id, "result.query", sparse_id, "query")
 
-    # Feed both retrieval result lists into the fusion node.
+    # Feed both retrieval result lists into the fusion node. DenseRetrievalNode /
+    # SparseRetrievalNode are `Node` subclasses publishing a top-level `results`
+    # port, so these edges stay flat.
     builder.add_connection(dense_id, "results", fuse_id, "dense_result")
     builder.add_connection(sparse_id, "results", fuse_id, "sparse_result")
+
+    # PHANTOM-PORT FIX: `fuse` is a from_function node publishing ONLY a flat
+    # `result` port (its returned dict's keys are NOT top-level ports). Each
+    # projector reads the WHOLE fuse dict via `result` and returns its one bare
+    # value on its own flat `result` port.
+    builder.add_connection(fuse_id, "result", proj_results_id, "fused")
+    builder.add_connection(fuse_id, "result", proj_scores_id, "fused")
+    builder.add_connection(fuse_id, "result", proj_metadata_id, "fused")
 
     workflow = builder.build(name="hybrid_rag_workflow")
 
@@ -181,10 +289,12 @@ metadata = {{
             "documents": {"node": "source", "parameter": "documents"},
             "query": {"node": "source", "parameter": "query"},
         },
+        # Each projector publishes its bare value on the flat `result` port; the
+        # output_mapping surfaces it under the top-level contract name.
         output_mapping={
-            "results": {"node": "fuse", "output": "results"},
-            "scores": {"node": "fuse", "output": "scores"},
-            "metadata": {"node": "fuse", "output": "metadata"},
+            "results": {"node": "proj_results", "output": "result"},
+            "scores": {"node": "proj_scores", "output": "result"},
+            "metadata": {"node": "proj_metadata", "output": "result"},
         },
     )
 

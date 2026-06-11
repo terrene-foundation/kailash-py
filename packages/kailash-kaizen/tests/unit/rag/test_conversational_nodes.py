@@ -268,14 +268,52 @@ class TestConversationalRAGGraphShape:
         inbound = [c for c in wf.connections if c.target_node == "result_formatter"]
         assert len(inbound) >= 4  # session_updater + response_gen + topic + retrieval
 
-    def test_max_context_turns_baked_into_context_loader_code(self):
-        """The max_context_turns kwarg is interpolated into the loader code."""
+    def test_max_context_turns_controls_context_loader_sliding_window(self):
+        """The max_context_turns kwarg controls the sliding-window slice the
+        context_loader applies.
+
+        S6a: the context_loader stage is now a ``PythonCodeNode.from_function``
+        node (the inline ``code=`` codegen with the interpolated
+        ``session["turns"][-{N}:]`` slice was lifted to the module-level
+        ``_load_conversation_context`` function, with ``max_context_turns`` bound
+        at workflow-construction time through a closure). This test preserves the
+        ORIGINAL intent BEHAVIORALLY (per ``rules/testing.md`` § Behavioral
+        Regression Tests Over Source-Grep): it (a) asserts the production node is
+        a ``from_function`` ``PythonCodeNode`` (no ``code=`` config), AND (b)
+        calls the lifted function directly with a pre-seeded session of 5 turns
+        and ``max_context_turns=3``, asserting the returned ``recent_turns`` slice
+        honors the window."""
         wf = _build(ConversationalRAGNode(max_context_turns=3))
         loader = wf.get_node("context_loader")
         assert loader is not None
-        code = loader.config.get("code", "")
-        # The recent_turns slice uses session["turns"][-3:].
-        assert 'session["turns"][-3:]' in code
+        # The lifted node is a from_function PythonCodeNode — no `code=` config.
+        assert type(loader).__name__ == "PythonCodeNode"
+        assert loader.config.get("code") is None
+
+        # Behavioral: the lifted function applies the sliding-window slice.
+        from kaizen.nodes.rag.conversational import _load_conversation_context
+
+        store = {
+            "s1": {
+                "id": "s1",
+                "turns": [{"query": f"q{i}", "response": f"r{i}"} for i in range(5)],
+                "summary": "",
+                "current_topic": None,
+                "user_preferences": {},
+                "metrics": {
+                    "turn_count": 5,
+                    "topics_discussed": [],
+                    "avg_response_length": 0,
+                },
+            }
+        }
+        out = _load_conversation_context(
+            session_id="s1", sessions_store=store, max_context_turns=3
+        )
+        recent = out["session_context"]["recent_turns"]
+        # The window keeps the LAST 3 of the 5 seeded turns.
+        assert len(recent) == 3
+        assert [t["query"] for t in recent] == ["q2", "q3", "q4"]
 
 
 # ==========================================================================
@@ -302,13 +340,11 @@ class TestCreateSession:
         assert session["current_topic"] is None
         assert session["metrics"]["turn_count"] == 0
 
-    def test_create_session_distinct_ids_for_same_user_at_different_timestamps(self):
-        """The sha256 hash includes datetime.now().isoformat() — different calls → different ids."""
-        import time
-
+    def test_create_session_distinct_ids_for_same_user(self):
+        """session_id is a CSPRNG token (secrets.token_hex(16)) — two calls for the
+        same user produce different, unguessable ids (no timestamp dependence)."""
         node = ConversationalRAGNode()
         out_a = node.create_session(user_id="alice")  # type: ignore[attr-defined]
-        time.sleep(0.01)  # ensure isoformat() differs in the microsecond field
         out_b = node.create_session(user_id="alice")  # type: ignore[attr-defined]
         assert out_a["session_id"] != out_b["session_id"]
 
@@ -557,3 +593,337 @@ def test_module_all_exports_two_classes():
         "ConversationalRAGNode",
         "ConversationMemoryNode",
     }
+
+
+# ==========================================================================
+# F31-FU2 Shard B — direct-call Tier-1 coverage of the 3 pure composer
+# `from_function` targets in ``conversational.py``. These render the OpenAI
+# chat `messages` list for each LLM stage — pure data rendering (the permitted
+# output-formatting exception per rules/agent-reasoning.md), NOT agent
+# decision-making. Called DIRECTLY (no LocalRuntime, no mocking — pure funcs).
+#
+# NOTE: conversational has NO `from_function` PARSERS — the consumers read
+# `.get("content")` inline inside the `code=` PythonCodeNode bodies (genuinely
+# correct; there is nothing to cover at the parser layer). Only the 3 composers
+# are direct-callable module-level functions, so ONLY they are covered here.
+# Each composer asserts VALID interpolation + EMPTY/None well-formedness; the
+# EMPTY assertion uses the composer's OWN honest placeholder (read source).
+# ==========================================================================
+
+
+from kaizen.nodes.rag.conversational import (
+    compose_coreference_messages,
+    compose_response_messages,
+    compose_summary_messages,
+)
+
+
+def _assert_messages_shape(result):
+    """Assert the composer return is a well-formed OpenAI chat ``messages`` list."""
+    assert isinstance(result, dict)
+    assert "messages" in result
+    msgs = result["messages"]
+    assert isinstance(msgs, list) and len(msgs) >= 1
+    for m in msgs:
+        assert isinstance(m, dict)
+        assert "role" in m and "content" in m
+    return msgs
+
+
+class TestComposeResponseMessages:
+    def test_compose_response_valid_renders_docs_history_query(self):
+        contextual_retrieval = {
+            "contextual_retrieval": {
+                "documents": [{"content": "BERT is a transformer model"}],
+                "enhanced_query": "What is BERT?",
+            }
+        }
+        conversation_context = {
+            "session_context": {
+                "context_text": "User: hi\nAssistant: hello\n",
+            }
+        }
+        msgs = _assert_messages_shape(
+            compose_response_messages(
+                contextual_retrieval=contextual_retrieval,
+                conversation_context=conversation_context,
+                query="What is BERT?",
+            )
+        )
+        content = msgs[0]["content"]
+        assert "What is BERT?" in content
+        # Retrieved docs + history are grounded into the response messages.
+        assert "BERT is a transformer model" in content
+        assert "User: hi" in content
+
+    def test_compose_response_recovers_query_from_enhanced_query(self):
+        # No explicit `query` -> the composer recovers it from the retriever's
+        # enhanced_query (an in-graph source embedding the original question).
+        contextual_retrieval = {
+            "contextual_retrieval": {
+                "documents": [],
+                "enhanced_query": "transformers context: explain attention",
+            }
+        }
+        msgs = _assert_messages_shape(
+            compose_response_messages(
+                contextual_retrieval=contextual_retrieval,
+                conversation_context=None,
+                query="",
+            )
+        )
+        assert "explain attention" in msgs[0]["content"]
+
+    def test_compose_response_all_empty_returns_wellformed(self):
+        # query="", no retrieval, no history -> still a valid messages shape.
+        msgs = _assert_messages_shape(
+            compose_response_messages(
+                contextual_retrieval=None,
+                conversation_context=None,
+                query="",
+            )
+        )
+        # The composer always appends the "Current question:" block (empty body).
+        assert "Current question:" in msgs[0]["content"]
+
+
+class TestComposeCoreferenceMessages:
+    def test_compose_coreference_valid_renders_query_and_history(self):
+        conversation_context = {
+            "session_context": {
+                "context_text": "User: tell me about transformers\nAssistant: ok\n",
+            }
+        }
+        msgs = _assert_messages_shape(
+            compose_coreference_messages(
+                current_query="How does its attention work?",
+                conversation_context=conversation_context,
+            )
+        )
+        content = msgs[0]["content"]
+        assert "How does its attention work?" in content
+        # The conversation history (the antecedent source) is rendered.
+        assert "tell me about transformers" in content
+
+    def test_compose_coreference_empty_returns_wellformed(self):
+        msgs = _assert_messages_shape(
+            compose_coreference_messages(current_query="", conversation_context=None)
+        )
+        # Always appends the "Query to resolve:" block (empty body), no crash.
+        assert "Query to resolve:" in msgs[0]["content"]
+
+
+class TestComposeSummaryMessages:
+    def test_compose_summary_valid_renders_history(self):
+        conversation_context = {
+            "session_context": {
+                "context_text": "User: explain BERT\nAssistant: BERT is...\n",
+            }
+        }
+        msgs = _assert_messages_shape(
+            compose_summary_messages(conversation_context=conversation_context)
+        )
+        assert "explain BERT" in msgs[0]["content"]
+
+    def test_compose_summary_empty_returns_wellformed(self):
+        # No history -> explicit empty-history note (honest, non-empty messages).
+        msgs = _assert_messages_shape(
+            compose_summary_messages(conversation_context=None)
+        )
+        assert "No conversation history yet." in msgs[0]["content"]
+
+
+# ==========================================================================
+# S6a Shard — direct-call Tier-1 coverage of the 5 COMPUTE-stage
+# `from_function` targets lifted from the inline `code=` codegen blocks in
+# ``conversational.py``. These are pure data computations (the permitted
+# tool-fetch / data-transform shape per rules/agent-reasoning.md — no agent
+# decision-making). Called DIRECTLY (no LocalRuntime, no mocking — pure funcs)
+# per the one-direct-test-per-variant Tier-1 mandate. A from_function node
+# publishes its `return` value on the flat `result` port, so the returned dict
+# is exactly what the node publishes downstream.
+#
+# `_load_conversation_context` is covered above by
+# ``test_max_context_turns_controls_context_loader_sliding_window`` (sliding
+# window) — the remaining four lifted functions are covered here.
+# ==========================================================================
+
+
+from kaizen.nodes.rag.conversational import (
+    _format_conversational_result,
+    _load_conversation_context,
+    _retrieve_with_context,
+    _track_conversation_topic,
+    _update_session,
+)
+
+
+class TestLiftedComputeFunctions:
+    def test_load_conversation_context_creates_session_when_absent(self):
+        """An absent session is seeded; the returned shape carries the
+        documented session_context keys + an empty recent_turns window."""
+        store: dict = {}
+        out = _load_conversation_context(
+            session_id="brand_new", sessions_store=store, max_context_turns=10
+        )
+        sc = out["session_context"]
+        assert sc["session_id"] == "brand_new"
+        assert sc["recent_turns"] == []
+        assert sc["turn_count"] == 0
+        assert sc["context_text"] == ""
+        # The seeded session is now in the per-run store.
+        assert "brand_new" in store
+
+    def test_track_conversation_topic_identifies_transformer_topic(self):
+        """A transformer-keyword query yields the 'transformers' topic on the
+        flat result's topic_analysis. session_context is the whole
+        {"session_context": ...} wrapper the function unwraps internally."""
+        out = _track_conversation_topic(
+            current_query="explain self-attention in the encoder",
+            session_context={"session_context": {"current_topic": None}},
+        )
+        ta = out["topic_analysis"]
+        assert ta["current_topic"] == "transformers"
+        assert ta["topic_changed"] is False  # first topic = new_conversation
+        assert ta["transition_type"] == "new_conversation"
+        assert "transformers" in ta["identified_topics"]
+        assert ta["confidence"] == 0.8
+
+    def test_track_conversation_topic_no_keyword_yields_general(self):
+        """A query with no topic keyword falls back to 'general' (honest
+        default, not fabricated)."""
+        out = _track_conversation_topic(
+            current_query="hello there",
+            session_context={"session_context": {"current_topic": None}},
+        )
+        ta = out["topic_analysis"]
+        assert ta["current_topic"] == "general"
+        assert ta["identified_topics"] == []
+        assert ta["confidence"] == 0.3
+
+    def test_retrieve_with_context_scores_and_enhances_query(self):
+        """The retriever ranks docs by query-term overlap and surfaces the
+        enhanced_query on the flat result's contextual_retrieval. topic_info is
+        passed through WITHOUT unwrap (already {"topic_analysis": ...})."""
+        docs = [
+            {"content": "transformer attention mechanism explained"},
+            {"content": "unrelated cooking recipe"},
+        ]
+        out = _retrieve_with_context(
+            query="attention mechanism",
+            documents=docs,
+            session_context={"session_context": {"context_text": ""}},
+            topic_info={"topic_analysis": {"current_topic": "transformers"}},
+        )
+        cr = out["contextual_retrieval"]
+        # The topic prefix is folded into the enhanced query.
+        assert cr["enhanced_query"].startswith("transformers context:")
+        assert len(cr["documents"]) == 2
+        # The transformer doc outranks the cooking doc.
+        assert cr["documents"][0]["content"].startswith("transformer attention")
+
+    def test_retrieve_with_context_resolved_query_overrides_raw(self):
+        """A resolved_query dict (the coreference_resolver `response` port value,
+        keyed by "content") overrides the raw query string."""
+        out = _retrieve_with_context(
+            query="how does it work",
+            documents=[{"content": "bert masked language model"}],
+            session_context={"session_context": {"context_text": ""}},
+            topic_info=None,
+            resolved_query={"content": "how does bert work"},
+        )
+        cr = out["contextual_retrieval"]
+        # The resolved query ("bert") drives scoring, not the raw "it".
+        assert "bert" in cr["enhanced_query"]
+
+    def test_retrieve_with_context_empty_documents_honest_zero_influence(self):
+        """No documents → empty results + honest zero context_influence."""
+        out = _retrieve_with_context(
+            query="anything",
+            documents=[],
+            session_context={"session_context": {"context_text": ""}},
+        )
+        cr = out["contextual_retrieval"]
+        assert cr["documents"] == []
+        assert cr["scores"] == []
+        assert cr["context_influence"] == 0
+
+    def test_update_session_records_turn_and_metrics(self):
+        """A new turn is appended; the returned session_update reflects the
+        recorded turn + derived (non-fabricated) coherence metrics. response is
+        the LLMAgentNode `response` port value keyed by "content"."""
+        store: dict = {}
+        out = _update_session(
+            session_id="s_up",
+            query="what is bert",
+            response={"content": "BERT is a bidirectional model."},
+            topic_info={"topic_analysis": {"current_topic": "bert"}},
+            summary=None,
+            sessions_store=store,
+            max_context_turns=10,
+        )
+        su = out["session_update"]
+        assert su["session_id"] == "s_up"
+        assert su["turn_added"] == 1
+        assert su["total_turns"] == 1
+        assert su["current_topic"] == "bert"
+        # Single-topic conversation → coherence 1.0 (derived from topic count).
+        assert su["conversation_metrics"]["coherence_score"] == 1.0
+
+    def test_update_session_applies_summary_when_provided(self):
+        """A summary dict (context_summarizer `response` port, keyed by
+        "content") updates the session summary."""
+        store: dict = {}
+        _update_session(
+            session_id="s_sum",
+            query="q",
+            response={"content": "r"},
+            summary={"content": "A concise conversation summary."},
+            sessions_store=store,
+            max_context_turns=10,
+        )
+        assert store["s_sum"]["summary"] == "A concise conversation summary."
+
+    def test_format_conversational_result_publishes_documented_shape(self):
+        """The terminal formatter unwraps each producer's nested key and
+        publishes the documented conversational_response. The config flags are
+        passed explicitly (the closure binds them at construction time)."""
+        out = _format_conversational_result(
+            response={"content": "the answer"},
+            session_update={
+                "session_update": {
+                    "session_id": "sid",
+                    "turn_added": 2,
+                    "total_turns": 2,
+                    "conversation_metrics": {"topic_diversity": 0.5},
+                }
+            },
+            topic_info={"topic_analysis": {"current_topic": "gpt"}},
+            contextual_retrieval={"contextual_retrieval": {"context_influence": 0.7}},
+            max_context_turns=8,
+            enable_summarization=False,
+            coreference_resolution=True,
+            personalization_enabled=False,
+        )
+        cr = out["conversational_response"]
+        assert cr["response"] == "the answer"
+        assert cr["session_state"]["session_id"] == "sid"
+        assert cr["session_state"]["total_turns"] == 2
+        # Config flags interpolated through the explicit params (the #1123 fix).
+        assert cr["session_state"]["context_window"] == 8
+        assert cr["session_state"]["summary_available"] is False
+        assert cr["topic_info"]["current_topic"] == "gpt"
+        assert cr["conversation_metrics"]["retrieval_context_influence"] == 0.7
+        assert cr["metadata"]["coreference_resolution"] is True
+        assert cr["metadata"]["personalization"] is False
+        assert cr["metadata"]["context_enhanced_retrieval"] is True
+
+    def test_format_conversational_result_handles_all_empty_inputs(self):
+        """All-None inputs (a False optional-branch with nothing wired) still
+        publish a well-formed conversational_response (honest empty defaults)."""
+        out = _format_conversational_result()
+        cr = out["conversational_response"]
+        assert cr["response"] == ""
+        assert cr["session_state"]["session_id"] is None
+        assert cr["topic_info"]["transition_type"] == "continuation"
+        assert "metadata" in cr

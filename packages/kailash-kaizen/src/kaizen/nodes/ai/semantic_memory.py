@@ -5,16 +5,21 @@ These nodes add embeddings and vector search capabilities to the A2A system,
 allowing for semantic matching and contextual agent selection.
 """
 
+from __future__ import annotations
+
 import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 import aiohttp
-import numpy as np
-
 from kailash.nodes.base import Node, NodeParameter, register_node
+
+from kaizen.nodes._optional import require_numpy
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @dataclass
@@ -67,6 +72,7 @@ class SimpleEmbeddingProvider:
 
     async def embed_text(self, text: Union[str, List[str]]) -> EmbeddingResult:
         """Generate embeddings for text."""
+        np = require_numpy("embedding generation")
         if isinstance(text, str):
             texts = [text]
         else:
@@ -113,6 +119,7 @@ class SimpleEmbeddingProvider:
 
     def _hash_embedding(self, text: str, dimension: int = 384) -> np.ndarray:
         """Create a simple hash-based embedding as fallback."""
+        np = require_numpy("hash-based embedding fallback")
         # Simple deterministic embedding based on text content
         hash_str = hashlib.md5(text.encode()).hexdigest()
         # Convert hex to numbers and normalize
@@ -152,6 +159,7 @@ class InMemoryVectorStore:
         threshold: float = 0.5,
     ) -> List[Tuple[SemanticMemoryItem, float]]:
         """Search for similar items."""
+        np = require_numpy("vector similarity search")
         results = []
 
         # Filter by collection if specified
@@ -497,6 +505,7 @@ class SemanticAgentMatchingNode(Node):
             req_text = str(requirements)
 
         # Generate embeddings for requirements and agents
+        np = require_numpy("semantic agent matching")
         all_texts = [req_text] + [str(agent) for agent in agents]
         result = await self._provider.embed_text(all_texts)
 

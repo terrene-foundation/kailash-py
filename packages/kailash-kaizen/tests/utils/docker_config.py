@@ -20,7 +20,6 @@ import time
 from typing import Dict, List
 
 import asyncpg
-import pymongo
 import redis
 import requests
 
@@ -152,6 +151,11 @@ class DockerServicesManager:
     async def _check_mongodb(self) -> bool:
         """Check MongoDB health."""
         try:
+            # Lazy import: pymongo is only needed when a test actually
+            # health-checks MongoDB; a module-scope import poisons collection
+            # for every test importing tests.utils (same class as F31-FU5).
+            import pymongo
+
             client = pymongo.MongoClient(
                 host=MONGODB_CONFIG["host"],
                 port=MONGODB_CONFIG["port"],

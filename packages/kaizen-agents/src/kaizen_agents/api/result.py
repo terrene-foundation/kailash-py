@@ -7,7 +7,7 @@ all execution details including output, tool calls, costs, and metrics.
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -57,7 +57,7 @@ class ToolCallRecord:
     duration_ms: int = 0
     """Duration of the tool call in milliseconds."""
 
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     """ISO timestamp when the tool was called."""
 
     cycle: int = 0
@@ -90,7 +90,7 @@ class ToolCallRecord:
             result=data.get("result"),
             error=data.get("error"),
             duration_ms=data.get("duration_ms", 0),
-            timestamp=data.get("timestamp", datetime.utcnow().isoformat()),
+            timestamp=data.get("timestamp", datetime.now(UTC).isoformat()),
             cycle=data.get("cycle", 0),
         )
 
@@ -167,7 +167,7 @@ class AgentResult:
     """Unique run identifier."""
 
     # Timestamps
-    started_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     """ISO timestamp when execution started."""
 
     completed_at: str = ""
@@ -349,7 +349,7 @@ class AgentResult:
             duration_ms=data.get("duration_ms", 0),
             session_id=data.get("session_id", ""),
             run_id=data.get("run_id", ""),
-            started_at=data.get("started_at", datetime.utcnow().isoformat()),
+            started_at=data.get("started_at", datetime.now(UTC).isoformat()),
             completed_at=data.get("completed_at", ""),
             error=data.get("error"),
             error_type=data.get("error_type"),
@@ -392,7 +392,7 @@ class AgentResult:
         return cls(
             text=text,
             status=ResultStatus.SUCCESS,
-            completed_at=datetime.utcnow().isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
             **kwargs,
         )
 
@@ -419,7 +419,7 @@ class AgentResult:
             status=ResultStatus.ERROR,
             error=error_message,
             error_type=error_type,
-            completed_at=datetime.utcnow().isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
             **kwargs,
         )
 
@@ -444,7 +444,7 @@ class AgentResult:
             status=ResultStatus.TIMEOUT,
             error="Execution timed out",
             error_type="TimeoutError",
-            completed_at=datetime.utcnow().isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
             **kwargs,
         )
 
@@ -467,7 +467,7 @@ class AgentResult:
         return cls(
             text=partial_text,
             status=ResultStatus.INTERRUPTED,
-            completed_at=datetime.utcnow().isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
             **kwargs,
         )
 

@@ -14,11 +14,11 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from kaizen.nodes.ai import LLMAgentNode
-
 from kailash.nodes.auth.directory_integration import (
     DirectoryIntegrationNode as CoreDirectoryIntegrationNode,
 )
+
+from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
 
@@ -262,9 +262,16 @@ Example output:
                 max_completion_tokens=2000,  # OpenAI API compatibility: use max_completion_tokens for gpt-5-nano models
             )
 
-            # Parse AI response - extract content from LLM response
-            # Format: {"content": "json_string", "role": "assistant", ...}
-            response_content = result.get("content", "{}")
+            # Parse AI response - LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "json_string", ...}, ...}
+            response = result.get("response", {})
+            response_content = (
+                response.get("content") if isinstance(response, dict) else None
+            )
+            if not response_content:
+                # Fail closed: a malformed/missing envelope routes to the
+                # documented fallback in the except branch below
+                raise ValueError("LLM result missing nested response.content")
             search_intent = json.loads(response_content)
 
             logger.info(
@@ -439,9 +446,16 @@ Example output:
                 max_completion_tokens=2000,  # OpenAI API compatibility: use max_completion_tokens for gpt-5-nano models
             )
 
-            # Parse AI response - extract content from LLM response
-            # Format: {"content": "json_string", "role": "assistant", ...}
-            response_content = result.get("content", "[]")
+            # Parse AI response - LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "json_string", ...}, ...}
+            response = result.get("response", {})
+            response_content = (
+                response.get("content") if isinstance(response, dict) else None
+            )
+            if not response_content:
+                # Fail closed: a malformed/missing envelope routes to the
+                # documented fallback in the except branch below
+                raise ValueError("LLM result missing nested response.content")
             roles = json.loads(response_content)
 
             # Ensure "user" is always included
@@ -506,9 +520,16 @@ Example output:
                 max_completion_tokens=2000,  # OpenAI API compatibility: use max_completion_tokens for gpt-5-nano models
             )
 
-            # Parse AI response - extract content from LLM response
-            # Format: {"content": "json_string", "role": "assistant", ...}
-            response_content = result.get("content", "[]")
+            # Parse AI response - LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "json_string", ...}, ...}
+            response = result.get("response", {})
+            response_content = (
+                response.get("content") if isinstance(response, dict) else None
+            )
+            if not response_content:
+                # Fail closed: a malformed/missing envelope routes to the
+                # documented fallback in the except branch below
+                raise ValueError("LLM result missing nested response.content")
             permissions = json.loads(response_content)
 
             # Ensure basic read permission
@@ -570,9 +591,16 @@ Example output:
                 max_completion_tokens=2000,  # OpenAI API compatibility: use max_completion_tokens for gpt-5-nano models
             )
 
-            # Parse AI response - extract content from LLM response
-            # Format: {"content": "json_string", "role": "assistant", ...}
-            response_content = result.get("content", "{}")
+            # Parse AI response - LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "json_string", ...}, ...}
+            response = result.get("response", {})
+            response_content = (
+                response.get("content") if isinstance(response, dict) else None
+            )
+            if not response_content:
+                # Fail closed: a malformed/missing envelope routes to the
+                # documented fallback in the except branch below
+                raise ValueError("LLM result missing nested response.content")
             settings = json.loads(response_content)
 
             return settings

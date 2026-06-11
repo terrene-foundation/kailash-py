@@ -11,7 +11,7 @@ Defines the core types for the native autonomous agent implementation:
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -244,8 +244,8 @@ class ExecutionState:
     error: str | None = None
 
     # Timestamps
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def is_complete(self) -> bool:
@@ -265,32 +265,32 @@ class ExecutionState:
     def advance_cycle(self) -> None:
         """Advance to next cycle."""
         self.current_cycle += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def set_phase(self, phase: AutonomousPhase) -> None:
         """Set current execution phase."""
         self.phase = phase
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def add_message(self, message: dict[str, Any]) -> None:
         """Add a message to conversation history."""
         self.messages.append(message)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def add_tool_call(self, tool_call: dict[str, Any]) -> None:
         """Add a pending tool call."""
         self.pending_tool_calls.append(tool_call)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def add_tool_result(self, result: dict[str, Any]) -> None:
         """Add a tool execution result."""
         self.tool_results.append(result)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def clear_pending_tool_calls(self) -> None:
         """Clear all pending tool calls."""
         self.pending_tool_calls = []
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def update_budget(self, tokens: int, cost: float) -> None:
         """Update token and cost tracking.
@@ -301,7 +301,7 @@ class ExecutionState:
         """
         self.tokens_used += tokens
         self.cost_usd += cost
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def complete(self, result: str) -> None:
         """Mark execution as completed successfully.
@@ -311,7 +311,7 @@ class ExecutionState:
         """
         self.status = "completed"
         self.result = result
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def fail(self, error: str) -> None:
         """Mark execution as failed with error.
@@ -321,12 +321,12 @@ class ExecutionState:
         """
         self.status = "error"
         self.error = error
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def interrupt(self) -> None:
         """Mark execution as interrupted."""
         self.status = "interrupted"
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize state to dictionary for checkpointing.

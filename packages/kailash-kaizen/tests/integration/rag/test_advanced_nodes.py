@@ -55,27 +55,49 @@ class TestHybridRagWorkflowGraph:
     """Assert the A-S2 workflow graph shape directly (no execution)."""
 
     def test_workflow_node_count_and_ids(self):
-        """The hybrid graph is exactly source + dense + sparse + fuse."""
+        """The hybrid graph is source + dense + sparse + fuse + 3 projectors.
+
+        Post-S6b the source / fuse COMPUTE stages are
+        ``PythonCodeNode.from_function`` nodes (flat ``result`` port); the three
+        projector nodes index the fuse ``result`` dict so the output_mapping can
+        surface the ``results`` / ``scores`` / ``metadata`` contract."""
         wf = create_hybrid_rag_workflow(RAGConfig())
         assert isinstance(wf, WorkflowNode)
         nodes = wf._workflow.nodes  # type: ignore[union-attr]
-        assert set(nodes.keys()) == {"source", "dense", "sparse", "fuse"}
+        assert set(nodes.keys()) == {
+            "source",
+            "dense",
+            "sparse",
+            "fuse",
+            "proj_results",
+            "proj_scores",
+            "proj_metadata",
+        }
 
-    def test_workflow_has_six_connections(self):
-        """source fans to 2 retrievers (4 edges) + 2 edges into fuse = 6."""
+    def test_workflow_connection_count(self):
+        """source fans to 2 retrievers (4 edges) + 2 edges into fuse + 3 edges
+        from fuse to the projector nodes = 9 connections."""
         wf = create_hybrid_rag_workflow(RAGConfig())
         connections = wf._workflow.connections  # type: ignore[union-attr]
-        assert len(connections) == 6
+        assert len(connections) == 9
 
-    def test_fuse_node_carries_rrf_code(self):
-        """The fuse PythonCodeNode's code= template implements RRF."""
-        wf = create_hybrid_rag_workflow(RAGConfig())
-        # the built PythonCodeNode instance exposes its template as .code
-        fuse = wf._workflow.get_node("fuse")  # type: ignore[union-attr]
-        code = fuse.code  # type: ignore[attr-defined]
-        assert "_reciprocal_rank_fusion" in code
-        # the codegen template carries the same isinstance guard as run() paths
-        assert "isinstance" in code
+    def test_fuse_node_implements_rrf(self):
+        """The fuse stage implements Reciprocal Rank Fusion (post-S6b it is the
+        lifted ``_make_rrf_fuse`` from_function node, not a code= template).
+
+        Behavioral proof: fusing two ranked lists with a shared doc id boosts
+        that doc's RRF score and orders results by fused score descending."""
+        from kaizen.nodes.rag.advanced import _make_rrf_fuse
+
+        fuse = _make_rrf_fuse(5)
+        out = fuse(
+            dense_result=[{"id": "a", "content": "x"}, {"id": "b", "content": "y"}],
+            sparse_result=[{"id": "a", "content": "x"}, {"id": "c", "content": "z"}],
+        )
+        assert out["metadata"]["fusion_method"] == "rrf"
+        # "a" appears in BOTH lists → highest fused RRF score → ranks first.
+        assert out["results"][0]["id"] == "a"
+        assert out["scores"] == sorted(out["scores"], reverse=True)
 
     def test_input_and_output_mapping_present(self):
         """The WorkflowNode maps documents/query in and results/scores out."""

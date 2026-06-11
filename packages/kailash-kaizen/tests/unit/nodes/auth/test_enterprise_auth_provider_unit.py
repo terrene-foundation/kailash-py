@@ -17,6 +17,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
 
@@ -66,9 +67,17 @@ class TestEnterpriseAuthProviderNodeUnit:
             "recommended_action": "allow",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content
+        # (llm_agent.py:995); flat top-level "content" was the F31
+        # wrong-shape false-green that masked the fail-open parse defect.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_ai_analysis)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_ai_analysis),
+                    "role": "assistant",
+                },
+            }
         )
 
         # Use external IP to bypass fast path (internal IPs trigger fast path)
@@ -103,9 +112,17 @@ class TestEnterpriseAuthProviderNodeUnit:
             "recommended_action": "require_additional_verification",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content
+        # (llm_agent.py:995); flat top-level "content" was the F31
+        # wrong-shape false-green that masked the fail-open parse defect.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_ai_analysis)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_ai_analysis),
+                    "role": "assistant",
+                },
+            }
         )
 
         risk_context = {
@@ -208,9 +225,14 @@ class TestEnterpriseAuthProviderNodeUnit:
         """Test handling of invalid JSON from LLM."""
         node = EnterpriseAuthProviderNode()
 
-        # Mock LLM to return invalid JSON
+        # Mock LLM to return invalid JSON inside the PRODUCTION envelope —
+        # the failure mode under test is json.JSONDecodeError on the content,
+        # not a malformed envelope.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"response": "This is not valid JSON"}
+            return_value={
+                "success": True,
+                "response": {"content": "This is not valid JSON", "role": "assistant"},
+            }
         )
 
         risk_context = {"ip_address": "1.2.3.4"}
@@ -237,9 +259,17 @@ class TestEnterpriseAuthProviderNodeUnit:
             "recommended_action": "block",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content
+        # (llm_agent.py:995); flat top-level "content" was the F31
+        # wrong-shape false-green that masked the fail-open parse defect.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_ai_analysis)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_ai_analysis),
+                    "role": "assistant",
+                },
+            }
         )
 
         risk_context = {
@@ -279,9 +309,17 @@ class TestEnterpriseAuthProviderNodeUnit:
             "recommended_action": "require_mfa",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content
+        # (llm_agent.py:995); flat top-level "content" was the F31
+        # wrong-shape false-green that masked the fail-open parse defect.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_ai_analysis)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_ai_analysis),
+                    "role": "assistant",
+                },
+            }
         )
 
         risk_context = {
@@ -319,9 +357,17 @@ class TestEnterpriseAuthProviderNodeUnit:
             "recommended_action": "require_additional_verification",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content
+        # (llm_agent.py:995); flat top-level "content" was the F31
+        # wrong-shape false-green that masked the fail-open parse defect.
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_ai_analysis)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_ai_analysis),
+                    "role": "assistant",
+                },
+            }
         )
 
         risk_context = {
@@ -380,17 +426,21 @@ class TestEnterpriseAuthProviderNodeUnit:
         ]
 
         for scenario in test_scenarios:
-            # Mock format must match what the implementation expects: result.get("content", "{}")
+            # Production LLMAgentNode envelope: nested response.content
             node.llm_agent.async_run = AsyncMock(
                 return_value={
-                    "content": json.dumps(
-                        {
-                            "risk_score": scenario["score"],
-                            "additional_factors": [],
-                            "reasoning": scenario["description"],
-                            "recommended_action": scenario["action"],
-                        }
-                    )
+                    "success": True,
+                    "response": {
+                        "content": json.dumps(
+                            {
+                                "risk_score": scenario["score"],
+                                "additional_factors": [],
+                                "reasoning": scenario["description"],
+                                "recommended_action": scenario["action"],
+                            }
+                        ),
+                        "role": "assistant",
+                    },
                 }
             )
 
@@ -420,15 +470,20 @@ class TestEnterpriseAuthProviderPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
+            # Production LLMAgentNode envelope: nested response.content
             return {
-                "response": json.dumps(
-                    {
-                        "risk_score": 0.5,
-                        "additional_factors": [],
-                        "reasoning": "Test",
-                        "recommended_action": "allow",
-                    }
-                )
+                "success": True,
+                "response": {
+                    "content": json.dumps(
+                        {
+                            "risk_score": 0.5,
+                            "additional_factors": [],
+                            "reasoning": "Test",
+                            "recommended_action": "allow",
+                        }
+                    ),
+                    "role": "assistant",
+                },
             }
 
         node.llm_agent.async_run = capture_prompt
@@ -476,15 +531,20 @@ class TestEnterpriseAuthProviderPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
+            # Production LLMAgentNode envelope: nested response.content
             return {
-                "response": json.dumps(
-                    {
-                        "risk_score": 0.0,
-                        "additional_factors": [],
-                        "reasoning": "Test",
-                        "recommended_action": "allow",
-                    }
-                )
+                "success": True,
+                "response": {
+                    "content": json.dumps(
+                        {
+                            "risk_score": 0.0,
+                            "additional_factors": [],
+                            "reasoning": "Test",
+                            "recommended_action": "allow",
+                        }
+                    ),
+                    "role": "assistant",
+                },
             }
 
         node.llm_agent.async_run = capture_prompt
