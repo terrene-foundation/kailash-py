@@ -17,6 +17,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen.nodes.auth.sso import SSOAuthenticationNode
 
 
@@ -284,16 +285,23 @@ class TestSSOAuthenticationNodeUnit:
         providers = ["azure", "google", "okta", "auth0", "ping"]
 
         for provider in providers:
-            # Mock LLM response
+            # Mock LLM response — production LLMAgentNode envelope (nested
+            # response.content, llm_agent.py:995). The prior flat-string
+            # shape routed every call through the rule-based fallback, so
+            # this test exercised zero AI-path code (F31 wrong-shape class).
             node.llm_agent.async_run = AsyncMock(
                 return_value={
-                    "response": json.dumps(
-                        {
-                            "first_name": "Test",
-                            "last_name": "User",
-                            "email": f"test@{provider}.com",
-                        }
-                    )
+                    "success": True,
+                    "response": {
+                        "content": json.dumps(
+                            {
+                                "first_name": "Test",
+                                "last_name": "User",
+                                "email": f"test@{provider}.com",
+                            }
+                        ),
+                        "role": "assistant",
+                    },
                 }
             )
 
@@ -301,6 +309,11 @@ class TestSSOAuthenticationNodeUnit:
             result = await node._ai_field_mapping(attrs, provider)
 
             assert result["email"] == f"test@{provider}.com"
+            # These fields only surface via the AI parse path — the
+            # rule-based fallback yields firstName/lastName=None, so the
+            # test can no longer green through the exception fallback.
+            assert result["first_name"] == "Test"
+            assert result["last_name"] == "User"
 
     def test_node_parameter_validation(self):
         """Test parameter validation for node initialization."""
@@ -334,7 +347,14 @@ class TestSSOAuthenticationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
-            return {"response": json.dumps({"email": "test@test.com"})}
+            # Production LLMAgentNode envelope: nested response.content
+            return {
+                "success": True,
+                "response": {
+                    "content": json.dumps({"email": "test@test.com"}),
+                    "role": "assistant",
+                },
+            }
 
         node.llm_agent.async_run = capture_prompt
 
@@ -368,7 +388,14 @@ class TestSSOAuthenticationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
-            return {"response": json.dumps(["user"])}
+            # Production LLMAgentNode envelope: nested response.content
+            return {
+                "success": True,
+                "response": {
+                    "content": json.dumps(["user"]),
+                    "role": "assistant",
+                },
+            }
 
         node.llm_agent.async_run = capture_prompt
 

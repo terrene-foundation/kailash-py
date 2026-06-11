@@ -17,6 +17,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen.nodes.auth.directory_integration import DirectoryIntegrationNode
 
 
@@ -71,9 +72,15 @@ class TestDirectoryIntegrationNodeUnit:
             "reasoning": "Query targets users with developer role",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_search_intent)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_search_intent),
+                    "role": "assistant",
+                },
+            }
         )
 
         result = await node._ai_search_analysis("find all developers")
@@ -100,9 +107,15 @@ class TestDirectoryIntegrationNodeUnit:
             "reasoning": "Query targets DevOps group",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_search_intent)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_search_intent),
+                    "role": "assistant",
+                },
+            }
         )
 
         result = await node._ai_search_analysis("DevOps team")
@@ -127,9 +140,15 @@ class TestDirectoryIntegrationNodeUnit:
             "reasoning": "Query searches for specific email address",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_search_intent)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_search_intent),
+                    "role": "assistant",
+                },
+            }
         )
 
         result = await node._ai_search_analysis("jane.doe@company.com")
@@ -159,9 +178,12 @@ class TestDirectoryIntegrationNodeUnit:
 
         mock_roles = ["user", "developer", "devops"]
 
-        # Mock format must match what the implementation expects: result.get("content", "[]")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_roles)}
+            return_value={
+                "success": True,
+                "response": {"content": json.dumps(mock_roles), "role": "assistant"},
+            }
         )
 
         user_data = {
@@ -189,9 +211,12 @@ class TestDirectoryIntegrationNodeUnit:
         # Mock without 'user' role - implementation should add it automatically
         mock_roles = ["admin", "manager"]
 
-        # Mock format must match what the implementation expects: result.get("content", "[]")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_roles)}
+            return_value={
+                "success": True,
+                "response": {"content": json.dumps(mock_roles), "role": "assistant"},
+            }
         )
 
         user_data = {"email": "test@example.com", "job_title": "IT Manager"}
@@ -222,9 +247,15 @@ class TestDirectoryIntegrationNodeUnit:
 
         mock_permissions = ["read", "write", "deploy", "monitor"]
 
-        # Mock format must match what the implementation expects: result.get("content", "[]")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_permissions)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_permissions),
+                    "role": "assistant",
+                },
+            }
         )
 
         user_data = {
@@ -248,9 +279,15 @@ class TestDirectoryIntegrationNodeUnit:
         # Mock without read permission - implementation should add it automatically
         mock_permissions = ["write", "delete"]
 
-        # Mock format must match what the implementation expects: result.get("content", "[]")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_permissions)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_permissions),
+                    "role": "assistant",
+                },
+            }
         )
 
         user_data = {"groups": ["admin"]}
@@ -284,9 +321,12 @@ class TestDirectoryIntegrationNodeUnit:
             "session_timeout_minutes": 240,
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_settings)}
+            return_value={
+                "success": True,
+                "response": {"content": json.dumps(mock_settings), "role": "assistant"},
+            }
         )
 
         user_data = {
@@ -314,9 +354,12 @@ class TestDirectoryIntegrationNodeUnit:
             "session_timeout_minutes": 480,
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_settings)}
+            return_value={
+                "success": True,
+                "response": {"content": json.dumps(mock_settings), "role": "assistant"},
+            }
         )
 
         user_data = {
@@ -361,9 +404,15 @@ class TestDirectoryIntegrationNodeUnit:
             "reasoning": "Search for developer users",
         }
 
-        # Mock format must match what the implementation expects: result.get("content", "{}")
+        # Production LLMAgentNode envelope: nested response.content (llm_agent.py:995)
         node.llm_agent.async_run = AsyncMock(
-            return_value={"content": json.dumps(mock_search_intent)}
+            return_value={
+                "success": True,
+                "response": {
+                    "content": json.dumps(mock_search_intent),
+                    "role": "assistant",
+                },
+            }
         )
 
         # Mock directory search results
@@ -479,16 +528,21 @@ class TestDirectoryIntegrationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
+            # Production LLMAgentNode envelope: nested response.content
             return {
-                "response": json.dumps(
-                    {
-                        "search_users": True,
-                        "search_groups": False,
-                        "search_attributes": ["cn"],
-                        "filters": {},
-                        "reasoning": "Test",
-                    }
-                )
+                "success": True,
+                "response": {
+                    "content": json.dumps(
+                        {
+                            "search_users": True,
+                            "search_groups": False,
+                            "search_attributes": ["cn"],
+                            "filters": {},
+                            "reasoning": "Test",
+                        }
+                    ),
+                    "role": "assistant",
+                },
             }
 
         node.llm_agent.async_run = capture_prompt
@@ -517,7 +571,11 @@ class TestDirectoryIntegrationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
-            return {"response": json.dumps(["user"])}
+            # Production LLMAgentNode envelope: nested response.content
+            return {
+                "success": True,
+                "response": {"content": json.dumps(["user"]), "role": "assistant"},
+            }
 
         node.llm_agent.async_run = capture_prompt
 
@@ -557,7 +615,11 @@ class TestDirectoryIntegrationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
-            return {"response": json.dumps(["read"])}
+            # Production LLMAgentNode envelope: nested response.content
+            return {
+                "success": True,
+                "response": {"content": json.dumps(["read"]), "role": "assistant"},
+            }
 
         node.llm_agent.async_run = capture_prompt
 
@@ -595,14 +657,19 @@ class TestDirectoryIntegrationPromptEngineering:
             messages = kwargs.get("messages", [])
 
             captured_prompt = messages[0]["content"] if messages else ""
+            # Production LLMAgentNode envelope: nested response.content
             return {
-                "response": json.dumps(
-                    {
-                        "mfa_required": False,
-                        "password_expiry_days": 90,
-                        "session_timeout_minutes": 480,
-                    }
-                )
+                "success": True,
+                "response": {
+                    "content": json.dumps(
+                        {
+                            "mfa_required": False,
+                            "password_expiry_days": 90,
+                            "session_timeout_minutes": 480,
+                        }
+                    ),
+                    "role": "assistant",
+                },
             }
 
         node.llm_agent.async_run = capture_prompt

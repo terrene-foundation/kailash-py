@@ -250,8 +250,17 @@ Your analysis should help security teams understand:
                     "error": result["error"],
                 }
 
-            # Extract response content
-            response_content = result.get("response", "")
+            # Extract response content — LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "<text>", ...}, ...}
+            response = result.get("response", "")
+            if isinstance(response, dict):
+                response_content = response.get("content")
+            else:
+                response_content = response
+            if not response_content or not isinstance(response_content, str):
+                # Fail closed: a malformed/missing envelope routes to the
+                # documented ai_available=False degrade in the except branch
+                raise ValueError("LLM result missing nested response.content")
 
             # Parse structured response
             # Expected format from LLM:

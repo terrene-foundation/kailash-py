@@ -15,11 +15,11 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from kaizen.nodes.ai import LLMAgentNode
-
 from kailash.nodes.auth.enterprise_auth_provider import (
     EnterpriseAuthProviderNode as CoreEnterpriseAuthNode,
 )
+
+from kaizen.nodes.ai import LLMAgentNode
 
 logger = logging.getLogger(__name__)
 
@@ -213,9 +213,19 @@ Example output:
                 max_completion_tokens=2000,  # OpenAI API compatibility: use max_completion_tokens for gpt-5-nano models
             )
 
-            # Parse AI response - extract content from LLM response
-            # Format: {"content": "json_string", "role": "assistant", ...}
-            response_content = result.get("content", "{}")
+            # Parse AI response - LLMAgentNode returns nested structure
+            # Format: {"response": {"content": "json_string", ...}, ...}
+            response = result.get("response", {})
+            response_content = (
+                response.get("content") if isinstance(response, dict) else None
+            )
+            if not response_content:
+                # Fail closed: a malformed/missing envelope routes to the
+                # rule-based fallback below instead of silently scoring 0.0
+                raise ValueError(
+                    "LLM result missing nested response.content; "
+                    "cannot run AI risk assessment"
+                )
             ai_analysis = json.loads(response_content)
 
             risk_score = ai_analysis.get("risk_score", 0.0)
