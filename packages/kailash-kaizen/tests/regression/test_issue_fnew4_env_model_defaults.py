@@ -202,4 +202,34 @@ def test_detect_provider_family_convention():
     assert detect_provider("gpt-4o-mini") == "openai"
     assert detect_provider("o1-preview") == "openai"
     assert detect_provider("claude-sonnet-4-6") == "anthropic"
-    assert detect_provider("some-local-model") == "mock"
+    assert detect_provider("llama3.2:3b") == "ollama"
+    assert detect_provider("mistral-large") == "ollama"
+    assert detect_provider("gemini-2.0-flash") == "google"
+
+
+@pytest.mark.regression
+def test_detect_provider_unrecognized_model_raises_typed_error():
+    """Fail-closed: an unrecognized model MUST NOT silently route to the
+    mock provider in production node ctors (security fail-open class).
+    Explicit provider="mock" remains the test opt-in."""
+    from kaizen.errors import ProviderUndetectable
+
+    with pytest.raises(ProviderUndetectable) as excinfo:
+        detect_provider("some-unknown-model", "RegressionProbe")
+    msg = str(excinfo.value)
+    assert "some-unknown-model" in msg
+    assert "provider=" in msg  # actionable instruction
+
+
+@pytest.mark.regression
+def test_unrecognized_env_model_raises_at_node_construction(
+    monkeypatch: pytest.MonkeyPatch, _env_serialized: None
+):
+    from kaizen.errors import ProviderUndetectable
+
+    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "totally-unknown-model")
+    with pytest.raises(ProviderUndetectable):
+        AIThreatDetectionNode()
+    # Explicit provider opt-out still constructs.
+    node = AIThreatDetectionNode(provider="mock")
+    assert node.provider == "mock"

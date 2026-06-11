@@ -111,7 +111,11 @@ class AIBehaviorAnalysisNode(Node):
         # KAIZEN_DEFAULT_MODEL (rules/env-models.md); provider auto-detected
         # from the resolved model when not given.
         model = resolve_default_model("AIBehaviorAnalysisNode", model)
-        self.provider = provider if provider is not None else detect_provider(model)
+        self.provider = (
+            provider
+            if provider is not None
+            else detect_provider(model, "AIBehaviorAnalysisNode")
+        )
         self.model = model
         self.enable_explanations = enable_explanations
         self.enable_recommendations = enable_recommendations

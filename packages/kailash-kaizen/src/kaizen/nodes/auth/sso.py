@@ -81,7 +81,7 @@ class SSOAuthenticationNode(CoreSSONode):
         # provider auto-detected from the resolved model when not given.
         ai_model = resolve_default_model("SSOAuthenticationNode", ai_model)
         if provider is None:
-            provider = detect_provider(ai_model)
+            provider = detect_provider(ai_model, "SSOAuthenticationNode")
 
         # Store provider and model for later use in LLM calls
         self.ai_provider = provider

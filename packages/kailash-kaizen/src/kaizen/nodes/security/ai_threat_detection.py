@@ -113,7 +113,11 @@ class AIThreatDetectionNode(Node):
         # KAIZEN_DEFAULT_MODEL (rules/env-models.md); provider auto-detected
         # from the resolved model when not given.
         model = resolve_default_model("AIThreatDetectionNode", model)
-        self.provider = provider if provider is not None else detect_provider(model)
+        self.provider = (
+            provider
+            if provider is not None
+            else detect_provider(model, "AIThreatDetectionNode")
+        )
         self.model = model
         self.enable_intelligence = enable_intelligence
         self.enable_narratives = enable_narratives

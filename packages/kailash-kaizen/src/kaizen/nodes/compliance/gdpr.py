@@ -221,7 +221,10 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             if ai_model.startswith("ollama:"):
                 provider, model = "ollama", ai_model.split(":", 1)[1]
             else:
-                provider, model = detect_provider(ai_model), ai_model
+                provider, model = (
+                    detect_provider(ai_model, "GDPRComplianceNode"),
+                    ai_model,
+                )
             self.ai_agent = LLMAgentNode(
                 name=f"{name}_ai_agent",
                 provider=provider,
