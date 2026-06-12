@@ -10,9 +10,7 @@ paths:
 
 # SDK Release Rules
 
-
 <!-- slot:neutral-body -->
-
 
 ## Before Any Release
 
@@ -254,5 +252,42 @@ The rule above covers the one-way case (sub-package imports from root core). At 
 **Why:** Bridge modules are by definition dual-import — each side's tests exercise paths that import the other package's modules. A one-way editable install surfaces only one direction's `ModuleNotFoundError`; the other direction surfaces in the NEXT PR that runs the opposite test suite, cascading fixes across two release cycles. Pre-declaring BOTH reciprocal installs in BOTH CI workflows catches it at the FIRST collection pass. Evidence: PR #611 release cycle — align→ml reciprocal install landed at commit `e7c5a33b`; the ml→align direction surfaced as the next collection failure at commit `c59c30da`. Both directions needed identical discipline.
 
 Origin: kailash-py PR #611 release cycle (2026-04-23) — ML↔Align bridge CI cascade.
+
+## MUST: Eagerly-Imported Transitive Deps Are Declared By The Importing Package
+
+A package whose `__init__.py` (or any module on an eager import path) imports a third-party dependency MUST declare that dependency in its OWN `pyproject.toml` — even when the dependency is also pulled in transitively by an upstream package or an upstream `[extra]`. Relying on "the upstream extra installs it" is BLOCKED.
+
+```python
+# DO — kailash-ml declares aiosqlite because its eager import path needs it
+# packages/kailash-ml/pyproject.toml
+dependencies = ["kailash>=2.28.0", "aiosqlite>=0.19"]  # ml eagerly imports via kailash.core.pool
+
+# DO NOT — assume the upstream extra provides it
+dependencies = ["kailash>=2.28.0"]  # kailash[server] happens to install aiosqlite TODAY
+# → clean-venv `pip install kailash-ml` (no [server]) fails at FIRST import:
+#   ModuleNotFoundError: No module named 'aiosqlite'
+#   (kailash.core.pool.__init__ re-exports it eagerly)
+```
+
+**BLOCKED rationalizations:**
+
+- "The upstream extra installs it, so it's always present"
+- "It works in our dev env where the extra is installed"
+- "Declaring it duplicates the upstream dependency"
+- "The transitive resolution covers it"
+- "CI passes because CI installs the full extra set"
+
+**Why:** A clean-venv `pip install <package>` resolves ONLY that package's declared deps; an eagerly-imported transitive dep that is undeclared fails at first import for every user who does not ALSO install the upstream extra. Evidence: kailash-ml imported `aiosqlite` via `kailash.core.pool.__init__`'s eager re-export but never declared it — clean-venv install failed at import; the same pattern hit kailash-mcp 0.2.13 → 0.2.14 the same day. Declaration by the importing package is the only resolution that survives a minimal install.
+
+**Trust Posture Wiring (this clause):**
+
+- **Severity:** `halt-and-report` at `/release` gate-review (release-specialist confirms a clean-venv import of each sub-package; cc-architect / reviewer at `/codify`). Advisory at any future hook layer (an import-vs-declared-dep static check is structural but not yet wired).
+- **Grace period:** 7 days from this clause landing.
+- **Cumulative posture impact:** contributes to `trust-posture.md` MUST Rule 4 cumulative math (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** a release within 7 days that ships a sub-package whose eager import path references an undeclared transitive dep = emergency downgrade per `trust-posture.md` MUST Rule 4 (`regression_within_grace`; 1× = drop 1 posture).
+- **Receipt requirement:** SessionStart MUST require `[ack: deployment-transitive-dep]` in the agent's first response IF `posture.json::pending_verification` includes this rule_id. Soft-gate.
+- **Detection mechanism:** Phase 1 — release-specialist clean-venv import at `/release` (`pip install <pkg>` in a fresh venv with NO extras → import the package → exit 0); cc-architect / reviewer mechanical sweep at `/codify`. Phase 2 (deferred) — a static `import`-vs-`pyproject.dependencies` checker; audit fixtures attach there per `cc-artifacts.md` Rule 9.
+- **Violation scope:** this single MUST clause (eager-import transitive-dep declaration). Every violation row names the package + the undeclared dep + the eager import path.
+- **Origin:** issue #1086 candidate 1; evidence kailash-ml `aiosqlite` clean-venv failure + kailash-mcp 0.2.13 → 0.2.14 same-day repeat (2026-05-18).
 
 <!-- /slot:neutral-body -->
