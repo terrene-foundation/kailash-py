@@ -281,7 +281,6 @@ class FeatureStore:
         data: pl.DataFrame,
         *,
         tenant_id: str | None = None,
-        point_in_time: datetime | None = None,
     ) -> Any:
         """Write-through a :class:`FeatureGroup`'s rows; register lineage.
 
@@ -317,10 +316,11 @@ class FeatureStore:
             :class:`~kailash_ml.errors.TenantRequiredError`. A cross-tenant
             materialise raises
             :class:`~kailash_ml.errors.CrossTenantReadError`.
-        point_in_time:
-            Optional materialise-time stamp (observability). Per-row event-time
-            is read from the schema's ``timestamp_column`` in ``data`` so a later
-            :meth:`get_features` ``timestamp=T`` read is point-in-time correct.
+
+        Per-row event-time is read from the schema's ``timestamp_column`` in
+        ``data`` so a later :meth:`get_features` ``timestamp=T`` read is
+        point-in-time correct. The write path takes no ``point_in_time`` —
+        point-in-time is a READ concern.
 
         Returns
         -------
@@ -342,7 +342,6 @@ class FeatureStore:
             group,
             data,
             tenant_id=effective_tenant,
-            point_in_time=point_in_time,
         )
 
     # ------------------------------------------------------------------
@@ -453,9 +452,9 @@ def _import_ml_feature_source() -> Any:
     except (ImportError, AttributeError):
         pass
     try:
-        # Path 3: legacy back-compat probe.
+        # Path 3: legacy back-compat probe (guarded; module may be absent).
         from dataflow.ml_integration import (
-            ml_feature_source,  # type: ignore[import-not-found]
+            ml_feature_source,  # pyright: ignore[reportMissingImports]; type: ignore[import-not-found]
         )
 
         return ml_feature_source

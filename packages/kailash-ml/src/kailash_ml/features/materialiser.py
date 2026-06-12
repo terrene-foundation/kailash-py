@@ -147,7 +147,6 @@ class FeatureMaterialiser:
         data: pl.DataFrame,
         *,
         tenant_id: str | None = None,
-        point_in_time: datetime | None = None,
     ) -> MaterializeResult:
         """Compute + persist a feature group's rows; register lineage.
 
@@ -175,12 +174,12 @@ class FeatureMaterialiser:
             :class:`~kailash_ml.errors.TenantRequiredError`. A multi-tenant group
             whose own ``tenant_id`` differs raises
             :class:`~kailash_ml.errors.CrossTenantReadError`.
-        point_in_time:
-            Optional materialise-time stamp recorded for observability. Per-row
-            event-time is read from the schema's ``timestamp_column`` in ``data``
-            (NOT synthesised here) so a later
-            :meth:`~kailash_ml.features.store.FeatureStore.get_features`
-            ``timestamp=T`` read is point-in-time correct (spec §4 MUST-5).
+
+        Per-row event-time is read from the schema's ``timestamp_column`` in
+        ``data`` (NOT synthesised here), so a later
+        :meth:`~kailash_ml.features.store.FeatureStore.get_features`
+        ``timestamp=T`` read is point-in-time correct (spec §4 MUST-5). The
+        write path takes no ``point_in_time`` — point-in-time is a READ concern.
 
         Returns
         -------
