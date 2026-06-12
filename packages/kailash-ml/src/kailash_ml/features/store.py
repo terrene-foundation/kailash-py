@@ -62,6 +62,8 @@ if TYPE_CHECKING:
     # Avoid importing DataFlow eagerly — kailash-ml depends on kailash-dataflow
     # as a wave peer but downstream callers may import FeatureStore on paths
     # that never touch DataFlow (e.g. type-only utility imports).
+    from kailash_ml.features.feature_group import FeatureGroup
+
     from dataflow.core.engine import DataFlow
 
 __all__ = ["FeatureStore"]
@@ -270,6 +272,148 @@ class FeatureStore:
             ) from exc
 
     # ------------------------------------------------------------------
+    # Write-through materialisation (FM2 Shard B — composed, not a kwarg)
+    # ------------------------------------------------------------------
+
+    async def materialize(
+        self,
+        group: "FeatureGroup",
+        data: pl.DataFrame,
+        *,
+        tenant_id: str | None = None,
+    ) -> Any:
+        """Write-through a :class:`FeatureGroup`'s rows; register lineage.
+
+        Thin facade over the composed
+        :class:`~kailash_ml.features.materialiser.FeatureMaterialiser`
+        (constructed internally from the bound ``self._df`` — NO new
+        ``FeatureStore.__init__`` kwarg, per spec §11.6 / composition over
+        constructor-flag bloat, ``rules/facade-manager-detection.md`` Rule 3).
+
+        Computes the group's declared ``@feature`` derived columns on ``data``
+        via the shipped ``dataflow.transform`` binding, persists the resulting
+        feature table through DataFlow Express (no raw SQL — the backing table is
+        a ``@db.model`` driven by ``auto_migrate``), and registers the
+        materialized dataset's lineage hash via ``dataflow.hash``.
+
+        Idempotent: re-running the same ``materialize(...)`` upserts the same
+        content-addressed rows and does NOT duplicate them.
+
+        Async per the sibling :meth:`get_features` — both are ``async def`` so the
+        canonical read+write pipeline composes under any event loop
+        (``rules/patterns.md`` § Paired Public Surface).
+
+        Parameters
+        ----------
+        group:
+            The authored :class:`FeatureGroup` to materialise.
+        data:
+            The input ``polars.DataFrame`` carrying the base columns the group's
+            schema + ``@feature`` expressions read.
+        tenant_id:
+            Tenant scope; resolved via the store's tenant policy
+            (:meth:`_resolve_tenant`). Missing tenant raises
+            :class:`~kailash_ml.errors.TenantRequiredError`. A cross-tenant
+            materialise raises
+            :class:`~kailash_ml.errors.CrossTenantReadError`.
+
+        Per-row event-time is read from the schema's ``timestamp_column`` in
+        ``data`` so a later :meth:`get_features` ``timestamp=T`` read is
+        point-in-time correct. The write path takes no ``point_in_time`` —
+        point-in-time is a READ concern.
+
+        Returns
+        -------
+        kailash_ml.features.materialiser.MaterializeResult
+            ``frame`` (redacted persisted DataFrame), ``lineage_hash``,
+            ``row_count``, ``group``, ``version``, ``tenant_id``,
+            ``invalidation_pattern``.
+        """
+        effective_tenant = self._resolve_tenant(
+            tenant_id, operation="FeatureStore.materialize"
+        )
+        # Compose the materialiser from the bound DataFlow instance — NOT a
+        # constructor flag (spec §11.6). Constructed per-call so the facade adds
+        # no state to FeatureStore.
+        from kailash_ml.features.materialiser import FeatureMaterialiser
+
+        materialiser = FeatureMaterialiser(self._df)
+        return await materialiser.materialize(
+            group,
+            data,
+            tenant_id=effective_tenant,
+        )
+
+    # ------------------------------------------------------------------
+    # GDPR tenant erasure (FM2 Shard F — composed helper, not a kwarg)
+    # ------------------------------------------------------------------
+
+    async def erase_tenant(
+        self,
+        *,
+        tenant_id: str | None = None,
+        force: bool = False,
+    ) -> Any:
+        """Erase every feature trace of a tenant: materialized rows + registry.
+
+        Thin facade over the composed
+        :func:`~kailash_ml.features.erasure.erase_tenant` helper (called with the
+        bound ``self._df`` — NO new ``FeatureStore.__init__`` kwarg, per spec
+        §11.6 / composition over constructor-flag bloat,
+        ``rules/facade-manager-detection.md`` Rule 3).
+
+        Deletes, for the given tenant, (a) every materialized feature-table row
+        persisted by :class:`~kailash_ml.features.materialiser.FeatureMaterialiser`
+        AND (b) every :class:`~kailash_ml.features.registry.FeatureRegistry` row —
+        through DataFlow Express (``express.list`` + ``express.delete``, NO raw
+        SQL). The registry is the authoritative per-tenant index of feature
+        tables; materialized rows are tenant-scoped via the deterministic
+        content-addressed id (no tenant column needed). The returned
+        ``invalidation_patterns`` drive any online-store cache eviction.
+
+        Async per the sibling :meth:`get_features` / :meth:`materialize` — all
+        three are ``async def`` so the canonical read+write+erase pipeline
+        composes under any event loop (``rules/patterns.md`` § Paired Public
+        Surface).
+
+        Parameters
+        ----------
+        tenant_id:
+            The tenant to erase; resolved via the store's tenant policy
+            (:meth:`_resolve_tenant`). Missing / invalid tenant raises
+            :class:`~kailash_ml.errors.TenantRequiredError` — a destructive
+            operation MUST NOT run unscoped (``rules/security.md``).
+        force:
+            When ``True``, bypass the alias-protection refusal hook (operator
+            override). Defaults to ``False`` (refusal hook active).
+
+        Returns
+        -------
+        kailash_ml.features.erasure.EraseTenantResult
+            ``tenant_fingerprint``, ``feature_rows``, ``registry_rows``,
+            ``feature_groups``, ``invalidation_patterns``, ``audit_emitted``.
+
+        Raises
+        ------
+        kailash_ml.errors.TenantRequiredError
+            ``tenant_id`` missing / invalid / a forbidden sentinel.
+        kailash_ml.errors.ErasureRefusedError
+            The tenant has a feature group linked to a protected resource and
+            ``force`` is ``False`` (REUSED canonical error, not redefined).
+        kailash_ml.errors.FeatureStoreError
+            A delete leg failed — the erase is PARTIAL; surfaced (fail-closed),
+            never swallowed (``rules/zero-tolerance.md`` Rule 3).
+        """
+        effective_tenant = self._resolve_tenant(
+            tenant_id, operation="FeatureStore.erase_tenant"
+        )
+        # Compose the erasure helper from the bound DataFlow instance — NOT a
+        # constructor flag (spec §11.6).
+        from kailash_ml.features.erasure import erase_tenant as _erase_tenant
+
+        return await _erase_tenant(self._df, tenant_id=effective_tenant, force=force)
+
+    # ------------------------------------------------------------------
     # Cache key helpers (read-path, tenant-scoped)
     # ------------------------------------------------------------------
 
@@ -377,9 +521,9 @@ def _import_ml_feature_source() -> Any:
     except (ImportError, AttributeError):
         pass
     try:
-        # Path 3: legacy back-compat probe.
-        from dataflow.ml_integration import (
-            ml_feature_source,  # type: ignore[import-not-found]
+        # Path 3: legacy back-compat probe (guarded; module may be absent).
+        from dataflow.ml_integration import (  # type: ignore[import-not-found] # pyright: ignore[reportMissingImports] # noqa: E501
+            ml_feature_source,
         )
 
         return ml_feature_source

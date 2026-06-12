@@ -193,6 +193,16 @@ from kailash_ml.estimators import (
     unregister_estimator,
 )
 
+# FM2 Wave-1 Shard A — public feature-authoring surface
+# (``specs/ml-feature-store.md §11.1``). ``FeatureGroup`` + the ``@feature``
+# decorator are eagerly importable from ``kailash_ml`` so
+# ``from kailash_ml import FeatureGroup, feature`` resolves; they are NOT in the
+# §15.9 count-pinned canonical ``__all__`` (same treatment as ``FeatureStore`` /
+# ``FeatureField`` / ``FeatureSchema`` — the canonical authoring surface lives
+# at ``kailash_ml.features``). The module imports DataFlow lazily, so this eager
+# import does not drag DataFlow into the hot import path.
+from kailash_ml.features import FeatureDefinition, FeatureGroup, feature
+
 # Issue #1125 AC 5 — ``kailash_ml.from_brief(brief, df)`` returns a
 # ``(FeatureSchema, ModelSpec, EvalSpec)`` triple. The function is
 # module-level (not a classmethod) because the result type is a tuple of
@@ -802,7 +812,10 @@ _ = (
     PolicyArtifactRef,
     RLLifecycleProtocol,
     AgentInfusionProtocol,
+    FeatureDefinition,
     FeatureField,
+    FeatureGroup,
+    feature,
     FeatureSchema,
     MetricSpec,
     MLToolProtocol,

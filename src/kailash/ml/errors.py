@@ -67,7 +67,12 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     ├── FeatureStoreError
     │   ├── FeatureNotFoundError
     │   ├── StaleFeatureError
-    │   └── PointInTimeViolationError
+    │   ├── PointInTimeViolationError
+    │   ├── FeatureGroupNotFoundError
+    │   ├── FeatureVersionImmutableError
+    │   ├── FeatureVersionNotFoundError
+    │   ├── FeatureEvolutionError
+    │   └── CrossTenantReadError
     ├── AutoMLError
     │   ├── BudgetExhaustedError
     │   ├── InsufficientTrialsError
@@ -189,6 +194,11 @@ __all__ = [
     "FeatureNotFoundError",
     "StaleFeatureError",
     "PointInTimeViolationError",
+    "FeatureGroupNotFoundError",
+    "FeatureVersionImmutableError",
+    "FeatureVersionNotFoundError",
+    "FeatureEvolutionError",
+    "CrossTenantReadError",
     # --- AutoMLError subclasses ---
     "BudgetExhaustedError",
     "InsufficientTrialsError",
@@ -666,6 +676,82 @@ class StaleFeatureError(FeatureStoreError):
 class PointInTimeViolationError(FeatureStoreError):
     """Raised when a point-in-time query would leak future values into a
     training set."""
+
+
+class FeatureGroupNotFoundError(FeatureStoreError):
+    """Raised when a public ``FeatureGroup`` is looked up by name and no
+    group with that name is registered/authored for the tenant.
+
+    Landed with its raise-site (FM2 Wave-1 Shard A — the public
+    :class:`~kailash_ml.features.feature_group.FeatureGroup` authoring
+    surface). A ``FeatureStoreError`` subclass so existing
+    ``except FeatureStoreError`` handlers keep catching it
+    (``specs/ml-feature-store.md §11.7`` / §6.2).
+    """
+
+
+class FeatureVersionImmutableError(FeatureStoreError):
+    """Raised when a caller re-registers an existing ``(tenant, name, version)``
+    with a DIFFERENT ``content_hash``.
+
+    Landed with its raise-site (FM2 Wave-1 Shard E — the registry-backed
+    :class:`~kailash_ml.features.registry.FeatureRegistry`). Version
+    immutability is enforced at the registry-mutation site (a DB-level
+    ``UNIQUE(tenant_id, name, version)`` constraint via DataFlow ``@db.model``)
+    PLUS a content-hash cross-check: a registered version is frozen, so a
+    second ``register(...)`` of the same ``(tenant, name, version)`` carrying a
+    different ``content_hash`` is an attempt to mutate a frozen version and
+    raises this typed error. Re-registering the IDENTICAL schema (same
+    ``content_hash``) is idempotent and does NOT raise
+    (``specs/ml-feature-store.md §11.3`` / §6.3).
+    """
+
+
+class FeatureVersionNotFoundError(FeatureStoreError):
+    """Raised by ``FeatureRegistry.get(name, version, ...)`` when the requested
+    ``(tenant, name, version)`` is not registered.
+
+    Landed with its raise-site (FM2 Wave-1 Shard E). Distinct from
+    :class:`FeatureGroupNotFoundError` (no group of that NAME exists at all):
+    this fires when the group NAME is known but the requested VERSION was never
+    registered for the tenant (``specs/ml-feature-store.md §11.3`` / §6.3).
+    """
+
+
+class FeatureEvolutionError(FeatureStoreError):
+    """Raised on an invalid feature-schema evolution across versions.
+
+    Landed with its raise-site (FM2 Wave-1 Shard E). The concrete trigger:
+    re-registering a NEW ``content_hash`` under an EXISTING ``(tenant, name)``
+    at a version that is NOT strictly greater than the highest already-frozen
+    version for that ``(tenant, name)`` — i.e. an attempt to evolve the schema
+    WITHOUT a forward version bump. Schema evolution MUST route through
+    :meth:`~kailash_ml.features.schema.FeatureSchema.with_features`
+    (``bump_version=True``), which advances the version; a backward or equal
+    version carrying changed fields is a non-monotonic evolution and raises
+    this typed error (``specs/ml-feature-store.md §11.3`` / §6.3).
+    """
+
+
+class CrossTenantReadError(FeatureStoreError):
+    """Raised when a materialise/read crosses a tenant boundary.
+
+    Landed with its raise-site (FM2 Wave-2 Shard B — the
+    :class:`~kailash_ml.features.materialiser.FeatureMaterialiser`
+    write-through path). The materialiser binds the caller-supplied
+    ``tenant_id`` to the DataFlow tenant context before any write; if the
+    feature group's own ``tenant_id`` (resolved at registration) does NOT
+    match the caller's tenant, the operation would materialise one tenant's
+    feature data under another tenant's scope — a cross-tenant isolation
+    breach (``rules/tenant-isolation.md`` Rule 2). The materialiser refuses
+    with this typed error rather than writing the rows.
+
+    A ``FeatureStoreError`` subclass so existing ``except FeatureStoreError``
+    handlers keep catching it (``specs/ml-feature-store.md §6.2`` / §11.7).
+    Tenant identifiers are fingerprinted (never echoed verbatim) in the
+    message per ``rules/dataflow-identifier-safety.md`` error-message
+    discipline.
+    """
 
 
 # --- AutoMLError subclasses --------------------------------------------
