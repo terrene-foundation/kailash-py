@@ -1,5 +1,11 @@
 # Nexus Changelog
 
+## [2.9.1] — 2026-06-12 — `Nexus.close()` cascade-closes internal AsyncLocalRuntimes (#1285)
+
+### Fixed
+
+- **`Nexus.close()` now releases every internal `AsyncLocalRuntime` (#1285).** Previously every Nexus app/test emitted `ResourceWarning: Unclosed AsyncLocalRuntime (ref_count=1)` at GC even when `close()` was called, because three runtime references were never released on the synchronous teardown path: (1) the HTTP gateway (`EnterpriseWorkflowServer`) acquires `Nexus.runtime` at construction and was never released; (2) each registered workflow's `WorkflowAPI` owns its own runtime, never tracked/closed (the Core SDK half, fixed in kailash 2.29.4); (3) the MCP/WebSocket transports lazily acquire a `_shared_runtime` on tool invocation and released it only in async `stop()`. `Nexus.close()` now closes the gateway (cascading to every per-workflow runtime) and iterates `self._transports` to release each `_shared_runtime`; the base `Transport` gains a no-op `close()`, and `MCPTransport`/`WebSocketTransport` override it with their async `stop()` delegating to it. Verified clean on every teardown path (explicit `close()`, context-manager `__exit__`, `__del__`/GC, double-close). Requires `kailash>=2.28.4` (the Core SDK `WorkflowServer`/`WorkflowAPIGateway` half ships in kailash 2.29.4).
+
 ## [2.9.0] — 2026-06-01 — WebSocket pre-upgrade handshake rejection + subprotocol echo + typed-status gateway (#1216, #1217, #1218)
 
 Three deferred follow-ups of the #1174 FastAPI-parity work. Requires `kailash>=2.28.4` (the #1218 typed-status gateway fix lives in the Core SDK `WorkflowAPI`).
