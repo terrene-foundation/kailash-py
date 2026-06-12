@@ -128,7 +128,8 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
     The 1.0 read surface (§ 2.1) is the original 6 symbols; FM2 Wave-1 Shard A
     (``specs/ml-feature-store.md §11.1``) adds the public authoring surface
     (``FeatureGroup`` + ``@feature`` / ``FeatureDefinition`` + the
-    ``FeatureGroupNotFoundError`` raise-site helper ``lookup_feature_group``).
+    ``FeatureGroupNotFoundError`` raise-site helper ``lookup_feature_group``);
+    FM2 Wave-1 Shard E (``§11.3``) adds the durable ``FeatureRegistry``.
     """
     expected = {
         # § 2.1 — 1.0 read surface
@@ -143,6 +144,8 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
         "feature",
         "FeatureDefinition",
         "lookup_feature_group",
+        # §11.3 — FM2 Wave-1 Shard E registry surface
+        "FeatureRegistry",
     }
     assert set(features_pkg.__all__) == expected, (
         f"features.__all__ drift: got {set(features_pkg.__all__)}, "

@@ -321,13 +321,15 @@ These typed exceptions are part of the M2 surface (see § 11). The 1.0+ FeatureS
 
 ### 6.3 NOT Defined Anywhere — Do Not Reference
 
-The following classes do NOT appear in `src/kailash/ml/errors.py` (verified via round-2 grep). v1 (and round 1 of this v2) referred to them; downstream code MUST NOT `try/except` against them.
+The following classes do NOT appear in `src/kailash/ml/errors.py`; downstream code MUST NOT `try/except` against them.
 
-`FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`, `FeatureVersionImmutableError`.
+`OnlineStoreUnavailableError`, `CrossTenantReadError`.
 
-These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (evolution, online store, cross-tenant read guard, version immutability) ship — see § 11.
+These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (online store, cross-tenant read guard) ship — see § 11.
 
 `FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A): a `FeatureStoreError` subclass at `src/kailash/ml/errors.py:673` (re-exported from `kailash_ml.errors`), raised by `kailash_ml.features.feature_group.lookup_feature_group` when a group name is absent. Downstream code MAY `try/except` against it.
+
+`FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). Downstream code MAY `try/except` against them.
 
 ---
 
@@ -493,13 +495,20 @@ The `@feature` decorator HAS shipped at `packages/kailash-ml/src/kailash_ml/feat
 
 **Deferred to M2:** the write-through materialisation scheduler + `FeatureStore.materialize()` persistence facade (§ 11.2 write path) and registry-backed lineage registration remain deferred (FM2 Wave 2). The decorator + the on-read derived-column application are the shipped half.
 
-### 11.3 Feature Versioning + Immutability Enforcement (was § 7 in v1; F-E2-20)
+### 11.3 Feature Versioning + Immutability Enforcement (SHIPPED FM2 Wave-1 Shard E)
 
-V1 specified that registered feature versions are immutable; mutation attempts raise `FeatureVersionImmutableError`.
+`FeatureRegistry` (`packages/kailash-ml/src/kailash_ml/features/registry.py`) is the durable, DataFlow-backed store of authored feature groups, ENFORCING per-tenant version immutability. It is a composed object (`FeatureRegistry(dataflow)`), NOT a `FeatureStore.__init__` kwarg (§ 11.6).
 
-1.0+ ships `FeatureSchema.version: int` (`schema.py:203`) which is part of the content-addressed hash, but there is NO registry-backed immutability check at the `FeatureStore` layer. `FeatureVersionImmutableError` does NOT exist in `errors.py` (verified § 6.3).
+Immutability is enforced at the registry-mutation site two ways that compose:
 
-**M2 disposition:** Define `FeatureVersionImmutableError` in `errors.py` AND wire the immutability check at the registry-mutation site (M2 — when the registry-backed feature group lands, see § 11.1). Today, immutability is content-addressed only — two callers writing `FeatureSchema(name="x", version=1, fields=A)` and `FeatureSchema(name="x", version=1, fields=B)` produce different `content_hash` values, but the FeatureStore has no DDL-level `UNIQUE(name, version)` enforcement to reject the second registration.
+- **DB-level `UNIQUE(tenant_id, name, version)`** — the backing `@db.model` carries `__dataflow__["indexes"]` with `unique: True` over `(tenant_id, name, version)`, which DataFlow auto-migration emits as a real `CREATE UNIQUE INDEX` (DB-enforced, parameterised by DataFlow — no raw SQL, no hand-rolled uniqueness). A conflicting INSERT for an already-registered tuple is rejected at the database boundary.
+- **content_hash cross-check** — `FeatureRegistry.register(group, *, tenant_id=...)` compares the incoming `content_hash` against the frozen row's on conflict. Re-registering the IDENTICAL schema (same `content_hash`) is idempotent (no error, no duplicate row); re-registering a DIFFERENT `content_hash` for a frozen `(tenant, name, version)` raises `FeatureVersionImmutableError` (`src/kailash/ml/errors.py:685`).
+
+Evolution MUST be a forward version bump: registering a changed schema under an existing `(tenant, name)` at a version that is not strictly greater than the highest frozen version raises `FeatureEvolutionError` (`errors.py:713`). The canonical evolution surface is `FeatureSchema.with_features(bump_version=True)` (`schema.py:283`).
+
+`FeatureRegistry.get(name, version, *, tenant_id=...)` reads back a pure-declarative `FeatureGroup`, raising `FeatureGroupNotFoundError` when the name is absent for the tenant and `FeatureVersionNotFoundError` (`errors.py:702`) when the name is known but the version is not. `FeatureRegistry.list(*, tenant_id=...)` returns every registered group for the tenant. All three are tenant-isolated — tenant A's `(x, v1)` and tenant B's `(x, v1)` are independent rows.
+
+Tier-2 wiring: `packages/kailash-ml/tests/integration/test_feature_registry.py` (9 tests — round-trip, DB-enforced UNIQUE index, immutable-on-different-fields, idempotent-on-identical, version-bump, missing-version, missing-name, non-forward-evolution, tenant isolation).
 
 ### 11.4 Storage / Retention / Eraser (was § 8 in v1; F-E2-21)
 
@@ -527,9 +536,9 @@ V1 implied a richer constructor surface (e.g. `FeatureStore(connection_manager=.
 
 ### 11.7 Typed Exceptions Absent At The Surface (F-E2-22)
 
-`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). The remaining four classes referenced in v1 do NOT exist in `errors.py` today (§ 6.3): `FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`.
+`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). `FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). The two remaining classes referenced in v1 do NOT exist in `errors.py` today (§ 6.3): `OnlineStoreUnavailableError`, `CrossTenantReadError`.
 
-**M2 disposition:** Each remaining class lands in `errors.py` at the same PR that lands the corresponding surface (§ 11.3, § 11.4). Until then, downstream code MUST NOT `try/except` against the four not-yet-shipped classes.
+**M2 disposition:** Each remaining class lands in `errors.py` at the same PR that lands the corresponding surface (§ 11.4). Until then, downstream code MUST NOT `try/except` against the two not-yet-shipped classes.
 
 ---
 
