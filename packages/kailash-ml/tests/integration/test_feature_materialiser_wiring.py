@@ -145,6 +145,57 @@ async def test_materialize_persists_and_reads_back(store_db):
     assert by_entity["u1"]["amount"] == pytest.approx(9.0)
 
 
+async def test_materialize_logs_fingerprint_not_raw_tenant(store_db, caplog):
+    """HIGH-2 regression (Wave-2 redteam R2): NO materialiser log line — on the
+    success (.start/.compute/.ok) OR failure (.error) path — may carry the RAW
+    tenant id; only ``tenant_fingerprint`` (observability Rule 4/8). Guards both
+    the .ok (line 292) and .error (line 322) sites the R1 fix missed."""
+    import logging
+
+    store, df, _ = store_db
+    group = _group()
+
+    # Success path — emits feature_materialise.{start,compute,ok}.
+    with caplog.at_level(logging.DEBUG, logger="kailash_ml.features.materialiser"):
+        await store.materialize(group, _input_frame(), tenant_id="acme_audit")
+    mat_records = [
+        r for r in caplog.records if r.getMessage().startswith("feature_materialise")
+    ]
+    assert mat_records, "no feature_materialise log lines emitted"
+    for r in mat_records:
+        assert (
+            getattr(r, "tenant_id", None) is None
+        ), f"raw tenant_id leaked on log line {r.getMessage()!r}"
+        assert "acme_audit" not in r.getMessage()
+        assert getattr(r, "tenant_fingerprint", "").startswith("sha256:")
+
+    # Failure path — inject a persist failure so feature_materialise.error fires;
+    # assert neither the log record nor the wrapping exception carries the raw tenant.
+    caplog.clear()
+
+    async def _boom(*a, **kw):
+        raise RuntimeError("injected persist failure")
+
+    monkeypatch_target = df.express
+    orig_upsert = monkeypatch_target.upsert
+    monkeypatch_target.upsert = _boom
+    try:
+        with caplog.at_level(logging.INFO, logger="kailash_ml.features.materialiser"):
+            with pytest.raises(FeatureStoreError) as excinfo:
+                await store.materialize(group, _input_frame(), tenant_id="acme_audit")
+    finally:
+        monkeypatch_target.upsert = orig_upsert
+    assert "acme_audit" not in str(excinfo.value)
+    assert "acme_audit" not in repr(excinfo.value)
+    err_records = [
+        r for r in caplog.records if r.getMessage() == "feature_materialise.error"
+    ]
+    assert err_records, "no feature_materialise.error log line emitted on failure"
+    for r in err_records:
+        assert getattr(r, "tenant_id", None) is None
+        assert "acme_audit" not in r.getMessage()
+
+
 # ---------------------------------------------------------------------------
 # Invariant 6: idempotent re-materialise (no duplicate rows)
 # ---------------------------------------------------------------------------

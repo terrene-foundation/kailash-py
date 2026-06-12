@@ -37,8 +37,9 @@ feature data under another tenant's scope.
 
 **Observability (``rules/observability.md`` Rule 8 / spec MUST-7).** Structured
 ``feature_materialise.{start,ok,error}`` lines carry ``source='dataflow'``,
-``mode='real'``, ``tenant_id``, ``schema``, ``version``, ``row_count``,
-``latency_ms``. Schema/column names appear ONLY at DEBUG level.
+``mode='real'``, ``tenant_fingerprint`` (NEVER the raw tenant id — observability
+Rule 4/8), ``schema``, ``version``, ``row_count``, ``latency_ms``. Schema/column
+names appear ONLY at DEBUG level.
 
 See ``specs/ml-feature-store.md §11.2`` (materialise — now shipped) + §4
 (point-in-time write integrity).
@@ -289,7 +290,7 @@ class FeatureMaterialiser:
                 extra={
                     "source": "dataflow",
                     "mode": "real",
-                    "tenant_id": tenant,
+                    "tenant_fingerprint": tenant_fp,
                     "schema": group.name,
                     "version": schema.version,
                     "row_count": row_count,
@@ -319,7 +320,7 @@ class FeatureMaterialiser:
                 extra={
                     "source": "dataflow",
                     "mode": "real",
-                    "tenant_id": tenant,
+                    "tenant_fingerprint": tenant_fp,
                     "schema": group.name,
                     "version": schema.version,
                     "latency_ms": latency_ms,
