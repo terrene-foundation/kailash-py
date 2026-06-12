@@ -16,8 +16,9 @@ sibling test ``test_feature_store.py`` exercises the 0.x engine surface
 
 Conformance assertions covered (15 from § 10 of ml-feature-store.md):
 
-1. ``kailash_ml.features.__all__`` lists exactly the six § 2.1 symbols,
-   each with a corresponding eager import.
+1. ``kailash_ml.features.__all__`` lists the canonical surface symbols
+   (§ 2.1 read surface + §11.1 FM2 authoring surface), each with a
+   corresponding eager import.
 2. ``FeatureStore.__init__(dataflow, *, default_tenant_id=None)``
    matches § 2.2 exactly.
 3. ``FeatureStore(None)`` raises ``TypeError`` with the actionable
@@ -120,17 +121,28 @@ def churn_schema() -> FeatureSchema:
 # ---------------------------------------------------------------------------
 
 
-def test_assertion_01_features_pkg_exports_six_symbols_eagerly() -> None:
-    """``kailash_ml.features.__all__`` lists exactly the six § 2.1 symbols
+def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
+    """``kailash_ml.features.__all__`` lists the canonical surface symbols
     each with an eager (module-scope) import bound on the package.
+
+    The 1.0 read surface (§ 2.1) is the original 6 symbols; FM2 Wave-1 Shard A
+    (``specs/ml-feature-store.md §11.1``) adds the public authoring surface
+    (``FeatureGroup`` + ``@feature`` / ``FeatureDefinition`` + the
+    ``FeatureGroupNotFoundError`` raise-site helper ``lookup_feature_group``).
     """
     expected = {
+        # § 2.1 — 1.0 read surface
         "CANONICAL_SINGLE_TENANT_SENTINEL",
         "FeatureField",
         "FeatureSchema",
         "FeatureStore",
         "make_feature_cache_key",
         "make_feature_group_wildcard",
+        # §11.1 — FM2 Wave-1 Shard A authoring surface
+        "FeatureGroup",
+        "feature",
+        "FeatureDefinition",
+        "lookup_feature_group",
     }
     assert set(features_pkg.__all__) == expected, (
         f"features.__all__ drift: got {set(features_pkg.__all__)}, "

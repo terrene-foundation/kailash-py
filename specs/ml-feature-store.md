@@ -37,7 +37,7 @@ Concretely, the canonical surface ships:
 
 ### 1.2 What FeatureStore Does NOT Do in 1.0+
 
-The 1.0+ canonical surface does NOT provide: `@feature` decorator, `FeatureGroup` class, registry persistence, materialization scheduling, online-vs-offline split, GDPR `erase_tenant`, feature evolution, version immutability enforcement at the FeatureStore layer, or industry-parity adapters. Each is enumerated under § 11 "Deferred to M2".
+The 1.0+ canonical surface does NOT provide: registry persistence, materialization scheduling / write-through, online-vs-offline split, GDPR `erase_tenant`, feature evolution, version immutability enforcement at the FeatureStore layer, or industry-parity adapters. Each is enumerated under § 11 "Deferred to M2". (FM2 Wave-1 Shard A shipped the public `FeatureGroup` authoring class + the `@feature` decorator — see § 11.1 / § 11.2.)
 
 ### 1.3 Source-File Surface
 
@@ -323,9 +323,11 @@ These typed exceptions are part of the M2 surface (see § 11). The 1.0+ FeatureS
 
 The following classes do NOT appear in `src/kailash/ml/errors.py` (verified via round-2 grep). v1 (and round 1 of this v2) referred to them; downstream code MUST NOT `try/except` against them.
 
-`FeatureGroupNotFoundError`, `FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`, `FeatureVersionImmutableError`.
+`FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`, `FeatureVersionImmutableError`.
 
-These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (feature groups, evolution, online store, cross-tenant read guard, version immutability) ship — see § 11.
+These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (evolution, online store, cross-tenant read guard, version immutability) ship — see § 11.
+
+`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A): a `FeatureStoreError` subclass at `src/kailash/ml/errors.py:673` (re-exported from `kailash_ml.errors`), raised by `kailash_ml.features.feature_group.lookup_feature_group` when a group name is absent. Downstream code MAY `try/except` against it.
 
 ---
 
@@ -477,21 +479,19 @@ A feature-store implementation claiming "1.0+ canonical surface" MUST satisfy AL
 
 Each entry below was specified in v1 and does NOT exist in 1.0+. The Wave 5 audit (F-E2-18..22) flagged these. Each entry: what was specified, what's in 1.0+, M2 disposition.
 
-### 11.1 Feature Groups (was § 4 in v1; F-E2-19)
+### 11.1 Feature Groups (was § 4 in v1; F-E2-19) — SHIPPED (FM2 Wave-1 Shard A)
 
-V1 specified a `FeatureGroup` class with online + offline views, materialisation policies, and online-store backends.
+The public `FeatureGroup` authoring class HAS shipped at `packages/kailash-ml/src/kailash_ml/features/feature_group.py` (exported from `kailash_ml.features` AND `kailash_ml`). It is the user-facing declarative authoring object: it HAS-A a `FeatureSchema` (composition — field/dtype validation stays in `schema.py`), and satisfies the `dataflow.ml_feature_source` duck-type via `.name` / `.multi_tenant` / `.classification` / `.materialize(*, tenant_id, point_in_time=None, since=None, until=None, limit=None)` (the 5-kwarg binding contract, `feature_group.py::FeatureGroup.materialize`).
 
-1.0+ ships only `FeatureSchema` (the schema definition) plus `FeatureStore.get_features` (a single retrieval surface). There is no `FeatureGroup` class. Online vs offline split is collapsed into "whatever `dataflow.ml_feature_source` returns".
+It is DISTINCT from the internal read-path adapter `SchemaFeatureGroup` (`_schema_feature_group.py`): the internal adapter is what `FeatureStore.get_features` wraps a bare schema in; the public `FeatureGroup` is the authoring handle that the registry (§ 11.3, M2) persists. `FeatureGroup.materialize` COMPOSES the internal adapter for the base read, then layers `@feature`-authored derived columns via the shipped `dataflow.transform` binding. The online-vs-offline split remains "whatever `dataflow.ml_feature_source` returns".
 
-**M2 disposition:** Re-introduce `FeatureGroup` if and only if a downstream Engine surfaces a need that `FeatureSchema + ml_feature_source(...)` cannot express. If introduced, define `FeatureGroupNotFoundError` in `errors.py` (currently absent — see § 6.3) at the same time the class lands.
+`FeatureGroupNotFoundError` shipped with its raise-site: `lookup_feature_group(groups, name)` (`feature_group.py`) resolves a group by name and raises the typed error when absent (§ 6.3). Registry-persistence (`UNIQUE(tenant, name, version)` enforcement) remains deferred to § 11.3.
 
-### 11.2 `@feature` Decorator + Materialization (was § 5 in v1; F-E2-18)
+### 11.2 `@feature` Decorator + Materialization (was § 5 in v1; F-E2-18) — DECORATOR SHIPPED (FM2 Wave-1 Shard A)
 
-V1 specified `@feature` for declarative materialisation pipelines + scheduling.
+The `@feature` decorator HAS shipped at `packages/kailash-ml/src/kailash_ml/features/decorators.py` (exported from `kailash_ml.features` AND `kailash_ml`). It is DECLARATIVE only: it wraps a function returning a `polars.Expr` into a frozen, content-addressed `FeatureDefinition` (name + dtype + a content-SHA `version` of the function body); it performs NO compute at decoration time. The captured expression is applied at materialisation time by `FeatureGroup.materialize`, which routes each derived column through the shipped `dataflow.transform` binding (`packages/kailash-dataflow/src/dataflow/ml/_transform.py`) so classification + lineage tagging are preserved.
 
-1.0+ ships nothing in this surface. Materialisation is a DataFlow concern; scheduling lives in workflow primitives.
-
-**M2 disposition:** Defer until DataFlow ships a materialisation primitive that the FeatureStore can wrap. The decorator surface is a UX concern best deferred until the underlying mechanism ships.
+**Deferred to M2:** the write-through materialisation scheduler + `FeatureStore.materialize()` persistence facade (§ 11.2 write path) and registry-backed lineage registration remain deferred (FM2 Wave 2). The decorator + the on-read derived-column application are the shipped half.
 
 ### 11.3 Feature Versioning + Immutability Enforcement (was § 7 in v1; F-E2-20)
 
@@ -527,9 +527,9 @@ V1 implied a richer constructor surface (e.g. `FeatureStore(connection_manager=.
 
 ### 11.7 Typed Exceptions Absent At The Surface (F-E2-22)
 
-The five exception classes referenced in v1 (and falsely cited by round 1 of this draft) do NOT exist in `errors.py` today (§ 6.3): `FeatureGroupNotFoundError`, `FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`.
+`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). The remaining four classes referenced in v1 do NOT exist in `errors.py` today (§ 6.3): `FeatureVersionNotFoundError`, `FeatureEvolutionError`, `OnlineStoreUnavailableError`, `CrossTenantReadError`.
 
-**M2 disposition:** Each will land in `errors.py` at the same PR that lands the corresponding surface (§ 11.1, § 11.2, § 11.3, § 11.4). Until then, downstream code MUST NOT `try/except` against any of these classes.
+**M2 disposition:** Each remaining class lands in `errors.py` at the same PR that lands the corresponding surface (§ 11.3, § 11.4). Until then, downstream code MUST NOT `try/except` against the four not-yet-shipped classes.
 
 ---
 

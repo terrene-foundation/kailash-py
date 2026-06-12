@@ -67,7 +67,8 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     ├── FeatureStoreError
     │   ├── FeatureNotFoundError
     │   ├── StaleFeatureError
-    │   └── PointInTimeViolationError
+    │   ├── PointInTimeViolationError
+    │   └── FeatureGroupNotFoundError
     ├── AutoMLError
     │   ├── BudgetExhaustedError
     │   ├── InsufficientTrialsError
@@ -189,6 +190,7 @@ __all__ = [
     "FeatureNotFoundError",
     "StaleFeatureError",
     "PointInTimeViolationError",
+    "FeatureGroupNotFoundError",
     # --- AutoMLError subclasses ---
     "BudgetExhaustedError",
     "InsufficientTrialsError",
@@ -666,6 +668,18 @@ class StaleFeatureError(FeatureStoreError):
 class PointInTimeViolationError(FeatureStoreError):
     """Raised when a point-in-time query would leak future values into a
     training set."""
+
+
+class FeatureGroupNotFoundError(FeatureStoreError):
+    """Raised when a public ``FeatureGroup`` is looked up by name and no
+    group with that name is registered/authored for the tenant.
+
+    Landed with its raise-site (FM2 Wave-1 Shard A — the public
+    :class:`~kailash_ml.features.feature_group.FeatureGroup` authoring
+    surface). A ``FeatureStoreError`` subclass so existing
+    ``except FeatureStoreError`` handlers keep catching it
+    (``specs/ml-feature-store.md §11.7`` / §6.2).
+    """
 
 
 # --- AutoMLError subclasses --------------------------------------------
