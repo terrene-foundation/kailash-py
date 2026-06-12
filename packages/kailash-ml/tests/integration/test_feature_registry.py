@@ -28,6 +28,7 @@ backed SQLite mirrors the precedent in ``test_feature_group_authoring.py``.
 """
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from pathlib import Path
 
@@ -250,6 +251,65 @@ async def test_tenant_isolation(tmp_path: Path):
         # Tenant A's row is unchanged.
         a_again = await registry.get("user_churn", 1, tenant_id="tenant_a")
         assert a_again.schema.field_names == ["age"]
+    finally:
+        try:
+            df.close()
+        except Exception:
+            pass
+
+
+async def test_concurrent_register_race_translates_to_immutable_error(tmp_path: Path):
+    """Race path: concurrent register() of the same (tenant, name, version) with
+    DIFFERENT content_hash. The DB-enforced UNIQUE(tenant_id, name, version) index
+    is the load-bearing guard for the TOCTOU window between the in-memory pre-scan
+    and the create — the loser(s) of the race MUST surface the typed
+    ``FeatureVersionImmutableError`` (the ``except``-branch dialect translation),
+    never a raw driver IntegrityError, and EXACTLY ONE row may persist.
+
+    NO MOCKING — real file-backed SQLite; the UNIQUE index does the rejecting.
+    """
+    db_path = tmp_path / "feat_registry_race.sqlite"
+    df = DataFlow(f"sqlite:///{db_path}", auto_migrate=True)
+    registry = FeatureRegistry(df)
+    try:
+        # 6 concurrent registrations of v1, each a DIFFERENT schema (distinct
+        # content_hash via a unique extra field) so none is the idempotent path.
+        async def _attempt(i: int):
+            fields = (
+                FeatureField(name="age", dtype="int"),
+                FeatureField(name=f"f_{i}", dtype="int"),
+            )
+            schema = FeatureSchema(
+                name="user_churn",
+                version=1,
+                fields=fields,
+                entity_id_column="entity_id",
+            )
+            return await registry.register(FeatureGroup(schema))
+
+        results = await asyncio.gather(
+            *(_attempt(i) for i in range(6)), return_exceptions=True
+        )
+
+        # Every non-winner is the TYPED immutability error (dialect-translated),
+        # NOT a raw sqlite3.IntegrityError / RuntimeError leaking through.
+        errors = [r for r in results if isinstance(r, Exception)]
+        assert errors, "expected at least one loser in the race"
+        for err in errors:
+            assert isinstance(err, FeatureVersionImmutableError), (
+                f"race loser surfaced {type(err).__name__} instead of the typed "
+                f"FeatureVersionImmutableError: {err!r}"
+            )
+
+        # The DB constraint admitted EXACTLY ONE v1 row (immutability invariant).
+        rows = await registry.list()
+        v1_rows = [g for g in rows if g.name == "user_churn" and g.version == 1]
+        assert len(v1_rows) == 1, f"UNIQUE index admitted {len(v1_rows)} v1 rows"
+
+        # The survivor is retrievable and well-formed.
+        survivor = await registry.get("user_churn", 1)
+        assert survivor.version == 1
+        assert "age" in survivor.schema.field_names
     finally:
         try:
             df.close()

@@ -68,7 +68,10 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     │   ├── FeatureNotFoundError
     │   ├── StaleFeatureError
     │   ├── PointInTimeViolationError
-    │   └── FeatureGroupNotFoundError
+    │   ├── FeatureGroupNotFoundError
+    │   ├── FeatureVersionImmutableError
+    │   ├── FeatureVersionNotFoundError
+    │   └── FeatureEvolutionError
     ├── AutoMLError
     │   ├── BudgetExhaustedError
     │   ├── InsufficientTrialsError
@@ -191,6 +194,9 @@ __all__ = [
     "StaleFeatureError",
     "PointInTimeViolationError",
     "FeatureGroupNotFoundError",
+    "FeatureVersionImmutableError",
+    "FeatureVersionNotFoundError",
+    "FeatureEvolutionError",
     # --- AutoMLError subclasses ---
     "BudgetExhaustedError",
     "InsufficientTrialsError",

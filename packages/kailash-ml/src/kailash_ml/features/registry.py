@@ -60,7 +60,17 @@ _UNIQUE_INDEX_NAME = "uq_kml_feature_registry_tnv"
 # registry translates this structural signal into the typed immutability error
 # so the DB constraint — not a Python-only check — is the load-bearing guard
 # (closes the check-then-insert race window a dict check would leave open).
-_DB_UNIQUE_VIOLATION_MARKER = "unique constraint failed"
+# DataFlow does not surface a typed integrity exception (it propagates the raw
+# driver IntegrityError), so we match the per-dialect UNIQUE-violation text.
+# SQLite: "UNIQUE constraint failed: ..."; PostgreSQL: "duplicate key value
+# violates unique constraint ..."; MySQL/MariaDB: "Duplicate entry '...' for
+# key ...". (Follow-up: a typed dataflow integrity exception would let this
+# catch a class instead of string-sniffing — tracked out of FM2 scope.)
+_DB_UNIQUE_VIOLATION_MARKERS = (
+    "unique constraint failed",  # SQLite
+    "duplicate key value violates unique constraint",  # PostgreSQL
+    "duplicate entry",  # MySQL / MariaDB
+)
 
 
 class FeatureRegistry:
@@ -221,6 +231,7 @@ class FeatureRegistry:
         existing = await self._df.express.list(
             _MODEL_NAME,
             filter={"tenant_id": tenant, "name": name},
+            limit=10_000,  # frozen-version scan drives immutability/evolution; no 100-row cap
         )
 
         same_version = next(
@@ -287,7 +298,8 @@ class FeatureRegistry:
                 },
             )
         except Exception as exc:  # noqa: BLE001 — re-raised below; not swallowed
-            if _DB_UNIQUE_VIOLATION_MARKER in str(exc).lower():
+            _err = str(exc).lower()
+            if any(_m in _err for _m in _DB_UNIQUE_VIOLATION_MARKERS):
                 from kailash_ml.errors import FeatureVersionImmutableError
 
                 raise FeatureVersionImmutableError(
@@ -351,6 +363,7 @@ class FeatureRegistry:
         rows = await self._df.express.list(
             _MODEL_NAME,
             filter={"tenant_id": tenant, "name": name},
+            limit=10_000,  # version lookup must not be capped at the default 100
         )
         if not rows:
             from kailash_ml.errors import FeatureGroupNotFoundError
