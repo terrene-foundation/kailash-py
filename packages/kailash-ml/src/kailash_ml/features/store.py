@@ -62,6 +62,8 @@ if TYPE_CHECKING:
     # Avoid importing DataFlow eagerly — kailash-ml depends on kailash-dataflow
     # as a wave peer but downstream callers may import FeatureStore on paths
     # that never touch DataFlow (e.g. type-only utility imports).
+    from kailash_ml.features.feature_group import FeatureGroup
+
     from dataflow.core.engine import DataFlow
 
 __all__ = ["FeatureStore"]
@@ -268,6 +270,80 @@ class FeatureStore:
                 reason=f"get_features failed: {type(exc).__name__}",
                 tenant_id=effective_tenant,
             ) from exc
+
+    # ------------------------------------------------------------------
+    # Write-through materialisation (FM2 Shard B — composed, not a kwarg)
+    # ------------------------------------------------------------------
+
+    async def materialize(
+        self,
+        group: "FeatureGroup",
+        data: pl.DataFrame,
+        *,
+        tenant_id: str | None = None,
+        point_in_time: datetime | None = None,
+    ) -> Any:
+        """Write-through a :class:`FeatureGroup`'s rows; register lineage.
+
+        Thin facade over the composed
+        :class:`~kailash_ml.features.materialiser.FeatureMaterialiser`
+        (constructed internally from the bound ``self._df`` — NO new
+        ``FeatureStore.__init__`` kwarg, per spec §11.6 / composition over
+        constructor-flag bloat, ``rules/facade-manager-detection.md`` Rule 3).
+
+        Computes the group's declared ``@feature`` derived columns on ``data``
+        via the shipped ``dataflow.transform`` binding, persists the resulting
+        feature table through DataFlow Express (no raw SQL — the backing table is
+        a ``@db.model`` driven by ``auto_migrate``), and registers the
+        materialized dataset's lineage hash via ``dataflow.hash``.
+
+        Idempotent: re-running the same ``materialize(...)`` upserts the same
+        content-addressed rows and does NOT duplicate them.
+
+        Async per the sibling :meth:`get_features` — both are ``async def`` so the
+        canonical read+write pipeline composes under any event loop
+        (``rules/patterns.md`` § Paired Public Surface).
+
+        Parameters
+        ----------
+        group:
+            The authored :class:`FeatureGroup` to materialise.
+        data:
+            The input ``polars.DataFrame`` carrying the base columns the group's
+            schema + ``@feature`` expressions read.
+        tenant_id:
+            Tenant scope; resolved via the store's tenant policy
+            (:meth:`_resolve_tenant`). Missing tenant raises
+            :class:`~kailash_ml.errors.TenantRequiredError`. A cross-tenant
+            materialise raises
+            :class:`~kailash_ml.errors.CrossTenantReadError`.
+        point_in_time:
+            Optional materialise-time stamp (observability). Per-row event-time
+            is read from the schema's ``timestamp_column`` in ``data`` so a later
+            :meth:`get_features` ``timestamp=T`` read is point-in-time correct.
+
+        Returns
+        -------
+        kailash_ml.features.materialiser.MaterializeResult
+            ``frame`` (redacted persisted DataFrame), ``lineage_hash``,
+            ``row_count``, ``group``, ``version``, ``tenant_id``,
+            ``invalidation_pattern``.
+        """
+        effective_tenant = self._resolve_tenant(
+            tenant_id, operation="FeatureStore.materialize"
+        )
+        # Compose the materialiser from the bound DataFlow instance — NOT a
+        # constructor flag (spec §11.6). Constructed per-call so the facade adds
+        # no state to FeatureStore.
+        from kailash_ml.features.materialiser import FeatureMaterialiser
+
+        materialiser = FeatureMaterialiser(self._df)
+        return await materialiser.materialize(
+            group,
+            data,
+            tenant_id=effective_tenant,
+            point_in_time=point_in_time,
+        )
 
     # ------------------------------------------------------------------
     # Cache key helpers (read-path, tenant-scoped)

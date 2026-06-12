@@ -339,3 +339,33 @@ def _import_transform() -> Any:
             "the canonical contract. Upgrade kailash-dataflow to a version that "
             "exports transform from `dataflow.ml`."
         ) from exc
+
+
+def _import_dataflow_hash() -> Any:
+    """Resolve ``dataflow.hash`` at call time (loud on absence).
+
+    Mirrors :func:`_import_transform` — a missing binding MUST surface a
+    descriptive :class:`ImportError`, never a silent degrade
+    (``rules/dependencies.md`` § Optional Extras With Loud Failure). Returns the
+    shipped ``"sha256:<64hex>"`` stable content-hash helper used for lineage
+    provenance (``specs/dataflow-ml-integration.md §4.4`` /
+    ``packages/kailash-dataflow/src/dataflow/ml/_hash.py``).
+    """
+    try:
+        from dataflow import hash as df_hash  # type: ignore[attr-defined]
+
+        return df_hash
+    except (ImportError, AttributeError):
+        pass
+    try:
+        from dataflow.ml import hash as df_hash  # type: ignore[attr-defined]
+
+        return df_hash
+    except (ImportError, AttributeError) as exc:
+        raise ImportError(
+            "dataflow.hash is not available. kailash-ml FeatureMaterialiser "
+            "lineage-hash registration requires DataFlow 2.11+'s stable "
+            "content-hash binding — see specs/dataflow-ml-integration.md §4.4 "
+            "for the canonical contract. Upgrade kailash-dataflow to a version "
+            "that exports hash from `dataflow.ml`."
+        ) from exc

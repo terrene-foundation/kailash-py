@@ -71,7 +71,8 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     │   ├── FeatureGroupNotFoundError
     │   ├── FeatureVersionImmutableError
     │   ├── FeatureVersionNotFoundError
-    │   └── FeatureEvolutionError
+    │   ├── FeatureEvolutionError
+    │   └── CrossTenantReadError
     ├── AutoMLError
     │   ├── BudgetExhaustedError
     │   ├── InsufficientTrialsError
@@ -197,6 +198,7 @@ __all__ = [
     "FeatureVersionImmutableError",
     "FeatureVersionNotFoundError",
     "FeatureEvolutionError",
+    "CrossTenantReadError",
     # --- AutoMLError subclasses ---
     "BudgetExhaustedError",
     "InsufficientTrialsError",
@@ -728,6 +730,27 @@ class FeatureEvolutionError(FeatureStoreError):
     (``bump_version=True``), which advances the version; a backward or equal
     version carrying changed fields is a non-monotonic evolution and raises
     this typed error (``specs/ml-feature-store.md §11.3`` / §6.3).
+    """
+
+
+class CrossTenantReadError(FeatureStoreError):
+    """Raised when a materialise/read crosses a tenant boundary.
+
+    Landed with its raise-site (FM2 Wave-2 Shard B — the
+    :class:`~kailash_ml.features.materialiser.FeatureMaterialiser`
+    write-through path). The materialiser binds the caller-supplied
+    ``tenant_id`` to the DataFlow tenant context before any write; if the
+    feature group's own ``tenant_id`` (resolved at registration) does NOT
+    match the caller's tenant, the operation would materialise one tenant's
+    feature data under another tenant's scope — a cross-tenant isolation
+    breach (``rules/tenant-isolation.md`` Rule 2). The materialiser refuses
+    with this typed error rather than writing the rows.
+
+    A ``FeatureStoreError`` subclass so existing ``except FeatureStoreError``
+    handlers keep catching it (``specs/ml-feature-store.md §6.2`` / §11.7).
+    Tenant identifiers are fingerprinted (never echoed verbatim) in the
+    message per ``rules/dataflow-identifier-safety.md`` error-message
+    discipline.
     """
 
 

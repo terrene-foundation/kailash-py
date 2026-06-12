@@ -16,6 +16,7 @@ from kailash_ml.features.cache_keys import (
 )
 from kailash_ml.features.decorators import FeatureDefinition, feature
 from kailash_ml.features.feature_group import FeatureGroup, lookup_feature_group
+from kailash_ml.features.materialiser import FeatureMaterialiser, MaterializeResult
 from kailash_ml.features.registry import FeatureRegistry
 from kailash_ml.features.schema import FeatureField, FeatureSchema
 from kailash_ml.features.store import FeatureStore
@@ -25,9 +26,11 @@ __all__ = [
     "FeatureDefinition",
     "FeatureField",
     "FeatureGroup",
+    "FeatureMaterialiser",
     "FeatureRegistry",
     "FeatureSchema",
     "FeatureStore",
+    "MaterializeResult",
     "feature",
     "lookup_feature_group",
     "make_feature_cache_key",
