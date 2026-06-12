@@ -321,11 +321,11 @@ These typed exceptions are part of the M2 surface (see § 11). The 1.0+ FeatureS
 
 ### 6.3 NOT Defined Anywhere — Do Not Reference
 
-The following classes do NOT appear in `src/kailash/ml/errors.py`; downstream code MUST NOT `try/except` against them.
+The following class does NOT appear in `src/kailash/ml/errors.py`; downstream code MUST NOT `try/except` against it.
 
-`OnlineStoreUnavailableError`, `CrossTenantReadError`.
+`OnlineStoreUnavailableError`.
 
-These are M2 placeholders to be defined IF and WHEN the corresponding surfaces (online store, cross-tenant read guard) ship — see § 11.
+This is an M2 placeholder to be defined IF and WHEN the corresponding surface (online store adapter) ships — see § 11.4a. (`CrossTenantReadError` shipped FM2 Wave-2 Shard B at `errors.py:736`; it is a defined, catchable `FeatureStoreError` subclass — see § 11.7.)
 
 `FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A): a `FeatureStoreError` subclass at `src/kailash/ml/errors.py:673` (re-exported from `kailash_ml.errors`), raised by `kailash_ml.features.feature_group.lookup_feature_group` when a group name is absent. Downstream code MAY `try/except` against it.
 
@@ -514,9 +514,19 @@ Tier-2 wiring: `packages/kailash-ml/tests/integration/test_feature_registry.py` 
 
 V1 specified online-store backends (Redis, DynamoDB) + retention policies + GDPR `erase_tenant`.
 
-1.0+ ships none of this. The cache-key helpers in § 5 produce keys SUITABLE for a Redis backend, but no Redis adapter is shipped at the FeatureStore layer.
+The **GDPR eraser** HAS shipped (FM2 Wave-2 Shard F). The online-store backends + retention policies remain deferred (see § 11.4a).
 
-**M2 disposition:** Defer. GDPR erasure is a cross-cutting concern — `ml-tracking.md §8.4` already defines `ErasureRefusedError` (canonical home: `TrackingError`) — when the FeatureStore lands a registry-backed online surface, GDPR erasure plumbs through that path.
+`FeatureStore.erase_tenant(*, tenant_id=None, force=False)` (`packages/kailash-ml/src/kailash_ml/features/store.py:351`) is a thin facade that delegates to the composed `erase_tenant` helper (`packages/kailash-ml/src/kailash_ml/features/erasure.py:239`), constructed internally from the bound `self._df` — NO new `FeatureStore.__init__` kwarg (§ 11.6). Erasure deletes, for the given tenant: (a) every materialized feature-table row persisted by `FeatureMaterialiser`, AND (b) every `FeatureRegistry` row — through DataFlow Express (`express.list` + `express.delete`, NO raw SQL). The `FeatureRegistry` table (`KmlFeatureRegistry`, carrying an explicit `tenant_id` column) is the authoritative per-tenant INDEX of which feature tables a tenant has; erasure reads it, deletes each registered feature table's tenant rows, then deletes the registry rows. Materialized rows are tenant-scoped WITHOUT a tenant column by re-deriving each candidate row's deterministic content-addressed `id = sha256(tenant, group, version, entity_id, timestamp)[:32]` from its `entity_id` / `timestamp` columns + the registry-known `(tenant, name, version)` and deleting only the rows whose stored `id` matches — a sibling tenant's row yields a different derived id and is left intact.
+
+Erasure REUSES the canonical `ErasureRefusedError` (`src/kailash/ml/errors.py:476`, a `TrackingError` subclass — NOT redefined): an invalid / forbidden-sentinel tenant raises `TenantRequiredError` before any delete (a destructive op MUST NOT run unscoped); a tenant linked to a `production`-aliased resource raises `ErasureRefusedError` via the forward-compat refusal hook (`force=True` bypasses, operator override). A delete-leg failure fails closed — surfaced as `FeatureStoreError` flagging PARTIAL ERASE, never silently leaving half-erased state (`zero-tolerance.md` Rule 3). Erasure emits a `feature_store.erase_tenant.ok` state-transition audit log line (`action='erase'`, `resource_kind='feature_tenant'`, tenant fingerprinted — no raw feature data / PII; `observability.md` Rule 4 / Rule 8). The returned `EraseTenantResult` (`erasure.py:84`) carries `tenant_fingerprint` / `feature_rows` / `registry_rows` / `feature_groups` / `invalidation_patterns` (the tenant-scoped `v*` cache wildcards driving online-store eviction) / `audit_emitted`. Re-erasing an already-erased tenant returns zero counts (idempotent), not an error.
+
+Tier-2 wiring: `packages/kailash-ml/tests/integration/test_feature_store_erase_tenant_wiring.py` (7 tests — tenant-scoped delete + sibling intact, sibling-still-readable, idempotent re-erase, audit-log emission, refusal via reused `ErasureRefusedError` + `force` bypass, invalid-tenant refusal, fail-closed on partial delete).
+
+### 11.4a Storage / Retention (online backends still deferred)
+
+1.0+ ships NO online-store backend. The cache-key helpers in § 5 produce keys SUITABLE for a Redis backend, and `erase_tenant` returns the per-tenant `invalidation_patterns` an online-store eviction would consume, but no Redis/DynamoDB adapter is shipped at the FeatureStore layer.
+
+**M2 disposition:** Defer. When the FeatureStore lands a registry-backed online surface, `erase_tenant`'s `invalidation_patterns` is the eviction contract that online surface plumbs through.
 
 ### 11.5 Industry Parity Adapters (was § 15 in v1)
 
@@ -536,9 +546,9 @@ V1 implied a richer constructor surface (e.g. `FeatureStore(connection_manager=.
 
 ### 11.7 Typed Exceptions Absent At The Surface (F-E2-22)
 
-`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). `FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). The two remaining classes referenced in v1 do NOT exist in `errors.py` today (§ 6.3): `OnlineStoreUnavailableError`, `CrossTenantReadError`.
+`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). `FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). `CrossTenantReadError` (`errors.py:736`) HAS shipped (FM2 Wave-2 Shard B) with its raise-site in `FeatureMaterialiser` (§ 11.2). The GDPR eraser (FM2 Wave-2 Shard F, § 11.4) REUSES the canonical `ErasureRefusedError` (`errors.py:476`) — no new class. The one remaining class referenced in v1 does NOT exist in `errors.py` today (§ 6.3): `OnlineStoreUnavailableError` (lands with the deferred online-store adapter, § 11.4a).
 
-**M2 disposition:** Each remaining class lands in `errors.py` at the same PR that lands the corresponding surface (§ 11.4). Until then, downstream code MUST NOT `try/except` against the two not-yet-shipped classes.
+**M2 disposition:** The remaining `OnlineStoreUnavailableError` lands in `errors.py` at the same PR that lands the online-store adapter surface (§ 11.4a). Until then, downstream code MUST NOT `try/except` against the not-yet-shipped class.
 
 ---
 

@@ -129,6 +129,18 @@ class FeatureRegistry:
 
         df = self._df
 
+        # Idempotency across registry INSTANCES: model registration is
+        # per-DataFlow-instance. A second FeatureRegistry over the SAME DataFlow
+        # (e.g. one constructed by FeatureStore.erase_tenant alongside a caller's
+        # own registry) would re-run @df.model, which DataFlow rejects with
+        # "Model already registered" (DF-501). Consult the DataFlow registry of
+        # record (``_models``) — not just this instance's flag — so re-use over
+        # one DataFlow does not re-register. Mirrors FeatureMaterialiser._ensure_model.
+        if _MODEL_NAME in getattr(df, "_models", {}):
+            df._ensure_connected()
+            self._model_ready = True
+            return
+
         @df.model
         class KmlFeatureRegistry:  # noqa: N801 — DataFlow model name is the class name
             tenant_id: str

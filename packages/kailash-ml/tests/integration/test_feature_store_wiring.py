@@ -129,7 +129,10 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
     (``specs/ml-feature-store.md §11.1``) adds the public authoring surface
     (``FeatureGroup`` + ``@feature`` / ``FeatureDefinition`` + the
     ``FeatureGroupNotFoundError`` raise-site helper ``lookup_feature_group``);
-    FM2 Wave-1 Shard E (``§11.3``) adds the durable ``FeatureRegistry``.
+    FM2 Wave-1 Shard E (``§11.3``) adds the durable ``FeatureRegistry``;
+    FM2 Wave-2 Shard B (``§11.2``) adds the write-through ``FeatureMaterialiser``
+    + ``MaterializeResult``; FM2 Wave-2 Shard F (``§11.4``) adds the GDPR
+    ``erase_tenant`` helper + ``EraseTenantResult``.
     """
     expected = {
         # § 2.1 — 1.0 read surface
@@ -146,6 +149,12 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
         "lookup_feature_group",
         # §11.3 — FM2 Wave-1 Shard E registry surface
         "FeatureRegistry",
+        # §11.2 — FM2 Wave-2 Shard B write-through materialiser surface
+        "FeatureMaterialiser",
+        "MaterializeResult",
+        # §11.4 — FM2 Wave-2 Shard F GDPR tenant-erasure surface
+        "erase_tenant",
+        "EraseTenantResult",
     }
     assert set(features_pkg.__all__) == expected, (
         f"features.__all__ drift: got {set(features_pkg.__all__)}, "

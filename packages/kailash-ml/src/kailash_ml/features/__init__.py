@@ -15,6 +15,7 @@ from kailash_ml.features.cache_keys import (
     make_feature_group_wildcard,
 )
 from kailash_ml.features.decorators import FeatureDefinition, feature
+from kailash_ml.features.erasure import EraseTenantResult, erase_tenant
 from kailash_ml.features.feature_group import FeatureGroup, lookup_feature_group
 from kailash_ml.features.materialiser import FeatureMaterialiser, MaterializeResult
 from kailash_ml.features.registry import FeatureRegistry
@@ -23,6 +24,7 @@ from kailash_ml.features.store import FeatureStore
 
 __all__ = [
     "CANONICAL_SINGLE_TENANT_SENTINEL",
+    "EraseTenantResult",
     "FeatureDefinition",
     "FeatureField",
     "FeatureGroup",
@@ -31,6 +33,7 @@ __all__ = [
     "FeatureSchema",
     "FeatureStore",
     "MaterializeResult",
+    "erase_tenant",
     "feature",
     "lookup_feature_group",
     "make_feature_cache_key",
