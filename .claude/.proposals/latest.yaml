@@ -1,9 +1,12 @@
 source_repo: kailash-py
 codify_date: '2026-05-18'
-status: pending_review
-# RESET reviewed -> pending_review 2026-06-11 (later) per artifact-flow append-rule:
-# env-models provider-intrinsic carve-out appended as the final changes entry. Prior
-# entries were Gate-1 reviewed on reviewed_date below; the appended entry is NEW + unreviewed.
+status: distributed
+distributed_date: 2026-06-11
+# DISTRIBUTED 2026-06-11: loom 2.42.0 cycle (PR #487, main bc8780b) placed all
+# reviewed entries INCLUDING the appended env-models carve-out (placed at loom
+# commit 03288f0, closes loom#485); /sync distributed to all 6 USE templates at
+# loom 2.42.1 @ 1d6968e (py lane: claude-py 23a562b, coc-py 0b1beaa).
+# Receipt: loom journal/0269.
 reviewed_date: 2026-06-11
 # Gate-1 review (2026-06-11, loom): user-approved classification.
 # 19 entries: 13 GLOBAL, 2 VARIANT-py (ml-doc-real-api adopted; featurestore-cutover SUPERSEDED), 4 deferred/withdrawn. verify-claims authored as NEW path-scoped rule (git.md-extension duplicate superseded); doc-api rule folded into spec-accuracy.md (tool deferred to cross-SDK issue).
