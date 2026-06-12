@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.4] - 2026-06-12
+
+### Fixed
+
+- **`register_node` no longer erases decorated node subclasses to `type[Node]` (#1286).** The inner decorator was annotated `decorator(node_class: type[Node])` with no generic return type, so static checkers inferred every `@register_node()`-decorated class as `type[Node]` and emitted an `attr-defined` diagnostic at every subclass-specific classmethod call site (e.g. `PythonCodeNode.from_function`). `register_node` is now a generic decorator (`Callable[[type[_NodeT]], type[_NodeT]]`, `_NodeT` bound to `Node`). **Typing-only — zero runtime/behavior change** (`register_node()(cls) is cls` still holds; `NodeRegistry.register` path untouched).
+- **`WorkflowServer` / `WorkflowAPIGateway` now release per-workflow runtimes on teardown (#1285, core half).** `WorkflowServer.register_workflow` builds a `WorkflowAPI` per workflow, each constructing its own `AsyncLocalRuntime`; these were never tracked or closed, leaking one runtime per registered workflow until GC. `WorkflowServer` now tracks the wrappers and gains a `close()` that releases them; `EnterpriseWorkflowServer.close()` cascades via `super().close()` (so closing the gateway releases both its acquired runtime reference and every per-workflow runtime); the legacy `WorkflowAPIGateway` carrying the same bug class is fixed in tandem (track + release on shutdown/`close()`). Pairs with the Nexus-side fix in kailash-nexus 2.9.1.
+
 ## [2.29.3] - 2026-06-06
 
 ### Documentation
