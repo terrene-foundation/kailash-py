@@ -522,8 +522,8 @@ def _import_ml_feature_source() -> Any:
         pass
     try:
         # Path 3: legacy back-compat probe (guarded; module may be absent).
-        from dataflow.ml_integration import (
-            ml_feature_source,  # pyright: ignore[reportMissingImports]; type: ignore[import-not-found]
+        from dataflow.ml_integration import (  # type: ignore[import-not-found] # pyright: ignore[reportMissingImports] # noqa: E501
+            ml_feature_source,
         )
 
         return ml_feature_source
