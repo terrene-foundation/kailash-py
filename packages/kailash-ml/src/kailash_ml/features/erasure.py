@@ -146,6 +146,7 @@ async def _delete_tenant_feature_rows(
     """
     entity_col = schema.entity_id_column
     ts_col = schema.timestamp_column
+    fp = fingerprint_classified_value(tenant)  # never echo raw tenant in errors
 
     try:
         rows = await df.express.list(schema.name, {}, limit=1_000_000)
@@ -155,7 +156,7 @@ async def _delete_tenant_feature_rows(
                 f"erase_tenant: enumerating feature table {schema.name!r} failed: "
                 f"{type(exc).__name__}"
             ),
-            tenant_id=tenant,
+            tenant_fingerprint=fp,
         ) from exc
 
     deleted = 0
@@ -184,7 +185,7 @@ async def _delete_tenant_feature_rows(
                     f"failed (PARTIAL ERASE — state is half-deleted): "
                     f"{type(exc).__name__}"
                 ),
-                tenant_id=tenant,
+                tenant_fingerprint=fp,
             ) from exc
         if ok:
             deleted += 1
@@ -203,6 +204,7 @@ async def _delete_tenant_registry_rows(
     + per-row ``express.delete`` (no raw SQL). Fail-closed: a delete failure
     re-raises as :class:`FeatureStoreError`.
     """
+    fp = fingerprint_classified_value(tenant)  # never echo raw tenant in errors
     try:
         rows = await df.express.list(
             _REGISTRY_MODEL, {"tenant_id": tenant}, limit=1_000_000
@@ -213,7 +215,7 @@ async def _delete_tenant_registry_rows(
                 f"erase_tenant: enumerating registry rows failed: "
                 f"{type(exc).__name__}"
             ),
-            tenant_id=tenant,
+            tenant_fingerprint=fp,
         ) from exc
 
     deleted = 0
@@ -229,7 +231,7 @@ async def _delete_tenant_registry_rows(
                     f"erase_tenant: deleting registry row failed (PARTIAL ERASE — "
                     f"state is half-deleted): {type(exc).__name__}"
                 ),
-                tenant_id=tenant,
+                tenant_fingerprint=fp,
             ) from exc
         if ok:
             deleted += 1
@@ -319,7 +321,6 @@ async def erase_tenant(
         extra={
             "source": "dataflow",
             "mode": "real",
-            "tenant_id": tenant,
             "tenant_fingerprint": fingerprint,
             "force": force,
         },
@@ -344,8 +345,7 @@ async def erase_tenant(
                             "alias first or pass force=True "
                             "(spec ml-feature-store.md §11.4 / §11.3)."
                         ),
-                        tenant_id=tenant,
-                        resource_id=fingerprint,
+                        tenant_fingerprint=fingerprint,
                     )
 
         # 3. Read the tenant's registry rows — the per-tenant feature-table index.
@@ -359,7 +359,7 @@ async def erase_tenant(
                     f"erase_tenant: reading registry index failed: "
                     f"{type(exc).__name__}"
                 ),
-                tenant_id=tenant,
+                tenant_fingerprint=fingerprint,
             ) from exc
 
         # Distinct schemas for this tenant (a name may carry multiple versions —
@@ -375,7 +375,7 @@ async def erase_tenant(
                         f"erase_tenant: rehydrating a registry schema failed: "
                         f"{type(exc).__name__}"
                     ),
-                    tenant_id=tenant,
+                    tenant_fingerprint=fingerprint,
                 ) from exc
 
         # 3b. Delete the tenant's materialized rows per registered feature table.
@@ -406,7 +406,6 @@ async def erase_tenant(
             extra={
                 "source": "dataflow",
                 "mode": "real",
-                "tenant_id": tenant,
                 "tenant_fingerprint": fingerprint,
                 "action": "erase",
                 "resource_kind": "feature_tenant",
@@ -438,7 +437,6 @@ async def erase_tenant(
             extra={
                 "source": "dataflow",
                 "mode": "real",
-                "tenant_id": tenant,
                 "tenant_fingerprint": fingerprint,
                 "latency_ms": latency_ms,
             },
@@ -451,12 +449,11 @@ async def erase_tenant(
             extra={
                 "source": "dataflow",
                 "mode": "real",
-                "tenant_id": tenant,
                 "tenant_fingerprint": fingerprint,
                 "latency_ms": latency_ms,
             },
         )
         raise FeatureStoreError(
             reason=f"erase_tenant failed: {type(exc).__name__}",
-            tenant_id=tenant,
+            tenant_fingerprint=fingerprint,
         ) from exc

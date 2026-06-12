@@ -229,6 +229,14 @@ async def test_erase_tenant_emits_audit_log(store_db, caplog):
     assert getattr(rec, "resource_kind", None) == "feature_tenant"
     # tenant fingerprint present; raw feature data / PII never logged (Rule 8).
     assert getattr(rec, "tenant_fingerprint", "").startswith("sha256:")
+    # HIGH-1 regression (Wave-2 redteam R1): the RAW tenant id MUST NOT appear on
+    # ANY audit log line — only the fingerprint (spec §11.4 fingerprint mandate;
+    # observability Rule 4/8). Sweep every erasure log record, not just .ok.
+    for r in caplog.records:
+        assert (
+            getattr(r, "tenant_id", None) is None
+        ), f"raw tenant_id leaked on log line {r.getMessage()!r}"
+        assert "tenant_a" not in r.getMessage()
 
 
 # ---------------------------------------------------------------------------
@@ -312,3 +320,8 @@ async def test_erase_tenant_fail_closed_on_partial_delete(store_db, monkeypatch)
         await store.erase_tenant(tenant_id="tenant_a")
     # The error names the partial-erase condition (fail-closed, not swallowed).
     assert "PARTIAL ERASE" in excinfo.value.reason
+    # MED-1 regression (Wave-2 redteam R1): the raw tenant id MUST NOT appear in
+    # the exception's rendered message/repr — only a fingerprint (MLError
+    # _format_message echoes any tenant_id= kwarg; we pass tenant_fingerprint= now).
+    assert "tenant_a" not in str(excinfo.value)
+    assert "tenant_a" not in repr(excinfo.value)

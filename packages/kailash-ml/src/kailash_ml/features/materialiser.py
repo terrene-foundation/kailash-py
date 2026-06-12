@@ -52,6 +52,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
+from kailash_ml.errors import fingerprint_classified_value
 from kailash_ml.features.cache_keys import (
     make_feature_group_wildcard,
     validate_tenant_id,
@@ -215,6 +216,10 @@ class FeatureMaterialiser:
         tenant = validate_tenant_id(
             tenant_id, operation=f"FeatureMaterialiser[{group.name}].materialize"
         )
+        # Tenant scope is fingerprinted (never raw) on every log line + error
+        # surface so the tenant id does not bleed to log aggregators / exception
+        # messages (observability Rule 4/8; spec §11.4 fingerprint convention).
+        tenant_fp = fingerprint_classified_value(tenant)
 
         # Tenant-isolation gate: a group rehydrated/registered under a SPECIFIC
         # tenant MUST NOT be materialised under a different caller tenant — that
@@ -232,7 +237,7 @@ class FeatureMaterialiser:
                     f"caller_fingerprint={hash(tenant) & 0xFFFF:04x}); refusing to "
                     f"materialise across the tenant boundary"
                 ),
-                tenant_id=tenant,
+                tenant_fingerprint=tenant_fp,
             )
 
         started_at = time.monotonic()
@@ -241,7 +246,7 @@ class FeatureMaterialiser:
             extra={
                 "source": "dataflow",
                 "mode": "real",
-                "tenant_id": tenant,
+                "tenant_fingerprint": tenant_fp,
                 "schema": group.name,
                 "version": schema.version,
                 "input_rows": data.height,
@@ -322,7 +327,7 @@ class FeatureMaterialiser:
             )
             raise FeatureStoreError(
                 reason=f"materialize failed: {type(exc).__name__}",
-                tenant_id=tenant,
+                tenant_fingerprint=tenant_fp,
             ) from exc
 
     # ------------------------------------------------------------------
@@ -361,7 +366,7 @@ class FeatureMaterialiser:
             "feature_materialise.compute",
             extra={
                 "schema": group.name,
-                "tenant_id": tenant_id,
+                "tenant_fingerprint": fingerprint_classified_value(tenant_id),
                 "derived_count": len(group.features),
                 "derived_columns": [d.name for d in group.features],
             },
@@ -552,6 +557,14 @@ class FeatureMaterialiser:
         ``"tenant_id"`` key. A pure-declarative group (authored inline, not bound
         to a tenant) returns ``None`` — it can be materialised under any caller
         tenant.
+
+        Reserved-key note: ``classification`` is dual-purpose — it carries the
+        reserved scalar ``"tenant_id"`` (str) read here AND per-column redaction
+        policy tuples ``{column: (level, strategy)}`` read by ``_redact``. The
+        ``isinstance(value, str)`` guard below fails closed if a column were ever
+        literally named ``tenant_id`` (a policy tuple, not a str → returns
+        ``None``, no false cross-tenant trip). ``tenant_id`` is therefore a
+        reserved key name that a feature column MUST NOT shadow.
         """
         classification = getattr(group, "classification", None)
         if isinstance(classification, dict):
