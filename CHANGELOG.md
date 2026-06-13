@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-06-13
+
+### Added
+
+- **`OnlineStoreUnavailableError` in `kailash.ml.errors`** (a `FeatureStoreError` subclass), supporting the kailash-ml 2.2.0 online feature-store adapter (FM2 Wave 3, #693). Raised when the Redis-backed online store is unreachable so online-serving call sites can `except OnlineStoreUnavailableError` and degrade to the offline read path. Purely additive — the canonical ML error taxonomy (`kailash.ml.errors`) remains the single source the `kailash-ml` package re-exports from. kailash-ml 2.2.0 floors `kailash>=2.31.0` because it imports this class.
+
 ## [2.30.0] - 2026-06-13
 
 ### Added

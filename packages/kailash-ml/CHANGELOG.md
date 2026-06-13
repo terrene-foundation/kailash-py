@@ -1,5 +1,30 @@
 # kailash-ml Changelog
 
+## [2.2.0] — 2026-06-13 — Feature-store M2 Wave 3: online-store adapter + spec graduation (#693)
+
+Minor release. Completes the M2 feature-store (FM2 Wave 3 of 3): the Redis-backed
+online feature-store read path and the self-healing model re-registration that lets
+a fresh `FeatureStore` instance recover a previously-registered model. Backward-compatible —
+purely additive public API; the 2.0.0 canonical read surface (`FeatureStore.get_features`)
+and the 2.1.0 authoring/registry/materialize surfaces are unchanged.
+
+### Added
+
+- **Online feature-store adapter** (`kailash_ml.features.online_store.OnlineFeatureStore`) —
+  graduates spec §11.4: low-latency online reads backed by Redis, with the offline store
+  as the durable source of truth. Raises `OnlineStoreUnavailableError` when the backend is
+  unreachable so serving code can `try/except` and degrade to the offline read path.
+- **`OnlineStoreUnavailableError`** re-exported from `kailash_ml.errors` (canonical source:
+  `kailash.ml.errors`, requires `kailash>=2.31.0`).
+- **Self-healing model re-registration** — a fresh `FeatureStore` instance re-registers a
+  model on first read against an existing registry row instead of failing, so serving
+  processes that did not author the model can still read it.
+
+### Changed
+
+- Core dependency floor raised to **`kailash>=2.31.0`** (was `>=2.30.0`) — 2.2.0 imports the
+  new `OnlineStoreUnavailableError` first published in `kailash` 2.31.0.
+
 ## [2.1.1] — 2026-06-13 — Fix core dependency floor (feature-store error classes)
 
 Patch release. Corrects the `kailash` dependency floor so the feature-store
@@ -16,7 +41,7 @@ surface installs and imports correctly.
   `UnsupportedPrecision`. Those classes were added to core by the FM2 Wave 1+2
   merge and first published in **`kailash` 2.30.0** — which was released after
   `kailash-ml` 2.1.0. With the old `>=2.16.0` floor, `pip install
-  kailash-ml==2.1.0` against any core in `[2.16.0, 2.29.4]` raised `ImportError`
+kailash-ml==2.1.0` against any core in `[2.16.0, 2.29.4]` raised `ImportError`
   on first touch of the feature store. The corrected floor pins the version that
   actually carries the symbols. (`kailash-ml` 2.1.0 is yanked from PyPI.)
 
