@@ -161,6 +161,34 @@ def test_online_store_url_is_masked_at_construction():
     assert "topsecret" not in online.masked_url
 
 
+def test_online_store_unclosed_emits_resourcewarning():
+    """An unclosed OnlineFeatureStore warns at GC (patterns.md § Async Resource
+    Cleanup) — the pool holds sockets; a forgotten close() must be loud, not a
+    silent leak. __del__ MUST emit ResourceWarning and do nothing else."""
+    import gc
+
+    online = OnlineFeatureStore("redis://127.0.0.1:6379/0")
+    assert online._closed is False
+    with pytest.warns(ResourceWarning, match="was not closed"):
+        del online
+        gc.collect()
+
+
+async def test_online_store_closed_emits_no_resourcewarning():
+    """After close(), GC of the instance is silent — _closed flips to True so
+    the well-behaved caller path produces no warning."""
+    import gc
+    import warnings as _w
+
+    online = OnlineFeatureStore("redis://127.0.0.1:6379/0")
+    await online.close()
+    assert online._closed is True
+    with _w.catch_warnings():
+        _w.simplefilter("error", ResourceWarning)
+        del online
+        gc.collect()  # no ResourceWarning → no error raised
+
+
 # ===========================================================================
 # C-1: online-store LIVE path — skip-if-unset (real Redis via REDIS_URL)
 # ===========================================================================

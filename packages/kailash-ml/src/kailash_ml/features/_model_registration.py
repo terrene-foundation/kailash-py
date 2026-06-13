@@ -99,7 +99,14 @@ def ensure_feature_model_registered(
         ``True`` if a registration was performed in this call, ``False`` if the
         model was already present in ``dataflow._models`` (no-op).
     """
-    model_name = schema.name
+    # Defense-in-depth (security review LOW): re-validate the schema name against
+    # the SAME SQL-identifier rule the cache-key path uses (cache_keys
+    # ._validate_schema_name) BEFORE it reaches type()/dataflow.model(). Authored
+    # schema names already pass upstream, so this is a no-op for valid names and a
+    # loud ValueError for a malformed one — no regex drift (shared validator).
+    from kailash_ml.features.cache_keys import _validate_schema_name
+
+    model_name = _validate_schema_name(schema.name)
 
     # A DataFlow-shaped read double (a Protocol-satisfying deterministic adapter
     # per rules/testing.md, or any object that serves reads directly without a

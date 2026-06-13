@@ -48,6 +48,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import warnings
 from datetime import date, datetime
 from datetime import time as _time
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -125,6 +126,10 @@ class OnlineFeatureStore:
         (``rules/dependencies.md`` § "Optional Extras with Loud Failure").
     """
 
+    # Class-level default so __del__ on a partially-constructed instance (one
+    # that raised before __init__ finished) sees _closed=True and stays silent.
+    _closed: bool = True
+
     def __init__(
         self,
         url: str | None = None,
@@ -169,6 +174,9 @@ class OnlineFeatureStore:
         self._client: "_redis_async_t.Redis" = _redis_async.from_url(
             self._url, decode_responses=True
         )
+        # Construction succeeded: the pool now owns sockets. __del__ warns if
+        # the caller never releases them (see close() / __aexit__).
+        self._closed = False
 
     # ------------------------------------------------------------------
     # Key parity (REUSE make_feature_cache_key — never re-derive)
@@ -446,12 +454,29 @@ class OnlineFeatureStore:
             await self._client.aclose()
         except Exception:  # pragma: no cover - best-effort cleanup
             logger.debug("online_feature_store.close_error", exc_info=True)
+        finally:
+            self._closed = True
 
     async def __aenter__(self) -> "OnlineFeatureStore":
         return self
 
     async def __aexit__(self, *exc_info: Any) -> None:
         await self.close()
+
+    def __del__(self, _warnings: Any = warnings) -> None:
+        # patterns.md § Async Resource Cleanup: emit ResourceWarning and return
+        # — NEVER call close()/aclose() or any logging path here. __del__ fires
+        # from Python's GC (often inside the logging machinery); awaiting an
+        # async close or emitting a log line can deadlock on the root logging
+        # lock. Real cleanup is the caller's job via `async with` / await close().
+        if not self._closed:
+            _warnings.warn(
+                "OnlineFeatureStore was not closed; use `async with "
+                "OnlineFeatureStore(...)` or call `await store.close()` to "
+                "release the Redis connection pool.",
+                ResourceWarning,
+                stacklevel=2,
+            )
 
     @property
     def masked_url(self) -> str:
