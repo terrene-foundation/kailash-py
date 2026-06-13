@@ -52,12 +52,13 @@ import warnings
 from datetime import date, datetime
 from datetime import time as _time
 from typing import TYPE_CHECKING, Any, NoReturn
-from urllib.parse import urlsplit, urlunsplit
 
 import polars as pl
 from kailash_ml.errors import OnlineStoreUnavailableError
 from kailash_ml.features.cache_keys import make_feature_cache_key, validate_tenant_id
 from kailash_ml.features.schema import FeatureSchema
+
+from kailash.utils.url_credentials import mask_url
 
 if TYPE_CHECKING:  # avoid importing the optional redis dep on type-only paths
     import redis.asyncio as _redis_async_t
@@ -69,27 +70,6 @@ logger = logging.getLogger(__name__)
 #: Default Redis URL when neither ``url`` nor ``ONLINE_FEATURE_STORE_REDIS_URL``
 #: is supplied — mirrors the events-backend default (``backends.py``).
 _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
-
-
-def _mask_redis_url(url: str) -> str:
-    """Mask credentials in a Redis URL for log / error surfaces.
-
-    Canonical form per ``rules/observability.md`` Rule 6.2:
-    ``scheme://***@host[:port][/path]``. On a parse failure returns a grep-able
-    sentinel distinct from a successful mask (Rule 6.1) so triage can tell
-    "masked OK" apart from "masker bailed".
-    """
-    try:
-        parts = urlsplit(url)
-    except Exception:
-        return "<unparseable redis url>"
-    if not parts.scheme or not parts.hostname:
-        return "<unparseable redis url>"
-    host = parts.hostname
-    netloc = f"***@{host}"
-    if parts.port is not None:
-        netloc = f"{netloc}:{parts.port}"
-    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
 def _json_default(obj: Any) -> Any:
@@ -153,7 +133,7 @@ class OnlineFeatureStore:
             or os.environ.get("ONLINE_FEATURE_STORE_REDIS_URL")
             or _DEFAULT_REDIS_URL
         )
-        self._masked_url = _mask_redis_url(self._url)
+        self._masked_url = mask_url(self._url)
         if default_ttl_seconds is not None:
             if isinstance(default_ttl_seconds, bool) or not isinstance(
                 default_ttl_seconds, int

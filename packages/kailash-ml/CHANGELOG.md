@@ -1,5 +1,19 @@
 # kailash-ml Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **URL credential masking consolidated onto the core single-source-of-truth.**
+  The three internal URL-masking helpers (`features.online_store._mask_redis_url`,
+  `dashboard.cli._mask_db_url`, `tracking.tracker._mask_url`) are removed in favor of
+  `kailash.utils.url_credentials.mask_url` (`rules/security.md` § Credential Decode Helpers;
+  `rules/observability.md` Rule 6). Masking is identical for credentialed URLs
+  (`redis://u:p@host:port/db` → `redis://***@host:port/db`) and now additionally masks
+  credentials passed via URL query parameters. One subtle change: a **credential-less**
+  URL on a log/error surface (e.g. `redis://127.0.0.1:1/0`) now renders **verbatim**
+  (nothing to mask) instead of the prior forced `redis://***@127.0.0.1:1/0`.
+
 ## [2.2.0] — 2026-06-13 — Feature-store M2 Wave 3: online-store adapter + spec graduation (#693)
 
 Minor release. Completes the M2 feature-store (FM2 Wave 3 of 3): the Redis-backed

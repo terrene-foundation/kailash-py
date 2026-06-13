@@ -85,7 +85,10 @@ def _input_frame() -> pl.DataFrame:
 
 # An unroutable Redis target — 127.0.0.1:1 is the reserved TCP port 1, which
 # refuses immediately, giving a deterministic backend-down without a mock.
-_UNREACHABLE_REDIS_URL = "redis://127.0.0.1:1/0"
+# Credentials are embedded so the error-surface masking assertion below verifies
+# real credential-safety (the canonical mask_url emits credential-less URLs
+# verbatim — there is nothing to mask — so a leak check needs actual credentials).
+_UNREACHABLE_REDIS_URL = "redis://probe_user:probe_secret@127.0.0.1:1/0"
 
 
 # ===========================================================================
@@ -101,8 +104,9 @@ async def test_online_store_populate_unavailable_raises_typed():
     try:
         with pytest.raises(OnlineStoreUnavailableError) as excinfo:
             await online.populate(_schema(), _input_frame(), tenant_id="_single")
-        # The masked URL appears (credential-safe); no raw host:port creds leak.
+        # The masked URL appears (credential-safe); the raw password never leaks.
         assert "***@127.0.0.1:1" in str(excinfo.value)
+        assert "probe_secret" not in str(excinfo.value)
         # Cause-chained from the real redis exception (fail-loud, not swallowed).
         assert excinfo.value.__cause__ is not None
     finally:
