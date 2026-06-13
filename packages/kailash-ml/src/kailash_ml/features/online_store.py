@@ -50,7 +50,7 @@ import logging
 import time
 from datetime import date, datetime
 from datetime import time as _time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 from urllib.parse import urlsplit, urlunsplit
 
 import polars as pl
@@ -412,7 +412,7 @@ class OnlineFeatureStore:
     # Unavailability wrapping + lifecycle
     # ------------------------------------------------------------------
 
-    def _raise_unavailable(self, operation: str, exc: Exception) -> Any:
+    def _raise_unavailable(self, operation: str, exc: Exception) -> NoReturn:
         """Wrap a backend-down failure in the typed error (never a bare one).
 
         Re-raises a :class:`~kailash_ml.errors.OnlineStoreUnavailableError`
