@@ -37,7 +37,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from kailash.trust.signing.algorithm_id import AlgorithmIdentifier, coerce_algorithm_id
+from kailash.trust.signing.algorithm_id import (
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+    resolve_dispatch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1388,18 +1392,21 @@ def sign_envelope(
     Returns a hex-encoded HMAC digest. The kid (key ID) from the SecretRef
     can be transmitted alongside the signature for key rotation support.
 
-    Algorithm-agility (issue #604, asymmetric pair):
+    Algorithm-agility (EATP-08, asymmetric pair):
 
     - Accepts an optional ``alg_id`` keyword. ``None`` defaults via
       :func:`coerce_algorithm_id` to :data:`ALGORITHM_DEFAULT`
-      (``"ed25519+sha256"``). Non-default values raise
-      ``NotImplementedError`` (the single permitted scaffold-era stub).
-    - The canonical ``algorithm`` value is recorded ALONGSIDE the
-      signature in the caller's metadata dict — NOT inside the signed
-      payload bytes. Adding ``algorithm`` to the canonical-JSON shape
-      would invalidate every existing HMAC-signed envelope on disk
-      (the payload-bytes change → the HMAC changes). The asymmetry is
-      documented in spec § 21.4.
+      (``"eatp-v1"``). A non-Active registry token raises
+      :class:`~kailash.trust.signing.algorithm_id.UnsupportedAlgorithmError`
+      (code ``unsupported-algorithm``) before any crypto work.
+    - The registry token is recorded ALONGSIDE the signature in the
+      caller's metadata dict — NOT inside the signed payload bytes. Adding
+      ``alg_id`` to the canonical-JSON shape would invalidate every existing
+      HMAC-signed envelope on disk (the payload-bytes change → the HMAC
+      changes). This is the EATP-08 §8 substrate-framed exception
+      (pinned-schema-position model): the ConstraintEnvelope's audit
+      pre-image carries the algorithm out-of-band rather than as the literal
+      first JCS field. The asymmetry is documented in spec § 21.4.
 
     The HMAC primitive (`hmac.compare_digest`) is unchanged; threading
     ``alg_id`` adds metadata to the surrounding shape, NOT the
@@ -1408,18 +1415,17 @@ def sign_envelope(
     Args:
         envelope: The ConstraintEnvelope to sign.
         secret_ref: Reference to the signing secret.
-        alg_id: Optional algorithm identifier. ``None`` → default
-            (``"ed25519+sha256"``). Mint ISS-31 will lift the
-            single-value restriction; threading is in place today so
-            no producer/verifier will need re-touching when it does.
+        alg_id: Optional EATP-08 registry token. ``None`` → default
+            (``"eatp-v1"``). A non-Active token raises
+            ``UnsupportedAlgorithmError``.
 
     Returns:
         Hex-encoded HMAC-SHA256 digest string.
     """
-    # Coerce alg_id; non-default raises NotImplementedError before any
-    # crypto work — the verifier MUST not give the appearance of approval
-    # for an unsupported algorithm even by accident.
-    coerce_algorithm_id(alg_id)
+    # Coerce + dispatch-gate alg_id; a non-Active token raises
+    # UnsupportedAlgorithmError before any crypto work — the verifier MUST
+    # not give the appearance of approval for an unsupported algorithm.
+    resolve_dispatch(coerce_algorithm_id(alg_id).algorithm)
     key_bytes = _resolve_secret(secret_ref)
     payload = envelope.to_canonical_json().encode("utf-8")
     return hmac_mod.new(key_bytes, payload, hashlib.sha256).hexdigest()
@@ -1437,52 +1443,43 @@ def verify_envelope(
     Uses constant-time comparison (hmac.compare_digest) per trust-plane
     security rule -- NEVER use equality operators for HMAC comparison.
 
-    Algorithm-agility (issue #604, asymmetric pair):
+    Algorithm-agility (EATP-08, asymmetric pair):
 
     - When ``alg_id`` is provided, it is validated via
-      :func:`coerce_algorithm_id`. Non-default values raise
-      ``NotImplementedError`` BEFORE any HMAC work — fail-closed to
+      :func:`coerce_algorithm_id` and dispatch-gated via
+      :func:`resolve_dispatch`. A non-Active registry token raises
+      :class:`~kailash.trust.signing.algorithm_id.UnsupportedAlgorithmError`
+      (``unsupported-algorithm``) BEFORE any HMAC work — fail-closed to
       avoid the appearance of approval for an unsupported algorithm.
     - When ``alg_id`` is ``None``, the verifier resolves the default
-      algorithm and proceeds with HMAC verification — symmetric with
-      :func:`sign_envelope`, which calls :func:`coerce_algorithm_id`
-      unconditionally. ``None`` is the ONLY supported calling
-      convention until the ``alg_id`` wire format lands (ISS-31; #604
-      closed without it); no ``DeprecationWarning`` is emitted because
-      deprecating the only supported path with no migration target is
-      premature. The PR that lands the wire format reintroduces a
-      proper deprecation with a real migration path at that time.
+      (``eatp-v1``) and proceeds with HMAC verification — symmetric with
+      :func:`sign_envelope`.
 
-    The HMAC ConstraintEnvelope is the asymmetric pair: ``algorithm`` is
-    recorded in the caller's metadata dict, NOT inside the
-    canonical-JSON payload bytes (see spec § 21.4 for rationale).
+    The HMAC ConstraintEnvelope is the asymmetric pair: the registry token
+    is recorded in the caller's metadata dict, NOT inside the canonical-JSON
+    payload bytes (EATP-08 §8 substrate-framed pinned-schema-position model;
+    see spec § 21.4 for rationale).
 
     Args:
         envelope: The ConstraintEnvelope to verify.
         signature: Hex-encoded HMAC-SHA256 digest to verify against.
         secret_ref: Reference to the verification secret.
-        alg_id: Optional algorithm identifier. ``None`` resolves to the
-            default algorithm (the only supported convention until
-            ISS-31). Non-default values raise ``NotImplementedError``.
+        alg_id: Optional EATP-08 registry token. ``None`` resolves to the
+            default (``eatp-v1``). A non-Active token raises
+            ``UnsupportedAlgorithmError``.
 
     Returns:
         True if the signature matches, False otherwise. Fail-closed on
         any error.
 
     Raises:
-        NotImplementedError: If ``alg_id`` is non-default (pending mint
-            ISS-31). Raised BEFORE any HMAC work.
+        UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+            token (code ``unsupported-algorithm``). Raised BEFORE HMAC work.
     """
-    # alg_id wire format deferred to ISS-31 (#604 closed without it).
-    # None resolves to the default algorithm — consistent with
-    # sign_envelope, which calls coerce_algorithm_id unconditionally.
-    # coerce raises NotImplementedError on a non-default alg_id (the
-    # ISS-31 gate), BEFORE any HMAC work. No DeprecationWarning is
-    # emitted: the alg_id-less call is the ONLY supported convention
-    # until ISS-31 lands a migration target, so deprecating it is
-    # premature. The PR that lands the alg_id wire format reintroduces
-    # a proper deprecation with a real migration path at that time.
-    coerce_algorithm_id(alg_id)
+    # Coerce + dispatch-gate alg_id. None resolves to the default (eatp-v1),
+    # consistent with sign_envelope. A non-Active token raises
+    # UnsupportedAlgorithmError BEFORE any HMAC work.
+    resolve_dispatch(coerce_algorithm_id(alg_id).algorithm)
 
     try:
         key_bytes = _resolve_secret(secret_ref)

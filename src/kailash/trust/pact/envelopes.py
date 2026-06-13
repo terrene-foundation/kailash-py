@@ -17,7 +17,6 @@ import hashlib
 import logging
 import math
 import uuid
-import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -40,21 +39,18 @@ from kailash.trust.pathutils import normalize_resource_path
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    UnsupportedAlgorithmError,
     coerce_algorithm_id,
+    decode_wire_alg_id,
+    resolve_dispatch,
 )
 
 logger = logging.getLogger(__name__)
 
-# Module-level guard for once-per-process DeprecationWarning emission when a
-# legacy SignedEnvelope (no `algorithm` field — pre-#604 record) is verified.
-# Per zero-tolerance.md Rule 1 + the issue-#604 directive, the warning text MUST
-# contain the literal string "scaffold for #604; wire format pending mint
-# ISS-31" so future agents can grep-find it across log archives.
-_LEGACY_SIGNED_ENVELOPE_WARNED: bool = False
-
 __all__ = [
     "ALGORITHM_DEFAULT",
     "AlgorithmIdentifier",
+    "UnsupportedAlgorithmError",
     "EffectiveEnvelopeSnapshot",
     "MonotonicTighteningError",
     "RoleEnvelope",
@@ -1209,14 +1205,13 @@ class SignedEnvelope:
         expires_at: When this signed envelope expires (default: 90 days
             after signed_at). After expiry, the signature is considered
             invalid and the envelope must be re-signed.
-        algorithm: The algorithm identifier (issue #604 scaffold). Defaults
-            to :data:`kailash.trust.signing.algorithm_id.ALGORITHM_DEFAULT`
-            (``"ed25519+sha256"``). Threaded through every signed-record
-            producer/verifier so that when mint ISS-31 stabilises the
-            canonical wire format, only the validation + canonical
-            serialiser change. Legacy records (pre-#604, no ``algorithm``
-            field) are accepted by :meth:`verify` with a one-time
-            DeprecationWarning per process.
+        alg_id: The EATP-08 §3.3 registry token (top-level ``alg_id`` wire
+            field, §3.1). Defaults to
+            :data:`kailash.trust.signing.algorithm_id.ALGORITHM_DEFAULT`
+            (``"eatp-v1"``). A verifier dispatches only on an **Active**
+            token; a Reserved / unregistered token raises
+            :class:`UnsupportedAlgorithmError` (``unsupported-algorithm``)
+            and MUST NOT fall through to ``eatp-v1``.
     """
 
     envelope: ConstraintEnvelopeConfig
@@ -1224,11 +1219,10 @@ class SignedEnvelope:
     signed_at: datetime
     signed_by: str
     expires_at: datetime
-    # Issue #604 scaffold: algorithm identifier. Default keeps backward-
-    # compatible construction (existing call sites do not need to pass it),
-    # while every NEW signed record carries the algorithm field so the
-    # round-trip via to_dict/from_dict surfaces it on the wire.
-    algorithm: str = ALGORITHM_DEFAULT
+    # EATP-08 §3.1: the top-level `alg_id` registry token. Default `eatp-v1`
+    # keeps existing call sites working while every NEW signed record carries
+    # the conformant top-level token on the wire (to_dict/from_dict).
+    alg_id: str = ALGORITHM_DEFAULT
 
     def verify(self, public_key: str) -> bool:
         """Validate the signature, algorithm, and expiry.
@@ -1239,16 +1233,12 @@ class SignedEnvelope:
         - The signed envelope has expired (past expires_at)
         - Any unexpected error occurs
 
-        Algorithm handling (issue #604 scaffold):
-        - ``algorithm == ALGORITHM_DEFAULT`` (``"ed25519+sha256"``) →
-          verify normally.
-        - ``algorithm`` is empty / missing equivalent (legacy record) →
-          accept BUT emit a one-time DeprecationWarning per process; the
-          warning text contains the literal "scaffold for #604; wire format
-          pending mint ISS-31" so future agents can grep-find it.
-        - ``algorithm`` is set to any other non-default value → raise
-          NotImplementedError. Mint ISS-31 will lift this restriction; the
-          single permitted scaffold-era stub per zero-tolerance.md Rule 2.
+        Algorithm dispatch (EATP-08 §5.1):
+        - ``alg_id == "eatp-v1"`` (Active) → verify under Ed25519+SHA-256.
+        - A Reserved / Reserved-Unregistered / unregistered ``alg_id`` →
+          raise :class:`UnsupportedAlgorithmError`
+          (``unsupported-algorithm``) BEFORE any crypto work. The verifier
+          MUST NOT fall through to ``eatp-v1`` semantics (§3.3).
 
         Args:
             public_key: Base64-encoded Ed25519 public key.
@@ -1259,35 +1249,15 @@ class SignedEnvelope:
 
         Raises:
             ImportError: If PyNaCl is not installed.
-            NotImplementedError: If algorithm is non-default and non-empty
-                (pending mint ISS-31). Raised BEFORE any crypto work — the
-                verifier must not give the appearance of approval for an
-                unsupported algorithm even by accident.
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``). Raised BEFORE any
+                crypto work — the verifier must not give the appearance of
+                approval for an unsupported algorithm.
         """
-        # Algorithm-agility guard (issue #604) — runs BEFORE expiry / crypto
-        # so a non-default algorithm fails loudly, never silently accepted.
-        global _LEGACY_SIGNED_ENVELOPE_WARNED
-        algo = self.algorithm or ""
-        if algo == "":
-            # Legacy record: pre-#604, no algorithm field on disk. Accept
-            # AND warn once per process. The "scaffold for #604; wire format
-            # pending mint ISS-31" text is required per the issue brief.
-            if not _LEGACY_SIGNED_ENVELOPE_WARNED:
-                _LEGACY_SIGNED_ENVELOPE_WARNED = True
-                _warnings.warn(
-                    "SignedEnvelope verified with empty algorithm (legacy "
-                    "record); defaulting to "
-                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
-                    "format pending mint ISS-31.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-        elif algo != ALGORITHM_DEFAULT:
-            raise NotImplementedError(
-                f"SignedEnvelope.algorithm={algo!r} awaits mint ISS-31 spec. "
-                f"Only {ALGORITHM_DEFAULT!r} is supported in this scaffold "
-                f"(issue #604, cross-SDK kailash-rs#33)."
-            )
+        # Dispatch gate (EATP-08 §5.1) — runs BEFORE expiry / crypto so a
+        # non-Active alg_id fails loudly, never silently accepted. Active
+        # `eatp-v1` is the only dispatchable signature/hash this SDK ships.
+        resolve_dispatch(self.alg_id)
 
         # Check expiry (cheap check before crypto).
         if datetime.now(UTC) > self.expires_at:
@@ -1308,9 +1278,9 @@ class SignedEnvelope:
             return verify_signature(payload, self.signature, public_key)
         except ImportError:
             raise
-        except NotImplementedError:
-            # Re-raise the algorithm-agility guard above; do not mask as
-            # fail-closed-False — the caller MUST see the spec gate.
+        except UnsupportedAlgorithmError:
+            # Re-raise the dispatch gate above; do not mask as
+            # fail-closed-False — the caller MUST see the dispatch failure.
             raise
         except Exception:
             logger.exception(
@@ -1342,17 +1312,16 @@ class SignedEnvelope:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dict suitable for JSON encoding.
 
-        Includes the ``algorithm`` field (issue #604 scaffold) so the wire
-        format records which algorithm produced the signature. Lexicographic
-        key ordering is preserved when keys are sorted (e.g., via
-        ``sorted(d.keys())``) for deterministic JSON canonicalisation.
+        Emits the conformant top-level ``alg_id`` string member (EATP-08
+        §3.1). Under JCS key ordering (§3.2) ``alg_id`` sorts first, so a
+        verifier reads the algorithm before parsing the payload.
 
         Returns:
             A dict with all fields. The envelope is serialized via
             ``model_dump(mode='json')``. Datetimes as ISO 8601.
         """
         return {
-            "algorithm": self.algorithm,
+            "alg_id": self.alg_id,
             "envelope": self.envelope.model_dump(mode="json"),
             "expires_at": self.expires_at.isoformat(),
             "signature": self.signature,
@@ -1361,73 +1330,44 @@ class SignedEnvelope:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SignedEnvelope:
-        """Deserialize from a dict.
+    def from_dict(
+        cls, data: dict[str, Any], *, legacy_path: bool = False
+    ) -> SignedEnvelope:
+        """Deserialize from a dict (EATP-08 §4.2 D2b / §4.5 D2d).
 
-        Algorithm-agility handling (issue #604 scaffold) parallels
-        :meth:`verify`:
-
-        - Missing or empty ``"algorithm"`` key (legacy / pre-#604 record) →
-          accept AND emit a one-time DeprecationWarning per process whose
-          text contains the literal "scaffold for #604; wire format pending
-          mint ISS-31". The reconstructed envelope's ``algorithm`` field
-          defaults to :data:`ALGORITHM_DEFAULT` so a subsequent ``to_dict``
-          round-trip emits the canonical value.
-        - Non-default ``"algorithm"`` (anything other than
-          :data:`ALGORITHM_DEFAULT`) → raise ``NotImplementedError``. Mint
-          ISS-31 will lift this restriction.
-        - ``"algorithm"`` equal to :data:`ALGORITHM_DEFAULT` → pass through.
-
-        The same module-level guard (``_LEGACY_SIGNED_ENVELOPE_WARNED``)
-        coordinates parse-time and verify-time warning emission so the
-        DeprecationWarning fires at most once per process across BOTH
-        surfaces — important because a single legacy record typically
-        passes through ``from_dict`` then ``verify`` in the same call site.
+        - **Post-adoption path (default)**: the dict MUST carry a top-level
+          ``alg_id`` string token. A missing/empty ``alg_id`` is NOT
+          silently defaulted (the E6 defect the v1.1 erratum closes): it
+          raises :class:`UnsupportedAlgorithmError`
+          (``missing-alg-id-post-adoption``). An unregistered token raises
+          ``unsupported-algorithm``; a malformed value raises
+          ``alg-id-shape-mismatch``.
+        - **Bounded legacy path (``legacy_path=True``)**: a caller that has
+          satisfied the D2d dated/witnessed gate (§4.5) accepts a
+          pre-registry explicit form — the deprecated literal
+          ``ed25519+sha256`` (top-level, nested ``{"algorithm": ...}``, or
+          carried only under an unsigned ``algorithm`` key) — mapping it to
+          ``eatp-v1`` and logging the acceptance. The reconstructed envelope
+          re-emits the ``eatp-v1`` token.
 
         Args:
-            data: Dict as produced by ``to_dict()``. Pre-#604 dicts without
-                an ``"algorithm"`` key are accepted with a one-time warning.
+            data: Dict as produced by ``to_dict()``.
+            legacy_path: True only after the D2d dated/witnessed gate is met.
 
         Returns:
-            A SignedEnvelope instance.
+            A SignedEnvelope instance carrying a registry token.
 
         Raises:
-            KeyError: If required fields other than ``"algorithm"`` are
-                missing.
+            KeyError: If required fields other than ``alg_id`` are missing.
             ValueError: If field values are invalid.
-            NotImplementedError: If ``"algorithm"`` is set to a non-default
-                non-empty value (pending mint ISS-31).
+            UnsupportedAlgorithmError: ``missing-alg-id-post-adoption``,
+                ``alg-id-shape-mismatch``, or ``unsupported-algorithm`` per
+                EATP-08 §5.3.
         """
-        # Algorithm-agility scaffold (issue #604) — runs BEFORE other field
-        # parsing so a non-default algorithm fails loudly rather than
-        # paying the cost of envelope reconstruction.
-        global _LEGACY_SIGNED_ENVELOPE_WARNED
-        algorithm_raw = data.get("algorithm", "")
-        algorithm: str
-        if algorithm_raw == "":
-            # Legacy / pre-#604 record: accept AND warn once per process.
-            # The "scaffold for #604; wire format pending mint ISS-31"
-            # substring is required by the issue brief so future agents
-            # can grep-find it across log archives.
-            if not _LEGACY_SIGNED_ENVELOPE_WARNED:
-                _LEGACY_SIGNED_ENVELOPE_WARNED = True
-                _warnings.warn(
-                    "SignedEnvelope.from_dict received dict with empty/missing "
-                    "algorithm (legacy record); defaulting to "
-                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
-                    "format pending mint ISS-31.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            algorithm = ALGORITHM_DEFAULT
-        elif algorithm_raw != ALGORITHM_DEFAULT:
-            raise NotImplementedError(
-                f"SignedEnvelope.algorithm={algorithm_raw!r} awaits mint "
-                f"ISS-31 spec. Only {ALGORITHM_DEFAULT!r} is supported in "
-                f"this scaffold (issue #604, cross-SDK kailash-rs#33)."
-            )
-        else:
-            algorithm = algorithm_raw
+        # Decode + validate alg_id BEFORE other field parsing so a
+        # non-conformant token fails loudly rather than paying the cost of
+        # envelope reconstruction.
+        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
 
         envelope = ConstraintEnvelopeConfig(**data["envelope"])
 
@@ -1449,7 +1389,7 @@ class SignedEnvelope:
             signed_at=signed_at,
             signed_by=data["signed_by"],
             expires_at=expires_at,
-            algorithm=algorithm,
+            alg_id=alg_id,
         )
 
 

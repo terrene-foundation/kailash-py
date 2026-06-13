@@ -214,6 +214,8 @@ class TestCRLMetadata:
 
         d = metadata.to_dict()
 
+        # EATP-08 §3.1: the wire form carries a top-level `alg_id` token.
+        assert d["alg_id"] == "eatp-v1"
         assert d["crl_id"] == "crl-001"
         assert d["issuer_id"] == "org-acme"
         assert d["issued_at"] == now.isoformat()
@@ -222,11 +224,12 @@ class TestCRLMetadata:
         assert d["signature"] == "sig123"
 
     def test_metadata_from_dict(self):
-        """Test deserialization from dictionary."""
+        """Test deserialization from dictionary (EATP-08 §3.1)."""
         now = datetime.now(timezone.utc)
         next_update = now + timedelta(hours=1)
 
         data = {
+            "alg_id": "eatp-v1",
             "crl_id": "crl-001",
             "issuer_id": "org-acme",
             "issued_at": now.isoformat(),
@@ -237,6 +240,7 @@ class TestCRLMetadata:
 
         metadata = CRLMetadata.from_dict(data)
 
+        assert metadata.alg_id == "eatp-v1"
         assert metadata.crl_id == "crl-001"
         assert metadata.issuer_id == "org-acme"
         assert metadata.entry_count == 5

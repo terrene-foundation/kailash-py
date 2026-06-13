@@ -17,7 +17,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -26,17 +25,12 @@ from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
     coerce_algorithm_id,
+    decode_wire_alg_id,
+    resolve_dispatch,
 )
 from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
 
 logger = logging.getLogger(__name__)
-
-# Module-level guard for once-per-process DeprecationWarning emission when a
-# legacy CRL (no/empty algorithm — pre-#604 record) is verified. Per
-# zero-tolerance.md Rule 1 + the issue-#604 directive, the warning text MUST
-# contain the literal "scaffold for #604; wire format pending mint ISS-31"
-# substring so future agents can grep-find it across log archives.
-_LEGACY_CRL_WARNED: bool = False
 
 
 @dataclass
@@ -123,14 +117,12 @@ class CRLMetadata:
         next_update: When the CRL should be refreshed
         entry_count: Number of entries in the CRL
         signature: Optional signature for integrity verification
-        algorithm: The signing-algorithm identifier (issue #604 scaffold).
-            Defaults to :data:`ALGORITHM_DEFAULT` (``"ed25519+sha256"``).
-            Threaded through every signed-record producer/verifier so that
-            when mint ISS-31 stabilises the canonical wire format, only the
-            validation + canonical serialiser change. Legacy records
-            (pre-#604, no/empty ``algorithm``) are accepted by
-            :meth:`CertificateRevocationList.verify_signature` with a
-            one-time DeprecationWarning per process.
+        alg_id: The EATP-08 §3.3 registry token (top-level ``alg_id`` wire
+            field, §3.1). Defaults to :data:`ALGORITHM_DEFAULT`
+            (``"eatp-v1"``). A verifier dispatches only on an **Active**
+            token; a Reserved / unregistered token raises
+            :class:`~kailash.trust.signing.algorithm_id.UnsupportedAlgorithmError`
+            and MUST NOT fall through to ``eatp-v1`` (§3.3).
     """
 
     crl_id: str
@@ -139,48 +131,52 @@ class CRLMetadata:
     next_update: Optional[datetime] = None
     entry_count: int = 0
     signature: Optional[str] = None
-    # Issue #604 scaffold: signing-algorithm identifier. Default keeps
-    # backward-compatible construction.
-    algorithm: str = ALGORITHM_DEFAULT
+    # EATP-08 §3.1: top-level `alg_id` registry token. Default `eatp-v1`.
+    alg_id: str = ALGORITHM_DEFAULT
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary.
 
-        Includes the ``algorithm`` field (issue #604 scaffold) so the wire
-        format records which signing algorithm produced the CRL signature.
+        Emits the conformant top-level ``alg_id`` string member (EATP-08
+        §3.1) so the wire format records which signing algorithm produced the
+        CRL signature.
 
         Returns:
             Dictionary representation of the metadata
         """
         return {
+            "alg_id": self.alg_id,
             "crl_id": self.crl_id,
             "issuer_id": self.issuer_id,
             "issued_at": self.issued_at.isoformat(),
             "next_update": self.next_update.isoformat() if self.next_update else None,
             "entry_count": self.entry_count,
             "signature": self.signature,
-            "algorithm": self.algorithm,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CRLMetadata":
-        """Deserialize from dictionary.
+    def from_dict(
+        cls, data: Dict[str, Any], *, legacy_path: bool = False
+    ) -> "CRLMetadata":
+        """Deserialize from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
-        Missing/empty ``algorithm`` (legacy / pre-#604 record) defaults to
-        :data:`ALGORITHM_DEFAULT`. The verify-path warning contract is
-        enforced by :meth:`CertificateRevocationList.verify_signature`.
+        Post-adoption: the dict MUST carry a top-level ``alg_id`` string
+        token; a missing/empty value raises ``missing-alg-id-post-adoption``
+        (NOT silently defaulted). On the bounded ``legacy_path=True`` (the
+        D2d dated/witnessed gate is the caller's responsibility), a
+        pre-registry explicit form maps to ``eatp-v1``.
 
         Args:
             data: Dictionary with CRLMetadata fields
+            legacy_path: True only after the D2d dated/witnessed gate is met.
 
         Returns:
             CRLMetadata instance
+
+        Raises:
+            UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
-        if not isinstance(algorithm, str):
-            raise TypeError(
-                f"CRLMetadata.algorithm must be str, got " f"{type(algorithm).__name__}"
-            )
+        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
         return cls(
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],
@@ -192,7 +188,7 @@ class CRLMetadata:
             ),
             entry_count=data.get("entry_count", 0),
             signature=data.get("signature"),
-            algorithm=algorithm,
+            alg_id=alg_id,
         )
 
 
@@ -551,28 +547,30 @@ class CertificateRevocationList:
         Sign the CRL for integrity verification.
 
         Creates a cryptographic signature of the CRL contents using the
-        provided private key. The canonical algorithm identifier (issue
-        #604 scaffold) is recorded on :attr:`CRLMetadata.algorithm`.
+        provided private key. The EATP-08 registry token is recorded on
+        :attr:`CRLMetadata.alg_id`.
 
         Args:
             private_key: Base64-encoded Ed25519 private key
-            alg_id: Optional algorithm identifier. ``None`` →
-                :data:`ALGORITHM_DEFAULT`. Non-default → raises.
+            alg_id: Optional EATP-08 registry token. ``None`` →
+                :data:`ALGORITHM_DEFAULT`. A non-Active token raises.
 
         Returns:
             Base64-encoded signature
 
         Raises:
-            NotImplementedError: If ``alg_id`` is non-default (pending
-                mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
-        # Coerce + validate alg_id BEFORE any crypto work.
+        # Coerce + validate alg_id BEFORE any crypto work. resolve_dispatch
+        # confirms the token is Active (dispatchable) per EATP-08 §5.1.
         canonical = coerce_algorithm_id(alg_id)
+        resolve_dispatch(canonical.algorithm)
 
         payload = self._get_signing_payload()
         signature = sign(payload, private_key)
         self._metadata.signature = signature
-        self._metadata.algorithm = canonical.algorithm
+        self._metadata.alg_id = canonical.algorithm
 
         logger.debug(f"Signed CRL {self._metadata.crl_id}")
 
@@ -582,16 +580,15 @@ class CertificateRevocationList:
         """
         Verify CRL signature.
 
-        Algorithm-agility (issue #604 scaffold):
+        Algorithm dispatch (EATP-08 §5.1):
 
-        - Examines ``self._metadata.algorithm``.
-        - Empty / missing → emits a one-time ``DeprecationWarning`` per
-          process whose message contains the literal substring
-          ``"scaffold for #604; wire format pending mint ISS-31"`` and
-          proceeds with verification (legacy / pre-#604 record path).
-        - Equal to :data:`ALGORITHM_DEFAULT` → verifies normally.
-        - Any other non-default value → raises ``NotImplementedError``
-          BEFORE any crypto work.
+        - ``self._metadata.alg_id == "eatp-v1"`` (Active) → verify under
+          Ed25519+SHA-256.
+        - A Reserved / Reserved-Unregistered / unregistered ``alg_id`` →
+          raise
+          :class:`~kailash.trust.signing.algorithm_id.UnsupportedAlgorithmError`
+          (``unsupported-algorithm``) BEFORE any crypto work. The verifier
+          MUST NOT fall through to ``eatp-v1`` (§3.3).
 
         Args:
             public_key: Base64-encoded Ed25519 public key
@@ -600,32 +597,14 @@ class CertificateRevocationList:
             True if signature is valid, False otherwise
 
         Raises:
-            NotImplementedError: If ``algorithm`` is non-default
-                non-empty (pending mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``), raised BEFORE crypto.
         """
         if self._metadata.signature is None:
             return False
 
-        # Algorithm-agility guard — runs BEFORE any verification work.
-        global _LEGACY_CRL_WARNED
-        algo = self._metadata.algorithm or ""
-        if algo == "":
-            if not _LEGACY_CRL_WARNED:
-                _LEGACY_CRL_WARNED = True
-                _warnings.warn(
-                    "CertificateRevocationList verified with empty algorithm "
-                    "(legacy record); defaulting to "
-                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
-                    "format pending mint ISS-31.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-        elif algo != ALGORITHM_DEFAULT:
-            raise NotImplementedError(
-                f"CRLMetadata.algorithm={algo!r} awaits mint ISS-31 spec. "
-                f"Only {ALGORITHM_DEFAULT!r} is supported in this scaffold "
-                f"(issue #604, cross-SDK kailash-rs#33)."
-            )
+        # Dispatch gate (EATP-08 §5.1) — runs BEFORE any verification work.
+        resolve_dispatch(self._metadata.alg_id)
 
         payload = self._get_signing_payload()
 

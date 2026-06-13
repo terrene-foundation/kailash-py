@@ -244,8 +244,9 @@ class TestSecureMessageEnvelope:
         assert "message_id" in data
 
     def test_from_dict_deserialization(self):
-        """Envelope can be deserialized from dictionary."""
+        """Envelope can be deserialized from dictionary (EATP-08 §3.1)."""
         data = {
+            "alg_id": "eatp-v1",
             "message_id": "msg-123",
             "sender_agent_id": "agent-001",
             "recipient_agent_id": "agent-002",
@@ -258,6 +259,7 @@ class TestSecureMessageEnvelope:
         }
 
         envelope = SecureMessageEnvelope.from_dict(data)
+        assert envelope.alg_id == "eatp-v1"
 
         assert envelope.message_id == "msg-123"
         assert envelope.sender_agent_id == "agent-001"
@@ -303,6 +305,7 @@ class TestSecureMessageEnvelope:
         """from_json parses JSON string."""
         json_str = json.dumps(
             {
+                "alg_id": "eatp-v1",
                 "message_id": "msg-1",
                 "sender_agent_id": "sender",
                 "recipient_agent_id": "recipient",

@@ -137,6 +137,14 @@ class TestTimestampToken:
 
         data = token.to_dict()
 
+        # EATP-08 §3.1: the wire form carries a top-level `alg_id` string
+        # token. Default is `eatp-v1`. (The §3.2 "alg_id sorts first under
+        # JCS" property holds for records whose other keys all sort after
+        # `alg_id`; TimestampToken additionally carries `accuracy_*`, so the
+        # invariant this test pins is the top-level-string presence, not the
+        # absolute first position.)
+        assert data["alg_id"] == "eatp-v1"
+        assert isinstance(data["alg_id"], str)
         assert data["token_id"] == "tok-001"
         assert data["hash_value"] == sample_hash
         assert data["timestamp"] == timestamp.isoformat()
@@ -148,9 +156,10 @@ class TestTimestampToken:
         assert data["accuracy_microseconds"] == 1000
 
     def test_token_from_dict(self, sample_hash):
-        """TimestampToken deserializes from dictionary."""
+        """TimestampToken deserializes from dictionary (EATP-08 §3.1)."""
         timestamp = datetime.now(timezone.utc)
         data = {
+            "alg_id": "eatp-v1",
             "token_id": "tok-001",
             "hash_value": sample_hash,
             "timestamp": timestamp.isoformat(),
@@ -164,6 +173,7 @@ class TestTimestampToken:
 
         token = TimestampToken.from_dict(data)
 
+        assert token.alg_id == "eatp-v1"
         assert token.token_id == "tok-001"
         assert token.hash_value == sample_hash
         assert token.source == TimestampSource.LOCAL
