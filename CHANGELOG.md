@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.0] - 2026-06-13
+
+### Added
+
+- **Five ML feature-store exception classes in `kailash.ml.errors`** (all `FeatureStoreError` subclasses), supporting the kailash-ml 2.1.0 feature-store M2 authoring/registry/materialize surfaces (FM2, #1302): `FeatureGroupNotFoundError`, `FeatureVersionImmutableError`, `FeatureVersionNotFoundError`, `FeatureEvolutionError`, `CrossTenantReadError`. Purely additive — the canonical ML error taxonomy (`kailash.ml.errors`) is the single source the `kailash-ml` package re-exports from. kailash-ml 2.1.0 floors `kailash>=2.30.0` because it imports these.
+
 ## [2.29.4] - 2026-06-12
 
 ### Fixed
