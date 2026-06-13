@@ -1,0 +1,81 @@
+{
+  "contract": "eatp-08-alg-id-canonical",
+  "version": "1.1.0",
+  "spec_ref": "specs/trust-crypto.md §32 / EATP-08 v1.1 §3.1-§3.3",
+  "issue": "https://github.com/terrene-foundation/kailash-py/issues/1304",
+  "cross_sdk_sibling": "esperie-enterprise/kailash-rs#1315",
+  "description": "Cross-SDK canonical byte-pin vectors for the EATP-08 v1.1 algorithm identifier. The conformant wire encoding is a top-level `alg_id` string member; under JCS (RFC 8785) it serialises to `{\"alg_id\":\"<token>\"}`. Both kailash-py and kailash-rs MUST produce byte-identical `canonical_member` and identical `expected_sha256` for every registry token. kailash-py is the canonical AUTHOR (first SDK to implement EATP-08 v1.1); kailash-rs VENDORS this file byte-for-byte as part of its eatp-v1 adoption (#1315) per rules/cross-sdk-inspection.md Rule 4a. The `expected_sha256` is the SHA-256 of the UTF-8 `canonical_member` bytes (ASCII-only; serialize_for_signing uses ensure_ascii=True).",
+  "adoption_date": "2026-04-26",
+  "active_token": "eatp-v1",
+  "registry": [
+    {
+      "token": "eatp-v1",
+      "status": "Active",
+      "dispatchable": true,
+      "canonical_member": "{\"alg_id\":\"eatp-v1\"}",
+      "expected_sha256": "5a5b339254571f89dd1215e4111036b1699149fa663528cd63460302ca2d7569"
+    },
+    {
+      "token": "eatp-v1.1",
+      "status": "Reserved",
+      "dispatchable": false,
+      "canonical_member": "{\"alg_id\":\"eatp-v1.1\"}",
+      "expected_sha256": "f28effee85b1269c1ea021f7ef1b790dc302ed78aa86e7cd8763ba140e50f0ee"
+    },
+    {
+      "token": "eatp-v2",
+      "status": "Reserved-Unregistered",
+      "dispatchable": false,
+      "canonical_member": "{\"alg_id\":\"eatp-v2\"}",
+      "expected_sha256": "dc3e7f287f548a091793813edd216f18ac14ddf32a162ae05c1e50c36d4fc643"
+    },
+    {
+      "token": "eatp-v2.ml-dsa",
+      "status": "Reserved",
+      "dispatchable": false,
+      "canonical_member": "{\"alg_id\":\"eatp-v2.ml-dsa\"}",
+      "expected_sha256": "c765128ad084fefad24f7915519acb0b85e0939cc63a1f335b5c2c793754c6b5"
+    },
+    {
+      "token": "eatp-v2.slh-dsa",
+      "status": "Reserved",
+      "dispatchable": false,
+      "canonical_member": "{\"alg_id\":\"eatp-v2.slh-dsa\"}",
+      "expected_sha256": "b12b5a7264fc2a682ff7e8519cfd2fb37362f8aaebb5b4813cc9796f80613768"
+    }
+  ],
+  "non_conformant": [
+    {
+      "name": "deprecated_pre_registry_literal",
+      "value_repr": "ed25519+sha256",
+      "shape": "bare top-level string",
+      "decode_post_adoption": "reject: alg-id-shape-mismatch",
+      "decode_with_pre_adoption_witness": "accept as eatp-v1 (D2d legacy path)",
+      "reason": "deprecated pre-registry literal; accepted only on the dated/witnessed D2d legacy path (EATP-08 §4.5), never a conformant emission"
+    },
+    {
+      "name": "nested_pre_registry_object",
+      "value_repr": "{\"algorithm\":\"ed25519+sha256\"}",
+      "shape": "nested object (kailash-rs pre-publication scaffold form)",
+      "decode_post_adoption": "reject: alg-id-shape-mismatch",
+      "decode_with_pre_adoption_witness": "accept as eatp-v1 (D2d legacy path)",
+      "reason": "pre-registry nested-object encoding; accepted only via the D2d witnessed legacy path, mapped to eatp-v1"
+    },
+    {
+      "name": "missing_alg_id_post_adoption",
+      "value_repr": "(absent)",
+      "shape": "no alg_id member",
+      "decode_post_adoption": "reject: missing-alg-id-post-adoption",
+      "decode_with_pre_adoption_witness": "accept as eatp-v1 only when the record carries the pre-registry algorithm metadata + a pre-adoption witness",
+      "reason": "EATP-08 §4.2 (D2b): a post-adoption record without alg_id MUST be rejected, NOT default-filled"
+    },
+    {
+      "name": "unregistered_token",
+      "value_repr": "ed25519+sha512",
+      "shape": "top-level string, not in registry",
+      "decode_post_adoption": "reject: unsupported-algorithm",
+      "decode_with_pre_adoption_witness": "reject: unsupported-algorithm (witness does not rescue a non-pre-registry unknown token)",
+      "reason": "EATP-08 §3.3: an unregistered token MUST emit unsupported-algorithm and MUST NOT fall through to eatp-v1"
+    }
+  ]
+}
