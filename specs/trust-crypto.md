@@ -672,82 +672,107 @@ Both Python (`kailash-py`) and Rust (`kailash-rs`) SDKs implement the EATP spec 
 
 Cross-SDK issues are tracked with `cross-sdk` label per `rules/cross-sdk-inspection.md`.
 
-## 21. Algorithm Agility (Scaffold #604, awaiting mint ISS-31)
+## 32. Algorithm Identifier (EATP-08 v1.1)
 
-The signed-record surface threads an `AlgorithmIdentifier` metadata field
-through every producer/verifier so that when mint **ISS-31** stabilises
-the canonical wire-format value space, only the `__post_init__`
-validation and canonical serialiser change. The threading itself
-(producer → record → verifier) is already in place and does NOT need to
-be re-touched per site.
+The signed-record surface threads an `AlgorithmIdentifier` registry token
+through every producer/verifier. This implements **EATP-08
+"Algorithm-Identifier Versioning" v1.1** (published 2026-04-26,
+`foundation/docs/02-standards/eatp/08-algorithm-identifier.md`), which
+supersedes the closed pre-publication #604 scaffold. The threading
+(producer → record → verifier) is in place across every Layer-1
+signed-record pair; see § 32.4.
 
-### 21.1 Public surface
+### 32.1 Registry constants and the wire shape
 
-`kailash.trust.signing.algorithm_id`:
+Canonical home: `kailash.trust.signing.algorithm_id`; the package
+`kailash.trust.signing` re-exports the full surface as the canonical import
+path (`src/kailash/trust/signing/__init__.py:27-44`).
 
-- `ALGORITHM_DEFAULT: str = "ed25519+sha256"` — the only value supported
-  in this scaffold. Any other value passed to `AlgorithmIdentifier(...)`
-  raises `NotImplementedError` with a message that names the issue
-  (`#604`) AND the spec gate (`mint ISS-31`).
-- `class AlgorithmIdentifier` — frozen dataclass with single attribute
-  `algorithm: str = ALGORITHM_DEFAULT`.
-- `coerce_algorithm_id(alg_id)` — canonical helper for threading
-  `Optional[AlgorithmIdentifier]` so call sites do not have to
-  re-implement the `alg_id or AlgorithmIdentifier()` defaulting pattern.
+- `ALGORITHM_DEFAULT: str = "eatp-v1"` — the sole **Active** identifier
+  (Ed25519 + SHA-256), per EATP-08 §3.3 (`algorithm_id.py:61`). Replaces
+  the pre-publication scaffold default `"ed25519+sha256"`.
+- `DEPRECATED_PRE_REGISTRY_LITERAL: str = "ed25519+sha256"` — accepted
+  ONLY on the bounded D2d legacy path (§ 32.3), never a conformant
+  emission (`algorithm_id.py:67`).
+- `ADOPTION_DATE: str = "2026-04-26"` + `ADOPTION_DATE_PARSED` — the
+  EATP-08 §7.1 pinned adoption date, consumed by the D2d temporal gate
+  (`algorithm_id.py:71-76`).
 
-### 21.2 Threaded surface (this scaffold)
+Wire encoding (EATP-08 §3.1/§3.2, binding D3): the identifier serialises as
+a **top-level `alg_id` string** member. Under JCS (RFC 8785) key ordering,
+`alg_id` sorts first, so a verifier reads the algorithm before parsing the
+payload. The pre-registry nested object `{"algorithm": "..."}` and the
+deprecated literal are NON-conformant emissions. `AlgorithmIdentifier.to_dict()`
+returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:393-402`).
 
-This shard threads only the `SignedEnvelope` storage record + sign /
-verify pair in `kailash.trust.pact.envelopes`:
+### 32.2 Registry and dispatch (EATP-08 §3.3 / §5.1)
 
-- `SignedEnvelope.algorithm: str = ALGORITHM_DEFAULT` — new dataclass
-  field. Backward-compatible (existing call sites that omit it inherit
-  the default).
-- `SignedEnvelope.to_dict()` — emits `"algorithm": "ed25519+sha256"`. The
-  serialised dict's keys, when sorted, MUST be:
-  `["algorithm", "envelope", "expires_at", "signature", "signed_at",
-  "signed_by"]`. Lexicographic ordering is the canonical wire shape and
-  enables deterministic JSON canonicalisation.
-- `SignedEnvelope.from_dict()` — accepts dicts with **missing or empty**
-  `"algorithm"` keys (legacy / pre-#604 records), defaulting them to
-  `ALGORITHM_DEFAULT`. Non-default non-empty values raise
-  `NotImplementedError`.
-- `SignedEnvelope.verify()` — same algorithm-agility branching as
-  `from_dict()`: empty → accept-and-warn-once; non-default → raise
-  before any crypto work; default → verify normally.
+`ALGORITHM_REGISTRY` (`algorithm_id.py:108-140`) carries `eatp-v1` (Active)
+plus reserved rows (`eatp-v1.1`, `eatp-v2`, `eatp-v2.ml-dsa`,
+`eatp-v2.slh-dsa`). `AlgorithmStatus` enumerates `Active` / `Reserved` /
+`Reserved-Unregistered` (`algorithm_id.py:79-85`).
 
-### 21.3 Legacy-record warning contract
+- `AlgorithmIdentifier(...)` (`algorithm_id.py:338`) accepts any **registered**
+  token as a value; an unregistered token raises `UnsupportedAlgorithmError`
+  with code `unsupported-algorithm`.
+- `resolve_dispatch(alg_id)` (`algorithm_id.py:273`) is the §5.1 step-2
+  dispatch gate: only an **Active** row dispatches. Unregistered, Reserved,
+  and Reserved-Unregistered all raise `unsupported-algorithm` and MUST NOT
+  fall through to `eatp-v1` semantics.
+- `is_registered` / `is_active` (`algorithm_id.py:260-271`) are the value vs
+  dispatchability predicates.
 
-Empty algorithm field on parse OR verify emits **one** `DeprecationWarning`
-per process containing the literal substring:
+`UnsupportedAlgorithmError` (`algorithm_id.py:142`) carries the normative
+EATP-08 §5.3 error code: `unsupported-algorithm`, `alg-id-shape-mismatch`,
+`missing-alg-id-post-adoption`, or `implicit-v1-witness-failure`.
 
-> `scaffold for #604; wire format pending mint ISS-31`
+### 32.3 Backward-compat regime (EATP-08 §4 — D1/D2a/D2b/D2c/D2d)
 
-The substring is grep-able across log archives so future agents can
-correlate stale records. Emission is coordinated by the module-level
-`_LEGACY_SIGNED_ENVELOPE_WARNED` guard so a single legacy record
-passing through `from_dict()` then `verify()` warns at most once.
+The post-adoption path is strict (D2b): `AlgorithmIdentifier.from_dict()`
+and the consumer helper `decode_wire_alg_id()` (`algorithm_id.py:404`, `:527`)
+do NOT silently default-fill. A missing/empty `alg_id` post-adoption raises
+`missing-alg-id-post-adoption`; a non-string or nested form raises
+`alg-id-shape-mismatch`; the bare deprecated literal off the legacy path
+raises `alg-id-shape-mismatch`.
 
-### 21.4 Sites NOT yet threaded (next-shard work)
+The legacy path (D2d, §4.5) is **dated and witnessed**. The pre-1.1 scaffold
+accepted a bare `legacy_path: bool` — a perpetual un-sunsetted downgrade
+channel — and defined `ADOPTION_DATE` but never consulted it. D2d replaces
+that with `D2dWitness` (`algorithm_id.py:169`): a pre-registry explicit form
+(`is_pre_registry_form`, `algorithm_id.py:309`) is accepted as `eatp-v1`
+ONLY when a witness is supplied AND its witnessed-date AND chain-head date
+are both strictly before `ADOPTION_DATE`. The gate is
+`assert_d2d_witness_pre_adoption()` (`algorithm_id.py:223`): a missing
+witness OR a witness dated on/after adoption raises
+`implicit-v1-witness-failure` — the form is rejected, never silently
+downgraded. Accepted legacy acceptance is logged for migration tracking.
 
-The full inventory lives at
-`workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`.
-Layer-1 primitive pairs still pending:
+### 32.4 Threaded surface
 
-- `src/kailash/trust/envelope.py::sign_envelope` / `verify_envelope`
-- `src/kailash/trust/signing/timestamping.py::RFC3161TimestampManager`
-  (`create_anchor` / `verify_anchor` + `TimestampToken` storage)
-- `src/kailash/trust/signing/crl.py::CRLMetadata.sign` / `verify_signature`
-- `src/kailash/trust/messaging/{signer,verifier}.py::MessageEnvelope`
+Every Layer-1 signed-record producer/verifier carries the top-level `alg_id`
+member and decodes it through `decode_wire_alg_id` (witness-aware):
+
+- `src/kailash/trust/pact/envelopes.py` — `SignedEnvelope` (`alg_id` field,
+  `envelopes.py:1227`) sign/verify pair.
+- `src/kailash/trust/envelope.py` — `sign_envelope` / `verify_envelope`
+  (optional `alg_id` kwarg, `envelope.py:1388`).
+- `src/kailash/trust/signing/timestamping.py` — `RFC3161TimestampManager`
+  (`create_anchor` / `verify_anchor` + `TimestampToken`).
+- `src/kailash/trust/signing/crl.py` — `CRLMetadata.sign` / `verify_signature`.
+- `src/kailash/trust/messaging/{signer,verifier}.py` — `MessageEnvelope`.
 
 Layer-2 stores (audit_store, chain_store, key_manager) inherit threading
-once their underlying Layer-1 primitives carry the field.
+through their underlying Layer-1 primitives.
 
-### 21.5 Cross-SDK alignment
+### 32.5 Cross-SDK alignment
 
-Cross-SDK sibling: `esperie/kailash-rs#33`. Wire format awaits
-`terrene-foundation/mint` ISS-31. When mint stabilises, ONLY the
-`AlgorithmIdentifier.__post_init__` validation and the canonical
-serialiser change. The threading remains intact.
+Cross-SDK sibling: `esperie-enterprise/kailash-rs` (companion conformance
+issue). EATP-08 is wire-format-breaking; the version bump and the
+transition provision for already-emitted `ed25519+sha256` records (an open
+EATP-08 §4 erratum question — flagged to mint, not resolved unilaterally)
+are coordinated with the Rust SDK before release. Cross-SDK conformance
+vectors carrying `alg_id` byte-align with the Rust sibling per
+`rules/cross-sdk-inspection.md` Rule 4.
 
-Origin: GitHub issue terrene-foundation/kailash-py#604.
+Origin: GitHub issue terrene-foundation/kailash-py#1304 (mint#6 / EATP-08
+v1.1), superseding the closed #604 scaffold.
