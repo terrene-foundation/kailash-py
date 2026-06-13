@@ -214,6 +214,8 @@ class TestCRLMetadata:
 
         d = metadata.to_dict()
 
+        # EATP-08 §3.1: the wire form carries a top-level `alg_id` token.
+        assert d["alg_id"] == "eatp-v1"
         assert d["crl_id"] == "crl-001"
         assert d["issuer_id"] == "org-acme"
         assert d["issued_at"] == now.isoformat()
@@ -222,11 +224,12 @@ class TestCRLMetadata:
         assert d["signature"] == "sig123"
 
     def test_metadata_from_dict(self):
-        """Test deserialization from dictionary."""
+        """Test deserialization from dictionary (EATP-08 §3.1)."""
         now = datetime.now(timezone.utc)
         next_update = now + timedelta(hours=1)
 
         data = {
+            "alg_id": "eatp-v1",
             "crl_id": "crl-001",
             "issuer_id": "org-acme",
             "issued_at": now.isoformat(),
@@ -237,6 +240,7 @@ class TestCRLMetadata:
 
         metadata = CRLMetadata.from_dict(data)
 
+        assert metadata.alg_id == "eatp-v1"
         assert metadata.crl_id == "crl-001"
         assert metadata.issuer_id == "org-acme"
         assert metadata.entry_count == 5
@@ -278,14 +282,14 @@ class TestCertificateRevocationListBasic:
 
     def test_add_duplicate_updates(self, crl):
         """Test that adding same delegation_id updates the entry."""
-        entry1 = crl.add_revocation(
+        crl.add_revocation(
             delegation_id="del-001",
             agent_id="agent-001",
             reason="Original reason",
             revoked_by="admin",
         )
 
-        entry2 = crl.add_revocation(
+        crl.add_revocation(
             delegation_id="del-001",
             agent_id="agent-001",
             reason="Updated reason",
@@ -294,6 +298,7 @@ class TestCertificateRevocationListBasic:
 
         assert crl.entry_count == 1
         stored = crl.get_entry("del-001")
+        assert stored is not None
         assert stored.reason == "Updated reason"
 
     def test_remove_revocation(self, crl):
@@ -770,6 +775,8 @@ class TestCertificateRevocationListSerialization:
         for del_id in ["del-001", "del-002", "del-003"]:
             original = crl.get_entry(del_id)
             restored_entry = restored.get_entry(del_id)
+            assert original is not None
+            assert restored_entry is not None
             assert original.delegation_id == restored_entry.delegation_id
             assert original.agent_id == restored_entry.agent_id
             assert original.reason == restored_entry.reason
@@ -903,6 +910,7 @@ class TestCRLIntegration:
         # Now revoked
         result2 = verify_delegation_with_crl("del-001", crl)
         assert result2.valid is False
+        assert result2.entry is not None
         assert result2.entry.reason == "Security issue"
 
         # Remove revocation
@@ -963,6 +971,7 @@ class TestCRLIntegration:
         # Verify data intact
         assert crl2.is_revoked("del-001")
         entry = crl2.get_entry("del-001")
+        assert entry is not None
         assert entry.reason == "Test"
 
     def test_multiple_agents_same_delegation_update(self):
@@ -1023,6 +1032,7 @@ class TestCRLEdgeCases:
 
         assert crl.is_revoked("del:001/test")
         entry = crl.get_entry("del:001/test")
+        assert entry is not None
         assert entry.agent_id == "agent@example.com"
 
     def test_crl_verification_with_empty_crl(self):

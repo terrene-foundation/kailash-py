@@ -17,15 +17,16 @@ import base64
 import logging
 from typing import Any, Dict, Optional, Union
 
-from kailash.trust.signing.algorithm_id import (
-    AlgorithmIdentifier,
-    coerce_algorithm_id,
-)
-from kailash.trust.signing.crypto import sign
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
 from kailash.trust.messaging.exceptions import SigningError
 from kailash.trust.operations import TrustOperations
+from kailash.trust.signing.algorithm_id import (
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+    resolve_dispatch,
+)
+from kailash.trust.signing.crypto import sign
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +130,11 @@ class MessageSigner:
             ...     metadata=MessageMetadata(priority="high", ttl_seconds=60)
             ... )
         """
-        # Issue #604 scaffold: coerce + validate alg_id BEFORE any I/O.
-        # Non-default values raise NotImplementedError immediately.
+        # EATP-08 §5.1: coerce + validate alg_id BEFORE any I/O.
+        # resolve_dispatch confirms the token is Active (dispatchable);
+        # a non-Active token raises UnsupportedAlgorithmError immediately.
         canonical = coerce_algorithm_id(alg_id)
+        resolve_dispatch(canonical.algorithm)
 
         try:
             # Get current trust chain hash
@@ -143,7 +146,7 @@ class MessageSigner:
                 recipient_agent_id=recipient_agent_id,
                 payload=payload,
                 trust_chain_hash=trust_chain_hash,
-                algorithm=canonical.algorithm,
+                alg_id=canonical.algorithm,
                 metadata=metadata,
             )
 

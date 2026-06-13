@@ -20,14 +20,28 @@ Functions:
 
 from __future__ import annotations
 
-# Issue #604 algorithm-agility scaffold — canonical namespace.
+# EATP-08 v1.1 algorithm-identifier surface — canonical namespace.
 # `kailash.trust.signing.algorithm_id` is the module-level home; this
 # re-export establishes `kailash.trust.signing` as the canonical import
 # path per specs/trust-crypto.md § 21.1.
 from kailash.trust.signing.algorithm_id import (
+    ADOPTION_DATE,
+    ADOPTION_DATE_PARSED,
     ALGORITHM_DEFAULT,
+    ALGORITHM_REGISTRY,
+    DEPRECATED_PRE_REGISTRY_LITERAL,
     AlgorithmIdentifier,
+    AlgorithmStatus,
+    D2dWitness,
+    RegistryEntry,
+    UnsupportedAlgorithmError,
+    assert_d2d_witness_pre_adoption,
     coerce_algorithm_id,
+    decode_wire_alg_id,
+    is_active,
+    is_pre_registry_form,
+    is_registered,
+    resolve_dispatch,
 )
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
@@ -77,8 +91,22 @@ __all__ = [
     "hmac_verify",
     "dual_sign",
     "dual_verify",
-    # Issue #604 algorithm-agility scaffold (canonical namespace)
+    # EATP-08 v1.1 algorithm-identifier surface (canonical namespace)
+    "ADOPTION_DATE",
+    "ADOPTION_DATE_PARSED",
     "ALGORITHM_DEFAULT",
+    "ALGORITHM_REGISTRY",
     "AlgorithmIdentifier",
+    "AlgorithmStatus",
+    "D2dWitness",
+    "DEPRECATED_PRE_REGISTRY_LITERAL",
+    "RegistryEntry",
+    "UnsupportedAlgorithmError",
+    "assert_d2d_witness_pre_adoption",
     "coerce_algorithm_id",
+    "decode_wire_alg_id",
+    "is_active",
+    "is_pre_registry_form",
+    "is_registered",
+    "resolve_dispatch",
 ]

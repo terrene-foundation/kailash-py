@@ -13,7 +13,6 @@ Note: These are unit tests (Tier 1), no external dependencies.
 import json
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
 
 
@@ -145,6 +144,7 @@ class TestSecureMessageEnvelope:
             metadata=metadata,
         )
 
+        assert envelope.metadata is not None
         assert envelope.metadata.priority == "high"
 
     def test_get_signing_payload_returns_bytes(self):
@@ -244,8 +244,9 @@ class TestSecureMessageEnvelope:
         assert "message_id" in data
 
     def test_from_dict_deserialization(self):
-        """Envelope can be deserialized from dictionary."""
+        """Envelope can be deserialized from dictionary (EATP-08 §3.1)."""
         data = {
+            "alg_id": "eatp-v1",
             "message_id": "msg-123",
             "sender_agent_id": "agent-001",
             "recipient_agent_id": "agent-002",
@@ -258,6 +259,7 @@ class TestSecureMessageEnvelope:
         }
 
         envelope = SecureMessageEnvelope.from_dict(data)
+        assert envelope.alg_id == "eatp-v1"
 
         assert envelope.message_id == "msg-123"
         assert envelope.sender_agent_id == "agent-001"
@@ -281,6 +283,8 @@ class TestSecureMessageEnvelope:
         assert restored.sender_agent_id == original.sender_agent_id
         assert restored.payload == original.payload
         assert restored.nonce == original.nonce
+        assert restored.metadata is not None
+        assert original.metadata is not None
         assert restored.metadata.priority == original.metadata.priority
 
     def test_to_json_returns_string(self):
@@ -303,6 +307,7 @@ class TestSecureMessageEnvelope:
         """from_json parses JSON string."""
         json_str = json.dumps(
             {
+                "alg_id": "eatp-v1",
                 "message_id": "msg-1",
                 "sender_agent_id": "sender",
                 "recipient_agent_id": "recipient",

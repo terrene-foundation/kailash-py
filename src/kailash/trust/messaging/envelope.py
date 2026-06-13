@@ -19,7 +19,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from kailash.trust.signing.algorithm_id import ALGORITHM_DEFAULT
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    D2dWitness,
+    decode_wire_alg_id,
+)
 
 
 @dataclass
@@ -183,12 +187,11 @@ class SecureMessageEnvelope:
     nonce: str = field(default_factory=lambda: secrets.token_hex(32))
     signature: str = ""
     signature_algorithm: str = "Ed25519"
-    # Issue #604 scaffold: signing-algorithm version-tag (distinct from the
-    # legacy `signature_algorithm` field which names the crypto primitive).
-    # Recorded out-of-band from get_signing_payload() so legacy envelopes
-    # (no algorithm) verify under the empty-branch warning path. Default
-    # value matches the only spec-supported value until mint ISS-31.
-    algorithm: str = ALGORITHM_DEFAULT
+    # EATP-08 §3.1: top-level `alg_id` registry token (distinct from the
+    # `signature_algorithm` field which names the crypto primitive). Recorded
+    # out-of-band from get_signing_payload(); the dispatch gate lives in
+    # MessageVerifier._verify_signature. Default `eatp-v1`.
+    alg_id: str = ALGORITHM_DEFAULT
     metadata: Optional[MessageMetadata] = None
 
     def get_signing_payload(self) -> bytes:
@@ -254,23 +257,37 @@ class SecureMessageEnvelope:
             "payload": self.payload,
             "timestamp": self.timestamp.isoformat(),
             "nonce": self.nonce,
+            "alg_id": self.alg_id,
             "signature": self.signature,
             "signature_algorithm": self.signature_algorithm,
             "trust_chain_hash": self.trust_chain_hash,
-            "algorithm": self.algorithm,
             "metadata": self.metadata.to_dict() if self.metadata else None,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SecureMessageEnvelope":
+    def from_dict(
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+    ) -> "SecureMessageEnvelope":
         """
-        Deserialize envelope from dictionary.
+        Deserialize envelope from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
+
+        The top-level ``alg_id`` registry token is decoded under the D2b/D2d
+        regime: a missing/empty value raises ``missing-alg-id-post-adoption``
+        on the post-adoption path; a pre-registry explicit form maps to
+        ``eatp-v1`` only when a :class:`D2dWitness` whose witnessed/head date
+        is strictly before :data:`ADOPTION_DATE` is supplied (§4.5),
+        otherwise it is rejected with ``implicit-v1-witness-failure``.
 
         Args:
             data: Dictionary representation of the envelope.
+            witness: A :class:`D2dWitness` only when rescuing a pre-registry
+                legacy record; ``None`` (default) means strict.
 
         Returns:
             SecureMessageEnvelope instance.
+
+        Raises:
+            UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
         timestamp = data["timestamp"]
         if isinstance(timestamp, str):
@@ -280,16 +297,7 @@ class SecureMessageEnvelope:
         if data.get("metadata"):
             metadata = MessageMetadata.from_dict(data["metadata"])
 
-        # Issue #604: missing/empty `algorithm` (legacy / pre-#604) defaults
-        # to ALGORITHM_DEFAULT. Verify-path warning fires in
-        # MessageVerifier._verify_signature, not here, so persistence-layer
-        # round-trips do not flood logs with the legacy warning.
-        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
-        if not isinstance(algorithm, str):
-            raise TypeError(
-                f"SecureMessageEnvelope.algorithm must be str, got "
-                f"{type(algorithm).__name__}"
-            )
+        alg_id = decode_wire_alg_id(data, witness=witness)
 
         return cls(
             message_id=data["message_id"],
@@ -301,7 +309,7 @@ class SecureMessageEnvelope:
             signature=data.get("signature", ""),
             signature_algorithm=data.get("signature_algorithm", "Ed25519"),
             trust_chain_hash=data["trust_chain_hash"],
-            algorithm=algorithm,
+            alg_id=alg_id,
             metadata=metadata,
         )
 

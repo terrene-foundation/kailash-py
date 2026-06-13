@@ -39,7 +39,6 @@ Example:
 
 import logging
 import secrets
-import warnings as _warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -50,7 +49,11 @@ from uuid import uuid4
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dWitness,
+    UnsupportedAlgorithmError,
     coerce_algorithm_id,
+    decode_wire_alg_id,
+    resolve_dispatch,
 )
 from kailash.trust.signing.crypto import (
     generate_keypair,
@@ -61,13 +64,6 @@ from kailash.trust.signing.crypto import (
 from kailash.trust.signing.merkle import MerkleTree
 
 logger = logging.getLogger(__name__)
-
-# Module-level guard for once-per-process DeprecationWarning emission when a
-# legacy timestamp record (no/empty algorithm — pre-#604 record) is verified.
-# Per zero-tolerance.md Rule 1 + the issue-#604 directive, the warning text MUST
-# contain the literal "scaffold for #604; wire format pending mint ISS-31"
-# substring so future agents can grep-find it across log archives.
-_LEGACY_TIMESTAMP_WARNED: bool = False
 
 # CARE-049: Default threshold for clock drift detection (in seconds).
 # If consecutive timestamps drift by more than this, log a CRITICAL warning.
@@ -107,14 +103,12 @@ class TimestampToken:
         nonce: Random value for replay prevention
         serial_number: Sequential number from the authority
         accuracy_microseconds: Accuracy of the timestamp in microseconds
-        algorithm: The signing-algorithm identifier (issue #604 scaffold).
-            Defaults to :data:`ALGORITHM_DEFAULT` (``"ed25519+sha256"``).
-            Threaded through every signed-record producer/verifier so that
-            when mint ISS-31 stabilises the canonical wire format, only
-            the validation + canonical serialiser change. Distinct from
-            :attr:`TimestampRequest.algorithm`, which is the *hash*
-            algorithm (sha256) used to build the message imprint and is
-            unrelated to signing-algorithm agility.
+        alg_id: The EATP-08 §3.3 registry token (top-level ``alg_id`` wire
+            field, §3.1). Defaults to :data:`ALGORITHM_DEFAULT`
+            (``"eatp-v1"``). A verifier dispatches only on an **Active**
+            token. Distinct from :attr:`TimestampRequest.algorithm`, which is
+            the *hash* algorithm (sha256) used to build the message imprint
+            and is unrelated to signing-algorithm agility.
     """
 
     token_id: str
@@ -126,20 +120,18 @@ class TimestampToken:
     nonce: Optional[str] = None
     serial_number: Optional[int] = None
     accuracy_microseconds: Optional[int] = None
-    # Issue #604 scaffold: signing-algorithm identifier. Default keeps
-    # backward-compatible construction (existing call sites do not need to
-    # pass it), while every NEW token carries the algorithm field so the
-    # round-trip via to_dict/from_dict surfaces it on the wire.
-    algorithm: str = ALGORITHM_DEFAULT
+    # EATP-08 §3.1: top-level `alg_id` registry token. Default `eatp-v1`.
+    alg_id: str = ALGORITHM_DEFAULT
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize token to dictionary.
 
-        Includes the ``algorithm`` field (issue #604 scaffold) so the wire
-        format records which signing algorithm produced the token. Sorted
-        keys produce a deterministic JSON canonicalisation.
+        Emits the conformant top-level ``alg_id`` string member (EATP-08
+        §3.1) so the wire format records which signing algorithm produced the
+        token.
         """
         return {
+            "alg_id": self.alg_id,
             "token_id": self.token_id,
             "hash_value": self.hash_value,
             "timestamp": self.timestamp.isoformat(),
@@ -149,25 +141,25 @@ class TimestampToken:
             "nonce": self.nonce,
             "serial_number": self.serial_number,
             "accuracy_microseconds": self.accuracy_microseconds,
-            "algorithm": self.algorithm,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TimestampToken":
-        """Deserialize token from dictionary.
+    def from_dict(
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+    ) -> "TimestampToken":
+        """Deserialize token from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
-        Missing or empty ``algorithm`` keys (legacy / pre-#604 records)
-        default to :data:`ALGORITHM_DEFAULT`. The verify-path warning
-        contract is enforced by :meth:`TimestampAnchorManager.verify_anchor`
-        — ``from_dict`` itself does not warn so silent persistence-layer
-        round-trips do not flood logs.
+        Post-adoption: the dict MUST carry a top-level ``alg_id`` string
+        token; a missing/empty value raises ``missing-alg-id-post-adoption``.
+        Legacy acceptance of a pre-registry explicit form requires a
+        :class:`D2dWitness` whose witnessed/head date is strictly before
+        :data:`ADOPTION_DATE` (§4.5); otherwise the form is rejected with
+        ``implicit-v1-witness-failure`` (no downgrade).
+
+        Raises:
+            UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
-        if not isinstance(algorithm, str):
-            raise TypeError(
-                f"TimestampToken.algorithm must be str, got "
-                f"{type(algorithm).__name__}"
-            )
+        alg_id = decode_wire_alg_id(data, witness=witness)
         return cls(
             token_id=data["token_id"],
             hash_value=data["hash_value"],
@@ -178,7 +170,7 @@ class TimestampToken:
             nonce=data.get("nonce"),
             serial_number=data.get("serial_number"),
             accuracy_microseconds=data.get("accuracy_microseconds"),
-            algorithm=algorithm,
+            alg_id=alg_id,
         )
 
 
@@ -215,25 +207,28 @@ class TimestampResponse:
         token: The resulting timestamp token
         raw_response: Raw response bytes (for RFC 3161 DER encoding)
         verified: Whether the token was verified after creation
-        algorithm: Signing-algorithm identifier (issue #604 scaffold).
-            Defaults to :data:`ALGORITHM_DEFAULT` (``"ed25519+sha256"``)
-            and mirrors :attr:`TimestampToken.algorithm`. Recorded
-            separately on the response wrapper for forward compatibility
-            with mint ISS-31 — when the wire format stabilises, only the
-            validation + canonical serialiser change.
+        alg_id: The EATP-08 §3.3 registry token (top-level ``alg_id`` wire
+            field, §3.1). Defaults to :data:`ALGORITHM_DEFAULT`
+            (``"eatp-v1"``) and mirrors :attr:`TimestampToken.alg_id`.
     """
 
     request: TimestampRequest
     token: TimestampToken
     raw_response: Optional[bytes] = None
     verified: bool = False
-    # Issue #604 scaffold: signing-algorithm identifier. Default keeps
-    # backward-compatible construction.
-    algorithm: str = ALGORITHM_DEFAULT
+    # EATP-08 §3.1: top-level `alg_id` registry token. Default `eatp-v1`.
+    alg_id: str = ALGORITHM_DEFAULT
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize response to dictionary."""
+        """Serialize response to dictionary.
+
+        The signing-algorithm identifier is emitted as the top-level
+        ``alg_id`` registry token (EATP-08 §3.1). The nested
+        ``request.algorithm`` is the *hash* algorithm (sha256) for the
+        message imprint and is unrelated to signing-algorithm agility.
+        """
         return {
+            "alg_id": self.alg_id,
             "request": {
                 "hash_value": self.request.hash_value,
                 "nonce": self.request.nonce,
@@ -243,16 +238,22 @@ class TimestampResponse:
             "token": self.token.to_dict(),
             "raw_response": (self.raw_response.hex() if self.raw_response else None),
             "verified": self.verified,
-            "algorithm": self.algorithm,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TimestampResponse":
-        """Deserialize response from dictionary.
+    def from_dict(
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+    ) -> "TimestampResponse":
+        """Deserialize response from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
-        Missing/empty top-level ``algorithm`` (legacy record) defaults to
-        :data:`ALGORITHM_DEFAULT`. The nested ``request.algorithm`` retains
-        its original semantics (hash algorithm; sha256).
+        The top-level ``alg_id`` is the signing-algorithm registry token,
+        decoded under the D2b/D2d regime (legacy acceptance requires a dated
+        :class:`D2dWitness` strictly before :data:`ADOPTION_DATE`, §4.5). The
+        nested ``request.algorithm`` retains its original semantics (hash
+        algorithm; sha256).
+
+        Raises:
+            UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
         request_data = data["request"]
         request = TimestampRequest(
@@ -261,22 +262,17 @@ class TimestampResponse:
             requested_at=datetime.fromisoformat(request_data["requested_at"]),
             algorithm=request_data.get("algorithm", "sha256"),
         )
-        token = TimestampToken.from_dict(data["token"])
+        token = TimestampToken.from_dict(data["token"], witness=witness)
         raw_response = (
             bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
         )
-        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
-        if not isinstance(algorithm, str):
-            raise TypeError(
-                f"TimestampResponse.algorithm must be str, got "
-                f"{type(algorithm).__name__}"
-            )
+        alg_id = decode_wire_alg_id(data, witness=witness)
         return cls(
             request=request,
             token=token,
             raw_response=raw_response,
             verified=data.get("verified", False),
-            algorithm=algorithm,
+            alg_id=alg_id,
         )
 
 
@@ -301,22 +297,19 @@ class TimestampAuthority(ABC):
         Args:
             hash_value: The hash to timestamp
             nonce: Optional nonce for replay prevention
-            alg_id: Optional algorithm identifier (issue #604 scaffold).
-                ``None`` defaults via
+            alg_id: Optional EATP-08 registry token. ``None`` defaults via
                 :func:`kailash.trust.signing.algorithm_id.coerce_algorithm_id`
-                to :data:`ALGORITHM_DEFAULT` (``"ed25519+sha256"``).
-                Non-default values raise ``NotImplementedError`` until
-                mint ISS-31 stabilises the canonical wire format.
+                to :data:`ALGORITHM_DEFAULT` (``"eatp-v1"``). A non-Active
+                token raises ``UnsupportedAlgorithmError``.
 
         Returns:
-            TimestampResponse with the timestamp token. The
-            ``token.algorithm`` and ``response.algorithm`` fields record
-            the canonical algorithm identifier.
+            TimestampResponse with the timestamp token. The ``token.alg_id``
+            and ``response.alg_id`` fields record the dispatched token.
 
         Raises:
             Exception: If timestamping fails
-            NotImplementedError: If ``alg_id`` is non-default (pending
-                mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
         pass
 
@@ -480,26 +473,27 @@ class LocalTimestampAuthority(TimestampAuthority):
         Get a timestamp for a hash value.
 
         Creates a signed timestamp token using the local clock
-        and Ed25519 signature. The canonical algorithm identifier
-        (issue #604 scaffold) is recorded on both the token and the
-        response wrapper so a JSON round-trip surfaces it on the wire.
+        and Ed25519 signature. The EATP-08 registry token is recorded on
+        both the token and the response wrapper so a JSON round-trip surfaces
+        the top-level ``alg_id`` member on the wire (§3.1).
 
         Args:
             hash_value: The hash to timestamp
             nonce: Optional nonce for replay prevention
-            alg_id: Optional algorithm identifier. ``None`` →
-                :data:`ALGORITHM_DEFAULT`. Non-default → raises.
+            alg_id: Optional EATP-08 registry token. ``None`` →
+                :data:`ALGORITHM_DEFAULT`. A non-Active token raises.
 
         Returns:
             TimestampResponse with the timestamp token
 
         Raises:
-            NotImplementedError: If ``alg_id`` is non-default (pending
-                mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
-        # Coerce + validate alg_id BEFORE any crypto work — fail-loud on
-        # non-default to surface the spec gate, never silent acceptance.
+        # Coerce + validate alg_id BEFORE any crypto work. resolve_dispatch
+        # confirms the token is Active (dispatchable) per EATP-08 §5.1.
         canonical = coerce_algorithm_id(alg_id)
+        resolve_dispatch(canonical.algorithm)
 
         # Create request
         request = TimestampRequest(hash_value=hash_value, nonce=nonce)
@@ -540,7 +534,7 @@ class LocalTimestampAuthority(TimestampAuthority):
             nonce=request.nonce,
             serial_number=self._serial_counter,
             accuracy_microseconds=1000,  # 1ms accuracy for local clock
-            algorithm=canonical.algorithm,
+            alg_id=canonical.algorithm,
         )
 
         return TimestampResponse(
@@ -548,7 +542,7 @@ class LocalTimestampAuthority(TimestampAuthority):
             token=token,
             raw_response=None,
             verified=True,  # We just created it
-            algorithm=canonical.algorithm,
+            alg_id=canonical.algorithm,
         )
 
     async def verify_timestamp(self, token: TimestampToken) -> bool:
@@ -644,19 +638,20 @@ class RFC3161TimestampAuthority(TimestampAuthority):
         Args:
             hash_value: The hash to timestamp (hex-encoded)
             nonce: Optional nonce for replay prevention
-            alg_id: Optional algorithm identifier (issue #604 scaffold).
-                ``None`` → :data:`ALGORITHM_DEFAULT`. Non-default raises.
+            alg_id: Optional EATP-08 registry token. ``None`` →
+                :data:`ALGORITHM_DEFAULT`. A non-Active token raises.
 
         Returns:
             TimestampResponse with token and raw response
 
         Raises:
-            NotImplementedError: If ``alg_id`` is non-default (pending
-                mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
         import hashlib
 
         canonical = coerce_algorithm_id(alg_id)
+        resolve_dispatch(canonical.algorithm)
 
         request = TimestampRequest(
             hash_value=hash_value,
@@ -686,7 +681,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                 source=TimestampSource.RFC3161,
                 authority=self._url,
                 nonce=request.nonce,
-                algorithm=canonical.algorithm,
+                alg_id=canonical.algorithm,
             )
 
             return TimestampResponse(
@@ -694,7 +689,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                 token=token,
                 raw_response=raw_response if isinstance(raw_response, bytes) else None,
                 verified=True,
-                algorithm=canonical.algorithm,
+                alg_id=canonical.algorithm,
             )
         else:
             # Fallback: raw HTTP POST to TSA endpoint
@@ -736,7 +731,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                 source=TimestampSource.RFC3161,
                 authority=self._url,
                 nonce=request.nonce,
-                algorithm=canonical.algorithm,
+                alg_id=canonical.algorithm,
             )
 
             return TimestampResponse(
@@ -744,7 +739,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                 token=token,
                 raw_response=raw_response,
                 verified=False,
-                algorithm=canonical.algorithm,
+                alg_id=canonical.algorithm,
             )
 
     async def verify_timestamp(self, token: TimestampToken) -> bool:
@@ -906,26 +901,26 @@ class TimestampAnchorManager:
 
         Args:
             hash_value: The hash to anchor
-            alg_id: Optional algorithm identifier (issue #604 scaffold).
+            alg_id: Optional EATP-08 registry token (``None`` → ``eatp-v1``).
                 Threaded through to the underlying authority's
-                ``get_timestamp`` so ``response.algorithm`` records the
-                canonical value.
+                ``get_timestamp`` so the token / response record the
+                dispatched value.
 
         Returns:
             TimestampResponse with the timestamp token
 
         Raises:
             RuntimeError: If all authorities fail and no local fallback
-            NotImplementedError: If ``alg_id`` is non-default (pending
-                mint ISS-31).
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
         # Try primary
         try:
             response = await self._primary.get_timestamp(hash_value, alg_id=alg_id)
             self._anchor_history.append(response)
             return response
-        except NotImplementedError:
-            # Surface the spec-gate error; do NOT mask under the
+        except UnsupportedAlgorithmError:
+            # Surface the dispatch-gate error; do NOT mask under the
             # general-failure fallback chain.
             raise
         except Exception as e:
@@ -937,7 +932,7 @@ class TimestampAnchorManager:
                 response = await fallback.get_timestamp(hash_value, alg_id=alg_id)
                 self._anchor_history.append(response)
                 return response
-            except NotImplementedError:
+            except UnsupportedAlgorithmError:
                 raise
             except Exception as e:
                 logger.debug(
@@ -966,14 +961,15 @@ class TimestampAnchorManager:
 
         Args:
             tree: The Merkle tree to anchor
-            alg_id: Optional algorithm identifier (issue #604 scaffold).
+            alg_id: Optional EATP-08 registry token (``None`` → ``eatp-v1``).
 
         Returns:
             TimestampResponse with the timestamp token
 
         Raises:
             ValueError: If tree is empty (no root hash)
-            NotImplementedError: If ``alg_id`` is non-default.
+            UnsupportedAlgorithmError: If ``alg_id`` is not an Active registry
+                token (code ``unsupported-algorithm``).
         """
         root_hash = tree.root_hash
         if root_hash is None:
@@ -987,17 +983,15 @@ class TimestampAnchorManager:
 
         Uses the appropriate authority based on the token source.
 
-        Algorithm-agility (issue #604 scaffold):
+        Algorithm dispatch (EATP-08 §5.1):
 
-        - Examines ``response.token.algorithm``.
-        - Empty / missing → emits a one-time ``DeprecationWarning`` per
-          process whose message contains the literal substring
-          ``"scaffold for #604; wire format pending mint ISS-31"`` and
-          proceeds with verification (legacy / pre-#604 record path).
-        - Equal to :data:`ALGORITHM_DEFAULT` → verifies normally.
-        - Any other non-default value → raises ``NotImplementedError``
-          BEFORE any crypto work (the verifier MUST not give the
-          appearance of approval for an unsupported algorithm).
+        - ``response.token.alg_id == "eatp-v1"`` (Active) → verify under
+          Ed25519+SHA-256.
+        - A Reserved / Reserved-Unregistered / unregistered ``alg_id`` →
+          raise
+          :class:`~kailash.trust.signing.algorithm_id.UnsupportedAlgorithmError`
+          (``unsupported-algorithm``) BEFORE any crypto work (the verifier
+          MUST NOT fall through to ``eatp-v1``, §3.3).
 
         Args:
             response: The timestamp response to verify
@@ -1006,31 +1000,13 @@ class TimestampAnchorManager:
             True if the anchor is valid, False otherwise
 
         Raises:
-            NotImplementedError: If ``token.algorithm`` is non-default
-                non-empty (pending mint ISS-31).
+            UnsupportedAlgorithmError: If ``token.alg_id`` is not an Active
+                registry token (code ``unsupported-algorithm``).
         """
         token = response.token
 
-        # Algorithm-agility guard — runs BEFORE any verification work.
-        global _LEGACY_TIMESTAMP_WARNED
-        algo = token.algorithm or ""
-        if algo == "":
-            if not _LEGACY_TIMESTAMP_WARNED:
-                _LEGACY_TIMESTAMP_WARNED = True
-                _warnings.warn(
-                    "TimestampToken verified with empty algorithm (legacy "
-                    "record); defaulting to "
-                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
-                    "format pending mint ISS-31.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-        elif algo != ALGORITHM_DEFAULT:
-            raise NotImplementedError(
-                f"TimestampToken.algorithm={algo!r} awaits mint ISS-31 spec. "
-                f"Only {ALGORITHM_DEFAULT!r} is supported in this scaffold "
-                f"(issue #604, cross-SDK kailash-rs#33)."
-            )
+        # Dispatch gate (EATP-08 §5.1) — runs BEFORE any verification work.
+        resolve_dispatch(token.alg_id)
 
         # Find matching authority
         if token.authority == self._primary.authority_url:
