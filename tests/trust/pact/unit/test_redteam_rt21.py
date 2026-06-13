@@ -14,12 +14,14 @@ Comprehensive adversarial testing of the PACT governance framework:
 
 from __future__ import annotations
 
+import importlib.util
 import math
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -637,6 +639,11 @@ class TestAgentBypass:
 # ===========================================================================
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("fastapi") is None,
+    reason="fastapi is the optional [api] extra (pact.governance.api requires it "
+    "per audit #890); environments installing only [trust,dev] skip these.",
+)
 class TestAPIBypass:
     """Adversarial attempts to bypass API authentication and authorization."""
 
