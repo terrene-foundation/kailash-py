@@ -46,12 +46,12 @@
   ],
   "non_conformant": [
     {
-      "name": "deprecated_pre_registry_literal",
+      "name": "deprecated_pre_registry_literal_bare_top_level_string",
       "value_repr": "ed25519+sha256",
       "shape": "bare top-level string",
-      "decode_post_adoption": "reject: alg-id-shape-mismatch",
-      "decode_with_pre_adoption_witness": "accept as eatp-v1 (D2d legacy path)",
-      "reason": "deprecated pre-registry literal; accepted only on the dated/witnessed D2d legacy path (EATP-08 §4.5), never a conformant emission"
+      "decode_post_adoption": "reject: unsupported-algorithm",
+      "decode_with_pre_adoption_witness": "reject: unsupported-algorithm (a bare top-level-string literal is an unregistered token, NOT a D2d form; a witness MUST NOT rescue it)",
+      "reason": "EATP-08 v1.1.1 / mint#26: a top-level alg_id string equal to the deprecated literal is registry-matched (§5.1 step 2), is not a registry token, and is rejected with unsupported-algorithm with or without a witness. The two D2d forms are the nested-object alg_id value and unsigned `algorithm` metadata (§4.5), never a bare top-level string. Preserves the §3.3 top-level-string-token invariant the anti-strip design (§4.4/V6) depends on."
     },
     {
       "name": "nested_pre_registry_object",

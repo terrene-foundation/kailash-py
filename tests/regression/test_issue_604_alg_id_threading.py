@@ -26,6 +26,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -258,14 +259,19 @@ def test_signed_envelope_from_dict_nested_object_shape_mismatch(signed):
 
 
 @pytest.mark.regression
-def test_signed_envelope_from_dict_deprecated_literal_shape_mismatch(signed):
-    """Bare deprecated literal post-adoption is a shape mismatch, not v1."""
+def test_signed_envelope_from_dict_deprecated_literal_unsupported(signed):
+    """Bare top-level-string deprecated literal is an unregistered token.
+
+    v1.1.1 / mint#26: a top-level `alg_id` string equal to the deprecated
+    literal is registry-matched (§5.1 step 2), is not a registry token, and is
+    rejected with `unsupported-algorithm` (not `alg-id-shape-mismatch`, and not
+    a D2d form)."""
 
     payload = signed.to_dict()
     payload["alg_id"] = DEPRECATED_PRE_REGISTRY_LITERAL
     with pytest.raises(UnsupportedAlgorithmError) as exc:
         SignedEnvelope.from_dict(payload)
-    assert exc.value.code == "alg-id-shape-mismatch"
+    assert exc.value.code == "unsupported-algorithm"
 
 
 @pytest.mark.regression
@@ -304,14 +310,17 @@ def test_signed_envelope_from_dict_reserved_token_decodes_but_undispatchable(
 
 
 @pytest.mark.regression
-def test_signed_envelope_from_dict_d2d_bare_literal(signed):
-    """EATP-08 §4.5 (D2d): bare deprecated literal maps to eatp-v1 ONLY with a
-    pre-adoption witness."""
+def test_signed_envelope_from_dict_bare_literal_not_rescued_by_witness(signed):
+    """v1.1.1 / mint#26: a bare top-level-string deprecated literal is NOT a D2d
+    form, so an otherwise-valid pre-adoption witness MUST NOT rescue it; it
+    stays `unsupported-algorithm`. (The D2d forms are the nested-object value
+    and unsigned `algorithm` metadata, exercised by the two tests below.)"""
 
     payload = signed.to_dict()
     payload["alg_id"] = DEPRECATED_PRE_REGISTRY_LITERAL
-    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
-    assert reconstructed.alg_id == "eatp-v1"
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
+    assert exc.value.code == "unsupported-algorithm"
 
 
 @pytest.mark.regression
