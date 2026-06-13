@@ -199,6 +199,7 @@ __all__ = [
     "FeatureVersionNotFoundError",
     "FeatureEvolutionError",
     "CrossTenantReadError",
+    "OnlineStoreUnavailableError",
     # --- AutoMLError subclasses ---
     "BudgetExhaustedError",
     "InsufficientTrialsError",
@@ -751,6 +752,30 @@ class CrossTenantReadError(FeatureStoreError):
     Tenant identifiers are fingerprinted (never echoed verbatim) in the
     message per ``rules/dataflow-identifier-safety.md`` error-message
     discipline.
+    """
+
+
+class OnlineStoreUnavailableError(FeatureStoreError):
+    """Raised when the online feature-store backend is unreachable.
+
+    Landed with its raise-site (FM2 Wave-3 Shard C — the
+    :class:`~kailash_ml.features.online_store.OnlineFeatureStore` Redis
+    adapter, ``specs/ml-feature-store.md §11.4a``). The adapter composes
+    ``redis.asyncio`` (the SDK's own Redis-client pattern, ``backends.py``);
+    a backend-down condition (connection refused, DNS failure, socket /
+    command timeout) is wrapped in this typed error rather than letting a
+    bare ``redis.ConnectionError`` / ``TimeoutError`` / ``OSError`` escape,
+    so online-serving call sites can ``except OnlineStoreUnavailableError``
+    and degrade to the offline ``FeatureStore.get_features`` read path
+    deterministically.
+
+    A ``FeatureStoreError`` subclass so existing ``except FeatureStoreError``
+    handlers keep catching it (``specs/ml-feature-store.md §6.2`` / §11.7).
+    The Redis URL carried in the raise-site message is masked
+    (``scheme://***@host:port/db``) so credentials embedded in the
+    connection string never reach a log line / aggregator
+    (``rules/observability.md`` Rule 6 + ``rules/security.md`` § "No
+    secrets in logs").
     """
 
 

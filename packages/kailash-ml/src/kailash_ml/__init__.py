@@ -648,6 +648,10 @@ def __getattr__(name: str):  # noqa: N807
         # (ctor ``FeatureStore(conn, *, table_prefix=...)``) remains importable
         # via its explicit module path — see ``packages/kailash-ml/MIGRATION.md``.
         "FeatureStore": "kailash_ml.features",
+        # FM2 Wave-3 Shard C — online serving tier (Redis); composed per-call
+        # with FeatureStore.materialize / serve_online. Lazy so a bare
+        # ``import kailash_ml`` never imports the optional redis dep.
+        "OnlineFeatureStore": "kailash_ml.features",
         "TrainingPipeline": "kailash_ml.engines.training_pipeline",
         # `InferenceServer` lazy-loaded from the canonical surface
         # `kailash_ml.serving.server` after W6-004 deleted the legacy

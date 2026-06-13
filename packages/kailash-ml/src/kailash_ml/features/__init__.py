@@ -18,6 +18,7 @@ from kailash_ml.features.decorators import FeatureDefinition, feature
 from kailash_ml.features.erasure import EraseTenantResult, erase_tenant
 from kailash_ml.features.feature_group import FeatureGroup, lookup_feature_group
 from kailash_ml.features.materialiser import FeatureMaterialiser, MaterializeResult
+from kailash_ml.features.online_store import OnlineFeatureStore
 from kailash_ml.features.registry import FeatureRegistry
 from kailash_ml.features.schema import FeatureField, FeatureSchema
 from kailash_ml.features.store import FeatureStore
@@ -33,6 +34,7 @@ __all__ = [
     "FeatureSchema",
     "FeatureStore",
     "MaterializeResult",
+    "OnlineFeatureStore",
     "erase_tenant",
     "feature",
     "lookup_feature_group",

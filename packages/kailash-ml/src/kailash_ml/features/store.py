@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     # as a wave peer but downstream callers may import FeatureStore on paths
     # that never touch DataFlow (e.g. type-only utility imports).
     from kailash_ml.features.feature_group import FeatureGroup
+    from kailash_ml.features.online_store import OnlineFeatureStore
 
     from dataflow.core.engine import DataFlow
 
@@ -281,6 +282,8 @@ class FeatureStore:
         data: pl.DataFrame,
         *,
         tenant_id: str | None = None,
+        online_store: "OnlineFeatureStore | None" = None,
+        online_ttl_seconds: int | None = None,
     ) -> Any:
         """Write-through a :class:`FeatureGroup`'s rows; register lineage.
 
@@ -289,6 +292,16 @@ class FeatureStore:
         (constructed internally from the bound ``self._df`` — NO new
         ``FeatureStore.__init__`` kwarg, per spec §11.6 / composition over
         constructor-flag bloat, ``rules/facade-manager-detection.md`` Rule 3).
+
+        When ``online_store`` is supplied (composition — spec §11.6 prefers a
+        per-call object over constructor-kwarg expansion), the materialised
+        redacted-safe frame is ALSO written through to the online serving tier
+        keyed by the SAME canonical tenant-scoped cache key (online/offline key
+        parity, spec §5 / §11.4a). The offline persist is the source of truth;
+        the online populate is best-effort feed-forward — if the online backend
+        is unreachable the :class:`~kailash_ml.errors.OnlineStoreUnavailableError`
+        propagates (fail-loud, ``rules/zero-tolerance.md`` Rule 3), it is NOT
+        swallowed, AFTER the offline rows have already been durably persisted.
 
         Computes the group's declared ``@feature`` derived columns on ``data``
         via the shipped ``dataflow.transform`` binding, persists the resulting
@@ -316,6 +329,15 @@ class FeatureStore:
             :class:`~kailash_ml.errors.TenantRequiredError`. A cross-tenant
             materialise raises
             :class:`~kailash_ml.errors.CrossTenantReadError`.
+        online_store:
+            Optional :class:`~kailash_ml.features.online_store.OnlineFeatureStore`.
+            When supplied, the redacted materialise frame is ALSO written through
+            to the online serving tier under the canonical tenant-scoped cache
+            key (online/offline parity, spec §11.4a). Composition, NOT a
+            constructor kwarg (spec §11.6).
+        online_ttl_seconds:
+            Optional per-call TTL (seconds) for the online write-through. Ignored
+            when ``online_store`` is ``None``.
 
         Per-row event-time is read from the schema's ``timestamp_column`` in
         ``data`` so a later :meth:`get_features` ``timestamp=T`` read is
@@ -328,6 +350,13 @@ class FeatureStore:
             ``frame`` (redacted persisted DataFrame), ``lineage_hash``,
             ``row_count``, ``group``, ``version``, ``tenant_id``,
             ``invalidation_pattern``.
+
+        Raises
+        ------
+        kailash_ml.errors.OnlineStoreUnavailableError
+            ``online_store`` was supplied but its backend is unreachable. The
+            offline rows ARE durably persisted before this propagates (the
+            online feed-forward is the failing leg).
         """
         effective_tenant = self._resolve_tenant(
             tenant_id, operation="FeatureStore.materialize"
@@ -338,11 +367,74 @@ class FeatureStore:
         from kailash_ml.features.materialiser import FeatureMaterialiser
 
         materialiser = FeatureMaterialiser(self._df)
-        return await materialiser.materialize(
+        result = await materialiser.materialize(
             group,
             data,
             tenant_id=effective_tenant,
         )
+
+        # Optional online write-through (composition, spec §11.6). The offline
+        # persist above is the source of truth and is already durable; the online
+        # populate keys on the SAME canonical cache key (online/offline parity,
+        # spec §11.4a). A backend-down condition raises
+        # OnlineStoreUnavailableError — fail-loud (zero-tolerance Rule 3), NOT
+        # swallowed; the offline rows survive.
+        if online_store is not None:
+            await online_store.populate(
+                group.schema,
+                result["frame"],
+                tenant_id=effective_tenant,
+                ttl_seconds=online_ttl_seconds,
+            )
+        return result
+
+    # ------------------------------------------------------------------
+    # Online serving (FM2 Shard C — composed adapter, not a kwarg)
+    # ------------------------------------------------------------------
+
+    async def serve_online(
+        self,
+        online_store: "OnlineFeatureStore",
+        schema: FeatureSchema,
+        entity_ids: list[str],
+        *,
+        tenant_id: str | None = None,
+    ) -> pl.DataFrame:
+        """Serve features from the online tier (low-latency point read).
+
+        Thin facade over the composed
+        :class:`~kailash_ml.features.online_store.OnlineFeatureStore` (passed in
+        per-call — composition over constructor-kwarg expansion, spec §11.6).
+        Delegates tenant resolution to the store's tenant policy, then reads the
+        online rows keyed by the canonical tenant-scoped cache key (online/offline
+        parity, spec §11.4a). Returns a ``polars.DataFrame`` with one row per
+        FOUND entity (a partial-hit serve is NOT an error).
+
+        Parameters
+        ----------
+        online_store:
+            The :class:`~kailash_ml.features.online_store.OnlineFeatureStore`
+            adapter to read through.
+        schema:
+            The :class:`FeatureSchema` being served.
+        entity_ids:
+            The entity identifiers to serve.
+        tenant_id:
+            Tenant scope; resolved via the store's tenant policy. Because the
+            online key embeds ``tenant_id``, a tenant-A serve never reads
+            tenant-B rows (``rules/tenant-isolation.md`` Rule 1/2).
+
+        Raises
+        ------
+        kailash_ml.errors.TenantRequiredError
+            ``tenant_id`` missing / invalid (and no store default).
+        kailash_ml.errors.OnlineStoreUnavailableError
+            The online backend is unreachable.
+        """
+        effective_tenant = self._resolve_tenant(
+            tenant_id, operation="FeatureStore.serve_online"
+        )
+        return await online_store.get(schema, entity_ids, tenant_id=effective_tenant)
 
     # ------------------------------------------------------------------
     # GDPR tenant erasure (FM2 Shard F — composed helper, not a kwarg)

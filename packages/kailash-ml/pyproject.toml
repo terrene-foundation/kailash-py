@@ -144,6 +144,12 @@ kaizen-judges = ["kailash-kaizen>=2.7.5"]
 kaizen-observability = ["kailash-kaizen>=2.7.5"]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
+# Online feature-serving tier (FM2 Wave-3 Shard C, specs/ml-feature-store.md
+# §11.4a). kailash_ml.features.OnlineFeatureStore composes redis.asyncio (the
+# SDK's own Redis-client pattern). Without [online-store], constructing an
+# OnlineFeatureStore raises a loud ImportError naming this extra per
+# rules/dependencies.md § "Optional Extras with Loud Failure" — NO silent None.
+online-store = ["redis>=6.2.0"]
 # RAG evaluation backends for kailash_ml.diagnostics.RAGDiagnostics.
 # Without [rag], evaluate() falls back to a pluggable JudgeCallable +
 # deterministic heuristic; ragas_scores() / trulens_scores() raise
@@ -224,6 +230,7 @@ markers = [
     "bench: Benchmark tests (performance)",
     "regression: Permanent regression tests (never delete; see rules/testing.md)",
     "invariant: Numeric/structural invariant guards (per rules/refactor-invariants.md)",
+    "online_store: Online feature-store (Redis) tests — live path needs REDIS_URL (FM2 Wave-3 Shard C)",
 ]
 # Scoped warning filters — each entry has a documented origin + disposition
 # per rules/observability.md MUST Rule 5. Unfiltered suite emits ~240
