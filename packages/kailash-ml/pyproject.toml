@@ -205,6 +205,15 @@ dev = [
     # 1.26 compat OR onnxruntime ships 1.26.x with the regression fixed.
     # Tracked as follow-up; see PR #909 commit message.
     "onnxruntime>=1.17,<1.26",
+    # tests/integration/test_online_store_and_reopen_wiring.py constructs
+    # OnlineFeatureStore at test time; its deterministic unavailable-path +
+    # masking + ResourceWarning tests need the `redis` driver IMPORTABLE (no
+    # live server — the live read-back tests skip on REDIS_URL). redis is the
+    # `[online-store]` production extra (online_store.py composes redis.asyncio);
+    # declared here too so the Base CI matrix (installs `[dev]`) runs these
+    # wiring tests instead of erroring at construction — `rules/dependencies.md`
+    # § "Declared = Imported" (same rationale as the pandas entry above).
+    "redis>=6.2.0",
 ]
 
 [project.scripts]
