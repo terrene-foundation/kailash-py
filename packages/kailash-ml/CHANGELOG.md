@@ -1,5 +1,52 @@
 # kailash-ml Changelog
 
+## [2.1.0] — 2026-06-13 — Feature-store M2: authoring, registry, materialize, GDPR erase (#1302)
+
+Minor release. Adds the M2 feature-store authoring + materialization + governance
+surfaces (FM2 Waves 1+2 of 3). Backward-compatible — purely additive public API; the
+2.0.0 canonical read surface (`FeatureStore.get_features`) is unchanged. Wave 3
+(online-store adapter + spec graduation closing #693) follows in a later release.
+
+### Added
+
+- **`@feature` decorator + public `FeatureGroup`** (`kailash_ml.features`, re-exported
+  from `kailash_ml`). `@feature` wraps a function returning a `polars.Expr` into a
+  frozen, content-addressed `FeatureDefinition` (declarative — no compute at decoration).
+  `FeatureGroup` is the user-facing authoring object (HAS-A `FeatureSchema`; satisfies
+  the `dataflow.ml_feature_source` duck-type via `.name` / `.multi_tenant` /
+  `.classification` / `.materialize`). Raises `FeatureGroupNotFoundError`.
+- **`FeatureRegistry`** (`kailash_ml.features.FeatureRegistry`) — DataFlow-backed durable
+  store of authored groups with **per-tenant version immutability** enforced two ways:
+  DB-level `UNIQUE(tenant_id, name, version)` (via `@db.model` auto-migrate) + content-hash
+  cross-check. Raises `FeatureVersionImmutableError` / `FeatureVersionNotFoundError` /
+  `FeatureEvolutionError`. Tenant-isolated; forward version-bump evolution via
+  `FeatureSchema.with_features(bump_version=True)`.
+- **`FeatureStore.materialize(group, data, *, tenant_id)`** + composed `FeatureMaterialiser`
+  — write-through materialization. Computes `@feature`-derived columns via `dataflow.transform`,
+  persists through DataFlow Express `upsert` against an auto-migrated `@db.model` (no raw SQL),
+  registers the dataset lineage hash via `dataflow.hash`. Idempotent re-materialise (deterministic
+  content-addressed row id); per-row event-time read from the schema `timestamp_column` for
+  point-in-time-correct reads. Cross-tenant materialise raises `CrossTenantReadError`; REDACT-classified
+  columns are redacted on the return frame while the backing store holds real values.
+- **`FeatureStore.erase_tenant(*, tenant_id=None, force=False)`** — GDPR tenant erasure. Deletes
+  every materialized feature-table row + every `FeatureRegistry` row for a tenant through DataFlow
+  Express (no raw SQL); fail-closed on partial erase (`FeatureStoreError` flagging PARTIAL ERASE,
+  never silent half-erase); reuses the canonical `ErasureRefusedError`; emits a tenant-fingerprinted
+  audit log line (no raw tenant id / PII). Idempotent re-erase returns zero counts.
+
+### Changed
+
+- **`kailash-dataflow` dependency floor `>=2.0.11` → `>=2.11.3`.** `FeatureStore.materialize` /
+  `get_features` route through `dataflow.transform` / `dataflow.hash` / `ml_feature_source`
+  (in `dataflow.ml`), which ship in kailash-dataflow 2.11.3. Installing kailash-ml 2.1.0
+  against an older dataflow would fail at materialize/read time.
+
+### Notes
+
+- Tenant scope is **fingerprinted** (never raw) on every feature-store log + exception surface
+  (observability Rule 4/8). Wave-2 redteam converged over 2 consecutive clean rounds (reviewer +
+  security-reviewer). 66 feature-store integration tests + 146 unit tests pass.
+
 ## [2.0.1] — 2026-06-08 — `kailash-kaizen` floor consistency (#1183)
 
 Patch release. **No source changes** — diff is strictly `pyproject.toml` dependency-floor edits + `__version__` anchor + this CHANGELOG entry.
