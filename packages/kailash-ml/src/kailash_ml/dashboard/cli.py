@@ -29,6 +29,8 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from kailash.utils.url_credentials import mask_url
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["main", "build_parser", "run"]
@@ -278,7 +280,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             "tenant_id": args.tenant_id,
             "enable_control": args.enable_control,
             "auth_configured": args.auth is not None,
-            "db_url": _mask_db_url(db_url),
+            "db_url": mask_url(db_url),
         },
     )
 
@@ -365,30 +367,3 @@ def main() -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _mask_db_url(db_url: str) -> str:
-    """Mask credentials in DB URL for log lines per rules/observability.md §6."""
-    try:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(db_url)
-    except Exception:
-        return "<unparseable db url>"
-
-    if not parsed.scheme:
-        return "<unparseable db url>"
-
-    if parsed.hostname is None and not parsed.path:
-        return "<unparseable db url>"
-
-    host = parsed.hostname or ""
-    port = f":{parsed.port}" if parsed.port else ""
-    path = parsed.path or ""
-    # SQLite URLs have no userinfo — return verbatim path for them
-    if parsed.scheme.startswith("sqlite"):
-        return db_url
-    # Mask userinfo uniformly (***@host) so credentials never land in logs
-    if parsed.username or parsed.password:
-        return f"{parsed.scheme}://***@{host}{port}{path}"
-    return f"{parsed.scheme}://{host}{port}{path}"

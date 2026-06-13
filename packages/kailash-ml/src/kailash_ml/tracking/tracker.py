@@ -46,6 +46,8 @@ from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.runner import track as _track_async
 from kailash_ml.tracking.storage import AbstractTrackerStore, SqliteTrackerStore
 
+from kailash.utils.url_credentials import mask_url
+
 __all__ = ["ExperimentTracker"]
 
 
@@ -148,7 +150,7 @@ class ExperimentTracker:
         logger.info(
             "kailash_ml.tracker.ready",
             extra={
-                "store_url": _mask_url(resolved),
+                "store_url": mask_url(resolved),
                 "default_tenant_id": default_tenant_id,
             },
         )
@@ -738,23 +740,3 @@ def _runs_dataframe(rows: list[dict[str, Any]]) -> "Any":
         )
     projected = [{col: row.get(col) for col in _RUN_DATAFRAME_COLUMNS} for row in rows]
     return pl.DataFrame(projected)
-
-
-def _mask_url(url: str) -> str:
-    """Mask credentials in a store URL for structured logging.
-
-    SQLite URLs are returned as-is (no credentials). Network URLs
-    get their userinfo collapsed to ``***``.
-    """
-    if url.startswith("sqlite"):
-        return url
-    try:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(url)
-        if not parsed.scheme or not parsed.hostname:
-            return "<unparseable store url>"
-        port = f":{parsed.port}" if parsed.port else ""
-        return f"{parsed.scheme}://***@{parsed.hostname}{port}{parsed.path}"
-    except Exception:
-        return "<unparseable store url>"
