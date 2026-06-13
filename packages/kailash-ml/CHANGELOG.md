@@ -1,5 +1,25 @@
 # kailash-ml Changelog
 
+## [2.1.1] — 2026-06-13 — Fix core dependency floor (feature-store error classes)
+
+Patch release. Corrects the `kailash` dependency floor so the feature-store
+surface installs and imports correctly.
+
+### Fixed
+
+- **`kailash>=2.30.0` dependency floor** (was `kailash>=2.16.0`). The 2.1.0
+  feature-store surface re-exports the ML error hierarchy from
+  `kailash.ml.errors` (via `kailash_ml/errors.py`), including the feature-store
+  subclasses `FeatureStoreError`, `FeatureGroupNotFoundError`,
+  `FeatureVersionImmutableError`, `FeatureVersionNotFoundError`,
+  `FeatureEvolutionError`, `CrossTenantReadError`, `UnsupportedFamily`, and
+  `UnsupportedPrecision`. Those classes were added to core by the FM2 Wave 1+2
+  merge and first published in **`kailash` 2.30.0** — which was released after
+  `kailash-ml` 2.1.0. With the old `>=2.16.0` floor, `pip install
+  kailash-ml==2.1.0` against any core in `[2.16.0, 2.29.4]` raised `ImportError`
+  on first touch of the feature store. The corrected floor pins the version that
+  actually carries the symbols. (`kailash-ml` 2.1.0 is yanked from PyPI.)
+
 ## [2.1.0] — 2026-06-13 — Feature-store M2: authoring, registry, materialize, GDPR erase (#1302)
 
 Minor release. Adds the M2 feature-store authoring + materialization + governance
