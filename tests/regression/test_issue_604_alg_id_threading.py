@@ -40,10 +40,28 @@ from kailash.trust.pact.envelopes import (
     sign_envelope,
 )
 from kailash.trust.signing.algorithm_id import (
+    ADOPTION_DATE,
     DEPRECATED_PRE_REGISTRY_LITERAL,
+    D2dWitness,
     resolve_dispatch,
 )
 from kailash.trust.signing.crypto import generate_keypair
+
+# A witness whose witnessed/head dates are strictly BEFORE the pinned
+# adoption date (2026-04-26). This is what D2d requires to accept a
+# pre-registry explicit form as eatp-v1.
+_PRE_ADOPTION_WITNESS = D2dWitness(
+    witnessed_at=datetime(2026, 3, 1, tzinfo=UTC),
+    chain_head_date=datetime(2026, 3, 1, tzinfo=UTC),
+    principal="D1-R1",
+)
+
+# A witness dated ON the adoption date — must be REJECTED (not strictly before).
+_POST_ADOPTION_WITNESS = D2dWitness(
+    witnessed_at=datetime(2026, 4, 26, tzinfo=UTC),
+    chain_head_date=datetime(2026, 4, 26, tzinfo=UTC),
+    principal="D1-R1",
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -287,22 +305,23 @@ def test_signed_envelope_from_dict_reserved_token_decodes_but_undispatchable(
 
 @pytest.mark.regression
 def test_signed_envelope_from_dict_d2d_bare_literal(signed):
-    """EATP-08 §4.5 (D2d): bare deprecated literal maps to eatp-v1 on the
-    legacy path."""
+    """EATP-08 §4.5 (D2d): bare deprecated literal maps to eatp-v1 ONLY with a
+    pre-adoption witness."""
 
     payload = signed.to_dict()
     payload["alg_id"] = DEPRECATED_PRE_REGISTRY_LITERAL
-    reconstructed = SignedEnvelope.from_dict(payload, legacy_path=True)
+    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
     assert reconstructed.alg_id == "eatp-v1"
 
 
 @pytest.mark.regression
 def test_signed_envelope_from_dict_d2d_nested_form(signed):
-    """D2d: the nested {"algorithm": "ed25519+sha256"} form maps to eatp-v1."""
+    """D2d: the nested {"algorithm": "ed25519+sha256"} form maps to eatp-v1
+    with a pre-adoption witness."""
 
     payload = signed.to_dict()
     payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
-    reconstructed = SignedEnvelope.from_dict(payload, legacy_path=True)
+    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
     assert reconstructed.alg_id == "eatp-v1"
 
 
@@ -311,14 +330,83 @@ def test_signed_envelope_from_dict_d2d_unsigned_metadata_form(signed):
     """D2d: the unsigned top-level `algorithm` metadata form maps to eatp-v1.
 
     This is kailash-py's historical no-`alg_id` shape (the algorithm rode in
-    unsigned caller metadata under `algorithm`); D2d rescues it on the
-    bounded legacy path (per the spec's py/rs asymmetry note)."""
+    unsigned caller metadata under `algorithm`); D2d rescues it ONLY with a
+    pre-adoption witness (per the spec's py/rs asymmetry note)."""
 
     payload = signed.to_dict()
     payload.pop("alg_id")
     payload["algorithm"] = DEPRECATED_PRE_REGISTRY_LITERAL
-    reconstructed = SignedEnvelope.from_dict(payload, legacy_path=True)
+    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
     assert reconstructed.alg_id == "eatp-v1"
+
+
+# ---------------------------------------------------------------------------
+# D2d witness gate (EATP-08 §4.5 / §4.3.2): dated + witnessed enforcement.
+# ADOPTION_DATE (2026-04-26) is now CONSUMED in the temporal comparison; the
+# bare boolean legacy channel is gone.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_d2d_pre_adoption_witnessed_legacy_record_accepted(signed):
+    """(a) A pre-adoption witnessed legacy record is accepted as eatp-v1."""
+
+    assert ADOPTION_DATE == "2026-04-26"
+    payload = signed.to_dict()
+    payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
+    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
+    assert reconstructed.alg_id == "eatp-v1"
+
+
+@pytest.mark.regression
+def test_d2d_on_or_after_adoption_witness_rejected(signed):
+    """(b) A legacy record dated ON/after 2026-04-26 is REJECTED (no downgrade).
+
+    The witness date equals the adoption date; the gate requires *strictly
+    before*, so it MUST fail with implicit-v1-witness-failure rather than
+    accept the deprecated form as eatp-v1.
+    """
+
+    payload = signed.to_dict()
+    payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        SignedEnvelope.from_dict(payload, witness=_POST_ADOPTION_WITNESS)
+    assert exc.value.code == "implicit-v1-witness-failure"
+
+
+@pytest.mark.regression
+def test_d2d_legacy_record_with_no_witness_rejected(signed):
+    """(c) A legacy record with NO witness is REJECTED.
+
+    Passing the deprecated/nested form without a witness MUST NOT downgrade to
+    eatp-v1; the strict default rejects it (the deprecated form lands on the
+    shape-mismatch rejection since no witness opens the D2d gate)."""
+
+    payload = signed.to_dict()
+    payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        SignedEnvelope.from_dict(payload)  # no witness
+    assert exc.value.code == "alg-id-shape-mismatch"
+
+    # The unsigned-metadata-only legacy shape with no witness is a
+    # post-adoption record missing its alg_id (D2b), also rejected.
+    payload2 = signed.to_dict()
+    payload2.pop("alg_id")
+    payload2["algorithm"] = DEPRECATED_PRE_REGISTRY_LITERAL
+    with pytest.raises(UnsupportedAlgorithmError) as exc2:
+        SignedEnvelope.from_dict(payload2)  # no witness
+    assert exc2.value.code == "missing-alg-id-post-adoption"
+
+
+@pytest.mark.regression
+def test_strict_default_rejects_missing_alg_id_post_adoption(signed):
+    """(d) The strict default path rejects a bare missing alg_id post-adoption."""
+
+    payload = signed.to_dict()
+    payload.pop("alg_id")
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        SignedEnvelope.from_dict(payload)  # strict default, no witness
+    assert exc.value.code == "missing-alg-id-post-adoption"
 
 
 # ---------------------------------------------------------------------------

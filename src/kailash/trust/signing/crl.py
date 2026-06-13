@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dWitness,
     coerce_algorithm_id,
     decode_wire_alg_id,
     resolve_dispatch,
@@ -156,19 +157,21 @@ class CRLMetadata:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, legacy_path: bool = False
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
     ) -> "CRLMetadata":
         """Deserialize from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
         Post-adoption: the dict MUST carry a top-level ``alg_id`` string
         token; a missing/empty value raises ``missing-alg-id-post-adoption``
-        (NOT silently defaulted). On the bounded ``legacy_path=True`` (the
-        D2d dated/witnessed gate is the caller's responsibility), a
-        pre-registry explicit form maps to ``eatp-v1``.
+        (NOT silently defaulted). Legacy acceptance of a pre-registry explicit
+        form requires a :class:`D2dWitness` whose witnessed/head date is
+        strictly before :data:`ADOPTION_DATE` (§4.5); otherwise the form is
+        rejected with ``implicit-v1-witness-failure`` (no downgrade).
 
         Args:
             data: Dictionary with CRLMetadata fields
-            legacy_path: True only after the D2d dated/witnessed gate is met.
+            witness: A :class:`D2dWitness` only when rescuing a pre-registry
+                legacy record; ``None`` (default) means strict.
 
         Returns:
             CRLMetadata instance
@@ -176,7 +179,7 @@ class CRLMetadata:
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
+        alg_id = decode_wire_alg_id(data, witness=witness)
         return cls(
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],

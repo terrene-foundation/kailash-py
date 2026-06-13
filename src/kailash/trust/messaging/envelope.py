@@ -19,7 +19,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from kailash.trust.signing.algorithm_id import ALGORITHM_DEFAULT, decode_wire_alg_id
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    D2dWitness,
+    decode_wire_alg_id,
+)
 
 
 @dataclass
@@ -262,7 +266,7 @@ class SecureMessageEnvelope:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, legacy_path: bool = False
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
     ) -> "SecureMessageEnvelope":
         """
         Deserialize envelope from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
@@ -270,11 +274,14 @@ class SecureMessageEnvelope:
         The top-level ``alg_id`` registry token is decoded under the D2b/D2d
         regime: a missing/empty value raises ``missing-alg-id-post-adoption``
         on the post-adoption path; a pre-registry explicit form maps to
-        ``eatp-v1`` only on the bounded ``legacy_path=True``.
+        ``eatp-v1`` only when a :class:`D2dWitness` whose witnessed/head date
+        is strictly before :data:`ADOPTION_DATE` is supplied (§4.5),
+        otherwise it is rejected with ``implicit-v1-witness-failure``.
 
         Args:
             data: Dictionary representation of the envelope.
-            legacy_path: True only after the D2d dated/witnessed gate is met.
+            witness: A :class:`D2dWitness` only when rescuing a pre-registry
+                legacy record; ``None`` (default) means strict.
 
         Returns:
             SecureMessageEnvelope instance.
@@ -290,7 +297,7 @@ class SecureMessageEnvelope:
         if data.get("metadata"):
             metadata = MessageMetadata.from_dict(data["metadata"])
 
-        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
+        alg_id = decode_wire_alg_id(data, witness=witness)
 
         return cls(
             message_id=data["message_id"],

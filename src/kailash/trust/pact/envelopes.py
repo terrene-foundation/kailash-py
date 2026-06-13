@@ -39,6 +39,7 @@ from kailash.trust.pathutils import normalize_resource_path
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dWitness,
     UnsupportedAlgorithmError,
     coerce_algorithm_id,
     decode_wire_alg_id,
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ALGORITHM_DEFAULT",
     "AlgorithmIdentifier",
+    "D2dWitness",
     "UnsupportedAlgorithmError",
     "EffectiveEnvelopeSnapshot",
     "MonotonicTighteningError",
@@ -1331,28 +1333,32 @@ class SignedEnvelope:
 
     @classmethod
     def from_dict(
-        cls, data: dict[str, Any], *, legacy_path: bool = False
+        cls, data: dict[str, Any], *, witness: D2dWitness | None = None
     ) -> SignedEnvelope:
         """Deserialize from a dict (EATP-08 §4.2 D2b / §4.5 D2d).
 
-        - **Post-adoption path (default)**: the dict MUST carry a top-level
-          ``alg_id`` string token. A missing/empty ``alg_id`` is NOT
-          silently defaulted (the E6 defect the v1.1 erratum closes): it
-          raises :class:`UnsupportedAlgorithmError`
+        - **Post-adoption path (default, ``witness=None``)**: the dict MUST
+          carry a top-level ``alg_id`` string token. A missing/empty
+          ``alg_id`` is NOT silently defaulted (the E6 defect the v1.1
+          erratum closes): it raises :class:`UnsupportedAlgorithmError`
           (``missing-alg-id-post-adoption``). An unregistered token raises
           ``unsupported-algorithm``; a malformed value raises
           ``alg-id-shape-mismatch``.
-        - **Bounded legacy path (``legacy_path=True``)**: a caller that has
-          satisfied the D2d dated/witnessed gate (§4.5) accepts a
-          pre-registry explicit form — the deprecated literal
-          ``ed25519+sha256`` (top-level, nested ``{"algorithm": ...}``, or
-          carried only under an unsigned ``algorithm`` key) — mapping it to
-          ``eatp-v1`` and logging the acceptance. The reconstructed envelope
-          re-emits the ``eatp-v1`` token.
+        - **Bounded legacy path (``witness`` supplied)**: a caller rescuing a
+          pre-registry explicit form passes a :class:`D2dWitness`. Acceptance
+          as ``eatp-v1`` happens ONLY when the witness is present AND its
+          witnessed/head date is strictly before :data:`ADOPTION_DATE`
+          (§4.5); a witness dated on/after adoption raises
+          ``implicit-v1-witness-failure`` and does NOT downgrade. The
+          recognised forms are the deprecated literal ``ed25519+sha256``
+          (top-level, nested ``{"algorithm": ...}``, or carried only under an
+          unsigned ``algorithm`` key); on acceptance the envelope re-emits the
+          ``eatp-v1`` token.
 
         Args:
             data: Dict as produced by ``to_dict()``.
-            legacy_path: True only after the D2d dated/witnessed gate is met.
+            witness: A :class:`D2dWitness` only when rescuing a pre-registry
+                legacy record; ``None`` (default) means strict.
 
         Returns:
             A SignedEnvelope instance carrying a registry token.
@@ -1361,13 +1367,13 @@ class SignedEnvelope:
             KeyError: If required fields other than ``alg_id`` are missing.
             ValueError: If field values are invalid.
             UnsupportedAlgorithmError: ``missing-alg-id-post-adoption``,
-                ``alg-id-shape-mismatch``, or ``unsupported-algorithm`` per
-                EATP-08 §5.3.
+                ``alg-id-shape-mismatch``, ``unsupported-algorithm``, or
+                ``implicit-v1-witness-failure`` per EATP-08 §5.3.
         """
         # Decode + validate alg_id BEFORE other field parsing so a
         # non-conformant token fails loudly rather than paying the cost of
         # envelope reconstruction.
-        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
+        alg_id = decode_wire_alg_id(data, witness=witness)
 
         envelope = ConstraintEnvelopeConfig(**data["envelope"])
 

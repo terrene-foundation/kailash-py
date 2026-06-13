@@ -13,9 +13,7 @@ Tests the timestamp anchoring implementation for trust chain hashes:
 
 import asyncio
 import hashlib
-import time
 from datetime import datetime, timezone
-from unittest.mock import patch
 
 import pytest
 from kailash.trust.signing.merkle import MerkleTree
@@ -451,7 +449,7 @@ class TestTimestampAnchorManager:
 
         # Create a failing primary
         class FailingAuthority(LocalTimestampAuthority):
-            async def get_timestamp(self, hash_value, nonce=None):
+            async def get_timestamp(self, hash_value, nonce=None, *, alg_id=None):
                 raise RuntimeError("Primary failed")
 
         primary = FailingAuthority()
@@ -469,7 +467,7 @@ class TestTimestampAnchorManager:
         """TimestampAnchorManager uses local when all fail."""
 
         class FailingAuthority(LocalTimestampAuthority):
-            async def get_timestamp(self, hash_value, nonce=None):
+            async def get_timestamp(self, hash_value, nonce=None, *, alg_id=None):
                 raise RuntimeError("Failed")
 
         primary = FailingAuthority()
@@ -490,7 +488,7 @@ class TestTimestampAnchorManager:
         """TimestampAnchorManager raises when all fail without local fallback."""
 
         class FailingAuthority(LocalTimestampAuthority):
-            async def get_timestamp(self, hash_value, nonce=None):
+            async def get_timestamp(self, hash_value, nonce=None, *, alg_id=None):
                 raise RuntimeError("Failed")
 
         primary = FailingAuthority()

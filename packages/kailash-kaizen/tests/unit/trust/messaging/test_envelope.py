@@ -13,7 +13,6 @@ Note: These are unit tests (Tier 1), no external dependencies.
 import json
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
 
 
@@ -145,6 +144,7 @@ class TestSecureMessageEnvelope:
             metadata=metadata,
         )
 
+        assert envelope.metadata is not None
         assert envelope.metadata.priority == "high"
 
     def test_get_signing_payload_returns_bytes(self):
@@ -283,6 +283,8 @@ class TestSecureMessageEnvelope:
         assert restored.sender_agent_id == original.sender_agent_id
         assert restored.payload == original.payload
         assert restored.nonce == original.nonce
+        assert restored.metadata is not None
+        assert original.metadata is not None
         assert restored.metadata.priority == original.metadata.priority
 
     def test_to_json_returns_string(self):

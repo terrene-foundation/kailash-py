@@ -49,6 +49,7 @@ from uuid import uuid4
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dWitness,
     UnsupportedAlgorithmError,
     coerce_algorithm_id,
     decode_wire_alg_id,
@@ -144,20 +145,21 @@ class TimestampToken:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, legacy_path: bool = False
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
     ) -> "TimestampToken":
         """Deserialize token from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
         Post-adoption: the dict MUST carry a top-level ``alg_id`` string
         token; a missing/empty value raises ``missing-alg-id-post-adoption``.
-        On the bounded ``legacy_path=True`` (the D2d dated/witnessed gate is
-        the caller's responsibility), a pre-registry explicit form maps to
-        ``eatp-v1``.
+        Legacy acceptance of a pre-registry explicit form requires a
+        :class:`D2dWitness` whose witnessed/head date is strictly before
+        :data:`ADOPTION_DATE` (§4.5); otherwise the form is rejected with
+        ``implicit-v1-witness-failure`` (no downgrade).
 
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
+        alg_id = decode_wire_alg_id(data, witness=witness)
         return cls(
             token_id=data["token_id"],
             hash_value=data["hash_value"],
@@ -240,13 +242,15 @@ class TimestampResponse:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, legacy_path: bool = False
+        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
     ) -> "TimestampResponse":
         """Deserialize response from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
         The top-level ``alg_id`` is the signing-algorithm registry token,
-        decoded under the D2b/D2d regime. The nested ``request.algorithm``
-        retains its original semantics (hash algorithm; sha256).
+        decoded under the D2b/D2d regime (legacy acceptance requires a dated
+        :class:`D2dWitness` strictly before :data:`ADOPTION_DATE`, §4.5). The
+        nested ``request.algorithm`` retains its original semantics (hash
+        algorithm; sha256).
 
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
@@ -258,11 +262,11 @@ class TimestampResponse:
             requested_at=datetime.fromisoformat(request_data["requested_at"]),
             algorithm=request_data.get("algorithm", "sha256"),
         )
-        token = TimestampToken.from_dict(data["token"], legacy_path=legacy_path)
+        token = TimestampToken.from_dict(data["token"], witness=witness)
         raw_response = (
             bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
         )
-        alg_id = decode_wire_alg_id(data, legacy_path=legacy_path)
+        alg_id = decode_wire_alg_id(data, witness=witness)
         return cls(
             request=request,
             token=token,
