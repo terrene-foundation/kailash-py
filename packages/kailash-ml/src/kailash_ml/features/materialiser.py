@@ -54,6 +54,8 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from kailash_ml.errors import fingerprint_classified_value
+from kailash_ml.features._model_registration import DTYPE_TO_PYTYPE as _DTYPE_TO_PYTYPE
+from kailash_ml.features._model_registration import ensure_feature_model_registered
 from kailash_ml.features.cache_keys import (
     make_feature_group_wildcard,
     validate_tenant_id,
@@ -68,27 +70,10 @@ __all__ = ["FeatureMaterialiser", "MaterializeResult"]
 
 logger = logging.getLogger(__name__)
 
-# Polars dtype string -> Python annotation type for dynamic @db.model field
-# declaration. The backing table is created by DataFlow auto_migrate from these
-# annotations; only the coarse Python type matters for DDL (DataFlow maps to the
-# dialect column type). Unknown dtypes fall back to str (safe, never silently
-# drops a column).
-_DTYPE_TO_PYTYPE: dict[str, type] = {
-    "int8": int,
-    "int16": int,
-    "int32": int,
-    "int64": int,
-    "uint8": int,
-    "uint16": int,
-    "uint32": int,
-    "uint64": int,
-    "float32": float,
-    "float64": float,
-    "bool": bool,
-    "utf8": str,
-    "string": str,
-    "datetime": datetime,
-}
+# Dynamic @db.model dtype map is the SINGLE source in
+# kailash_ml.features._model_registration (shared by the write + read self-heal
+# paths so both register byte-identical models — journal/0004 disposition (a)).
+# Aliased above as _DTYPE_TO_PYTYPE for the derived-column annotations below.
 
 
 class MaterializeResult(dict):
@@ -507,43 +492,20 @@ class FeatureMaterialiser:
         features) plus a content-addressed ``id`` primary key. DataFlow
         ``auto_migrate`` emits the ``CREATE TABLE`` — NO inline DDL, NO raw SQL
         (``rules/schema-migration.md`` Rule 1, ``rules/framework-first.md``).
+
+        Delegates the model-shape derivation + cross-instance registration to the
+        shared :func:`ensure_feature_model_registered` helper (the SAME helper the
+        read self-heal uses, so write + read register byte-identical models —
+        journal/0004 disposition (a)). The local ``_models_ready`` set is a
+        fast-path cache for repeated calls on one materialiser instance.
         """
         model_name = group.name
-        df = self._df
-
-        # Idempotency across materialiser INSTANCES: model registration is
-        # per-DataFlow-instance, and FeatureStore.materialize constructs a fresh
-        # FeatureMaterialiser per call. Consult the DataFlow registry of record
-        # (``_models``) — not just this instance's cache — so a re-materialise on
-        # a new materialiser over the SAME DataFlow does not re-register (which
-        # DataFlow rejects with "Model already registered"). The local set is the
-        # fast-path cache for repeated calls on one instance.
         if model_name in self._models_ready:
             return
-        if model_name in getattr(df, "_models", {}):
-            self._models_ready.add(model_name)
-            df._ensure_connected()
-            return
-
-        schema = group.schema
-
-        # Build the field annotations for the dynamic model. id (PK str) first,
-        # then entity_id, timestamp, declared fields, derived feature columns.
-        annotations: dict[str, type] = {"id": str, schema.entity_id_column: str}
-        if schema.timestamp_column is not None:
-            annotations[schema.timestamp_column] = datetime
-        for fld in schema.fields:
-            annotations[fld.name] = _DTYPE_TO_PYTYPE.get(fld.dtype, str)
-        for definition in group.features:
-            annotations[definition.name] = _DTYPE_TO_PYTYPE.get(definition.dtype, str)
-
-        # Construct the model class dynamically so the backing table matches the
-        # authored schema (mirrors registry._ensure_model's dynamic @df.model).
-        model_cls = type(model_name, (), {"__annotations__": annotations})
-        df.model(model_cls)
-
-        # auto_migrate creates the table on first connect.
-        df._ensure_connected()
+        # Derived @feature columns are write-path-only context the read path does
+        # not have; pass them so the materialise table is created wide.
+        extra = {d.name: _DTYPE_TO_PYTYPE.get(d.dtype, str) for d in group.features}
+        ensure_feature_model_registered(self._df, group.schema, extra_columns=extra)
         self._models_ready.add(model_name)
 
     # ------------------------------------------------------------------

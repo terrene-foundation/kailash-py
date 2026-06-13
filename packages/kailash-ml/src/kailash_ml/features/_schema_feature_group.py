@@ -205,6 +205,22 @@ class SchemaFeatureGroup:
         ts_col = schema.timestamp_column
         filter_spec: dict[str, Any] = {}
 
+        # Self-heal (journal/0004 disposition (a)): the materialiser registers the
+        # backing dynamic @db.model only in ITS OWN DataFlow instance. A FRESH
+        # FeatureStore over the same SQLite file (separate serving process, or a
+        # reconstruction) has NOT registered the model, so express_sync.list would
+        # raise FeatureSourceError("Node ...ListNode not found. Ensure model '...'
+        # is registered"). Re-register the model on demand from the schema before
+        # reading — idempotent + cross-instance-safe; auto_migrate never re-creates
+        # an existing table, so this binds the node without disturbing data. Tenant
+        # isolation is unchanged (the model carries no tenant column; scoping rides
+        # on DataFlow's context-bound multi-tenancy at read time).
+        from kailash_ml.features._model_registration import (
+            ensure_feature_model_registered,
+        )
+
+        ensure_feature_model_registered(self._df, schema)
+
         if ts_col is not None:
             ts_bounds: dict[str, Any] = {}
             # point_in_time supersedes since/until (the store's MUST-5 contract;

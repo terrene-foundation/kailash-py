@@ -319,13 +319,9 @@ Three subclasses of `FeatureStoreError` exist in `errors.py:632-643` but are NOT
 
 These typed exceptions are part of the M2 surface (see § 11). The 1.0+ FeatureStore does NOT raise them — feature-not-found at the polars-binding level surfaces as a `FeatureStoreError` wrapper with the original exception preserved via `from exc`. Downstream code that catches `FeatureStoreError` will continue to catch the M2 subclasses once the wiring lands; but downstream code MUST NOT today `try/except` against `FeatureNotFoundError` etc. expecting it to surface from `kailash_ml.features.FeatureStore` — those paths do not raise these classes today.
 
-### 6.3 NOT Defined Anywhere — Do Not Reference
+### 6.3 Online-Store Unavailability
 
-The following class does NOT appear in `src/kailash/ml/errors.py`; downstream code MUST NOT `try/except` against it.
-
-`OnlineStoreUnavailableError`.
-
-This is an M2 placeholder to be defined IF and WHEN the corresponding surface (online store adapter) ships — see § 11.4a. (`CrossTenantReadError` shipped FM2 Wave-2 Shard B at `errors.py:736`; it is a defined, catchable `FeatureStoreError` subclass — see § 11.7.)
+`OnlineStoreUnavailableError` HAS shipped (FM2 Wave-3 Shard C): a `FeatureStoreError` subclass in `src/kailash/ml/errors.py` (re-exported from `kailash_ml.errors`), raised by the Redis `OnlineFeatureStore` adapter (`packages/kailash-ml/src/kailash_ml/features/online_store.py`, § 11.4a) when the online backend is unreachable. Downstream serving code MAY `try/except` against it to degrade to the offline `FeatureStore.get_features` read path. (`CrossTenantReadError` shipped FM2 Wave-2 Shard B at `errors.py:736`; it is a defined, catchable `FeatureStoreError` subclass — see § 11.7.)
 
 `FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A): a `FeatureStoreError` subclass at `src/kailash/ml/errors.py:673` (re-exported from `kailash_ml.errors`), raised by `kailash_ml.features.feature_group.lookup_feature_group` when a group name is absent. Downstream code MAY `try/except` against it.
 
@@ -514,7 +510,7 @@ Tier-2 wiring: `packages/kailash-ml/tests/integration/test_feature_registry.py` 
 
 V1 specified online-store backends (Redis, DynamoDB) + retention policies + GDPR `erase_tenant`.
 
-The **GDPR eraser** HAS shipped (FM2 Wave-2 Shard F). The online-store backends + retention policies remain deferred (see § 11.4a).
+The **GDPR eraser** HAS shipped (FM2 Wave-2 Shard F). A Redis **online-store backend** HAS shipped (FM2 Wave-3 Shard C; see § 11.4a). Retention policies remain deferred (§ 11.4a).
 
 `FeatureStore.erase_tenant(*, tenant_id=None, force=False)` (`packages/kailash-ml/src/kailash_ml/features/store.py:351`) is a thin facade that delegates to the composed `erase_tenant` helper (`packages/kailash-ml/src/kailash_ml/features/erasure.py:241`), constructed internally from the bound `self._df` — NO new `FeatureStore.__init__` kwarg (§ 11.6). Erasure deletes, for the given tenant: (a) every materialized feature-table row persisted by `FeatureMaterialiser`, AND (b) every `FeatureRegistry` row — through DataFlow Express (`express.list` + `express.delete`, NO raw SQL). The `FeatureRegistry` table (`KmlFeatureRegistry`, carrying an explicit `tenant_id` column) is the authoritative per-tenant INDEX of which feature tables a tenant has; erasure reads it, deletes each registered feature table's tenant rows, then deletes the registry rows. Materialized rows are tenant-scoped WITHOUT a tenant column by re-deriving each candidate row's deterministic content-addressed `id = sha256(tenant, group, version, entity_id, timestamp)[:32]` from its `entity_id` / `timestamp` columns + the registry-known `(tenant, name, version)` and deleting only the rows whose stored `id` matches — a sibling tenant's row yields a different derived id and is left intact.
 
@@ -522,11 +518,17 @@ Erasure REUSES the canonical `ErasureRefusedError` (`src/kailash/ml/errors.py:47
 
 Tier-2 wiring: `packages/kailash-ml/tests/integration/test_feature_store_erase_tenant_wiring.py` (7 tests — tenant-scoped delete + sibling intact, sibling-still-readable, idempotent re-erase, audit-log emission, refusal via reused `ErasureRefusedError` + `force` bypass, invalid-tenant refusal, fail-closed on partial delete).
 
-### 11.4a Storage / Retention (online backends still deferred)
+### 11.4a Storage / Retention (Redis online backend shipped; DynamoDB + retention deferred)
 
-1.0+ ships NO online-store backend. The cache-key helpers in § 5 produce keys SUITABLE for a Redis backend, and `erase_tenant` returns the per-tenant `invalidation_patterns` an online-store eviction would consume, but no Redis/DynamoDB adapter is shipped at the FeatureStore layer.
+A Redis **online serving tier** HAS shipped (FM2 Wave-3 Shard C). `OnlineFeatureStore` (`packages/kailash-ml/src/kailash_ml/features/online_store.py`, exported from `kailash_ml.features` and reachable as `kailash_ml.OnlineFeatureStore`) is a Redis-backed key/value adapter composing `redis.asyncio` — the SDK's own Redis-client pattern (`src/kailash/events/backends.py::RedisStreamsEventBackend`), NOT a hand-rolled pool (`rules/framework-first.md`). Every entry is keyed via the SAME canonical `make_feature_cache_key` (§ 5.1) the offline cache key uses, so an offline write and an online write for the same `(tenant, schema, version, entity)` land on a byte-identical key — online/offline parity by reuse, not re-derivation.
 
-**M2 disposition:** Defer. When the FeatureStore lands a registry-backed online surface, `erase_tenant`'s `invalidation_patterns` is the eviction contract that online surface plumbs through.
+`OnlineFeatureStore.populate(schema, frame, *, tenant_id, ttl_seconds=None)` (`online_store.py`) writes one Redis `SET` per entity row; `OnlineFeatureStore.get(schema, entity_ids, *, tenant_id)` (`online_store.py`) is the low-latency point read returning a `polars.DataFrame` of the FOUND entities (a partial-hit serve is NOT an error). Because the key embeds `tenant_id` (validated by `make_feature_cache_key` → `TenantRequiredError` on a missing/forbidden tenant), a tenant-A serve never reads tenant-B rows (`rules/tenant-isolation.md` Rule 1/2). The write-through is **composition** (§ 11.6): `FeatureStore.materialize(group, data, *, tenant_id, online_store=None, online_ttl_seconds=None)` (`store.py::FeatureStore.materialize`) optionally feeds the materialised frame forward to the online tier AFTER the offline rows are durably persisted; `FeatureStore.serve_online(online_store, schema, entity_ids, *, tenant_id)` (`store.py::FeatureStore.serve_online`) is the read facade.
+
+A backend-down condition (connection refused / DNS failure / socket-or-command timeout) raises the typed `OnlineStoreUnavailableError` (`src/kailash/ml/errors.py`, a `FeatureStoreError` subclass; re-exported from `kailash_ml.errors`) — never a bare `redis.ConnectionError` (`rules/zero-tolerance.md` Rule 3). The Redis URL is masked (`scheme://***@host:port/db`) at every log/error surface so embedded credentials never leak (`rules/observability.md` Rule 6 + `rules/security.md`). `redis` is the optional `[online-store]` extra (`redis>=6.2.0`); constructing an `OnlineFeatureStore` without it raises a loud `ImportError` naming the extra (`rules/dependencies.md` § "Optional Extras with Loud Failure"), NO silent `None`. `erase_tenant`'s per-tenant `invalidation_patterns` (§ 11.4) remains the eviction contract this online surface plumbs through.
+
+Tier-2 wiring: `packages/kailash-ml/tests/integration/test_online_store_and_reopen_wiring.py` (marker `online_store`) — unavailable-path raises `OnlineStoreUnavailableError` deterministically (unreachable host, real driver, no redis mock); the live materialize→serve→read-back + online tenant-isolation tests run against real Redis via `REDIS_URL` (skip-if-unset).
+
+**M2 disposition:** A DynamoDB online backend + retention policies remain deferred. The DynamoDB adapter, if requested, satisfies the same `populate` / `get` shape `OnlineFeatureStore` defines.
 
 ### 11.5 Industry Parity Adapters (was § 15 in v1)
 
@@ -546,9 +548,9 @@ V1 implied a richer constructor surface (e.g. `FeatureStore(connection_manager=.
 
 ### 11.7 Typed Exceptions Absent At The Surface (F-E2-22)
 
-`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). `FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). `CrossTenantReadError` (`errors.py:736`) HAS shipped (FM2 Wave-2 Shard B) with its raise-site in `FeatureMaterialiser` (§ 11.2). The GDPR eraser (FM2 Wave-2 Shard F, § 11.4) REUSES the canonical `ErasureRefusedError` (`errors.py:476`) — no new class. The one remaining class referenced in v1 does NOT exist in `errors.py` today (§ 6.3): `OnlineStoreUnavailableError` (lands with the deferred online-store adapter, § 11.4a).
+`FeatureGroupNotFoundError` HAS shipped (FM2 Wave-1 Shard A) at `src/kailash/ml/errors.py:673` with its raise-site (`lookup_feature_group`, § 11.1). `FeatureVersionImmutableError` (`errors.py:685`), `FeatureVersionNotFoundError` (`errors.py:702`), and `FeatureEvolutionError` (`errors.py:713`) HAVE shipped (FM2 Wave-1 Shard E) with their raise-sites in `FeatureRegistry` (§ 11.3). `CrossTenantReadError` (`errors.py:736`) HAS shipped (FM2 Wave-2 Shard B) with its raise-site in `FeatureMaterialiser` (§ 11.2). The GDPR eraser (FM2 Wave-2 Shard F, § 11.4) REUSES the canonical `ErasureRefusedError` (`errors.py:476`) — no new class. `OnlineStoreUnavailableError` HAS shipped (FM2 Wave-3 Shard C) as a `FeatureStoreError` subclass in `errors.py` (re-exported from `kailash_ml.errors`), with its raise-site in the Redis `OnlineFeatureStore` adapter (§ 11.4a / § 6.3).
 
-**M2 disposition:** The remaining `OnlineStoreUnavailableError` lands in `errors.py` at the same PR that lands the online-store adapter surface (§ 11.4a). Until then, downstream code MUST NOT `try/except` against the not-yet-shipped class.
+**M2 disposition:** Every v1-referenced FeatureStore typed exception now ships with a raise-site. Downstream serving code MAY `try/except OnlineStoreUnavailableError` to degrade to the offline read path.
 
 ---
 
