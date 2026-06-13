@@ -1,6 +1,9 @@
 # kailash-ml Changelog
 
-## [Unreleased]
+## [2.2.1] — 2026-06-13 — URL credential masking consolidated onto core helper
+
+Patch release. Internal refactor — no public API change. Replaces three
+hand-rolled URL-masking helpers with the canonical core `mask_url`.
 
 ### Changed
 
