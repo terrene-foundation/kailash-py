@@ -1,16 +1,15 @@
 # DataFlow × kailash-ml Integration — Feature-Source Binding, @feature Pipeline Consumption, Lineage Hashing
 
-Version: 1.0.0 (draft)
+Version: 2.0.0 — graduated from `1.0.0 (draft)` (FM2 Wave 3, #693). DataFlow-side ML bridge re-derived against `kailash-dataflow 2.11.3` / `kailash-ml 2.1.1` shipped code.
 Package: `kailash-dataflow`
-Target release: **kailash-dataflow 2.1.0** (shipping in the kailash-ml 1.0.0 wave)
-Status: DRAFT at `workspaces/kailash-ml-audit/supporting-specs-draft/dataflow-ml-integration-draft.md`. Promotes to `specs/dataflow-ml-integration.md` after round-3 convergence.
+Shipped in: **kailash-dataflow 2.1.0** (the ML bridge first landed here); `TenantRequiredError` rename closed F-B-23 in **2.3.2**; consumer side (`@feature` / `FeatureGroup` / `FeatureStore.materialize` / `FeatureMaterialiser` / `FeatureRegistry`) landed FM2 Waves 1+2 in `kailash-ml 2.1.x`, against the DataFlow primitives shipped in **kailash-dataflow 2.11.3**.
 Supersedes: none — this spec adds ML-facing surfaces to DataFlow without modifying existing engine / Express APIs.
 Parent domain: Kailash DataFlow (database operations + classification + lineage).
-Sibling specs: `specs/dataflow-core.md`, `specs/dataflow-express.md`, `specs/dataflow-models.md`, `specs/dataflow-cache.md`.
+Sibling specs: `specs/dataflow-core.md`, `specs/dataflow-express.md`, `specs/dataflow-models.md`, `specs/dataflow-cache.md`, `specs/ml-feature-store.md` (the kailash-ml consumer of `ml_feature_source` / `transform` / `hash`).
 
-Origin: `ml-feature-store-draft.md` §2 mandates "DataFlow lineage integration" + `@feature` consuming `dataflow.transform`. `ml-registry-draft.md` mandates `lineage_dataset_hash` field on every model version. Round-1 theme T6 flagged spec-to-code drift where feature-store specs referenced a DataFlow binding that did not exist. This spec specifies the DataFlow-side surface kailash-ml 1.0.0 consumes.
+Origin: `ml-feature-store.md` §2/§11 mandates DataFlow lineage integration + `@feature` consuming `dataflow.transform`; `ml-registry.md` mandates `lineage_dataset_hash` on every model version. This spec specifies the DataFlow-side surface kailash-ml consumes.
 
-> **Wave 6.5 deferral note (2026-04-26):** Sections referencing the `@feature` decorator (§ 2.5, § 3) and `FeatureGroup` class as `kailash-ml`-side consumers describe **M2-deferred surfaces**, not 1.1.1-shipped behavior. Per `ml-feature-store.md` v2 § 11, the canonical 1.1.1 `FeatureStore` does NOT export `@feature`, `FeatureGroup`, `FeatureStore.materialize()`, or an online-store adapter. The `dataflow.ml_feature_source(...)` polars binding (§ 2 of this spec) IS shipped. It is consumed by `kailash_ml.features.FeatureStore.get_features(...)` via the internal `SchemaFeatureGroup` read adapter (`packages/kailash-ml/src/kailash_ml/features/_schema_feature_group.py`, issue #1241): the binding duck-types on a FeatureGroup-shaped `.materialize()`, which a declarative `FeatureSchema` does not expose, so the store wraps the schema in the adapter before calling the binding. **Correction (2026-06-03):** the prior "verified positive at audit finding F-E2-23 end-to-end" claim was a phantom — before #1241 `get_features` ALWAYS raised (the schema reached the binding without a `.materialize` and failed the shape check). End-to-end retrieval is now verified by `packages/kailash-ml/tests/integration/test_feature_store_get_features_wiring.py` + `packages/kailash-ml/tests/regression/test_issue_1241_get_features_returns_dataframe.py` (point-in-time correctness included). When this spec graduates from `(draft)` to a versioned release, the `@feature` / `FeatureGroup` clauses MUST be revisited against ml-feature-store.md M2 deliverables.
+> **Graduation note (FM2 Wave 3, #693, 2026-06-13):** the prior Wave 6.5 deferral admonition gated this spec on the M2 consumer surface (`@feature`, `FeatureGroup`, `FeatureStore.materialize()`). That surface HAS shipped (FM2 Waves 1+2 — see `ml-feature-store.md` §11.1/§11.2/§11.3/§11.4): `@feature` (`kailash_ml.features.decorators`), public `FeatureGroup` (`kailash_ml.features.feature_group`), `FeatureStore.materialize` + `FeatureMaterialiser` (`kailash_ml.features.materialiser`), and `FeatureRegistry` (`kailash_ml.features.registry`) are all exported. The §2.5 / §3 clauses are now re-derived against the shipped `dataflow.ml._transform` / `dataflow.ml._feature_source` code. The `dataflow.ml_feature_source(...)` polars binding is consumed by `kailash_ml.features.FeatureStore.get_features(...)` via the internal `SchemaFeatureGroup` read adapter (`packages/kailash-ml/src/kailash_ml/features/_schema_feature_group.py`, issue #1241): the binding duck-types on a FeatureGroup-shaped `.materialize()`, which a declarative `FeatureSchema` does not expose, so the store wraps the schema in the adapter before calling the binding. End-to-end retrieval is verified by `packages/kailash-ml/tests/integration/test_feature_store_get_features_wiring.py` + `packages/kailash-ml/tests/regression/test_issue_1241_get_features_returns_dataframe.py` (point-in-time correctness included).
 
 ---
 
@@ -18,7 +17,7 @@ Origin: `ml-feature-store-draft.md` §2 mandates "DataFlow lineage integration" 
 
 ### 1.1 In Scope
 
-Four capabilities DataFlow 2.1.0 ships for kailash-ml 1.0.0:
+Four capabilities the `dataflow.ml` bridge ships (first landed in DataFlow 2.1.0; current as of kailash-dataflow 2.11.3):
 
 1. **`dataflow.ml_feature_source(feature_group)` polars binding** — materialize a `FeatureStore` feature group as a DataFlow read source that downstream Express / workflow operations can consume.
 2. **`@feature` pipeline consumption of `dataflow.transform`** — feature-store decorators call into a new `dataflow.transform(expr, source)` helper for feature-computation pipelines that reuse DataFlow's parameterized-query guarantees.
@@ -42,14 +41,14 @@ Public symbols (re-exported through `dataflow.ml.__all__`):
 - Model decorator / classification / masking → `specs/dataflow-models.md`.
 - Cache / dialect / pooling → `specs/dataflow-cache.md`.
 - Core engine / trust / fabric → `specs/dataflow-core.md`.
-- FeatureStore decorator / materialization → `ml-feature-store-draft.md`.
-- ModelRegistry model versions → `ml-registry-draft.md`.
+- FeatureStore decorator / materialization → `specs/ml-feature-store.md` (§11).
+- ModelRegistry model versions → `specs/ml-registry.md`.
 
 ### 1.3 Non-Goals
 
 - **No new ORM layer.** `ml_feature_source` returns a `polars.LazyFrame` (not a new query-builder class).
 - **No feature-engineering DSL.** `dataflow.transform(expr, source)` accepts polars expressions only — no SQL DSL, no pandas.
-- **No caching of feature materializations inside DataFlow.** FeatureStore owns caching per `ml-feature-store-draft.md`; DataFlow is the data layer.
+- **No caching of feature materializations inside DataFlow.** FeatureStore owns caching per `specs/ml-feature-store.md`; DataFlow is the data layer.
 
 ---
 
@@ -58,7 +57,7 @@ Public symbols (re-exported through `dataflow.ml.__all__`):
 ### 2.1 Contract
 
 ```python
-# packages/kailash-dataflow/src/dataflow/ml_integration.py
+# packages/kailash-dataflow/src/dataflow/ml/_feature_source.py
 def ml_feature_source(
     feature_group: "FeatureGroup",
     *,
@@ -74,24 +73,24 @@ def ml_feature_source(
 
 ### 2.2 Invariants
 
-- Accepts a `FeatureGroup` instance imported from `kailash_ml.engines.feature_store`. DataFlow does NOT take a hard dependency on kailash-ml — the import is deferred inside the function body, and if kailash-ml is absent the import raises `RuntimeError("dataflow.ml_feature_source requires kailash-ml>=1.0.0")`.
-- `tenant_id` MUST be provided when the feature group's underlying model is `multi_tenant=True`. Omission raises `TenantRequiredError` (per `rules/tenant-isolation.md` §2). A `None` `tenant_id` for a single-tenant group is accepted.
-- `point_in_time` enables point-in-time-correct feature joins (Feast-parity). When provided, the underlying query filters `WHERE effective_from <= point_in_time AND (effective_until IS NULL OR effective_until > point_in_time)`.
-- `since` / `until` are window-bounds; `point_in_time` supersedes them when both are provided (raises `ValueError` to enforce explicit caller intent).
-- `limit` is enforced at SQL level (`LIMIT n`) to bound query cost on large feature groups.
-- Returns a `LazyFrame` (polars). Callers `.collect()` to materialize.
+- Accepts ANY `FeatureGroup`-shaped object — DataFlow takes NO hard dependency on kailash-ml. The binding is **duck-typed** (`_feature_source.py:77-103::_validate_feature_group_shape`): an object satisfies the contract when it exposes a non-empty string `.name` AND a callable `.materialize(...)`. The public `kailash_ml.features.FeatureGroup`, the internal `SchemaFeatureGroup` read adapter, and the legacy `kailash_ml.engines.feature_store.FeatureGroup` all satisfy it. A `None` / shape-invalid object raises `FeatureSourceError` (NOT a `RuntimeError` — there is no `import kailash_ml` inside the function body to fail).
+- `tenant_id` MUST be provided when the feature group is `multi_tenant=True` (`_is_multi_tenant_group` inspects `.multi_tenant`, or a nested `.model.multi_tenant`, defaulting `False`). Omission raises `TenantRequiredError` (per `rules/tenant-isolation.md` §2, `_feature_source.py:213-216`). A `None` `tenant_id` for a single-tenant group is accepted.
+- `point_in_time` enables point-in-time-correct feature joins (Feast-parity); it is forwarded unchanged to the feature group's `.materialize(point_in_time=...)`. The DataFlow read pushes the `timestamp_column <= point_in_time` window filter down to SQL; the as-of dedup is computed in polars (see `ml-feature-store.md` §4 MUST-5).
+- `since` / `until` are window-bounds; supplying `point_in_time` AND either `since`/`until` raises `ValueError` to enforce explicit caller intent (`_feature_source.py:198-202`).
+- `limit` is forwarded to `.materialize(limit=...)` to bound query cost on large feature groups.
+- Returns a `polars.LazyFrame` — a `DataFrame` returned by the feature group is collected to `.lazy()` (`_feature_source.py:282-283`). Callers `.collect()` to materialize.
 
 ### 2.3 Tenant isolation
 
-Cache keys for repeated feature-source queries follow the canonical `kailash_ml:v1:{tenant_id}:feature_source:{hash}` shape per approved-decisions.md implications. Invalidation uses tenant-scoped wildcards per `rules/tenant-isolation.md` §3a.
+Cache keys for repeated feature-source queries follow the canonical shape emitted by `_feature_source_cache_key` (`_feature_source.py:41-69`): multi-tenant `kailash_ml:v1:{tenant_id}:feature_source:{group}:{params}`, single-tenant `kailash_ml:v1:feature_source:{group}:{params}` (where `{params}` encodes `point_in_time`/`since`/`until`/`limit`). The tenant dimension is the second segment per `rules/tenant-isolation.md` §1; `build_cache_key` is re-exported from `dataflow.ml` for tenant-scoped invalidation callers (§3a wildcards).
 
 ### 2.4 SQL safety
 
-All identifier interpolation (`feature_group.name`, column names) routes through `dataflow.adapters.dialect.quote_identifier()` per `rules/dataflow-identifier-safety.md` §1. Parameter binding is used for VALUES per `rules/infrastructure-sql.md`.
+`ml_feature_source` builds NO SQL of its own — it forwards `(tenant_id, point_in_time, since, until, limit)` to the feature group's `.materialize(...)`, which owns its backing-store query and its identifier-quoting / parameter-binding discipline (`rules/dataflow-identifier-safety.md` §1 + `rules/infrastructure-sql.md`). The binding only validates the feature group's shape and the window-arg conflict; it never interpolates a user identifier into a SQL string.
 
 ### 2.5 Classification propagation
 
-A `FeatureGroup.classification` field (from `ml-feature-store-draft.md` §3.1) propagates through `ml_feature_source`. Classified columns in the returned `LazyFrame` carry DataFlow classification metadata via polars metadata attributes so downstream consumers (InferenceServer, AutoML) can enforce `redact=` / `mask=` per `rules/dataflow-classification.md`.
+A feature group's `.classification` attribute (when present) propagates through `ml_feature_source`. `_classification_metadata` (`_feature_source.py:133-150`) reads `getattr(feature_group, "classification", None)` and, when set, stashes it on the returned frame as the `frame._kailash_ml_metadata` attribute (`_feature_source.py:287-295` — polars exposes no public user-metadata API on `LazyFrame`, so the binding uses this attribute so `transform()` can forward it). Only classification METADATA travels (which column is classified, which strategy) — never raw classified VALUES — so downstream consumers can enforce `redact=` / `mask=` per `rules/dataflow-classification.md`.
 
 ---
 
@@ -100,7 +99,7 @@ A `FeatureGroup.classification` field (from `ml-feature-store-draft.md` §3.1) p
 ### 3.1 New helper: `dataflow.transform`
 
 ```python
-# packages/kailash-dataflow/src/dataflow/transforms.py
+# packages/kailash-dataflow/src/dataflow/ml/_transform.py
 def transform(
     expr: polars.Expr,
     source: polars.LazyFrame,
@@ -115,20 +114,20 @@ def transform(
 
 ### 3.2 How `@feature` uses it
 
-Per `ml-feature-store-draft.md` §3.1, the `@feature` decorator wraps a function returning a polars Expr. At registration time:
+Per `ml-feature-store.md` §11.2, the shipped `@feature` decorator (`kailash_ml.features.decorators.feature`) is keyword-only — `@feature(*, name: str, dtype: str, description: str = "")` — and wraps a zero-arg function returning a `polars.Expr` into a frozen, content-addressed `FeatureDefinition` (`name` + `dtype` + a content-SHA `version` of the function body). It does NOT take an `entity` or `version` kwarg (entity scoping belongs to the `FeatureGroup` / `FeatureSchema`; the version is content-derived). `FeatureDefinition.expr()` is a METHOD that evaluates `self.fn()` and returns the `polars.Expr`, raising `TypeError` if the body returns a non-`Expr` (`decorators.py:82-99`). At materialise time `FeatureGroup.materialize` routes each derived column's expr through this binding:
 
 ```python
-# conceptual
-@feature(entity="user_id", dtype="float64", version="1.0")
-def recent_clicks(df: pl.LazyFrame) -> pl.Expr:
-    return pl.col("clicks").filter(pl.col("ts") > pl.lit(...)).count()
+from kailash_ml.features import feature
 
-# FeatureStore stores the function + dtype + version (content SHA).
-# At materialize time:
+@feature(name="amount_log", dtype="float64")
+def amount_log():               # zero-arg; returns a polars.Expr
+    return pl.col("amount").log()
+
+# At materialise time FeatureGroup.materialize composes:
 result = dataflow.transform(
-    expr=recent_clicks.expr,
+    expr=amount_log.expr(),                                 # .expr() is a method call
     source=dataflow.ml_feature_source(group, tenant_id=tid),
-    name="recent_clicks@1.0",
+    name=f"amount_log@{amount_log.version}",                # content-SHA version
     tenant_id=tid,
 )
 ```
@@ -159,7 +158,7 @@ recency = dataflow.transform(recency_expr, clicks, name="recency@1.0", tenant_id
 ### 4.1 `dataflow.hash(df)` contract
 
 ```python
-# packages/kailash-dataflow/src/dataflow/lineage.py
+# packages/kailash-dataflow/src/dataflow/ml/_hash.py
 def hash(
     df: Union[polars.DataFrame, polars.LazyFrame],
     *,
@@ -184,12 +183,15 @@ Returns `f"sha256:{hexlify(hash)}"` — 64 hex chars after the `sha256:` prefix.
 
 ### 4.4 Consumed by ModelRegistry
 
-Per `ml-registry-draft.md` (mandatory), every `ModelRegistry.register_version(...)` call requires `lineage_dataset_hash`:
+Per `specs/ml-registry.md` (mandatory), every `ModelRegistry.register_version(...)` call requires `lineage_dataset_hash` (the field is a `NOT NULL` column on the registry's backing model — `kailash_ml/tracking/registry.py:277`, `tracking/storage/postgres.py:215`):
 
 ```python
-from dataflow.lineage import hash as df_hash
+from dataflow.ml import hash as df_hash   # re-exported from dataflow.ml._hash
 
-training_df = await db.express_list_df("TrainingSet", tenant_id=tid)
+# Fetch the training set as a polars frame however your pipeline produces it
+# (e.g. dataflow.ml_feature_source(group, tenant_id=tid).collect(), or any
+# caller-owned query materialized to polars):
+training_df = await fetch_training_dataframe(tenant_id=tid)
 dataset_hash = df_hash(training_df)
 
 await registry.register_version(
@@ -203,21 +205,7 @@ await registry.register_version(
 
 ### 4.5 Resolution
 
-`ModelRegistry.resolve_dataset(lineage_dataset_hash)` — posts-1.0 capability — resolves a hash back to a DataFlow-backed query snapshot if the caller stored the query under a named materialization. Out of scope for 1.0.0 but API stub reserved:
-
-```python
-# Placeholder signature for post-1.0 (raises NotImplementedError in 1.0.0 per
-# zero-tolerance Rule 2 — NOT stubbed with fake implementation; instead a
-# typed RuntimeError with an explicit "post-1.0" message):
-class ModelRegistry:
-    async def resolve_dataset(self, lineage_dataset_hash: str) -> "DatasetSnapshot":
-        raise NotImplementedError(
-            "ModelRegistry.resolve_dataset is reserved for post-1.0; "
-            "use dataflow.lineage.replay(lineage_dataset_hash) directly."
-        )
-```
-
-Per `rules/zero-tolerance.md` Rule 2, this is NOT a stub — it is an explicitly-declared future surface with a typed error indicating the correct alternative. The method body does not pretend to succeed.
+Hash-to-snapshot resolution (resolving a `lineage_dataset_hash` back to the DataFlow-backed query that produced it) is **out of scope** for this spec — neither `ModelRegistry` nor `dataflow.lineage` ships a `resolve_dataset` / `replay` method today (`grep -rn 'resolve_dataset' packages/` returns no production match). `dataflow.hash(df)` is a one-way fingerprint: it indexes a dataset for registry provenance but does NOT retain the query needed to reconstruct it. Callers needing reproducibility MUST persist the producing query themselves (e.g. a named materialization the caller owns). When a reverse-resolution capability is genuinely scoped and implemented, it lands in a future revision of this spec describing the shipped surface — not as a reserved stub here (per `rules/spec-accuracy.md` Rule 5).
 
 ---
 
@@ -407,7 +395,7 @@ class TenantRequiredError(DataFlowMLIntegrationError):
 
 **Deprecated alias:** `MLTenantRequiredError` resolves to `TenantRequiredError` via a module-level `__getattr__` on both `dataflow.ml._errors` and `dataflow.ml`; the alias emits a `DeprecationWarning` per access. Slated for removal in **kailash-dataflow v3.0**. Callers SHOULD migrate to the canonical name within the v2.x → v3.0 window. The alias is intentionally absent from `__all__` so star-imports pick up only the canonical name.
 
-The errors are DataFlow-side — the ML-side sees them wrapped via `FeatureStoreError(MLError)` when thrown through the `FeatureStore` API (per `kailash-core-ml-integration-draft.md` §3 hierarchy).
+The errors are DataFlow-side — the ML-side sees them wrapped via `FeatureStoreError(MLError)` when thrown through the `FeatureStore` API (per `specs/kailash-core-ml-integration.md` §3 hierarchy).
 
 ---
 
@@ -485,7 +473,7 @@ No breaking changes. Purely additive ML surface.
 
 ## 10. Release Coordination Notes
 
-Part of the kailash-ml 1.0.0 wave release (see `pact-ml-integration-draft.md` §10 for the full wave list).
+Part of the kailash-ml 1.0.0 wave release (see `specs/pact-ml-integration.md` §10 for the full wave list).
 
 **Release order position:** after kailash 2.9.0 (the `DataFlowMLIntegrationError` hierarchy inherits discipline from kailash's MLError ladder). Parallel with kailash-pact 0.10.0, kailash-nexus 2.2.0, kailash-kaizen 2.12.0. Must be released BEFORE kailash-ml 1.0.0 because `FeatureStore.materialize()` (ml-side) calls `dataflow.ml_feature_source()`.
 
@@ -496,10 +484,10 @@ Part of the kailash-ml 1.0.0 wave release (see `pact-ml-integration-draft.md` §
 ## 11. Cross-References
 
 - kailash-ml specs consuming this surface:
-  - `ml-feature-store-draft.md` §2, §3.1 — `@feature` decorator + `FeatureStore.materialize()`.
-  - `ml-registry-draft.md` §4 — `lineage_dataset_hash` mandatory field.
-  - `ml-engines-v2-draft.md` §5 — training engines read from `dataflow.ml_feature_source` as a training-set source.
-  - `ml-automl-draft.md` — AutoML consumes feature sources via DataFlow.
+  - `specs/ml-feature-store.md` §11.1/§11.2 — public `FeatureGroup` + `@feature` decorator + `FeatureStore.materialize()` (SHIPPED, FM2 Waves 1+2).
+  - `specs/ml-registry.md` §4 — `lineage_dataset_hash` mandatory field.
+  - `specs/ml-engines-v2.md` §5 — training engines read from `dataflow.ml_feature_source` as a training-set source.
+  - `specs/ml-automl.md` — AutoML consumes feature sources via DataFlow.
 - DataFlow companion specs:
   - `specs/dataflow-core.md` — engine + exceptions.
   - `specs/dataflow-express.md` — Express API unchanged.
@@ -512,4 +500,4 @@ Part of the kailash-ml 1.0.0 wave release (see `pact-ml-integration-draft.md` §
   - `rules/dataflow-classification.md` — classification propagation through transforms.
   - `rules/facade-manager-detection.md` §2 — Tier 2 wiring tests.
   - `rules/event-payload-classification.md` §2 — 8-hex short fingerprint (distinct from lineage hash's 64-hex full form).
-  - `rules/zero-tolerance.md` Rule 2 — reserved `resolve_dataset()` method uses typed `NotImplementedError` with actionable message, not a silent stub.
+  - `rules/spec-accuracy.md` Rule 5 — hash-to-snapshot resolution (§4.5) is out of scope: this spec describes only shipped behavior, no reserved-stub framing.

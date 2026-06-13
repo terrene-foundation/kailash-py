@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "2.1.1"
+version = "2.2.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -28,7 +28,7 @@ classifiers = [
 readme = "README.md"
 keywords = ["ml", "machine-learning", "kailash", "automl", "feature-store", "model-registry"]
 dependencies = [
-    "kailash>=2.30.0",
+    "kailash>=2.31.0",
     # FM2 (2.1.0): FeatureStore.materialize() routes derived columns through
     # dataflow.transform + lineage through dataflow.hash, and get_features reads
     # via ml_feature_source — all in dataflow.ml, verified shipped in 2.11.3
@@ -144,6 +144,12 @@ kaizen-judges = ["kailash-kaizen>=2.7.5"]
 kaizen-observability = ["kailash-kaizen>=2.7.5"]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
+# Online feature-serving tier (FM2 Wave-3 Shard C, specs/ml-feature-store.md
+# §11.4a). kailash_ml.features.OnlineFeatureStore composes redis.asyncio (the
+# SDK's own Redis-client pattern). Without [online-store], constructing an
+# OnlineFeatureStore raises a loud ImportError naming this extra per
+# rules/dependencies.md § "Optional Extras with Loud Failure" — NO silent None.
+online-store = ["redis>=6.2.0"]
 # RAG evaluation backends for kailash_ml.diagnostics.RAGDiagnostics.
 # Without [rag], evaluate() falls back to a pluggable JudgeCallable +
 # deterministic heuristic; ragas_scores() / trulens_scores() raise
@@ -199,6 +205,15 @@ dev = [
     # 1.26 compat OR onnxruntime ships 1.26.x with the regression fixed.
     # Tracked as follow-up; see PR #909 commit message.
     "onnxruntime>=1.17,<1.26",
+    # tests/integration/test_online_store_and_reopen_wiring.py constructs
+    # OnlineFeatureStore at test time; its deterministic unavailable-path +
+    # masking + ResourceWarning tests need the `redis` driver IMPORTABLE (no
+    # live server — the live read-back tests skip on REDIS_URL). redis is the
+    # `[online-store]` production extra (online_store.py composes redis.asyncio);
+    # declared here too so the Base CI matrix (installs `[dev]`) runs these
+    # wiring tests instead of erroring at construction — `rules/dependencies.md`
+    # § "Declared = Imported" (same rationale as the pandas entry above).
+    "redis>=6.2.0",
 ]
 
 [project.scripts]
@@ -224,6 +239,7 @@ markers = [
     "bench: Benchmark tests (performance)",
     "regression: Permanent regression tests (never delete; see rules/testing.md)",
     "invariant: Numeric/structural invariant guards (per rules/refactor-invariants.md)",
+    "online_store: Online feature-store (Redis) tests — live path needs REDIS_URL (FM2 Wave-3 Shard C)",
 ]
 # Scoped warning filters — each entry has a documented origin + disposition
 # per rules/observability.md MUST Rule 5. Unfiltered suite emits ~240

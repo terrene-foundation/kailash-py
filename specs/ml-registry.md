@@ -433,7 +433,7 @@ class RegisterResult:
                                     # rows matching (tenant_id, name, version))`.
     signature_sha256: str            # content hash of the signature spec
     lineage_run_id: str              # cross-ref to tracker run
-    lineage_dataset_hash: str        # sha256:<64hex> per dataflow-ml-integration §X
+    lineage_dataset_hash: str        # sha256:<64hex> per dataflow-ml-integration §4 (dataflow.hash)
     lineage_code_sha: str            # git SHA at fit-time
     onnx_status: Optional[Literal["clean", "custom_ops", "legacy_pickle_only"]] = None
     is_golden: bool = False
@@ -449,7 +449,7 @@ class RegisterResult:
 - `artifact_uris` — `dict[format, uri]` where each key is a persisted artifact format (`"onnx"`, `"torch"`, `"torchscript"`, `"gguf"`, `"pickle"`, `"checkpoint"`, etc.) and each value is its CAS digest URI (`"cas://sha256:..."` or `"file://..."`). ONNX-first registration (Decision 8) MUST populate `artifact_uris["onnx"]` on successful export; see `ml-engines-v2 §6 MUST 4`. When ONNX export fails on unsupported ops and `allow_pickle_fallback=True`, `artifact_uris["pickle"]` is populated instead AND `onnx_status="legacy_pickle_only"` is set.
 - `signature_sha256` — content hash (64 hex chars) of the canonical JSON-serialized `ModelSignature` spec. Enables fast equality checks across versions without re-parsing the signature.
 - `lineage_run_id` — cross-reference to the tracker run that produced this version; matches `TrainingResult.tracker_run_id` per `ml-engines-v2 §4.1`.
-- `lineage_dataset_hash` — `"sha256:<64hex>"` content hash of the training entity DataFrame per `dataflow-ml-integration §X`.
+- `lineage_dataset_hash` — `"sha256:<64hex>"` content hash of the training entity DataFrame, produced by `dataflow.hash(...)` per `dataflow-ml-integration §4`.
 - `lineage_code_sha` — git SHA at fit-time; resolved from the tracker run's environment capture per `ml-tracking §6`.
 - `onnx_status` — optional ONNX export-probe outcome per §5.6.2; `None` when `format != "onnx"`. Values: `"clean"` (no custom ops, no extensions required), `"custom_ops"` (exported but requires ort-extensions), `"legacy_pickle_only"` (ONNX export failed on unsupported ops, pickle fallback persisted).
 - `is_golden` — release-CI flag per §7.5; `True` only when the registering path supplied `is_golden=True` AND validation gates passed.

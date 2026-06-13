@@ -132,7 +132,8 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
     FM2 Wave-1 Shard E (``§11.3``) adds the durable ``FeatureRegistry``;
     FM2 Wave-2 Shard B (``§11.2``) adds the write-through ``FeatureMaterialiser``
     + ``MaterializeResult``; FM2 Wave-2 Shard F (``§11.4``) adds the GDPR
-    ``erase_tenant`` helper + ``EraseTenantResult``.
+    ``erase_tenant`` helper + ``EraseTenantResult``; FM2 Wave-3 Shard C
+    (``§11.4a``) adds the Redis online serving tier ``OnlineFeatureStore``.
     """
     expected = {
         # § 2.1 — 1.0 read surface
@@ -155,6 +156,8 @@ def test_assertion_01_features_pkg_exports_canonical_symbols_eagerly() -> None:
         # §11.4 — FM2 Wave-2 Shard F GDPR tenant-erasure surface
         "erase_tenant",
         "EraseTenantResult",
+        # §11.4a — FM2 Wave-3 Shard C Redis online serving tier
+        "OnlineFeatureStore",
     }
     assert set(features_pkg.__all__) == expected, (
         f"features.__all__ drift: got {set(features_pkg.__all__)}, "
@@ -366,19 +369,31 @@ async def test_assertion_09b_get_features_wraps_other_exceptions_as_feature_stor
     ``FeatureStoreError(reason=..., tenant_id=...)`` with ``__cause__``
     chained to the original.
 
-    Genuine error scenario (issue #1241): the canonical surface reads the
-    backing DataFlow table named after the schema (``schema.name`` ==
-    model name). Here the ``user_churn`` model is NOT registered on ``db``,
-    so the DataFlow read raises and get_features reclassifies it as
-    ``FeatureStoreError``. (Pre-#1241 this test pinned a different error —
-    the binding's ``.materialize`` duck-type mismatch — which masked the
-    fact that get_features could never complete the happy path. The happy
-    path is now covered by
-    ``test_feature_store_get_features_wiring.py``.)
+    Note (FM2 Wave-3 Shard C): the read path now RE-REGISTERS the backing
+    dynamic ``@db.model`` on demand (journal/0004 disposition (a)), so an
+    *unregistered* model no longer forces an error — the self-heal auto-migrates
+    an empty table and the read returns an empty column-shaped frame (that
+    behavior is asserted separately in
+    ``test_online_store_and_reopen_wiring.py``). To still exercise the
+    wrap-other-exceptions contract this test injects a REAL backing-read failure
+    (``express_sync.list`` raises) so the genuine non-Tenant/non-Import path is
+    covered.
     """
     fs = FeatureStore(db, default_tenant_id="acme")
-    with pytest.raises(FeatureStoreError) as exc_info:
-        await fs.get_features(churn_schema)
+
+    # Inject a backing-store read failure so get_features hits its generic
+    # except-Exception wrap path (NOT a Tenant/Import error).
+    orig_list = db.express_sync.list
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("injected backing-read failure")
+
+    db.express_sync.list = _boom
+    try:
+        with pytest.raises(FeatureStoreError) as exc_info:
+            await fs.get_features(churn_schema)
+    finally:
+        db.express_sync.list = orig_list
     err = exc_info.value
     # Tenant context propagated for forensic correlation
     assert err.tenant_id == "acme"
@@ -539,12 +554,23 @@ async def test_assertion_14_15_get_features_emits_structured_logs_no_field_names
     """
     fs = FeatureStore(db, default_tenant_id="acme")
     caplog.clear()
-    with caplog.at_level(logging.INFO, logger="kailash_ml.features.store"):
-        with pytest.raises(FeatureStoreError):
-            # FeatureSchema lacks .materialize → binding raises →
-            # FeatureStore wraps as FeatureStoreError. Path emits
-            # start + error log lines.
-            await fs.get_features(churn_schema)
+    # Inject a backing-read failure so the .error path is genuinely exercised
+    # (FM2 Wave-3 Shard C: the read now self-heals an unregistered model, so an
+    # absent model no longer raises — see test 09b note).
+    orig_list = db.express_sync.list
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("injected backing-read failure")
+
+    db.express_sync.list = _boom
+    try:
+        with caplog.at_level(logging.INFO, logger="kailash_ml.features.store"):
+            with pytest.raises(FeatureStoreError):
+                # Backing read raises → FeatureStore wraps as FeatureStoreError.
+                # Path emits start + error log lines.
+                await fs.get_features(churn_schema)
+    finally:
+        db.express_sync.list = orig_list
 
     messages = [r.message for r in caplog.records]
     levels_at_start_or_above = [
