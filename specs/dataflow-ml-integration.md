@@ -186,9 +186,12 @@ Returns `f"sha256:{hexlify(hash)}"` — 64 hex chars after the `sha256:` prefix.
 Per `specs/ml-registry.md` (mandatory), every `ModelRegistry.register_version(...)` call requires `lineage_dataset_hash` (the field is a `NOT NULL` column on the registry's backing model — `kailash_ml/tracking/registry.py:277`, `tracking/storage/postgres.py:215`):
 
 ```python
-from dataflow.lineage import hash as df_hash
+from dataflow.ml import hash as df_hash   # re-exported from dataflow.ml._hash
 
-training_df = await db.express_list_df("TrainingSet", tenant_id=tid)
+# Fetch the training set as a polars frame however your pipeline produces it
+# (e.g. dataflow.ml_feature_source(group, tenant_id=tid).collect(), or any
+# caller-owned query materialized to polars):
+training_df = await fetch_training_dataframe(tenant_id=tid)
 dataset_hash = df_hash(training_df)
 
 await registry.register_version(
