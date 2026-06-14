@@ -290,6 +290,26 @@ def test_backupreceipt_enforces_ritual_floor_and_kcv_length():
             k=3,
             n=5,
         )
+    with pytest.raises(ValueError):  # KCV right length but non-hex (LOW-2)
+        BackupReceipt(
+            vault_id="v",
+            kek_generation=7,
+            kek_commitment_alg="eatp-v1",
+            kek_identity_commitment="ab" * 32,
+            kcv="zzzzzzzzzzzzzzzz",
+            k=3,
+            n=5,
+        )
+    with pytest.raises(ValueError):  # commitment not 64-hex (LOW-2)
+        BackupReceipt(
+            vault_id="v",
+            kek_generation=7,
+            kek_commitment_alg="eatp-v1",
+            kek_identity_commitment="not-hex",
+            kcv="00051364b85b0a43",
+            k=3,
+            n=5,
+        )
 
 
 @pytest.mark.regression

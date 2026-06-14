@@ -14,10 +14,14 @@ KEK is consumed inside the trusted module and returned only as an opaque handle
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+_HEX16 = re.compile(r"\A[0-9a-f]{16}\Z")  # 8-byte KCV, lowercase hex
+_HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")  # SHA-256 commitment, lowercase hex
 
 __all__ = [
     "HolderId",
@@ -121,8 +125,12 @@ class VaultKeyHandle:
     """An opaque handle to a KEK-class key (N12-IN-01/IN-02).
 
     The public binding surface accepts this — never raw KEK bytes. It references
-    the key by its stable ``key_id`` (bound into the commitment via N12-IN-04) and
-    pins the captured ``kek_generation``; it does NOT carry key material.
+    the key by its stable ``key_id`` and pins the captured ``kek_generation``; it
+    does NOT carry key material. Per N12-IN-04 the resolved ``key_id`` is recorded
+    on the :class:`BackupReceipt` and bound at the registry layer (C2a) — it is
+    NOT in the §12.2 commitment pre-image (which is ``vault_id``-keyed to stay
+    cross-SDK byte-exact). See :mod:`kailash.trust.vault.commitment` for the
+    layering rationale.
     """
 
     key_id: str
@@ -176,8 +184,15 @@ class BackupReceipt:
     side_channel_hardened: bool = False
 
     def __post_init__(self) -> None:
-        if len(self.kcv) != 16:
-            raise ValueError(f"kcv must be 16 hex chars (8 bytes), got {len(self.kcv)}")
+        if not _HEX16.match(self.kcv):
+            raise ValueError(
+                f"kcv must be 16 lowercase-hex chars (8 bytes), got {self.kcv!r}"
+            )
+        if not _HEX64.match(self.kek_identity_commitment):
+            raise ValueError(
+                "kek_identity_commitment must be 64 lowercase-hex chars (SHA-256), "
+                f"got {self.kek_identity_commitment!r}"
+            )
         if not (2 <= self.k <= self.n <= 9):
             raise ValueError(
                 f"ritual outside the 2<=k<=n<=9 floor: k={self.k} n={self.n}"
