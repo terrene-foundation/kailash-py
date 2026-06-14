@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.0] - 2026-06-14
+
+### Added
+
+- **EATP-08 v1.1 algorithm-registry public API in `kailash.trust.signing` (#1315).** The signing surface now exports a first-class algorithm registry: `ALGORITHM_REGISTRY` (the `eatp-v1` / `eatp-v1.1` / `eatp-v2` / `eatp-v2.ml-dsa` / `eatp-v2.slh-dsa` entries), `RegistryEntry`, `AlgorithmStatus`, `DEPRECATED_PRE_REGISTRY_LITERAL` (`"ed25519+sha256"`), `D2dWitness`, `UnsupportedAlgorithmError`, and the resolution helpers `decode_wire_alg_id`, `resolve_dispatch`, `is_active`, `is_registered`, `is_pre_registry_form`, `assert_d2d_witness_pre_adoption`. These give callers a single source of truth for which signing algorithms are dispatchable and which are deprecated / pre-registry forms. Purely additive to `kailash.trust.signing.__all__`.
+
+### Security
+
+- **EATP-08 ISS-32 (v1.1.1 / mint#26): a bare top-level-string `alg_id` equal to the deprecated literal `ed25519+sha256` now rejects with `unsupported-algorithm` and MUST NOT dispatch (#1315).** Previously a bare top-level literal could be mistaken for a D2d pre-registry form and rescued by a sibling `algorithm` key; it is now treated as an unsupported algorithm at the verification boundary (§3.3 / §5.1 step 2), never rescued by a witness. A latent `from_dict` bypass is closed in the same change: a **present `alg_id` key is authoritative** — a sibling `algorithm` key cannot rescue a bare deprecated literal. The two legitimate D2d forms remain the nested-object `alg_id` value and unsigned `algorithm` metadata. The change reworks the alg-id verification path across `trust/signing/algorithm_id.py`, `trust/envelope.py`, `trust/messaging/{envelope,signer,verifier}.py`, and `trust/pact/envelopes.py`, with a new canonical vector set at `tests/test-vectors/eatp08-alg-id-canonical.json`.
+
+### Documentation
+
+- **EATP-08 §32.3 spec prose synced to the v1.1.1 bare-literal ruling (#1317).** `specs/trust-crypto.md` updated so the documented contract matches the `unsupported-algorithm` rejection behavior shipped in #1315.
+
 ## [2.31.0] - 2026-06-13
 
 ### Added
