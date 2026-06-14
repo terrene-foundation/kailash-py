@@ -34,6 +34,18 @@ from kailash.trust.vault.commitment import (
     verify_commitment,
     verify_kcv,
 )
+from kailash.trust.vault.complete import (
+    APPROVE_CAPABILITY,
+    WITNESS_CAPABILITY,
+    CeremonyWitness,
+    ConformanceLevel,
+    GovernanceApproval,
+    HolderRevocationRegistry,
+    unwrap_shard_for_holder,
+    verify_ceremony_witness,
+    verify_governance_approval,
+    wrap_shard_for_holder,
+)
 from kailash.trust.vault.dispatch import (
     AuditDispatcher,
     AuditTier,
@@ -124,6 +136,17 @@ __all__ = [
     # EATP-12 W5-R1 — rotation trigger (amicable holder rotation + for-cause gen-advance)
     "rotate_vault_holders",
     "revoke_holder_for_cause",
+    # EATP-12 W5-X1 — Complete-level optional knobs (approver / witness / per-holder-wrap)
+    "ConformanceLevel",
+    "APPROVE_CAPABILITY",
+    "WITNESS_CAPABILITY",
+    "GovernanceApproval",
+    "CeremonyWitness",
+    "verify_governance_approval",
+    "verify_ceremony_witness",
+    "HolderRevocationRegistry",
+    "wrap_shard_for_holder",
+    "unwrap_shard_for_holder",
     # EATP-12 W3-C3 — stale-generation guard + denylist + RT-05 D6 trigger
     "CompromisedGenerationDenylist",
     "default_compromised_generation_denylist",
