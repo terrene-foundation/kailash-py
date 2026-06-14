@@ -60,6 +60,12 @@ DEFAULT_KEK_COMMITMENT_ALG = "eatp-v1"
 # entries are never removed except by an explicit signed retire (C2b).
 _COMMITMENT_ALG_HASH: Dict[str, Callable[[bytes], "hashlib._Hash"]] = {
     "eatp-v1": hashlib.sha256,
+    # The hash-sunset successor (EATP-08 §3.3): SHA-512/256 is a distinct
+    # 64-hex digest, so a C2b ``vault_kek_recommit`` from ``eatp-v1`` to
+    # ``eatp-v1.1`` ADDS a genuinely different commitment ``C_Y`` for the same
+    # secret. Registered additively per N12-CB-04(c); removed only by a signed
+    # ``vault_kek_retire`` (C2b), never silently.
+    "eatp-v1.1": lambda data: hashlib.new("sha512_256", data),
 }
 
 

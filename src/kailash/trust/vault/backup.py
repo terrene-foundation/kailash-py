@@ -49,15 +49,18 @@ cross the public API by default.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any, Callable, Optional, Sequence
 
 from kailash.delegate.audit import content_signing_bytes
 from kailash.delegate.types import DelegateIdentity
+from kailash.trust.posture.postures import PostureStore
 from kailash.trust.vault.anchors import (
     build_backup_anchor,
     build_denial_anchor,
     build_restore_anchor,
+    build_restore_forced_stale_anchor,
 )
 from kailash.trust.vault.commitment import (
     DEFAULT_KEK_COMMITMENT_ALG,
@@ -75,6 +78,7 @@ from kailash.trust.vault.errors import (
     N12FT01Code,
     VaultBindingError,
     first_failing,
+    map_wrapper_exception,
 )
 from kailash.trust.vault.input_gates import (
     BACKUP_CAPABILITY,
@@ -89,7 +93,20 @@ from kailash.trust.vault.input_gates import (
     require_ritual_floor,
     require_secret_length,
 )
-from kailash.trust.vault.shamir import ShamirRitual, generate, reconstruct
+from kailash.trust.vault.registry import CommitmentRegistry, default_commitment_registry
+from kailash.trust.vault.shamir import (
+    ShamirRitual,
+    generate,
+    reconstruct,
+    serialize_shard,
+)
+from kailash.trust.vault.stale_guard import (
+    RESTORE_STALE_CAPABILITY,
+    CompromisedGenerationDenylist,
+    current_generation_from_chain,
+    default_compromised_generation_denylist,
+    trigger_d6_posture_downgrade,
+)
 from kailash.trust.vault.types import (
     BackupReceipt,
     ClearanceContext,
@@ -214,6 +231,7 @@ def back_up_vault_key(
     signer: AnchorSigner,
     signer_identity: DelegateIdentity,
     alg_id: str,
+    registry: Optional[CommitmentRegistry] = None,
     kek_commitment_alg: str = DEFAULT_KEK_COMMITMENT_ALG,
     passphrase: bytes = b"",
     iteration_exponent: int = DEFAULT_ITERATION_EXPONENT,
@@ -334,9 +352,15 @@ def back_up_vault_key(
 
         # Shard under the vetted ritual (CSPRNG-internal — no caller entropy).
         shards = generate(secret, ritual, passphrase=passphrase)
-        # The shard mnemonics never leave the trusted module; only their count
-        # and the commitment/KCV cross the boundary. del the shards eagerly.
+        # The shard mnemonics never leave the trusted module; only their count,
+        # their per-shard ciphertext COMMITMENTS (SHA-256 of the canonical
+        # paper-print form, N12-CB-03), and the commitment/KCV cross the
+        # boundary. Compute the shard_commitments BEFORE del-ing the shards so
+        # the recovery-tier anchor carries the within-deployment foreign-shard
+        # array restore (C2a) consults. The ciphertext hash is one-way and
+        # carries no secret (N12-AU-01 contents-exclusion holds).
         shard_count = len(shards)
+        shard_commitments = [_shard_commitment(s) for s in shards]
         del shards
 
         # Commitment + KCV (C1) bind the resolved generation + secret.
@@ -354,12 +378,16 @@ def back_up_vault_key(
             alg=kek_commitment_alg,
         )
 
-        # Build the OUTCOME anchor (D2). shard_commitments are NOT computed by
-        # I1 (the per-shard ciphertext-hash set is a later shard's concern; the
-        # builder requires the field, so I1 supplies the empty ordered array —
-        # the within-deployment foreign-shard array is populated by the C2a
-        # registry shard). The cross-SDK / cross-generation defense is the
-        # KEK-identity commitment, which I1 DOES register.
+        # The per-(vault_id, gen) registry this backup registers into
+        # (N12-CB-04(c)); injected for tests, the process singleton otherwise.
+        active_registry = (
+            registry if registry is not None else default_commitment_registry()
+        )
+
+        # Build the OUTCOME anchor (D2). The within-deployment foreign-shard
+        # array (N12-CB-03) is the per-shard ciphertext-commitment set computed
+        # above; the cross-SDK / cross-generation defense is the KEK-identity
+        # commitment registered just below.
         ts = timestamp if (time_attested and timestamp is not None) else "unverified"
         payload = build_backup_anchor(
             alg_id=alg_id,
@@ -372,7 +400,7 @@ def back_up_vault_key(
             kek_identity_commitment=commitment,
             kek_commitment_alg=kek_commitment_alg,
             kcv=kcv,
-            shard_commitments=[],
+            shard_commitments=shard_commitments,
             slip39_params={
                 "extendable": True,
                 "iteration_exponent": iteration_exponent,
@@ -394,6 +422,19 @@ def back_up_vault_key(
             signer_identity=signer_identity,
             event_payload=payload,
             tier=AuditTier.RECOVERY,
+        )
+
+        # Register the KEK-identity commitment ONLY AFTER the OUTCOME anchor is
+        # durably dispatched (N12-CB-04(c) + N12-IN-04 key_id binding). Ordering
+        # matters: a dispatch failure RAISES above and this line never executes,
+        # so the registry never holds a commitment with no audited backup — the
+        # registry mirrors the audited recovery-tier chain (AU-02b).
+        active_registry.register(
+            vault_id=key_handle.vault_id,
+            kek_generation=resolved.kek_generation,
+            kek_commitment_alg=kek_commitment_alg,
+            commitment=commitment,
+            key_id=resolved.key_id,
         )
 
         receipt = BackupReceipt(
@@ -436,8 +477,12 @@ def restore_vault_key(
     dispatcher: AuditDispatcher,
     signer: AnchorSigner,
     signer_identity: DelegateIdentity,
-    expected_commitment: str,
     alg_id: str,
+    registry: Optional[CommitmentRegistry] = None,
+    denylist: Optional[CompromisedGenerationDenylist] = None,
+    posture_store: Optional[PostureStore] = None,
+    force_stale: bool = False,
+    expected_commitment: Optional[str] = None,
     kek_commitment_alg: str = DEFAULT_KEK_COMMITMENT_ALG,
     passphrase: bytes = b"",
     holders: Sequence[str] = (),
@@ -450,34 +495,42 @@ def restore_vault_key(
     """Reconstruct a KEK from ``shards`` and re-establish it opaquely (N12-IN-01).
 
     Handle-based: ``target_handle`` is resolved internally to obtain the target
-    KEK's class + generation + passphrase provenance (the resolver is the
-    trusted-module boundary). Raw KEK bytes are NOT returned (N12-IN-05) — only
-    an opaque :class:`~kailash.trust.vault.types.RestoreReceipt` ref.
+    KEK's class + generation + key_id + passphrase provenance (the resolver is
+    the trusted-module boundary). Raw KEK bytes are NOT returned (N12-IN-05) —
+    only an opaque :class:`~kailash.trust.vault.types.RestoreReceipt` ref.
 
-    Gates I1 OWNS (driven through the canonical FT-02 first-failing order so
-    two SDKs return the same first code):
+    Gate order (FT-02 §4.6, the canonical first-failing sequence). C2a wires the
+    foreign-shard (step 6), commitment-auth (step 7), and key-identity sub-gate
+    of step 7. Step 6 evaluates the PRESENTED shard ciphertext-hashes against the
+    distribution anchor's ``shard_commitments`` and runs **BEFORE reconstruction**
+    (it needs no secret); reconstruction happens between step 6 and step 7; step 7
+    authenticates the reconstructed secret + key-identity. The remaining gates
+    (shard-count / parameter / mixed-identifier) are backstopped by the wrapper
+    raising and are mapped via :func:`map_wrapper_exception`; ordinal-generation
+    (step 8) is C3's.
 
-    * ``clearance`` → ``clearance.has_capability("vault:restore")`` else
-      ``missing-clearance``;
-    * ``handle-type`` → resolve ``target_handle``; ``key_class==KEK`` else
-      ``not-a-kek``;
-    * ``commitment-auth`` → reconstruct the secret, then ``verify_commitment``
-      (C1, constant-time) against ``expected_commitment`` for the target →
-      ``kek-commitment-mismatch`` on failure.
+    **Registry consultation (C2a — replaces the Wave-2 caller-supplied interim).**
+    When a ``registry`` is available (injected or the process default), restore
+    SOURCES its anti-injection inputs from the registry + the recovery-tier
+    distribution anchor rather than trusting caller args:
 
-    Gates NOT owned by I1 (``shard-count``, ``parameter``, ``mixed-identifier``,
-    ``foreign-shard`` (C2a), ``ordinal-generation`` (C3)) are wired by Wave-3
-    shards via the SAME ``check`` function. I1's ``check`` returns ``None`` for
-    the structurally-safe unwired gates ONLY where a stricter gate added later
-    cannot make a Wave-2-accepted restore unsafe (see the inline per-gate
-    comments naming the owning shard).
+    * commitment-auth recomputes the commitment over ``resolved.kek_generation``
+      under the backup's recorded ``kek_commitment_alg`` and compares to the
+      registry entry — discriminating the three N12-CB-02 codes precisely
+      (``commitment-alg-mismatch`` / ``retired-commitment-alg`` /
+      ``kek-commitment-mismatch``);
+    * key-identity (N12-CB-02(d)) compares ``target_handle``'s captured ``key_id``
+      against the registered ``key_id`` → ``key-identity-mismatch``;
+    * foreign-shard + the restore anchor's distribution (holders/shard_commitments)
+      are sourced from the recovery-tier distribution anchor for
+      ``(vault_id, kek_generation)``.
 
-    After the gates pass: consume-and-``del`` the reconstructed secret in a
-    ``finally`` block (N12-IN-05), build + dispatch a ``vault_key_restore``
-    anchor (D2/D1, RECOVERY tier, AU-02b), and return the
-    :class:`~kailash.trust.vault.types.RestoreReceipt` (opaque handle ref,
-    never bytes). A clearance denial dispatches a ``vault_key_restore_denied``
-    anchor to the SAFETY tier.
+    ``expected_commitment`` / ``holders`` / ``shard_commitments`` remain as a
+    BACKWARD-COMPAT fallback for callers/tests that supply the distribution
+    explicitly (the Wave-2 interim); the registry/anchor source takes precedence
+    when a registration exists. ``map_wrapper_exception`` is wired fail-closed: an
+    UNRECOGNIZED wrapper exception (None return) DENIES the restore — never a
+    silent proceed.
 
     Args:
         shards: The presented shard mnemonics (each a word-list).
@@ -486,16 +539,33 @@ def restore_vault_key(
         resolver: The injected trusted-module resolver.
         dispatcher: The named-tier audit dispatcher (D1).
         signer / signer_identity: The anchor signer + identity.
-        expected_commitment: The registered KEK-identity commitment for the
-            target (the caller/resolver supplies it this wave; the C2a registry
-            replaces this in Wave 3).
         alg_id: The deployment SLIP-0039 algorithm id (rides
             ``event_payload.alg_id``).
-        kek_commitment_alg: The commitment registry token (default ``eatp-v1``).
+        registry: The per-(vault_id, gen) commitment registry to CONSULT
+            (N12-CB-04(c)); the process default when omitted.
+        denylist: The per-vault compromised-generation denylist consulted at
+            step 8 (N12-SG-05); the process default when omitted. A denylisted
+            captured generation → ``revoked-generation``, NOT overridable by
+            ``force_stale``, EVEN when it equals current.
+        posture_store: The injected PostureStore (N12-RT-05). EVERY successful
+            KEK-materializing restore downgrades ``principal`` to SUPERVISED +
+            records a 7-day cooling-off start via this store. Omitting it skips
+            the D6 trigger with a loud WARN (a Conformant deployment MUST wire it).
+        force_stale: N12-SG-03 override. Overrides ONLY the step-8 ordinal
+            staleness gate (never steps 6/7, never the denylist). Requires the
+            DISTINCT higher capability ``vault:restore-stale`` (else
+            ``missing-clearance``). When set on a successful restore: sources the
+            step-6 foreign-shard array from the CAPTURED (old-gen) distribution,
+            emits a LOUD ``vault_key_restore_forced_stale`` anchor dual-emitted to
+            BOTH recovery AND safety, and sets ``RestoreReceipt.forced_stale=True``.
+        expected_commitment: Backward-compat fallback commitment (the Wave-2
+            interim) — used only when the registry has no entry for the target.
+        kek_commitment_alg: The backup's recorded commitment-registry token.
         passphrase: The SLIP-0039 passphrase used at backup time.
-        holders: The current-generation holder distribution (recorded on the
-            restore anchor per N12-AU-04; sourced from the establishing
-            distribution anchor by the caller).
+        holders / shard_commitments: Backward-compat fallback distribution —
+            used only when no recovery-tier distribution anchor is found.
+        re_established_handle_ref: The opaque re-established handle (caller-supplied
+            until #630's re-establishment hierarchy mints it).
         timestamp / time_attested: N12-AU-04a two-state grammar.
         principal: The acting principal; defaults to ``clearance.principal``.
 
@@ -503,24 +573,45 @@ def restore_vault_key(
         A :class:`~kailash.trust.vault.types.RestoreReceipt`.
 
     Raises:
-        VaultBindingError: any owned gate fails (``missing-clearance`` /
-            ``not-a-kek`` / ``kek-commitment-mismatch``), or the audit dispatch
-            fails (AU-02b).
+        VaultBindingError: any gate fails (``missing-clearance`` / ``not-a-kek`` /
+            ``unknown-shard`` / ``commitment-alg-mismatch`` /
+            ``retired-commitment-alg`` / ``kek-commitment-mismatch`` /
+            ``key-identity-mismatch`` / a mapped wrapper code), or the audit
+            dispatch fails (AU-02b).
     """
     target_ref = f"{target_handle.vault_id}:{target_handle.key_id}"
     acting_principal = principal if principal is not None else clearance.principal
+    active_registry = (
+        registry if registry is not None else default_commitment_registry()
+    )
+    active_denylist = (
+        denylist if denylist is not None else default_compromised_generation_denylist()
+    )
 
     # --- gate 1 (clearance) — runs BEFORE resolution/reconstruction so a
-    # denial dispatches without touching key material.
+    # denial dispatches without touching key material. A forced-stale restore
+    # (N12-SG-03) requires the DISTINCT higher capability vault:restore-stale IN
+    # ADDITION to vault:restore: a caller holding only vault:restore with
+    # force_stale=True is denied with missing-clearance (F-AUTHZ-9). The
+    # higher-capability check rides the SAME clearance gate so its denial routes
+    # to the safety tier identically — force_stale does NOT relax any gate, it
+    # adds a requirement.
+    required_capability = (
+        RESTORE_STALE_CAPABILITY if force_stale else RESTORE_CAPABILITY
+    )
     try:
         require_clearance(clearance, RESTORE_CAPABILITY)
+        if force_stale:
+            # The ordinary token is necessary but NOT sufficient for the forced
+            # path; the distinct higher token is mandatory (N12-SG-03).
+            require_clearance(clearance, RESTORE_STALE_CAPABILITY)
     except VaultBindingError:
         _emit_restore_denial(
             dispatcher=dispatcher,
             signer=signer,
             signer_identity=signer_identity,
             principal=acting_principal,
-            missing_capability_or_scope=RESTORE_CAPABILITY,
+            missing_capability_or_scope=required_capability,
             target_handle_ref=target_ref,
         )
         raise
@@ -536,7 +627,7 @@ def restore_vault_key(
     )
 
     # Resolve the target handle (handle-type gate needs the class; commitment
-    # auth needs the generation + passphrase provenance).
+    # auth needs the generation + key_id + passphrase provenance).
     resolved = resolver.resolve_kek(target_handle)
     if not isinstance(resolved, ResolvedKek):
         raise VaultBindingError(
@@ -546,33 +637,153 @@ def restore_vault_key(
             details={"returned_type": type(resolved).__name__},
         )
 
-    secret: bytes = b""
-    try:
-        # Reconstruct the candidate secret BEFORE running the commitment-auth
-        # gate (commitment auth needs the reconstructed bytes). Reconstruction
-        # itself does not re-establish a key; it only produces the candidate
-        # the commitment gate authenticates. shamir.reconstruct may raise
-        # wrapper errors (insufficient/mixed/corrupted) — those are gates the
-        # Wave-3 shards own; here a wrapper raise propagates as the mapped
-        # wrapper condition (resolved at the wrapper-exception layer, errors.py).
-        secret = reconstruct(list(_as_word_lists(shards)), passphrase=passphrase)
+    # --- Source the distribution (N12-CB-03 / N12-AU-04). PREFER the recovery-tier
+    # distribution anchor for (vault_id, captured gen); fall back to caller-supplied
+    # holders/shard_commitments (the Wave-2 interim) when no anchor is found.
+    dist_anchor = _find_distribution_anchor(
+        dispatcher,
+        vault_id=target_handle.vault_id,
+        kek_generation=resolved.kek_generation,
+    )
+    if dist_anchor is not None:
+        dist_holders: list[str] = list(dist_anchor.get("holders", []))
+        dist_shard_commitments: list[str] = list(
+            dist_anchor.get("shard_commitments", [])
+        )
+    else:
+        dist_holders = list(holders)
+        dist_shard_commitments = list(shard_commitments)
 
-        # Bind the reconstructed secret as a default arg (`_secret=secret`) so
-        # the closure captures the value at def-time — explicit, and clean to
-        # static analysis (no closure-over-mutable-local F821).
-        def check(gate: str, _secret: bytes = secret) -> Optional[N12FT01Code]:
-            """The FT-02 per-gate predicate. I1 owns 2 gates; the rest are seams."""
+    secret: bytes = b""
+    # `_reconstructed` is a one-element box so the lazy reconstruct (between
+    # step 6 and step 7) is visible to the finally for consume-and-del.
+    _reconstructed: list[bytes] = []
+
+    def _reconstruct_guarded() -> bytes:
+        """Reconstruct between step 6 and step 7, fail-closed on the wrapper.
+
+        On a wrapper raise, map it via :func:`map_wrapper_exception`: a non-None
+        code → typed VaultBindingError (insufficient/corrupted/parameter); a None
+        (UNRECOGNIZED wrapper exception) → DENY with an internal typed error,
+        NEVER proceed and NEVER treat as success (EATP §4.6 fail-closed).
+        """
+        try:
+            value = reconstruct(list(_as_word_lists(shards)), passphrase=passphrase)
+        except VaultBindingError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - mapped below; never swallowed
+            code = map_wrapper_exception(exc)
+            if code is not None:
+                raise VaultBindingError(
+                    code,
+                    f"restore reconstruction failed: {code.value} "
+                    f"(vault_id={target_handle.vault_id})",
+                    details={"code": code.value, "error": str(exc)},
+                ) from exc
+            # None → unrecognized wrapper exception. Fail-closed: deny.
+            raise VaultBindingError(
+                N12FT01Code.CORRUPTED_SHARD,
+                "restore reconstruction raised an unrecognized wrapper "
+                f"exception ({type(exc).__name__}); denying fail-closed "
+                "(the wrapper text is not the only signal; no key without a "
+                "recognized, authenticated reconstruction)",
+                details={
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "vault_id": target_handle.vault_id,
+                },
+            ) from exc
+        nonlocal secret
+        secret = value
+        _reconstructed.append(value)
+        return value
+
+    try:
+
+        def check(gate: str) -> Optional[N12FT01Code]:
+            """The FT-02 per-gate predicate (steps 1–8).
+
+            Steps 1–6 evaluate on the PRESENTED shards (no secret). Step 6
+            (foreign-shard) runs BEFORE reconstruction. The first gate that
+            needs the secret (step 7) triggers the guarded lazy reconstruct, so
+            reconstruction happens strictly between step 6 and step 7 — never
+            before the foreign-shard gate has passed.
+            """
+            if gate == "clearance":
+                # Already enforced above (before resolution); keep order intact.
+                return None
             if gate == "handle-type":
                 # N12-IN-02: target MUST be KEK-class.
                 if resolved.key_class.value != "kek":
                     return N12FT01Code.NOT_A_KEK
                 return None
+            # "shard-count" / "parameter" / "mixed-identifier" — the shipped
+            # wrapper raises on under/over-supply, parameter disagreement, and
+            # mixed identifiers; those map via map_wrapper_exception at the
+            # reconstruct() boundary (step 7's lazy reconstruct). They cannot
+            # silently accept — fail-closed at the wrapper. (C3 may surface the
+            # count/param distinctions earlier; the order is unchanged.)
+            if gate in ("shard-count", "parameter", "mixed-identifier"):
+                return None
+            if gate == "foreign-shard":
+                # N12-CB-03 — BEFORE reconstruction. Every PRESENTED shard's
+                # ciphertext-hash MUST be in the distribution anchor's
+                # shard_commitments. A shard whose hash is absent → unknown-shard
+                # (foreign / old-generation), rejected before reconstruct().
+                # When there is NO distribution to consult (no anchor AND no
+                # caller-supplied array), fail-closed: a restore with no
+                # foreign-shard source MUST NOT silently skip the gate (N12-RT-06).
+                if not dist_shard_commitments:
+                    return N12FT01Code.UNKNOWN_SHARD
+                allowed = set(dist_shard_commitments)
+                for shard in shards:
+                    if _shard_commitment(shard) not in allowed:
+                        return N12FT01Code.UNKNOWN_SHARD
+                return None
             if gate == "commitment-auth":
-                # N12-CB-02 (C1): constant-time verify the reconstructed secret
-                # against the registered commitment for the target. False →
-                # kek-commitment-mismatch.
+                # N12-CB-02(b)(c)(d) — AFTER reconstruction. Lazily reconstruct
+                # (guarded) on first need, then discriminate the 3-way:
+                _secret = _reconstruct_guarded()
+                lookup = active_registry.lookup(
+                    vault_id=target_handle.vault_id,
+                    kek_generation=resolved.kek_generation,
+                    kek_commitment_alg=kek_commitment_alg,
+                )
+                entry = lookup.entry
+                if entry is None:
+                    # No commitment registered under the recorded alg for this
+                    # (vault_id, captured gen). If the caller supplied the
+                    # Wave-2 interim expected_commitment, fall back to it
+                    # (backward-compat); otherwise the recorded alg was never
+                    # registered → commitment-alg-mismatch (N12-CB-04(b)).
+                    if expected_commitment is not None:
+                        ok = verify_commitment(
+                            expected_commitment=expected_commitment,
+                            vault_id=target_handle.vault_id,
+                            kek_generation=resolved.kek_generation,
+                            master_secret=_secret,
+                            passphrase_provenance=resolved.passphrase_provenance,
+                            alg=kek_commitment_alg,
+                        )
+                        return None if ok else N12FT01Code.KEK_COMMITMENT_MISMATCH
+                    return N12FT01Code.COMMITMENT_ALG_MISMATCH
+                if entry.retired:
+                    # C2b sets retired=True; C2a always yields False. A retired
+                    # entry MUST NOT silently verify (N12-CB-04(e)).
+                    return N12FT01Code.RETIRED_COMMITMENT_ALG
+                # (d) key-identity (N12-CB-02(d)): the target handle's captured
+                # key_id MUST match the registered key_id (intra-vault
+                # two-KEK-same-generation / cross-vault re-install). key_id is
+                # bound at THIS registry layer (N12-IN-04), not in the §12.2
+                # pre-image — so this is the control that detects the case the
+                # vault_id-keyed commitment cannot.
+                if resolved.key_id != entry.key_id:
+                    return N12FT01Code.KEY_IDENTITY_MISMATCH
+                # Live registered entry: recompute under the recorded alg +
+                # constant-time compare (N12-CB-02(b)(c)). False → injection /
+                # wrong passphrase / relabelled-gen-whose-ciphertexts-reached-7.
                 ok = verify_commitment(
-                    expected_commitment=expected_commitment,
+                    expected_commitment=entry.commitment,
                     vault_id=target_handle.vault_id,
                     kek_generation=resolved.kek_generation,
                     master_secret=_secret,
@@ -580,64 +791,42 @@ def restore_vault_key(
                     alg=kek_commitment_alg,
                 )
                 return None if ok else N12FT01Code.KEK_COMMITMENT_MISMATCH
-            # --- gates I1 does NOT own; each documents its owning shard ---
-            # "clearance" already ran above (before resolution); returning None
-            # here keeps the canonical order intact without re-checking.
-            if gate == "clearance":
-                return None
-            # "shard-count" — insufficient/too-many. Owned by C3 (shard-count
-            # gate). SAFE to return None in Wave-2: the shipped wrapper's
-            # combine_mnemonics requires EXACTLY k shards and RAISES on
-            # under/over-supply, so an out-of-bounds shard set fails at the
-            # reconstruct() call above (loud wrapper error) — it never reaches
-            # a silently-accepted restore. A stricter C3 gate only changes
-            # WHICH typed code surfaces first, never makes a Wave-2-accepted
-            # restore unsafe.
-            if gate == "shard-count":
-                return None
-            # "parameter" — SLIP-0039 parameter-mismatch. Owned by C3. SAFE to
-            # return None: parameter disagreement RAISES inside reconstruct()
-            # (wrapper MnemonicError) above — fail-closed at the wrapper, never
-            # a silent accept.
-            if gate == "parameter":
-                return None
-            # "mixed-identifier" — mixed-shard-set. Owned by C3. SAFE: a mixed
-            # identifier set RAISES inside reconstruct() (wrapper rejects mixed
-            # identifiers) — fail-closed at the wrapper.
-            if gate == "mixed-identifier":
-                return None
-            # "foreign-shard" — within-deployment ciphertext-hash check
-            # (N12-CB-03). Owned by C2a (the shard_commitments registry I1 does
-            # not populate). SAFE to return None in Wave-2 ONLY because the
-            # cross-SDK / cross-generation defense — the KEK-identity
-            # commitment — runs at the NEXT gate (commitment-auth) and rejects
-            # any reconstructed secret whose commitment does not match the
-            # target's registered commitment. A foreign shard set that somehow
-            # reconstructs a DIFFERENT secret fails commitment-auth; a set that
-            # reconstructs the SAME secret is by definition the genuine secret.
-            # C2a tightens the typed code (unknown-shard before
-            # kek-commitment-mismatch) but cannot make a Wave-2-accepted
-            # restore unsafe — commitment-auth is the backstop.
-            if gate == "foreign-shard":
-                return None
-            # "ordinal-generation" — stale/revoked generation (N12-SG-02/05).
-            # Owned by C3 (the ordinal staleness gate sourcing the current
-            # generation from the audited rotation chain). This gate is NOT
-            # structurally safe to skip in general — a stale (superseded)
-            # generation that PASSES commitment-auth (a legitimately-old backup)
-            # would be re-established, silently rolling the vault back. But in
-            # Wave-2 there is NO rotation chain to source the current generation
-            # from (#630 — the generation registry is the C3 net-new gap), so
-            # there is no current generation to compare against: every resolved
-            # target is its own authoritative generation. Returning None here is
-            # therefore correct for the Wave-2 surface (single-generation), and
-            # C3 wires the real ordinal comparison the moment the rotation chain
-            # exists. Documented as an actively-tracked integration seam (NOT a
-            # silent stub): the workspace plan tracks C3's ordinal gate.
             if gate == "ordinal-generation":
+                # N12-SG-02/03/05 — step 8, AFTER commitment-auth (step 7)
+                # authenticated the captured generation. Operates on the
+                # ALREADY-AUTHENTICATED captured generation
+                # (resolved.kek_generation), NEVER a caller-supplied generation
+                # in isolation. Two sub-gates, in this order:
+                #
+                #   (a) denylist (N12-SG-05) — revoked-generation. NOT
+                #       force_stale-overridable: a compromised generation is
+                #       refused EVEN WHEN it equals current AND EVEN UNDER
+                #       force_stale (the stale guard is purely ordinal and would
+                #       not catch a current-but-compromised KEK; F-CRYPTO-6).
+                #   (b) ordinal staleness (N12-SG-02) — stale-generation. The
+                #       current generation is derived from the AUDITED rotation
+                #       chain (N12-RT-06), NOT a mutable counter. captured <
+                #       current → stale-generation, UNLESS force_stale (N12-SG-03)
+                #       overrides ONLY this ordinal step. When no rotation anchor
+                #       exists the captured gen IS current (single-generation):
+                #       no staleness.
+                if active_denylist.is_revoked(
+                    vault_id=target_handle.vault_id,
+                    kek_generation=resolved.kek_generation,
+                ):
+                    return N12FT01Code.REVOKED_GENERATION
+                current_gen = current_generation_from_chain(
+                    dispatcher,
+                    vault_id=target_handle.vault_id,
+                    captured_generation=resolved.kek_generation,
+                )
+                if resolved.kek_generation < current_gen and not force_stale:
+                    # A stale superseded generation that passed commitment-auth
+                    # MUST refuse by default — never silently roll back to a KEK
+                    # under which current data keys are no longer wrapped.
+                    return N12FT01Code.STALE_GENERATION
                 return None
-            # Unknown gate name — fail-closed (the FT-02 order is closed; an
-            # unrecognized gate is a programming error, never a silent pass).
+            # Unknown gate name — fail-closed (the FT-02 order is closed).
             raise VaultBindingError(
                 N12FT01Code.PARAMETER_MISMATCH,
                 f"restore gate {gate!r} is not a recognized FT-02 gate "
@@ -648,9 +837,8 @@ def restore_vault_key(
         first = first_failing(RESTORE_GATE_ORDER, check)
         if first is not None:
             # A gate failed → dispatch a restore denial to the safety tier and
-            # raise the typed code. (A commitment mismatch / not-a-kek IS a
-            # denial-class outcome under N12-AU-01 — the restore did not
-            # proceed.)
+            # raise the typed code (a foreign-shard / commitment / identity
+            # mismatch IS a denial-class outcome under N12-AU-01).
             _emit_restore_denial(
                 dispatcher=dispatcher,
                 signer=signer,
@@ -666,52 +854,149 @@ def restore_vault_key(
                 details={"gate_code": first.value, "vault_id": target_handle.vault_id},
             )
 
-        # Gates passed. Re-establish the KEK opaquely. The shipped key manager
-        # has no KEK re-establishment hierarchy (#630), so the trusted-module
-        # re-establishment is the resolver's domain in a real deployment; here
-        # the re-established handle is the (now-authenticated) target handle.
-        # The reconstructed secret is consumed for authentication ONLY and is
-        # del-ed in the finally — it is NEVER returned (N12-IN-05).
+        # Gates passed (incl. foreign-shard before reconstruct + commitment-auth
+        # after). Re-establish the KEK opaquely. The reconstructed secret is
+        # consumed for authentication ONLY and is del-ed in the finally — never
+        # returned (N12-IN-05).
         ts = timestamp if (time_attested and timestamp is not None) else "unverified"
         # N12-AU-04 (§12.8): the restore anchor records the CURRENT-GENERATION
-        # DISTRIBUTION (holders / shard_count / shard_commitments) copied from
-        # the establishing distribution anchor for target_handle — NOT the
-        # presenting k-shard subset. In Wave 2 the caller supplies the
-        # distribution (holders + shard_commitments), exactly as it supplies
-        # expected_commitment; Wave-3 C2a sources both from the registered
-        # distribution anchor (N12-CB-03 reads the same record). shard_count is
-        # the distribution n (len(shard_commitments)), never len(shards)=k. The
-        # re-established handle is the opaque ref the deployment's re-establishment
-        # path mints (the #630 hierarchy in Wave 3); the caller supplies it here,
-        # falling back to the target ref for an in-place restore.
-        payload = build_restore_anchor(
-            alg_id=alg_id,
-            re_established_handle_ref=(re_established_handle_ref or target_ref),
+        # DISTRIBUTION (holders / shard_count / shard_commitments) sourced from
+        # the recovery-tier distribution anchor (or the caller-supplied fallback),
+        # NOT the presenting k-shard subset. shard_count is the distribution n
+        # (len(shard_commitments)). The commitment recorded is the registered
+        # (authenticated) one — the registry entry's commitment when present,
+        # else the caller's expected_commitment fallback.
+        registered_commitment = active_registry.lookup(
             vault_id=target_handle.vault_id,
             kek_generation=resolved.kek_generation,
-            generation_checked=resolved.kek_generation,
-            kek_identity_commitment=expected_commitment,
             kek_commitment_alg=kek_commitment_alg,
-            holders=list(holders),
-            shard_count=len(shard_commitments),
-            shard_commitments=list(shard_commitments),
-            principal=acting_principal,
-            timestamp=ts,
-            time_attested=time_attested,
+        ).entry
+        anchor_commitment = (
+            registered_commitment.commitment
+            if registered_commitment is not None
+            else expected_commitment
         )
-        _sign_and_dispatch(
-            dispatcher=dispatcher,
-            signer=signer,
-            signer_identity=signer_identity,
-            event_payload=payload,
-            tier=AuditTier.RECOVERY,
-        )
+        if anchor_commitment is None:
+            # Unreachable on a passing restore (commitment-auth passes ONLY via a
+            # registered entry OR the expected_commitment fallback, both non-None),
+            # but guard fail-closed rather than emit a None-commitment anchor —
+            # no anchor without an authenticated commitment (N12-AU-01/CB-02).
+            raise VaultBindingError(
+                N12FT01Code.KEK_COMMITMENT_MISMATCH,
+                "restore reached anchor build with no authenticated commitment "
+                f"(vault_id={target_handle.vault_id}); fail-closed",
+                details={"vault_id": target_handle.vault_id},
+            )
+        if force_stale:
+            # N12-SG-03 forced-stale rollback: the step-8 ordinal gate was
+            # overridden (steps 6/7 still ran — the genuine old set passed
+            # foreign-shard against its CAPTURED distribution and commitment-auth
+            # over its captured generation). Emit the LOUD distinct
+            # vault_key_restore_forced_stale anchor DUAL-emitted to BOTH the
+            # recovery AND safety tiers (N12-SG-03 MUST), carrying the captured
+            # restored_generation + the overridden current generation. The
+            # CAPTURED-generation distribution (dist_holders/dist_shard_commitments,
+            # sourced by _find_distribution_anchor keyed on resolved.kek_generation)
+            # is what is recorded (fix [2]).
+            overridden_current = current_generation_from_chain(
+                dispatcher,
+                vault_id=target_handle.vault_id,
+                captured_generation=resolved.kek_generation,
+            )
+            forced_payload = build_restore_forced_stale_anchor(
+                alg_id=alg_id,
+                re_established_handle_ref=(re_established_handle_ref or target_ref),
+                vault_id=target_handle.vault_id,
+                kek_generation=resolved.kek_generation,
+                generation_checked=resolved.kek_generation,
+                restored_generation=resolved.kek_generation,
+                overridden_current_generation=overridden_current,
+                kek_identity_commitment=anchor_commitment,
+                kek_commitment_alg=kek_commitment_alg,
+                holders=dist_holders,
+                shard_count=len(dist_shard_commitments),
+                shard_commitments=dist_shard_commitments,
+                principal=acting_principal,
+                timestamp=ts,
+                time_attested=time_attested,
+            )
+            # Dual-emit: recovery FIRST (the outcome-of-record), then safety (the
+            # incident-response surface). BOTH are hard preconditions
+            # (require_receipt_or_abort inside _sign_and_dispatch) — a forced
+            # rollback that cannot durably record on BOTH tiers aborts before the
+            # KEK is treated as re-established (N12-AU-02b fail-closed).
+            _sign_and_dispatch(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                event_payload=forced_payload,
+                tier=AuditTier.RECOVERY,
+            )
+            _sign_and_dispatch(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                event_payload=forced_payload,
+                tier=AuditTier.SAFETY,
+            )
+        else:
+            payload = build_restore_anchor(
+                alg_id=alg_id,
+                re_established_handle_ref=(re_established_handle_ref or target_ref),
+                vault_id=target_handle.vault_id,
+                kek_generation=resolved.kek_generation,
+                generation_checked=resolved.kek_generation,
+                kek_identity_commitment=anchor_commitment,
+                kek_commitment_alg=kek_commitment_alg,
+                holders=dist_holders,
+                shard_count=len(dist_shard_commitments),
+                shard_commitments=dist_shard_commitments,
+                principal=acting_principal,
+                timestamp=ts,
+                time_attested=time_attested,
+            )
+            _sign_and_dispatch(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                event_payload=payload,
+                tier=AuditTier.RECOVERY,
+            )
+
+        # N12-RT-05 — ANY restore that MATERIALIZES the KEK (ordinary OR
+        # forced-stale; NO re-wrap carve-out) triggers D6 by reference: downgrade
+        # the principal's posture to SUPERVISED + start the 7-day cooling-off the
+        # Wave-4 CL-04 gate consumes. Fired AFTER the outcome anchor is durably
+        # dispatched (the KEK is materialized only past a successful anchor per
+        # AU-02b) and BEFORE returning the receipt. When no posture_store is
+        # injected the trigger is skipped with a loud WARN — a deployment claiming
+        # Conformant level MUST wire the store (N12-RT-05); the Tier-2 tests inject
+        # a real SQLitePostureStore.
+        if posture_store is not None:
+            trigger_d6_posture_downgrade(
+                posture_store,
+                principal=acting_principal,
+                forced_stale=force_stale,
+            )
+        else:
+            logger.warning(
+                "vault.restore.d6_not_triggered_no_posture_store",
+                extra={
+                    "vault_id": target_handle.vault_id,
+                    "principal": acting_principal,
+                    "forced_stale": force_stale,
+                    "detail": (
+                        "no posture_store injected; N12-RT-05 D6 downgrade NOT "
+                        "fired — a Conformant deployment MUST inject the store"
+                    ),
+                },
+            )
 
         receipt = RestoreReceipt(
             restored_handle=target_handle,
             kek_generation=resolved.kek_generation,
             audit_anchor_ref=target_ref,
-            forced_stale=False,
+            forced_stale=force_stale,
             metadata={"kek_commitment_alg": kek_commitment_alg},
         )
         logger.info(
@@ -720,14 +1005,17 @@ def restore_vault_key(
                 "vault_id": target_handle.vault_id,
                 "key_id": target_handle.key_id,
                 "kek_generation": resolved.kek_generation,
+                "forced_stale": force_stale,
             },
         )
         return receipt
     finally:
-        # N12-IN-05: consume-and-del the reconstructed secret + the resolved
-        # target material in a finally so every exit path (success, gate-fail,
-        # dispatch-fail) drops the plaintext.
+        # N12-IN-05: consume-and-del the reconstructed secret (if reconstruction
+        # was reached) + the resolved target material in a finally so every exit
+        # path (success, gate-fail, dispatch-fail, foreign-shard-reject-before-
+        # reconstruct) drops the plaintext.
         del secret
+        _reconstructed.clear()
         resolved.zeroize()
 
 
@@ -838,3 +1126,60 @@ def _as_word_lists(shards: Sequence[Sequence[str]]):
     tuples (a common caller shape) reaches the wrapper as lists.
     """
     return [list(s) for s in shards]
+
+
+def _shard_commitment(shard: Sequence[str]) -> str:
+    """SHA-256 (lowercase hex) of a shard's canonical paper-print ciphertext.
+
+    The within-deployment foreign-shard anchor (N12-CB-03) is the SHA-256 of each
+    shard's canonical SLIP-0039 mnemonic form (the paper-print ciphertext produced
+    by :func:`~kailash.trust.vault.shamir.serialize_shard` — space-joined words).
+    Backup computes one per generated shard so the recovery-tier
+    ``vault_key_backup`` anchor carries the per-deployment ``shard_commitments``
+    array; restore re-hashes each PRESENTED shard the same way and rejects a shard
+    whose hash is absent from that array with ``unknown-shard`` BEFORE
+    reconstruction.
+    """
+    return hashlib.sha256(serialize_shard(list(shard)).encode("utf-8")).hexdigest()
+
+
+#: The recovery-tier OUTCOME subtypes that establish a generation's shard
+#: distribution (N12-CB-03 sources the foreign-shard array from one of these).
+#: ``vault_kek_recommit`` / ``vault_kek_retire`` are EXCLUDED — they re-shard
+#: nothing, so they carry no distribution.
+_DISTRIBUTION_SUBTYPES: frozenset[str] = frozenset(
+    {"vault_key_backup", "vault_holder_rotation", "vault_kek_rotation"}
+)
+
+
+def _find_distribution_anchor(
+    dispatcher: AuditDispatcher,
+    *,
+    vault_id: str,
+    kek_generation: int,
+) -> Optional[dict[str, Any]]:
+    """Find the recovery-tier distribution anchor for ``(vault_id, gen)`` (N12-CB-03).
+
+    Scans the recovery-tier engine entries for the LATEST OUTCOME anchor whose
+    ``subtype`` establishes a shard distribution AND whose ``vault_id`` +
+    ``kek_generation`` match. Returns its ``event_payload`` (carrying
+    ``shard_commitments`` + ``holders``) or ``None`` when no such anchor exists.
+
+    For Wave-3 the ordinary in-generation restore reads the CURRENT-generation
+    distribution anchor; the forced-stale captured-generation source (sourcing
+    the CAPTURED old-generation distribution) is C3's. C2a sources the anchor
+    matching the generation being restored (``resolved.kek_generation``).
+    """
+    engine = dispatcher._engines.get(AuditTier.RECOVERY.value)
+    if engine is None:
+        return None
+    match: Optional[dict[str, Any]] = None
+    for entry in engine.entries:
+        payload = entry.event_payload
+        if (
+            payload.get("subtype") in _DISTRIBUTION_SUBTYPES
+            and payload.get("vault_id") == vault_id
+            and payload.get("kek_generation") == kek_generation
+        ):
+            match = payload  # latest-wins (entries are append-ordered)
+    return match

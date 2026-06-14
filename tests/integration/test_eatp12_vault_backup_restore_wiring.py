@@ -31,6 +31,7 @@ Conformance coverage (EATP-12 §4.1 / §4.5):
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from typing import Callable
@@ -42,15 +43,24 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from kailash.delegate.audit import AuditChainSignatureError
 from kailash.delegate.types import DelegateIdentity, PrincipalDirectory
 from kailash.delegate.verifier import Ed25519Verifier
-from kailash.trust._json import canonical_json_dumps
 from kailash.trust.key_manager import KeyClass
 from kailash.trust.vault.backup import back_up_vault_key, restore_vault_key
 from kailash.trust.vault.commitment import kek_identity_commitment
 from kailash.trust.vault.dispatch import AuditDispatcher, AuditTier
 from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
 from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
-from kailash.trust.vault.shamir import ShamirRitual, generate
+from kailash.trust.vault.registry import CommitmentRegistry
+from kailash.trust.vault.shamir import ShamirRitual, generate, serialize_shard
 from kailash.trust.vault.types import ClearanceContext, VaultKeyHandle
+
+
+def _shard_commitments(shards) -> list[str]:
+    """SHA-256 (hex) of each shard's canonical paper-print form (N12-CB-03)."""
+    return [
+        hashlib.sha256(serialize_shard(list(s)).encode("utf-8")).hexdigest()
+        for s in shards
+    ]
+
 
 # A known KEK secret (32 bytes = 256 bits). The no-plaintext invariant asserts
 # this NEVER appears (raw or hex) in any receipt / anchor / log record.
@@ -122,6 +132,22 @@ def _clearance(*caps: str) -> ClearanceContext:
     return ClearanceContext(
         principal="agent-1", tenant="t1", domain="d1", capabilities=tuple(caps)
     )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_default_registry():
+    """Reset the process-default commitment registry between tests.
+
+    Backups that do NOT inject a ``registry`` register into the module singleton
+    (:func:`default_commitment_registry`); without isolation a registration from
+    one test would leak into a sibling that consults the default. Clearing the
+    store before each test keeps the singleton-default path deterministic.
+    """
+    from kailash.trust.vault.registry import default_commitment_registry
+
+    default_commitment_registry()._store.clear()
+    yield
+    default_commitment_registry()._store.clear()
 
 
 def _resolver_satisfies_protocol() -> None:
@@ -334,6 +360,10 @@ def test_restore_round_trip_no_plaintext_in_receipt(caplog):
         expected_commitment=commitment,
         alg_id=_ALG,
         holders=["h1", "h2", "h3", "h4", "h5"],
+        # Foreign-shard source (N12-CB-03): the presented shards' real ciphertext
+        # hashes MUST be in the distribution. The caller-supplied array is the
+        # backward-compat fallback (no registry / no anchor in this isolated test).
+        shard_commitments=_shard_commitments(shards),
     )
 
     assert receipt.restored_handle == _handle()
@@ -386,6 +416,10 @@ def test_restore_commitment_mismatch_rejected():
             expected_commitment=wrong_commitment,
             alg_id=_ALG,
             holders=["h1", "h2", "h3", "h4", "h5"],
+            # Genuine shards pass the foreign-shard gate (step 6) so the restore
+            # reaches the commitment-auth gate (step 7) where the wrong commitment
+            # is rejected — the gate-ORDER guarantee the reorder must preserve.
+            shard_commitments=_shard_commitments(shards),
         )
     assert exc.value.code is N12FT01Code.KEK_COMMITMENT_MISMATCH
     # The restore did NOT proceed: no OUTCOME anchor on recovery; a denial on
@@ -431,39 +465,28 @@ def test_restore_missing_clearance_dispatches_safety_denial():
 
 
 @pytest.mark.integration
-def test_restore_binding_path_reproduces_spec_12_8_event_payload():
-    """N12-AU-04 / §12.8 — the I1 restore BINDING path (not just the direct D2
-    builder) emits a ``vault_key_restore`` anchor whose ``event_payload``
-    reproduces the §12.8 golden canonical form byte-for-byte.
+def test_restore_binding_path_records_distribution_via_registry():
+    """C2a — the restore BINDING path sources its distribution from the backup's
+    recovery-tier distribution anchor (N12-CB-03 / N12-AU-04), NOT the presenting
+    k-shard subset.
 
-    Closes the G1 gate gap (security-reviewer HIGH-1): the §12.8 byte-pin was
-    previously exercised ONLY via ``build_restore_anchor`` directly, hiding that
-    the binding recorded ``shard_commitments=[]`` + ``shard_count=len(shards)``
-    (the presenting k-subset) instead of the current-generation DISTRIBUTION
-    (n=5 + the 5 commitments) the spec mandates. Drives the real
-    ``restore_vault_key`` against the §12.1 fixed inputs and asserts the
-    DISPATCHED anchor payload equals §12.8. (The full signed pre-image hex is
-    signer-id-dependent — the fixture's ``delegate:vault-signer-00`` vs this
-    test's random Ed25519 ``delegate_id`` — so the signer-independent
-    ``event_payload`` is the binding-path conformance target; the full-hex pin
-    lives in the direct-builder test ``test_restore_anchor_byte_pin_12_8``.)
+    The C2a successor to the Wave-2 HIGH-1 §12.8 binding-path test (per
+    journal/0007 G3 carry-in: "the binding-path test MUST be updated to drive the
+    registry path once C2a lands"). Drives a real backup→restore round-trip:
+    backup registers the commitment + dispatches a ``vault_key_backup``
+    distribution anchor carrying the REAL shard_commitments; restore then SOURCES
+    its foreign-shard array + restore-anchor distribution from that anchor and its
+    commitment from the registry — no caller-supplied ``expected_commitment`` /
+    ``holders`` / ``shard_commitments``. The HIGH-1 regression guard
+    (``shard_count == n == 5``, distribution recorded not the k-subset) holds
+    against the registry-sourced distribution. The byte-exact §12.8 golden pin is
+    owned by the direct-builder test ``test_restore_anchor_byte_pin_12_8``.
     """
-    import json
-    from pathlib import Path
-
-    # §12.1 fixed inputs (128-bit master secret, generation 7, fixture vault).
     secret_128 = bytes.fromhex("00112233445566778899aabbccddeeff")
     vault_id = "vault:fixture-0001"
     gen = 7
     provenance = "vault-derived:v1"
     holders = ["holder:h1", "holder:h2", "holder:h3", "holder:h4", "holder:h5"]
-    shard_commitments = ["a" * 64, "b" * 64, "c" * 64, "d" * 64, "e" * 64]
-    commitment = kek_identity_commitment(
-        vault_id=vault_id,
-        kek_generation=gen,
-        master_secret=secret_128,
-        passphrase_provenance=provenance,
-    )
 
     class _FixtureResolver:
         """Trusted-module resolver returning the §12.1 KEK (NOT a mock)."""
@@ -479,47 +502,111 @@ def test_restore_binding_path_reproduces_spec_12_8_event_payload():
 
     identity, verifier, signer = _build_signer()
     dispatcher = AuditDispatcher.for_named_tiers(verifier)
-    # A conformant restore PRESENTS exactly k=3 shards (the wrapper requires
-    # exactly k); the anchor still records the full n=5 distribution via the
-    # caller-supplied shard_commitments, independent of the presented subset.
-    shards = generate(secret_128, ShamirRitual(threshold=3, total_shards=5))[:3]
+    resolver = _FixtureResolver()
+    registry = CommitmentRegistry()  # fresh — isolate the registration
     target = VaultKeyHandle(key_id="kek-fixture", vault_id=vault_id, kek_generation=gen)
 
+    # Model post-backup deployment state from ONE canonical shard set (holders
+    # hold these; the restore presents a k-subset of THESE). A real
+    # ``back_up_vault_key`` shards INTERNALLY with a CSPRNG and never returns the
+    # shards (they go to holders), so a round-trip test cannot share backup's
+    # internal shards — it constructs the post-backup state the restore consults:
+    # (a) the registered commitment (what backup.register did), (b) the recovery-
+    # tier ``vault_key_backup`` distribution anchor carrying THESE shards'
+    # ciphertext commitments (what backup dispatched).
+    all_shards = generate(secret_128, ShamirRitual(threshold=3, total_shards=5))
+    real_commitments = _shard_commitments(all_shards)
+    commitment = kek_identity_commitment(
+        vault_id=vault_id,
+        kek_generation=gen,
+        master_secret=secret_128,
+        passphrase_provenance=provenance,
+    )
+    registry.register(
+        vault_id=vault_id,
+        kek_generation=gen,
+        kek_commitment_alg="eatp-v1",
+        commitment=commitment,
+        key_id="kek-fixture",
+    )
+    from kailash.delegate.audit import content_signing_bytes
+    from kailash.trust.vault.anchors import build_backup_anchor
+
+    backup_payload = build_backup_anchor(
+        alg_id="eatp-v1",
+        k=3,
+        n=5,
+        holders=holders,
+        shard_count=5,
+        vault_id=vault_id,
+        kek_generation=gen,
+        kek_identity_commitment=commitment,
+        kek_commitment_alg="eatp-v1",
+        kcv="0" * 16,
+        shard_commitments=real_commitments,
+        slip39_params={
+            "extendable": True,
+            "iteration_exponent": 1,
+            "group_threshold": 1,
+            "master_secret_bits": 128,
+        },
+        principal="delegate:requester-01",
+        timestamp="unverified",
+        time_attested=False,
+        side_channel_hardened=False,
+    )
+    _pre = content_signing_bytes(
+        "external_side_effect", backup_payload, identity.delegate_id
+    )
+    dispatcher.dispatch(
+        "external_side_effect",
+        backup_payload,
+        identity,
+        signer(_pre),
+        AuditTier.RECOVERY.value,
+    )
+
+    # Present a k=3 subset of the SAME canonical shard set the distribution holds.
+    shards = all_shards[:3]
+
+    # Restore: NO caller-supplied commitment / holders / shard_commitments —
+    # everything is sourced from the registry + the recovery-tier distribution
+    # anchor the backup dispatched.
     restore_vault_key(
         shards,
         target,
         _clearance("vault:restore"),
-        resolver=_FixtureResolver(),
+        resolver=resolver,
         dispatcher=dispatcher,
         signer=signer,
         signer_identity=identity,
-        expected_commitment=commitment,
         alg_id="eatp-v1",
-        holders=holders,
-        shard_commitments=shard_commitments,
+        registry=registry,
         re_established_handle_ref="opaque:href-restored-01",
         timestamp="2026-06-12T00:00:00Z",
         time_attested=True,
         principal="delegate:requester-01",
     )
 
-    # The binding dispatched exactly one vault_key_restore anchor to recovery.
-    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 1
-    payload = dispatcher._engines[AuditTier.RECOVERY.value].entries[-1].event_payload
-    assert payload["subtype"] == "vault_key_restore"
-    # Distribution recorded, NOT the presenting subset (HIGH-1 regression guard).
-    assert payload["shard_count"] == 5
-    assert payload["shard_commitments"] == shard_commitments
-    assert payload["re_established_handle_ref"] == "opaque:href-restored-01"
-
-    fixture = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "test-vectors"
-            / "eatp12-vault-canonical.json"
-        ).read_text(encoding="utf-8")
+    # Recovery tier now holds the backup anchor + the restore anchor.
+    rec = dispatcher._engines[AuditTier.RECOVERY.value].entries
+    backup_anchor = next(
+        e for e in rec if e.event_payload["subtype"] == "vault_key_backup"
     )
-    vec = next(v for v in fixture["anchor_vectors"] if v["spec_section"] == "12.8")
+    restore_anchor = next(
+        e for e in rec if e.event_payload["subtype"] == "vault_key_restore"
+    )
+    payload = restore_anchor.event_payload
+    # Distribution recorded, NOT the presenting subset (HIGH-1 regression guard),
+    # and sourced from the backup's distribution anchor (C2a).
+    assert payload["shard_count"] == 5
     assert (
-        canonical_json_dumps(payload) == vec["event_payload"]
-    ), "I1 restore binding path diverged from the §12.8 golden event_payload"
+        payload["shard_commitments"] == backup_anchor.event_payload["shard_commitments"]
+    )
+    assert payload["holders"] == backup_anchor.event_payload["holders"]
+    assert payload["re_established_handle_ref"] == "opaque:href-restored-01"
+    # The recorded commitment is the registered (authenticated) one.
+    assert (
+        payload["kek_identity_commitment"]
+        == backup_anchor.event_payload["kek_identity_commitment"]
+    )

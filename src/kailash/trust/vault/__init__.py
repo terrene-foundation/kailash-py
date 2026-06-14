@@ -34,6 +34,17 @@ from kailash.trust.vault.dispatch import (
 )
 from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
 from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
+from kailash.trust.vault.registry import (
+    CommitmentEntry,
+    CommitmentRegistry,
+    RegistryLookup,
+    default_commitment_registry,
+)
+from kailash.trust.vault.registry_ops import (
+    RETIRE_ALG_CAPABILITY,
+    recommit_vault_kek,
+    retire_vault_kek_alg,
+)
 from kailash.trust.vault.shamir import (
     ShamirRitual,
     deserialize_shard,
@@ -41,6 +52,14 @@ from kailash.trust.vault.shamir import (
     reconstruct,
     rotate_holders,
     serialize_shard,
+)
+from kailash.trust.vault.stale_guard import (
+    COOLING_OFF_DAYS,
+    RESTORE_STALE_CAPABILITY,
+    CompromisedGenerationDenylist,
+    current_generation_from_chain,
+    default_compromised_generation_denylist,
+    trigger_d6_posture_downgrade,
 )
 from kailash.trust.vault.types import (
     BackupReceipt,
@@ -73,6 +92,22 @@ __all__ = [
     "AuditTier",
     "DispatchReceipt",
     "require_receipt_or_abort",
+    # EATP-12 W3-C2a — per-(handle, generation) commitment registry (N12-CB-04(c))
+    "CommitmentRegistry",
+    "CommitmentEntry",
+    "RegistryLookup",
+    "default_commitment_registry",
+    # EATP-12 W3-C2b — commitment-registry write ops (recommit + retire)
+    "recommit_vault_kek",
+    "retire_vault_kek_alg",
+    "RETIRE_ALG_CAPABILITY",
+    # EATP-12 W3-C3 — stale-generation guard + denylist + RT-05 D6 trigger
+    "CompromisedGenerationDenylist",
+    "default_compromised_generation_denylist",
+    "current_generation_from_chain",
+    "trigger_d6_posture_downgrade",
+    "RESTORE_STALE_CAPABILITY",
+    "COOLING_OFF_DAYS",
     # EATP-12 Wave-1 substrate — taxonomy (N12-FT-01)
     "N12FT01Code",
     "VaultBindingError",
