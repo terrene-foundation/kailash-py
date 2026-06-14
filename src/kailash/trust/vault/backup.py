@@ -725,6 +725,9 @@ def back_up_vault_key(
         try:
             del secret
         except NameError:
+            # `secret` was never bound — an early raise above (resolve/gate
+            # failure) exits before line 610. Nothing to delete; the resolver
+            # zeroize below still runs unconditionally. (N12-IN-05.)
             pass
         resolved.zeroize()
 

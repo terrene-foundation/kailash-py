@@ -66,7 +66,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 
 from kailash.delegate.types import DelegateIdentity
 from kailash.trust.posture.postures import PostureStore
