@@ -588,7 +588,7 @@ Trust Vault key backup uses Shamir secret-sharing per SLIP-0039 (SatoshiLabs ref
 - **`serialize_shard(shard: List[str]) -> str`** -- canonical paper-print form (single space-joined dictionary words). Interop surface across SDKs and the form holders write to paper, engrave on metal, or print on cards.
 - **`deserialize_shard(shard: str) -> List[str]`** -- reverse operation, whitespace-tolerant for paper transcription.
 - **`rotate_holders(old_shards: List[List[str]], new_ritual: ShamirRitual, *, passphrase: bytes = b"") -> List[List[str]]`** -- recombine then re-shard. Used when the holder set changes (a holder leaves, a new holder joins, or the ritual is updated). The intermediate secret is `del`-eted before the function returns; rotation SHOULD run on an air-gapped host per Trust Vault operational guidance.
-- **`back_up_vault_key(vault_key: bytes, ritual: ShamirRitual) -> List[List[str]]`** -- Trust Vault binding stub. Awaits mint ISS-37 (Trust Vault key clearance and rotation envelope). The signature is published so callers can compile against it; the body raises `NotImplementedError` referencing issue #606 + ISS-37 until the binding spec lands.
+- **`back_up_vault_key(key_handle, ritual, clearance, holders, *, resolver, dispatcher, signer, signer_identity, alg_id, ...) -> BackupReceipt`** (`kailash.trust.vault.backup`) -- the handle-based EATP-12 Trust-Vault binding (issue #1312). The KEK is resolved INTERNALLY from `key_handle` via the injected `resolver` (the trusted-module boundary, N12-IN-01); raw KEK bytes do NOT cross the public API and the resolved secret is consumed-and-`del`-eted in a `finally` (N12-IN-05). It gates clearance (`vault:backup`), the ritual floor (`2<=k<=n<=9`), and holder-registry membership; shards under the vetted ritual; registers the KEK-identity commitment + KCV; dispatches a signed `vault_key_backup` audit anchor to the `recovery` tier (no shard release until the dispatch receipt is in hand, N12-AU-02b); and returns a `BackupReceipt` (commitment, KCV, k, n, holder ids -- NEVER the secret). The full EATP-12 binding contract is § "Trust-Vault Binding (EATP-12)" below.
 
 ### Optional Extra
 
@@ -629,15 +629,23 @@ The ritual is captured as `(threshold, total_shards)` -- m-of-n. Reconstruction 
 
 The intermediate secret is held in memory for the duration of the re-shard call. Hardened deployments SHOULD perform rotation in a process that exits immediately afterward to minimize the residence window. To rotate the passphrase as well as the holder set, call `reconstruct()` and `generate()` explicitly.
 
-### Trust Vault Binding (Awaiting Mint ISS-37)
+### Trust-Vault Binding (EATP-12)
 
-`back_up_vault_key` is published as a gate-documented stub -- the only permitted stub per `rules/zero-tolerance.md` Rule 2 (issue-linked, gate-documented). When mint ISS-37 stabilises:
+The EATP-12 v1.0 Trust-Vault key-binding (issue #1312) composes the SLIP-0039 wrapper above with a commitment/KCV control, a clearance/authz gate, a named-tier audit dispatcher, a per-(vault, generation) commitment registry, a stale-generation guard, holder rotation, and Complete-level governance gates. The two operator-facing operations live in `kailash.trust.vault.backup`:
 
-1. The body resolves the vault key by ID against the mint-issued clearance envelope, validating that the calling agent holds the required `backup` capability.
-2. The resolved key bytes are passed to `kailash.trust.vault.shamir.generate()` under the supplied ritual.
-3. An audit anchor is written to the canonical audit store (per `rules/eatp.md` audit-anchor contract) capturing ritual parameters, holder distribution policy, and shard count. Shard contents are NEVER logged (per `rules/observability.md` MUST Rule 4).
+- **`back_up_vault_key(...) -> BackupReceipt`** -- splits a resolver-resolved KEK under a vetted ritual and dispatches a signed `vault_key_backup` anchor (see the Public-Surface bullet above for the gate order).
+- **`restore_vault_key(shards, target_handle, clearance, *, resolver, dispatcher, signer, signer_identity, alg_id, ...) -> RestoreReceipt`** -- reconstructs a KEK from presented shards and re-establishes it opaquely. Runs the canonical FT-02 first-failing gate order (§4.6): clearance (tenant->domain->token fail-closed + the N12-CL-04 cooling-off suspension) -> handle-type -> foreign-shard (presented shard ciphertext-hashes checked against the distribution anchor BEFORE reconstruction) -> reconstruct -> commitment-auth (3-way discrimination: `commitment-alg-mismatch` / `retired-commitment-alg` / `kek-commitment-mismatch`, plus `key-identity-mismatch`) -> stale-generation (ordinal gen derived from the audited rotation chain). The reconstructed secret is consumed-and-`del`-eted in a `finally` (N12-IN-05); the `RestoreReceipt` is an opaque handle ref, never the secret.
 
-The signature does NOT change when ISS-37 lands; only the body fills in. Callers can compile against `back_up_vault_key` today and observe `NotImplementedError` referencing issue #606 + mint ISS-37 until the binding spec lands.
+Supporting surface (all under `kailash.trust.vault`):
+
+- **Commitment + KCV** (`commitment.py`): `kek_identity_commitment` binds `(vault_id, kek_generation, secret, passphrase_provenance, resolved key-id)` under the EATP-08 §3.3 registry alg token; `key_check_value` is the key-free domain-separated 8-byte KCV. The canonical pre-image uses RFC-8785/JCS (`canonical_json_dumps`, `ensure_ascii=False`).
+- **Audit anchors** (`anchors.py`): the closed `vault_*` subtype set (`vault_key_backup`, `vault_key_restore`, `vault_key_restore_denied`, `vault_kek_rotation`, `vault_kek_recommit`, `vault_kek_retire`, `vault_holder_rotation`, `vault_key_restore_forced_stale`, `vault_denial_summary`), each a canonical `event_payload` whose pre-image is `content_signing_bytes` (`event_type="external_side_effect"`); `alg_id` rides `event_payload.alg_id`. Denials carry a distinct minimal schema and are dispatched to the `safety` tier; secrets/shard contents are never recorded.
+- **Commitment registry + recommit/retire** (`registry.py` / `registry_ops.py`): additive per-(vault, generation) commitment registration; `vault_kek_recommit` adds a new-alg commitment without deleting the prior (EATP-08 hash-sunset migration); `vault_kek_retire` marks an alg entry non-verifiable (`retired-commitment-alg` on restore under it).
+- **Stale-generation guard** (`stale_guard.py`): default stale-refusal; the `force_stale` override (distinct `vault:restore-stale` capability) overrides ONLY the ordinal gate and loudly dual-emits `vault_key_restore_forced_stale` to recovery + safety; a compromised-generation denylist (`revoked-generation`) is NOT overridable by `force_stale`. Every materializing restore triggers the N12-RT-05 D6 downgrade (principal -> SUPERVISED + 7-day cooling-off).
+- **Rotation** (`rotation.py`): `rotate_vault_holders` (amicable, generation unchanged) and `revoke_holder_for_cause` (for-cause generation-advance + new distribution), composing `shamir.rotate_holders` + the k-floor revocation check.
+- **Complete-level gates** (`complete.py`, gated behind `ConformanceLevel.COMPLETE`): `verify_governance_approval` (N12-CL-03 -- a distinct `vault:approve` holder, no self-approval on principal or `delegate_id`, signed approval bound into the restore anchor's `event_payload["approval"]`), `verify_ceremony_witness` (N12-CL-05 -- a distinct `vault:witness` holder bound into the backup anchor's `event_payload["witness"]`), and per-holder wrapping (N12-SH-02). At `ConformanceLevel.CONFORMANT` these are not invoked and the audit pre-image is byte-unchanged.
+
+Conformance vectors V1-V8 (spec §7) are exercised as Tier-2 tests; the canonical §12 byte-vectors live at `tests/test-vectors/eatp12-vault-canonical.json`. The closed typed-error enum is `N12FT01Code` (`errors.py`).
 
 ### Security Caveat
 
@@ -653,8 +661,13 @@ A matching scaffold is expected on the Rust SDK (`kailash-rs`) using a parallel 
 
 ### Tests
 
-- Tier 1 regression: `tests/regression/test_issue_606_shamir_wrapper.py` -- ritual validation, frozen invariant, lazy-import absence-path contract, stub error message.
+- Tier 1 regression: `tests/regression/test_issue_606_shamir_wrapper.py` -- ritual validation, frozen invariant, lazy-import absence-path contract, the handle-based `back_up_vault_key` conformant surface.
 - Tier 2 integration: `tests/integration/trust/test_shamir_round_trip.py` -- real `shamir-mnemonic` round-trip across multiple shard subsets, threshold-minus-1 reconstruct refusal, paper-print round-trip, holder rotation 3-of-5 -> 2-of-3 + 3-of-5 -> 5-of-7 secret preservation. Per `rules/orphan-detection.md` Rule 2a (Crypto-Pair Round-Trip Through Facade), all crypto operations route through the public `kailash.trust.vault.shamir.<name>` surface, NOT the underlying library directly.
+- EATP-12 binding (Tier-1 byte-pin + Tier-2 wiring): `tests/regression/test_eatp12_vault_canonical_vectors.py` + `test_eatp12_vault_anchor_vectors.py` (§12 byte-pins), `test_eatp12_vault_3way_discrimination.py`, and the `tests/integration/test_eatp12_vault_*_wiring.py` suites (dispatch, clearance, registry, stale-guard, rotation, recommit/retire, holder-registry, backup/restore, complete, x1-embed) exercising the full gate order, audit chain, and Complete-level V8 governance binding against the real substrate.
+
+### §30 Change log
+
+- 2026-06-15: replaced the "Awaiting Mint ISS-37" `back_up_vault_key` stub description with the shipped EATP-12 Trust-Vault binding contract (issue #1312, Waves 1-6); `back_up_vault_key` is now the handle-based conformant surface returning `BackupReceipt` and `restore_vault_key` is its inverse, per `rules/spec-accuracy.md` Rule 5 (code-first, spec describes what landed).
 
 ---
 

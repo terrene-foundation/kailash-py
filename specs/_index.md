@@ -65,11 +65,11 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Trust Plane (EATP)
 
-| File                                 | Description                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------ |
-| [trust-eatp.md](trust-eatp.md)       | EATP protocol, trust chains, constraint envelope, capability attestation, delegation |
-| [trust-posture.md](trust-posture.md) | TrustPosture state machine, BudgetTracker, PostureStore, audit store                 |
-| [trust-crypto.md](trust-crypto.md)   | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop          |
+| File                                 | Description                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| [trust-eatp.md](trust-eatp.md)       | EATP protocol, trust chains, constraint envelope, capability attestation, delegation                         |
+| [trust-posture.md](trust-posture.md) | TrustPosture state machine, BudgetTracker, PostureStore, audit store                                         |
+| [trust-crypto.md](trust-crypto.md)   | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop, EATP-12 Trust-Vault key-binding |
 
 ## ML Lifecycle 2.0 — Engine Core
 
@@ -108,14 +108,14 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## ML Integrations (cross-framework supporting specs)
 
-| File                                                             | Description                                                                                                                                     |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [kailash-core-ml-integration.md](kailash-core-ml-integration.md) | Core SDK ↔ ML bridge: extras alias (`pip install kailash[ml]`), workflow-node adapters, `kailash.ml` namespace re-export                        |
+| File                                                             | Description                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [kailash-core-ml-integration.md](kailash-core-ml-integration.md) | Core SDK ↔ ML bridge: extras alias (`pip install kailash[ml]`), workflow-node adapters, `kailash.ml` namespace re-export                                                                                                                          |
 | [dataflow-ml-integration.md](dataflow-ml-integration.md)         | DataFlow ↔ ML bridge (**v2.0.0 — graduated from draft, #693**): `ml_feature_source` / `transform` / `hash` polars bindings, `TrainingContext`, `lineage_dataset_hash` provenance, multi-tenant feature-group classification, ML-event subscribers |
-| [nexus-ml-integration.md](nexus-ml-integration.md)               | Nexus ↔ ML bridge: ml-endpoints mount (REST + MCP + WS), `UserContext` preservation, channel-aware `ServeHandle`, dashboard embed               |
-| [kaizen-ml-integration.md](kaizen-ml-integration.md)             | Kaizen ↔ ML bridge: §2.4 Agent Tool Discovery via `km.engine_info()`, `SQLiteSink` TraceExporter, shared `CostTracker`, `_kml_agent_*` tables   |
-| [align-ml-integration.md](align-ml-integration.md)               | Align ↔ ML bridge: fine-tuning-as-training-engine, LoRA Lightning callback, RL ↔ alignment trajectory unification via `ml-rl-align-unification` |
-| [pact-ml-integration.md](pact-ml-integration.md)                 | PACT ↔ ML bridge: `ml_context` envelope kwarg, D/T/R clearance on engine methods, governance-gated AutoML + registry                            |
+| [nexus-ml-integration.md](nexus-ml-integration.md)               | Nexus ↔ ML bridge: ml-endpoints mount (REST + MCP + WS), `UserContext` preservation, channel-aware `ServeHandle`, dashboard embed                                                                                                                 |
+| [kaizen-ml-integration.md](kaizen-ml-integration.md)             | Kaizen ↔ ML bridge: §2.4 Agent Tool Discovery via `km.engine_info()`, `SQLiteSink` TraceExporter, shared `CostTracker`, `_kml_agent_*` tables                                                                                                     |
+| [align-ml-integration.md](align-ml-integration.md)               | Align ↔ ML bridge: fine-tuning-as-training-engine, LoRA Lightning callback, RL ↔ alignment trajectory unification via `ml-rl-align-unification`                                                                                                   |
+| [pact-ml-integration.md](pact-ml-integration.md)                 | PACT ↔ ML bridge: `ml_context` envelope kwarg, D/T/R clearance on engine methods, governance-gated AutoML + registry                                                                                                                              |
 
 ## ML Lifecycle (Legacy)
 

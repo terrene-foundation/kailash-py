@@ -352,9 +352,9 @@ In-memory audit log with configurable capacity.
 Trust Vault key material is backed up via SLIP-0039 Shamir secret-sharing per Envoy Phase 01. The default ritual is **3-of-5** -- any three of five holders MUST agree to reconstruct a backed-up vault key. Operational guidance:
 
 - The wrapper API lives in `kailash.trust.vault.shamir`; full surface and contracts in `specs/trust-crypto.md` § Shamir Secret-Sharing.
-- The Trust Vault binding (`kailash.trust.vault.backup.back_up_vault_key`) is a gate-documented stub awaiting **mint ISS-37** (Trust Vault key clearance and rotation envelope). Until ISS-37 stabilises, callers reach `back_up_vault_key` and receive `NotImplementedError` referencing issue #606 + ISS-37; direct callers can use `kailash.trust.vault.shamir.generate(...)` against pre-resolved key bytes.
+- The Trust Vault binding (`kailash.trust.vault.backup.back_up_vault_key` / `restore_vault_key`) is the shipped EATP-12 v1.0 handle-based key-binding (issue #1312). The KEK is resolved internally from a `VaultKeyHandle` via the deployment-supplied trusted resolver; raw KEK bytes do NOT cross the public API. `back_up_vault_key` gates clearance + ritual floor + holder-registry membership, shards the KEK, and dispatches a signed `vault_key_backup` audit anchor; it returns a `BackupReceipt` (commitment, KCV, k, n, holders -- never the secret). Full contract in `specs/trust-crypto.md` § Trust-Vault Binding (EATP-12).
 - The audited reference library (`shamir-mnemonic>=0.3`) is shipped as the optional `shamir` extra: `pip install kailash[shamir]`. Module import succeeds without the extra; first call site fails loudly with an actionable install hint per `rules/dependencies.md`.
-- Shard contents are NEVER logged at any severity (per `rules/observability.md` MUST Rule 4). When ISS-37 lands, the binding will write an audit anchor capturing ritual parameters, holder distribution policy, and shard count -- but not the shards themselves.
+- Shard contents are NEVER logged at any severity (per `rules/observability.md` MUST Rule 4). The binding writes a signed `vault_key_backup` audit anchor capturing ritual parameters, holder ids, and shard count -- but never the shards themselves; the reconstructed secret is consumed-and-`del`-eted in a `finally` (N12-IN-05).
 - The reference implementation is **not constant-time**; production deployments needing side-channel resistance MUST evaluate hardened alternatives before relying on the reference path. See `specs/trust-crypto.md` § Shamir Secret-Sharing for the full security caveat.
 
 ---
@@ -402,12 +402,12 @@ Pre-auth read paths (login lookup, password-reset lookup, invite-accept lookup) 
 
 **Public surface:**
 
-| Symbol | Purpose |
-| --- | --- |
-| `SecurityDefinerBuilder` | Fluent builder. Required setters: `function_name` (constructor arg), `search_path`, `authenticator_role`, `user_table`, `password_column`, ≥1 `param`, ≥1 `return_column`. Optional: `tenant_column`, `primary_lookup_column`, `active_column`. |
-| `SecurityDefinerBuilderError` | `ValueError` subclass. Raised on missing required field, unknown PG type, identifier-injection payload, or `tenant_column` set without matching `p_tenant_id` param. Error messages NEVER echo raw input — only fingerprint hashes. |
-| `ALLOWED_PG_TYPES` | Allowlist of 30 PostgreSQL type strings (`bigint`, `text`, `inet`, `cidr`, `citext`, `interval`, ...) — byte-shape identical with kailash-rs. |
-| `FunctionParam`, `ReturnColumn` | Frozen dataclasses representing the function signature shape. |
+| Symbol                          | Purpose                                                                                                                                                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SecurityDefinerBuilder`        | Fluent builder. Required setters: `function_name` (constructor arg), `search_path`, `authenticator_role`, `user_table`, `password_column`, ≥1 `param`, ≥1 `return_column`. Optional: `tenant_column`, `primary_lookup_column`, `active_column`. |
+| `SecurityDefinerBuilderError`   | `ValueError` subclass. Raised on missing required field, unknown PG type, identifier-injection payload, or `tenant_column` set without matching `p_tenant_id` param. Error messages NEVER echo raw input — only fingerprint hashes.             |
+| `ALLOWED_PG_TYPES`              | Allowlist of 30 PostgreSQL type strings (`bigint`, `text`, `inet`, `cidr`, `citext`, `interval`, ...) — byte-shape identical with kailash-rs.                                                                                                   |
+| `FunctionParam`, `ReturnColumn` | Frozen dataclasses representing the function signature shape.                                                                                                                                                                                   |
 
 **`build()` output:** ordered list of 4 SQL statements:
 
