@@ -38,15 +38,16 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from kailash.trust.exceptions import TrustError
 from kailash.trust.signing.crypto import (
     generate_keypair,
     serialize_for_signing,
     sign,
     verify_signature,
 )
-from kailash.trust.exceptions import TrustError
 
 try:
     import boto3
@@ -90,6 +91,20 @@ class KeyManagerError(TrustError):
         self.operation = operation
 
 
+class KeyClass(str, Enum):
+    """Classification of a key within the KEK/data-key wrapping hierarchy.
+
+    EATP-12 §3.4 required net-new substrate. ``KEK`` (key-encryption key) is the
+    class the vault binding shards/backs-up; ``DATA`` keys are wrapped *by* a KEK
+    and MUST NOT be sharded/backed-up/restored directly (N12-IN-02). Existing keys
+    default to ``DATA`` so the field is backward-compatible — only keys explicitly
+    minted as a KEK carry ``KeyClass.KEK``.
+    """
+
+    KEK = "kek"
+    DATA = "data"
+
+
 @dataclass
 class KeyMetadata:
     """
@@ -105,6 +120,11 @@ class KeyMetadata:
         is_revoked: Whether the key has been revoked
         revoked_at: When the key was revoked
         rotated_from: Key ID this was rotated from (if any)
+        key_class: KEK vs DATA classification (EATP-12 §3.4; default DATA for
+            backward compatibility — see :class:`KeyClass`)
+        kek_generation: Monotonic generation counter for a KEK (EATP-12 §3.4 /
+            §6 stale-generation guard). Advances on every KEK rotation; MUST NOT
+            decrease. Meaningful only for ``key_class == KeyClass.KEK``.
     """
 
     key_id: str
@@ -116,11 +136,30 @@ class KeyMetadata:
     is_revoked: bool = False
     revoked_at: Optional[datetime] = None
     rotated_from: Optional[str] = None
+    key_class: KeyClass = KeyClass.DATA
+    kek_generation: int = 0
 
     def __post_init__(self):
-        """Set default created_at if not provided."""
+        """Set default created_at + validate the §3.4 generation invariant."""
         if self.created_at is None:
             self.created_at = datetime.now(timezone.utc)
+        # Normalize a str value into the enum (e.g. from from_dict / wire decode).
+        if not isinstance(self.key_class, KeyClass):
+            self.key_class = KeyClass(self.key_class)
+        # §3.4: kek_generation is a monotonic counter — it is never negative.
+        # (Monotonic *advance* across rotations is enforced by the rotation path,
+        # N12-RT-06; here we hold the structural floor that a generation label is
+        # a non-negative integer so a relabelled-to-negative blob is rejected.)
+        if not isinstance(self.kek_generation, int) or isinstance(
+            self.kek_generation, bool
+        ):
+            raise ValueError(
+                f"kek_generation must be an int, got {type(self.kek_generation).__name__}"
+            )
+        if self.kek_generation < 0:
+            raise ValueError(
+                f"kek_generation must be non-negative, got {self.kek_generation}"
+            )
 
     def is_active(self) -> bool:
         """Check if key is currently active (not expired and not revoked)."""
