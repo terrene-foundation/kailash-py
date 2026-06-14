@@ -703,7 +703,7 @@ a **top-level `alg_id` string** member. Under JCS (RFC 8785) key ordering,
 `alg_id` sorts first, so a verifier reads the algorithm before parsing the
 payload. The pre-registry nested object `{"algorithm": "..."}` and the
 deprecated literal are NON-conformant emissions. `AlgorithmIdentifier.to_dict()`
-returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:393-402`).
+returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:406-415`).
 
 ### 32.2 Registry and dispatch (EATP-08 §3.3 / §5.1)
 
@@ -712,7 +712,7 @@ plus reserved rows (`eatp-v1.1`, `eatp-v2`, `eatp-v2.ml-dsa`,
 `eatp-v2.slh-dsa`). `AlgorithmStatus` enumerates `Active` / `Reserved` /
 `Reserved-Unregistered` (`algorithm_id.py:79-85`).
 
-- `AlgorithmIdentifier(...)` (`algorithm_id.py:338`) accepts any **registered**
+- `AlgorithmIdentifier(...)` (`algorithm_id.py:350`, validation `:379`) accepts any **registered**
   token as a value; an unregistered token raises `UnsupportedAlgorithmError`
   with code `unsupported-algorithm`.
 - `resolve_dispatch(alg_id)` (`algorithm_id.py:273`) is the §5.1 step-2
@@ -729,11 +729,16 @@ EATP-08 §5.3 error code: `unsupported-algorithm`, `alg-id-shape-mismatch`,
 ### 32.3 Backward-compat regime (EATP-08 §4 — D1/D2a/D2b/D2c/D2d)
 
 The post-adoption path is strict (D2b): `AlgorithmIdentifier.from_dict()`
-and the consumer helper `decode_wire_alg_id()` (`algorithm_id.py:404`, `:527`)
+and the consumer helper `decode_wire_alg_id()` (`algorithm_id.py:417`, `:558`)
 do NOT silently default-fill. A missing/empty `alg_id` post-adoption raises
 `missing-alg-id-post-adoption`; a non-string or nested form raises
-`alg-id-shape-mismatch`; the bare deprecated literal off the legacy path
-raises `alg-id-shape-mismatch`.
+`alg-id-shape-mismatch`. A **bare top-level-string** `alg_id` equal to the
+deprecated literal `ed25519+sha256` is an unregistered token and raises
+`unsupported-algorithm` (EATP-08 §3.3 / §5.1 step 2, v1.1.1 / mint#26): it is
+NOT a D2d pre-registry form, and a D2d witness MUST NOT rescue it. A present
+`alg_id` key is authoritative, so `{"alg_id":"ed25519+sha256","algorithm":...}`
+also raises `unsupported-algorithm` rather than falling through to the
+`algorithm`-key D2d match (`from_dict`, `algorithm_id.py:474`).
 
 The legacy path (D2d, §4.5) is **dated and witnessed**. The pre-1.1 scaffold
 accepted a bare `legacy_path: bool` — a perpetual un-sunsetted downgrade
