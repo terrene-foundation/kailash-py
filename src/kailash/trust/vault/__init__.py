@@ -15,6 +15,13 @@ from __future__ import annotations
 import logging
 
 from kailash.trust.vault.backup import back_up_vault_key
+from kailash.trust.vault.commitment import (
+    kek_identity_commitment,
+    key_check_value,
+    verify_commitment,
+    verify_kcv,
+)
+from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
 from kailash.trust.vault.shamir import (
     ShamirRitual,
     deserialize_shard,
@@ -23,10 +30,19 @@ from kailash.trust.vault.shamir import (
     rotate_holders,
     serialize_shard,
 )
+from kailash.trust.vault.types import (
+    BackupReceipt,
+    ClearanceContext,
+    HolderId,
+    PassphraseRef,
+    RestoreReceipt,
+    VaultKeyHandle,
+)
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    # SLIP-0039 wrapper (pre-existing)
     "ShamirRitual",
     "back_up_vault_key",
     "deserialize_shard",
@@ -34,4 +50,19 @@ __all__ = [
     "reconstruct",
     "rotate_holders",
     "serialize_shard",
+    # EATP-12 Wave-1 substrate — taxonomy (N12-FT-01)
+    "N12FT01Code",
+    "VaultBindingError",
+    # commitment + KCV (N12-CB-01 / N12-CB-04(d))
+    "kek_identity_commitment",
+    "key_check_value",
+    "verify_commitment",
+    "verify_kcv",
+    # core DTOs (§4.1/§4.4/§4.5)
+    "BackupReceipt",
+    "ClearanceContext",
+    "HolderId",
+    "PassphraseRef",
+    "RestoreReceipt",
+    "VaultKeyHandle",
 ]

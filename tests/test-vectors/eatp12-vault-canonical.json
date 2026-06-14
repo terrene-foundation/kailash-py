@@ -1,0 +1,27 @@
+{
+  "_comment": "EATP-12 v1.0 Appendix B golden fixture (normative) — the cross-SDK byte-identical contract for N12-CB-01 (commitment) + N12-CB-04(d) (KCV). kailash-py and kailash-rs MUST both reproduce each hash exactly for the fixed inputs. ASCII-only; the non-ASCII sentinel (ensure_ascii=False divergence) is reconciled at the post-Wave-6 cross-SDK gate. Source: workspaces/eatp-12-vault-binding-py/briefs/eatp-12-v1.0-spec.md §12.1-12.3.",
+  "fixed_inputs": {
+    "master_secret_hex": "00112233445566778899aabbccddeeff",
+    "master_secret_bits": 128,
+    "vault_id": "vault:fixture-0001",
+    "kek_generation": 7,
+    "passphrase_provenance": "vault-derived:v1",
+    "kek_commitment_alg": "eatp-v1"
+  },
+  "vectors": [
+    {
+      "id": "C12.2-kek-identity-commitment",
+      "conformance_id": "N12-CB-01",
+      "spec_section": "12.2",
+      "pre_image": "{\"domain_sep\":\"EATP-12/kek-identity-commitment/v1\",\"kek_generation\":7,\"master_secret\":\"00112233445566778899aabbccddeeff\",\"passphrase_provenance\":\"vault-derived:v1\",\"vault_id\":\"vault:fixture-0001\"}",
+      "kek_identity_commitment": "f325754cc891869ee326b89037571ceb83278562249b1de9ee59348134d9405c"
+    },
+    {
+      "id": "C12.3-key-check-value",
+      "conformance_id": "N12-CB-04(d)",
+      "spec_section": "12.3",
+      "pre_image": "{\"domain_sep\":\"EATP-12/kcv/v1\",\"kek_generation\":7,\"master_secret\":\"00112233445566778899aabbccddeeff\",\"vault_id\":\"vault:fixture-0001\"}",
+      "kcv": "00051364b85b0a43"
+    }
+  ]
+}
