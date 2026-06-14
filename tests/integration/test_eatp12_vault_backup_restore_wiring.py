@@ -94,6 +94,8 @@ class _DeterministicResolver:
             kek_generation=_KEK_GENERATION,
             key_id=_KEY_ID,
             passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
         )
 
 
@@ -143,11 +145,19 @@ def _isolate_default_registry():
     one test would leak into a sibling that consults the default. Clearing the
     store before each test keeps the singleton-default path deterministic.
     """
+    from kailash.trust.vault.holder_registry import default_holder_registry
     from kailash.trust.vault.registry import default_commitment_registry
 
     default_commitment_registry()._store.clear()
+    # N12-SH-01: gate 3 now requires every holder id to be registered in the
+    # deployment holder registry. Register the test holders so the backups in
+    # this file reach the gate they exercise (the SH-01 enforcement itself is
+    # exercised by test_eatp12_vault_holder_registry_wiring.py).
+    default_holder_registry()._registered.clear()
+    default_holder_registry().register_all(["h1", "h2", "h3", "h4", "h5"])
     yield
     default_commitment_registry()._store.clear()
+    default_holder_registry()._registered.clear()
 
 
 def _resolver_satisfies_protocol() -> None:
@@ -498,6 +508,8 @@ def test_restore_binding_path_records_distribution_via_registry():
                 kek_generation=gen,
                 key_id="kek-fixture",
                 passphrase_provenance=provenance,
+                vault_tenant="t1",
+                vault_domain="d1",
             )
 
     identity, verifier, signer = _build_signer()

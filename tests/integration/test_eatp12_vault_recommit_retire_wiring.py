@@ -88,6 +88,8 @@ class _DeterministicResolver:
             kek_generation=self._gen,
             key_id=_KEY_ID,
             passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
         )
 
 

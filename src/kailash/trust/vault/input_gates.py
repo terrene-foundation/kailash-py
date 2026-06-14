@@ -148,6 +148,14 @@ class ResolvedKek:
             ``BackupReceipt`` and bound at the registry layer (C2a). NOT secret.
         passphrase_provenance: The provenance string bound into the commitment
             (N12-PP-01) — NOT the passphrase bytes.
+        vault_tenant: The vault's bound tenant resolved from the handle/store
+            (N12-CL-02a(a)). The trusted-module source the clearance gate
+            compares ``ClearanceContext.tenant`` against — the binding NEVER
+            reads the tenant off ``RoleScope`` (which has no tenant field) and
+            NEVER trusts a caller arg for it. NOT secret.
+        vault_domain: The vault's bound PACT D/T/R domain resolved from the
+            handle/store (N12-CL-02a(b)). The clearance gate verifies the bound
+            role's domain COVERS this. NOT secret.
     """
 
     master_secret: bytes
@@ -155,6 +163,8 @@ class ResolvedKek:
     kek_generation: int
     key_id: str
     passphrase_provenance: str
+    vault_tenant: str
+    vault_domain: str
 
     def zeroize(self) -> None:
         """Drop the reference to the KEK bytes (N12-IN-05 consume-and-``del``).
@@ -191,7 +201,10 @@ class VaultKeyResolver(Protocol):
         """Resolve ``handle`` to a :class:`ResolvedKek`.
 
         Returns the KEK master-secret bytes + ``key_class`` + ``kek_generation``
-        + ``key_id`` + passphrase provenance. The binding consumes the bytes
+        + ``key_id`` + passphrase provenance + the vault's bound ``vault_tenant``
+        / ``vault_domain`` (the N12-CL-02a tenant/domain source — the resolver is
+        the trusted-module authority for the vault's tenant/domain; the binding
+        does NOT trust caller args for it). The binding consumes the bytes
         inside the trusted module and ``del``-s them in a ``finally`` block
         (N12-IN-05). A resolver MUST fail-closed (raise) when a handle cannot
         be resolved; returning a non-KEK class is allowed (the binding's

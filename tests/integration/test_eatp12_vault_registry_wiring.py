@@ -98,6 +98,8 @@ class _Resolver:
             kek_generation=self._gen,
             key_id=self._key_id,
             passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
         )
 
 
@@ -123,6 +125,19 @@ def _build_signer() -> tuple[DelegateIdentity, Ed25519Verifier, Callable[[bytes]
         return priv.sign(canonical_bytes).hex()
 
     return identity, verifier, signer
+
+
+@pytest.fixture(autouse=True)
+def _register_default_holders():
+    """Register the test holders so gate-3 (N12-SH-01) is satisfied for the
+    backups in this file (their SH-01 enforcement is exercised in its own wiring
+    test). ``_do_backup`` uses the process-default holder registry."""
+    from kailash.trust.vault.holder_registry import default_holder_registry
+
+    default_holder_registry()._registered.clear()
+    default_holder_registry().register_all(["h1", "h2", "h3", "h4", "h5"])
+    yield
+    default_holder_registry()._registered.clear()
 
 
 def _handle(key_id: str = "kek-handle-a", vault_id: str = _VAULT) -> VaultKeyHandle:

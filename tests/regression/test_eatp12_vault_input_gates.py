@@ -186,6 +186,8 @@ def test_data_class_resolved_key_rejected_not_a_kek():
         kek_generation=1,
         key_id="k-data",
         passphrase_provenance="vault-derived:v1",
+        vault_tenant="t1",
+        vault_domain="d1",
     )
     with pytest.raises(VaultBindingError) as exc:
         require_kek_class(resolved)
@@ -201,6 +203,8 @@ def test_kek_class_resolved_key_passes():
         kek_generation=1,
         key_id="k-kek",
         passphrase_provenance="vault-derived:v1",
+        vault_tenant="t1",
+        vault_domain="d1",
     )
     assert require_kek_class(resolved) is None
 
@@ -291,6 +295,8 @@ def test_resolved_kek_zeroize_drops_secret():
         kek_generation=1,
         key_id="k1",
         passphrase_provenance="vault-derived:v1",
+        vault_tenant="t1",
+        vault_domain="d1",
     )
     resolved.zeroize()
     assert resolved.master_secret == b""

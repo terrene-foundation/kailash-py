@@ -20,6 +20,14 @@ from kailash.trust.vault.backup import (
     back_up_vault_key,
     restore_vault_key,
 )
+from kailash.trust.vault.clearance import (
+    COOLING_OFF_SUSPENDED_CAPABILITIES,
+    ROTATE_CAPABILITY,
+    domain_covers,
+    evaluate_clearance,
+    is_in_cooling_off,
+    read_cooling_off_start,
+)
 from kailash.trust.vault.commitment import (
     kek_identity_commitment,
     key_check_value,
@@ -33,6 +41,12 @@ from kailash.trust.vault.dispatch import (
     require_receipt_or_abort,
 )
 from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
+from kailash.trust.vault.holder_registry import (
+    HolderRegistry,
+    check_revocation_k_floor,
+    default_holder_registry,
+    require_registered_holders,
+)
 from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
 from kailash.trust.vault.registry import (
     CommitmentEntry,
@@ -97,6 +111,11 @@ __all__ = [
     "CommitmentEntry",
     "RegistryLookup",
     "default_commitment_registry",
+    # EATP-12 W4-B2 — deployment holder registry (N12-SH-01) + k-floor guard (N12-SH-03)
+    "HolderRegistry",
+    "default_holder_registry",
+    "require_registered_holders",
+    "check_revocation_k_floor",
     # EATP-12 W3-C2b — commitment-registry write ops (recommit + retire)
     "recommit_vault_kek",
     "retire_vault_kek_alg",
@@ -108,6 +127,13 @@ __all__ = [
     "trigger_d6_posture_downgrade",
     "RESTORE_STALE_CAPABILITY",
     "COOLING_OFF_DAYS",
+    # EATP-12 W4-B1 — clearance eval (CL-01/02/02a token+scope + CL-04 cooling-off)
+    "evaluate_clearance",
+    "domain_covers",
+    "read_cooling_off_start",
+    "is_in_cooling_off",
+    "ROTATE_CAPABILITY",
+    "COOLING_OFF_SUSPENDED_CAPABILITIES",
     # EATP-12 Wave-1 substrate — taxonomy (N12-FT-01)
     "N12FT01Code",
     "VaultBindingError",

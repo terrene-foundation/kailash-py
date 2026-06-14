@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import datetime
 from typing import Any, Callable, Optional, Sequence
 
 from kailash.delegate.audit import content_signing_bytes
@@ -62,6 +63,7 @@ from kailash.trust.vault.anchors import (
     build_restore_anchor,
     build_restore_forced_stale_anchor,
 )
+from kailash.trust.vault.clearance import evaluate_clearance
 from kailash.trust.vault.commitment import (
     DEFAULT_KEK_COMMITMENT_ALG,
     kek_identity_commitment,
@@ -80,6 +82,11 @@ from kailash.trust.vault.errors import (
     first_failing,
     map_wrapper_exception,
 )
+from kailash.trust.vault.holder_registry import (
+    HolderRegistry,
+    default_holder_registry,
+    require_registered_holders,
+)
 from kailash.trust.vault.input_gates import (
     BACKUP_CAPABILITY,
     RESTORE_CAPABILITY,
@@ -88,7 +95,6 @@ from kailash.trust.vault.input_gates import (
     master_secret_bits,
     require_clearance,
     require_escape_hatch_enabled,
-    require_holders_supplied,
     require_kek_class,
     require_ritual_floor,
     require_secret_length,
@@ -232,12 +238,16 @@ def back_up_vault_key(
     signer_identity: DelegateIdentity,
     alg_id: str,
     registry: Optional[CommitmentRegistry] = None,
+    holder_registry: Optional[HolderRegistry] = None,
+    posture_store: Optional[PostureStore] = None,
     kek_commitment_alg: str = DEFAULT_KEK_COMMITMENT_ALG,
     passphrase: bytes = b"",
     iteration_exponent: int = DEFAULT_ITERATION_EXPONENT,
     side_channel_hardened: bool = False,
     timestamp: Optional[str] = None,
     time_attested: bool = False,
+    trust_anchored_now: Optional[datetime] = None,
+    approver_configured: bool = False,
     principal: Optional[str] = None,
 ) -> BackupReceipt:
     """Split a KEK (resolved from ``key_handle``) into Shamir shards (N12-IN-01).
@@ -250,12 +260,20 @@ def back_up_vault_key(
 
     Gate order (fail-closed):
 
-    1. clearance presence — ``clearance.has_capability("vault:backup")`` else
-       ``missing-clearance`` (a denial anchor is dispatched to the SAFETY tier);
+    1. clearance presence (CL-01) — ``clearance.has_capability("vault:backup")``
+       else ``missing-clearance`` (a denial anchor is dispatched to the SAFETY
+       tier). This is the cheap token presence-check that needs no resolution;
     2. ritual floor (N12-TH-01) — ``2<=k<=n<=9`` else ``invalid-ritual``;
-    3. holders supplied (basic) else ``unregistered-holder``;
+    3. holders supplied AND registry-registered (N12-SH-01) else
+       ``unregistered-holder`` — every holder id MUST be in the deployment
+       holder registry BEFORE any sharding (F-AUTHZ-6);
     4. resolve KEK via ``resolver`` → ``key_class==KEK`` else ``not-a-kek``
-       (N12-IN-02) BEFORE sharding.
+       (N12-IN-02) BEFORE sharding;
+    5. full clearance (CL-02a + CL-04) — tenant→domain→token fail-closed order
+       AGAINST the resolved vault tenant/domain, plus the cooling-off
+       suspension, BEFORE any sharding. A bound token in tenant/domain A fails
+       ``missing-clearance`` against a vault in tenant/domain B; a principal
+       inside the 7-day post-recovery window is suspended.
 
     Then: ``shamir.generate`` → commitment + KCV (C1) → build the
     ``vault_key_backup`` anchor (D2) with ``slip39_params`` incl.
@@ -279,6 +297,18 @@ def back_up_vault_key(
             pre-image + receipt).
         alg_id: The deployment SLIP-0039 algorithm id (rides
             ``event_payload.alg_id``).
+        registry: The per-(vault_id, gen) commitment registry to register into
+            (N12-CB-04(c)); the process default when omitted.
+        holder_registry: The deployment-controlled holder registry gate 3 checks
+            every supplied holder id against (N12-SH-01); the process default
+            (:func:`~kailash.trust.vault.holder_registry.default_holder_registry`)
+            when omitted. The default singleton is EMPTY and FAIL-CLOSED — a
+            deployment MUST register its holders before the first backup, else
+            every holder is rejected ``unregistered-holder``.
+        posture_store: The injected PostureStore the CL-04 cooling-off read
+            consults (N12-CL-04). When omitted the cooling-off check cannot run
+            (no-receipt conservative default — a backup by a principal with no
+            prior materializing restore is not suspended).
         kek_commitment_alg: The EATP-08 §3.3 registry token for the commitment
             hash (default ``"eatp-v1"`` → SHA-256).
         passphrase: Optional SLIP-0039 passphrase (NEVER logged / receipted).
@@ -287,6 +317,14 @@ def back_up_vault_key(
         timestamp: RFC3339-Z attested timestamp (required when
             ``time_attested=True``); ignored when ``time_attested=False``.
         time_attested: Whether ``timestamp`` is trust-anchored (N12-AU-04a).
+        trust_anchored_now: The trust-anchored clock the CL-04 cooling-off
+            window is evaluated against (N12-CL-04) — the SAME source C3 used to
+            record the start, NEVER a locally-mutable wall clock. When a
+            cooling-off receipt exists but this is omitted, the suspension
+            remains in force (fail-closed).
+        approver_configured: Whether a governance-approver (CL-03) is configured
+            (the X1 seam). Until CL-03 lands a suspended op rejects fail-closed
+            regardless.
         principal: The acting principal recorded on the anchor; defaults to
             ``clearance.principal``.
 
@@ -319,8 +357,17 @@ def back_up_vault_key(
     # Gate 2 — ritual floor (N12-TH-01), BEFORE key resolution.
     require_ritual_floor(ritual)
 
-    # Gate 3 — holders supplied (basic), BEFORE key resolution.
-    holder_ids = require_holders_supplied(holders)
+    # Gate 3 — holders supplied AND registry-registered (N12-SH-01), BEFORE key
+    # resolution. Deepens I1's basic presence check: every supplied holder id
+    # MUST be a registered, deployment-approved holder, else unregistered-holder
+    # on the FIRST unregistered id, BEFORE any sharding (F-AUTHZ-6 — caller-
+    # arbitrary holder ids would turn backup-to-attacker-holders into a
+    # sanctioned exfiltration channel; the registry closes it). The validated
+    # ids are the registry ids recorded on the audit envelope (never contents).
+    active_holder_registry = (
+        holder_registry if holder_registry is not None else default_holder_registry()
+    )
+    holder_ids = require_registered_holders(holders, active_holder_registry)
 
     logger.info(
         "vault.backup.start",
@@ -346,6 +393,34 @@ def back_up_vault_key(
     try:
         # Gate 4 — KEK-class type enforcement (N12-IN-02), BEFORE sharding.
         require_kek_class(resolved)
+
+        # Gate 5 — full clearance (CL-02a tenant/domain + CL-04 cooling-off),
+        # BEFORE sharding. The token presence-check ran at gate 1; this deepens
+        # it to the binding-OWNED tenant→domain→token fail-closed order against
+        # the RESOLVED vault tenant/domain (the substrate gate is domain-blind),
+        # plus the cooling-off suspension. A bound token in tenant/domain A is
+        # denied against this vault in tenant/domain B; a principal inside the
+        # 7-day post-recovery window is suspended. On failure dispatch a denial
+        # to the safety tier BEFORE raising (denials MUST NOT be dropped).
+        try:
+            evaluate_clearance(
+                clearance,
+                resolved,
+                BACKUP_CAPABILITY,
+                posture_store=posture_store,
+                now=trust_anchored_now,
+                approver_configured=approver_configured,
+            )
+        except VaultBindingError:
+            _emit_backup_denial(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                principal=acting_principal,
+                missing_capability_or_scope=BACKUP_CAPABILITY,
+                target_handle_ref=target_ref,
+            )
+            raise
 
         secret = resolved.master_secret
         ms_bits = master_secret_bits(secret)
@@ -490,6 +565,8 @@ def restore_vault_key(
     re_established_handle_ref: Optional[str] = None,
     timestamp: Optional[str] = None,
     time_attested: bool = False,
+    trust_anchored_now: Optional[datetime] = None,
+    approver_configured: bool = False,
     principal: Optional[str] = None,
 ) -> RestoreReceipt:
     """Reconstruct a KEK from ``shards`` and re-establish it opaquely (N12-IN-01).
@@ -499,15 +576,24 @@ def restore_vault_key(
     the trusted-module boundary). Raw KEK bytes are NOT returned (N12-IN-05) —
     only an opaque :class:`~kailash.trust.vault.types.RestoreReceipt` ref.
 
-    Gate order (FT-02 §4.6, the canonical first-failing sequence). C2a wires the
-    foreign-shard (step 6), commitment-auth (step 7), and key-identity sub-gate
-    of step 7. Step 6 evaluates the PRESENTED shard ciphertext-hashes against the
-    distribution anchor's ``shard_commitments`` and runs **BEFORE reconstruction**
-    (it needs no secret); reconstruction happens between step 6 and step 7; step 7
-    authenticates the reconstructed secret + key-identity. The remaining gates
-    (shard-count / parameter / mixed-identifier) are backstopped by the wrapper
-    raising and are mapped via :func:`map_wrapper_exception`; ordinal-generation
-    (step 8) is C3's.
+    Gate order (FT-02 §4.6, the canonical first-failing sequence). B1 deepens the
+    clearance gate (step 1) from I1's presence-check to the full §4.2 control:
+    CL-02a tenant→domain→token fail-closed scoping against the resolved vault
+    tenant/domain (the substrate capability gate is domain-blind, so the binding
+    OWNS the tenant/domain cascade) PLUS the CL-04 cooling-off suspension (a 2nd
+    materializing op by a principal inside the 7-day post-recovery window is
+    rejected ``missing-clearance``). A cheap token presence-check still runs
+    BEFORE resolution (so an unauthorized caller is denied without touching key
+    material); the full CL-02a/CL-04 evaluation runs at step 1 once the resolver
+    has supplied the vault's tenant/domain, BEFORE any shard is combined. C2a
+    wires the foreign-shard (step 6), commitment-auth (step 7), and key-identity
+    sub-gate of step 7. Step 6 evaluates the PRESENTED shard ciphertext-hashes
+    against the distribution anchor's ``shard_commitments`` and runs **BEFORE
+    reconstruction** (it needs no secret); reconstruction happens between step 6
+    and step 7; step 7 authenticates the reconstructed secret + key-identity. The
+    remaining gates (shard-count / parameter / mixed-identifier) are backstopped
+    by the wrapper raising and are mapped via :func:`map_wrapper_exception`;
+    ordinal-generation (step 8) is C3's.
 
     **Registry consultation (C2a — replaces the Wave-2 caller-supplied interim).**
     When a ``registry`` is available (injected or the process default), restore
@@ -567,6 +653,15 @@ def restore_vault_key(
         re_established_handle_ref: The opaque re-established handle (caller-supplied
             until #630's re-establishment hierarchy mints it).
         timestamp / time_attested: N12-AU-04a two-state grammar.
+        trust_anchored_now: The trust-anchored clock the CL-04 cooling-off window
+            (FT-02 step 1) is evaluated against (N12-CL-04) — the SAME source C3
+            used to record the start, NEVER a locally-mutable wall clock. When a
+            cooling-off receipt exists but this is omitted, the suspension
+            remains in force (fail-closed). A roll-forward does NOT lift an
+            active suspension early.
+        approver_configured: Whether a governance-approver (CL-03) is configured
+            (the X1 seam). Until CL-03 lands a suspended 2nd materializing op
+            rejects fail-closed regardless.
         principal: The acting principal; defaults to ``clearance.principal``.
 
     Returns:
@@ -588,33 +683,33 @@ def restore_vault_key(
         denylist if denylist is not None else default_compromised_generation_denylist()
     )
 
-    # --- gate 1 (clearance) — runs BEFORE resolution/reconstruction so a
-    # denial dispatches without touching key material. A forced-stale restore
-    # (N12-SG-03) requires the DISTINCT higher capability vault:restore-stale IN
-    # ADDITION to vault:restore: a caller holding only vault:restore with
-    # force_stale=True is denied with missing-clearance (F-AUTHZ-9). The
-    # higher-capability check rides the SAME clearance gate so its denial routes
-    # to the safety tier identically — force_stale does NOT relax any gate, it
-    # adds a requirement.
-    required_capability = (
-        RESTORE_STALE_CAPABILITY if force_stale else RESTORE_CAPABILITY
-    )
-    try:
-        require_clearance(clearance, RESTORE_CAPABILITY)
-        if force_stale:
-            # The ordinary token is necessary but NOT sufficient for the forced
-            # path; the distinct higher token is mandatory (N12-SG-03).
+    # --- pre-resolution clearance — the force_stale higher-capability check
+    # (N12-SG-03) is a DISTINCT axis the spec gates separately from the ordinary
+    # token, so it runs here BEFORE resolution: a forced-stale restore requires
+    # vault:restore-stale IN ADDITION to vault:restore; a caller holding only
+    # vault:restore with force_stale=True is denied missing-clearance (F-AUTHZ-9).
+    # The ORDINARY token + the CL-02a tenant/domain scoping + the CL-04
+    # cooling-off suspension are evaluated TOGETHER at the canonical FT-02 step 1
+    # (the "clearance" gate in `check` below) — AFTER resolution supplies the
+    # vault tenant/domain, in the fail-closed order tenant→domain→token. That
+    # step still runs BEFORE any shard is combined (reconstruction is lazy and
+    # fires only at step 7), so deferring the ordinary-token report to step 1
+    # honors CL-02a's order WITHOUT combining any shard for an unauthorized
+    # caller. Resolution itself materializes nothing dangerous (the secret is
+    # held in the trusted module and zeroized in the finally).
+    if force_stale:
+        try:
             require_clearance(clearance, RESTORE_STALE_CAPABILITY)
-    except VaultBindingError:
-        _emit_restore_denial(
-            dispatcher=dispatcher,
-            signer=signer,
-            signer_identity=signer_identity,
-            principal=acting_principal,
-            missing_capability_or_scope=required_capability,
-            target_handle_ref=target_ref,
-        )
-        raise
+        except VaultBindingError:
+            _emit_restore_denial(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                principal=acting_principal,
+                missing_capability_or_scope=RESTORE_STALE_CAPABILITY,
+                target_handle_ref=target_ref,
+            )
+            raise
 
     logger.info(
         "vault.restore.start",
@@ -710,7 +805,28 @@ def restore_vault_key(
             before the foreign-shard gate has passed.
             """
             if gate == "clearance":
-                # Already enforced above (before resolution); keep order intact.
+                # The cheap token presence-check (CL-01/02) + the force_stale
+                # higher-capability check ran BEFORE resolution (above). Here, at
+                # the canonical FT-02 step 1, run the full CL-02a tenant/domain
+                # scoping + CL-04 cooling-off suspension AGAINST the resolved
+                # vault tenant/domain (the substrate gate is domain-blind; this
+                # is the binding-OWNED control). tenant→domain→token fail-closed
+                # order; cooling-off suspends a 2nd materializing op inside the
+                # 7-day window. A bound vault:restore in tenant/domain A fails
+                # missing-clearance against this vault in tenant/domain B even
+                # with k valid shards. evaluate_clearance raises on failure;
+                # translate to the typed code for first_failing.
+                try:
+                    evaluate_clearance(
+                        clearance,
+                        resolved,
+                        RESTORE_CAPABILITY,
+                        posture_store=posture_store,
+                        now=trust_anchored_now,
+                        approver_configured=approver_configured,
+                    )
+                except VaultBindingError as exc:
+                    return exc.code
                 return None
             if gate == "handle-type":
                 # N12-IN-02: target MUST be KEK-class.
@@ -973,10 +1089,17 @@ def restore_vault_key(
         # Conformant level MUST wire the store (N12-RT-05); the Tier-2 tests inject
         # a real SQLitePostureStore.
         if posture_store is not None:
+            # MED (Wave-4 gate): record the cooling-off START from the SAME
+            # trust-anchored clock the CL-04 reader compares against — never the
+            # producer's wall-clock. A wall-clock start measured against a
+            # trust-anchored `now` at read time is a clock-source asymmetry an
+            # attacker who skews host time at restore-1 could exploit to shift
+            # the window's lower bound.
             trigger_d6_posture_downgrade(
                 posture_store,
                 principal=acting_principal,
                 forced_stale=force_stale,
+                now=trust_anchored_now,
             )
         else:
             logger.warning(

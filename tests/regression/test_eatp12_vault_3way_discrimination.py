@@ -75,6 +75,8 @@ class _Resolver:
             kek_generation=self._gen,
             key_id=self._key_id,
             passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
         )
 
 
