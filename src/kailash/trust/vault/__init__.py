@@ -14,14 +14,26 @@ from __future__ import annotations
 
 import logging
 
-from kailash.trust.vault.backup import back_up_vault_key
+from kailash.trust.vault.backup import (
+    AnchorSigner,
+    back_up_raw_vault_key,
+    back_up_vault_key,
+    restore_vault_key,
+)
 from kailash.trust.vault.commitment import (
     kek_identity_commitment,
     key_check_value,
     verify_commitment,
     verify_kcv,
 )
+from kailash.trust.vault.dispatch import (
+    AuditDispatcher,
+    AuditTier,
+    DispatchReceipt,
+    require_receipt_or_abort,
+)
 from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
+from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
 from kailash.trust.vault.shamir import (
     ShamirRitual,
     deserialize_shard,
@@ -50,6 +62,17 @@ __all__ = [
     "reconstruct",
     "rotate_holders",
     "serialize_shard",
+    # EATP-12 W2-I1 — handle-based binding surface + resolver boundary
+    "restore_vault_key",
+    "back_up_raw_vault_key",
+    "AnchorSigner",
+    "VaultKeyResolver",
+    "ResolvedKek",
+    # EATP-12 W2-D1 — named-tier audit dispatcher (deployment wires this)
+    "AuditDispatcher",
+    "AuditTier",
+    "DispatchReceipt",
+    "require_receipt_or_abort",
     # EATP-12 Wave-1 substrate — taxonomy (N12-FT-01)
     "N12FT01Code",
     "VaultBindingError",

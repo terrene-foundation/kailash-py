@@ -11,13 +11,22 @@ Tier 1 regression suite for ``kailash.trust.vault.shamir``:
   ``shamir`` extra is absent (probed via ``sys.modules`` monkey-patch so the
   test exercises the absence path even when ``shamir-mnemonic`` IS installed
   locally for the Tier 2 round-trip suite).
-* :func:`back_up_vault_key` stub -- documents mint ISS-37 in the error.
+* :func:`back_up_vault_key` -- the EATP-12 W2-I1 handle-based conformant
+  surface (issue #1312). The pre-#606 ``NotImplementedError`` stub is GONE;
+  the function now resolves a KEK handle internally and shards it. The two
+  deferral tests that asserted ``pytest.raises(NotImplementedError)`` were
+  rewritten when the stub was implemented (orphan-detection.md Rule 4a:
+  implementing a deferred stub MUST rewrite its deferral tests in the SAME
+  change) to assert the new entry-gate behavior instead.
 
 These tests run without the optional extra; they probe the absence-path
 contract that ``rules/dependencies.md`` calls out as the only acceptable form
 of "loud failure at call site" for optional dependencies. The Tier 2 suite
 under ``tests/integration/trust/test_shamir_round_trip.py`` exercises the
-real cryptographic round-trip with ``shamir-mnemonic`` installed.
+real cryptographic round-trip with ``shamir-mnemonic`` installed; the
+EATP-12 binding Tier-1/Tier-2 suites live under
+``tests/regression/test_eatp12_vault_input_gates.py`` and
+``tests/integration/test_eatp12_vault_backup_restore_wiring.py``.
 """
 
 from __future__ import annotations
@@ -25,7 +34,6 @@ from __future__ import annotations
 import sys
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # ShamirRitual validation
@@ -170,28 +178,66 @@ def test_rotate_holders_optional_extra_absence_raises(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# back_up_vault_key stub
+# back_up_vault_key — #606 stub implemented (EATP-12 W2-I1)
 # ---------------------------------------------------------------------------
+#
+# The pre-#606 NotImplementedError stub is GONE. These two tests were the
+# scaffold-era deferral tests (they asserted pytest.raises(NotImplementedError)
+# on the bytes-form stub). Per orphan-detection.md Rule 4a they are rewritten
+# IN THE SAME CHANGE that implemented the stub, to assert the new conformant
+# behavior: the function no longer accepts raw bytes as the primary surface,
+# and it no longer raises NotImplementedError. The full handle-based path is
+# exercised by the W2-I1 Tier-1/Tier-2 suites; here we pin the two facts the
+# old deferral tests pinned (the symbol exists; it is no longer a stub).
 
 
 @pytest.mark.regression
-def test_back_up_vault_key_stub_raises():
-    """The stub raises NotImplementedError citing mint ISS-37."""
+def test_back_up_vault_key_is_no_longer_a_notimplemented_stub():
+    """#606 closed: back_up_vault_key does NOT raise NotImplementedError.
+
+    The pre-#606 stub raised NotImplementedError("...mint ISS-37...#606").
+    Calling the conformant handle-based surface with no required kwargs now
+    raises a TypeError (missing keyword-only args) — NOT NotImplementedError —
+    proving the stub body is gone.
+    """
     from kailash.trust.vault import ShamirRitual, back_up_vault_key
 
     ritual = ShamirRitual(threshold=3, total_shards=5)
-    with pytest.raises(NotImplementedError, match=r"mint ISS-37"):
-        back_up_vault_key(b"x" * 16, ritual)
+    # The conformant surface is handle-based + keyword-only resolver/dispatcher
+    # /signer; calling it the OLD way (positional bytes + ritual) raises a
+    # TypeError for the missing required args, never NotImplementedError.
+    with pytest.raises(TypeError):
+        back_up_vault_key(b"x" * 16, ritual)  # type: ignore[arg-type]
+    # And it is definitively not the old stub:
+    try:
+        back_up_vault_key(b"x" * 16, ritual)  # type: ignore[arg-type]
+    except NotImplementedError:  # pragma: no cover - must not happen
+        pytest.fail(
+            "back_up_vault_key still raises NotImplementedError (#606 not closed)"
+        )
+    except TypeError:
+        pass
 
 
 @pytest.mark.regression
-def test_back_up_vault_key_stub_references_issue_606():
-    """The stub error message links to issue #606 for traceability."""
-    from kailash.trust.vault import ShamirRitual, back_up_vault_key
+def test_back_up_vault_key_rejects_invalid_ritual_floor():
+    """The conformant surface enforces the N12-TH-01 vault floor (2<=k<=n<=9).
 
-    ritual = ShamirRitual(threshold=3, total_shards=5)
-    with pytest.raises(NotImplementedError, match=r"#606"):
-        back_up_vault_key(b"x" * 16, ritual)
+    A 1-of-n ritual is constructed-rejected by ShamirRitual itself; here we
+    pin that a ritual passing the wrapper but BELOW the stricter vault floor
+    (n>9) is rejected with the typed invalid-ritual code via the binding's
+    entry gate — replacing the old #606 deferral assertion with the new
+    conformant entry-gate behavior.
+    """
+    from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
+    from kailash.trust.vault.input_gates import require_ritual_floor
+    from kailash.trust.vault.shamir import ShamirRitual
+
+    # n=10 passes the wrapper (<=16) but exceeds the vault ceiling (9).
+    over_ceiling = ShamirRitual(threshold=2, total_shards=10)
+    with pytest.raises(VaultBindingError) as exc:
+        require_ritual_floor(over_ceiling)
+    assert exc.value.code is N12FT01Code.INVALID_RITUAL
 
 
 # ---------------------------------------------------------------------------
