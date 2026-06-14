@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-06-15
+
+### Added
+
+- **EATP-12 v1.0 Trust Vault Key-Binding in `kailash.trust.vault` (#1312).** A new vault sub-package binds Key-Encryption-Key (KEK) backup and recovery to an audited, commitment-anchored trust substrate. Top-level entry points: `back_up_vault_key` / `restore_vault_key` (SLIP-39 shard backup + reconstruction of a resolved KEK) and `back_up_raw_vault_key`. The 63-symbol `kailash.trust.vault.__all__` surface exports the KEK-class + generation substrate (`VaultKeyResolver`, `ResolvedKek`, `VaultKeyHandle`, `current_generation_from_chain`), commitment binding (`kek_identity_commitment`, `key_check_value`, `verify_commitment`, `verify_kcv`, `CommitmentRegistry`), audited dispatch (`AuditDispatcher`, `AuditTier`, `DispatchReceipt`, `require_receipt_or_abort`), holder governance (`HolderRegistry`, `wrap_shard_for_holder` / `unwrap_shard_for_holder`, `revoke_holder_for_cause`, `rotate_vault_holders`), Complete-level ceremony gates (`GovernanceApproval`, `CeremonyWitness`, `verify_governance_approval`, `verify_ceremony_witness`, `ConformanceLevel`), generation rotation + for-cause advance (`recommit_vault_kek`, `retire_vault_kek_alg`, `CompromisedGenerationDenylist`), clearance + cooling-off gates (`ClearanceContext`, `evaluate_clearance`, `is_in_cooling_off`), and the typed error surface (`VaultBindingError`, `N12FT01Code`). The master secret never crosses the audit boundary — only one-way commitments / KCV + the SLIP-39 bit-length parameter are anchored (N12-AU-01 contents-exclusion); resolved key material is zeroized after use.
+
+### Security
+
+- **EATP-12 audited fail-closed dispatch + zeroization (#1312).** Vault anchors emit a signed, per-tier audit receipt BEFORE the operation is considered complete (AU-02b fail-closed ordering interlock — a dispatch failure raises and no receipt is produced). Resolved KEK bytes are consumed inside the trusted module and `del`-ed in a `finally` block (N12-IN-05). Converged through a holistic R3–R5 redteam cycle: KEK residency-leak zeroization, four orphaned-control gates wired into the hot path, side-channel-hardening rejection, and key-check-value gating.
+
 ## [2.32.0] - 2026-06-14
 
 ### Added
