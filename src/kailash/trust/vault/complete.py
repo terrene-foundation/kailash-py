@@ -475,7 +475,11 @@ class HolderRevocationRegistry:
         logger.warning("vault.complete.holder_revoked", extra={"holder_id": holder_id})
 
     def is_revoked(self, holder_id: str) -> bool:
-        """Membership check. Fail-closed: a malformed id → not revoked here."""
+        """Membership check. A malformed/empty id is not a member here (returns
+        False), but the unwrap path then re-derives the wrap MAC over that same
+        id and fails ``corrupted-shard`` via :func:`hmac.compare_digest` — so a
+        malformed id can never yield a valid unwrap (the integrity check is the
+        fail-closed backstop immediately after this revocation check)."""
         return holder_id in self._revoked
 
 
