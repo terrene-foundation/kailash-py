@@ -220,8 +220,16 @@ def test_wrapper_exception_mapping():
         map_wrapper_exception(ValueError("invalid mnemonic checksum"))
         is N12FT01Code.CORRUPTED_SHARD
     )
+    # "identifier parameters don't match" IS the SLIP-0039 mixed-identifier error
+    # (two backups combined) → mixed-shard-set (defense-in-depth backstop for the
+    # pre-reconstruction mixed-identifier gate, FT-02 step 5). A GENERIC
+    # "parameters don't match" still maps to parameter-mismatch.
     assert (
         map_wrapper_exception(ValueError("identifier parameters don't match"))
+        is N12FT01Code.MIXED_SHARD_SET
+    )
+    assert (
+        map_wrapper_exception(ValueError("parameters don't match"))
         is N12FT01Code.PARAMETER_MISMATCH
     )
     # unrecognized wrapper exception → None (fail-closed: caller re-raises internal)

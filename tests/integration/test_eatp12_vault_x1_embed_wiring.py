@@ -911,6 +911,112 @@ def test_high1_forged_approval_zeroizes_kek(posture_store):
 
 
 @pytest.mark.integration
+def test_gap3_cross_delegate_approval_replay_denied(posture_store):
+    """GAP-3 — an approval signed under delegate-A cannot be replayed under delegate-B.
+
+    The acting principal's ``requester_delegate_id`` is bound into the signed
+    approval pre-image (``approval_pre_image`` includes it). An approval signed for
+    a restore by delegate-A, replayed on a restore declaring delegate-B as the
+    requester, recomputes a DIFFERENT pre-image → the approver's signature does NOT
+    verify → ``missing-clearance``. This proves the cross-delegate replay defense
+    and guards against a future refactor silently dropping the delegate field from
+    the pre-image. (Mirrors the forged-approval test but varies the DELEGATE, not
+    the key.)
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    keyring = _TokenKeyring()
+    spy = _SpyResolver()
+    old_shards, _ = _seed_forced_stale_setup(dispatcher, identity, signer, registry)
+
+    # Approval SIGNED for a restore requested by delegate-A (genuine, well-formed).
+    approval_for_a = _signed_approval(
+        keyring,
+        approver_delegate_id="dlg-approver",
+        requester_principal=_REQUESTER,
+        operation="restore-forced-stale",
+        kek_generation=_GEN_OLD,
+        requester_delegate_id="delegate-A",
+    )
+
+    # REPLAY it on a restore declaring delegate-B as the requester. The pre-image
+    # the verifier recomputes binds delegate-B, so the delegate-A signature fails.
+    with pytest.raises(VaultBindingError) as exc:
+        restore_vault_key(
+            old_shards[:3],
+            _handle(_GEN_OLD),
+            _clearance(_REQUESTER, "vault:restore", "vault:restore-stale"),
+            resolver=spy,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG,
+            registry=registry,
+            posture_store=posture_store,
+            force_stale=True,
+            conformance_level=ConformanceLevel.COMPLETE,
+            approval=approval_for_a,
+            approver_clearance=_clearance(_APPROVER, "vault:approve"),
+            requester_delegate_id="delegate-B",  # ← replayed under a DIFFERENT delegate
+            verify_token=keyring.verify_token,
+        )
+    assert exc.value.code == N12FT01Code.MISSING_CLEARANCE
+    # Denial landed on safety; the KEK was zeroized (pre-try denial path).
+    assert (
+        dispatcher._engines[AuditTier.SAFETY.value].entries[-1].event_payload["subtype"]
+        == "vault_key_restore_denied"
+    )
+    assert spy.last is not None
+    assert spy.last.master_secret == b"", "resolved KEK MUST be zeroized on denial"
+
+
+@pytest.mark.integration
+def test_gap3_same_delegate_approval_succeeds_control(posture_store):
+    """GAP-3 control — the SAME approval verifies when the requester delegate matches.
+
+    Pairs with the cross-delegate replay test: an approval signed for delegate-A,
+    presented on a restore that ALSO declares delegate-A, verifies and the restore
+    succeeds. This proves the denial above is caused by the delegate MISMATCH, not
+    by an unrelated approval defect.
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    keyring = _TokenKeyring()
+    old_shards, _ = _seed_forced_stale_setup(dispatcher, identity, signer, registry)
+
+    approval_for_a = _signed_approval(
+        keyring,
+        approver_delegate_id="dlg-approver",
+        requester_principal=_REQUESTER,
+        operation="restore-forced-stale",
+        kek_generation=_GEN_OLD,
+        requester_delegate_id="delegate-A",
+    )
+
+    receipt = restore_vault_key(
+        old_shards[:3],
+        _handle(_GEN_OLD),
+        _clearance(_REQUESTER, "vault:restore", "vault:restore-stale"),
+        resolver=_Resolver(),
+        dispatcher=dispatcher,
+        signer=signer,
+        signer_identity=identity,
+        alg_id=_ALG,
+        registry=registry,
+        posture_store=posture_store,
+        force_stale=True,
+        conformance_level=ConformanceLevel.COMPLETE,
+        approval=approval_for_a,
+        approver_clearance=_clearance(_APPROVER, "vault:approve"),
+        requester_delegate_id="delegate-A",  # ← MATCHES the signed delegate
+        verify_token=keyring.verify_token,
+    )
+    assert receipt.forced_stale is True
+
+
+@pytest.mark.integration
 def test_high1_approval_companion_args_missing_zeroizes_kek(posture_store):
     """An approval supplied without its companion args MUST zeroize the KEK."""
     identity, verifier, signer = _build_signer()

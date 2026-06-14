@@ -639,3 +639,115 @@ def test_retire_au02b_failing_dispatch_aborts_entry_stays_live():
         vault_id=_VAULT_ID, kek_generation=_KEK_GENERATION, kek_commitment_alg=_ALG_V1
     ).entry
     assert entry is not None and entry.retired is False
+
+
+# ===========================================================================
+# LOW-1 — recommit-binding-mismatch (FT-03 gate 4 "new-commitment-binds-secret")
+# ===========================================================================
+
+
+class _SecretFlipResolved(ResolvedKek):
+    """A ResolvedKek whose ``master_secret`` differs between its first and second
+    read — modelling a resolver whose backing secret is not stable across the
+    gate-4 compute-then-verify window.
+
+    Protocol-satisfying deterministic adapter (NOT a mock): the FIRST read of
+    ``master_secret`` returns ``first``, every subsequent read returns ``second``.
+    Gate 4 computes ``C_Y`` over the first read and then re-verifies the bind over
+    the second read — with two distinct secrets the recomputed commitment does NOT
+    bind, surfacing ``recommit-binding-mismatch`` genuinely (no monkeypatching of
+    the system-under-test).
+    """
+
+    def __init__(self, *, first: bytes, second: bytes) -> None:
+        super().__init__(
+            master_secret=first,
+            key_class=KeyClass.KEK,
+            kek_generation=_KEK_GENERATION,
+            key_id=_KEY_ID,
+            passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
+        )
+        # Store the flip state out-of-band; the property below owns the reads.
+        object.__setattr__(self, "_first", first)
+        object.__setattr__(self, "_second", second)
+        object.__setattr__(self, "_reads", 0)
+
+    @property  # type: ignore[override]
+    def master_secret(self) -> bytes:
+        reads = object.__getattribute__(self, "_reads")
+        object.__setattr__(self, "_reads", reads + 1)
+        return (
+            object.__getattribute__(self, "_first")
+            if reads == 0
+            else object.__getattribute__(self, "_second")
+        )
+
+    @master_secret.setter
+    def master_secret(self, value: bytes) -> None:
+        # The parent dataclass __init__ assigns master_secret; route it to the
+        # backing field. zeroize() uses object.__setattr__ so it bypasses this.
+        object.__setattr__(self, "_first", value)
+
+
+class _SecretFlipResolver:
+    """Deployment-supplied resolver returning a _SecretFlipResolved (NOT a mock)."""
+
+    def __init__(self, *, first: bytes, second: bytes) -> None:
+        self._first = first
+        self._second = second
+
+    def resolve_kek(self, handle: VaultKeyHandle) -> ResolvedKek:
+        return _SecretFlipResolved(first=self._first, second=self._second)
+
+
+@pytest.mark.integration
+def test_recommit_binding_mismatch_when_new_commitment_does_not_bind_secret():
+    """LOW-1 / N12-FT-03 gate 4 — a new commitment that does NOT bind the resolved
+    secret → recommit-binding-mismatch.
+
+    Gate 4 (``new-commitment-binds-secret``) recomputes ``C_Y`` over the resolved
+    secret and constant-time verifies it binds that secret. When the resolved
+    secret is not stable across the compute-then-verify window (modelled by a
+    resolver whose master_secret flips between reads), ``C_Y`` (over secret-A) does
+    NOT bind secret-B → ``recommit-binding-mismatch`` — the control reachable but
+    previously untested.
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    resolver = _SecretFlipResolver(first=_KNOWN_KEK, second=b"\xab" * 32)
+
+    # A LIVE prior eatp-v1 entry MUST exist so gate 3 passes and gate 4 runs. The
+    # prior commitment is computed over the FIRST secret (_KNOWN_KEK) — but the
+    # prior-commitment gate (step 3) does not read the resolved secret, so this is
+    # just the standard prior registration.
+    c_x = _seed_registry_with_v1(registry)
+
+    with pytest.raises(VaultBindingError) as exc:
+        recommit_vault_kek(
+            _handle(),
+            _clearance("vault:backup"),
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG_V1,
+            prior_kek_commitment_alg=_ALG_V1,
+            prior_kek_identity_commitment=c_x,
+            new_kek_commitment_alg=_ALG_V11,
+            registry=registry,
+        )
+    assert exc.value.code is N12FT01Code.RECOMMIT_BINDING_MISMATCH
+    # Gate 4 failed before any anchor dispatch / registry mutation (AU-02b).
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+    # The new alg was NOT registered (recommit aborted at the gate).
+    assert (
+        registry.lookup(
+            vault_id=_VAULT_ID,
+            kek_generation=_KEK_GENERATION,
+            kek_commitment_alg=_ALG_V11,
+        ).entry
+        is None
+    )

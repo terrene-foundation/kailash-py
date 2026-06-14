@@ -325,9 +325,15 @@ def test_eatp12_vault_quickstart_foreign_shard_rejected(posture_store):
         AuditTier.RECOVERY.value,
     )
 
-    # A foreign shard from a DIFFERENT secret is not in the distribution.
+    # A HOMOGENEOUS foreign set from a DIFFERENT secret: all 3 presented shards
+    # come from the SAME foreign backup, so they share ONE SLIP-0039 identifier
+    # and never trip the mixed-identifier gate (step 5). This is the F-CRYPTO-2 /
+    # V5(c) anti-injection case — the foreign-shard `shard_commitments` gate
+    # (step 6) MUST catch it as `unknown-shard` before reconstruction. (A genuine
+    # shard MIXED with a foreign one is a DISTINCT case — `mixed-shard-set` at
+    # step 5; see test_eatp12_vault_backup_restore_wiring's mixed-set test.)
     foreign = generate(bytes.fromhex("ff" * 32), ritual)
-    presented = [genuine[0], genuine[1], foreign[0]]
+    presented = [foreign[0], foreign[1], foreign[2]]
     with pytest.raises(VaultBindingError) as exc:
         restore_vault_key(
             presented,

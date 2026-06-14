@@ -116,8 +116,13 @@ class VaultBindingError(TrustError):
 # wrapper, so they are intentionally NOT in this map.
 
 _WRAPPER_TEXT_MAP: tuple[tuple[str, N12FT01Code], ...] = (
-    # SLIP-0039 identifier-parameter disagreement
-    ("identifier parameters don't match", N12FT01Code.PARAMETER_MISMATCH),
+    # SLIP-0039 "identifier parameters don't match" IS the mixed-identifier error
+    # (two backups combined). Defense-in-depth: if a mixed set ever reaches the
+    # reconstruct() boundary (e.g. the pre-reconstruction mixed-identifier gate
+    # deferred on a parse edge case), surface mixed-shard-set, NOT
+    # parameter-mismatch. ORDER MATTERS — this specific needle is checked BEFORE
+    # the generic "parameters don't match" below.
+    ("identifier parameters don't match", N12FT01Code.MIXED_SHARD_SET),
     ("parameters don't match", N12FT01Code.PARAMETER_MISMATCH),
     # MAC / checksum integrity failure on a KNOWN shard
     ("invalid mnemonic checksum", N12FT01Code.CORRUPTED_SHARD),

@@ -45,7 +45,7 @@ from kailash.delegate.types import DelegateIdentity, PrincipalDirectory
 from kailash.delegate.verifier import Ed25519Verifier
 from kailash.trust.key_manager import KeyClass
 from kailash.trust.vault.backup import back_up_vault_key, restore_vault_key
-from kailash.trust.vault.commitment import kek_identity_commitment
+from kailash.trust.vault.commitment import kek_identity_commitment, key_check_value
 from kailash.trust.vault.dispatch import AuditDispatcher, AuditTier
 from kailash.trust.vault.errors import N12FT01Code, VaultBindingError
 from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
@@ -622,3 +622,294 @@ def test_restore_binding_path_records_distribution_via_registry():
         payload["kek_identity_commitment"]
         == backup_anchor.event_payload["kek_identity_commitment"]
     )
+
+
+# ===========================================================================
+# GAP-2 — pre-reconstruction shard-count (step 3) + mixed-identifier (step 5)
+# ===========================================================================
+
+
+@pytest.mark.integration
+def test_restore_too_many_shards_rejected_too_many_shards():
+    """GAP-2 / V5(g)(h) reject branch — k+1 shards from the SAME backup → too-many-shards.
+
+    Over-supply (4 shards for a 3-of-5 ritual, all from one backup so identifiers
+    match) is rejected at FT-02 step 3 (shard-count) with the REJECT-branch code
+    `too-many-shards` — BEFORE reconstruction, sourced from the SLIP-0039
+    member-threshold metadata, NOT the ambiguous wrapper "Wrong number" text.
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    shards = generate(_KNOWN_KEK, ShamirRitual(threshold=3, total_shards=5))
+    commitment = kek_identity_commitment(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        passphrase_provenance=_PROVENANCE,
+        alg=_ALG,
+    )
+
+    with pytest.raises(VaultBindingError) as exc:
+        restore_vault_key(
+            shards[:4],  # k+1 = 4 (k=3), all from the SAME backup
+            _handle(),
+            _clearance("vault:restore"),
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            expected_commitment=commitment,
+            alg_id=_ALG,
+            holders=["h1", "h2", "h3", "h4", "h5"],
+            shard_commitments=_shard_commitments(shards),
+        )
+    assert exc.value.code is N12FT01Code.TOO_MANY_SHARDS
+    # Rejected before any OUTCOME anchor; a denial landed on safety.
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+    assert dispatcher.sequence_length(AuditTier.SAFETY.value) == 1
+
+
+@pytest.mark.integration
+def test_restore_insufficient_shards_rejected_insufficient_shards():
+    """GAP-2 — fewer than k shards → insufficient-shards at step 3 (pre-reconstruction)."""
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    shards = generate(_KNOWN_KEK, ShamirRitual(threshold=3, total_shards=5))
+    commitment = kek_identity_commitment(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        passphrase_provenance=_PROVENANCE,
+        alg=_ALG,
+    )
+
+    with pytest.raises(VaultBindingError) as exc:
+        restore_vault_key(
+            shards[:2],  # k-1 = 2 (k=3)
+            _handle(),
+            _clearance("vault:restore"),
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            expected_commitment=commitment,
+            alg_id=_ALG,
+            holders=["h1", "h2", "h3", "h4", "h5"],
+            shard_commitments=_shard_commitments(shards),
+        )
+    assert exc.value.code is N12FT01Code.INSUFFICIENT_SHARDS
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+
+
+@pytest.mark.integration
+def test_restore_mixed_shard_set_rejected_before_foreign_shard():
+    """GAP-2 / V5(f) — k shards from TWO distinct SLIP-0039 identifiers → mixed-shard-set.
+
+    A genuine shard mixed with a shard from a DIFFERENT backup (distinct
+    identifier) is rejected at FT-02 step 5 (mixed-identifier) — BEFORE the step-6
+    foreign-shard gate and the step-7 commitment gate. The assertion that the code
+    is `mixed-shard-set` (NOT `unknown-shard` / `corrupted-shard`) proves the
+    canonical ordering: step 5 fires first.
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    genuine = generate(_KNOWN_KEK, ShamirRitual(threshold=3, total_shards=5))
+    foreign = generate(b"\xab" * 32, ShamirRitual(threshold=3, total_shards=5))
+    commitment = kek_identity_commitment(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        passphrase_provenance=_PROVENANCE,
+        alg=_ALG,
+    )
+    # k=3 shards but one is from a DIFFERENT backup (distinct identifier).
+    presented = [genuine[0], genuine[1], foreign[0]]
+
+    with pytest.raises(VaultBindingError) as exc:
+        restore_vault_key(
+            presented,
+            _handle(),
+            _clearance("vault:restore"),
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            expected_commitment=commitment,
+            alg_id=_ALG,
+            holders=["h1", "h2", "h3", "h4", "h5"],
+            # The genuine distribution: foreign[0]'s hash is absent, so step 6
+            # WOULD reject unknown-shard — but step 5 (mixed) fires FIRST.
+            shard_commitments=_shard_commitments(genuine),
+        )
+    assert exc.value.code is N12FT01Code.MIXED_SHARD_SET
+    assert exc.value.code is not N12FT01Code.UNKNOWN_SHARD
+    assert exc.value.code is not N12FT01Code.CORRUPTED_SHARD
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+
+
+# ===========================================================================
+# GAP-1 — kcv-mismatch (N12-CB-04(d) / V6) offline blob check
+# ===========================================================================
+
+
+@pytest.mark.integration
+def test_restore_wrong_kcv_rejected_kcv_mismatch():
+    """GAP-1 / V6 — a relabelled/tampered blob (wrong expected_kcv) → kcv-mismatch.
+
+    Backup-equivalent: capture the receipt's KCV; present a WRONG KCV (simulating
+    a relabelled blob) at restore. The commitment-auth gate recomputes the KCV
+    over the reconstructed secret and constant-time compares — a mismatch fails
+    OFFLINE with `kcv-mismatch` (no live vault needed for the tamper signal).
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    shards = generate(_KNOWN_KEK, ShamirRitual(threshold=3, total_shards=5))
+    commitment = kek_identity_commitment(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        passphrase_provenance=_PROVENANCE,
+        alg=_ALG,
+    )
+    # A KCV over a DIFFERENT secret — the genuine reconstructed secret won't match.
+    wrong_kcv = key_check_value(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=b"\xff" * 32,
+        alg=_ALG,
+    )
+
+    with pytest.raises(VaultBindingError) as exc:
+        restore_vault_key(
+            shards[:3],
+            _handle(),
+            _clearance("vault:restore"),
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            expected_commitment=commitment,
+            expected_kcv=wrong_kcv,
+            alg_id=_ALG,
+            holders=["h1", "h2", "h3", "h4", "h5"],
+            shard_commitments=_shard_commitments(shards),
+        )
+    assert exc.value.code is N12FT01Code.KCV_MISMATCH
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+    assert dispatcher.sequence_length(AuditTier.SAFETY.value) == 1
+
+
+@pytest.mark.integration
+def test_restore_correct_kcv_succeeds_round_trip():
+    """GAP-1 — the CORRECT expected_kcv passes (orphan-detection §2a crypto-pair).
+
+    The crypto-pair round-trip: backup computes the KCV over the real secret;
+    restore presents that SAME KCV; the offline check passes and the restore
+    succeeds. Pairs with the wrong-KCV test so the KCV gate is exercised on BOTH
+    branches (a gate that only ever fails is indistinguishable from a hard-reject).
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    shards = generate(_KNOWN_KEK, ShamirRitual(threshold=3, total_shards=5))
+    commitment = kek_identity_commitment(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        passphrase_provenance=_PROVENANCE,
+        alg=_ALG,
+    )
+    correct_kcv = key_check_value(
+        vault_id=_VAULT_ID,
+        kek_generation=_KEK_GENERATION,
+        master_secret=_KNOWN_KEK,
+        alg=_ALG,
+    )
+
+    receipt = restore_vault_key(
+        shards[:3],
+        _handle(),
+        _clearance("vault:restore"),
+        resolver=resolver,
+        dispatcher=dispatcher,
+        signer=signer,
+        signer_identity=identity,
+        expected_commitment=commitment,
+        expected_kcv=correct_kcv,
+        alg_id=_ALG,
+        holders=["h1", "h2", "h3", "h4", "h5"],
+        shard_commitments=_shard_commitments(shards),
+    )
+    assert receipt.kek_generation == _KEK_GENERATION
+    assert receipt.forced_stale is False
+    # The restore OUTCOME anchor landed (the KCV gate passed → reconstruction
+    # authenticated → anchor dispatched).
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 1
+
+
+# ===========================================================================
+# GAP-4 — side_channel_hardened=True is non-fake (N12-CRY-SC)
+# ===========================================================================
+
+
+@pytest.mark.integration
+def test_backup_side_channel_hardened_true_rejected():
+    """GAP-4 / N12-CRY-SC — side_channel_hardened=True is rejected (never truthful here).
+
+    This binding ALWAYS reconstructs via userspace combine_mnemonics (not
+    constant-time), so asserting side_channel_hardened=True would be a
+    fake-classification (zero-tolerance Rule 2). The entry gate rejects it with a
+    ValueError before resolution — no anchor, no sharding.
+    """
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    with pytest.raises(ValueError, match="side_channel_hardened"):
+        back_up_vault_key(
+            _handle(),
+            ShamirRitual(threshold=3, total_shards=5),
+            _clearance("vault:backup"),
+            ["h1", "h2", "h3", "h4", "h5"],
+            resolver=resolver,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG,
+            side_channel_hardened=True,
+        )
+    # Rejected at the entry gate — nothing dispatched.
+    assert dispatcher.sequence_length(AuditTier.RECOVERY.value) == 0
+
+
+@pytest.mark.integration
+def test_backup_side_channel_hardened_false_records_false_in_anchor():
+    """GAP-4 — the default (False) records side_channel_hardened=False on the anchor."""
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    resolver = _DeterministicResolver(key_class=KeyClass.KEK)
+
+    back_up_vault_key(
+        _handle(),
+        ShamirRitual(threshold=3, total_shards=5),
+        _clearance("vault:backup"),
+        ["h1", "h2", "h3", "h4", "h5"],
+        resolver=resolver,
+        dispatcher=dispatcher,
+        signer=signer,
+        signer_identity=identity,
+        alg_id=_ALG,
+        # side_channel_hardened defaults to False
+    )
+    anchor = dispatcher._engines[AuditTier.RECOVERY.value].entries[0]
+    assert anchor.event_payload["subtype"] == "vault_key_backup"
+    assert anchor.event_payload["side_channel_hardened"] is False

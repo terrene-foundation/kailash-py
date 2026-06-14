@@ -50,6 +50,7 @@ cross the public API by default.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 from datetime import datetime
 from typing import Any, Callable, Optional, Sequence
@@ -148,6 +149,56 @@ DEFAULT_ITERATION_EXPONENT: int = 1
 #: backup/restore/denial IS an external side effect on the trust plane
 #: (mirrors :attr:`AuditDispatcher._VAULT_EVENT_TYPE`).
 _EVENT_TYPE: str = "external_side_effect"
+
+
+def _shard_words_to_str(words: Sequence[str]) -> str:
+    """Space-join a shard word-list into the SLIP-0039 mnemonic string form.
+
+    Mirrors the wrapper's internal ``_join`` (single-space delimiter) so a parsed
+    :class:`shamir_mnemonic.share.Share` sees the same mnemonic text the
+    reconstruct path passes to ``combine_mnemonics``.
+    """
+    return " ".join(words)
+
+
+def _parse_share(words: Sequence[str]):
+    """Parse ONE shard word-list into a SLIP-0039 ``Share`` WITHOUT reconstructing.
+
+    Returns the parsed ``Share`` (exposing ``.identifier`` + ``.member_threshold``
+    SLIP-0039 metadata) or ``None`` on ANY exception (malformed shard, missing
+    extra, import failure). Returning ``None`` lets the FT-02 shard-count /
+    mixed-identifier gates defer to the reconstruct/checksum backstop rather than
+    mislabel a corrupted shard — the pre-reconstruction count/identifier gates are
+    additive determinism, never a new failure surface.
+    """
+    try:
+        from shamir_mnemonic.share import Share  # type: ignore[import-not-found]
+
+        return Share.from_mnemonic(_shard_words_to_str(words))
+    except Exception:  # noqa: BLE001 - any parse failure → defer to backstop
+        return None
+
+
+def _shard_identifier(words: Sequence[str]) -> Optional[int]:
+    """Return a shard's SLIP-0039 ``identifier`` (the per-backup id), or None.
+
+    Two shards from the SAME backup share an identifier; distinct identifiers
+    mean the shards came from two different SLIP-0039 backups (mixed set).
+    """
+    share = _parse_share(words)
+    return None if share is None else share.identifier
+
+
+def _shard_member_threshold(words: Sequence[str]) -> Optional[int]:
+    """Return a shard's SLIP-0039 ``member_threshold`` (k), or None on parse error.
+
+    SLIP-0039 encodes k (the within-group member threshold) in each shard's
+    metadata, so the required quorum is derivable from a single presented shard
+    WITHOUT reconstruction — the pre-reconstruction shard-count gate (FT-02 step 3)
+    reads it to detect under/over-supply deterministically.
+    """
+    share = _parse_share(words)
+    return None if share is None else share.member_threshold
 
 
 #: A signer callable: receives the ``content_signing_bytes`` pre-image and
@@ -397,6 +448,23 @@ def back_up_vault_key(
     # non-printable passphrase DETERMINISTICALLY (`invalid-passphrase`) BEFORE the
     # SLIP-0039 wrapper, rather than as a mapped library ValueError.
     require_printable_passphrase(passphrase)
+
+    # Gate 2b — N12-CRY-SC truthfulness. side_channel_hardened=True is assertable
+    # ONLY at Complete AND REQUIRES hardware-backed reconstruction (HSM/enclave)
+    # so the secret never enters the non-constant-time userspace
+    # combine_mnemonics. THIS binding ALWAYS reconstructs via userspace
+    # combine_mnemonics (the SLIP-0039 reference wrapper is documented
+    # not-constant-time), so True is never truthful here — recording it would be a
+    # fake-classification (zero-tolerance Rule 2). Reject at the entry gate, before
+    # resolution. §4.6 has no typed code for this, so a plain ValueError is the
+    # correct entry-gate surface.
+    if side_channel_hardened is True:
+        raise ValueError(
+            "side_channel_hardened=True is assertable only at Complete with "
+            "hardware-backed reconstruction (HSM/enclave); this binding "
+            "reconstructs via userspace combine_mnemonics and cannot truthfully "
+            "assert it (N12-CRY-SC). Leave it False."
+        )
 
     # Gate 3 — holders supplied AND registry-registered (N12-SH-01), BEFORE key
     # resolution. Deepens I1's basic presence check: every supplied holder id
@@ -676,6 +744,7 @@ def restore_vault_key(
     posture_store: Optional[PostureStore] = None,
     force_stale: bool = False,
     expected_commitment: Optional[str] = None,
+    expected_kcv: Optional[str] = None,
     kek_commitment_alg: str = DEFAULT_KEK_COMMITMENT_ALG,
     passphrase: bytes = b"",
     holders: Sequence[str] = (),
@@ -769,6 +838,12 @@ def restore_vault_key(
             BOTH recovery AND safety, and sets ``RestoreReceipt.forced_stale=True``.
         expected_commitment: Backward-compat fallback commitment (the Wave-2
             interim) — used only when the registry has no entry for the target.
+        expected_kcv: Optional offline key-check-value (N12-CB-04(d) / V6) from
+            the ``BackupReceipt``. When supplied, the commitment-auth gate
+            recomputes the 16-hex KCV over the reconstructed secret + captured
+            generation and constant-time compares it; a mismatch (a relabelled /
+            tampered escrow blob) fails ``kcv-mismatch`` OFFLINE — no registry or
+            live vault needed. ``None`` (default) skips the check (backward-compat).
         kek_commitment_alg: The backup's recorded commitment-registry token.
         passphrase: The SLIP-0039 passphrase used at backup time.
         holders / shard_commitments: Backward-compat fallback distribution —
@@ -882,19 +957,30 @@ def restore_vault_key(
     # --- Source the distribution (N12-CB-03 / N12-AU-04). PREFER the recovery-tier
     # distribution anchor for (vault_id, captured gen); fall back to caller-supplied
     # holders/shard_commitments (the Wave-2 interim) when no anchor is found.
-    dist_anchor = _find_distribution_anchor(
-        dispatcher,
-        vault_id=target_handle.vault_id,
-        kek_generation=resolved.kek_generation,
-    )
-    if dist_anchor is not None:
-        dist_holders: list[str] = list(dist_anchor.get("holders", []))
-        dist_shard_commitments: list[str] = list(
-            dist_anchor.get("shard_commitments", [])
+    # N12-IN-05: this span runs AFTER resolution but BEFORE the main try/finally,
+    # and `_find_distribution_anchor` / the `dist_anchor.get(...)` extraction
+    # dereference attacker-shaped recovery-tier state (dispatcher._engines /
+    # entry.event_payload / list(get("holders"))) that can raise. Wrap it so the
+    # resolved (live) KEK is zeroized on ANY raise — no denial/error exit leaks an
+    # un-zeroized KEK (the same residency class the R1 HIGH-1 fix closed for the X1
+    # block; resolved.zeroize() is idempotent so it composes with that block).
+    dist_holders: list[str]
+    dist_shard_commitments: list[str]
+    try:
+        dist_anchor = _find_distribution_anchor(
+            dispatcher,
+            vault_id=target_handle.vault_id,
+            kek_generation=resolved.kek_generation,
         )
-    else:
-        dist_holders = list(holders)
-        dist_shard_commitments = list(shard_commitments)
+        if dist_anchor is not None:
+            dist_holders = list(dist_anchor.get("holders", []))
+            dist_shard_commitments = list(dist_anchor.get("shard_commitments", []))
+        else:
+            dist_holders = list(holders)
+            dist_shard_commitments = list(shard_commitments)
+    except BaseException:
+        resolved.zeroize()
+        raise
 
     # --- Complete-level governance approval (N12-CL-03 / X1). Verify the
     # approver's HELD action fail-closed HERE — after resolution (the approval
@@ -1081,13 +1167,54 @@ def restore_vault_key(
                 if resolved.key_class.value != "kek":
                     return N12FT01Code.NOT_A_KEK
                 return None
-            # "shard-count" / "parameter" / "mixed-identifier" — the shipped
-            # wrapper raises on under/over-supply, parameter disagreement, and
-            # mixed identifiers; those map via map_wrapper_exception at the
-            # reconstruct() boundary (step 7's lazy reconstruct). They cannot
-            # silently accept — fail-closed at the wrapper. (C3 may surface the
-            # count/param distinctions earlier; the order is unchanged.)
-            if gate in ("shard-count", "parameter", "mixed-identifier"):
+            if gate == "shard-count":
+                # FT-02 step 3 — pre-reconstruction quorum count gate. Derive k
+                # (the SLIP-0039 member-threshold) from the PRESENTED shards'
+                # metadata via Share.from_mnemonic (no reconstruction). When a
+                # shard fails to parse, defer (return None) — the reconstruct /
+                # checksum path backstops it as corrupted-shard; do NOT mislabel a
+                # malformed shard as a count problem. The wrapper's own under/over
+                # "Wrong number" message is ambiguous (it names the count for BOTH
+                # branches), so the count distinction is owned HERE, not by the
+                # wrapper text.
+                #
+                # py pins the N12-FT-02 REJECT branch (too-many-shards): an
+                # over-supply is REJECTED, the trim branch is not chosen.
+                # Cross-SDK reconciliation with kailash-rs (which branch rs picks)
+                # is the separate XSDK gate, out of scope here.
+                k: Optional[int] = None
+                for shard in shards:
+                    mt = _shard_member_threshold(shard)
+                    if mt is None:
+                        return None  # unparseable → defer to corrupted-shard
+                    k = mt
+                if k is None:
+                    return None  # empty presented set → defer to wrapper
+                if len(shards) < k:
+                    return N12FT01Code.INSUFFICIENT_SHARDS
+                if len(shards) > k:
+                    return N12FT01Code.TOO_MANY_SHARDS
+                return None
+            if gate == "parameter":
+                # FT-02 step 4 — SLIP-0039 parameter disagreement stays
+                # wrapper-backstopped (mapped via map_wrapper_exception at the
+                # reconstruct() boundary). No pre-reconstruction predicate here.
+                return None
+            if gate == "mixed-identifier":
+                # FT-02 step 5 — pre-reconstruction mixed-shard-set gate
+                # (F-XSDK-13 determinism; runs BEFORE the step-6 foreign-shard
+                # gate). Distinct SLIP-0039 identifiers across the presented shards
+                # mean two different backups were combined → mixed-shard-set.
+                # Defer (None) on any parse failure (backstopped as
+                # corrupted-shard), NEVER mislabel.
+                identifiers: set[int] = set()
+                for shard in shards:
+                    ident = _shard_identifier(shard)
+                    if ident is None:
+                        return None  # unparseable → defer to corrupted-shard
+                    identifiers.add(ident)
+                if len(identifiers) > 1:
+                    return N12FT01Code.MIXED_SHARD_SET
                 return None
             if gate == "foreign-shard":
                 # N12-CB-03 — BEFORE reconstruction. Every PRESENTED shard's
@@ -1108,6 +1235,23 @@ def restore_vault_key(
                 # N12-CB-02(b)(c)(d) — AFTER reconstruction. Lazily reconstruct
                 # (guarded) on first need, then discriminate the 3-way:
                 _secret = _reconstruct_guarded()
+                # N12-CB-04(d) / V6 — offline KCV blob-tamper check. When the
+                # caller supplies the receipt's KCV, recompute it over the
+                # reconstructed secret + captured generation and constant-time
+                # compare. A relabelled/tampered blob fails OFFLINE here (no
+                # registry needed — works for the escrow-blob scenario). Skipped
+                # when expected_kcv is None (backward-compat). Runs BEFORE the
+                # registry lookup so the offline tamper signal is the FIRST
+                # commitment-auth failure surfaced.
+                if expected_kcv is not None:
+                    recomputed_kcv = key_check_value(
+                        vault_id=target_handle.vault_id,
+                        kek_generation=resolved.kek_generation,
+                        master_secret=_secret,
+                        alg=kek_commitment_alg,
+                    )
+                    if not hmac.compare_digest(recomputed_kcv, expected_kcv):
+                        return N12FT01Code.KCV_MISMATCH
                 lookup = active_registry.lookup(
                     vault_id=target_handle.vault_id,
                     kek_generation=resolved.kek_generation,
