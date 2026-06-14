@@ -309,23 +309,35 @@ def resolve_dispatch(alg_id: str) -> RegistryEntry:
 def is_pre_registry_form(value: Any) -> bool:
     """Return True if ``value`` is a recognised D2d pre-registry explicit form.
 
-    EATP-08 §4.5 (D2d) recognises two pre-registry explicit forms that carry
-    the deprecated literal ``ed25519+sha256``:
+    EATP-08 §4.5 (D2d), as clarified by the v1.1.1 erratum, recognises the
+    deprecated literal ``ed25519+sha256`` as a pre-registry explicit form in
+    exactly **two structurally-distinguishable encodings**:
 
-    - the bare deprecated literal string (kailash-py historically signed NO
-      ``alg_id`` at all, carrying the algorithm in unsigned metadata; when a
-      caller surfaces that metadata literal into the field, it lands here);
-      and
-    - the nested-object encoding ``{"algorithm": "ed25519+sha256"}`` that
-      kailash-rs historically signed.
+    - the **nested-object** encoding ``{"algorithm": "ed25519+sha256"}`` — the
+      value of a signed ``alg_id`` field (the kailash-rs historical form); and
+    - the algorithm carried only in **unsigned ``algorithm`` metadata** with no
+      signed ``alg_id`` (the kailash-py historical form), which reaches this
+      predicate as a dict whose ``algorithm`` key holds the literal (see
+      :func:`decode_wire_alg_id`).
 
-    Both map to ``eatp-v1`` under the bounded/witnessed legacy path. This
-    function only RECOGNISES the shape; the dated/witnessed/sunset gating is
-    the verifier's responsibility (§4.5).
+    A **bare top-level-string** ``alg_id`` equal to ``ed25519+sha256`` is NOT a
+    pre-registry form: it is an unregistered top-level token and MUST be
+    rejected with ``unsupported-algorithm`` (§3.3 / §5.1 step 2), never rescued
+    by a witness. Accepting a bare literal string here would dilute the
+    "top-level ``alg_id`` string is a registry token" invariant that the
+    anti-strip design (§4.4 / V6) depends on, and no conformant emitter ever
+    produced one (the reference scaffolds emitted the nested object or unsigned
+    metadata). This is the v1.1.1 / mint#26 ruling (ISS-32).
+
+    Both recognised encodings map to ``eatp-v1`` under the bounded/witnessed
+    legacy path. This function only RECOGNISES the shape; the
+    dated/witnessed/sunset gating is the verifier's responsibility (§4.5).
     """
 
-    if value == DEPRECATED_PRE_REGISTRY_LITERAL:
-        return True
+    # Only the structurally-distinguishable nested form is a D2d pre-registry
+    # shape. A bare string `== DEPRECATED_PRE_REGISTRY_LITERAL` is deliberately
+    # NOT matched here (v1.1.1): it falls through to the registry match and
+    # raises `unsupported-algorithm`.
     if (
         isinstance(value, dict)
         and value.get("algorithm") == DEPRECATED_PRE_REGISTRY_LITERAL
@@ -451,8 +463,15 @@ class AlgorithmIdentifier:
         # Some historical record shapes nested the token under a top-level
         # `{"alg_id": "<token>"}` member; accept that envelope transparently
         # so `from_dict(record_dict)` and `from_dict(record_dict["alg_id"])`
-        # behave identically for a conformant record.
-        if isinstance(data, dict) and "alg_id" in data and "algorithm" not in data:
+        # behave identically for a conformant record. A present `alg_id` key is
+        # authoritative: when it exists we always resolve from it, even if the
+        # record ALSO carries an `algorithm` sibling. This closes a latent
+        # bypass where `{"alg_id":"ed25519+sha256","algorithm":"ed25519+sha256"}`
+        # could otherwise fall through to the whole-dict `algorithm`-key D2d
+        # match and rescue a bare top-level-string literal (v1.1.1 / mint#26).
+        # The unsigned-`algorithm`-metadata D2d form applies only when there is
+        # NO `alg_id` member (handled by `decode_wire_alg_id`'s second branch).
+        if isinstance(data, dict) and "alg_id" in data:
             value: Any = data["alg_id"]
         else:
             value = data
@@ -504,13 +523,25 @@ class AlgorithmIdentifier:
             )
 
         if value == DEPRECATED_PRE_REGISTRY_LITERAL:
-            # The deprecated literal as a bare top-level string is NOT a
-            # registry token. Off the legacy path it is a shape mismatch.
+            # The deprecated literal as a bare top-level `alg_id` string is an
+            # UNREGISTERED top-level token, not a D2d form (v1.1.1 / mint#26):
+            # §5.1 step 2 registry-matches a top-level string, and the literal
+            # is not in the registry, so it is `unsupported-algorithm` with or
+            # without a witness (a witness MUST NOT rescue it). The two D2d
+            # forms are the nested-object `alg_id` value and unsigned
+            # `algorithm` metadata (§4.5), both reached structurally above, not
+            # here. (is_pre_registry_form no longer matches the bare string, so
+            # the witnessed D2d block above is skipped for it.)
             raise UnsupportedAlgorithmError(
-                "alg-id-shape-mismatch",
-                f"alg_id {value!r} is the deprecated pre-registry literal; "
-                f"it is accepted only on the D2d legacy path (§4.5), never "
-                f"as a conformant post-adoption emission.",
+                "unsupported-algorithm",
+                f"alg_id {value!r} is the deprecated pre-registry literal "
+                f"presented as a top-level string; it is an unregistered "
+                f"token and MUST be rejected with unsupported-algorithm "
+                f"(EATP-08 §3.3 / §5.1, v1.1.1). It MUST NOT fall through to "
+                f"{ALGORITHM_DEFAULT!r}, and a D2d witness does not rescue it; "
+                f"the D2d legacy path accepts the literal only as a "
+                f"nested-object alg_id value or unsigned `algorithm` metadata "
+                f"(§4.5).",
             )
 
         if not is_registered(value):

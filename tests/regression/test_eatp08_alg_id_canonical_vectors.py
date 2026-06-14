@@ -99,15 +99,45 @@ def test_registry_status_and_dispatchability_match(row):
 
 @pytest.mark.regression
 def test_non_conformant_deprecated_literal_decode_regime():
-    # Post-adoption (no witness): the bare deprecated literal is shape-mismatch.
+    # v1.1.1 / mint#26: a bare top-level-string `alg_id` equal to the deprecated
+    # literal is an UNREGISTERED top-level token -> `unsupported-algorithm`, in
+    # BOTH the no-witness and witnessed cases. It is NOT a D2d form, and a
+    # witness MUST NOT rescue it (§5.1 step 2 registry-matches a top-level
+    # string; the literal is not a registry token). The two D2d forms are the
+    # nested-object value and unsigned `algorithm` metadata, exercised by the
+    # sibling tests below.
     with pytest.raises(UnsupportedAlgorithmError) as exc:
         decode_wire_alg_id({"alg_id": "ed25519+sha256"})
-    assert exc.value.code == "alg-id-shape-mismatch"
-    # D2d witnessed legacy path: accepted as eatp-v1.
-    got = decode_wire_alg_id(
-        {"alg_id": "ed25519+sha256"}, witness=_pre_adoption_witness()
-    )
-    assert got == ALGORITHM_DEFAULT == "eatp-v1"
+    assert exc.value.code == "unsupported-algorithm"
+    # An otherwise-valid pre-adoption witness does NOT rescue the bare
+    # top-level-string literal (it is not a D2d encoding).
+    with pytest.raises(UnsupportedAlgorithmError) as exc_witnessed:
+        decode_wire_alg_id(
+            {"alg_id": "ed25519+sha256"}, witness=_pre_adoption_witness()
+        )
+    assert exc_witnessed.value.code == "unsupported-algorithm"
+
+
+@pytest.mark.regression
+def test_alg_id_key_is_authoritative_over_algorithm_sibling():
+    """A present `alg_id` key is authoritative; a bare-literal `alg_id` is NOT
+    rescued by an `algorithm` sibling.
+
+    Boundary case (v1.1.1 / mint#26): a record carrying BOTH a bare top-level
+    `alg_id` string literal AND an `algorithm` metadata key must resolve from
+    `alg_id` and reject with `unsupported-algorithm` — the `algorithm`-sibling
+    D2d form applies only when there is NO `alg_id` member. Exercises
+    `AlgorithmIdentifier.from_dict` directly (the exported surface), not only
+    the `decode_wire_alg_id` production path."""
+
+    both_keys = {"alg_id": "ed25519+sha256", "algorithm": "ed25519+sha256"}
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        AlgorithmIdentifier.from_dict(both_keys, witness=_pre_adoption_witness())
+    assert exc.value.code == "unsupported-algorithm"
+    # And without a witness.
+    with pytest.raises(UnsupportedAlgorithmError) as exc_nw:
+        AlgorithmIdentifier.from_dict(both_keys)
+    assert exc_nw.value.code == "unsupported-algorithm"
 
 
 @pytest.mark.regression
