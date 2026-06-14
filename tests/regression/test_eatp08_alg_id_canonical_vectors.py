@@ -119,6 +119,28 @@ def test_non_conformant_deprecated_literal_decode_regime():
 
 
 @pytest.mark.regression
+def test_alg_id_key_is_authoritative_over_algorithm_sibling():
+    """A present `alg_id` key is authoritative; a bare-literal `alg_id` is NOT
+    rescued by an `algorithm` sibling.
+
+    Boundary case (v1.1.1 / mint#26): a record carrying BOTH a bare top-level
+    `alg_id` string literal AND an `algorithm` metadata key must resolve from
+    `alg_id` and reject with `unsupported-algorithm` — the `algorithm`-sibling
+    D2d form applies only when there is NO `alg_id` member. Exercises
+    `AlgorithmIdentifier.from_dict` directly (the exported surface), not only
+    the `decode_wire_alg_id` production path."""
+
+    both_keys = {"alg_id": "ed25519+sha256", "algorithm": "ed25519+sha256"}
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        AlgorithmIdentifier.from_dict(both_keys, witness=_pre_adoption_witness())
+    assert exc.value.code == "unsupported-algorithm"
+    # And without a witness.
+    with pytest.raises(UnsupportedAlgorithmError) as exc_nw:
+        AlgorithmIdentifier.from_dict(both_keys)
+    assert exc_nw.value.code == "unsupported-algorithm"
+
+
+@pytest.mark.regression
 def test_non_conformant_nested_pre_registry_object_decode_regime():
     # The kailash-rs pre-publication scaffold form: nested {"algorithm": "..."}.
     nested = {"alg_id": {"algorithm": "ed25519+sha256"}}

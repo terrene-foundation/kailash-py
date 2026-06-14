@@ -463,8 +463,15 @@ class AlgorithmIdentifier:
         # Some historical record shapes nested the token under a top-level
         # `{"alg_id": "<token>"}` member; accept that envelope transparently
         # so `from_dict(record_dict)` and `from_dict(record_dict["alg_id"])`
-        # behave identically for a conformant record.
-        if isinstance(data, dict) and "alg_id" in data and "algorithm" not in data:
+        # behave identically for a conformant record. A present `alg_id` key is
+        # authoritative: when it exists we always resolve from it, even if the
+        # record ALSO carries an `algorithm` sibling. This closes a latent
+        # bypass where `{"alg_id":"ed25519+sha256","algorithm":"ed25519+sha256"}`
+        # could otherwise fall through to the whole-dict `algorithm`-key D2d
+        # match and rescue a bare top-level-string literal (v1.1.1 / mint#26).
+        # The unsigned-`algorithm`-metadata D2d form applies only when there is
+        # NO `alg_id` member (handled by `decode_wire_alg_id`'s second branch).
+        if isinstance(data, dict) and "alg_id" in data:
             value: Any = data["alg_id"]
         else:
             value = data
