@@ -30,6 +30,7 @@ __all__ = [
     "VaultKeyHandle",
     "BackupReceipt",
     "RestoreReceipt",
+    "RotationReceipt",
 ]
 
 
@@ -259,4 +260,108 @@ class RestoreReceipt:
             audit_anchor_ref=d.get("audit_anchor_ref"),
             forced_stale=bool(d.get("forced_stale", False)),
             metadata=dict(d.get("metadata", {})),
+        )
+
+
+@dataclass(frozen=True)
+class RotationReceipt:
+    """The metadata receipt returned by a successful rotation (§5).
+
+    Covers BOTH rotation shapes (R1 / Wave 5):
+
+    * **Amicable holder rotation** (N12-RT-01/02/03): ``for_cause=False``,
+      ``kek_generation == prior_kek_generation`` (an amicable holder rotation
+      does NOT advance the generation — only the shard distribution changes,
+      §5.1). ``kek_identity_commitment`` is ``None`` (the commitment binds the
+      unchanged ``(vault_id, generation, secret, provenance)`` so the
+      already-registered commitment still verifies — no new commitment is
+      registered).
+    * **For-cause generation-advancing rotation** (N12-SH-04 / N12-RT-06):
+      ``for_cause=True``, ``kek_generation == prior_kek_generation + 1`` (the
+      for-cause revocation escalates to a KEK rotation that advances the
+      generation so the departed holder's retained shards become stale, §5.2).
+      ``kek_identity_commitment`` carries the NEW generation's commitment (the
+      one registered for ``(vault_id, kek_generation)`` and recorded on the
+      ``vault_kek_rotation`` anchor).
+
+    NO shard ciphertext, NO secret — only the post-rotation distribution
+    topology (the new ``shard_commitments``, the new ``holders``) and the
+    audit-anchor reference. The new shards are produced + distributed inside
+    the trusted-module ceremony and ``del``-ed (N12-IN-05); they never ride
+    the receipt.
+    """
+
+    vault_id: str
+    prior_kek_generation: int
+    kek_generation: int  # advanced (+1) for for-cause; unchanged for amicable
+    for_cause: bool
+    k: int
+    n: int
+    holders: Tuple[str, ...] = ()
+    shard_commitments: Tuple[str, ...] = ()
+    kek_identity_commitment: Optional[str] = None  # new-gen commitment (for-cause only)
+    kek_commitment_alg: Optional[str] = None
+    audit_anchor_ref: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if not (2 <= self.k <= self.n <= 9):
+            raise ValueError(
+                f"ritual outside the 2<=k<=n<=9 floor: k={self.k} n={self.n}"
+            )
+        if self.for_cause:
+            if self.kek_generation != self.prior_kek_generation + 1:
+                raise ValueError(
+                    "for-cause rotation MUST advance the generation by exactly 1 "
+                    f"(N12-SH-04): prior={self.prior_kek_generation} "
+                    f"new={self.kek_generation}"
+                )
+            if self.kek_identity_commitment is None or not _HEX64.match(
+                self.kek_identity_commitment
+            ):
+                raise ValueError(
+                    "for-cause rotation MUST carry the new-generation "
+                    "kek_identity_commitment (64 lowercase-hex, N12-RT-06); got "
+                    f"{self.kek_identity_commitment!r}"
+                )
+        else:
+            if self.kek_generation != self.prior_kek_generation:
+                raise ValueError(
+                    "amicable holder rotation MUST NOT advance the generation "
+                    f"(N12-RT-03): prior={self.prior_kek_generation} "
+                    f"new={self.kek_generation}"
+                )
+        if not isinstance(self.holders, tuple):
+            object.__setattr__(self, "holders", tuple(self.holders))
+        if not isinstance(self.shard_commitments, tuple):
+            object.__setattr__(self, "shard_commitments", tuple(self.shard_commitments))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "vault_id": self.vault_id,
+            "prior_kek_generation": self.prior_kek_generation,
+            "kek_generation": self.kek_generation,
+            "for_cause": self.for_cause,
+            "k": self.k,
+            "n": self.n,
+            "holders": list(self.holders),
+            "shard_commitments": list(self.shard_commitments),
+            "kek_identity_commitment": self.kek_identity_commitment,
+            "kek_commitment_alg": self.kek_commitment_alg,
+            "audit_anchor_ref": self.audit_anchor_ref,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "RotationReceipt":
+        return cls(
+            vault_id=d["vault_id"],
+            prior_kek_generation=int(d["prior_kek_generation"]),
+            kek_generation=int(d["kek_generation"]),
+            for_cause=bool(d["for_cause"]),
+            k=int(d["k"]),
+            n=int(d["n"]),
+            holders=tuple(d.get("holders", ())),
+            shard_commitments=tuple(d.get("shard_commitments", ())),
+            kek_identity_commitment=d.get("kek_identity_commitment"),
+            kek_commitment_alg=d.get("kek_commitment_alg"),
+            audit_anchor_ref=d.get("audit_anchor_ref"),
         )

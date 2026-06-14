@@ -59,6 +59,7 @@ from kailash.trust.vault.registry_ops import (
     recommit_vault_kek,
     retire_vault_kek_alg,
 )
+from kailash.trust.vault.rotation import revoke_holder_for_cause, rotate_vault_holders
 from kailash.trust.vault.shamir import (
     ShamirRitual,
     deserialize_shard,
@@ -120,6 +121,9 @@ __all__ = [
     "recommit_vault_kek",
     "retire_vault_kek_alg",
     "RETIRE_ALG_CAPABILITY",
+    # EATP-12 W5-R1 — rotation trigger (amicable holder rotation + for-cause gen-advance)
+    "rotate_vault_holders",
+    "revoke_holder_for_cause",
     # EATP-12 W3-C3 — stale-generation guard + denylist + RT-05 D6 trigger
     "CompromisedGenerationDenylist",
     "default_compromised_generation_denylist",
