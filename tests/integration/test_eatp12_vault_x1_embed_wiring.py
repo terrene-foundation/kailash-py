@@ -811,3 +811,137 @@ def test_v8_conformant_backup_anchor_has_no_witness():
     backup = [e for e in rec if e.event_payload["subtype"] == "vault_key_backup"][-1]
     assert "witness" not in backup.event_payload
     assert "approver" not in backup.event_payload
+
+
+# ===========================================================================
+# HIGH-1 regression (terminal holistic redteam) — the resolved KEK MUST be
+# zeroized on the X1 approval-gate denial paths, which sit AFTER resolution but
+# BEFORE the main try/finally (N12-IN-05: no plaintext KEK residency on any exit).
+# ===========================================================================
+
+
+class _SpyResolver:
+    """A trusted resolver that RETAINS the ResolvedKek it returned so the test can
+    assert the binding zeroized it (real zeroize semantics; NOT a mock)."""
+
+    def __init__(self) -> None:
+        self.last: ResolvedKek | None = None
+
+    def resolve_kek(self, handle: VaultKeyHandle) -> ResolvedKek:
+        self.last = ResolvedKek(
+            master_secret=_KEK_OLD,
+            key_class=KeyClass.KEK,
+            kek_generation=_GEN_OLD,
+            key_id=_KEY_ID,
+            passphrase_provenance=_PROVENANCE,
+            vault_tenant="t1",
+            vault_domain="d1",
+        )
+        return self.last
+
+
+@pytest.mark.integration
+def test_high1_forced_stale_missing_approval_zeroizes_kek(posture_store):
+    """A Complete forced-stale restore denied for a MISSING mandatory approval
+    MUST zeroize the resolved KEK (the denial path is pre-try; regression for the
+    terminal-holistic-redteam HIGH-1 residency gap)."""
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    spy = _SpyResolver()
+    old_shards, _ = _seed_forced_stale_setup(dispatcher, identity, signer, registry)
+
+    with pytest.raises(VaultBindingError):
+        restore_vault_key(
+            old_shards[:3],
+            _handle(_GEN_OLD),
+            _clearance(_REQUESTER, "vault:restore", "vault:restore-stale"),
+            resolver=spy,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG,
+            registry=registry,
+            posture_store=posture_store,
+            force_stale=True,
+            conformance_level=ConformanceLevel.COMPLETE,  # approval omitted
+        )
+    assert spy.last is not None
+    assert spy.last.master_secret == b"", "resolved KEK MUST be zeroized on denial"
+
+
+@pytest.mark.integration
+def test_high1_forged_approval_zeroizes_kek(posture_store):
+    """A forged approval denial MUST zeroize the resolved KEK (pre-try path)."""
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    keyring = _TokenKeyring()
+    spy = _SpyResolver()
+    old_shards, _ = _seed_forced_stale_setup(dispatcher, identity, signer, registry)
+    forged = _signed_approval(
+        keyring,
+        approver_delegate_id="dlg-approver",
+        requester_principal=_REQUESTER,
+        operation="restore-forced-stale",
+        kek_generation=_GEN_OLD,
+        valid=False,
+    )
+    with pytest.raises(VaultBindingError):
+        restore_vault_key(
+            old_shards[:3],
+            _handle(_GEN_OLD),
+            _clearance(_REQUESTER, "vault:restore", "vault:restore-stale"),
+            resolver=spy,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG,
+            registry=registry,
+            posture_store=posture_store,
+            force_stale=True,
+            conformance_level=ConformanceLevel.COMPLETE,
+            approval=forged,
+            approver_clearance=_clearance(_APPROVER, "vault:approve"),
+            requester_delegate_id="dlg-requester",
+            verify_token=keyring.verify_token,
+        )
+    assert spy.last is not None
+    assert spy.last.master_secret == b"", "resolved KEK MUST be zeroized on denial"
+
+
+@pytest.mark.integration
+def test_high1_approval_companion_args_missing_zeroizes_kek(posture_store):
+    """An approval supplied without its companion args MUST zeroize the KEK."""
+    identity, verifier, signer = _build_signer()
+    dispatcher = AuditDispatcher.for_named_tiers(verifier)
+    registry = CommitmentRegistry()
+    keyring = _TokenKeyring()
+    spy = _SpyResolver()
+    old_shards, _ = _seed_forced_stale_setup(dispatcher, identity, signer, registry)
+    approval = _signed_approval(
+        keyring,
+        approver_delegate_id="dlg-approver",
+        requester_principal=_REQUESTER,
+        operation="restore-forced-stale",
+        kek_generation=_GEN_OLD,
+    )
+    with pytest.raises(VaultBindingError):
+        restore_vault_key(
+            old_shards[:3],
+            _handle(_GEN_OLD),
+            _clearance(_REQUESTER, "vault:restore", "vault:restore-stale"),
+            resolver=spy,
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=identity,
+            alg_id=_ALG,
+            registry=registry,
+            posture_store=posture_store,
+            force_stale=True,
+            conformance_level=ConformanceLevel.COMPLETE,
+            approval=approval,
+            # verify_token / approver_clearance / requester_delegate_id omitted
+        )
+    assert spy.last is not None
+    assert spy.last.master_secret == b"", "resolved KEK MUST be zeroized on denial"

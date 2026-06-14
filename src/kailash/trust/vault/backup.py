@@ -105,6 +105,7 @@ from kailash.trust.vault.input_gates import (
     require_clearance,
     require_escape_hatch_enabled,
     require_kek_class,
+    require_printable_passphrase,
     require_ritual_floor,
     require_secret_length,
 )
@@ -391,6 +392,11 @@ def back_up_vault_key(
 
     # Gate 2 — ritual floor (N12-TH-01), BEFORE key resolution.
     require_ritual_floor(ritual)
+
+    # Gate 2a — passphrase printability (N12-PP-01, §4.4.1): reject a
+    # non-printable passphrase DETERMINISTICALLY (`invalid-passphrase`) BEFORE the
+    # SLIP-0039 wrapper, rather than as a mapped library ValueError.
+    require_printable_passphrase(passphrase)
 
     # Gate 3 — holders supplied AND registry-registered (N12-SH-01), BEFORE key
     # resolution. Deepens I1's basic presence check: every supplied holder id
@@ -819,6 +825,11 @@ def restore_vault_key(
         denylist if denylist is not None else default_compromised_generation_denylist()
     )
 
+    # Passphrase printability (N12-PP-01, §4.4.1): reject a non-printable
+    # passphrase DETERMINISTICALLY (`invalid-passphrase`) BEFORE the SLIP-0039
+    # wrapper's reconstruct, matching the backup-side entry gate.
+    require_printable_passphrase(passphrase)
+
     # --- pre-resolution clearance — the force_stale higher-capability check
     # (N12-SG-03) is a DISTINCT axis the spec gates separately from the ordinary
     # token, so it runs here BEFORE resolution: a forced-stale restore requires
@@ -919,6 +930,10 @@ def restore_vault_key(
                     "has_requester_delegate_id": requester_delegate_id is not None,
                 },
             )
+            # N12-IN-05: the X1 approval gate runs AFTER resolution but BEFORE the
+            # main try/finally, so zeroize the resolved KEK on this exit path (the
+            # finally below does not cover the pre-try X1 raises).
+            resolved.zeroize()
             raise VaultBindingError(
                 N12FT01Code.MISSING_CLEARANCE,
                 "a governance approval was supplied but verify_token / "
@@ -947,6 +962,8 @@ def restore_vault_key(
                 missing_capability_or_scope=APPROVE_CAPABILITY,
                 target_handle_ref=target_ref,
             )
+            # N12-IN-05: zeroize the resolved KEK on this pre-try denial path.
+            resolved.zeroize()
             raise
 
     # Mandatory at COMPLETE for the forced-stale high-risk path (N12-SG-03 +
@@ -968,6 +985,8 @@ def restore_vault_key(
             missing_capability_or_scope=APPROVE_CAPABILITY,
             target_handle_ref=target_ref,
         )
+        # N12-IN-05: zeroize the resolved KEK on this pre-try mandatory-denial path.
+        resolved.zeroize()
         raise VaultBindingError(
             N12FT01Code.MISSING_CLEARANCE,
             "forced-stale restore at Complete level requires a verified "

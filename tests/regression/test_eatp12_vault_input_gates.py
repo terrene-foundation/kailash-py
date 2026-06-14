@@ -35,6 +35,7 @@ from kailash.trust.vault.input_gates import (
     require_escape_hatch_enabled,
     require_holders_supplied,
     require_kek_class,
+    require_printable_passphrase,
     require_ritual_floor,
     require_secret_length,
 )
@@ -300,3 +301,45 @@ def test_resolved_kek_zeroize_drops_secret():
     )
     resolved.zeroize()
     assert resolved.master_secret == b""
+
+
+# ---------------------------------------------------------------------------
+# N12-PP-01 — passphrase printability gate (§4.4.1, closure-parity GAP closure)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_printable_passphrase_accepts_empty_and_ascii():
+    """The empty passphrase (default) and printable-ASCII passphrases pass."""
+    assert require_printable_passphrase(b"") == b""
+    assert require_printable_passphrase(b"correct horse battery staple!") == (
+        b"correct horse battery staple!"
+    )
+    # Full printable boundary (0x20 space .. 0x7e tilde).
+    assert require_printable_passphrase(bytes(range(0x20, 0x7F))) == bytes(
+        range(0x20, 0x7F)
+    )
+
+
+@pytest.mark.regression
+def test_printable_passphrase_rejects_control_and_high_bytes():
+    """A passphrase with a byte outside 32-126 raises invalid-passphrase
+    deterministically (N12-PP-01) — NOT a mapped library ValueError."""
+    for bad in (
+        b"\x00",
+        b"tab\there",
+        b"newline\n",
+        b"\x7f",
+        b"high\xff",
+        "café".encode(),
+    ):
+        with pytest.raises(VaultBindingError) as exc:
+            require_printable_passphrase(bad)
+        assert exc.value.code is N12FT01Code.INVALID_PASSPHRASE
+
+
+@pytest.mark.regression
+def test_printable_passphrase_rejects_non_bytes():
+    with pytest.raises(VaultBindingError) as exc:
+        require_printable_passphrase("a str, not bytes")
+    assert exc.value.code is N12FT01Code.INVALID_PASSPHRASE

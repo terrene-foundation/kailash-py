@@ -1,13 +1,25 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Trust Vault — SLIP-0039 Shamir backup scaffold (issue #606).
+"""Trust Vault — EATP-12 v1.0 key-binding (issue #1312).
 
-The Trust Vault binding (mint ISS-37) is NOT YET STABLE. This package
-exposes the SLIP-0039 wrapper API + a gate-documented stub
-(:func:`back_up_vault_key`) that will fill in once the mint spec lands.
+The EATP-12 Trust-Vault key-binding composes the SLIP-0039 wrapper
+(:mod:`kailash.trust.vault.shamir`) with a commitment/KCV control, a
+clearance/authz gate, a named-tier audit dispatcher, a per-(vault, generation)
+commitment registry, a stale-generation guard, holder rotation, and
+Complete-level governance gates. The two operator-facing operations are
+:func:`back_up_vault_key` (resolve a KEK handle internally, shard it under a
+vetted ritual, register the commitment + KCV, dispatch a signed
+``vault_key_backup`` anchor, return a :class:`BackupReceipt`) and
+:func:`restore_vault_key` (reconstruct + re-establish the KEK opaquely through
+the canonical FT-02 gate order, return a :class:`RestoreReceipt`). Raw KEK bytes
+never cross the public API (N12-IN-01); the resolved secret is consumed-and-
+``del``-eted in a ``finally`` (N12-IN-05). The raw-bytes escape hatch
+(:func:`back_up_raw_vault_key`) is DISABLED by default (N12-IN-03).
 
-See :mod:`kailash.trust.vault.shamir` for the ritual surface.
+See ``specs/trust-crypto.md`` § Trust-Vault Binding (EATP-12) for the full
+contract and ``kailash.trust.vault.complete.ConformanceLevel`` for the
+Conformant vs Complete level gate.
 """
 
 from __future__ import annotations

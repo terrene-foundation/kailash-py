@@ -69,6 +69,7 @@ __all__ = [
     "require_kek_class",
     "require_escape_hatch_enabled",
     "require_secret_length",
+    "require_printable_passphrase",
 ]
 
 
@@ -378,3 +379,30 @@ def require_secret_length(secret: object) -> bytes:
             details={"length_bytes": n},
         )
     return bytes(secret)
+
+
+def require_printable_passphrase(passphrase: object) -> bytes:
+    """Entry gate — SLIP-0039 passphrase printability (N12-PP-01, spec §4.4.1).
+
+    SLIP-0039 requires the passphrase to be printable ASCII (code points 32-126).
+    The binding validates this DETERMINISTICALLY at the entry gate, BEFORE calling
+    the wrapper, surfacing ``invalid-passphrase`` rather than a mapped library
+    ``ValueError`` (so the two SDKs return the same first error for the same bad
+    input). The empty passphrase (``b""``, the default) is printable-vacuous and
+    valid. Returns the validated bytes.
+    """
+    if not isinstance(passphrase, (bytes, bytearray)):
+        raise VaultBindingError(
+            N12FT01Code.INVALID_PASSPHRASE,
+            f"passphrase MUST be bytes (N12-PP-01); got {type(passphrase).__name__}",
+            details={"type": type(passphrase).__name__},
+        )
+    for i, b in enumerate(passphrase):
+        if b < 0x20 or b > 0x7E:
+            raise VaultBindingError(
+                N12FT01Code.INVALID_PASSPHRASE,
+                "passphrase MUST be printable ASCII (SLIP-0039 code points "
+                f"32-126, N12-PP-01); byte at index {i} is 0x{b:02x}",
+                details={"index": i, "byte": b},
+            )
+    return bytes(passphrase)
