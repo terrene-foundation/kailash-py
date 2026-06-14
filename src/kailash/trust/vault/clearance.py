@@ -253,6 +253,7 @@ def evaluate_clearance(
     posture_store: Optional[PostureStore] = None,
     now: Optional[datetime] = None,
     approver_configured: bool = False,
+    approval_verified: bool = False,
 ) -> None:
     """Evaluate the full §4.2 clearance gate (CL-01/02 + CL-02a + CL-04).
 
@@ -274,13 +275,16 @@ def evaluate_clearance(
        presence-check seed, now the third axis of the deepened gate).
     4. **(CL-04) cooling-off** — if ``required_token`` is one of
        :data:`COOLING_OFF_SUSPENDED_CAPABILITIES` AND the principal is within the
-       7-day window (:func:`is_in_cooling_off`), the token is SUSPENDED. With NO
-       governance-approver configured (the Wave-4 conformant disposition) the op
-       is rejected ``missing-clearance``. **X1 seam:** when CL-03 lands, an
-       ``approver_configured=True`` deployment routes a suspended op through the
-       governance-approver HELD action instead of rejecting; until CL-03 is
-       implemented, ``approver_configured=True`` STILL rejects fail-closed (the
-       HELD path is not yet wired and MUST NOT silently fail open).
+       7-day window (:func:`is_in_cooling_off`), the token is SUSPENDED. The
+       suspension is lifted ONLY by a VERIFIED governance-approver HELD action
+       (N12-CL-03): when ``approval_verified=True`` (the caller has already run
+       :func:`~kailash.trust.vault.complete.verify_governance_approval`
+       fail-closed and bound the approval into the signed ``event_payload``), the
+       suspended op routes through the HELD action and PASSES. Otherwise the op
+       is rejected ``missing-clearance`` — fail-closed, even when
+       ``approver_configured=True`` but no approval was supplied/verified (a
+       configured-but-unexercised approver does NOT lift the suspension; only a
+       verified approval does, so the HELD path can never silently fail open).
 
     Args:
         clearance: The bound authorization context (CL-02a tenant/domain source —
@@ -295,10 +299,15 @@ def evaluate_clearance(
             default — see :func:`read_cooling_off_start`).
         now: The trust-anchored clock for the CL-04 window (the SAME source C3
             used to record the start). NEVER a locally-mutable wall clock.
-        approver_configured: Whether a governance-approver (CL-03) is configured.
-            The X1 seam: ``True`` will, once CL-03 lands, route a suspended op
-            through the HELD action; until then it STILL rejects (no silent
-            fail-open).
+        approver_configured: Whether a governance-approver (CL-03) is configured
+            for this deployment. Recorded on the denial ``details`` for audit;
+            it does NOT by itself lift a cooling-off suspension — only a VERIFIED
+            approval (``approval_verified``) does.
+        approval_verified: Whether the caller has already verified a
+            governance-approver HELD action fail-closed (N12-CL-03) for THIS op
+            and bound it into the signed ``event_payload``. ``True`` lifts the
+            CL-04 cooling-off suspension (routes through the HELD action);
+            ``False`` keeps the suspension in force (fail-closed).
 
     Raises:
         VaultBindingError: ``MISSING_CLEARANCE`` on a tenant mismatch, a domain
@@ -345,20 +354,35 @@ def evaluate_clearance(
         posture_store, principal=clearance.principal, now=now
     ):
         # The recovered principal's vault:* token is suspended during the window.
-        # X1 seam (N12-CL-03): a configured governance-approver would route the
-        # op through the HELD action here. CL-03 is NOT yet implemented, so the
-        # conformant Wave-4 disposition is to reject fail-closed — even when
-        # approver_configured=True (no silent fail-open until the HELD path
-        # lands).
-        raise VaultBindingError(
-            N12FT01Code.MISSING_CLEARANCE,
-            "principal is within the 7-day post-recovery cooling-off window "
-            f"(N12-CL-04): the {required_token!r} token is SUSPENDED. A second "
-            "materializing op requires the governance-approver HELD action "
-            "(N12-CL-03, an X1 seam not yet implemented) or is rejected; no "
-            "approver is configured for this deployment, so the op is denied.",
-            details={
-                "required_capability": required_token,
-                "approver_configured": approver_configured,
-            },
-        )
+        # N12-CL-03 HELD override (X1): a VERIFIED governance-approver HELD action
+        # lifts the suspension. The caller runs verify_governance_approval
+        # fail-closed and binds the approval into the signed event_payload BEFORE
+        # this gate, then passes approval_verified=True. A configured-but-
+        # unexercised approver does NOT lift it (approval_verified stays False),
+        # so the HELD path can never silently fail open.
+        if approval_verified:
+            logger.info(
+                "vault.clearance.cooling_off_held_override",
+                extra={
+                    "principal": clearance.principal,
+                    "required_capability": required_token,
+                    "detail": (
+                        "principal within the 7-day cooling-off window but a "
+                        "verified governance-approver HELD action (N12-CL-03) "
+                        "lifts the suspension for this op"
+                    ),
+                },
+            )
+        else:
+            raise VaultBindingError(
+                N12FT01Code.MISSING_CLEARANCE,
+                "principal is within the 7-day post-recovery cooling-off window "
+                f"(N12-CL-04): the {required_token!r} token is SUSPENDED. A "
+                "second materializing op requires a VERIFIED governance-approver "
+                "HELD action (N12-CL-03); none was supplied/verified, so the op "
+                "is denied fail-closed.",
+                details={
+                    "required_capability": required_token,
+                    "approver_configured": approver_configured,
+                },
+            )

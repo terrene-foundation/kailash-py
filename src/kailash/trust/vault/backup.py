@@ -70,6 +70,15 @@ from kailash.trust.vault.commitment import (
     key_check_value,
     verify_commitment,
 )
+from kailash.trust.vault.complete import (
+    APPROVE_CAPABILITY,
+    WITNESS_CAPABILITY,
+    CeremonyWitness,
+    ConformanceLevel,
+    GovernanceApproval,
+    verify_ceremony_witness,
+    verify_governance_approval,
+)
 from kailash.trust.vault.dispatch import (
     AuditDispatcher,
     AuditTier,
@@ -249,6 +258,13 @@ def back_up_vault_key(
     trust_anchored_now: Optional[datetime] = None,
     approver_configured: bool = False,
     principal: Optional[str] = None,
+    conformance_level: ConformanceLevel = ConformanceLevel.CONFORMANT,
+    witness: Optional[CeremonyWitness] = None,
+    witness_clearance: Optional[ClearanceContext] = None,
+    requester_delegate_id: Optional[str] = None,
+    verify_token: Optional[Callable[[bytes, str, str], bool]] = None,
+    approver_principal: Optional[str] = None,
+    approver_delegate_id: Optional[str] = None,
 ) -> BackupReceipt:
     """Split a KEK (resolved from ``key_handle``) into Shamir shards (N12-IN-01).
 
@@ -323,10 +339,29 @@ def back_up_vault_key(
             cooling-off receipt exists but this is omitted, the suspension
             remains in force (fail-closed).
         approver_configured: Whether a governance-approver (CL-03) is configured
-            (the X1 seam). Until CL-03 lands a suspended op rejects fail-closed
-            regardless.
+            for this deployment (audit-recorded; the cooling-off suspension is
+            lifted only by a VERIFIED approval, never by this flag alone).
         principal: The acting principal recorded on the anchor; defaults to
             ``clearance.principal``.
+        conformance_level: ``CONFORMANT`` (default) runs only the
+            Conformant-mandatory gates and the pre-image is witness-free
+            (byte-unchanged §12.4); ``COMPLETE`` requires an independent ceremony
+            witness (N12-CL-05) bound into the signed ``event_payload``.
+        witness: the Complete-level ceremony witness (N12-CL-05). When supplied
+            it is verified fail-closed and embedded under
+            ``event_payload["witness"]``; mandatory at ``COMPLETE``.
+        witness_clearance: the witness's bound authorization context (carries
+            ``vault:witness`` + the witness's tenant/domain); required when
+            ``witness`` is supplied.
+        requester_delegate_id: the acting principal's signing ``delegate_id`` —
+            the distinctness axis the witness MUST differ on; required when
+            ``witness`` is supplied.
+        verify_token: ``(pre_image, signature_hex, delegate_id) -> bool`` — the
+            deployment verifier (a real ``Ed25519Verifier`` in Tier-2) checking
+            the witness's signature; required when ``witness`` is supplied.
+        approver_principal / approver_delegate_id: the configured governance
+            approver's identity (when one is configured for the deployment); the
+            witness MUST be distinct from the approver on both axes (N12-CL-05).
 
     Returns:
         A :class:`~kailash.trust.vault.types.BackupReceipt`.
@@ -422,6 +457,82 @@ def back_up_vault_key(
             )
             raise
 
+        # Complete-level ceremony witness (N12-CL-05 / X1). At COMPLETE the
+        # backup/generation path MUST bind an independent witness into the
+        # signed vault_key_backup event_payload (covered by
+        # content_signing_bytes), so a missing/forged witness is
+        # cryptographically detectable; at CONFORMANT no witness is bound and the
+        # pre-image is byte-unchanged (§12.4 golden fixture). Verify BEFORE
+        # sharding so a forged witness aborts before any shard is generated.
+        witness_payload: Optional[dict[str, Any]] = None
+        if conformance_level == ConformanceLevel.COMPLETE and witness is None:
+            _emit_backup_denial(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                principal=acting_principal,
+                missing_capability_or_scope=WITNESS_CAPABILITY,
+                target_handle_ref=target_ref,
+            )
+            raise VaultBindingError(
+                N12FT01Code.MISSING_CLEARANCE,
+                "Complete-level backup requires an independent ceremony witness "
+                "(N12-CL-05); none was supplied. Pass a CeremonyWitness + "
+                "witness_clearance + verify_token, or run at CONFORMANT.",
+                details={"required_capability": WITNESS_CAPABILITY},
+            )
+        if witness is not None:
+            if (
+                verify_token is None
+                or witness_clearance is None
+                or requester_delegate_id is None
+            ):
+                # Caller-contract violation (a witness was supplied without its
+                # companion verification inputs) — distinct from a forged/missing
+                # WITNESS, which DOES emit a vault_key_backup_denied. We
+                # deliberately do NOT emit a denial here: a caller bug must not
+                # pollute the safety-tier incident surface with non-attack noise.
+                # Still fail-closed (raise before any shard is generated).
+                logger.warning(
+                    "vault.backup.witness_companion_args_missing",
+                    extra={
+                        "vault_id": key_handle.vault_id,
+                        "has_verify_token": verify_token is not None,
+                        "has_witness_clearance": witness_clearance is not None,
+                        "has_requester_delegate_id": requester_delegate_id is not None,
+                    },
+                )
+                raise VaultBindingError(
+                    N12FT01Code.MISSING_CLEARANCE,
+                    "a ceremony witness was supplied but verify_token / "
+                    "witness_clearance / requester_delegate_id is missing "
+                    "(N12-CL-05); fail-closed.",
+                    details={"required_capability": WITNESS_CAPABILITY},
+                )
+            try:
+                witness_payload = verify_ceremony_witness(
+                    witness,
+                    vault_id=key_handle.vault_id,
+                    requester_principal=acting_principal,
+                    requester_delegate_id=requester_delegate_id,
+                    resolved=resolved,
+                    operation="backup",
+                    verify_token=verify_token,
+                    witness_clearance=witness_clearance,
+                    approver_principal=approver_principal,
+                    approver_delegate_id=approver_delegate_id,
+                )
+            except VaultBindingError:
+                _emit_backup_denial(
+                    dispatcher=dispatcher,
+                    signer=signer,
+                    signer_identity=signer_identity,
+                    principal=acting_principal,
+                    missing_capability_or_scope=WITNESS_CAPABILITY,
+                    target_handle_ref=target_ref,
+                )
+                raise
+
         secret = resolved.master_secret
         ms_bits = master_secret_bits(secret)
 
@@ -486,6 +597,7 @@ def back_up_vault_key(
             timestamp=ts,
             time_attested=time_attested,
             side_channel_hardened=side_channel_hardened,
+            witness=witness_payload,
         )
 
         # AU-02b: sign + dispatch to the recovery tier; the receipt is the
@@ -568,6 +680,11 @@ def restore_vault_key(
     trust_anchored_now: Optional[datetime] = None,
     approver_configured: bool = False,
     principal: Optional[str] = None,
+    conformance_level: ConformanceLevel = ConformanceLevel.CONFORMANT,
+    approval: Optional[GovernanceApproval] = None,
+    approver_clearance: Optional[ClearanceContext] = None,
+    requester_delegate_id: Optional[str] = None,
+    verify_token: Optional[Callable[[bytes, str, str], bool]] = None,
 ) -> RestoreReceipt:
     """Reconstruct a KEK from ``shards`` and re-establish it opaquely (N12-IN-01).
 
@@ -660,9 +777,28 @@ def restore_vault_key(
             remains in force (fail-closed). A roll-forward does NOT lift an
             active suspension early.
         approver_configured: Whether a governance-approver (CL-03) is configured
-            (the X1 seam). Until CL-03 lands a suspended 2nd materializing op
-            rejects fail-closed regardless.
+            for this deployment (audit-recorded; the cooling-off suspension is
+            lifted only by a VERIFIED approval, never by this flag alone).
         principal: The acting principal; defaults to ``clearance.principal``.
+        conformance_level: ``CONFORMANT`` (default) embeds no approval and the
+            restore pre-image is byte-unchanged; ``COMPLETE`` makes the
+            governance-approver HELD action MANDATORY on the high-risk restore
+            paths (forced-stale N12-SG-03 here; cooling-off N12-CL-04 is enforced
+            by the clearance gate, which only lifts the suspension on a verified
+            approval).
+        approval: the Complete-level governance approval (N12-CL-03). When
+            supplied it is verified fail-closed BEFORE the FT-02 gate sequence,
+            lifts a CL-04 cooling-off suspension, and is embedded under
+            ``event_payload["approval"]`` (covered by ``content_signing_bytes``).
+        approver_clearance: the approver's bound authorization context (carries
+            ``vault:approve`` + the approver's tenant/domain); required when
+            ``approval`` is supplied.
+        requester_delegate_id: the acting principal's signing ``delegate_id`` —
+            the distinctness axis the approver MUST differ on; required when
+            ``approval`` is supplied.
+        verify_token: ``(pre_image, signature_hex, delegate_id) -> bool`` — the
+            deployment verifier checking the approver's signature; required when
+            ``approval`` is supplied.
 
     Returns:
         A :class:`~kailash.trust.vault.types.RestoreReceipt`.
@@ -749,6 +885,98 @@ def restore_vault_key(
         dist_holders = list(holders)
         dist_shard_commitments = list(shard_commitments)
 
+    # --- Complete-level governance approval (N12-CL-03 / X1). Verify the
+    # approver's HELD action fail-closed HERE — after resolution (the approval
+    # pre-image binds resolved.kek_generation + the operation) and BEFORE the
+    # FT-02 gate sequence — so a verified approval can (a) lift a CL-04
+    # cooling-off suspension at the clearance gate, AND (b) embed into the signed
+    # restore anchor (covered by content_signing_bytes). `operation` binds the
+    # pre-image to THIS path so an approval cannot be replayed for a different
+    # operation/requester (N12-CL-03(c)). A forged/missing approval on a
+    # mandatory high-risk path is rejected missing-clearance, dual-recorded as a
+    # vault_key_restore_denied denial, BEFORE the KEK is materialized.
+    operation = "restore-forced-stale" if force_stale else "restore"
+    approval_payload: Optional[dict[str, Any]] = None
+    approval_verified = False
+    if approval is not None:
+        if (
+            verify_token is None
+            or approver_clearance is None
+            or requester_delegate_id is None
+        ):
+            # Caller-contract violation (an approval was supplied without its
+            # companion verification inputs) — distinct from a forged/missing
+            # APPROVAL, which DOES emit a vault_key_restore_denied. We
+            # deliberately do NOT emit a denial here: a caller bug must not
+            # pollute the safety-tier incident surface with non-attack noise.
+            # Still fail-closed (raise before any shard is combined).
+            logger.warning(
+                "vault.restore.approval_companion_args_missing",
+                extra={
+                    "vault_id": target_handle.vault_id,
+                    "has_verify_token": verify_token is not None,
+                    "has_approver_clearance": approver_clearance is not None,
+                    "has_requester_delegate_id": requester_delegate_id is not None,
+                },
+            )
+            raise VaultBindingError(
+                N12FT01Code.MISSING_CLEARANCE,
+                "a governance approval was supplied but verify_token / "
+                "approver_clearance / requester_delegate_id is missing "
+                "(N12-CL-03); fail-closed.",
+                details={"required_capability": APPROVE_CAPABILITY},
+            )
+        try:
+            approval_payload = verify_governance_approval(
+                approval,
+                vault_id=target_handle.vault_id,
+                requester_principal=acting_principal,
+                requester_delegate_id=requester_delegate_id,
+                approver_clearance=approver_clearance,
+                resolved=resolved,
+                operation=operation,
+                verify_token=verify_token,
+            )
+            approval_verified = True
+        except VaultBindingError:
+            _emit_restore_denial(
+                dispatcher=dispatcher,
+                signer=signer,
+                signer_identity=signer_identity,
+                principal=acting_principal,
+                missing_capability_or_scope=APPROVE_CAPABILITY,
+                target_handle_ref=target_ref,
+            )
+            raise
+
+    # Mandatory at COMPLETE for the forced-stale high-risk path (N12-SG-03 +
+    # CL-03): a forced-stale restore overrides the staleness gate, so the spec
+    # requires the independent governance-approver HELD action. (Cooling-off
+    # CL-04 mandatory-ness is enforced INSIDE the clearance gate below — an
+    # unverified approval keeps the suspension in force.) Reject BEFORE any shard
+    # is combined.
+    if (
+        conformance_level == ConformanceLevel.COMPLETE
+        and force_stale
+        and not approval_verified
+    ):
+        _emit_restore_denial(
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=signer_identity,
+            principal=acting_principal,
+            missing_capability_or_scope=APPROVE_CAPABILITY,
+            target_handle_ref=target_ref,
+        )
+        raise VaultBindingError(
+            N12FT01Code.MISSING_CLEARANCE,
+            "forced-stale restore at Complete level requires a verified "
+            "governance-approver HELD action (N12-CL-03 / N12-SG-03); none was "
+            "supplied/verified. Pass a GovernanceApproval + approver_clearance + "
+            "verify_token, or run at CONFORMANT.",
+            details={"required_capability": APPROVE_CAPABILITY},
+        )
+
     secret: bytes = b""
     # `_reconstructed` is a one-element box so the lazy reconstruct (between
     # step 6 and step 7) is visible to the finally for consume-and-del.
@@ -824,6 +1052,7 @@ def restore_vault_key(
                         posture_store=posture_store,
                         now=trust_anchored_now,
                         approver_configured=approver_configured,
+                        approval_verified=approval_verified,
                     )
                 except VaultBindingError as exc:
                     return exc.code
@@ -1035,6 +1264,7 @@ def restore_vault_key(
                 principal=acting_principal,
                 timestamp=ts,
                 time_attested=time_attested,
+                approval=approval_payload,
             )
             # Dual-emit: recovery FIRST (the outcome-of-record), then safety (the
             # incident-response surface). BOTH are hard preconditions
@@ -1070,6 +1300,7 @@ def restore_vault_key(
                 principal=acting_principal,
                 timestamp=ts,
                 time_attested=time_attested,
+                approval=approval_payload,
             )
             _sign_and_dispatch(
                 dispatcher=dispatcher,

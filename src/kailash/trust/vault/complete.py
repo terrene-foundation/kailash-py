@@ -114,20 +114,25 @@ def approval_pre_image(
     kek_generation: int,
     operation: str,
     requester_principal: str,
+    requester_delegate_id: str,
 ) -> bytes:
     """Canonical pre-image the approver signs (N12-CL-03(c)).
 
     Binds the approval to the SPECIFIC operation (e.g. ``"restore"`` /
-    ``"restore-forced-stale"``), vault, generation, and requester — so an
-    approval cannot be replayed for a different operation or requester. The
-    approver's signature over THIS pre-image is the ``approval_signature``
-    embedded in the anchor ``event_payload``.
+    ``"restore-forced-stale"``), vault, generation, AND the requester on BOTH the
+    principal and the ``delegate_id`` axis — so an approval cannot be replayed for
+    a different operation, vault, generation, requester principal, OR a different
+    credential under the same principal (the delegate axis matches the
+    distinctness check's granularity; binding it here closes the same-principal
+    cross-delegate replay). The approver's signature over THIS pre-image is the
+    ``approval_signature`` embedded in the anchor ``event_payload``.
     """
     return canonical_json_dumps(
         {
             "domain_sep": "EATP-12/governance-approval/v1",
             "kek_generation": kek_generation,
             "operation": operation,
+            "requester_delegate_id": requester_delegate_id,
             "requester_principal": requester_principal,
             "vault_id": vault_id,
         }
@@ -140,6 +145,7 @@ def witness_pre_image(
     kek_generation: int,
     operation: str,
     requester_principal: str,
+    requester_delegate_id: str,
 ) -> bytes:
     """Canonical pre-image the witness signs (N12-CL-05). See :func:`approval_pre_image`."""
     return canonical_json_dumps(
@@ -147,6 +153,7 @@ def witness_pre_image(
             "domain_sep": "EATP-12/ceremony-witness/v1",
             "kek_generation": kek_generation,
             "operation": operation,
+            "requester_delegate_id": requester_delegate_id,
             "requester_principal": requester_principal,
             "vault_id": vault_id,
         }
@@ -303,6 +310,7 @@ def verify_governance_approval(
         kek_generation=resolved.kek_generation,
         operation=operation,
         requester_principal=requester_principal,
+        requester_delegate_id=requester_delegate_id,
     )
     if not verify_token(
         pre_image, approval.approval_signature, approval.approver_delegate_id
@@ -426,6 +434,7 @@ def verify_ceremony_witness(
         kek_generation=resolved.kek_generation,
         operation=operation,
         requester_principal=requester_principal,
+        requester_delegate_id=requester_delegate_id,
     )
     if not verify_token(
         pre_image, witness.witness_signature, witness.witness_delegate_id

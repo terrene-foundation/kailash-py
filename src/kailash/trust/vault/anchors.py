@@ -371,6 +371,64 @@ def _coerce_bool(name: str, value: object) -> bool:
     return value
 
 
+#: The canonical key triples for the Complete-level governance sub-objects
+#: embedded into the signed ``event_payload`` (N12-CL-03(c) / N12-CL-05). These
+#: MUST match :meth:`GovernanceApproval.to_payload` /
+#: :meth:`CeremonyWitness.to_payload` in :mod:`kailash.trust.vault.complete`.
+_APPROVAL_SUBOBJECT_KEYS: tuple[str, str, str] = (
+    "approver_principal",
+    "approver_delegate_id",
+    "approval_signature",
+)
+_WITNESS_SUBOBJECT_KEYS: tuple[str, str, str] = (
+    "witness_principal",
+    "witness_delegate_id",
+    "witness_signature",
+)
+
+
+def _coerce_governance_subobject(
+    name: str, value: object, *, keys: tuple[str, str, str]
+) -> dict[str, str]:
+    """Validate a Complete-level approval/witness sub-object (N12-CL-03(c)/CL-05).
+
+    The sub-object is bound into the signed ``event_payload`` (covered by
+    ``content_signing_bytes``), so a missing/forged token is cryptographically
+    detectable. Enforces EXACTLY the three canonical keys (``*_principal``,
+    ``*_delegate_id``, ``*_signature``), each a str, with the signature a 128-hex
+    Ed25519 signature — extra or missing keys are rejected fail-closed so the
+    embedded shape cannot drift from the verifier's ``to_payload`` contract.
+    """
+    if not isinstance(value, Mapping):
+        raise VaultBindingError(
+            N12FT01Code.PARAMETER_MISMATCH,
+            f"{name} MUST be a mapping (N12-CL-03(c)/CL-05); got "
+            f"{type(value).__name__}",
+            details={"field": name, "value": repr(value)},
+        )
+    present = set(value)
+    expected = set(keys)
+    if present != expected:
+        raise VaultBindingError(
+            N12FT01Code.PARAMETER_MISMATCH,
+            f"{name} MUST carry EXACTLY {sorted(expected)} (N12-CL-03(c)/CL-05); "
+            f"got {sorted(present)}",
+            details={
+                "field": name,
+                "missing": sorted(expected - present),
+                "unexpected": sorted(present - expected),
+            },
+        )
+    principal_key, delegate_key, signature_key = keys
+    return {
+        principal_key: _coerce_str(f"{name}.{principal_key}", value[principal_key]),
+        delegate_key: _coerce_str(f"{name}.{delegate_key}", value[delegate_key]),
+        signature_key: _coerce_lower_hex(
+            f"{name}.{signature_key}", value[signature_key], length=128
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Per-subtype required/forbidden field enforcement (N12-AU-04)
 # ---------------------------------------------------------------------------
@@ -419,8 +477,8 @@ def build_backup_anchor(
     timestamp: str,
     time_attested: bool,
     side_channel_hardened: bool = False,
-    approver: str | None = None,
-    witness: str | None = None,
+    approver: Mapping[str, Any] | None = None,
+    witness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a ``vault_key_backup`` outcome ``event_payload`` (§12.4 / N12-AU-04).
 
@@ -428,8 +486,11 @@ def build_backup_anchor(
     ``shard_count``, ``vault_id``, ``kek_generation``,
     ``kek_identity_commitment``, ``kek_commitment_alg``, ``kcv``,
     ``shard_commitments``, ``slip39_params``, ``side_channel_hardened``,
-    ``principal``, ``timestamp`` + ``time_attested``, and (when configured)
-    ``approver`` / ``witness``.
+    ``principal``, ``timestamp`` + ``time_attested``, and — at Complete level
+    (N12-CL-03/CL-05) — the embedded ``approver`` / ``witness`` governance
+    sub-objects (``{*_principal, *_delegate_id, *_signature}``, the verifier's
+    ``to_payload`` shape). Both are absent at Conformant, so the Conformant
+    pre-image is byte-unchanged (§12.4 golden fixture preserved).
     """
     payload: dict[str, Any] = {
         "subtype": "vault_key_backup",
@@ -453,9 +514,13 @@ def build_backup_anchor(
         "principal": _coerce_str("principal", principal),
     }
     if approver is not None:
-        payload["approver"] = _coerce_str("approver", approver)
+        payload["approver"] = _coerce_governance_subobject(
+            "approver", approver, keys=_APPROVAL_SUBOBJECT_KEYS
+        )
     if witness is not None:
-        payload["witness"] = _coerce_str("witness", witness)
+        payload["witness"] = _coerce_governance_subobject(
+            "witness", witness, keys=_WITNESS_SUBOBJECT_KEYS
+        )
     _enforce_two_state_timestamp(
         payload, timestamp=timestamp, time_attested=time_attested
     )
@@ -479,6 +544,7 @@ def build_restore_anchor(
     timestamp: str,
     time_attested: bool,
     raw: bool = False,
+    approval: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a ``vault_key_restore`` (or ``vault_key_restore_raw``) ``event_payload``.
 
@@ -492,6 +558,11 @@ def build_restore_anchor(
     Args:
         raw: when True, the subtype is ``vault_key_restore_raw`` (the
             raw-bytes escape-hatch restore, §4.1); else ``vault_key_restore``.
+        approval: the Complete-level governance-approval sub-object
+            (N12-CL-03(c), the verifier's ``to_payload`` shape) bound into the
+            signed ``event_payload``; absent at Conformant (byte-unchanged) and
+            mandatory for the high-risk restore paths (raw / forced-stale /
+            cooling-off) at Complete.
     """
     subtype = "vault_key_restore_raw" if raw else "vault_key_restore"
     payload: dict[str, Any] = {
@@ -512,6 +583,10 @@ def build_restore_anchor(
         "shard_commitments": _coerce_shard_commitments(shard_commitments),
         "principal": _coerce_str("principal", principal),
     }
+    if approval is not None:
+        payload["approval"] = _coerce_governance_subobject(
+            "approval", approval, keys=_APPROVAL_SUBOBJECT_KEYS
+        )
     _enforce_two_state_timestamp(
         payload, timestamp=timestamp, time_attested=time_attested
     )
@@ -545,6 +620,7 @@ def build_restore_forced_stale_anchor(
     principal: str,
     timestamp: str,
     time_attested: bool,
+    approval: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a ``vault_key_restore_forced_stale`` ``event_payload`` (§12.11 / N12-SG-03).
 
@@ -557,6 +633,13 @@ def build_restore_forced_stale_anchor(
     ``overridden_current_generation > restored_generation``.
     ``holders`` / ``shard_count`` / ``shard_commitments`` MUST be copied from
     the CAPTURED (restored, old-generation) distribution (fix [2]).
+
+    Args:
+        approval: the Complete-level governance-approval sub-object
+            (N12-CL-03(c)) bound into the signed ``event_payload``. Forced-stale
+            is a CL-03 high-risk path: at Complete the approval is MANDATORY (the
+            hot path rejects a missing/forged approval ``missing-clearance``
+            BEFORE the KEK is treated as re-established).
     """
     payload: dict[str, Any] = {
         "subtype": "vault_key_restore_forced_stale",
@@ -607,6 +690,10 @@ def build_restore_forced_stale_anchor(
                 ],
                 "restored_generation": payload["restored_generation"],
             },
+        )
+    if approval is not None:
+        payload["approval"] = _coerce_governance_subobject(
+            "approval", approval, keys=_APPROVAL_SUBOBJECT_KEYS
         )
     _enforce_two_state_timestamp(
         payload, timestamp=timestamp, time_attested=time_attested

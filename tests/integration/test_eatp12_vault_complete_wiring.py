@@ -113,6 +113,7 @@ def _signed_approval(
     approver_principal,
     approver_delegate_id,
     requester_principal,
+    requester_delegate_id="delg-requester",
 ):
     sig = priv.sign(
         approval_pre_image(
@@ -120,6 +121,7 @@ def _signed_approval(
             kek_generation=_GEN,
             operation=_OP,
             requester_principal=requester_principal,
+            requester_delegate_id=requester_delegate_id,
         )
     ).hex()
     return GovernanceApproval(
@@ -305,6 +307,7 @@ def _signed_witness(
     witness_delegate_id,
     requester_principal,
     operation="backup",
+    requester_delegate_id="delg-requester",
 ):
     sig = priv.sign(
         witness_pre_image(
@@ -312,6 +315,7 @@ def _signed_witness(
             kek_generation=_GEN,
             operation=operation,
             requester_principal=requester_principal,
+            requester_delegate_id=requester_delegate_id,
         )
     ).hex()
     return CeremonyWitness(
