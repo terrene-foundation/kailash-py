@@ -43,25 +43,51 @@ from kailash.trust.pact.envelopes import (
 from kailash.trust.signing.algorithm_id import (
     ADOPTION_DATE,
     DEPRECATED_PRE_REGISTRY_LITERAL,
+    D2dVerifierKeys,
     D2dWitness,
     resolve_dispatch,
 )
-from kailash.trust.signing.crypto import generate_keypair
+from kailash.trust.signing.crypto import generate_keypair, sign
 
-# A witness whose witnessed/head dates are strictly BEFORE the pinned
-# adoption date (2026-04-26). This is what D2d requires to accept a
+# Trusted verifier keypair for the D2d signed-marker gate (§4.3.2). The witness
+# signs the §4.3.1 core {principal, first_seen}; the verifier holds the public
+# key. D2d acceptance is signed-not-remembered: an unsigned witness no longer
+# rescues a pre-registry form (see test_issue_1316_d2c_marker.py for the gate).
+_WITNESS_PRIVATE_KEY, _WITNESS_PUBLIC_KEY = generate_keypair()
+_WITNESS_ID = "issue604-test-witness"
+_VERIFIER_KEYS = D2dVerifierKeys(keys={_WITNESS_ID: _WITNESS_PUBLIC_KEY})
+
+
+def _signed_marker(principal: str, first_seen: datetime) -> str:
+    return sign(
+        {"principal": principal, "first_seen": first_seen.isoformat()},
+        _WITNESS_PRIVATE_KEY,
+    )
+
+
+# A signed witness whose witnessed/head/first_seen dates are strictly BEFORE the
+# pinned adoption date (2026-04-26). This is what D2d requires to accept a
 # pre-registry explicit form as eatp-v1.
+_PRE_ADOPTION_FIRST_SEEN = datetime(2026, 3, 1, tzinfo=UTC)
 _PRE_ADOPTION_WITNESS = D2dWitness(
     witnessed_at=datetime(2026, 3, 1, tzinfo=UTC),
     chain_head_date=datetime(2026, 3, 1, tzinfo=UTC),
     principal="D1-R1",
+    first_seen=_PRE_ADOPTION_FIRST_SEEN,
+    marker_sig=_signed_marker("D1-R1", _PRE_ADOPTION_FIRST_SEEN),
+    witness_id=_WITNESS_ID,
 )
 
-# A witness dated ON the adoption date — must be REJECTED (not strictly before).
+# A signed witness with a pre-adoption first_seen (passes the signature +
+# corroboration checks) but witnessed/head dates ON the adoption date — must be
+# REJECTED at the temporal boundary check (not strictly before adoption).
 _POST_ADOPTION_WITNESS = D2dWitness(
     witnessed_at=datetime(2026, 4, 26, tzinfo=UTC),
     chain_head_date=datetime(2026, 4, 26, tzinfo=UTC),
     principal="D1-R1",
+    first_seen=_PRE_ADOPTION_FIRST_SEEN,
+    marker_sig=_signed_marker("D1-R1", _PRE_ADOPTION_FIRST_SEEN),
+    witness_id=_WITNESS_ID,
 )
 
 # ---------------------------------------------------------------------------
@@ -330,7 +356,9 @@ def test_signed_envelope_from_dict_d2d_nested_form(signed):
 
     payload = signed.to_dict()
     payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
-    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
+    reconstructed = SignedEnvelope.from_dict(
+        payload, witness=_PRE_ADOPTION_WITNESS, verifier_keys=_VERIFIER_KEYS
+    )
     assert reconstructed.alg_id == "eatp-v1"
 
 
@@ -345,7 +373,9 @@ def test_signed_envelope_from_dict_d2d_unsigned_metadata_form(signed):
     payload = signed.to_dict()
     payload.pop("alg_id")
     payload["algorithm"] = DEPRECATED_PRE_REGISTRY_LITERAL
-    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
+    reconstructed = SignedEnvelope.from_dict(
+        payload, witness=_PRE_ADOPTION_WITNESS, verifier_keys=_VERIFIER_KEYS
+    )
     assert reconstructed.alg_id == "eatp-v1"
 
 
@@ -363,7 +393,9 @@ def test_d2d_pre_adoption_witnessed_legacy_record_accepted(signed):
     assert ADOPTION_DATE == "2026-04-26"
     payload = signed.to_dict()
     payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
-    reconstructed = SignedEnvelope.from_dict(payload, witness=_PRE_ADOPTION_WITNESS)
+    reconstructed = SignedEnvelope.from_dict(
+        payload, witness=_PRE_ADOPTION_WITNESS, verifier_keys=_VERIFIER_KEYS
+    )
     assert reconstructed.alg_id == "eatp-v1"
 
 
@@ -379,7 +411,9 @@ def test_d2d_on_or_after_adoption_witness_rejected(signed):
     payload = signed.to_dict()
     payload["alg_id"] = {"algorithm": DEPRECATED_PRE_REGISTRY_LITERAL}
     with pytest.raises(UnsupportedAlgorithmError) as exc:
-        SignedEnvelope.from_dict(payload, witness=_POST_ADOPTION_WITNESS)
+        SignedEnvelope.from_dict(
+            payload, witness=_POST_ADOPTION_WITNESS, verifier_keys=_VERIFIER_KEYS
+        )
     assert exc.value.code == "implicit-v1-witness-failure"
 
 

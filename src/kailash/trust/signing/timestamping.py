@@ -49,6 +49,7 @@ from uuid import uuid4
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dVerifierKeys,
     D2dWitness,
     UnsupportedAlgorithmError,
     coerce_algorithm_id,
@@ -145,21 +146,26 @@ class TimestampToken:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+        cls,
+        data: Dict[str, Any],
+        *,
+        witness: Optional[D2dWitness] = None,
+        verifier_keys: Optional[D2dVerifierKeys] = None,
     ) -> "TimestampToken":
         """Deserialize token from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
         Post-adoption: the dict MUST carry a top-level ``alg_id`` string
         token; a missing/empty value raises ``missing-alg-id-post-adoption``.
         Legacy acceptance of a pre-registry explicit form requires a
-        :class:`D2dWitness` whose witnessed/head date is strictly before
-        :data:`ADOPTION_DATE` (§4.5); otherwise the form is rejected with
-        ``implicit-v1-witness-failure`` (no downgrade).
+        :class:`D2dWitness` whose signed marker verifies against a configured
+        :class:`D2dVerifierKeys` trusted key and whose witnessed/head date is
+        strictly before :data:`ADOPTION_DATE` (§4.5); otherwise the form is
+        rejected with ``implicit-v1-witness-failure`` (no downgrade).
 
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, witness=witness)
+        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
         return cls(
             token_id=data["token_id"],
             hash_value=data["hash_value"],
@@ -242,15 +248,20 @@ class TimestampResponse:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+        cls,
+        data: Dict[str, Any],
+        *,
+        witness: Optional[D2dWitness] = None,
+        verifier_keys: Optional[D2dVerifierKeys] = None,
     ) -> "TimestampResponse":
         """Deserialize response from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
         The top-level ``alg_id`` is the signing-algorithm registry token,
         decoded under the D2b/D2d regime (legacy acceptance requires a dated
-        :class:`D2dWitness` strictly before :data:`ADOPTION_DATE`, §4.5). The
-        nested ``request.algorithm`` retains its original semantics (hash
-        algorithm; sha256).
+        :class:`D2dWitness` with a signed marker verified against a configured
+        :class:`D2dVerifierKeys` trusted key, strictly before
+        :data:`ADOPTION_DATE`, §4.5). The nested ``request.algorithm`` retains
+        its original semantics (hash algorithm; sha256).
 
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
@@ -262,11 +273,13 @@ class TimestampResponse:
             requested_at=datetime.fromisoformat(request_data["requested_at"]),
             algorithm=request_data.get("algorithm", "sha256"),
         )
-        token = TimestampToken.from_dict(data["token"], witness=witness)
+        token = TimestampToken.from_dict(
+            data["token"], witness=witness, verifier_keys=verifier_keys
+        )
         raw_response = (
             bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
         )
-        alg_id = decode_wire_alg_id(data, witness=witness)
+        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
         return cls(
             request=request,
             token=token,

@@ -44,9 +44,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
+
+from kailash.trust.exceptions import InvalidSignatureError
+from kailash.trust.signing.crypto import verify_signature
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +169,47 @@ class UnsupportedAlgorithmError(Exception):
 
 
 @dataclass(frozen=True)
+class D2dVerifierKeys:
+    """Trusted public keys for verifying a D2d signed marker (EATP-08 §4.3).
+
+    The §4.3.2 detection rule requires the marker to be *signed-not-remembered*:
+    the verifier holds the trusted public key(s) and verifies ``marker_sig``
+    over the signed core ``serialize_for_signing({principal, first_seen})``
+    INSIDE the gate, rather than trusting a passed-in value. This config is the
+    resolution surface — it mirrors :class:`MultiSigPolicy.signer_public_keys`
+    (``multi_sig.py``): a mapping of ``witness_id`` to a base64 Ed25519 public
+    key, plus an optional ``default_key`` used when a marker carries no
+    ``witness_id`` or an unmatched one.
+
+    §4.3 makes the transport implementation-defined ("a transparency log, an
+    in-Foundation witness service, **or per-verifier signing keys**"); this is
+    the per-verifier-signing-key transport. A transparency log / witness service
+    can later become the marker *source* without changing this verification
+    contract (it still resolves a trusted key and verifies ``marker_sig``).
+
+    Attributes:
+        keys: Mapping of ``witness_id`` -> base64 Ed25519 public key.
+        default_key: Optional base64 Ed25519 public key applied when the
+            marker's ``witness_id`` is unset or not present in ``keys``.
+    """
+
+    keys: Mapping[str, str]
+    default_key: Optional[str] = None
+
+    def resolve(self, witness_id: Optional[str]) -> Optional[str]:
+        """Resolve the trusted public key for a marker's ``witness_id``.
+
+        Returns the keyed entry when ``witness_id`` matches, else
+        ``default_key`` (which MAY be ``None``). A ``None`` return means no
+        trusted key resolves and the gate MUST fail closed.
+        """
+
+        if witness_id is not None and witness_id in self.keys:
+            return self.keys[witness_id]
+        return self.default_key
+
+
+@dataclass(frozen=True)
 class D2dWitness:
     """Dated, signed-marker evidence for D2d legacy acceptance (EATP-08 §4.5).
 
@@ -175,39 +219,76 @@ class D2dWitness:
     temporal or witness bound, and :data:`ADOPTION_DATE` was defined but never
     consulted. D2d (§4.5) requires legacy acceptance to be **dated** and
     **witnessed**: a pre-registry explicit form is accepted as ``eatp-v1``
-    ONLY when a witness is present AND its witnessed/head date is strictly
-    before :data:`ADOPTION_DATE` (2026-04-26).
+    ONLY when a signed marker is present, verifies against a configured trusted
+    key, has not expired, corroborates the claimed pre-adoption head date, and
+    its witnessed/head dates are strictly before :data:`ADOPTION_DATE`.
 
     This dataclass is the structured argument that replaces ``legacy_path:
-    bool`` on every signed-record ``from_dict`` site. Its presence (not a bare
-    boolean) is the affirmative assertion that the caller has resolved a
-    pre-adoption witness for the record's chain head; the temporal comparison
-    is enforced here, not deferred to the caller.
+    bool`` on every signed-record ``from_dict`` site. The §4.3.1 REQUIRED
+    signed core is ``{principal, first_seen}``; ``marker_sig`` binds exactly
+    that (NOT ``chain_head_date`` — that is the record's CLAIMED head timestamp,
+    corroborated AGAINST the signed ``first_seen``). The temporal + signature
+    + expiry checks are enforced in :func:`assert_d2d_witness_pre_adoption`,
+    not deferred to the caller.
 
     Attributes:
-        witnessed_at: The timestamp of the witness / transparency-log entry
-            that corroborates the chain head (§4.3.1 ``first_seen``). This is
-            the date the verifier *trusts* (signed-not-remembered): an
-            attacker who backdates the record's own field still fails because
-            no pre-adoption witness corroborates it.
+        witnessed_at: The timestamp of the witness / transparency-log entry.
+            MUST be strictly before the adoption date (temporal gate).
         chain_head_date: The record's claimed chain-head ``timestamp``
-            (Genesis Record Element 1 / Audit Anchor Element 5). Both this and
-            ``witnessed_at`` MUST be strictly before the adoption date.
-        principal: Optional principal-chain id the witness binds (§4.3.1).
-            Informational here; the monotonic-upgrade boundary is enforced by
-            the record consumer, not this temporal gate.
+            (Genesis Record Element 1 / Audit Anchor Element 5). The CLAIMED
+            value corroborated against the signed ``first_seen``; MUST be
+            strictly before the adoption date.
+        principal: The principal-chain id the marker binds (§4.3.1 REQUIRED
+            signed-core field). Part of the ``marker_sig`` pre-image.
+        first_seen: The signed first-contact/adoption boundary (§4.3.1
+            REQUIRED signed-core field). The date the verifier *trusts*: an
+            attacker who backdates the record's own ``chain_head_date`` still
+            fails because a fresh chain cannot obtain a pre-adoption *signed*
+            ``first_seen`` from the trusted witness. Part of the ``marker_sig``
+            pre-image.
+        marker_sig: Base64 Ed25519 signature over
+            ``serialize_for_signing({principal, first_seen})``, produced by the
+            witness/verifier key. Absent ``marker_sig`` => unsigned marker =>
+            ``implicit-v1-witness-failure``.
+        expires_at: Optional marker expiry. When set and ``<= now``, the marker
+            is expired => ``implicit-v1-witness-failure``.
+        witness_id: Optional id selecting which trusted key in
+            :class:`D2dVerifierKeys` verifies ``marker_sig`` (§4.3.1 optional
+            field). Unset falls back to the config ``default_key``.
     """
 
     witnessed_at: datetime
     chain_head_date: datetime
     principal: Optional[str] = None
+    first_seen: Optional[datetime] = None
+    marker_sig: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    witness_id: Optional[str] = None
 
     @staticmethod
     def _as_date(value: datetime) -> date:
         return value.date() if isinstance(value, datetime) else value
 
+    def signed_marker_payload(self) -> Dict[str, Any]:
+        """The §4.3.1 signed core ``{principal, first_seen}``.
+
+        ``marker_sig`` binds EXACTLY this object (serialised via the canonical
+        cross-SDK :func:`serialize_for_signing`). ``chain_head_date`` is NOT in
+        the signed core — it is the claimed value corroborated against the
+        signed ``first_seen``.
+        """
+
+        return {
+            "principal": self.principal,
+            "first_seen": (
+                self.first_seen.isoformat()
+                if isinstance(self.first_seen, datetime)
+                else self.first_seen
+            ),
+        }
+
     def is_pre_adoption(self) -> bool:
-        """True iff BOTH dates are strictly before :data:`ADOPTION_DATE`.
+        """True iff BOTH witnessed/claimed dates are strictly before adoption.
 
         Consumes :data:`ADOPTION_DATE_PARSED` (the E5/D2d temporal bound). A
         witness whose witnessed-date OR chain-head date falls on/after the
@@ -220,40 +301,136 @@ class D2dWitness:
         )
 
 
-def assert_d2d_witness_pre_adoption(witness: Optional[D2dWitness]) -> None:
-    """Enforce the D2d dated-and-witnessed gate (EATP-08 §4.5 / §4.3.2).
+def _to_aware_utc(value: datetime) -> datetime:
+    """Coerce a datetime to timezone-aware UTC for safe comparison.
 
-    Raises ``implicit-v1-witness-failure`` when the witness is missing, or
-    when its witnessed/head date is not strictly before the pinned adoption
-    date. Returns silently only when a witness is present AND pre-adoption, in
-    which case the caller MAY accept the pre-registry explicit form as
-    ``eatp-v1`` and MUST log the acceptance for migration tracking.
+    A naive datetime is assumed to be UTC (the trust-plane wire convention is
+    RFC-3339-Z). Aware datetimes are converted to UTC.
+    """
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def assert_d2d_witness_pre_adoption(
+    witness: Optional[D2dWitness],
+    *,
+    verifier_keys: Optional[D2dVerifierKeys] = None,
+    now: Optional[datetime] = None,
+) -> None:
+    """Enforce the D2d signed-marker gate (EATP-08 §4.5 / §4.3.2).
+
+    The §4.3.2 detection rule: emit ``implicit-v1-witness-failure`` when ANY of
+    the five fail-closed checks does not hold. Returns silently ONLY when all
+    five hold, in which case the caller MAY accept the pre-registry explicit
+    form as ``eatp-v1`` and MUST log the acceptance for migration tracking.
+
+    The five checks (all map to ``implicit-v1-witness-failure``):
+
+    1. **missing** — no witness was supplied.
+    2. **sig-verify** — the signed core is complete (``principal`` +
+       ``marker_sig``) AND a trusted key resolves from ``verifier_keys`` AND
+       ``marker_sig`` verifies (Ed25519) over
+       ``serialize_for_signing({principal, first_seen})``. This is the
+       *signed-not-remembered* property: a passed-in value is not trusted.
+    3. **first_seen-corroboration** — the signed ``first_seen`` is present AND
+       strictly before adoption (a fresh chain cannot obtain a pre-adoption
+       *signed* ``first_seen``, defeating the backdated-``chain_head_date``
+       attack — §4.3.2(3)).
+    4. **expiry** — the marker is not expired (``expires_at`` unset, or
+       ``> now``).
+    5. **monotonic-boundary** (temporal) — both ``witnessed_at`` and the
+       claimed ``chain_head_date`` are strictly before the adoption date
+       (§4.5).
 
     Args:
-        witness: The :class:`D2dWitness`, or ``None`` if the caller asserted
-            no legacy acceptance.
+        witness: The :class:`D2dWitness`, or ``None`` if no legacy acceptance.
+        verifier_keys: The trusted-key config that resolves and verifies
+            ``marker_sig`` (check 2). ``None`` => no trusted key => fail closed.
+        now: Clock for the expiry check (defaults to ``datetime.now(UTC)``);
+            injectable for deterministic tests.
 
     Raises:
         UnsupportedAlgorithmError: code ``implicit-v1-witness-failure`` when
-            the witness is missing or dated on/after adoption.
+            any of the five checks fails.
     """
 
+    def _fail(detail: str) -> "UnsupportedAlgorithmError":
+        return UnsupportedAlgorithmError("implicit-v1-witness-failure", detail)
+
+    # Check 1 — missing.
     if witness is None:
-        raise UnsupportedAlgorithmError(
-            "implicit-v1-witness-failure",
-            "D2d legacy acceptance requires a dated, signed witness "
+        raise _fail(
+            "D2d legacy acceptance requires a dated, signed marker "
             "(EATP-08 §4.5 / §4.3): no witness was supplied, so the "
             "pre-registry explicit form MUST be rejected, not downgraded "
-            f"to {ALGORITHM_DEFAULT!r}.",
+            f"to {ALGORITHM_DEFAULT!r}."
         )
+
+    # Check 2 — signed-not-remembered: complete signed core + trusted-key verify.
+    if witness.principal is None or witness.marker_sig is None:
+        raise _fail(
+            "D2d marker is unsigned or incomplete: §4.3.1 requires a signed "
+            "core {principal, first_seen} bound by marker_sig. A trusted "
+            "passed-in witness is NOT sufficient — the marker MUST be "
+            "signed-not-remembered (§4.3.2)."
+        )
+    public_key = (
+        verifier_keys.resolve(witness.witness_id) if verifier_keys is not None else None
+    )
+    if public_key is None:
+        raise _fail(
+            "D2d marker cannot be verified: no trusted verifier key resolves "
+            f"for witness_id={witness.witness_id!r}. Configure D2dVerifierKeys "
+            "with the witness's public key (§4.3); an unverifiable marker fails "
+            "closed (§4.3.2)."
+        )
+    try:
+        sig_ok = verify_signature(
+            witness.signed_marker_payload(), witness.marker_sig, public_key
+        )
+    except InvalidSignatureError:
+        sig_ok = False
+    if not sig_ok:
+        raise _fail(
+            "D2d marker_sig failed Ed25519 verification against the configured "
+            "trusted key (§4.3.2): the signed core {principal, first_seen} does "
+            "not verify, so the marker is forged, tampered, or signed by an "
+            "untrusted key."
+        )
+
+    # Check 3 — first_seen corroboration (signed anchor precedes adoption).
+    if witness.first_seen is None:
+        raise _fail(
+            "D2d marker carries no signed first_seen; the claimed pre-adoption "
+            "head date is uncorroborated (§4.3.2(3))."
+        )
+    if not (witness._as_date(witness.first_seen) < ADOPTION_DATE_PARSED):
+        raise _fail(
+            "D2d witnessed first_seen does not precede the adoption date "
+            f"{ADOPTION_DATE!r} (§4.3.2(3)): a fresh chain cannot obtain a "
+            "pre-adoption signed first_seen, so the claimed pre-adoption head "
+            "date is uncorroborated."
+        )
+
+    # Check 4 — expiry.
+    if witness.expires_at is not None:
+        now_utc = _to_aware_utc(now if now is not None else datetime.now(timezone.utc))
+        if now_utc >= _to_aware_utc(witness.expires_at):
+            raise _fail(
+                "D2d marker is expired (expires_at <= now); an expired marker "
+                "does not license legacy acceptance (§4.3.2)."
+            )
+
+    # Check 5 — temporal monotonic boundary (claimed dates strictly < adoption).
     if not witness.is_pre_adoption():
-        raise UnsupportedAlgorithmError(
-            "implicit-v1-witness-failure",
-            "D2d legacy acceptance requires the witnessed chain-head date to "
-            f"be strictly before the adoption date {ADOPTION_DATE!r} "
-            "(EATP-08 §4.5 / §7.1); the supplied witness is dated on/after "
-            "adoption, so the pre-registry explicit form MUST be rejected, "
-            f"not downgraded to {ALGORITHM_DEFAULT!r}.",
+        raise _fail(
+            "D2d legacy acceptance requires the witnessed_at AND claimed "
+            f"chain_head_date to be strictly before the adoption date "
+            f"{ADOPTION_DATE!r} (EATP-08 §4.5 / §7.1); the supplied witness is "
+            f"dated on/after adoption, so the pre-registry explicit form MUST "
+            f"be rejected, not downgraded to {ALGORITHM_DEFAULT!r}."
         )
 
 
@@ -415,7 +592,11 @@ class AlgorithmIdentifier:
 
     @classmethod
     def from_dict(
-        cls, data: Any, *, witness: Optional[D2dWitness] = None
+        cls,
+        data: Any,
+        *,
+        witness: Optional[D2dWitness] = None,
+        verifier_keys: Optional[D2dVerifierKeys] = None,
     ) -> "AlgorithmIdentifier":
         """Reconstruct from a wire value (EATP-08 §4.5 D2b / D2d).
 
@@ -446,9 +627,13 @@ class AlgorithmIdentifier:
                 top-level ``alg_id`` value; on the legacy path it MAY be the
                 pre-registry literal or nested form.
             witness: A :class:`D2dWitness` only when the caller is rescuing a
-                pre-registry record; its dates are enforced strictly-before
-                adoption here. ``None`` (default) means strict, no legacy
+                pre-registry record; its signed marker + dates are enforced
+                here (§4.3.2). ``None`` (default) means strict, no legacy
                 acceptance.
+            verifier_keys: The :class:`D2dVerifierKeys` config that verifies
+                the witness's ``marker_sig`` against a configured trusted key.
+                ``None`` (default) => no trusted key => the D2d marker fails
+                closed with ``implicit-v1-witness-failure``.
 
         Returns:
             An :class:`AlgorithmIdentifier`, always carrying a registry token
@@ -484,7 +669,7 @@ class AlgorithmIdentifier:
             # (When no witness is supplied at all, a pre-registry form falls
             # through to the strict rejection below — shape-mismatch — exactly
             # as the post-adoption default requires.)
-            assert_d2d_witness_pre_adoption(witness)
+            assert_d2d_witness_pre_adoption(witness, verifier_keys=verifier_keys)
             logger.info(
                 "EATP-08 D2d: accepting pre-registry explicit form %r as "
                 "%r under the bounded/witnessed legacy path "
@@ -559,6 +744,7 @@ def decode_wire_alg_id(
     data: Dict[str, Any],
     *,
     witness: Optional[D2dWitness] = None,
+    verifier_keys: Optional[D2dVerifierKeys] = None,
 ) -> str:
     """Decode the ``alg_id`` token from a signed-record wire dict.
 
@@ -582,6 +768,10 @@ def decode_wire_alg_id(
         witness: A :class:`D2dWitness` only when rescuing a pre-registry
             legacy record; ``None`` (default) means strict, no legacy
             acceptance.
+        verifier_keys: The :class:`D2dVerifierKeys` config that verifies the
+            witness's ``marker_sig`` against a configured trusted key (§4.3.2).
+            ``None`` (default) => no trusted key resolves => any D2d marker
+            fails closed with ``implicit-v1-witness-failure``.
 
     Returns:
         A registry token string (the legacy forms resolve to ``eatp-v1``).
@@ -593,7 +783,9 @@ def decode_wire_alg_id(
     """
 
     if "alg_id" in data:
-        return AlgorithmIdentifier.from_dict(data["alg_id"], witness=witness).algorithm
+        return AlgorithmIdentifier.from_dict(
+            data["alg_id"], witness=witness, verifier_keys=verifier_keys
+        ).algorithm
 
     # No top-level `alg_id` member. A record carrying the algorithm only under
     # an unsigned top-level `algorithm` key is a D2d pre-registry form
@@ -607,7 +799,7 @@ def decode_wire_alg_id(
             or legacy_value in ("", None)
         ):
             # Enforce ADOPTION_DATE: missing/post-adoption witness rejects.
-            assert_d2d_witness_pre_adoption(witness)
+            assert_d2d_witness_pre_adoption(witness, verifier_keys=verifier_keys)
             logger.info(
                 "EATP-08 D2d: accepting unsigned `algorithm`=%r metadata as "
                 "%r under the bounded/witnessed legacy path "
@@ -658,6 +850,7 @@ __all__ = [
     "ALGORITHM_REGISTRY",
     "AlgorithmIdentifier",
     "AlgorithmStatus",
+    "D2dVerifierKeys",
     "D2dWitness",
     "DEPRECATED_PRE_REGISTRY_LITERAL",
     "RegistryEntry",

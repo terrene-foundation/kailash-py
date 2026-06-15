@@ -28,12 +28,13 @@ from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     ALGORITHM_REGISTRY,
     AlgorithmIdentifier,
+    D2dVerifierKeys,
     D2dWitness,
     UnsupportedAlgorithmError,
     decode_wire_alg_id,
     resolve_dispatch,
 )
-from kailash.trust.signing.crypto import serialize_for_signing
+from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
 
 _VECTORS_PATH = (
     Path(__file__).resolve().parents[1]
@@ -52,9 +53,43 @@ def _canonical_member_bytes(token: str) -> bytes:
 
 
 def _pre_adoption_witness() -> D2dWitness:
-    # Both dates strictly before ADOPTION_DATE (2026-04-26).
+    # Unsigned witness — for the rejection paths (bare-literal, unknown token,
+    # both-keys) where the value is rejected at the registry/shape gate BEFORE
+    # the D2d signed-marker gate is ever reached, so the marker need not verify.
     before = datetime(2026, 1, 1, tzinfo=timezone.utc)
     return D2dWitness(witnessed_at=before, chain_head_date=before)
+
+
+# A trusted verifier keypair, fixed for the module so the signed-marker accept
+# path (§4.3.2) is deterministic. The witness signs the §4.3.1 core
+# {principal, first_seen} with the private key; the verifier holds the public.
+_WITNESS_PRIVATE_KEY, _WITNESS_PUBLIC_KEY = generate_keypair()
+_WITNESS_ID = "eatp08-test-witness"
+
+
+def _verifier_keys() -> D2dVerifierKeys:
+    return D2dVerifierKeys(keys={_WITNESS_ID: _WITNESS_PUBLIC_KEY})
+
+
+def _signed_pre_adoption_witness() -> D2dWitness:
+    # A complete, signed, pre-adoption D2d marker that passes all five gate
+    # checks: principal + signed first_seen (both strictly < ADOPTION_DATE),
+    # marker_sig over the §4.3.1 signed core, no expiry.
+    before = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    principal = "chain:eatp08-test"
+    first_seen = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    marker_sig = sign(
+        {"principal": principal, "first_seen": first_seen.isoformat()},
+        _WITNESS_PRIVATE_KEY,
+    )
+    return D2dWitness(
+        witnessed_at=before,
+        chain_head_date=before,
+        principal=principal,
+        first_seen=first_seen,
+        marker_sig=marker_sig,
+        witness_id=_WITNESS_ID,
+    )
 
 
 @pytest.mark.regression
@@ -147,7 +182,14 @@ def test_non_conformant_nested_pre_registry_object_decode_regime():
     with pytest.raises(UnsupportedAlgorithmError) as exc:
         decode_wire_alg_id(nested)
     assert exc.value.code == "alg-id-shape-mismatch"
-    got = decode_wire_alg_id(nested, witness=_pre_adoption_witness())
+    # D2d accept requires a SIGNED marker verified against a trusted key
+    # (§4.3.2). An unsigned witness no longer rescues (see the signed-marker
+    # gate tests in test_issue_1316_d2c_marker.py).
+    got = decode_wire_alg_id(
+        nested,
+        witness=_signed_pre_adoption_witness(),
+        verifier_keys=_verifier_keys(),
+    )
     assert got == ALGORITHM_DEFAULT == "eatp-v1"
 
 
