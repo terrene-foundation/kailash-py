@@ -95,6 +95,73 @@ def test_get_namespace_annotations_lazy_falls_back_on_nameerror():
 
 
 @pytest.mark.regression
+def test_get_namespace_annotations_lazy_annotate_func_form():
+    """3.14-FINAL namespace shape: PEP 749 renamed ``__annotate__`` →
+    ``__annotate_func__``.
+
+    Regression for issue #1318: on Python 3.14 final the metaclass namespace
+    carries ``__annotate_func__`` (not the 3.14-beta ``__annotate__``), so the
+    helper's old two-key lookup fell through to ``{}`` and every class-based
+    Signature silently lost its fields.  The helper MUST read the final name.
+    """
+    from kailash.utils.annotations import get_namespace_annotations
+
+    expected = {"a": int, "b": str}
+
+    def fake_annotate(format):
+        # Format.VALUE == 1, Format.FORWARDREF == 2 — accept both so the
+        # helper's fallback path also resolves on pre-3.14 interpreters.
+        if format in (1, 2):
+            return dict(expected)
+        return {}
+
+    # No "__annotations__", no "__annotate__" — only the PEP 749 final name.
+    namespace = {"__annotate_func__": fake_annotate}
+    assert get_namespace_annotations(namespace) == expected
+
+
+@pytest.mark.regression
+def test_get_namespace_annotations_eager_cache_form():
+    """3.14-FINAL eager cache: PEP 749 stores the materialised dict under
+    ``__annotations_cache__``.
+
+    When 3.14 has already evaluated the annotations, the namespace carries the
+    eager cache rather than the lazy callable.  The helper MUST read it without
+    needing to invoke the annotate callable.
+    """
+    from kailash.utils.annotations import get_namespace_annotations
+
+    namespace = {"__annotations_cache__": {"x": int, "y": str}}
+    assert get_namespace_annotations(namespace) == {"x": int, "y": str}
+
+
+@pytest.mark.regression
+def test_get_namespace_annotations_metaclass_namespace_real_shape():
+    """Real metaclass ``__new__`` namespace on the running interpreter.
+
+    Captures the ACTUAL namespace the compiler emits — ``__annotations__`` on
+    ≤3.13, ``__annotate_func__`` on 3.14 final — and asserts the helper
+    extracts the class-body annotations.  Runs on every interpreter, so on the
+    3.14 CI leg it exercises the real PEP 749 namespace natively (issue #1318
+    acceptance criterion: metaclass-constructed class returns its fields).
+    """
+    from kailash.utils.annotations import get_namespace_annotations
+
+    captured = {}
+
+    class _Meta(type):
+        def __new__(mcs, name, bases, namespace):
+            captured["result"] = get_namespace_annotations(namespace)
+            return super().__new__(mcs, name, bases, dict(namespace))
+
+    class _Demo(metaclass=_Meta):
+        x: int
+        y: str
+
+    assert captured["result"] == {"x": int, "y": str}
+
+
+@pytest.mark.regression
 def test_get_class_annotations_returns_dict_for_annotated_class():
     """``get_class_annotations`` returns a copy of the class annotation dict."""
     from kailash.utils.annotations import get_class_annotations

@@ -10,10 +10,12 @@ This shifted two contracts that the Kailash stack relied on:
 
 1. **Metaclass namespace.**  Pre-3.14, ``namespace["__annotations__"]`` was
    a pre-built dict during ``__new__``.  In 3.14 the dict is gone — the
-   namespace carries ``__annotate__`` instead.  Code that did
-   ``namespace.get("__annotations__", {})`` silently sees ``{}`` and produces
-   classes with no field metadata.  This is what broke every Kaizen agent
-   using the declarative class-based ``Signature`` style.
+   namespace carries a lazy annotate callable instead.  3.14 *beta* emitted
+   ``__annotate__``; PEP 749 (3.14 *final*) renamed that callable to
+   ``__annotate_func__`` and the eager cache to ``__annotations_cache__``.
+   Code that did ``namespace.get("__annotations__", {})`` silently sees
+   ``{}`` and produces classes with no field metadata.  This is what broke
+   every Kaizen agent using the declarative class-based ``Signature`` style.
 
 2. **Class attribute.**  ``cls.__annotations__`` still works on 3.14, but
    may raise ``NameError`` instead of returning a string for unresolved
@@ -56,19 +58,29 @@ def get_namespace_annotations(namespace: Mapping[str, Any]) -> Dict[str, Any]:
     """Return class-body annotations from a metaclass ``__new__`` namespace.
 
     Pre-3.14 sets ``namespace["__annotations__"]`` directly; 3.14 emits a
-    lazy ``namespace["__annotate__"]`` callable instead.  This helper reads
-    whichever form is present and returns a plain dict.
+    lazy annotate callable instead.  3.14 *beta* named it ``__annotate__``;
+    PEP 749 (3.14 *final*) renamed it to ``__annotate_func__`` and added the
+    eager cache ``__annotations_cache__``.  This helper reads whichever form
+    is present — across every 3.14 pre-release and the final — and returns a
+    plain dict.
 
     The forward-reference (``FORWARDREF``) format is preferred so unresolved
     names do not raise during class construction — callers that store the
     annotation as descriptive metadata (Kaizen ``Signature``) accept the
     ``ForwardRef`` object as-is.
     """
-    annotations = namespace.get("__annotations__")
+    # Eager dict form: pre-3.14 "__annotations__"; 3.14-final materialises
+    # the eager cache under "__annotations_cache__" (PEP 749).
+    annotations = namespace.get("__annotations__") or namespace.get(
+        "__annotations_cache__"
+    )
     if annotations:
         return dict(annotations)
 
-    annotate = namespace.get("__annotate__")
+    # Lazy annotate callable: 3.14 beta emitted "__annotate__"; PEP 749
+    # (3.14 final) renamed it to "__annotate_func__".  Accept either so the
+    # helper resolves on every 3.14 pre-release and the final.
+    annotate = namespace.get("__annotate__") or namespace.get("__annotate_func__")
     if annotate is None:
         return {}
 
