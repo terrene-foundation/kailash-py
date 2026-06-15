@@ -342,15 +342,29 @@ class TimestampAuthority(ABC):
         pass
 
     @abstractmethod
-    async def verify_timestamp(self, token: TimestampToken) -> bool:
+    async def verify_timestamp(
+        self, token: TimestampToken, raw_token: Optional[bytes] = None
+    ) -> bool:
         """
         Verify a timestamp token.
 
         Args:
             token: The timestamp token to verify
+            raw_token: The raw, authority-native token bytes required for
+                cryptographic verification (e.g. the DER-encoded RFC 3161
+                TimeStampToken carried on
+                :attr:`TimestampResponse.raw_response`). Authorities whose
+                tokens are self-contained (e.g.
+                :class:`LocalTimestampAuthority`, which embeds its signature on
+                the token) MAY ignore this argument; authorities that verify an
+                external token (RFC 3161) REQUIRE it and MUST fail closed when
+                it is ``None``.
 
         Returns:
-            True if the token is valid, False otherwise
+            True if the token is cryptographically valid, False otherwise.
+            Implementations MUST fail closed: an unverifiable token (missing
+            material, unsupported library, failed crypto check) returns False,
+            never True.
         """
         pass
 
@@ -573,7 +587,9 @@ class LocalTimestampAuthority(TimestampAuthority):
             alg_id=canonical.algorithm,
         )
 
-    async def verify_timestamp(self, token: TimestampToken) -> bool:
+    async def verify_timestamp(
+        self, token: TimestampToken, raw_token: Optional[bytes] = None
+    ) -> bool:
         """
         Verify a timestamp token.
 
@@ -581,6 +597,10 @@ class LocalTimestampAuthority(TimestampAuthority):
 
         Args:
             token: The timestamp token to verify
+            raw_token: Unused for local tokens — a :class:`LocalTimestampAuthority`
+                token is self-contained (it carries its own Ed25519 signature on
+                the token). Accepted for interface symmetry with
+                :class:`RFC3161TimestampAuthority`.
 
         Returns:
             True if the token is valid, False otherwise
@@ -631,18 +651,33 @@ class RFC3161TimestampAuthority(TimestampAuthority):
     Attributes:
         _url: TSA URL
         _timeout: Request timeout in seconds
+        _certificate: Trusted TSA certificate (DER or PEM bytes) used as the
+            trust anchor when verifying a TimeStampToken's signature. Without
+            it, :meth:`verify_timestamp` cannot anchor trust and fails closed.
     """
 
-    def __init__(self, tsa_url: str, timeout_seconds: int = 10):
+    def __init__(
+        self,
+        tsa_url: str,
+        timeout_seconds: int = 10,
+        certificate: Optional[bytes] = None,
+    ):
         """
         Initialize RFC 3161 authority.
 
         Args:
             tsa_url: URL of the timestamp authority
             timeout_seconds: Request timeout
+            certificate: Trusted TSA signing certificate as DER or PEM bytes.
+                Required for :meth:`verify_timestamp` to cryptographically
+                verify a token's TSA signature — it is the trust anchor the
+                verifier checks the token's signature against. When ``None``,
+                verification fails closed (a token cannot be trusted without a
+                configured anchor).
         """
         self._url = tsa_url
         self._timeout = timeout_seconds
+        self._certificate = certificate
 
     @property
     def authority_url(self) -> str:
@@ -770,43 +805,125 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                 alg_id=canonical.algorithm,
             )
 
-    async def verify_timestamp(self, token: TimestampToken) -> bool:
+    async def verify_timestamp(
+        self, token: TimestampToken, raw_token: Optional[bytes] = None
+    ) -> bool:
         """
-        Verify an RFC 3161 timestamp token.
+        Verify an RFC 3161 timestamp token via real ASN.1 cryptographic checks.
 
-        Verifies the token was issued by the expected TSA and the hash
-        matches. If rfc3161ng is available, performs full ASN.1 verification.
+        Verification proceeds in two stages:
+
+        1. **Metadata pre-checks (necessary, NOT sufficient):** the token's
+           ``source`` is :attr:`TimestampSource.RFC3161` and its ``authority``
+           matches this authority's configured TSA URL.
+        2. **Cryptographic verification:** the raw DER-encoded ``TimeStampToken``
+           (``raw_token``, carried on :attr:`TimestampResponse.raw_response`) is
+           verified against the configured trusted TSA ``certificate`` and the
+           token's hashed message imprint (``token.hash_value``) using the
+           ``rfc3161ng`` library. This checks the TSA's signature over the token
+           AND that the timestamped imprint matches the hash recorded on the
+           token — the two properties that make a token unforgeable.
+
+        **Fail-closed (EATP):** the method returns ``True`` ONLY when stage 2
+        cryptographically succeeds. If any verification material is missing
+        (``rfc3161ng`` not installed, no ``raw_token``, no trusted
+        ``certificate``), or the cryptographic check raises or returns falsy,
+        the method returns ``False``. A forged or tampered token whose
+        ``source``/``authority`` metadata happen to match the configured TSA is
+        rejected, because metadata alone is never sufficient.
 
         Args:
-            token: The timestamp token to verify
+            token: The timestamp token to verify.
+            raw_token: The raw DER-encoded ``TimeStampToken`` bytes (from
+                :attr:`TimestampResponse.raw_response`). Required for
+                cryptographic verification; ``None`` → fail closed.
 
         Returns:
-            True if the token is valid
+            ``True`` iff the token is cryptographically verified against the
+            trusted TSA certificate; ``False`` otherwise.
         """
-        # Basic validation
+        # Stage 1 — metadata pre-checks (necessary, NOT sufficient).
         if token.source != TimestampSource.RFC3161:
-            logger.warning(f"Token source is {token.source}, expected RFC3161")
+            logger.warning(
+                "RFC3161 verify: token source is %s, expected RFC3161 — rejected",
+                token.source,
+            )
             return False
 
         if token.authority != self._url:
             logger.warning(
-                f"Token authority {token.authority} does not match configured TSA {self._url}"
+                "RFC3161 verify: token authority %s does not match configured "
+                "TSA %s — rejected",
+                token.authority,
+                self._url,
+            )
+            return False
+
+        # Stage 2 — cryptographic verification. Every missing material fails
+        # closed: an unverifiable token is NOT a valid token.
+        try:
+            import rfc3161ng  # type: ignore[import-untyped]
+        except ImportError:
+            logger.warning(
+                "RFC3161 verify: rfc3161ng is not installed — cannot "
+                "cryptographically verify the timestamp token; failing closed. "
+                "Install the 'rfc3161' extra (pip install 'kailash[rfc3161]') to "
+                "enable verification."
+            )
+            return False
+
+        if raw_token is None:
+            logger.warning(
+                "RFC3161 verify: no raw DER TimeStampToken supplied "
+                "(TimestampResponse.raw_response was empty) — cannot verify the "
+                "TSA signature; failing closed."
+            )
+            return False
+
+        if self._certificate is None:
+            logger.warning(
+                "RFC3161 verify: no trusted TSA certificate configured on the "
+                "authority — cannot anchor trust for signature verification; "
+                "failing closed. Construct RFC3161TimestampAuthority(..., "
+                "certificate=<DER/PEM bytes>) to enable verification."
             )
             return False
 
         try:
-            import rfc3161ng  # type: ignore[import-untyped]
-
-            # If we have rfc3161ng, we can do proper verification
-            # by re-timestamping and comparing (simplified)
-            return True
-        except ImportError:
-            # Without rfc3161ng, we can only verify basic metadata
+            data = bytes.fromhex(token.hash_value)
+        except (TypeError, ValueError):
             logger.warning(
-                "rfc3161ng not installed - performing metadata-only verification. "
-                "Install rfc3161ng for full cryptographic verification."
+                "RFC3161 verify: token hash_value is not valid hex — failing closed."
             )
-            return token.hash_value is not None and token.timestamp is not None
+            return False
+
+        try:
+            verified = rfc3161ng.check_timestamp(
+                raw_token,
+                certificate=self._certificate,
+                data=data,
+                hashname="sha256",
+            )
+        except Exception as e:  # noqa: BLE001 — fail closed on ANY crypto error
+            # rfc3161ng raises (rather than returning False) on signature
+            # mismatch, imprint mismatch, malformed DER, or certificate
+            # distrust. Catch-log-reject is the fail-closed disposition
+            # (zero-tolerance Rule 3: catch -> log -> handle, never silent).
+            logger.warning(
+                "RFC3161 verify: cryptographic verification failed (%s) — "
+                "token rejected.",
+                type(e).__name__,
+            )
+            return False
+
+        if not verified:
+            logger.warning(
+                "RFC3161 verify: timestamp token did not verify against the "
+                "trusted TSA certificate — token rejected."
+            )
+            return False
+
+        return True
 
     @staticmethod
     def _build_timestamp_request(hash_bytes: bytes, nonce: int) -> bytes:
@@ -1036,20 +1153,40 @@ class TimestampAnchorManager:
         # Dispatch gate (EATP-08 §5.1) — runs BEFORE any verification work.
         resolve_dispatch(token.alg_id)
 
+        # Imprint binding: the token's hashed imprint MUST equal the hash the
+        # caller actually anchored (the request hash). Cryptographic
+        # verification below proves the TSA signed *token.hash_value* — it does
+        # NOT prove that imprint is the artifact the caller intended to anchor.
+        # Without this cross-check, a (legitimately TSA-signed) token over an
+        # attacker-chosen imprint could be substituted for the intended one
+        # (both raw_response DER and token.hash_value swapped) and still pass.
+        # Fail closed on divergence (EATP: unknown/error -> deny).
+        if token.hash_value != response.request.hash_value:
+            logger.warning(
+                "verify_anchor: token imprint does not match the anchored "
+                "request hash — token rejected (possible imprint substitution)."
+            )
+            return False
+
+        # Thread the raw authority-native token bytes (DER TimeStampToken for
+        # RFC 3161) so the matched authority can cryptographically verify it.
+        # Dropping raw_response here is what forced the prior fail-open stub.
+        raw_token = response.raw_response
+
         # Find matching authority
         if token.authority == self._primary.authority_url:
-            return await self._primary.verify_timestamp(token)
+            return await self._primary.verify_timestamp(token, raw_token)
 
         for fallback in self._fallbacks:
             if token.authority == fallback.authority_url:
-                return await fallback.verify_timestamp(token)
+                return await fallback.verify_timestamp(token, raw_token)
 
         if (
             self._local_fallback
             and self._local is not None
             and token.authority == self._local.authority_url
         ):
-            return await self._local.verify_timestamp(token)
+            return await self._local.verify_timestamp(token, raw_token)
 
         # Unknown authority - cannot verify
         return False
@@ -1080,7 +1217,9 @@ class TimestampAnchorManager:
 
 
 async def verify_timestamp_token(
-    token: TimestampToken, authority: TimestampAuthority
+    token: TimestampToken,
+    authority: TimestampAuthority,
+    raw_token: Optional[bytes] = None,
 ) -> bool:
     """
     Verify a timestamp token using a specific authority.
@@ -1091,8 +1230,14 @@ async def verify_timestamp_token(
     Args:
         token: The timestamp token to verify
         authority: The authority to use for verification
+        raw_token: The raw authority-native token bytes required for
+            cryptographic verification of external tokens (the DER-encoded
+            RFC 3161 ``TimeStampToken`` from
+            :attr:`TimestampResponse.raw_response`). Omit for self-contained
+            tokens (e.g. :class:`LocalTimestampAuthority`); an RFC 3161 token
+            without it fails closed.
 
     Returns:
         True if the token is valid, False otherwise
     """
-    return await authority.verify_timestamp(token)
+    return await authority.verify_timestamp(token, raw_token)
