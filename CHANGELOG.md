@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **EATP-08 D2c signed-marker verification** (#1316): the D2d legacy-acceptance
+  witness is now verified-not-trusted. `D2dWitness` gains the §4.3.1 signed-core
+  fields (`first_seen`, `marker_sig`) plus `expires_at` and `witness_id`; new
+  `D2dVerifierKeys` (exported from `kailash.trust.signing.algorithm_id`) holds the
+  trusted Ed25519 public keys that `assert_d2d_witness_pre_adoption` verifies
+  `marker_sig` against — over the canonical `{principal, first_seen}` core.
+  Acceptance now requires five fail-closed checks (missing / signature / first_seen
+  corroboration / expiry / temporal boundary), each rejecting with
+  `implicit-v1-witness-failure`. `verifier_keys` is threaded through every
+  signed-record `from_dict` consumer (`SignedEnvelope`, `TimestampToken`,
+  `TimestampResponse`, `CRLMetadata`, `SecureMessageEnvelope`). The strict
+  post-adoption path (`witness=None`) is unchanged.
+
 ## [2.33.1] - 2026-06-15
 
 ### Fixed
