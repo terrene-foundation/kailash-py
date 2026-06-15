@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.0] - 2026-06-15
+
 ### Added
 
 - **EATP-08 D2c signed-marker verification** (#1316): the D2d legacy-acceptance

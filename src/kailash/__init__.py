@@ -95,7 +95,7 @@ def __getattr__(name):
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 
-__version__ = "2.33.1"
+__version__ = "2.34.0"
 
 __all__ = [
     # Core workflow components
