@@ -77,5 +77,142 @@
       "decode_with_pre_adoption_witness": "reject: unsupported-algorithm (witness does not rescue a non-pre-registry unknown token)",
       "reason": "EATP-08 §3.3: an unregistered token MUST emit unsupported-algorithm and MUST NOT fall through to eatp-v1"
     }
+  ],
+  "conformance_vectors_note": "Named V1-V9 coverage map for EATP-08 v1.1 §6 (`:274-321`). The #1316 acceptance bar is 'V4-V7 + V9 pass'. V1/V2 are the registry round-trips above; V3 is the chain-walk layer (SignedEnvelope/verify), NOT this alg-id-decode module; V8 is a non-runtime amendment-procedure obligation. Each acceptance-bar entry maps to a named behavioral test in tests/regression/test_eatp08_alg_id_canonical_vectors.py (the test_vN_* functions); the coverage-map test asserts every acceptance V-id has a named test. V6(i) (prior-v2 monotonic) is xfail-strict until Shard 3A lands the monotonic-upgrade-violation enforcer.",
+  "conformance_vectors": [
+    {
+      "vector_id": "V1",
+      "name": "round-trip-v1",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V1",
+      "scenario": "alg_id='eatp-v1' top-level string, signed Ed25519+SHA-256",
+      "expected": { "outcome": "accept", "token": "eatp-v1" },
+      "module_scope": "this-module",
+      "covered_by": "test_registry_status_and_dispatchability_match (eatp-v1 row) + test_registry_canonical_member_and_sha_reproduce",
+      "acceptance_bar": false
+    },
+    {
+      "vector_id": "V2",
+      "name": "round-trip-v2-future",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V2",
+      "scenario": "alg_id='eatp-v2.ml-dsa'; accept if supported, else unsupported-algorithm (this verifier does not implement v2 → reject, no fall-through to v1)",
+      "expected": { "outcome": "reject", "code": "unsupported-algorithm" },
+      "module_scope": "this-module",
+      "covered_by": "test_registry_status_and_dispatchability_match (eatp-v2.ml-dsa Reserved row)",
+      "acceptance_bar": false
+    },
+    {
+      "vector_id": "V3",
+      "name": "mixed-chain-walk",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V3 / §3.4.1",
+      "scenario": "chain H->M->T, D1 at each chain_ref; v2-canonical on H -> chain-ref-canonical-form-mismatch",
+      "expected": { "outcome": "accept-or-chain-ref-canonical-form-mismatch" },
+      "module_scope": "out-of-module",
+      "covered_by": "NOT exercised by this alg-id-decode module — chain-walk lives in the SignedEnvelope/verify layer; chain-ref-canonical-form-mismatch is out of #1316 scope (journal 0003)",
+      "acceptance_bar": false
+    },
+    {
+      "vector_id": "V4",
+      "name": "implicit-v1-pre-adoption",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V4 / §4.1 D2a",
+      "scenario": "record WITHOUT alg_id (algorithm metadata only), Ed25519+SHA-256, chain head pre-adoption, witnessed §4.3 signed marker, no prior v2 in chain",
+      "expected": { "outcome": "accept", "token": "eatp-v1" },
+      "module_scope": "this-module",
+      "covered_by": "test_v4_implicit_v1_pre_adoption_accepts",
+      "acceptance_bar": true
+    },
+    {
+      "vector_id": "V5",
+      "name": "implicit-v1-post-adoption",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V5 / §4.2 D2b",
+      "scenario": "record WITHOUT alg_id, chain head post-adoption (no qualifying witness)",
+      "expected": {
+        "outcome": "reject",
+        "code": "missing-alg-id-post-adoption"
+      },
+      "module_scope": "this-module",
+      "covered_by": "test_v5_implicit_v1_post_adoption_rejects",
+      "acceptance_bar": true
+    },
+    {
+      "vector_id": "V6",
+      "name": "alg-id-strip-attack",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V6 / §4.4 anti-strip",
+      "scenario": "legitimate v2 record, attacker strips alg_id and re-canonicalizes",
+      "sub_cases": [
+        {
+          "sub_case": "i",
+          "scenario": "principal-chain has prior v2 record",
+          "expected": {
+            "outcome": "reject",
+            "code": "monotonic-upgrade-violation"
+          },
+          "covered_by": "test_v6i_strip_prior_v2_monotonic (xfail-strict until Shard 3A)",
+          "status": "deferred-shard-3a"
+        },
+        {
+          "sub_case": "ii",
+          "scenario": "no prior records, chain head post-adoption",
+          "expected": {
+            "outcome": "reject",
+            "code": "missing-alg-id-post-adoption"
+          },
+          "covered_by": "test_v6ii_strip_fresh_post_adoption_missing",
+          "status": "enforced"
+        },
+        {
+          "sub_case": "iii",
+          "scenario": "no prior records, attacker-chosen pre-adoption date, no corroborating pre-adoption witness (fixture REQUIRED)",
+          "expected": {
+            "outcome": "reject",
+            "code": "implicit-v1-witness-failure"
+          },
+          "covered_by": "test_v6iii_strip_fresh_attacker_pre_adoption_witness_failure",
+          "status": "enforced"
+        }
+      ],
+      "acceptance_bar": true
+    },
+    {
+      "vector_id": "V7",
+      "name": "witnessed-adoption-marker",
+      "level": "Complete",
+      "spec_ref": "EATP-08 v1.1 §6 V7 / §4.3.2",
+      "scenario": "attacker tampers the local signed marker (marker_sig) to make a post-adoption stripped record look pre-adoption; the §4.3.2 detection rule MUST catch it",
+      "expected": {
+        "outcome": "reject",
+        "code": "implicit-v1-witness-failure"
+      },
+      "module_scope": "this-module",
+      "covered_by": "test_v7_marker_tamper_detected_complete_level",
+      "acceptance_bar": true
+    },
+    {
+      "vector_id": "V8",
+      "name": "precedence-rule-survives-jcs-rename",
+      "level": "n/a",
+      "spec_ref": "EATP-08 v1.1 §6 V8 / §3.2 / §8",
+      "scenario": "amendment-procedure obligation (D3 rename hook) — a process gate at ratification time, NOT a runtime fixture",
+      "expected": { "outcome": "non-runtime" },
+      "module_scope": "non-runtime",
+      "covered_by": "EXCLUDED from the executable set per §6 (`:272`, `:313-315`)",
+      "acceptance_bar": false
+    },
+    {
+      "vector_id": "V9",
+      "name": "pre-registry-explicit-form-accept",
+      "level": "Conformant",
+      "spec_ref": "EATP-08 v1.1 §6 V9 / §4.5 D2d",
+      "scenario": "pre-registry explicit form (nested {algorithm:'ed25519+sha256'} OR unsigned algorithm metadata), chain head pre-adoption, witnessed signed marker, no prior registry-form in chain -> accept as eatp-v1, logged",
+      "expected": { "outcome": "accept", "token": "eatp-v1" },
+      "module_scope": "this-module",
+      "covered_by": "test_v9_pre_registry_nested_d2d_accepts + test_v9_pre_registry_unsigned_metadata_d2d_accepts",
+      "acceptance_bar": true
+    }
   ]
 }

@@ -210,3 +210,192 @@ def test_non_conformant_unregistered_token_never_falls_through():
         decode_wire_alg_id(
             {"alg_id": "ed25519+sha512"}, witness=_pre_adoption_witness()
         )
+
+
+# ---------------------------------------------------------------------------
+# Named EATP-08 §6 conformance vectors (V4-V7 + V9 — the #1316 acceptance bar)
+# ---------------------------------------------------------------------------
+#
+# The coverage map lives in the canonical vector file under `conformance_vectors`;
+# each acceptance-bar V-id maps to a named `test_vN_*` here (the coverage-map test
+# below asserts the mapping holds). V1/V2 are the registry round-trips above; V3 is
+# the chain-walk layer (out of this module); V8 is non-runtime. Exact V1-V9 table:
+# workspaces/issue-1316-eatp08-marker-regime-py/01-analysis/02-spec-locked-facts.md.
+
+
+def _tampered_signed_witness() -> D2dWitness:
+    # A signed pre-adoption marker whose marker_sig has been tampered (one byte
+    # flipped) — it no longer verifies against the trusted key. V7 / §4.3.2.
+    w = _signed_pre_adoption_witness()
+    sig = w.marker_sig or ""
+    # Flip a base64 char deterministically (no RNG — `testing.md` determinism).
+    flipped = ("B" if sig[0] != "B" else "C") + sig[1:]
+    return D2dWitness(
+        witnessed_at=w.witnessed_at,
+        chain_head_date=w.chain_head_date,
+        principal=w.principal,
+        first_seen=w.first_seen,
+        marker_sig=flipped,
+        witness_id=w.witness_id,
+    )
+
+
+@pytest.mark.regression
+def test_v4_implicit_v1_pre_adoption_accepts():
+    """V4 (§6 / §4.1 D2a): a record WITHOUT an explicit alg_id, carrying only
+    empty/implicit algorithm metadata, with a signed pre-adoption marker and no
+    prior v2 in the chain, accepts as eatp-v1 (the implicit arm of
+    decode_wire_alg_id's `legacy_value in ('', None)` branch — distinct from V9's
+    explicit pre-registry literal/nested arms)."""
+    got = decode_wire_alg_id(
+        {"algorithm": ""},
+        witness=_signed_pre_adoption_witness(),
+        verifier_keys=_verifier_keys(),
+    )
+    assert got == ALGORITHM_DEFAULT == "eatp-v1"
+
+
+@pytest.mark.regression
+def test_v5_implicit_v1_post_adoption_rejects():
+    """V5 (§6 / §4.2 D2b): a record WITHOUT alg_id and with no qualifying witness
+    (cannot be dated pre-adoption) MUST reject with missing-alg-id-post-adoption,
+    never default-fill."""
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        decode_wire_alg_id({"envelope": "post-adoption-record"})
+    assert exc.value.code == "missing-alg-id-post-adoption"
+
+
+@pytest.mark.regression
+def test_v6ii_strip_fresh_post_adoption_missing():
+    """V6 sub-case (ii) (§6 / §4.4): a stripped v2 record from a chain with no
+    prior records, head post-adoption (no witness) MUST reject with
+    missing-alg-id-post-adoption."""
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        decode_wire_alg_id({"payload": "v2-record-with-alg_id-stripped"})
+    assert exc.value.code == "missing-alg-id-post-adoption"
+
+
+@pytest.mark.regression
+def test_v6iii_strip_fresh_attacker_pre_adoption_witness_failure():
+    """V6 sub-case (iii) (§6 / §4.3.2 — fixture REQUIRED): a stripped record from a
+    fresh chain with an attacker-chosen pre-adoption date but NO signed
+    pre-adoption marker (the witness is unsigned) MUST reject with
+    implicit-v1-witness-failure — the backdating defense. An attacker can set the
+    claimed date but cannot obtain a signed pre-adoption first_seen."""
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        decode_wire_alg_id(
+            {"algorithm": ""},
+            witness=_pre_adoption_witness(),  # unsigned — no marker_sig/principal
+        )
+    assert exc.value.code == "implicit-v1-witness-failure"
+
+
+@pytest.mark.regression
+def test_v7_marker_tamper_detected_complete_level():
+    """V7 (§6 — Complete only / §4.3.2): an attacker tampers the local signed
+    marker (marker_sig) to make a post-adoption stripped record look pre-adoption;
+    the §4.3.2 detection rule MUST catch the failed Ed25519 verification and reject
+    with implicit-v1-witness-failure."""
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        decode_wire_alg_id(
+            {"alg_id": {"algorithm": "ed25519+sha256"}},
+            witness=_tampered_signed_witness(),
+            verifier_keys=_verifier_keys(),
+        )
+    assert exc.value.code == "implicit-v1-witness-failure"
+
+
+@pytest.mark.regression
+def test_v9_pre_registry_nested_d2d_accepts():
+    """V9 (§6 / §4.5 D2d): the nested-object pre-registry explicit form with a
+    signed pre-adoption marker accepts as eatp-v1."""
+    got = decode_wire_alg_id(
+        {"alg_id": {"algorithm": "ed25519+sha256"}},
+        witness=_signed_pre_adoption_witness(),
+        verifier_keys=_verifier_keys(),
+    )
+    assert got == ALGORITHM_DEFAULT == "eatp-v1"
+
+
+@pytest.mark.regression
+def test_v9_pre_registry_unsigned_metadata_d2d_accepts():
+    """V9 (§6 / §4.5 D2d): the unsigned-`algorithm`-metadata pre-registry explicit
+    form (the kailash-py historical shape) with a signed pre-adoption marker
+    accepts as eatp-v1."""
+    got = decode_wire_alg_id(
+        {"algorithm": "ed25519+sha256"},
+        witness=_signed_pre_adoption_witness(),
+        verifier_keys=_verifier_keys(),
+    )
+    assert got == ALGORITHM_DEFAULT == "eatp-v1"
+
+
+@pytest.mark.regression
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "V6 sub-case (i) monotonic-upgrade-violation enforcer lands in Shard 3A "
+        "(#1316): decode_wire_alg_id gains `prior_registry_form_seen: bool` and "
+        "rejects an absent/pre-registry record from a chain with a prior "
+        "registry-form record. xfail-strict per testing.md — auto-fails (XPASS) "
+        "the moment Shard 3A wires it, forcing this marker's removal."
+    ),
+)
+def test_v6i_strip_prior_v2_monotonic():
+    """V6 sub-case (i) (§6 / §4.2 / §4.5.3): a stripped record from a principal-
+    chain that has previously emitted a registry-form (v2) record MUST reject with
+    monotonic-upgrade-violation. Shard-3A contract: the read-check is surfaced via
+    `decode_wire_alg_id(..., prior_registry_form_seen=True)`."""
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        decode_wire_alg_id(
+            {"payload": "v2-record-stripped"},
+            prior_registry_form_seen=True,
+        )
+    assert exc.value.code == "monotonic-upgrade-violation"
+
+
+@pytest.mark.regression
+def test_conformance_vector_coverage_map():
+    """H1 coverage gate: the canonical file's `conformance_vectors` names every
+    EATP-08 §6 vector V1-V9, and every #1316 acceptance-bar vector (V4-V7 + V9)
+    maps to a named test function present in this module. V6 sub-case (i) is the
+    only deferred contract and MUST be marked deferred-shard-3a (xfail-strict
+    test present), never silently dropped."""
+    data = _vectors()
+    cv = {v["vector_id"]: v for v in data["conformance_vectors"]}
+    assert set(cv) == {f"V{n}" for n in range(1, 10)}, "V1-V9 must all be named"
+
+    # The acceptance bar is exactly V4-V7 + V9.
+    acceptance = {vid for vid, v in cv.items() if v["acceptance_bar"]}
+    assert acceptance == {"V4", "V5", "V6", "V7", "V9"}
+
+    # V7 is Complete-only; the other acceptance-bar vectors are Conformant.
+    assert cv["V7"]["level"] == "Complete"
+    for vid in ("V4", "V5", "V6", "V9"):
+        assert cv[vid]["level"] == "Conformant", f"{vid} level"
+
+    # Every acceptance-bar vector's `covered_by` test(s) exist in this module.
+    module = globals()
+    expected_tests = {
+        "V4": ["test_v4_implicit_v1_pre_adoption_accepts"],
+        "V5": ["test_v5_implicit_v1_post_adoption_rejects"],
+        "V7": ["test_v7_marker_tamper_detected_complete_level"],
+        "V9": [
+            "test_v9_pre_registry_nested_d2d_accepts",
+            "test_v9_pre_registry_unsigned_metadata_d2d_accepts",
+        ],
+    }
+    for vid, names in expected_tests.items():
+        for name in names:
+            assert callable(module.get(name)), f"{vid} missing test {name!r}"
+
+    # V6 sub-cases: ii + iii enforced (named tests present); i deferred to Shard 3A.
+    subs = {s["sub_case"]: s for s in cv["V6"]["sub_cases"]}
+    assert subs["i"]["status"] == "deferred-shard-3a"
+    assert callable(module.get("test_v6i_strip_prior_v2_monotonic"))  # xfail-strict
+    assert subs["ii"]["status"] == "enforced"
+    assert callable(module.get("test_v6ii_strip_fresh_post_adoption_missing"))
+    assert subs["iii"]["status"] == "enforced"
+    assert callable(
+        module.get("test_v6iii_strip_fresh_attacker_pre_adoption_witness_failure")
+    )
