@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.1] - 2026-06-15
+
+### Fixed
+
+- **Security: RFC-3161 `verify_timestamp` no longer fails open** (#1332):
+  `RFC3161TimestampAuthority.verify_timestamp` previously returned `True` with
+  **no cryptographic verification** whenever `rfc3161ng` was importable — the
+  docstring promised "full ASN.1 verification" but the body was a bare
+  `return True`, so a forged or tampered token whose `source`/`authority`
+  metadata matched the configured TSA was accepted as valid. It now performs
+  real verification: the raw DER `TimeStampToken` (carried on
+  `TimestampResponse.raw_response`, now threaded through `verify_anchor`) is
+  checked against a configured trusted TSA `certificate` and the token's hashed
+  message imprint via `rfc3161ng.check_timestamp`. The method returns `True`
+  **only** on cryptographic success and **fails closed** (returns `False`) when
+  any verification material is missing (`rfc3161ng` not installed, no raw DER
+  token, no trusted certificate) or the check fails — per the EATP fail-closed
+  discipline. `RFC3161TimestampAuthority.__init__` gains an optional
+  `certificate` trust-anchor argument; `verify_timestamp` /
+  `verify_timestamp_token` gain an optional `raw_token` argument
+  (backward-compatible additions). A new `rfc3161` optional extra
+  (`pip install 'kailash[rfc3161]'`, included in `[all]`) installs `rfc3161ng`
+  to enable verification.
+
 ## [2.34.0] - 2026-06-15
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.34.0"
+version = "2.34.1"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -149,6 +149,12 @@ align    = ["kailash-align>=0.3.2"]
 # site" pattern.
 shamir = ["shamir-mnemonic>=0.3"]
 
+# RFC 3161 external timestamp verification (CARE-014). Module import succeeds
+# without this extra; RFC3161TimestampAuthority.verify_timestamp fails closed
+# (returns False) until rfc3161ng is installed, per the EATP fail-closed
+# discipline. Install to enable real ASN.1 TimeStampToken verification.
+rfc3161 = ["rfc3161ng>=2.1.3"]
+
 # Secret backends (vendor-specific SDKs).
 vault         = ["hvac>=2.1.0"]
 aws-secrets   = ["boto3>=1.34.0"]
@@ -217,7 +223,7 @@ docs = [
 # DeprecationWarning shim covering one minor cycle before v3.0 enforces it.
 all = [
     # Core capabilities (was the default install pre-#890)
-    "kailash[server,http-client,db-postgres,db-mysql,db-sqlite,redis,trust,auth,auth-azure,monitoring,telemetry,scheduler,mcp,data]",
+    "kailash[server,http-client,db-postgres,db-mysql,db-sqlite,redis,trust,auth,auth-azure,monitoring,telemetry,scheduler,mcp,data,rfc3161]",
     # Sub-package installs — pull each sibling's [security]-equivalent extras
     # so [all] preserves pre-#890 cryptographic posture (Fernet multi-tenancy
     # encryption, Ed25519 audit signing, FastAPI gateway, etc.). Heavy ML /
