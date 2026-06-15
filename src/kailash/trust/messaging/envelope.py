@@ -272,6 +272,7 @@ class SecureMessageEnvelope:
         *,
         witness: Optional[D2dWitness] = None,
         verifier_keys: Optional[D2dVerifierKeys] = None,
+        prior_registry_form_seen: bool = False,
     ) -> "SecureMessageEnvelope":
         """
         Deserialize envelope from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
@@ -304,7 +305,12 @@ class SecureMessageEnvelope:
         if data.get("metadata"):
             metadata = MessageMetadata.from_dict(data["metadata"])
 
-        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
+        alg_id = decode_wire_alg_id(
+            data,
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
+        )
 
         return cls(
             message_id=data["message_id"],

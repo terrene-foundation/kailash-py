@@ -735,14 +735,21 @@ plus reserved rows (`eatp-v1.1`, `eatp-v2`, `eatp-v2.ml-dsa`,
 - `is_registered` / `is_active` (`algorithm_id.py:260-271`) are the value vs
   dispatchability predicates.
 
-`UnsupportedAlgorithmError` (`algorithm_id.py:142`) carries the normative
+`UnsupportedAlgorithmError` (`algorithm_id.py:146`) carries the normative
 EATP-08 §5.3 error code: `unsupported-algorithm`, `alg-id-shape-mismatch`,
-`missing-alg-id-post-adoption`, or `implicit-v1-witness-failure`.
+`missing-alg-id-post-adoption`, `implicit-v1-witness-failure`, or
+`monotonic-upgrade-violation` (the §4.5.3 monotonic-downgrade reject — see
+§ 32.3 below). The remaining three §5.3 codes
+(`pre-registry-form-after-sunset`, `chain-ref-canonical-form-mismatch`,
+`alg-id-strip-detected`) are not surfaced by this module: their triggers (the
+2030 D2d sunset, D1 chain-ref canonicalization, and a signature matching no
+registered algorithm) live in the migration-policy and chain-walk layers, out
+of this alg-id-decode module's scope.
 
 ### 32.3 Backward-compat regime (EATP-08 §4 — D1/D2a/D2b/D2c/D2d)
 
 The post-adoption path is strict (D2b): `AlgorithmIdentifier.from_dict()`
-and the consumer helper `decode_wire_alg_id()` (`algorithm_id.py:417`, `:558`)
+and the consumer helper `decode_wire_alg_id()` (`algorithm_id.py:694`, `:856`)
 do NOT silently default-fill. A missing/empty `alg_id` post-adoption raises
 `missing-alg-id-post-adoption`; a non-string or nested form raises
 `alg-id-shape-mismatch`. A **bare top-level-string** `alg_id` equal to the
@@ -751,7 +758,7 @@ deprecated literal `ed25519+sha256` is an unregistered token and raises
 NOT a D2d pre-registry form, and a D2d witness MUST NOT rescue it. A present
 `alg_id` key is authoritative, so `{"alg_id":"ed25519+sha256","algorithm":...}`
 also raises `unsupported-algorithm` rather than falling through to the
-`algorithm`-key D2d match (`from_dict`, `algorithm_id.py:474`).
+`algorithm`-key D2d match (`from_dict`, `algorithm_id.py:694`).
 
 The legacy path (D2c/D2d, §4.5 / §4.3) is **signed, dated, and witnessed**.
 The pre-1.1 scaffold accepted a bare `legacy_path: bool` — a perpetual
@@ -760,17 +767,23 @@ consulted it. The D2c signed-marker regime replaces that: the marker is
 **signed-not-remembered** (EATP-08 §4.3.2), verified inside the gate against a
 configured trusted key rather than trusted as a passed-in value.
 
-`D2dWitness` (`algorithm_id.py:213`) carries the §4.3.1 REQUIRED signed core
+`D2dWitness` (`algorithm_id.py:222`) carries the §4.3.1 REQUIRED signed core
 `{principal, first_seen}` bound by `marker_sig`, plus an optional `expires_at`
 and `witness_id` (the back-compat `witnessed_at`/`chain_head_date` remain; the
 claimed `chain_head_date` is corroborated AGAINST the signed `first_seen`, NOT
-part of the signed bytes). `D2dVerifierKeys` (`algorithm_id.py:172`, mirrors
-`MultiSigPolicy.signer_public_keys`) maps `witness_id` → base64 Ed25519 public
-key (+ optional `default_key`) and is the trusted-key resolution surface.
+part of the signed bytes), plus the optional §4.5.3 monotonic boundary
+`first_v2_seen` (`algorithm_id.py:288`). `first_v2_seen`, when set, is
+included in the `marker_sig` pre-image (`signed_marker_payload`,
+`algorithm_id.py:294` — §4.3.1 "a field a verifier relies on MUST be in the
+signed bytes"); a marker without it keeps the two-field `{principal, first_seen}`
+core, so existing `marker_sig`s verify unchanged. `D2dVerifierKeys`
+(`algorithm_id.py:181`, mirrors `MultiSigPolicy.signer_public_keys`) maps
+`witness_id` → base64 Ed25519 public key (+ optional `default_key`) and is the
+trusted-key resolution surface.
 
-A pre-registry explicit form (`is_pre_registry_form`, `algorithm_id.py:486`) is
+A pre-registry explicit form (`is_pre_registry_form`, `algorithm_id.py:586`) is
 accepted as `eatp-v1` ONLY when ALL five fail-closed checks of
-`assert_d2d_witness_pre_adoption()` (`algorithm_id.py:316`) hold — every
+`assert_d2d_witness_pre_adoption()` (`algorithm_id.py:350`) hold — every
 failure raising `implicit-v1-witness-failure`:
 
 1. **missing** — no witness supplied.
@@ -794,12 +807,38 @@ witness service can later become the marker _source_ without changing this
 verification contract). The decode consumers thread `verifier_keys` alongside
 `witness` (§ 32.4).
 
+**Monotonic-upgrade enforcement (D2b / D2d — §4.2 / §4.5.3 / §5.1 step 3).**
+Once a principal-chain has emitted a registry-form (v2 / `eatp-v1`) record, a
+subsequent absent-`alg_id` OR pre-registry explicit form is a downgrade and
+`decode_wire_alg_id()` (and `AlgorithmIdentifier.from_dict()`) reject it with
+`monotonic-upgrade-violation`. The check fires BEFORE D2a/D2d acceptance and
+BEFORE `missing-alg-id-post-adoption`, so a chain that has crossed the boundary
+cannot regress even with an otherwise-valid signed pre-adoption witness. It does
+NOT fire for a conformant registry token (forward progress), nor for a bare
+unregistered string / non-string shape (those keep their `unsupported-algorithm`
+/ `alg-id-shape-mismatch` disposition). The prior-v2 state is supplied by the
+verifier via the `prior_registry_form_seen: bool` parameter threaded through
+every consumer `from_dict` (alongside `witness`/`verifier_keys`, § 32.4), OR via
+a resolved `D2dWitness` carrying a signed `first_v2_seen`.
+
+**Marker persistence is verifier-integration, not SDK-owned (signed-not-remembered).**
+The SDK enforces the monotonic READ check; it does NOT persist a per-chain
+first-v2 store. Consistent with the §4.3 "marker transport is
+implementation-defined" stance, the WRITE side that establishes the prior-v2
+state (a transparency log, a witness service, or the verifier's own chain-state
+table) is the integrator's responsibility — the SDK consumes the supplied signal
+(`prior_registry_form_seen` / a resolved marker's `first_v2_seen`) rather than
+owning a marker store. A future SDK-owned store can populate the same signal
+without changing this read contract.
+
 ### 32.4 Threaded surface
 
 Every Layer-1 signed-record producer/verifier carries the top-level `alg_id`
-member and decodes it through `decode_wire_alg_id` (witness- and
-verifier-keys-aware: each consumer's `from_dict` threads both `witness` and
-`verifier_keys` per `rules/security.md` Multi-Site Kwarg Plumbing):
+member and decodes it through `decode_wire_alg_id` (witness-, verifier-keys-, and
+prior-v2-aware: each consumer's `from_dict` threads `witness`, `verifier_keys`,
+AND `prior_registry_form_seen` per `rules/security.md` Multi-Site Kwarg
+Plumbing — the five decode sites are `crl.py`, `timestamping.py` ×2,
+`messaging/envelope.py`, `pact/envelopes.py`):
 
 - `src/kailash/trust/pact/envelopes.py` — `SignedEnvelope` (`alg_id` field,
   `envelopes.py:1227`) sign/verify pair.

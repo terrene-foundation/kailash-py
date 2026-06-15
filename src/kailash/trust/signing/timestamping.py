@@ -151,6 +151,7 @@ class TimestampToken:
         *,
         witness: Optional[D2dWitness] = None,
         verifier_keys: Optional[D2dVerifierKeys] = None,
+        prior_registry_form_seen: bool = False,
     ) -> "TimestampToken":
         """Deserialize token from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -165,7 +166,12 @@ class TimestampToken:
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
+        alg_id = decode_wire_alg_id(
+            data,
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
+        )
         return cls(
             token_id=data["token_id"],
             hash_value=data["hash_value"],
@@ -253,6 +259,7 @@ class TimestampResponse:
         *,
         witness: Optional[D2dWitness] = None,
         verifier_keys: Optional[D2dVerifierKeys] = None,
+        prior_registry_form_seen: bool = False,
     ) -> "TimestampResponse":
         """Deserialize response from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -279,7 +286,12 @@ class TimestampResponse:
         raw_response = (
             bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
         )
-        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
+        alg_id = decode_wire_alg_id(
+            data,
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
+        )
         return cls(
             request=request,
             token=token,
