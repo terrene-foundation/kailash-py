@@ -391,3 +391,22 @@ def test_conformance_vector_coverage_map():
     assert callable(
         module.get("test_v6iii_strip_fresh_attacker_pre_adoption_witness_failure")
     )
+
+
+@pytest.mark.regression
+def test_public_surface_reexports_d2d_symbols():
+    """Public-surface guard: the consumer-facing D2d symbols MUST be importable
+    from the canonical `kailash.trust.signing` re-export path (not only the deep
+    `...signing.algorithm_id` module). D2dVerifierKeys is required to configure
+    trusted keys for D2d verification; d2d_legacy_acceptance_count is the §7.1
+    migration-tracking reader. Regression for the holistic-redteam MED-1 finding
+    (both were in algorithm_id.__all__ but missing from the package re-export)."""
+    import kailash.trust.signing as signing
+
+    for name in ("D2dVerifierKeys", "d2d_legacy_acceptance_count"):
+        assert hasattr(signing, name), f"{name} missing from kailash.trust.signing"
+        assert name in signing.__all__, f"{name} missing from signing.__all__"
+    # The canonical path resolves to the same object as the deep module path.
+    from kailash.trust.signing.algorithm_id import D2dVerifierKeys as _DeepVK
+
+    assert signing.D2dVerifierKeys is _DeepVK

@@ -699,24 +699,24 @@ signed-record pair; see § 32.4.
 
 Canonical home: `kailash.trust.signing.algorithm_id`; the package
 `kailash.trust.signing` re-exports the full surface as the canonical import
-path (`src/kailash/trust/signing/__init__.py:27-44`).
+path (`src/kailash/trust/signing/__init__.py:27-47`).
 
 - `ALGORITHM_DEFAULT: str = "eatp-v1"` — the sole **Active** identifier
-  (Ed25519 + SHA-256), per EATP-08 §3.3 (`algorithm_id.py:61`). Replaces
+  (Ed25519 + SHA-256), per EATP-08 §3.3 (`algorithm_id.py:65`). Replaces
   the pre-publication scaffold default `"ed25519+sha256"`.
 - `DEPRECATED_PRE_REGISTRY_LITERAL: str = "ed25519+sha256"` — accepted
   ONLY on the bounded D2d legacy path (§ 32.3), never a conformant
-  emission (`algorithm_id.py:67`).
+  emission (`algorithm_id.py:71`).
 - `ADOPTION_DATE: str = "2026-04-26"` + `ADOPTION_DATE_PARSED` — the
   EATP-08 §7.1 pinned adoption date, consumed by the D2d temporal gate
-  (`algorithm_id.py:71-76`).
+  (`algorithm_id.py:75-80`).
 
 Wire encoding (EATP-08 §3.1/§3.2, binding D3): the identifier serialises as
 a **top-level `alg_id` string** member. Under JCS (RFC 8785) key ordering,
 `alg_id` sorts first, so a verifier reads the algorithm before parsing the
 payload. The pre-registry nested object `{"algorithm": "..."}` and the
 deprecated literal are NON-conformant emissions. `AlgorithmIdentifier.to_dict()`
-returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:406-415`).
+returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:683-691`).
 
 ### 32.2 Registry and dispatch (EATP-08 §3.3 / §5.1)
 
@@ -848,6 +848,12 @@ Plumbing — the five decode sites are `crl.py`, `timestamping.py` ×2,
   (`create_anchor` / `verify_anchor` + `TimestampToken`).
 - `src/kailash/trust/signing/crl.py` — `CRLMetadata.sign` / `verify_signature`.
 - `src/kailash/trust/messaging/{signer,verifier}.py` — `MessageEnvelope`.
+
+These bullets enumerate the `alg_id`-CARRYING surfaces (producers + verifiers);
+the actual `decode_wire_alg_id` CALL sites that thread the three kwargs are the
+five `from_dict` consumers named in the paragraph above (`signer.py`/`verifier.py`
+carry the field but do NOT call `decode_wire_alg_id` directly — they route through
+`messaging/envelope.py`).
 
 Layer-2 stores (audit_store, chain_store, key_manager) inherit threading
 through their underlying Layer-1 primitives.
