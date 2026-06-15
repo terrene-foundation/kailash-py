@@ -281,7 +281,10 @@ class TimestampResponse:
             algorithm=request_data.get("algorithm", "sha256"),
         )
         token = TimestampToken.from_dict(
-            data["token"], witness=witness, verifier_keys=verifier_keys
+            data["token"],
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
         )
         raw_response = (
             bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None

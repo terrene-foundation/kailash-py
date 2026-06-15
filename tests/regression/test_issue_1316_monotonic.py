@@ -37,6 +37,7 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
+from kailash.trust.signing.timestamping import TimestampResponse
 
 _PRIV, _PUB = generate_keypair()
 _WID = "eatp08-monotonic-witness"
@@ -217,6 +218,25 @@ def test_monotonic_threads_through_from_dict_surface():
             verifier_keys=_verifier_keys(),
             prior_registry_form_seen=True,
         )
+    assert exc.value.code == "monotonic-upgrade-violation"
+
+
+@pytest.mark.regression
+def test_monotonic_threads_through_nested_timestamp_token():
+    """`TimestampResponse.from_dict` MUST forward `prior_registry_form_seen` into
+    its NESTED `TimestampToken.from_dict` decode (the explicit-flag-mode
+    completeness gap a security review surfaced). The response carries a VALID
+    outer `alg_id` (so the outer decode passes) but a STRIPPED nested token — so
+    the rejection can ONLY come from the nested decode receiving the threaded
+    flag. Without the threading this raises missing-alg-id (or does not raise);
+    with it, monotonic-upgrade-violation."""
+    resp = {
+        "request": {"hash_value": "abc123", "requested_at": _BEFORE.isoformat()},
+        "token": {"payload": "v2-token-with-alg_id-stripped"},  # stripped nested
+        "alg_id": "eatp-v1",  # valid OUTER token — only the nested decode can catch
+    }
+    with pytest.raises(UnsupportedAlgorithmError) as exc:
+        TimestampResponse.from_dict(resp, prior_registry_form_seen=True)
     assert exc.value.code == "monotonic-upgrade-violation"
 
 

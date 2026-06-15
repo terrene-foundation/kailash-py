@@ -720,19 +720,19 @@ returns exactly `{"alg_id": "<token>"}` (`algorithm_id.py:406-415`).
 
 ### 32.2 Registry and dispatch (EATP-08 §3.3 / §5.1)
 
-`ALGORITHM_REGISTRY` (`algorithm_id.py:108-140`) carries `eatp-v1` (Active)
+`ALGORITHM_REGISTRY` (`algorithm_id.py:112-143`) carries `eatp-v1` (Active)
 plus reserved rows (`eatp-v1.1`, `eatp-v2`, `eatp-v2.ml-dsa`,
 `eatp-v2.slh-dsa`). `AlgorithmStatus` enumerates `Active` / `Reserved` /
-`Reserved-Unregistered` (`algorithm_id.py:79-85`).
+`Reserved-Unregistered` (`algorithm_id.py:83`).
 
-- `AlgorithmIdentifier(...)` (`algorithm_id.py:350`, validation `:379`) accepts any **registered**
+- `AlgorithmIdentifier(...)` (`algorithm_id.py:627`, validation `:656`) accepts any **registered**
   token as a value; an unregistered token raises `UnsupportedAlgorithmError`
   with code `unsupported-algorithm`.
-- `resolve_dispatch(alg_id)` (`algorithm_id.py:273`) is the §5.1 step-2
+- `resolve_dispatch(alg_id)` (`algorithm_id.py:550`) is the §5.1 step-2
   dispatch gate: only an **Active** row dispatches. Unregistered, Reserved,
   and Reserved-Unregistered all raise `unsupported-algorithm` and MUST NOT
   fall through to `eatp-v1` semantics.
-- `is_registered` / `is_active` (`algorithm_id.py:260-271`) are the value vs
+- `is_registered` / `is_active` (`algorithm_id.py:537`, `:543`) are the value vs
   dispatchability predicates.
 
 `UnsupportedAlgorithmError` (`algorithm_id.py:146`) carries the normative
