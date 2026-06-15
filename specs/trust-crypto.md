@@ -753,22 +753,53 @@ NOT a D2d pre-registry form, and a D2d witness MUST NOT rescue it. A present
 also raises `unsupported-algorithm` rather than falling through to the
 `algorithm`-key D2d match (`from_dict`, `algorithm_id.py:474`).
 
-The legacy path (D2d, §4.5) is **dated and witnessed**. The pre-1.1 scaffold
-accepted a bare `legacy_path: bool` — a perpetual un-sunsetted downgrade
-channel — and defined `ADOPTION_DATE` but never consulted it. D2d replaces
-that with `D2dWitness` (`algorithm_id.py:169`): a pre-registry explicit form
-(`is_pre_registry_form`, `algorithm_id.py:309`) is accepted as `eatp-v1`
-ONLY when a witness is supplied AND its witnessed-date AND chain-head date
-are both strictly before `ADOPTION_DATE`. The gate is
-`assert_d2d_witness_pre_adoption()` (`algorithm_id.py:223`): a missing
-witness OR a witness dated on/after adoption raises
-`implicit-v1-witness-failure` — the form is rejected, never silently
-downgraded. Accepted legacy acceptance is logged for migration tracking.
+The legacy path (D2c/D2d, §4.5 / §4.3) is **signed, dated, and witnessed**.
+The pre-1.1 scaffold accepted a bare `legacy_path: bool` — a perpetual
+un-sunsetted downgrade channel — and defined `ADOPTION_DATE` but never
+consulted it. The D2c signed-marker regime replaces that: the marker is
+**signed-not-remembered** (EATP-08 §4.3.2), verified inside the gate against a
+configured trusted key rather than trusted as a passed-in value.
+
+`D2dWitness` (`algorithm_id.py:213`) carries the §4.3.1 REQUIRED signed core
+`{principal, first_seen}` bound by `marker_sig`, plus an optional `expires_at`
+and `witness_id` (the back-compat `witnessed_at`/`chain_head_date` remain; the
+claimed `chain_head_date` is corroborated AGAINST the signed `first_seen`, NOT
+part of the signed bytes). `D2dVerifierKeys` (`algorithm_id.py:172`, mirrors
+`MultiSigPolicy.signer_public_keys`) maps `witness_id` → base64 Ed25519 public
+key (+ optional `default_key`) and is the trusted-key resolution surface.
+
+A pre-registry explicit form (`is_pre_registry_form`, `algorithm_id.py:486`) is
+accepted as `eatp-v1` ONLY when ALL five fail-closed checks of
+`assert_d2d_witness_pre_adoption()` (`algorithm_id.py:316`) hold — every
+failure raising `implicit-v1-witness-failure`:
+
+1. **missing** — no witness supplied.
+2. **sig-verify** — `marker_sig` present, `principal` present, a trusted key
+   resolves from `D2dVerifierKeys`, and the Ed25519 signature verifies over
+   `serialize_for_signing({principal, first_seen})`. A passed-in value is NOT
+   trusted; no verifier key configured ⇒ fail closed.
+3. **first_seen-corroboration** — the signed `first_seen` is present and
+   strictly before `ADOPTION_DATE` (a fresh chain cannot obtain a pre-adoption
+   _signed_ `first_seen`, defeating the backdated-`chain_head_date` attack,
+   §4.3.2(3)).
+4. **expiry** — `expires_at` unset or `> now` (tz-safe UTC comparison via
+   `_to_aware_utc`; `now` injectable for tests).
+5. **temporal boundary** — both `witnessed_at` and the claimed
+   `chain_head_date` strictly before `ADOPTION_DATE` (§4.5).
+
+The form is rejected, never silently downgraded; accepted legacy acceptance is
+logged for migration tracking. The marker transport is the
+per-verifier-signing-key form of EATP-08 §4.3 (a transparency log / Foundation
+witness service can later become the marker _source_ without changing this
+verification contract). The decode consumers thread `verifier_keys` alongside
+`witness` (§ 32.4).
 
 ### 32.4 Threaded surface
 
 Every Layer-1 signed-record producer/verifier carries the top-level `alg_id`
-member and decodes it through `decode_wire_alg_id` (witness-aware):
+member and decodes it through `decode_wire_alg_id` (witness- and
+verifier-keys-aware: each consumer's `from_dict` threads both `witness` and
+`verifier_keys` per `rules/security.md` Multi-Site Kwarg Plumbing):
 
 - `src/kailash/trust/pact/envelopes.py` — `SignedEnvelope` (`alg_id` field,
   `envelopes.py:1227`) sign/verify pair.
