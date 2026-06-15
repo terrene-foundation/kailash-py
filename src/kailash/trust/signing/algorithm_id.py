@@ -42,6 +42,7 @@ References
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -434,6 +435,72 @@ def assert_d2d_witness_pre_adoption(
         )
 
 
+# Migration-tracking counter (EATP-08 §7.1). Every Compatible-Legacy D2d
+# acceptance increments this so an operator can quantify how many records still
+# rely on the bounded downgrade path before the marker store + adoption gate
+# fully sunset the legacy form. Read via :func:`d2d_legacy_acceptance_count`.
+_D2D_LEGACY_ACCEPTANCE_COUNT: int = 0
+
+
+def d2d_legacy_acceptance_count() -> int:
+    """Return the count of D2d Compatible-Legacy acceptances this process (§7.1)."""
+
+    return _D2D_LEGACY_ACCEPTANCE_COUNT
+
+
+def _reset_d2d_legacy_acceptance_count() -> None:
+    """Reset the §7.1 migration counter (test-only helper)."""
+
+    global _D2D_LEGACY_ACCEPTANCE_COUNT
+    _D2D_LEGACY_ACCEPTANCE_COUNT = 0
+
+
+def _log_d2d_legacy_acceptance(form_description: str, witness: D2dWitness) -> None:
+    """Log + count a D2d Compatible-Legacy acceptance for migration tracking (§7.1).
+
+    Consolidates the two acceptance log sites (the nested-object `alg_id` form and
+    the unsigned-`algorithm`-metadata form) into one helper.
+
+    Level is **WARN** (`observability.md` Rule 3): a Compatible-Legacy acceptance
+    is a SUCCEEDED-but-DEGRADED path — the record relied on the bounded
+    pre-registry downgrade instead of a conformant top-level `alg_id`, and the
+    operator MUST see it to drive migration before the form sunsets.
+
+    The `principal` is a subject/chain identifier; per `observability.md` Rule 8
+    it is emitted at WARN only as an 8-char SHA-256 hash (WARN-safe correlation
+    without leaking the id to log aggregators) and in full only at DEBUG. The
+    `witnessed_at`/adoption dates are temporal metadata, safe at WARN.
+    """
+
+    global _D2D_LEGACY_ACCEPTANCE_COUNT
+    _D2D_LEGACY_ACCEPTANCE_COUNT += 1
+
+    principal = witness.principal
+    principal_hash = (
+        hashlib.sha256(principal.encode("utf-8")).hexdigest()[:8]
+        if principal is not None
+        else None
+    )
+    logger.warning(
+        "EATP-08 D2d Compatible-Legacy acceptance (§7.1): %s accepted as %r via "
+        "the bounded/witnessed legacy path (witnessed_at=%s < adoption=%s, "
+        "principal_hash=%s, total_legacy_acceptances=%d). Migrate the emitter to "
+        "a conformant top-level alg_id.",
+        form_description,
+        ALGORITHM_DEFAULT,
+        witness.witnessed_at,
+        ADOPTION_DATE,
+        principal_hash,
+        _D2D_LEGACY_ACCEPTANCE_COUNT,
+    )
+    logger.debug(
+        "EATP-08 D2d acceptance detail: principal=%s chain_head_date=%s first_seen=%s",
+        principal,
+        witness.chain_head_date,
+        witness.first_seen,
+    )
+
+
 def is_registered(alg_id: str) -> bool:
     """Return True if ``alg_id`` is a known registry token (any Status)."""
 
@@ -670,17 +737,7 @@ class AlgorithmIdentifier:
             # through to the strict rejection below — shape-mismatch — exactly
             # as the post-adoption default requires.)
             assert_d2d_witness_pre_adoption(witness, verifier_keys=verifier_keys)
-            logger.info(
-                "EATP-08 D2d: accepting pre-registry explicit form %r as "
-                "%r under the bounded/witnessed legacy path "
-                "(witnessed_at=%s, chain_head_date=%s, both < %s); "
-                "re-emitting as the eatp-v1 top-level token.",
-                value,
-                ALGORITHM_DEFAULT,
-                witness.witnessed_at if witness else None,
-                witness.chain_head_date if witness else None,
-                ADOPTION_DATE,
-            )
+            _log_d2d_legacy_acceptance(f"pre-registry explicit form {value!r}", witness)
             return cls(algorithm=ALGORITHM_DEFAULT)
 
         # Post-adoption path (or legacy path with a non-pre-registry value).
@@ -800,15 +857,8 @@ def decode_wire_alg_id(
         ):
             # Enforce ADOPTION_DATE: missing/post-adoption witness rejects.
             assert_d2d_witness_pre_adoption(witness, verifier_keys=verifier_keys)
-            logger.info(
-                "EATP-08 D2d: accepting unsigned `algorithm`=%r metadata as "
-                "%r under the bounded/witnessed legacy path "
-                "(witnessed_at=%s, chain_head_date=%s, both < %s).",
-                legacy_value,
-                ALGORITHM_DEFAULT,
-                witness.witnessed_at,
-                witness.chain_head_date,
-                ADOPTION_DATE,
+            _log_d2d_legacy_acceptance(
+                f"unsigned `algorithm`={legacy_value!r} metadata", witness
             )
             return ALGORITHM_DEFAULT
 
@@ -857,6 +907,7 @@ __all__ = [
     "UnsupportedAlgorithmError",
     "assert_d2d_witness_pre_adoption",
     "coerce_algorithm_id",
+    "d2d_legacy_acceptance_count",
     "decode_wire_alg_id",
     "is_active",
     "is_pre_registry_form",

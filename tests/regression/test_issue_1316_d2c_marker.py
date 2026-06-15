@@ -22,11 +22,14 @@ rules/testing.md, against REAL Ed25519 crypto (PyNaCl) — no mocking.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
+from kailash.trust.signing import algorithm_id as _alg_id_mod
 from kailash.trust.signing.algorithm_id import (
     ADOPTION_DATE_PARSED,
     ALGORITHM_DEFAULT,
@@ -34,6 +37,7 @@ from kailash.trust.signing.algorithm_id import (
     D2dWitness,
     UnsupportedAlgorithmError,
     assert_d2d_witness_pre_adoption,
+    d2d_legacy_acceptance_count,
     decode_wire_alg_id,
 )
 from kailash.trust.signing.crypto import generate_keypair, sign
@@ -296,3 +300,61 @@ def test_signed_witness_no_verifier_keys_through_decode_wire_rejected():
     with pytest.raises(UnsupportedAlgorithmError) as exc:
         decode_wire_alg_id(_NESTED_FORM, witness=_valid_witness(), verifier_keys=None)
     assert exc.value.code == "implicit-v1-witness-failure"
+
+
+# ---------------------------------------------------------------------------
+# Shard 4 — Compatible-Legacy logging (EATP-08 §7.1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_s4_legacy_acceptance_increments_migration_counter():
+    _alg_id_mod._reset_d2d_legacy_acceptance_count()
+    assert d2d_legacy_acceptance_count() == 0
+    decode_wire_alg_id(_NESTED_FORM, witness=_valid_witness(), verifier_keys=_keys())
+    assert d2d_legacy_acceptance_count() == 1
+    # The unsigned-`algorithm`-metadata form also counts.
+    decode_wire_alg_id(
+        {"algorithm": "ed25519+sha256"}, witness=_valid_witness(), verifier_keys=_keys()
+    )
+    assert d2d_legacy_acceptance_count() == 2
+
+
+@pytest.mark.regression
+def test_s4_legacy_acceptance_logs_at_warn(caplog):
+    # §7.1 / observability.md Rule 3: a Compatible-Legacy acceptance is a
+    # degraded path and MUST surface at WARN, not INFO.
+    with caplog.at_level(logging.WARNING, logger=_alg_id_mod.logger.name):
+        decode_wire_alg_id(
+            _NESTED_FORM, witness=_valid_witness(), verifier_keys=_keys()
+        )
+    warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("Compatible-Legacy acceptance" in r.getMessage() for r in warns)
+
+
+@pytest.mark.regression
+def test_s4_principal_hashed_not_raw_at_warn(caplog):
+    # observability.md Rule 8: the principal (a subject/chain id) MUST appear at
+    # WARN only as an 8-char hash, never raw.
+    with caplog.at_level(logging.WARNING, logger=_alg_id_mod.logger.name):
+        decode_wire_alg_id(
+            _NESTED_FORM, witness=_valid_witness(), verifier_keys=_keys()
+        )
+    warn_text = "\n".join(
+        r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+    )
+    expected_hash = hashlib.sha256(_PRINCIPAL.encode("utf-8")).hexdigest()[:8]
+    assert expected_hash in warn_text  # hashed correlation present
+    assert _PRINCIPAL not in warn_text  # raw subject id NOT leaked at WARN
+
+
+@pytest.mark.regression
+def test_s4_principal_full_only_at_debug(caplog):
+    with caplog.at_level(logging.DEBUG, logger=_alg_id_mod.logger.name):
+        decode_wire_alg_id(
+            _NESTED_FORM, witness=_valid_witness(), verifier_keys=_keys()
+        )
+    debug_text = "\n".join(
+        r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG
+    )
+    assert _PRINCIPAL in debug_text  # full principal available at DEBUG only
