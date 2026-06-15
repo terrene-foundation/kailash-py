@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dVerifierKeys,
     D2dWitness,
     coerce_algorithm_id,
     decode_wire_alg_id,
@@ -157,7 +158,11 @@ class CRLMetadata:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+        cls,
+        data: Dict[str, Any],
+        *,
+        witness: Optional[D2dWitness] = None,
+        verifier_keys: Optional[D2dVerifierKeys] = None,
     ) -> "CRLMetadata":
         """Deserialize from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -172,6 +177,8 @@ class CRLMetadata:
             data: Dictionary with CRLMetadata fields
             witness: A :class:`D2dWitness` only when rescuing a pre-registry
                 legacy record; ``None`` (default) means strict.
+            verifier_keys: The :class:`D2dVerifierKeys` config that verifies the
+                witness's ``marker_sig`` (§4.3.2); ``None`` => fail closed.
 
         Returns:
             CRLMetadata instance
@@ -179,7 +186,7 @@ class CRLMetadata:
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, witness=witness)
+        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
         return cls(
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],

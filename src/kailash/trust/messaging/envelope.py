@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional
 
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
+    D2dVerifierKeys,
     D2dWitness,
     decode_wire_alg_id,
 )
@@ -266,7 +267,11 @@ class SecureMessageEnvelope:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], *, witness: Optional[D2dWitness] = None
+        cls,
+        data: Dict[str, Any],
+        *,
+        witness: Optional[D2dWitness] = None,
+        verifier_keys: Optional[D2dVerifierKeys] = None,
     ) -> "SecureMessageEnvelope":
         """
         Deserialize envelope from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
@@ -282,6 +287,8 @@ class SecureMessageEnvelope:
             data: Dictionary representation of the envelope.
             witness: A :class:`D2dWitness` only when rescuing a pre-registry
                 legacy record; ``None`` (default) means strict.
+            verifier_keys: The :class:`D2dVerifierKeys` config that verifies the
+                witness's ``marker_sig`` (§4.3.2); ``None`` => fail closed.
 
         Returns:
             SecureMessageEnvelope instance.
@@ -297,7 +304,7 @@ class SecureMessageEnvelope:
         if data.get("metadata"):
             metadata = MessageMetadata.from_dict(data["metadata"])
 
-        alg_id = decode_wire_alg_id(data, witness=witness)
+        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
 
         return cls(
             message_id=data["message_id"],

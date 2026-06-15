@@ -39,6 +39,7 @@ from kailash.trust.pathutils import normalize_resource_path
 from kailash.trust.signing.algorithm_id import (
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
+    D2dVerifierKeys,
     D2dWitness,
     UnsupportedAlgorithmError,
     coerce_algorithm_id,
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ALGORITHM_DEFAULT",
     "AlgorithmIdentifier",
+    "D2dVerifierKeys",
     "D2dWitness",
     "UnsupportedAlgorithmError",
     "EffectiveEnvelopeSnapshot",
@@ -1333,7 +1335,11 @@ class SignedEnvelope:
 
     @classmethod
     def from_dict(
-        cls, data: dict[str, Any], *, witness: D2dWitness | None = None
+        cls,
+        data: dict[str, Any],
+        *,
+        witness: D2dWitness | None = None,
+        verifier_keys: D2dVerifierKeys | None = None,
     ) -> SignedEnvelope:
         """Deserialize from a dict (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -1359,6 +1365,8 @@ class SignedEnvelope:
             data: Dict as produced by ``to_dict()``.
             witness: A :class:`D2dWitness` only when rescuing a pre-registry
                 legacy record; ``None`` (default) means strict.
+            verifier_keys: The :class:`D2dVerifierKeys` config that verifies the
+                witness's ``marker_sig`` (§4.3.2); ``None`` => fail closed.
 
         Returns:
             A SignedEnvelope instance carrying a registry token.
@@ -1373,7 +1381,7 @@ class SignedEnvelope:
         # Decode + validate alg_id BEFORE other field parsing so a
         # non-conformant token fails loudly rather than paying the cost of
         # envelope reconstruction.
-        alg_id = decode_wire_alg_id(data, witness=witness)
+        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
 
         envelope = ConstraintEnvelopeConfig(**data["envelope"])
 
