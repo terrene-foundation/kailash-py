@@ -72,23 +72,32 @@ def fake_rfc3161ng(monkeypatch):
     The stub mirrors the library contract: it RAISES on a mismatch (the library
     raises rather than returning False), so a token whose hash_value differs
     from the imprint the TSA signed is rejected by the production catch-log-False
-    path. ``data`` is the bytes of ``token.hash_value`` the production code
-    passes; the stub compares it against the imprint embedded in the raw token.
+    path. Production passes the already-computed imprint via ``digest=`` (NOT
+    ``data=`` — ``data`` would be re-hashed by the real library); the stub
+    asserts ``digest`` is bound and compares it against the signed imprint. The
+    real-library round-trip is covered by
+    ``test_issue_1332_rfc3161_live_binding.py``.
     """
 
     class _ValidationError(Exception):
         pass
 
-    def check_timestamp(tst, *, certificate, data, hashname, **kwargs):
+    def check_timestamp(
+        tst, *, certificate, hashname, digest=None, data=None, **kwargs
+    ):
         # Trust anchor + materials must be present (production already gates
         # these, but assert the contract the library would enforce).
         assert certificate == FAKE_CERT
         assert hashname == "sha256"
         assert isinstance(tst, (bytes, bytearray))
+        # Production MUST pass the pre-computed imprint as digest=, not data=
+        # (data= would be double-hashed by the real library). Guard the binding.
+        assert digest is not None, "production must pass digest=, not data="
+        assert data is None, "production must NOT pass data= (it would re-hash)"
         # Simulate imprint verification: the raw token encodes the imprint it
         # was issued for; mismatch => library raises.
         signed_imprint = bytes.fromhex(GOOD_HASH)
-        if data != signed_imprint:
+        if digest != signed_imprint:
             raise _ValidationError("message imprint does not match")
         return True
 
