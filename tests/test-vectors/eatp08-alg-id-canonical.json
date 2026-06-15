@@ -147,13 +147,13 @@
       "sub_cases": [
         {
           "sub_case": "i",
-          "scenario": "principal-chain has prior v2 record",
+          "scenario": "principal-chain has prior v2 record (verifier-supplied prior_registry_form_seen / signed first_v2_seen)",
           "expected": {
             "outcome": "reject",
             "code": "monotonic-upgrade-violation"
           },
-          "covered_by": "test_v6i_strip_prior_v2_monotonic (xfail-strict until Shard 3A)",
-          "status": "deferred-shard-3a"
+          "covered_by": "test_v6i_strip_prior_v2_monotonic",
+          "status": "enforced"
         },
         {
           "sub_case": "ii",

@@ -331,21 +331,12 @@ def test_v9_pre_registry_unsigned_metadata_d2d_accepts():
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "V6 sub-case (i) monotonic-upgrade-violation enforcer lands in Shard 3A "
-        "(#1316): decode_wire_alg_id gains `prior_registry_form_seen: bool` and "
-        "rejects an absent/pre-registry record from a chain with a prior "
-        "registry-form record. xfail-strict per testing.md — auto-fails (XPASS) "
-        "the moment Shard 3A wires it, forcing this marker's removal."
-    ),
-)
 def test_v6i_strip_prior_v2_monotonic():
     """V6 sub-case (i) (§6 / §4.2 / §4.5.3): a stripped record from a principal-
     chain that has previously emitted a registry-form (v2) record MUST reject with
-    monotonic-upgrade-violation. Shard-3A contract: the read-check is surfaced via
-    `decode_wire_alg_id(..., prior_registry_form_seen=True)`."""
+    monotonic-upgrade-violation. Enforced in Shard 3A: the read-check is surfaced
+    via `decode_wire_alg_id(..., prior_registry_form_seen=True)` (was xfail-strict
+    in Shard 2 until the enforcer landed)."""
     with pytest.raises(UnsupportedAlgorithmError) as exc:
         decode_wire_alg_id(
             {"payload": "v2-record-stripped"},
@@ -389,10 +380,11 @@ def test_conformance_vector_coverage_map():
         for name in names:
             assert callable(module.get(name)), f"{vid} missing test {name!r}"
 
-    # V6 sub-cases: ii + iii enforced (named tests present); i deferred to Shard 3A.
+    # V6 sub-cases: all three enforced (named tests present). Sub-case (i) was
+    # xfail-strict in Shard 2 and is enforced as of Shard 3A.
     subs = {s["sub_case"]: s for s in cv["V6"]["sub_cases"]}
-    assert subs["i"]["status"] == "deferred-shard-3a"
-    assert callable(module.get("test_v6i_strip_prior_v2_monotonic"))  # xfail-strict
+    assert subs["i"]["status"] == "enforced"
+    assert callable(module.get("test_v6i_strip_prior_v2_monotonic"))
     assert subs["ii"]["status"] == "enforced"
     assert callable(module.get("test_v6ii_strip_fresh_post_adoption_missing"))
     assert subs["iii"]["status"] == "enforced"

@@ -1340,6 +1340,7 @@ class SignedEnvelope:
         *,
         witness: D2dWitness | None = None,
         verifier_keys: D2dVerifierKeys | None = None,
+        prior_registry_form_seen: bool = False,
     ) -> SignedEnvelope:
         """Deserialize from a dict (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -1381,7 +1382,12 @@ class SignedEnvelope:
         # Decode + validate alg_id BEFORE other field parsing so a
         # non-conformant token fails loudly rather than paying the cost of
         # envelope reconstruction.
-        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
+        alg_id = decode_wire_alg_id(
+            data,
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
+        )
 
         envelope = ConstraintEnvelopeConfig(**data["envelope"])
 

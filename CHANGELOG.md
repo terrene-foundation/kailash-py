@@ -21,6 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signed-record `from_dict` consumer (`SignedEnvelope`, `TimestampToken`,
   `TimestampResponse`, `CRLMetadata`, `SecureMessageEnvelope`). The strict
   post-adoption path (`witness=None`) is unchanged.
+- **EATP-08 §4.5.3 monotonic-upgrade enforcement** (#1316): once a
+  principal-chain has emitted a registry-form (v2 / `eatp-v1`) record, a
+  subsequent absent-`alg_id` or pre-registry explicit form is rejected with the
+  new `monotonic-upgrade-violation` error code — taking precedence over D2a/D2d
+  acceptance and over `missing-alg-id-post-adoption`. `D2dWitness` gains the
+  optional signed-marker field `first_v2_seen` (the §4.3.1 monotonic boundary;
+  included in the `marker_sig` pre-image only when set, so existing two-field
+  `{principal, first_seen}` markers verify unchanged). `decode_wire_alg_id` and
+  `AlgorithmIdentifier.from_dict` gain the `prior_registry_form_seen: bool`
+  parameter (the verifier-supplied prior-v2 signal), threaded through every
+  signed-record `from_dict` consumer. A conformant registry token and a bare
+  unregistered string are unaffected. Marker persistence (the write side that
+  sets the signal) is verifier-integration, not SDK-owned — consistent with the
+  §4.3 implementation-defined marker transport.
+- **EATP-08 §6 conformance vectors V1–V9** (#1316): the canonical cross-SDK
+  vector file (`tests/test-vectors/eatp08-alg-id-canonical.json`) gains a named
+  `conformance_vectors` coverage map (V-id, conformance `level`, spec ref,
+  per-vector test mapping), with behavioral regression tests for the full
+  acceptance bar (V4–V7 + V9, plus V6 sub-cases i/ii/iii). V7 is Conformance
+  level **Complete**; the rest are **Conformant**.
 
 ## [2.33.1] - 2026-06-15
 

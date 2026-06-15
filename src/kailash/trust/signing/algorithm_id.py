@@ -162,6 +162,14 @@ class UnsupportedAlgorithmError(Exception):
     - ``implicit-v1-witness-failure``: a D2d pre-registry form was offered for
       legacy acceptance but the witness is missing or its witnessed/head date
       is not strictly before the adoption date (§4.3.2, §4.5).
+    - ``monotonic-upgrade-violation``: a record without ``alg_id`` OR in a
+      pre-registry explicit form was offered from a principal-chain that has
+      previously emitted a registry-form (v2 / ``eatp-v1``) record — the chain
+      crossed the §4.5.3 monotonic boundary, so the downgrade MUST be rejected
+      (it takes precedence over D2a/D2d acceptance AND over
+      ``missing-alg-id-post-adoption``). The prior-v2 state is supplied by the
+      verifier via ``prior_registry_form_seen=True`` or a resolved
+      :class:`D2dWitness` carrying ``first_v2_seen``.
     """
 
     def __init__(self, code: str, message: str) -> None:
@@ -256,6 +264,18 @@ class D2dWitness:
         witness_id: Optional id selecting which trusted key in
             :class:`D2dVerifierKeys` verifies ``marker_sig`` (§4.3.1 optional
             field). Unset falls back to the config ``default_key``.
+        first_v2_seen: The signed monotonic-upgrade boundary (§4.3.1 / §4.5.3) —
+            the timestamp at which this principal-chain FIRST emitted a
+            registry-form (v2) record. When set, the chain has crossed the
+            monotonic boundary: a subsequent absent-``alg_id`` or pre-registry
+            explicit form is a downgrade and MUST be rejected with
+            ``monotonic-upgrade-violation``. Because a verifier relies on it for a
+            D2 decision it is inside the signed bytes (§4.3.1) — see
+            :meth:`signed_marker_payload`, which includes it in the
+            ``marker_sig`` pre-image when set (markers without it keep the
+            two-field ``{principal, first_seen}`` core, back-compat). The runtime
+            read-check (`decode_wire_alg_id`) also accepts an out-of-band
+            ``prior_registry_form_seen`` bool when no signed marker carries it.
     """
 
     witnessed_at: datetime
@@ -265,6 +285,7 @@ class D2dWitness:
     marker_sig: Optional[str] = None
     expires_at: Optional[datetime] = None
     witness_id: Optional[str] = None
+    first_v2_seen: Optional[datetime] = None
 
     @staticmethod
     def _as_date(value: datetime) -> date:
@@ -279,7 +300,7 @@ class D2dWitness:
         signed ``first_seen``.
         """
 
-        return {
+        payload: Dict[str, Any] = {
             "principal": self.principal,
             "first_seen": (
                 self.first_seen.isoformat()
@@ -287,6 +308,18 @@ class D2dWitness:
                 else self.first_seen
             ),
         }
+        # §4.3.1: a field a verifier relies on for a D2 decision MUST be in the
+        # signed bytes. `first_v2_seen` is signed-when-present so the monotonic
+        # boundary is tamper-proof; markers without it keep the two-field core
+        # (back-compat — existing {principal, first_seen} marker_sigs verify
+        # unchanged). JCS sorts keys, so the pre-image is deterministic.
+        if self.first_v2_seen is not None:
+            payload["first_v2_seen"] = (
+                self.first_v2_seen.isoformat()
+                if isinstance(self.first_v2_seen, datetime)
+                else self.first_v2_seen
+            )
+        return payload
 
     def is_pre_adoption(self) -> bool:
         """True iff BOTH witnessed/claimed dates are strictly before adoption.
@@ -664,6 +697,7 @@ class AlgorithmIdentifier:
         *,
         witness: Optional[D2dWitness] = None,
         verifier_keys: Optional[D2dVerifierKeys] = None,
+        prior_registry_form_seen: bool = False,
     ) -> "AlgorithmIdentifier":
         """Reconstruct from a wire value (EATP-08 §4.5 D2b / D2d).
 
@@ -727,6 +761,28 @@ class AlgorithmIdentifier:
             value: Any = data["alg_id"]
         else:
             value = data
+
+        # Monotonic gate (§4.2 / §4.5.3 / §5.1 step 3): once a principal-chain has
+        # emitted a registry-form (v2) record, a subsequent absent/empty alg_id OR
+        # pre-registry explicit form is a downgrade → monotonic-upgrade-violation.
+        # This takes precedence over the D2d witnessed-acceptance below AND over
+        # missing-alg-id-post-adoption. The prior-v2 state is verifier-supplied:
+        # an explicit `prior_registry_form_seen` flag, OR a resolved marker whose
+        # signed `first_v2_seen` is set (§4.3.1). A bare unregistered string /
+        # non-string shape is NOT a pre-registry form and keeps its
+        # unsupported-algorithm / alg-id-shape-mismatch disposition regardless.
+        prior_v2 = prior_registry_form_seen or (
+            witness is not None and witness.first_v2_seen is not None
+        )
+        if prior_v2 and (is_pre_registry_form(value) or value is None or value == ""):
+            raise UnsupportedAlgorithmError(
+                "monotonic-upgrade-violation",
+                "this principal-chain has previously emitted a registry-form "
+                "record (prior_registry_form_seen / signed first_v2_seen), so a "
+                f"subsequent absent or pre-registry alg_id ({value!r}) is a "
+                "downgrade and MUST be rejected (EATP-08 §4.5.3 / §5.1 step 3); "
+                f"it MUST NOT be accepted as {ALGORITHM_DEFAULT!r} via D2a/D2d.",
+            )
 
         if witness is not None and is_pre_registry_form(value):
             # D2d: a pre-registry explicit form is acceptable ONLY when the
@@ -802,6 +858,7 @@ def decode_wire_alg_id(
     *,
     witness: Optional[D2dWitness] = None,
     verifier_keys: Optional[D2dVerifierKeys] = None,
+    prior_registry_form_seen: bool = False,
 ) -> str:
     """Decode the ``alg_id`` token from a signed-record wire dict.
 
@@ -829,26 +886,59 @@ def decode_wire_alg_id(
             witness's ``marker_sig`` against a configured trusted key (§4.3.2).
             ``None`` (default) => no trusted key resolves => any D2d marker
             fails closed with ``implicit-v1-witness-failure``.
+        prior_registry_form_seen: The verifier-supplied §4.5.3 monotonic signal —
+            ``True`` when this principal-chain has previously emitted a
+            registry-form (v2 / ``eatp-v1``) record. When set (or when ``witness``
+            carries a signed ``first_v2_seen``), an absent-``alg_id`` or
+            pre-registry record is a downgrade and is rejected with
+            ``monotonic-upgrade-violation`` BEFORE any D2a/D2d acceptance or the
+            ``missing-alg-id-post-adoption`` path (§5.1 step 3). Defaults to
+            ``False`` (no prior v2 known — the verifier asserts a fresh chain).
 
     Returns:
         A registry token string (the legacy forms resolve to ``eatp-v1``).
 
     Raises:
         UnsupportedAlgorithmError: ``missing-alg-id-post-adoption``,
-            ``alg-id-shape-mismatch``, ``unsupported-algorithm``, or
-            ``implicit-v1-witness-failure`` per EATP-08 §5.3.
+            ``alg-id-shape-mismatch``, ``unsupported-algorithm``,
+            ``implicit-v1-witness-failure``, or ``monotonic-upgrade-violation``
+            per EATP-08 §5.3.
     """
 
     if "alg_id" in data:
+        # The alg_id-present monotonic + acceptance regime lives in from_dict
+        # (it sees the resolved value); forward the prior-v2 signal so a
+        # pre-registry alg_id from a prior-v2 chain is rejected there.
         return AlgorithmIdentifier.from_dict(
-            data["alg_id"], witness=witness, verifier_keys=verifier_keys
+            data["alg_id"],
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
         ).algorithm
 
-    # No top-level `alg_id` member. A record carrying the algorithm only under
-    # an unsigned top-level `algorithm` key is a D2d pre-registry form
-    # (kailash-py's historical metadata-only shape). It is accepted ONLY when a
-    # dated, signed witness places the chain head strictly before adoption;
-    # otherwise it is a post-adoption record missing its alg_id (D2b).
+    # No top-level `alg_id` member → a "record without alg_id" (§5.3 case 1).
+    # If the chain has already emitted a registry-form record, regressing to an
+    # absent alg_id is a monotonic downgrade — reject BEFORE the D2d
+    # unsigned-`algorithm`-metadata acceptance and before missing-alg-id
+    # (§4.2 / §4.5.3 / §5.1 step 3). Only the dict-level chokepoint can see that
+    # the `alg_id` KEY is absent (from_dict receives only a value).
+    if prior_registry_form_seen or (
+        witness is not None and witness.first_v2_seen is not None
+    ):
+        raise UnsupportedAlgorithmError(
+            "monotonic-upgrade-violation",
+            "signed record carries no top-level `alg_id`, but this "
+            "principal-chain has previously emitted a registry-form record "
+            "(prior_registry_form_seen / signed first_v2_seen); regressing to an "
+            "absent alg_id is a §4.5.3 monotonic downgrade and MUST be rejected, "
+            f"not accepted as {ALGORITHM_DEFAULT!r} via D2a/D2d.",
+        )
+
+    # A record carrying the algorithm only under an unsigned top-level
+    # `algorithm` key is a D2d pre-registry form (kailash-py's historical
+    # metadata-only shape). It is accepted ONLY when a dated, signed witness
+    # places the chain head strictly before adoption; otherwise it is a
+    # post-adoption record missing its alg_id (D2b).
     if "algorithm" in data:
         legacy_value = data["algorithm"]
         if witness is not None and (

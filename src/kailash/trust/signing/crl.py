@@ -163,6 +163,7 @@ class CRLMetadata:
         *,
         witness: Optional[D2dWitness] = None,
         verifier_keys: Optional[D2dVerifierKeys] = None,
+        prior_registry_form_seen: bool = False,
     ) -> "CRLMetadata":
         """Deserialize from dictionary (EATP-08 §4.2 D2b / §4.5 D2d).
 
@@ -186,7 +187,12 @@ class CRLMetadata:
         Raises:
             UnsupportedAlgorithmError: per EATP-08 §5.3.
         """
-        alg_id = decode_wire_alg_id(data, witness=witness, verifier_keys=verifier_keys)
+        alg_id = decode_wire_alg_id(
+            data,
+            witness=witness,
+            verifier_keys=verifier_keys,
+            prior_registry_form_seen=prior_registry_form_seen,
+        )
         return cls(
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],
