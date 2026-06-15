@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.1] - 2026-06-15
+
+### Fixed
+
+- **`get_namespace_annotations` now resolves class-body annotations on Python 3.14 final (PEP 749) (#1318).** PEP 749 (Python 3.14 final) renamed the lazy class-namespace annotate callable from the 3.14-beta `__annotate__` to `__annotate_func__` (and added the eager cache `__annotations_cache__`). `kailash.utils.annotations.get_namespace_annotations` read only `__annotations__` then `__annotate__`, so both lookups missed on 3.14 final and it fell through to `{}` — every class-based `kaizen.signatures.core.Signature` silently lost its declared fields and raised `ValueError: Either define fields as class attributes or provide inputs/outputs` at first instantiation. The helper now also reads `__annotate_func__` and `__annotations_cache__`, resolving on every 3.14 pre-release and the final. HIGH severity on Python 3.14; no effect on ≤3.13 (those interpreters set `__annotations__` eagerly, which is why the bug shipped unseen). Regression tests simulate the 3.14-final namespace shape so they assert the fix on every interpreter, plus a real metaclass-namespace test that exercises the native PEP 749 namespace on the 3.14 CI leg.
+
 ## [2.33.0] - 2026-06-15
 
 ### Added
