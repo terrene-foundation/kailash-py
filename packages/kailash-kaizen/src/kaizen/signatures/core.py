@@ -146,9 +146,10 @@ class SignatureMeta(type):
                 output_fields.update(base._signature_outputs)
 
         # Now process current class's fields (overrides parent fields).
-        # PEP 649 (Python 3.14+) makes annotations lazy via __annotate__;
-        # the shared helper reads both eager (<=3.13) and lazy (>=3.14)
-        # forms so signatures keep working under both annotation models.
+        # PEP 649/749 (Python 3.14+) makes annotations lazy: 3.14-beta emitted
+        # __annotate__, 3.14-final renamed it to __annotate_func__. The shared
+        # helper reads both eager (<=3.13) and lazy (>=3.14, beta + final)
+        # forms so signatures keep working under every annotation model.
         annotations = get_namespace_annotations(namespace)
         for field_name, field_type in annotations.items():
             field_value = namespace.get(field_name)
