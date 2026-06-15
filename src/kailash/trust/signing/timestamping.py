@@ -890,7 +890,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
             return False
 
         try:
-            data = bytes.fromhex(token.hash_value)
+            imprint = bytes.fromhex(token.hash_value)
         except (TypeError, ValueError):
             logger.warning(
                 "RFC3161 verify: token hash_value is not valid hex — failing closed."
@@ -898,10 +898,16 @@ class RFC3161TimestampAuthority(TimestampAuthority):
             return False
 
         try:
+            # `token.hash_value` IS the pre-computed message imprint (the hash
+            # the TSA timestamped), so it MUST be passed as ``digest=`` — NOT
+            # ``data=``. ``check_timestamp(data=...)`` hashes its argument with
+            # ``hashname`` before comparing to the token's imprint; passing an
+            # already-hashed imprint as ``data`` would double-hash it and reject
+            # every valid token. ``digest=`` compares the imprint directly.
             verified = rfc3161ng.check_timestamp(
                 raw_token,
                 certificate=self._certificate,
-                data=data,
+                digest=imprint,
                 hashname="sha256",
             )
         except Exception as e:  # noqa: BLE001 — fail closed on ANY crypto error

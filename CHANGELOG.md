@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.2] - 2026-06-15
+
+### Fixed
+
+- **RFC-3161 `verify_timestamp` correctness — `digest=` binding** (#1332
+  follow-up): the 2.34.1 fix passed the token's pre-computed message imprint to
+  `rfc3161ng.check_timestamp` as `data=`, which the library **re-hashes** before
+  comparison — so with `rfc3161ng` actually installed, every _valid_ token was
+  rejected (the verification was fail-closed/safe but non-functional). It now
+  passes the imprint as `digest=` (compared directly), so a genuine TSA-signed
+  token verifies `True` while a tampered imprint or untrusted certificate is
+  rejected. Surfaced by a new live-binding regression test that runs against a
+  real `rfc3161ng` + a real `openssl ts`-minted token/cert fixture — the offline
+  stub used in 2.34.1 could not catch the data-vs-digest semantics. The
+  `rfc3161` extra is now installed in the trust-tests CI job so the real-library
+  binding is verified on every trust-touching PR.
+
 ## [2.34.1] - 2026-06-15
 
 ### Fixed

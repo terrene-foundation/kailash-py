@@ -57,7 +57,7 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          uv pip install -e ".[trust,dev]"
+          uv pip install -e ".[trust,rfc3161,dev]"
           uv pip install -e "packages/kailash-kaizen[dev]"
           uv pip install -e "packages/kailash-dataflow[dev]"
           uv pip install -e "packages/kailash-nexus[dev]"
@@ -71,6 +71,16 @@ jobs:
             -v --tb=short --timeout=60 \
             --junitxml=reports/core-trust-results.xml \
             2>&1 | tee reports/core-trust.log
+        continue-on-error: false
+
+      - name: Run RFC-3161 Timestamp Verification Tests (#1332)
+        run: |
+          .venv/bin/python -m pytest \
+            tests/regression/test_issue_1332_rfc3161_verify_fail_closed.py \
+            tests/regression/test_issue_1332_rfc3161_live_binding.py \
+            -v --tb=short --timeout=60 \
+            --junitxml=reports/rfc3161-results.xml \
+            2>&1 | tee reports/rfc3161.log
         continue-on-error: false
 
       - name: Run Kaizen Trust Unit Tests
