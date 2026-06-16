@@ -11,17 +11,26 @@ module behind the ``[redis]`` extra so a slim-core install never pays for
 
 Mechanism:
 
-* **acquire** — ``SET lock:{key} {owner} NX PX {ttl_ms}`` claims the key
-  atomically only when free; on success ``INCR fence:{key}`` yields the
-  strictly-monotonic fencing token.  The ``fence:{key}`` counter is a separate
-  key with NO expiry, so the token survives lock churn (release / native
-  expiry / steal) and is therefore strictly increasing and NEVER reset.
-* **release** — a Lua compare-owner-then-DEL script: deletes the lock key
-  only when its value still equals this owner, so a holder whose lease expired
-  and was stolen can never delete the new holder's lock.
-* **extend** — a Lua compare-owner-then-PEXPIRE script: pushes out the TTL
-  only while still owned.
+* **acquire** — ``INCR fence:{key}`` first yields the strictly-monotonic
+  fencing token, then ``SET lock:{key} {owner}:{token} NX PX {ttl_ms}`` claims
+  the key atomically only when free, storing the COMPOSITE ``{owner}:{token}``
+  value.  The ``fence:{key}`` counter is a separate key with NO expiry, so the
+  token survives lock churn (release / native expiry / steal) and is therefore
+  strictly increasing and NEVER reset.  A contended ``SET NX`` after a
+  successful ``INCR`` simply leaves a gap in the fence sequence — harmless,
+  since fencing tokens need only be strictly monotonic, not gap-free.
+* **release** — a Lua compare-composite-then-DEL script: deletes the lock key
+  only when its value still equals this ``{owner}:{token}`` composite, so a
+  holder whose lease expired and was stolen (different owner OR different
+  token) can never delete the new holder's lock.
+* **extend** — a Lua compare-composite-then-PEXPIRE script: pushes out the TTL
+  only while still owned at the same token.
 * **expiry** — native (the ``PX`` on the SET); no reaper thread is needed.
+
+Storing the full ``{owner}:{token}`` composite (rather than ``owner`` alone)
+keeps the SQL and Redis backends semantically identical under the one
+``LockBackend`` Protocol: BOTH gate release / extend on ``owner`` AND
+``fencing_token`` (EATP-D6 cross-backend parity).
 
 Honesty note (read before relying on this in a multi-node Redis topology):
 this is a **single-instance** (or single-primary + replicas) lock, NOT the
@@ -46,8 +55,9 @@ __all__ = [
     "RedisLockBackend",
 ]
 
-# Lua: delete the lock key only if its current value matches this owner.
-# Returns 1 if deleted, 0 if owner mismatch / key absent.
+# Lua: delete the lock key only if its current value matches this
+# ``{owner}:{token}`` composite. Returns 1 if deleted, 0 if composite mismatch
+# (different owner OR different token) / key absent.
 _RELEASE_LUA = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then
     return redis.call('DEL', KEYS[1])
@@ -56,8 +66,9 @@ else
 end
 """
 
-# Lua: PEXPIRE the lock key only if its current value matches this owner.
-# Returns 1 if the TTL was set, 0 if owner mismatch / key absent.
+# Lua: PEXPIRE the lock key only if its current value matches this
+# ``{owner}:{token}`` composite. Returns 1 if the TTL was set, 0 if composite
+# mismatch / key absent.
 _EXTEND_LUA = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then
     return redis.call('PEXPIRE', KEYS[1], ARGV[2])
@@ -133,6 +144,16 @@ class RedisLockBackend:
     def _fence_key(self, key: str) -> str:
         return f"{self._namespace}:fence:{key}"
 
+    @staticmethod
+    def _composite(owner: str, token: int) -> str:
+        """The ``{owner}:{token}`` value stored under the lock key.
+
+        Release / extend compare this whole composite, so a stale holder whose
+        lease was stolen (which mints a NEW owner AND a NEW token) cannot match
+        — gating on owner AND token identically to the SQL backend.
+        """
+        return f"{owner}:{token}"
+
     def _require_client(self) -> Any:
         if self._client is None:
             raise RuntimeError(
@@ -151,15 +172,23 @@ class RedisLockBackend:
 
         Native ``PX`` expiry means an expired lock is automatically free for
         the next ``SET NX`` — that IS the steal-if-expired behaviour, with no
-        reaper.  On success ``INCR`` on the (never-expiring) fence counter
-        yields the strictly-monotonic token.
+        reaper.  ``INCR`` on the (never-expiring) fence counter runs FIRST to
+        mint the strictly-monotonic token, then the lock value stored is the
+        ``{owner}:{token}`` composite so release / extend can gate on BOTH
+        owner and token (SQL-backend parity).  A contended ``SET NX`` after a
+        successful ``INCR`` leaves a harmless gap in the fence sequence.
         """
         client = self._require_client()
         ttl_ms = max(1, int(ttl_seconds * 1000))
-        acquired = await client.set(self._lock_key(key), owner, nx=True, px=ttl_ms)
+        token = int(await client.incr(self._fence_key(key)))
+        acquired = await client.set(
+            self._lock_key(key),
+            self._composite(owner, token),
+            nx=True,
+            px=ttl_ms,
+        )
         if not acquired:
             return None
-        token = await client.incr(self._fence_key(key))
         logger.debug(
             "lock.acquire key=%s owner=%s token=%d ttl=%ds",
             key,
@@ -167,17 +196,20 @@ class RedisLockBackend:
             token,
             ttl_seconds,
         )
-        return int(token)
+        return token
 
     async def release(self, key: str, owner: str, token: int) -> bool:
-        """Release the lock iff still owned by ``owner`` (compare-then-DEL).
+        """Release the lock iff still held at this ``{owner}:{token}`` composite.
 
-        The ``token`` argument is accepted for Protocol parity; correctness on
-        Redis rests on the owner check (the owner uuid is unique per acquire,
-        so it already distinguishes a stale holder from the current one).
+        The Lua compare-then-DEL gates on the full ``{owner}:{token}`` value,
+        so a stale holder whose lease was stolen (different owner OR different
+        token) can never delete the new holder's lock — gating on owner AND
+        token identically to the SQL backend.
         """
         self._require_client()
-        result = await self._release_script(keys=[self._lock_key(key)], args=[owner])
+        result = await self._release_script(
+            keys=[self._lock_key(key)], args=[self._composite(owner, token)]
+        )
         released = bool(result)
         logger.debug(
             "lock.release key=%s owner=%s token=%d released=%s",
@@ -189,11 +221,16 @@ class RedisLockBackend:
         return released
 
     async def extend(self, key: str, owner: str, token: int, ttl_seconds: int) -> bool:
-        """Extend the lease TTL iff still owned (compare-then-PEXPIRE)."""
+        """Extend the lease TTL iff still held at this ``{owner}:{token}``.
+
+        The Lua compare-then-PEXPIRE gates on the full composite, so a stale
+        holder cannot extend a lock another worker now owns.
+        """
         self._require_client()
         ttl_ms = max(1, int(ttl_seconds * 1000))
         result = await self._extend_script(
-            keys=[self._lock_key(key)], args=[owner, ttl_ms]
+            keys=[self._lock_key(key)],
+            args=[self._composite(owner, token), ttl_ms],
         )
         extended = bool(result)
         logger.debug(
