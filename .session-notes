@@ -1,80 +1,46 @@
-# Session Notes — 2026-06-09/10
+# Session Notes — 2026-06-16
 
 ## Where we are
 
-RAG provably-correct remediation (F31), driven hard this session. TWO waves landed, both
-working-tree-only (BUILD repo — ALL held UNCOMMITTED; commit stays with the user):
-
-1. **Wave 2 (L3 input-side) — COMPLETE (5 shards converged).** 19 LLM stages across eval /
-   query_processing / agentic / graph / workflows now CONSUME retrieved/query context via the valid
-   `messages` port (was system-prompt-only). Receipts:
-   `workspaces/kaizen-rag-node-coverage/04-validate/14-wave-2-l3-2026-06-09.md`.
-2. **Output-side wave — scoped + shard O1 (eval) CONVERGED.** The output side was systematically broken
-   the same way the input side was (LLM publishes on `response={"content":"<json>"}`; downstream read the
-   wrong port / never parsed the JSON / dropped the output). eval is fixed (real parsed per-test scores,
-   xfail retired); O2-O5 queued. Receipts:
-   `workspaces/kaizen-rag-node-coverage/04-validate/15-wave-output-side-2026-06-09.md`.
+Clean released terminus: `main` == PyPI. This session shipped **kailash-dataflow
+2.12.0** (#1337 — standalone callable masking + record-agnostic redaction;
+PR #1344, tag `dataflow-v2.12.0`, clean-venv verified). Next in the parity
+queue: **#1336** (gateway middleware — large, see Traps), then #1338.
 
 ## Read first
 
-1. `04-validate/15-wave-output-side-2026-06-09.md` — START HERE: the output-side defect taxonomy
-   (Class A wrong-port / Class B parse-gap), per-node disposition table, O1 receipt, O2-O5 scope.
-2. `04-validate/14-wave-2-l3-2026-06-09.md` — Wave-2 L3 receipts + the G2/G4 learning + forest items
-   (F31-FU1 graph orphaned summary, F31-FU2 composer unit tests, F31-FU3 workflows analyzer output).
-3. `packages/kailash-kaizen/src/kaizen/nodes/rag/evaluation.py` — the reference template for BOTH the
-   L3 messages-composer pattern AND the output-side response-parser pattern (3 parsers: `response →
-   .content → json.loads` with typed parse-error sentinels excluded from means).
+1. GH issues **#1336** (gateway middleware — next) and **#1338** (tenant topic) — the remaining parity queue. #1337 is CLOSED/COMPLETED.
+2. `packages/kailash-dataflow/src/dataflow/classification/masking.py` — the #1337 deliverable (reuse the free-fn + delegation pattern + brief-correction approach if #1338 touches the same surface).
+3. `workspaces/issue-1337-masking-callables-py/02-plans/01-plan.md` — the #1337 brief-correction + gap analysis (the model for verifying parity-issue claims before planning).
+4. `SWEEP-2026-06-16.md` — sweep findings + the held workspace-records backlog (F5).
 
-## In-flight state (next session)
+## In-flight state
 
-Output-side wave, value-ranked (anchor: brief "provably correct"):
-- **O2 — workflows.py (BROKEN):** `rag_strategy_analyzer.result → strategy_executor/results_aggregator`
-  reads the wrong port (LLM publishes `response`) + needs a JSON parser so `{recommended_strategy}` drives
-  the SwitchNode. (= F31-FU3.)
-- **O3 — graph.py (BROKEN):** `graph_builder` iterates the unparsed `response` dict, not the entity JSON in
-  `response.content`; + `summary_generator.response → result_synthesizer.global_summaries` accepted-but-unread
-  (F31-FU1). Full graph can't run (networkx sandbox) → structural+standalone-probe proof per L3 precedent.
-- **O4 — query_processing.py (verify→fix):** 6 processors assign raw `response`; confirm/parse per-processor.
-- **O5 — agentic.py + conversational.py — VERIFY-ONLY** (audit says CORRECT; confirm + close).
-
-Fix shape per stage: insert a from_function response-parser (read `response` → `.content` → `json.loads`
-with a TYPED parse-error sentinel — never a fabricated default) between the LLM stage and its
-structured-field consumer; re-wire the consumer; end-to-end test asserts REAL parsed values reach the
-consumer (red-pre: raw response → consumer gets defaults). Same shard+redteam-to-convergence discipline.
+- **Workspace-records backlog STILL HELD for user decision** (F5, per SWEEP-2026-06-16): untracked
+  `workspaces/*` dirs incl. journals named `*cross-repo-authorized*` referencing the PRIVATE
+  Rust SDK repo (location in auto-memory) — do NOT bulk-commit; user adjudicating disclosure.
+- New untracked workspace this session: `issue-1337-masking-callables-py/` (no private-repo refs;
+  held consistent with the F5 hold — only src+tests+CHANGELOG were committed in PR #1344).
 
 ## Outstanding ledger (forest)
 
-| ID  | Item | Value-anchor | Status |
-| --- | ---- | ------------ | ------ |
-| F31 | RAG provably-correct remediation | brief "provably correct, not merely importable" + user approvals 2026-06-08/09 | Wave 2 (L3) DONE-held; output-side O1 DONE-held; O2-O5 queued |
-| F31-FU1 | graph summary_generator output orphaned (result_synthesizer never reads global_summaries) | brief "provably correct" | folded into O3 |
-| F31-FU3 | workflows analyzer output mis-wired (reads `result` not `response`; needs parser) | brief "provably correct" | folded into O2 |
-| F31-FU2 | composers/parsers lack DIRECT unit tests (proven via integration) | testing.md "one direct test per variant" | wave-level hardening (codify pass) |
-| (orig) Wave 3 from_function migration / Wave 4 simulated-node strip-vs-build (PRODUCT CALL) | brief + 13-re-analysis-decision | still queued after output-side wave |
-| F3/F1/F10/F12/F24/F26/F27 | (unchanged from prior notes — loom/Foundation/cross-SDK blocked items) | per prior | unchanged |
+| ID | Item | Value-anchor (MUST-1 source) | Status |
+| -- | ---- | ---------------------------- | ------ |
+| F2 | log-triage-gate `EXCLUDED_FILES` fix must ALSO land at **loom** + `/sync-to-build` | prior-session user directive (literal quote): "resolve this... it will keep alarming" | OPEN — needs a loom session (cross-repo) |
+| F3 | Cross-SDK: inspect kailash-rs for the RFC-3161 fail-open + digest-binding bug | #1332 acceptance criterion 4 (user-approved issue) | OPEN — owner handles in a kailash-rs session |
+| F4 | Cross-SDK parity queue: **#1336 (gateway, NEXT)** → #1338 (tenant topic) | user quote: "approved, /wrapup for fresh session" + the GH issues | QUEUED — #1336 first (#1337 DONE) |
+| F5 | Workspace-records backlog disposition (commit vs gitignore the untracked `workspaces/*` + a 2.35.0/2.12.0 deploy record) | SWEEP-2026-06-16 § recommendations; user holding decision | OPEN — user gate |
 
-Closed this session: none (BUILD repo — all advances held uncommitted; multi-session program).
+Shipped this session: `#1337` → PR #1344 + tag `dataflow-v2.12.0` (PyPI, clean-venv verified) → issue CLOSED/COMPLETED.
 
 ## Traps
 
-- kaizen has its OWN venv: `packages/kailash-kaizen/.venv/bin/python` — never bare python.
-- **kaizen venv lacks the optional in-repo `kaizen-agents` package** → `tests/regression/test_issue_1071/
-  357/486/822` (~22 tests) fail environmentally (kaizen.api/BaseAgent), ORTHOGONAL to RAG. A `--no-deps`
-  editable install left it unimportable (`No module named 'openai'`); a full install needs the agents dep
-  tree. Recommend a deliberate `uv sync` of the kaizen venv with the agents extra as a SEPARATE
-  env-setup step (changes the venv dep tree — user-gated). The RAG suite (`tests/unit/rag tests/integration/
-  rag`, currently 908 passed + 0 xfailed) is the trustworthy gate for this program.
-- DO NOT edit `src/kailash/nodes/base.py` for the `from_function`-on-`type[Node]` pyright hint — cascades
-  hundreds of pre-existing non-gating diagnostics. Project gates ruff+pytest ONLY (mypy hook commented out
-  `.pre-commit-config.yaml:217-223`; pyright not a gate). `# type: ignore[attr-defined]` on from_function
-  call lines is the established pattern across all converged shards.
-- LLMAgentNode output contract: publishes on the **`response`** port = `{"content":"<text or JSON string>"}`
-  (+ success/usage/metadata). Does NOT auto-parse JSON. Correct downstream: read `response` → `.get("content")`
-  → `json.loads` if the prompt asked for JSON → typed sentinel on failure (never a fabricated default).
-- 2 agentic `httpserver` test-collection errors are PRE-EXISTING (pytest-httpserver undeclared) — out of scope.
-- L3 + output-side playbook (from redteam): (1) verify EVERY stage of a node; (2) the test MUST exercise the
-  PRODUCTION delivery path (top-level input → auto-distribute), NOT node-keyed injection (false-green trap);
-  (3) parse-failures MUST be flagged honestly (typed sentinel + excluded from aggregates), never a fabricated
-  0/empty masquerading as real; (4) non-runnable graphs (cycle/sandbox/vector-DB) → structural wiring
-  assertion + standalone-composer probe (reviewer-validated load-bearing technique).
-- BUILD repo: commits stay with user; working-tree edits only.
+- **#1336 is a 5-CLUSTER parity ASSESSMENT, not a single fix** — rate-limit / exception→HTTP / per-request metrics / CSP / session store, across `kailash.gateway`/`channels`/`middleware`/`servers`. It is a ≥3-issue brief → MUST run parallel brief-claim verification (one agent per cluster) per agents.md BEFORE planning, AND it is Nexus-domain (delegate to nexus-specialist). Likely multi-shard. Start it FRESH — do not cram into a context-heavy tail.
+- **Parity issues are framed from the Rust/Foundation side and are routinely OVERSTATED** — #1335 was ~5× over (already-conformant); #1337 AC1 was ~80% already-present (the real home was `kailash-dataflow`, not core `kailash` where the issue probed). VERIFY every claim against kailash-py source before planning; the issue's "probed surface" may have probed the wrong namespace.
+- **`#1337` IS CLOSED/COMPLETED** — masking primitives shipped in `dataflow.classification.masking`. Do NOT re-open/re-implement. If #1338 needs masking, import from there.
+- Framework `kailash>=` pins are need-based floors, NOT lockstepped to core — kailash-dataflow's pin stayed `kailash>=2.28.0` on the 2.12.0 release (core is 2.35.0). Do NOT bump sibling pins on an unrelated release.
+- The harness diagnostics LSP shows a stale-index `dataflow.classification.masking could not be resolved` false-positive after adding a new module — runtime + CI mypy resolve it fine (editable install). Don't chase it.
+
+## Open questions for the human
+
+- Workspace-records backlog (F5): commit the institutional `workspaces/*` + add a deploy record, or gitignore? Blocked on the private-repo-reference disclosure call.
