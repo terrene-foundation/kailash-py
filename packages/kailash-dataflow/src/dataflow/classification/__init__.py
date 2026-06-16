@@ -35,6 +35,14 @@ from dataflow.classification.event_payload import (
     format_error_for_event,
     format_record_id_for_event,
 )
+from dataflow.classification.masking import (
+    RedactionFilter,
+    hash_value,
+    last_four,
+    redact,
+    redact_mapping,
+    redact_text,
+)
 from dataflow.classification.policy import (
     ClassificationPolicy,
     FieldClassification,
@@ -62,6 +70,13 @@ __all__ = [
     "apply_read_classification",
     "format_record_id_for_event",
     "format_error_for_event",
+    # Standalone masking primitives (public API — cross-SDK parity, GH #1337)
+    "hash_value",
+    "last_four",
+    "redact",
+    "redact_text",
+    "redact_mapping",
+    "RedactionFilter",
 ]
 
 __version__ = "0.2.0"

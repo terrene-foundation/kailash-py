@@ -11,8 +11,9 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
+from dataflow.classification.masking import hash_value, last_four, redact
 from dataflow.classification.types import (
     DataClassification,
     MaskingStrategy,
@@ -343,7 +344,9 @@ class ClassificationPolicy:
         return caller_idx >= field_idx
 
     @staticmethod
-    def apply_masking_strategy(value: Any, strategy: MaskingStrategy) -> Any:
+    def apply_masking_strategy(
+        value: Any, strategy: Union[MaskingStrategy, str]
+    ) -> Any:
         """Apply a ``MaskingStrategy`` to a single value.
 
         ``NONE`` returns the value unchanged. ``REDACT`` replaces with
@@ -353,23 +356,22 @@ class ClassificationPolicy:
         sentinel ``"[ENCRYPTED]"`` — true ciphertext is produced at
         the storage layer, not here.
         """
+        # Algorithms are owned by the standalone, directly-callable primitives
+        # in ``dataflow.classification.masking`` (GH #1337). This method is the
+        # classification-aware enum dispatch over those primitives — they stay
+        # byte-for-byte aligned because both paths call the same functions.
         if value is None:
             return None
         if strategy == MaskingStrategy.NONE:
             return value
         if strategy == MaskingStrategy.REDACT:
-            return "[REDACTED]"
+            return redact()
         if strategy == MaskingStrategy.ENCRYPT:
             return "[ENCRYPTED]"
         if strategy == MaskingStrategy.HASH:
-            import hashlib
-
-            return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+            return hash_value(value)
         if strategy == MaskingStrategy.LAST_FOUR:
-            text = str(value)
-            if len(text) <= 4:
-                return "*" * len(text)
-            return "*" * (len(text) - 4) + text[-4:]
+            return last_four(value)
         # Unknown strategy — fail closed.
         return "[REDACTED]"
 

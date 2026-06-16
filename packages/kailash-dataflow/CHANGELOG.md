@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.12.0] — 2026-06-16 — Standalone callable masking + record-agnostic redaction (#1337)
+
+### Added
+
+- **Directly-callable masking primitives over arbitrary strings (#1337).** New module `dataflow.classification.masking` exposes `hash_value(value, salt=None, length=None)`, `last_four(value)`, and `redact(value=None)` as free functions usable with no `ModelDefinition` and no pipeline. `hash_value` adds **HMAC-SHA256 salt support** (the legacy `MaskingStrategy.HASH` path is plain SHA-256, rainbow-table-reversible for low-entropy PII like SSN / card / phone); supply `salt=` to pin the digest per-tenant. All three are exported from `dataflow.classification`. Cross-SDK parity with `kailash.dataflow` masking in kailash-rs (#1350 / #1351).
+- **Record-agnostic redaction for logs / telemetry (#1337).** New `redact_text(text, patterns, *, strategy, salt)` redacts regex matches in arbitrary text; `redact_mapping(mapping, *, keys, patterns, strategy, salt)` redacts a telemetry dict by sensitive key name and/or value pattern (recurses into nested mappings AND list/tuple values, with safe pass-through of non-mapping input); and `RedactionFilter(logging.Filter)` is a drop-in standard-library logging filter that applies pattern redaction to the rendered message and key/pattern redaction to a `Mapping` positional arg. Unlike `ClassificationPolicy.apply_masking_to_record`, none require a registered model. All exported from `dataflow.classification`.
+
+### Changed
+
+- **`ClassificationPolicy.apply_masking_strategy` now delegates to the standalone masking primitives (#1337).** The HASH / LAST_FOUR / REDACT algorithms are owned by `dataflow.classification.masking`; the policy method is the classification-aware enum dispatch over them. **Behavior-preserving** — verified byte-for-byte (HASH → 64-char SHA-256 hex, LAST_FOUR → mask-all-but-final-4, REDACT → `"[REDACTED]"`, unknown → fail-closed `"[REDACTED]"`); the method additionally accepts a raw string strategy value (`MaskingStrategy` is a `str`-Enum). The 25 existing classification mutation-return / event-payload / fail-closed tests pass unchanged.
+
 ## [2.11.3] — 2026-06-06 — Type-introspection consolidation (#772)
 
 ### Changed
