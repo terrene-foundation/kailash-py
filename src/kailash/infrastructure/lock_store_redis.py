@@ -109,7 +109,9 @@ class RedisLockBackend:
             ) from exc
 
         if self._client is None:
-            self._client = aioredis.from_url(self._url)
+            # redis-py leaves `from_url` untyped in its stubs (returns Any);
+            # the targeted ignore acknowledges the upstream gap, not a missing module.
+            self._client = aioredis.from_url(self._url)  # type: ignore[no-untyped-call]
             # register_script returns an AsyncScript callable bound to the client.
             self._release_script = self._client.register_script(_RELEASE_LUA)
             self._extend_script = self._client.register_script(_EXTEND_LUA)
