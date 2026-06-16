@@ -36,7 +36,8 @@ __all__ = [
 
 # Current schema version for the infrastructure tables.
 # Bump this when adding new tables or altering existing schemas.
-SCHEMA_VERSION = 1
+# v2: added the ``kailash_locks`` table (DBLockBackend / DistributedLock).
+SCHEMA_VERSION = 2
 
 
 class StoreFactory:
