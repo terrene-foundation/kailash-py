@@ -159,6 +159,10 @@ class TestPostgresDialect:
         result = dialect.for_update_skip_locked()
         assert result == "FOR UPDATE SKIP LOCKED"
 
+    # -- for_update (blocking row lock) --
+    def test_for_update(self, dialect: PostgresDialect):
+        assert dialect.for_update() == "FOR UPDATE"
+
     # -- timestamp_now --
     def test_timestamp_now(self, dialect: PostgresDialect):
         assert dialect.timestamp_now() == "NOW()"
@@ -246,6 +250,10 @@ class TestMySQLDialect:
     def test_for_update_skip_locked(self, dialect: MySQLDialect):
         result = dialect.for_update_skip_locked()
         assert result == "FOR UPDATE SKIP LOCKED"
+
+    # -- for_update (blocking row lock) --
+    def test_for_update(self, dialect: MySQLDialect):
+        assert dialect.for_update() == "FOR UPDATE"
 
     # -- timestamp_now --
     def test_timestamp_now(self, dialect: MySQLDialect):
@@ -336,6 +344,11 @@ class TestSQLiteDialect:
         """SQLite does not support SKIP LOCKED; returns empty string."""
         result = dialect.for_update_skip_locked()
         assert result == ""
+
+    # -- for_update (blocking row lock) --
+    def test_for_update(self, dialect: SQLiteDialect):
+        """SQLite serializes writers via BEGIN IMMEDIATE; no per-row clause."""
+        assert dialect.for_update() == ""
 
     # -- timestamp_now --
     def test_timestamp_now(self, dialect: SQLiteDialect):

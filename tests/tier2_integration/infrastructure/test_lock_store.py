@@ -109,9 +109,9 @@ async def lock(request):
 
         conn = ConnectionManager(POSTGRES_TEST_URL)
         await conn.initialize()
-        # Fresh tables per test for isolation.
+        # Fresh table per test for isolation (single-table design — the fence
+        # lives in the lock row, so there is no companion table to drop).
         await conn.execute("DROP TABLE IF EXISTS kailash_locks")
-        await conn.execute("DROP TABLE IF EXISTS kailash_lock_fence")
         backend = DBLockBackend(conn)
         await backend.initialize()
         lock = DistributedLock(backend, default_ttl_seconds=30)
@@ -120,7 +120,6 @@ async def lock(request):
             yield lock
         finally:
             await conn.execute("DROP TABLE IF EXISTS kailash_locks")
-            await conn.execute("DROP TABLE IF EXISTS kailash_lock_fence")
             await lock.close()
             await conn.close()
 
@@ -266,6 +265,22 @@ class TestExtend:
         # The legitimate holder can extend.
         assert await lock.extend(stolen, ttl_seconds=30) is not None
 
+    async def test_extend_after_native_expiry_returns_none(self, lock):
+        # L2: distinct from loss-via-steal — here the lease lapses NATIVELY
+        # with NO stealer. The lock simply expires; nobody re-acquires it.
+        # extend MUST still report the lease lost on every backend.
+        held = await lock.acquire("res-extend-native-expiry", ttl_seconds=1)
+        assert held is not None
+        await asyncio.sleep(1.2)
+        # No steal happened; the row still carries this owner/token (SQL) or
+        # the key has natively expired (Redis). Either way the lease is dead.
+        assert await lock.extend(held, ttl_seconds=30) is None
+        # And the key is freely re-acquirable with a strictly-higher fence.
+        again = await lock.acquire("res-extend-native-expiry", ttl_seconds=30)
+        assert again is not None
+        assert again.fencing_token > held.fencing_token
+        await lock.release(again)
+
 
 # ---------------------------------------------------------------------------
 # lease() contextmanager
@@ -371,3 +386,65 @@ class TestReapExpired:
         # The live lock is still held (on every backend).
         assert await lock.acquire("res-reap-live", ttl_seconds=30) is None
         await lock.release(live)
+
+
+# ---------------------------------------------------------------------------
+# H1: expired-key steal race — exactly ONE acquirer wins under real concurrency
+# ---------------------------------------------------------------------------
+class TestExpiredStealRaceIsAtomic:
+    """The contended-steal race the single-table FOR UPDATE design closes.
+
+    Two workers race ``try_acquire`` on an EXPIRED key at the same instant.
+    Under the old check-then-act design on PostgreSQL's default READ COMMITTED
+    isolation BOTH could SELECT the expired row, both bump the fence, both
+    UPDATE last-writer-wins, and BOTH receive a token — each believing it holds
+    the lock. The ``SELECT ... FOR UPDATE`` row lock serializes the steal so
+    EXACTLY ONE wins; the loser blocks, re-reads the now-live row, and gets
+    ``None``.
+
+    This is the race ``test_second_acquire_fails_under_contention`` does NOT
+    cover (that test exercises the live-key short-circuit, not the
+    expired-steal write path).
+    """
+
+    async def _race_pg_expired_steal(self) -> None:
+        from kailash.db.connection import ConnectionManager
+        from kailash.infrastructure.lock_store import DBLockBackend, DistributedLock
+
+        conn = ConnectionManager(POSTGRES_TEST_URL)
+        await conn.initialize()
+        await conn.execute("DROP TABLE IF EXISTS kailash_locks")
+        backend = DBLockBackend(conn)
+        await backend.initialize()
+        lock = DistributedLock(backend, default_ttl_seconds=30)
+        try:
+            # Establish an EXPIRED lease: acquire with a 1s TTL, let it lapse.
+            held = await lock.acquire("res-steal-race", ttl_seconds=1)
+            assert held is not None
+            await asyncio.sleep(1.2)  # the lease is now expired (stealable)
+
+            # Race N concurrent steal attempts. asyncpg's pool gives each
+            # transaction() its own connection, so these genuinely race against
+            # the same expired row on real PostgreSQL.
+            results = await asyncio.gather(
+                *(lock.acquire("res-steal-race", ttl_seconds=30) for _ in range(8))
+            )
+
+            winners = [r for r in results if r is not None]
+            assert len(winners) == 1, (
+                f"expected exactly ONE winner stealing the expired key, got "
+                f"{len(winners)}: {[w.fencing_token for w in winners]}"
+            )
+            # The single winner's token strictly exceeds the expired lease's.
+            assert winners[0].fencing_token > held.fencing_token
+            # The winner genuinely holds it — a fresh acquire is contended.
+            assert await lock.acquire("res-steal-race", ttl_seconds=30) is None
+        finally:
+            await conn.execute("DROP TABLE IF EXISTS kailash_locks")
+            await lock.close()
+            await conn.close()
+
+    async def test_expired_steal_race_yields_exactly_one_winner_postgres(self):
+        if not await _postgres_available():
+            pytest.skip(f"PostgreSQL not available at {POSTGRES_TEST_URL}")
+        await self._race_pg_expired_steal()

@@ -93,23 +93,27 @@ lock = await factory.create_lock_store(backend="sql")   # force SQL (SQLite L0 /
 
 ## SQL backend (`DBLockBackend`)
 
-Dialect-portable via `ConnectionManager`, mirroring `DBIdempotencyStore`. It uses two tables:
+Dialect-portable via `ConnectionManager`, mirroring `DBIdempotencyStore`. It uses a **single** table:
 
-| Table                | Columns                                            | Purpose                                                                   |
-| -------------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
-| `kailash_locks`      | `key` (PK), `owner`, `fencing_token`, `expires_at` | The live lock rows + expiry index                                         |
-| `kailash_lock_fence` | `key` (PK), `token`                                | Per-key monotonic counter, kept distinct so the token survives lock churn |
+| Table           | Columns                                                                  | Purpose                      |
+| --------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| `kailash_locks` | `key` (PK), `owner` (nullable), `fencing_token`, `expires_at` (nullable) | The lock rows + expiry index |
 
-Keeping the fence in its **own** table is what makes the token strictly increasing and never reset: releasing or stealing a lock deletes/overwrites the `kailash_locks` row but leaves `kailash_lock_fence` intact. Acquire performs the expiry check, the fence bump, and the lock write inside **one transaction** (`BEGIN IMMEDIATE` on SQLite; serializable on PostgreSQL/MySQL), so there is no TOCTOU race and the token is monotonic on every dialect without relying on `RETURNING`-on-conflict (older SQLite lacks it).
+The lock row is **never deleted**: release and reap _tombstone_ the row (`owner` / `expires_at` set to `NULL`) while preserving `fencing_token`. Keeping one persistent row per key is what makes both the fence monotonicity AND the acquire atomicity hold:
+
+- **Monotonic fence, never reset.** The fence lives in the lock row and is bumped on every steal; because the row survives release / native expiry / steal as a tombstone, the token is strictly increasing across all of them.
+- **Atomic acquire (one winner, the rest get `None`).** Acquire runs in **one transaction**: it first ensures the row exists (`INSERT ... ON CONFLICT DO NOTHING`), then `SELECT ... FOR UPDATE` row-locks the key. Because the row always exists, the `FOR UPDATE` lock serializes every concurrent acquirer of that key — including two workers racing to steal the _same expired_ row — so exactly one bumps the fence and writes the new owner; the rest block, re-read the now-live row, and get `None`. This holds on **every** dialect regardless of transaction isolation level (PostgreSQL's asyncpg pool runs at READ COMMITTED; `FOR UPDATE`'s block-then-reread is correct under it). On SQLite `dialect.for_update()` is `""` because `BEGIN IMMEDIATE` already serializes writers.
 
 ## Redis backend (`RedisLockBackend`)
 
 Behind the `[redis]` extra (`pip install kailash[redis]`); `redis.asyncio` is imported lazily so a slim-core install never pays for it. If the extra is missing, the backend raises a typed, actionable `ImportError` — never a silent fallback.
 
-- **acquire** — `SET lock:{key} {owner} NX PX {ttl_ms}` claims the key only when free, then `INCR fence:{key}` yields the monotonic token. The `fence:{key}` counter has **no** expiry, so the token survives lock churn.
-- **release** — a Lua compare-owner-then-`DEL` script (atomic; never deletes another holder's lock).
-- **extend** — a Lua compare-owner-then-`PEXPIRE` script.
+- **acquire** — `INCR fence:{key}` first mints the monotonic token, then `SET lock:{key} {owner}:{token} NX PX {ttl_ms}` claims the key only when free, storing the **composite** `{owner}:{token}` value. The `fence:{key}` counter has **no** expiry, so the token survives lock churn. (A contended `SET NX` after a successful `INCR` leaves a harmless gap in the fence sequence — tokens need only be strictly monotonic, not gap-free.)
+- **release** — a Lua compare-`{owner}:{token}`-then-`DEL` script (atomic; never deletes another holder's lock, even one that re-acquired at a higher token).
+- **extend** — a Lua compare-`{owner}:{token}`-then-`PEXPIRE` script.
 - **expiry** — native (`PX`); no reaper is needed, so `reap_expired()` returns `0`.
+
+Storing the full `{owner}:{token}` composite (rather than `owner` alone) keeps the SQL and Redis backends semantically identical under the one `LockBackend` Protocol: **both** gate release / extend on `owner` **and** `fencing_token` (EATP-D6 cross-backend parity).
 
 **Honesty note.** This is a **single-instance** (or single-primary + replicas) Redis lock — **not** the multi-master Redlock algorithm across N independent Redis nodes, whose timing model is contested (Kleppmann). Safety does **not** rest on Redis timing: it rests on the **fencing token**. Under a primary failover that loses an un-replicated `SET`, two workers can briefly hold the same key — but only the one with the higher fencing token can mutate a fence-checking resource, so correctness is preserved.
 

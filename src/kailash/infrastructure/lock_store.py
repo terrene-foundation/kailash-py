@@ -51,32 +51,34 @@ Architecture (one seam, two backends behind it):
 All SQL uses canonical ``?`` placeholders; ConnectionManager translates to
 the target database dialect automatically.
 
-Tables (``DBLockBackend``):
-
-* ``kailash_locks`` — the live lock rows::
+Table (``DBLockBackend``) — a SINGLE table, ``kailash_locks``::
 
       key            TEXT PRIMARY KEY
-      owner          TEXT NOT NULL
-      fencing_token  BIGINT NOT NULL
-      expires_at     TEXT NOT NULL          -- ISO-8601 UTC
+      owner          TEXT                   -- NULL when free (tombstone)
+      fencing_token  BIGINT NOT NULL        -- survives release/expiry/steal
+      expires_at     TEXT                   -- NULL when free
 
-* ``kailash_lock_fence`` — the per-key monotonic fence counter, kept distinct
-  from ``kailash_locks`` so the token survives lock churn (release / expiry /
-  steal) and is therefore **strictly increasing and never reset**::
-
-      key    TEXT PRIMARY KEY
-      token  BIGINT NOT NULL
+The lock row is **never deleted** — release / reap set ``owner`` and
+``expires_at`` to ``NULL`` (a *tombstone*) while preserving ``fencing_token``.
+Keeping one persistent row per key (instead of a separate fence table) is what
+makes the acquire atomic: the row always exists once a key has been seen, so a
+``SELECT ... FOR UPDATE`` inside the acquire transaction always finds and locks
+it, serializing every concurrent acquirer of that key. The fence therefore
+stays strictly increasing and is **never reset** across release / native
+expiry / steal — exactly the load-bearing safety property a separate fence
+table previously provided, now with a single-table atomic-acquire design.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Optional, Protocol, runtime_checkable
+from typing import AsyncIterator, Optional, Protocol, runtime_checkable
 
 from kailash.db.connection import ConnectionManager
 
@@ -198,17 +200,27 @@ class DBLockBackend:
 
     Works on SQLite (Level 0) and PostgreSQL / MySQL (Level 1+).  Mirrors
     :class:`~kailash.infrastructure.idempotency_store.DBIdempotencyStore`:
-    atomic claim-with-TTL, ``expires_at`` column, dialect-portable DDL via
+    ``expires_at`` column, dialect-portable DDL via
     ``dialect.text_column(indexed=True)``, ``reap_expired`` analogous to
     ``cleanup``.
 
-    Atomicity of acquire (steal-if-expired) is provided by a single
-    ``conn.transaction()`` block — ``BEGIN IMMEDIATE`` serializes writers on
-    SQLite, and the same SELECT-then-write inside one transaction is
-    serializable on PostgreSQL / MySQL.  The fencing token is bumped in the
-    SAME transaction via the companion ``kailash_lock_fence`` row, so it is
-    strictly monotonic per key on every dialect — no reliance on
-    RETURNING-on-conflict, which older SQLite lacks.
+    Atomicity of acquire (steal-if-expired) is provided by a
+    ``SELECT ... FOR UPDATE`` row lock inside one ``conn.transaction()`` block.
+    Because the single ``kailash_locks`` table keeps one **persistent row per
+    key** (release / reap tombstone the row rather than deleting it), the row
+    always exists by the time the acquire reads it, so the ``FOR UPDATE`` lock
+    serializes every concurrent acquirer of that key — even an EXPIRED key two
+    workers race to steal.  The contract "exactly one acquirer wins, the rest
+    get ``None``" therefore holds on EVERY dialect regardless of transaction
+    isolation level (asyncpg defaults to READ COMMITTED; ``FOR UPDATE``'s
+    block-then-reread semantics make the check-then-steal atomic under it).
+    SQLite emits no ``FOR UPDATE`` clause (``dialect.for_update()`` returns
+    ``""``) because ``BEGIN IMMEDIATE`` already serializes writers.
+
+    The fencing token lives in the same row and is bumped in the SAME
+    transaction as the steal, so it is strictly monotonic per key on every
+    dialect — and because the row is tombstoned (never deleted) on release /
+    reap, the token survives lock churn and is **never reset**.
 
     Parameters
     ----------
@@ -216,30 +228,21 @@ class DBLockBackend:
         An initialized :class:`ConnectionManager` instance (shared, owned by
         the caller / StoreFactory).
     table_name:
-        Name of the live-locks table (default ``kailash_locks``).  Validated
+        Name of the locks table (default ``kailash_locks``).  Validated
         against ``[a-zA-Z_][a-zA-Z0-9_]*`` at construction time.
-    fence_table_name:
-        Name of the per-key fence-counter table (default
-        ``kailash_lock_fence``).  Same validation.
     """
 
     def __init__(
         self,
         conn_manager: ConnectionManager,
         table_name: str = "kailash_locks",
-        fence_table_name: str = "kailash_lock_fence",
         *,
         owns_connection: bool = False,
     ) -> None:
         if not _TABLE_NAME_RE.match(table_name):
             raise ValueError(f"Invalid table name: must match {_TABLE_NAME_RE.pattern}")
-        if not _TABLE_NAME_RE.match(fence_table_name):
-            raise ValueError(
-                f"Invalid fence table name: must match {_TABLE_NAME_RE.pattern}"
-            )
         self._conn = conn_manager
         self._table = table_name
-        self._fence_table = fence_table_name
         self._initialized = False
         # When True, this backend owns the ConnectionManager (built privately
         # for a Level-0 lock store) and MUST close it on close().  When False
@@ -251,11 +254,17 @@ class DBLockBackend:
     # Lifecycle
     # ------------------------------------------------------------------
     async def initialize(self) -> None:
-        """Create the lock + fence tables and the expiry index if absent.
+        """Create the locks table and the expiry index if absent.
 
         Per ``rules/dataflow-identifier-safety.md`` MUST Rule 1, the dynamic
-        table names route through ``dialect.quote_identifier()`` (validates +
+        table name routes through ``dialect.quote_identifier()`` (validates +
         quotes) for the DDL interpolation.  Safe to call multiple times.
+
+        ``owner`` and ``expires_at`` are NULLable: a free key is represented as
+        a tombstone row (``owner IS NULL``) so the persistent ``fencing_token``
+        survives release / reap.  Indexed text columns route through
+        ``dialect.text_column(indexed=True)`` (``VARCHAR(255)`` on MySQL, which
+        cannot index unbounded ``TEXT``).
         """
         if self._initialized:
             return
@@ -266,9 +275,9 @@ class DBLockBackend:
             f"""
             CREATE TABLE IF NOT EXISTS {quoted_locks} (
                 key {_tc} PRIMARY KEY,
-                owner TEXT NOT NULL,
+                owner TEXT,
                 fencing_token BIGINT NOT NULL,
-                expires_at {_tc} NOT NULL
+                expires_at {_tc}
             )
             """
         )
@@ -278,22 +287,8 @@ class DBLockBackend:
             "expires_at",
         )
 
-        quoted_fence = self._conn.dialect.quote_identifier(self._fence_table)
-        await self._conn.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS {quoted_fence} (
-                key {_tc} PRIMARY KEY,
-                token BIGINT NOT NULL
-            )
-            """
-        )
-
         self._initialized = True
-        logger.info(
-            "DBLockBackend tables '%s' / '%s' initialized",
-            self._table,
-            self._fence_table,
-        )
+        logger.info("DBLockBackend table '%s' initialized", self._table)
 
     async def close(self) -> None:
         """Release backend resources.
@@ -313,37 +308,6 @@ class DBLockBackend:
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------
-    async def _bump_fence(self, tx: Any, key: str) -> int:
-        """Bump and return the per-key fence counter inside transaction ``tx``.
-
-        The fence row lives in a separate table from the live lock so the
-        token survives lock churn — it is strictly increasing and is NEVER
-        reset on release / expiry / steal.  ``max(existing, 0) + 1`` is
-        computed in Python and written back atomically within the caller's
-        transaction (so two concurrent acquires of the same key cannot read
-        the same value: the BEGIN IMMEDIATE / serializable transaction
-        serializes them).
-        """
-        row = await tx.fetchone(
-            f"SELECT token FROM {self._fence_table} WHERE key = ?",
-            key,
-        )
-        if row is None:
-            next_token = 1
-            await tx.execute(
-                f"INSERT INTO {self._fence_table} (key, token) VALUES (?, ?)",
-                key,
-                next_token,
-            )
-        else:
-            next_token = int(row["token"]) + 1
-            await tx.execute(
-                f"UPDATE {self._fence_table} SET token = ? WHERE key = ?",
-                next_token,
-                key,
-            )
-        return next_token
-
     async def try_acquire(
         self, key: str, owner: str, ttl_seconds: int
     ) -> Optional[int]:
@@ -351,45 +315,77 @@ class DBLockBackend:
 
         Returns the new fencing token on success, ``None`` on contention.
 
-        The whole operation runs in ONE transaction so the read of the
-        current lock row, the fence bump, and the write of the new lock row
-        are atomic — no TOCTOU race between checking expiry and writing.
+        Atomicity (the "exactly one winner, the rest get ``None``" contract,
+        including the EXPIRED-key steal race two workers run concurrently) is
+        provided by a ``SELECT ... FOR UPDATE`` row lock inside ONE
+        transaction:
+
+        1. ``INSERT ... ON CONFLICT DO NOTHING`` ensures a tombstone row
+           exists for the key (atomic; idempotent).  This is what guarantees
+           the ``SELECT ... FOR UPDATE`` in step 2 always has a row to lock.
+        2. ``SELECT ... FOR UPDATE`` reads + row-locks the key.  A concurrent
+           acquirer of the SAME key BLOCKS here until this transaction
+           commits, then re-reads the committed row — so the expiry check in
+           step 3 is serialized, not racy.
+        3. If the lease is live (``owner IS NOT NULL`` AND ``expires_at`` in
+           the future) → contention → return ``None``.
+        4. Otherwise (free tombstone OR expired) → bump the fence, write the
+           new owner + expiry → return the token.
+
+        On SQLite ``dialect.for_update()`` is ``""``; ``BEGIN IMMEDIATE``
+        (acquired by ``ConnectionManager.transaction()``) serializes writers,
+        so the same single-winner guarantee holds with no per-row clause.
         """
         now = _utcnow()
         now_iso = _iso(now)
         expires_at = _iso(now + timedelta(seconds=ttl_seconds))
+        for_update = self._conn.dialect.for_update()
 
         async with self._conn.transaction() as tx:
-            existing = await tx.fetchone(
-                f"SELECT owner, expires_at FROM {self._table} WHERE key = ?",
-                key,
+            # Step 1: ensure a row exists so the FOR UPDATE lock has a target.
+            # insert_ignore() is atomic ON CONFLICT DO NOTHING (PG/SQLite) /
+            # INSERT IGNORE (MySQL); the seed row is a free tombstone with
+            # fencing_token = 0 so the first real acquire bumps it to 1.
+            seed_sql = self._conn.dialect.insert_ignore(
+                self._table,
+                ["key", "owner", "fencing_token", "expires_at"],
+                ["key"],
             )
+            await tx.execute(seed_sql, key, None, 0, None)
 
-            if existing is not None and existing["expires_at"] > now_iso:
-                # Held and not yet expired — contention.
+            # Step 2: row-lock the key (blocks concurrent acquirers).
+            select_sql = (
+                f"SELECT owner, fencing_token, expires_at FROM {self._table} "
+                "WHERE key = ?"
+            )
+            if for_update:
+                select_sql += f" {for_update}"
+            existing = await tx.fetchone(select_sql, key)
+
+            # The seed in step 1 guarantees a row; the typed guard converts an
+            # impossible-but-not-crash-safe None into an actionable error
+            # rather than an opaque KeyError on existing["..."].
+            if existing is None:  # pragma: no cover - row is seeded above
+                raise LockAcquireError(
+                    f"lock row for key {key!r} vanished after seed insert"
+                )
+
+            # Step 3: live lease held by someone → contention.
+            if existing["owner"] is not None and (
+                existing["expires_at"] is not None and existing["expires_at"] > now_iso
+            ):
                 return None
 
-            token = await self._bump_fence(tx, key)
-
-            if existing is None:
-                await tx.execute(
-                    f"INSERT INTO {self._table} "
-                    "(key, owner, fencing_token, expires_at) VALUES (?, ?, ?, ?)",
-                    key,
-                    owner,
-                    token,
-                    expires_at,
-                )
-            else:
-                # Steal the expired lease.
-                await tx.execute(
-                    f"UPDATE {self._table} SET owner = ?, fencing_token = ?, "
-                    "expires_at = ? WHERE key = ?",
-                    owner,
-                    token,
-                    expires_at,
-                    key,
-                )
+            # Step 4: free or expired → steal. Bump the persisted fence.
+            token = int(existing["fencing_token"]) + 1
+            await tx.execute(
+                f"UPDATE {self._table} SET owner = ?, fencing_token = ?, "
+                "expires_at = ? WHERE key = ?",
+                owner,
+                token,
+                expires_at,
+                key,
+            )
 
         logger.debug(
             "lock.acquire key=%s owner=%s token=%d ttl=%ds",
@@ -405,6 +401,11 @@ class DBLockBackend:
 
         Gated on ``key + owner + fencing_token`` so a stale lease (lost to
         expiry-then-steal) cannot release the new holder's lock.
+
+        The row is **tombstoned** (``owner`` / ``expires_at`` set to ``NULL``),
+        NOT deleted — preserving ``fencing_token`` so the next acquire of this
+        key gets a strictly-higher token.  The owner+token WHERE clause makes
+        the gated UPDATE itself atomic, so no FOR UPDATE is needed here.
         """
         async with self._conn.transaction() as tx:
             before = await tx.fetchone(
@@ -420,7 +421,7 @@ class DBLockBackend:
                 )
                 return False
             await tx.execute(
-                f"DELETE FROM {self._table} "
+                f"UPDATE {self._table} SET owner = NULL, expires_at = NULL "
                 "WHERE key = ? AND owner = ? AND fencing_token = ?",
                 key,
                 owner,
@@ -433,15 +434,26 @@ class DBLockBackend:
         """Extend the lease TTL iff still held by ``owner`` at ``token``.
 
         Returns ``True`` if extended, ``False`` if the lease was already lost.
+
+        "Lost" covers BOTH loss-via-steal (a newer acquirer tombstoned-then-
+        re-stole the row, changing owner/token) AND loss-via-native-expiry (the
+        lease's own ``expires_at`` lapsed without anyone stealing it — the row
+        still carries this owner/token but is no longer live).  The
+        ``expires_at > now`` predicate is what catches the native-expiry case:
+        without it, a holder whose lease silently expired could extend a lock
+        another worker is entitled to steal.
         """
+        now_iso = _iso(_utcnow())
         new_expires = _iso(_utcnow() + timedelta(seconds=ttl_seconds))
         async with self._conn.transaction() as tx:
             current = await tx.fetchone(
                 f"SELECT 1 AS hit FROM {self._table} "
-                "WHERE key = ? AND owner = ? AND fencing_token = ?",
+                "WHERE key = ? AND owner = ? AND fencing_token = ? "
+                "AND expires_at > ?",
                 key,
                 owner,
                 token,
+                now_iso,
             )
             if current is None:
                 logger.debug(
@@ -466,11 +478,14 @@ class DBLockBackend:
         return True
 
     async def reap_expired(self, before: Optional[str] = None) -> int:
-        """Delete expired lock rows; return the count reaped.
+        """Tombstone expired lock rows; return the count reaped.
 
-        Mirrors ``DBIdempotencyStore.cleanup``.  The companion fence rows are
-        intentionally left intact so a reaped-then-reacquired key keeps a
-        strictly-increasing token.
+        Mirrors ``DBIdempotencyStore.cleanup`` but does NOT delete: an expired
+        row is **tombstoned** (``owner`` / ``expires_at`` set to ``NULL``) so
+        the persisted ``fencing_token`` survives, keeping a reaped-then-
+        reacquired key strictly-increasing.  Only rows that are still *claimed*
+        (``owner IS NOT NULL``) AND past their TTL are reaped — an already-free
+        tombstone (``expires_at IS NULL``) is left alone and never counted.
         """
         if before is None:
             before = _iso(_utcnow())
@@ -478,16 +493,18 @@ class DBLockBackend:
         # Count first so the return value is dialect-portable (asyncpg's
         # execute() returns a status string, not a rowcount int).
         rows = await self._conn.fetch(
-            f"SELECT key FROM {self._table} WHERE expires_at < ?",
+            f"SELECT key FROM {self._table} "
+            "WHERE owner IS NOT NULL AND expires_at < ?",
             before,
         )
         reaped = len(rows)
         if reaped:
             await self._conn.execute(
-                f"DELETE FROM {self._table} WHERE expires_at < ?",
+                f"UPDATE {self._table} SET owner = NULL, expires_at = NULL "
+                "WHERE owner IS NOT NULL AND expires_at < ?",
                 before,
             )
-            logger.info("lock.reap removed %d expired lock(s)", reaped)
+            logger.info("lock.reap tombstoned %d expired lock(s)", reaped)
         return reaped
 
 
@@ -569,8 +586,6 @@ class DistributedLock:
             The acquired lease, or ``None`` if contended (non-blocking) or
             the timeout elapsed (blocking).
         """
-        import asyncio
-
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl
         owner = uuid.uuid4().hex
 
@@ -581,7 +596,9 @@ class DistributedLock:
         if not blocking:
             return None
 
-        loop = asyncio.get_event_loop()
+        # acquire() is always called from an async context; get_running_loop()
+        # is the non-deprecated accessor (get_event_loop() warns on 3.12+).
+        loop = asyncio.get_running_loop()
         deadline = None if timeout is None else loop.time() + timeout
         backoff = self._poll_interval
         while True:
