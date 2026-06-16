@@ -58,6 +58,12 @@ class TestHashValue:
     def test_non_str_value_coerced(self) -> None:
         assert hash_value(12345) == hashlib.sha256(b"12345").hexdigest()
 
+    def test_non_str_bytes_salt_raises_typed_error(self) -> None:
+        # A salt silently coerced to the wrong type would weaken the digest;
+        # fail closed with a typed error, not an opaque hmac internal error.
+        with pytest.raises(TypeError, match="salt must be str or bytes"):
+            hash_value("x", salt=12345)  # type: ignore[arg-type]
+
 
 @pytest.mark.unit
 class TestLastFour:
@@ -190,6 +196,27 @@ class TestRedactMapping:
         )
         assert out["card"] == "************1111"
 
+    def test_recurses_into_list_of_mappings_by_key(self) -> None:
+        # PII nested inside a list under a non-sensitive key must be reached.
+        out = redact_mapping({"users": [{"ssn": "123-45-6789"}]}, keys=["ssn"])
+        assert out["users"][0]["ssn"] == "[REDACTED]"
+
+    def test_recurses_into_list_of_strings_by_pattern(self) -> None:
+        out = redact_mapping(
+            {"notes": ["card 4111111111111111", "clean"]}, patterns=[r"\d{16}"]
+        )
+        assert "4111111111111111" not in out["notes"][0]
+        assert out["notes"][1] == "clean"
+
+    def test_tuple_value_preserved_as_tuple(self) -> None:
+        out = redact_mapping({"items": ("a", "b")}, keys=["x"])
+        assert out["items"] == ("a", "b")
+
+    def test_sensitive_key_masks_entire_container(self) -> None:
+        # A sensitive key collapses its whole subtree, not just leaves.
+        out = redact_mapping({"creds": {"pw": "x", "tok": "y"}}, keys=["creds"])
+        assert out["creds"] == "[REDACTED]"
+
 
 @pytest.mark.unit
 class TestRedactionFilter:
@@ -236,3 +263,8 @@ class TestRedactionFilter:
 
     def test_is_logging_filter_subclass(self) -> None:
         assert issubclass(RedactionFilter, logging.Filter)
+
+    def test_none_strategy_rejected(self) -> None:
+        # A redaction filter that does not redact is a deceptive no-op.
+        with pytest.raises(ValueError, match="must redact"):
+            RedactionFilter(patterns=[r"\d{16}"], strategy=MaskingStrategy.NONE)

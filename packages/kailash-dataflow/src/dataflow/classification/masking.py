@@ -80,11 +80,17 @@ def hash_value(
     A salt is strongly recommended for low-entropy PII (SSN, phone, card
     number): an unsalted hash of a small value space is reversible by
     rainbow table. ``salt`` may be a str (UTF-8 encoded) or raw bytes.
+
+    Raises ``TypeError`` on a non-str/bytes salt — a salt silently coerced to
+    the wrong type would weaken the digest, so it fails closed with a typed
+    error rather than an opaque ``hmac`` internal error.
     """
     msg = str(value).encode("utf-8")
     if salt is None:
         digest = hashlib.sha256(msg).hexdigest()
     else:
+        if not isinstance(salt, (str, bytes)):
+            raise TypeError(f"salt must be str or bytes, got {type(salt).__name__}")
         key = salt.encode("utf-8") if isinstance(salt, str) else salt
         digest = hmac.new(key, msg, hashlib.sha256).hexdigest()
     if length is not None:
@@ -99,6 +105,10 @@ def last_four(value: Any) -> str:
 
     Strings of length ≤ 4 are fully masked (one ``*`` per character), so no
     value short enough to be guessable leaks any character.
+
+    Caution: ``last_four`` is unsuitable for short low-entropy fields (a
+    5-digit ZIP, a 6-digit OTP) — it reveals all but the leading character.
+    Use ``hash_value`` (salted) or ``redact`` for those.
     """
     text = str(value)
     if len(text) <= 4:
@@ -161,6 +171,29 @@ def redact_text(
     return out
 
 
+def _redact_value(
+    v: Any,
+    keys: Optional[Iterable[str]],
+    compiled: list["Pattern[str]"],
+    patterns: Optional[Iterable[_PatternLike]],
+    strategy: _StrategyLike,
+    salt: Optional[Union[str, bytes]],
+) -> Any:
+    """Redact a single (non-sensitive-keyed) value, recursing into containers."""
+    if isinstance(v, Mapping):
+        return redact_mapping(
+            v, keys=keys, patterns=patterns, strategy=strategy, salt=salt
+        )
+    if isinstance(v, (list, tuple)):
+        redacted = [
+            _redact_value(e, keys, compiled, patterns, strategy, salt) for e in v
+        ]
+        return tuple(redacted) if isinstance(v, tuple) else redacted
+    if isinstance(v, str) and compiled and any(p.search(v) for p in compiled):
+        return redact_text(v, patterns, strategy=strategy, salt=salt)
+    return v
+
+
 def redact_mapping(
     mapping: Any,
     *,
@@ -172,10 +205,12 @@ def redact_mapping(
     """Redact a telemetry / log dict by sensitive key name and/or value pattern.
 
     Record-agnostic counterpart to ``apply_masking_to_record`` that needs no
-    registered model. A value is masked when its key (case-insensitive)
-    matches ``keys`` OR its string form matches any of ``patterns``. Nested
-    mappings are redacted recursively. Non-mapping input is returned
-    unchanged (so callers can pass arbitrary ``record.args`` safely).
+    registered model. For each entry: if the key (case-insensitive) matches
+    ``keys`` the WHOLE value is masked (a sensitive key masks its entire
+    subtree); otherwise nested mappings AND list/tuple values are redacted
+    recursively, and string values matching any of ``patterns`` are redacted.
+    Non-mapping input is returned unchanged (so callers can pass arbitrary
+    ``record.args`` safely).
     """
     if not isinstance(mapping, Mapping):
         return mapping
@@ -183,16 +218,11 @@ def redact_mapping(
     compiled = _compile(patterns)
     out: Dict[str, Any] = {}
     for k, v in mapping.items():
-        if isinstance(v, Mapping):
-            out[k] = redact_mapping(
-                v, keys=keys, patterns=patterns, strategy=strategy, salt=salt
-            )
-        elif isinstance(k, str) and k.lower() in key_set:
+        if isinstance(k, str) and k.lower() in key_set:
+            # Sensitive key — mask the entire value (collapse any subtree).
             out[k] = _mask_match(str(v), strategy, salt)
-        elif compiled and any(p.search(str(v)) for p in compiled):
-            out[k] = redact_text(v, patterns, strategy=strategy, salt=salt)
         else:
-            out[k] = v
+            out[k] = _redact_value(v, keys, compiled, patterns, strategy, salt)
     return out
 
 
@@ -204,6 +234,14 @@ class RedactionFilter(logging.Filter):
     after %-formatting) by ``patterns``, and any ``Mapping`` positional arg by
     ``keys`` + ``patterns``. It never drops a record (always returns ``True``)
     and never raises into the logging machinery.
+
+    Contract: a ``LogRecord`` is shared across every handler in the logger's
+    ancestry, and this filter redacts by mutating the record in place. Attach
+    it at ONE point (a single handler, or the logger) — stacking two
+    ``RedactionFilter`` instances with DIFFERENT strategies over the same
+    record is unsupported: the first to run wins and a stronger downstream
+    strategy is silently downgraded. ``strategy=MaskingStrategy.NONE`` is
+    rejected (a redaction filter that does not redact is a deceptive no-op).
 
     Example::
 
@@ -223,6 +261,11 @@ class RedactionFilter(logging.Filter):
         salt: Optional[Union[str, bytes]] = None,
     ) -> None:
         super().__init__(name)
+        if strategy == MaskingStrategy.NONE:
+            raise ValueError(
+                "RedactionFilter strategy must redact — MaskingStrategy.NONE "
+                "is a no-op filter that silently passes sensitive data through"
+            )
         self._patterns = _compile(patterns)
         self._keys = list(keys or ())
         self._strategy = strategy
