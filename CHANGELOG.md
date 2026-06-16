@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.35.0] - 2026-06-16
+
 ### Added
 
 - **`DistributedLock` / `Lease` primitive (#1339)**: a first-class distributed
@@ -19,10 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LockBackend`, `DBLockBackend`, `RedisLockBackend`, `LockAcquireError`.
   - `DBLockBackend` — dialect-portable SQL backend via `ConnectionManager`
     (SQLite at Level 0, PostgreSQL/MySQL at Level 1+), mirroring
-    `DBIdempotencyStore`. Tables `kailash_locks` + a companion
-    `kailash_lock_fence` counter bumped in the same transaction keep the token
-    strictly increasing on both SQLite and PostgreSQL without relying on
-    `RETURNING`-on-conflict (older SQLite lacks it).
+    `DBIdempotencyStore`. A single `kailash_locks` table holds one persistent
+    row per key; `release`/`reap` _tombstone_ the row (`owner`/`expires_at`
+    set to `NULL`) rather than deleting it, so the `fencing_token` is preserved
+    and stays strictly monotonic across release/expiry/steal. Acquire is
+    single-winner under concurrency via `INSERT ... ON CONFLICT DO NOTHING`
+    (seed the row) + `SELECT ... FOR UPDATE` (row-lock; SQLite serializes via
+    `BEGIN IMMEDIATE`, so `dialect.for_update()` returns `""` there) — correct
+    under PostgreSQL's default READ COMMITTED isolation.
   - `RedisLockBackend` — single-instance Redis lock behind the `[redis]` extra
     (lazy `redis.asyncio` import; typed `ImportError` if the extra is absent).
     `SET NX PX` + `INCR` for the fence, Lua compare-owner-then-DEL/PEXPIRE for
