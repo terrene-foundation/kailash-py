@@ -348,7 +348,10 @@ class StoreFactory:
 
             conn = ConnectionManager("sqlite:///kailash_locks.db")
             await conn.initialize()
-            sql_backend = DBLockBackend(conn)
+            # owns_connection=True: this private connection is created here and
+            # is NOT the shared factory ConnectionManager, so lock.close()
+            # (-> backend.close()) MUST close it.
+            sql_backend = DBLockBackend(conn, owns_connection=True)
             await sql_backend.initialize()
             return DistributedLock(sql_backend)
 

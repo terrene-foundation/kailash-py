@@ -365,3 +365,7 @@ await idempotency.cleanup()
 | `kailash_idempotency` | IdempotencyStore  | Not available   | DB (PG/MySQL/SQLite) |
 | `kailash_meta`        | Schema versioning | Not applicable  | DB (PG/MySQL/SQLite) |
 | `kailash_task_queue`  | SQLTaskQueue      | Not available   | DB (Level 2 only)    |
+| `kailash_locks`       | DistributedLock   | SQLite file     | DB (PG/MySQL/SQLite) |
+| `kailash_lock_fence`  | DistributedLock   | SQLite file     | DB (PG/MySQL/SQLite) |
+
+See the [Distributed Lock Reference](06-distributed-lock.md) for the fencing-token lease API and the SQL vs Redis backend choice.

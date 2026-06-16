@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`DistributedLock` / `Lease` primitive (#1339)**: a first-class distributed
+  lock with two interchangeable backends behind one seam (`LockBackend`). The
+  load-bearing safety mechanism is the **fencing token** — a strictly-monotonic
+  per-key integer returned by `acquire` and verified by `release`/`extend`,
+  never reset across release/expiry/steal — so a protected resource can reject
+  any write carrying a stale token (the Kleppmann critique of TTL-only locks).
+  New public surface on `kailash.infrastructure`: `DistributedLock`, `Lease`,
+  `LockBackend`, `DBLockBackend`, `RedisLockBackend`, `LockAcquireError`.
+  - `DBLockBackend` — dialect-portable SQL backend via `ConnectionManager`
+    (SQLite at Level 0, PostgreSQL/MySQL at Level 1+), mirroring
+    `DBIdempotencyStore`. Tables `kailash_locks` + a companion
+    `kailash_lock_fence` counter bumped in the same transaction keep the token
+    strictly increasing on both SQLite and PostgreSQL without relying on
+    `RETURNING`-on-conflict (older SQLite lacks it).
+  - `RedisLockBackend` — single-instance Redis lock behind the `[redis]` extra
+    (lazy `redis.asyncio` import; typed `ImportError` if the extra is absent).
+    `SET NX PX` + `INCR` for the fence, Lua compare-owner-then-DEL/PEXPIRE for
+    release/extend, native PX expiry. Not multi-master Redlock; safety rests on
+    the fencing token, not Redis timing.
+  - `DistributedLock` facade owns `acquire` (non-blocking + bounded
+    blocking-with-backoff) and an `async with lock.lease(key, ttl)`
+    contextmanager that auto-releases on normal AND exception exit.
+  - `StoreFactory.create_lock_store()` selects Redis when `REDIS_URL` is set
+    else SQL, with an explicit `backend=` override.
+
 ## [2.34.2] - 2026-06-15
 
 ### Fixed

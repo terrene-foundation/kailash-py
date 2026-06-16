@@ -228,6 +228,8 @@ class DBLockBackend:
         conn_manager: ConnectionManager,
         table_name: str = "kailash_locks",
         fence_table_name: str = "kailash_lock_fence",
+        *,
+        owns_connection: bool = False,
     ) -> None:
         if not _TABLE_NAME_RE.match(table_name):
             raise ValueError(f"Invalid table name: must match {_TABLE_NAME_RE.pattern}")
@@ -239,6 +241,11 @@ class DBLockBackend:
         self._table = table_name
         self._fence_table = fence_table_name
         self._initialized = False
+        # When True, this backend owns the ConnectionManager (built privately
+        # for a Level-0 lock store) and MUST close it on close().  When False
+        # (the default), the ConnectionManager is shared via StoreFactory and
+        # is owned by the caller — closing it here would break sibling stores.
+        self._owns_connection = owns_connection
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -291,9 +298,16 @@ class DBLockBackend:
     async def close(self) -> None:
         """Release backend resources.
 
-        The underlying ConnectionManager is NOT closed here — it is owned by
-        the caller and may be shared with other stores.
+        When the backend was built with a SHARED ConnectionManager
+        (``owns_connection=False``, the default), the connection is owned by
+        the caller / StoreFactory and is NOT closed here — closing it would
+        break sibling stores.  When the backend OWNS a private connection
+        (``owns_connection=True``, the Level-0 lock-store path), that
+        connection IS closed here so no aiosqlite worker thread is left
+        running.
         """
+        if self._owns_connection and self._conn is not None:
+            await self._conn.close()
         logger.debug("DBLockBackend backend closed")
 
     # ------------------------------------------------------------------

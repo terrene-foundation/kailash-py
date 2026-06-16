@@ -95,6 +95,7 @@ async def lock(request):
         backend = DBLockBackend(conn)
         await backend.initialize()
         lock = DistributedLock(backend, default_ttl_seconds=30)
+        lock._test_backend_kind = "sql"  # type: ignore[attr-defined]
         try:
             yield lock
         finally:
@@ -114,6 +115,7 @@ async def lock(request):
         backend = DBLockBackend(conn)
         await backend.initialize()
         lock = DistributedLock(backend, default_ttl_seconds=30)
+        lock._test_backend_kind = "sql"  # type: ignore[attr-defined]
         try:
             yield lock
         finally:
@@ -132,6 +134,7 @@ async def lock(request):
         # Clear any residue from a prior run.
         await backend._flush_namespace()  # test-only helper
         lock = DistributedLock(backend, default_ttl_seconds=30)
+        lock._test_backend_kind = "redis"  # type: ignore[attr-defined]
         try:
             yield lock
         finally:
@@ -343,20 +346,28 @@ class TestBlockingAcquire:
 # ---------------------------------------------------------------------------
 class TestReapExpired:
     async def test_reap_removes_expired_locks(self, lock):
-        await lock.acquire("res-reap-1", ttl_seconds=1)
+        kind = getattr(lock, "_test_backend_kind", "sql")
+        first = await lock.acquire("res-reap-1", ttl_seconds=1)
+        assert first is not None
         await lock.acquire("res-reap-2", ttl_seconds=1)
         await asyncio.sleep(1.2)
         reaped = await lock.reap_expired()
-        assert reaped >= 2
-        # After reaping, the keys are re-acquirable with a higher token.
+        if kind == "redis":
+            # Redis expiry is native (PX); reap_expired is a documented no-op
+            # returning 0 — there is nothing for the SDK to reap.
+            assert reaped == 0
+        else:
+            assert reaped >= 2
+        # On BOTH backends, the expired key is re-acquirable with a strictly
+        # higher fencing token — the fence survives reaping / native expiry.
         again = await lock.acquire("res-reap-1", ttl_seconds=30)
         assert again is not None
-        assert again.fencing_token >= 2  # fence survived the reap
+        assert again.fencing_token > first.fencing_token
 
     async def test_reap_leaves_live_locks(self, lock):
         live = await lock.acquire("res-reap-live", ttl_seconds=30)
         assert live is not None
         await lock.reap_expired()
-        # The live lock is still held.
+        # The live lock is still held (on every backend).
         assert await lock.acquire("res-reap-live", ttl_seconds=30) is None
         await lock.release(live)
