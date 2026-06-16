@@ -175,3 +175,4 @@ At Level 0, this stores events in local SQLite. At Level 1 with `KAILASH_DATABAS
 - [Task Queue Reference](03-task-queue.md) -- Redis vs SQL queue
 - [Idempotency Reference](04-idempotency.md) -- exactly-once execution
 - [Migration Guide](05-migration-guide.md) -- moving between levels
+- [Distributed Lock Reference](06-distributed-lock.md) -- fencing-token leases, SQL + Redis backends

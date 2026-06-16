@@ -243,7 +243,7 @@ class QueryDialect(ABC):
         """
         counter = 0
 
-        def _replace(match: re.Match) -> str:
+        def _replace(match: "re.Match[str]") -> str:
             nonlocal counter
             result = self.placeholder(counter)
             counter += 1
@@ -382,6 +382,24 @@ class QueryDialect(ABC):
         PostgreSQL/MySQL: ``FOR UPDATE SKIP LOCKED``
         SQLite: ``""`` (use ``BEGIN IMMEDIATE`` instead)
         """
+
+    def for_update(self) -> str:
+        """Return the row-level *blocking* lock clause for ``SELECT``.
+
+        Unlike :meth:`for_update_skip_locked` (which skips already-locked
+        rows for queue dequeue), this clause makes a concurrent acquirer
+        BLOCK until the row lock is released — the serialization primitive
+        the distributed-lock acquire path needs so two acquirers of the same
+        key cannot both read-then-write an expired row.
+
+        - PostgreSQL / MySQL: ``FOR UPDATE`` (row lock; under READ COMMITTED
+          the lock-holder's commit is re-read by the blocked waiter, so the
+          steal-if-expired check is serialized correctly).
+        - SQLite: ``""`` — SQLite serializes writers via ``BEGIN IMMEDIATE``
+          (acquired by ``ConnectionManager.transaction()``), so no per-row
+          clause is needed or supported.
+        """
+        return "FOR UPDATE"
 
     @abstractmethod
     def timestamp_now(self) -> str:
@@ -648,6 +666,10 @@ class SQLiteDialect(QueryDialect):
         return f"json_extract({column}, '$.{path}')"
 
     def for_update_skip_locked(self) -> str:
+        return ""
+
+    def for_update(self) -> str:
+        """SQLite: no per-row clause — ``BEGIN IMMEDIATE`` serializes writers."""
         return ""
 
     def timestamp_now(self) -> str:
