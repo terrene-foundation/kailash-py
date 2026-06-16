@@ -377,3 +377,5 @@ Per `rules/agents.md` § Quality Gates — `/implement` is a MUST gate; reviewer
 ## Open scope decisions (Q1-Q5 — user gates before /todos)
 
 The five open questions live in `02-plans/01-architecture.md` § "Open questions for the user". **ALL RESOLVED at the 2026-05-30 user gate** matching the spec's assumed recommended dispositions (Q2 two-layer staging, Q4 Option-A overload, Q5 cite-rs-prior-art) — no scope widening, so the surface contract above stands unchanged. The workspace is `/todos`-ready.
+
+**Filed as GitHub trackers (2026-05-31):** item 1 → #1216 (pre-upgrade `process_request`), item 2 → #1217 (subprotocol echo). A third typed-status follow-up surfaced at S4 convergence — `NexusHandlerError` collapsed to 500 on `/workflows/{name}/execute` — filed as #1218.
