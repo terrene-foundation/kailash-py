@@ -123,8 +123,12 @@ todos/
 **/.claude/learning/
 
 # Operator-local identity cache (multi-operator coordination substrate;
-# per-machine, mode 0600 — never committed)
+# per-machine, mode 0600 — never committed). The **/ variant covers
+# per-package stamps (packages/*/.claude/operator-id + nested node .claude
+# dirs) which initialise their own runtime identity — same class as
+# .claude/learning/ and packages/*/.claude/.proposals/ below.
 .claude/operator-id
+**/.claude/operator-id
 
 # Per-package proposal manifests are local-only; the canonical
 # proposal lives at root .claude/.proposals/latest.yaml.
