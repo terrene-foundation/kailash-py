@@ -56,6 +56,8 @@ Usage (auto-detection via StoreFactory)::
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from kailash.infrastructure.checkpoint_store import DBCheckpointStore
 from kailash.infrastructure.dlq import DBDeadLetterQueue
 from kailash.infrastructure.event_store import DBEventStoreBackend
@@ -72,9 +74,25 @@ from kailash.infrastructure.history_store import (
 )
 from kailash.infrastructure.idempotency import IdempotentExecutor
 from kailash.infrastructure.idempotency_store import DBIdempotencyStore
+from kailash.infrastructure.lock_store import (
+    DBLockBackend,
+    DistributedLock,
+    Lease,
+    LockAcquireError,
+    LockBackend,
+)
 from kailash.infrastructure.queue_factory import create_task_queue
 from kailash.infrastructure.task_queue import SQLTaskMessage, SQLTaskQueue
 from kailash.infrastructure.worker_registry import SQLWorkerRegistry
+
+if TYPE_CHECKING:
+    # RedisLockBackend lives behind the [redis] extra and is imported lazily
+    # via __getattr__ so a slim-core install does not pay for redis.asyncio.
+    # The TYPE_CHECKING import keeps it resolvable to static analysers
+    # (CodeQL py/undefined-export, mypy --strict, Sphinx autodoc) without
+    # dragging the optional dep into the eager import path
+    # (rules/orphan-detection.md § 6b).
+    from kailash.infrastructure.lock_store_redis import RedisLockBackend
 
 __all__ = [
     "DBCheckpointStore",
@@ -82,10 +100,16 @@ __all__ = [
     "DBEventStoreBackend",
     "DBExecutionStore",
     "DBIdempotencyStore",
+    "DBLockBackend",
+    "DistributedLock",
     "DowngradeRefusedError",
     "IdempotentExecutor",
     "InMemoryExecutionStore",
+    "Lease",
+    "LockAcquireError",
+    "LockBackend",
     "PostgresHistoryStore",
+    "RedisLockBackend",
     "SCHEMA_VERSION",
     "SQLTaskMessage",
     "SQLTaskQueue",
@@ -95,3 +119,18 @@ __all__ = [
     "WorkflowHistoryStore",
     "create_task_queue",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve the Redis-backed lock backend behind the [redis] extra.
+
+    ``from kailash.infrastructure import RedisLockBackend`` triggers the
+    import of :mod:`kailash.infrastructure.lock_store_redis`, which guards
+    ``redis.asyncio`` with a typed, actionable ImportError if the ``[redis]``
+    extra is missing.
+    """
+    if name == "RedisLockBackend":
+        from kailash.infrastructure.lock_store_redis import RedisLockBackend
+
+        return RedisLockBackend
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
