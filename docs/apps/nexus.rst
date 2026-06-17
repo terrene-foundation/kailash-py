@@ -273,7 +273,7 @@ Production Examples
 
    import os
    from nexus import Nexus
-   from kailash.nodes.ai import LLMAgentNode
+   from kaizen.nodes.ai import LLMAgentNode  # pip install kailash-kaizen
 
    app = Nexus()
 

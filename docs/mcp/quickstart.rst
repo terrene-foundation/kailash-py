@@ -142,7 +142,7 @@ Use MCP tools with an LLM agent:
    import asyncio
    import os
    from kailash.core import LocalRuntime
-   from kailash.nodes.ai import LLMAgentNode
+   from kaizen.nodes.ai import LLMAgentNode  # pip install kailash-kaizen
 
    async def main():
        # Create runtime and agent

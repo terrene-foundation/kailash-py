@@ -34,11 +34,15 @@ Key Features
 3. **Self-Evaluation**: Solutions are evaluated and improved iteratively
 4. **Multiple Organization Strategies**: Capability matching, swarm-based,
    market-based, hierarchical
-5. **Emergent Specialization**: Agents develop expertise over time
-6. **Adaptive Topology**: Team structure adapts to problem characteristics
 
 Basic Usage
 -----------
+
+.. note::
+
+   The self-organizing agent pool is provided by the **Kaizen** framework.
+   Install it with ``pip install kailash-kaizen``; the nodes then register
+   automatically with the Core SDK runtime.
 
 Simple Self-Organizing System
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,7 +50,7 @@ Simple Self-Organizing System
 .. code-block:: python
 
     from kailash import Workflow
-    from kailash.nodes.ai.self_organizing import (
+    from kaizen.nodes.ai.self_organizing import (  # pip install kailash-kaizen
         AgentPoolManagerNode,
         ProblemAnalyzerNode,
         TeamFormationNode,
@@ -175,82 +179,6 @@ Team Collaboration
             })
 
     print(f"Collected {len(solutions)} solution contributions")
-
-Advanced Patterns
------------------
-
-Emergent Specialization
-~~~~~~~~~~~~~~~~~~~~~~~
-
-Agents can develop specializations based on their performance history:
-
-.. code-block:: python
-
-    from kailash.nodes.ai.self_organizing import EmergentSpecializationNode
-
-    # Track agent performance over time
-    specialization_tracker = EmergentSpecializationNode()
-
-    # Simulate agent performing tasks
-    for task_num in range(10):
-        result = specialization_tracker.run(
-            agent_id="adaptive_agent_001",
-            task_type="data_analysis",
-            performance_score=0.8 + task_num * 0.02,  # Improving performance
-            context={"task_number": task_num}
-        )
-
-    # Agent develops specialization in data_analysis
-    print(f"Agent specializations: {result['all_specializations']}")
-
-Dynamic Coalition Formation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Agents form temporary coalitions for specific objectives:
-
-.. code-block:: python
-
-    from kailash.nodes.ai.self_organizing import DynamicCoalitionNode
-
-    coalition_manager = DynamicCoalitionNode()
-
-    # Define objective
-    objective = {
-        "goal": "Develop predictive healthcare model",
-        "required_capabilities": ["data_analysis", "machine_learning", "healthcare"],
-        "priority": "high"
-    }
-
-    # Form coalitions
-    coalitions_result = coalition_manager.run(
-        action="form",
-        objective=objective,
-        available_agents=agents
-    )
-
-    print(f"Formed {coalitions_result['coalitions_formed']} coalitions")
-
-Adaptive Team Topology
-~~~~~~~~~~~~~~~~~~~~~~
-
-Team structure adapts based on problem characteristics:
-
-.. code-block:: python
-
-    from kailash.nodes.ai.self_organizing import AdaptiveTopologyNode
-
-    topology_designer = AdaptiveTopologyNode()
-
-    # Design topology for brainstorming
-    result = topology_designer.run(
-        problem_type="brainstorming session for new features",
-        team_members=team,
-        performance_history=[],
-        constraints={}
-    )
-
-    print(f"Selected topology: {result['topology']}")
-    print(f"Communication channels: {len(result['communication_channels'])}")
 
 Complete Self-Organizing Research System
 ----------------------------------------
