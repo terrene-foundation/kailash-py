@@ -62,6 +62,14 @@ class NexusConfig:
     rate_limit: Optional[int] = 100
     rate_limit_config: Optional[Dict[str, Any]] = None
 
+    # Security Headers (threaded into the security-headers preset middleware)
+    # csp: custom Content-Security-Policy string; None keeps SecurityHeadersConfig's
+    # secure default. security_header_overrides: per-field overrides
+    # (hsts_max_age, frame_options, referrer_policy, etc.) merged into the
+    # SecurityHeadersConfig the preset constructs.
+    csp: Optional[str] = None
+    security_header_overrides: Optional[Dict[str, Any]] = None
+
     # Audit
     audit_enabled: bool = True
     audit_log_bodies: bool = False
@@ -138,15 +146,27 @@ def _cors_middleware_factory(config: NexusConfig) -> tuple:
 
 
 def _security_headers_middleware_factory(config: NexusConfig) -> Optional[tuple]:
-    """Create security headers middleware configuration."""
+    """Create security headers middleware configuration.
+
+    Threads a consumer-supplied CSP string (``config.csp``) and any per-field
+    security-header overrides (``config.security_header_overrides``) into the
+    ``SecurityHeadersConfig`` the preset constructs. When neither is set, the
+    SecurityHeadersConfig secure defaults apply unchanged.
+    """
     from nexus.middleware.security_headers import (
         SecurityHeadersConfig,
         SecurityHeadersMiddleware,
     )
 
-    sec_config = SecurityHeadersConfig(
-        exclude_paths=("/healthz", "/readyz", "/startup"),
-    )
+    sec_kwargs: Dict[str, Any] = {
+        "exclude_paths": ("/healthz", "/readyz", "/startup"),
+    }
+    if config.csp is not None:
+        sec_kwargs["csp"] = config.csp
+    if config.security_header_overrides:
+        sec_kwargs.update(config.security_header_overrides)
+
+    sec_config = SecurityHeadersConfig(**sec_kwargs)
     return (SecurityHeadersMiddleware, {"config": sec_config})
 
 
@@ -174,26 +194,34 @@ def _csrf_middleware_factory(config: NexusConfig) -> Optional[tuple]:
     )
 
 
-# NOTE: Placeholder factories for WS02 auth package.
-# These will be replaced with real implementations when auth package is complete.
-
-
 def _rate_limit_middleware_factory(config: NexusConfig) -> Optional[tuple]:
-    """Placeholder: Create rate limiting middleware configuration."""
+    """Create the token-bucket rate-limit middleware from NexusConfig.
+
+    Auto-attaches the built ``RateLimitMiddleware`` (token-bucket + 429 body +
+    ``X-RateLimit-*`` / ``Retry-After`` headers) using ``config.rate_limit`` as
+    the per-minute limit. ``config.rate_limit_config`` (a dict) supplies any
+    further ``RateLimitConfig`` fields (burst_size, backend, route_limits, …).
+    Returns None when rate limiting is disabled (``config.rate_limit is None``).
+    """
     if config.rate_limit is None:
         return None
 
-    logger.warning(
-        "Rate limiting middleware not yet implemented. "
-        "Install with: pip install kailash-nexus[auth] (coming in WS02)"
-    )
-    return None
+    from nexus.auth import RateLimitConfig, RateLimitMiddleware
+
+    rl_kwargs: Dict[str, Any] = {"requests_per_minute": config.rate_limit}
+    if config.rate_limit_config:
+        rl_kwargs.update(config.rate_limit_config)
+
+    rl_config = RateLimitConfig(**rl_kwargs)
+    return (RateLimitMiddleware, {"config": rl_config})
 
 
-def _error_handler_middleware_factory(config: NexusConfig) -> Optional[tuple]:
-    """Placeholder: Create error handling middleware configuration."""
-    logger.debug("Error handler middleware not yet implemented (coming in WS02)")
-    return None
+# NOTE: The exception → canonical-error-envelope contract (the WS02
+# "error handler middleware" placeholder formerly stubbed here) ships via the
+# HTTP transport's NexusError handler — see
+# nexus/transports/http.py::_install_exception_handlers (installs
+# app.add_exception_handler(NexusError, ...) producing the canonical
+# {"error", "detail"} body). No preset middleware is required for it.
 
 
 # =============================================================================
@@ -298,7 +326,6 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
-            _error_handler_middleware_factory,
         ],
         plugin_factories=[],
     ),
@@ -310,7 +337,6 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
-            _error_handler_middleware_factory,
         ],
         plugin_factories=[
             _jwt_auth_plugin_factory,
@@ -327,7 +353,6 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
-            _error_handler_middleware_factory,
         ],
         plugin_factories=[
             _jwt_auth_plugin_factory,
