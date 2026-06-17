@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.37.0] - 2026-06-17
+
+### Added
+
+- **Tenant-scoped event bus (#1338, cross-SDK parity with kailash-rs #1352)**:
+  new `kailash.events.TenantScopedEventBus` (also re-exported as
+  `kailash.TenantScopedEventBus`) gives multi-tenant pub/sub isolation over a
+  shared `EventBus`. It prefixes every topic with the tenant id
+  (`"acme:order.created"` vs `"globex:order.created"`); because both backends
+  dispatch by exact `event_type` (in-memory dict key, Redis one-stream-per-type),
+  a publish on one tenant fans out **only** within that tenant — isolation is
+  structural, not a runtime filter. The wrapper keeps the same
+  `publish` / `subscribe` / `subscribe_events` shape as `EventBus`; handlers
+  receive the original payload, and `subscribe_events` delivers a `DomainEvent`
+  whose `event_type` is the logical (un-prefixed) type. Isolation-integrity
+  guards: `tenant_id` MUST NOT contain the separator; every wrapper sharing one
+  bus MUST use the same separator (a mismatched separator is refused — it could
+  otherwise map two distinct tenants onto the same topic); and bus-construction
+  kwargs are rejected (not silently dropped) when a shared bus is passed. Works
+  unchanged over the Redis Streams backend, where prefixing is the only way to
+  isolate tenants sharing one broker. Runnable example at
+  `examples/eventbus_tenant_isolation.py`.
+
 ## [2.36.0] - 2026-06-17
 
 ### Added

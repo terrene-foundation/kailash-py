@@ -11,7 +11,7 @@ disabled because it does not follow ``__getattr__`` fallbacks.
 
 import warnings
 
-from kailash.events import DomainEvent, EventBus, Subscription
+from kailash.events import DomainEvent, EventBus, Subscription, TenantScopedEventBus
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -95,7 +95,7 @@ def __getattr__(name):
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 
-__version__ = "2.36.0"
+__version__ = "2.37.0"
 
 __all__ = [
     # Core workflow components
@@ -112,6 +112,8 @@ __all__ = [
     "EventBus",
     "Subscription",
     "DomainEvent",
+    # Tenant-scoped event bus (issue #1338)
+    "TenantScopedEventBus",
     # Server classes (lazy, require kailash[server])
     "WorkflowServer",
     "DurableWorkflowServer",

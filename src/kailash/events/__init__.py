@@ -14,10 +14,13 @@ Public surface:
   ``correlation_id`` for trace propagation.
 * :class:`EventBackend` / :class:`InMemoryEventBackend` /
   :class:`RedisStreamsEventBackend` — backend contract + implementations.
+* :class:`TenantScopedEventBus` — tenant-isolating facade over a shared
+  :class:`EventBus` (prefixes every topic with the tenant id so publishes
+  fan out only within the same tenant).
 
 These are also re-exported from the top-level ``kailash`` namespace::
 
-    from kailash import EventBus, Subscription
+    from kailash import EventBus, Subscription, TenantScopedEventBus
 """
 
 from __future__ import annotations
@@ -30,11 +33,13 @@ from .backends import (
 )
 from .bus import EventBus, Subscription
 from .domain_event import DomainEvent
+from .tenant import TenantScopedEventBus
 
 __all__ = [
     "EventBus",
     "Subscription",
     "DomainEvent",
+    "TenantScopedEventBus",
     "EventBackend",
     "InMemoryEventBackend",
     "RedisStreamsEventBackend",
