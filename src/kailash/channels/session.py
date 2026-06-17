@@ -29,6 +29,13 @@ class CrossChannelSession:
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     expires_at: Optional[float] = None
+    # Sliding-expiration window (seconds). When set, `expires_at` is re-slid to
+    # `now + ttl` on every activity (touch / mutation / access via
+    # SessionManager.get_session). When None, expiry is either a fixed absolute
+    # deadline (if `expires_at` was set directly / via timeout=) or idle-based
+    # (the `is_expired` last_activity branch). Sliding is strictly opt-in so
+    # fixed-deadline callers keep their existing semantics.
+    ttl: Optional[int] = None
     status: SessionStatus = SessionStatus.ACTIVE
 
     # Channel tracking
@@ -44,8 +51,16 @@ class CrossChannelSession:
     max_history_size: int = 1000
 
     def touch(self) -> None:
-        """Update last activity timestamp."""
+        """Update last activity timestamp.
+
+        When a sliding-expiration window (``ttl``) is configured, the absolute
+        ``expires_at`` deadline is re-slid forward to ``now + ttl`` so that
+        ongoing activity keeps the session alive. Sessions without ``ttl`` are
+        unaffected (fixed-deadline and idle-based behavior unchanged).
+        """
         self.last_activity = time.time()
+        if self.ttl is not None:
+            self.expires_at = self.last_activity + self.ttl
         if self.status == SessionStatus.IDLE:
             self.status = SessionStatus.ACTIVE
 
@@ -170,6 +185,30 @@ class CrossChannelSession:
             self.expires_at = time.time() + additional_seconds
         self.touch()
 
+    def remaining_ttl(self, timeout: int = 3600) -> float:
+        """Return the seconds remaining before this session expires.
+
+        Mirrors the two-mode logic of :meth:`is_expired` exactly so the two
+        always agree (``remaining_ttl(...) == 0.0`` iff ``is_expired(...)``):
+
+        - If an absolute ``expires_at`` deadline is set (fixed deadline, or a
+          sliding window re-slid by :meth:`touch`), returns
+          ``max(0.0, expires_at - now)``.
+        - Otherwise returns the idle-based remainder
+          ``max(0.0, timeout - (now - last_activity))``.
+
+        Args:
+            timeout: Idle timeout in seconds, used only when no ``expires_at``
+                deadline is set (matches the :meth:`is_expired` default).
+
+        Returns:
+            Seconds remaining, floored at 0.0 (never negative).
+        """
+        now = time.time()
+        if self.expires_at:
+            return max(0.0, self.expires_at - now)
+        return max(0.0, timeout - (now - self.last_activity))
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert session to dictionary for serialization."""
         return {
@@ -178,6 +217,7 @@ class CrossChannelSession:
             "created_at": self.created_at,
             "last_activity": self.last_activity,
             "expires_at": self.expires_at,
+            "ttl": self.ttl,
             "status": self.status.value,
             "active_channels": list(self.active_channels),
             "channel_contexts": self.channel_contexts,
@@ -230,17 +270,34 @@ class SessionManager:
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         timeout: Optional[int] = None,
+        sliding_ttl: Optional[int] = None,
     ) -> CrossChannelSession:
         """Create a new session.
 
         Args:
             user_id: Optional user ID for the session
             session_id: Optional custom session ID
-            timeout: Optional custom timeout
+            timeout: Optional fixed absolute deadline in seconds. The session
+                expires ``timeout`` seconds after creation regardless of
+                activity (existing behavior — unchanged).
+            sliding_ttl: Optional sliding-expiration window in seconds. The
+                deadline starts at ``now + sliding_ttl`` and is re-slid forward
+                on every activity (touch / mutation / ``get_session`` access).
+                Mutually exclusive with ``timeout``.
 
         Returns:
             New CrossChannelSession instance
+
+        Raises:
+            ValueError: if both ``timeout`` and ``sliding_ttl`` are provided,
+                or if ``session_id`` already exists.
         """
+        if timeout is not None and sliding_ttl is not None:
+            raise ValueError(
+                "create_session: pass either timeout (fixed deadline) or "
+                "sliding_ttl (sliding window), not both"
+            )
+
         if session_id is None:
             session_id = str(uuid.uuid4())
 
@@ -251,6 +308,9 @@ class SessionManager:
 
         if timeout:
             session.expires_at = time.time() + timeout
+        elif sliding_ttl:
+            session.ttl = sliding_ttl
+            session.expires_at = time.time() + sliding_ttl
 
         self._sessions[session_id] = session
         logger.info(f"Created session {session_id} for user {user_id}")
@@ -271,6 +331,12 @@ class SessionManager:
         if session and session.is_expired(self.default_timeout):
             self.terminate_session(session_id)
             return None
+
+        # Sliding-expiration: accessing a session with a configured window
+        # re-slides its deadline forward. Fixed-deadline / idle-based sessions
+        # (ttl is None) are returned unchanged — no silent extension.
+        if session and session.ttl is not None:
+            session.touch()
 
         return session
 
