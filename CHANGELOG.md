@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.38.0] - 2026-06-17
+
+### Added
+
+- **Real in-memory vector backend for `VectorDatabaseNode`**: `provider="memory"`
+  is now a working backend with real `upsert`/`query`/`delete`/`fetch`,
+  cosine/euclidean/dot similarity ranking, metadata storage + equality
+  filtering, and an optional `max_vectors` capacity cap. Previously every
+  operation returned fabricated results (`doc_0..doc_4`, invented scores,
+  `[0.1]*dimension` fetches).
+- **Real Okapi BM25 and TF-IDF scoring for `RelevanceScorerNode`**: the `bm25`
+  and `tfidf` similarity methods now compute real lexical relevance over chunk
+  text via a new optional `query` text parameter. Previously both returned a
+  constant `0.5` for every chunk.
+
+### Changed
+
+- **(Behavior change)** `VectorDatabaseNode` external providers
+  (`pinecone`/`weaviate`/`milvus`/`qdrant`/`chroma`) now raise a clear typed
+  `NodeConfigurationError` directing users to `provider="memory"` instead of
+  silently returning fabricated search results.
+- `RelevanceScorerNode` `bm25`/`tfidf` without a `query` text input now raise a
+  clear `ValueError` instead of returning a constant score.
+
+### Fixed
+
+- **Fabricated connection-pool metrics** in `WorkflowConnectionPool`:
+  `get_pool_statistics()` / `_get_pool_status()` returned hardcoded
+  `avg_query_time_ms=50.0`, `avg_latency_ms=0.0`, `queue_depth=0`, and
+  `capabilities=["read","write"]` — `avg_latency_ms` and `capabilities` fed
+  `query_router` routing decisions. Now real query-time tracking, real queue
+  depth, and honest omission where no real signal exists.
+- Latent `VectorDatabaseNode.configure()` `AttributeError` (it called a
+  non-existent base `configure()`); the documented `configure()` → `execute()`
+  flow now works.
+- `RelevanceScorerNode` removed a hardcoded fallback query string and all
+  `print()` debug output.
+
 ## [2.37.0] - 2026-06-17
 
 ### Added
