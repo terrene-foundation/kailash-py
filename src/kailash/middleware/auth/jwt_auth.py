@@ -524,7 +524,26 @@ class JWTAuthManager:
         except Exception:
             # Even if verification fails, revoke by raw token string so a
             # malformed/expired token presented for revocation is still recorded.
-            self._revocation_store.revoke(jti=None, token=token)
+            # Bound the entry's TTL so an attacker spamming revoke with unique
+            # invalid strings cannot grow the store without limit: derive exp
+            # from an unverified decode when possible, else fall back to the
+            # longest token lifetime (no presentable token outlives it, so the
+            # entry self-purges without ever evicting a still-valid token).
+            expires_at: Optional[datetime] = None
+            try:
+                unverified = jwt.decode(
+                    token, options={"verify_signature": False, "verify_exp": False}
+                )
+                exp = unverified.get("exp")
+                if exp:
+                    expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            except Exception:
+                expires_at = None
+            if expires_at is None:
+                expires_at = datetime.now(timezone.utc) + timedelta(
+                    days=self.config.refresh_token_expire_days
+                )
+            self._revocation_store.revoke(jti=None, token=token, expires_at=expires_at)
 
     def revoke_refresh_token(self, jti: str):
         """Revoke specific refresh token."""

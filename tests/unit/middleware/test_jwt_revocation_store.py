@@ -75,13 +75,18 @@ def test_default_store_is_process_local():
 
 
 @pytest.mark.regression
-def test_same_manager_rejects_revoked_token():
-    """Baseline: a manager rejects a token it revoked itself (unchanged behavior)."""
+def test_same_manager_rejects_revoked_token_with_revoked_message():
+    """A manager rejects a token it revoked, with the specific 'revoked' message.
+
+    Pins the post-decode ordering: a non-expired revoked token surfaces the
+    revocation reason (not a generic decode error), which is the observability
+    contract callers rely on to distinguish revoked from malformed.
+    """
     mgr = JWTAuthManager(config=_cfg())
     token = mgr.create_token_pair(user_id="u9").access_token
     assert mgr.verify_token(token)["sub"] == "u9"
     mgr.revoke_token(token)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="Token has been revoked"):
         mgr.verify_token(token)
 
 
@@ -144,6 +149,33 @@ def test_revocation_store_protocol_shape():
     assert len(store.revoked) == 1
     with pytest.raises(Exception):
         mgr.verify_token(token)
+
+
+@pytest.mark.regression
+def test_revoke_unverifiable_token_is_ttl_bounded_from_unverified_exp():
+    """Decode-failure fallback bounds entry TTL from the token's exp (no permanent growth).
+
+    A token signed with a foreign key fails verification, so revoke_token takes
+    the fallback path. The fallback extracts exp via an unverified decode and
+    bounds the entry — so a revoked-but-already-expired token does NOT linger in
+    the store forever (the M2 unbounded-growth defense).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    import jwt as pyjwt
+
+    store = InMemoryTokenRevocationStore()
+    mgr = JWTAuthManager(config=_cfg(), revocation_store=store)
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    foreign = pyjwt.encode(
+        {"sub": "x", "jti": "j1", "exp": past},
+        "a-different-secret-key-also-32-chars-x!",
+        algorithm="HS256",
+    )
+    mgr.revoke_token(foreign)  # fails verify -> fallback -> bounded by past exp
+    # Past exp -> the entry self-purges; it is not retained permanently.
+    assert store.is_revoked(token=foreign) is False
+    assert store.count() == 0
 
 
 @pytest.mark.regression
