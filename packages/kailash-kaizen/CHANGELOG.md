@@ -2,6 +2,27 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.27.1] — 2026-06-17 — PEP 563 Signatures: structured output no longer silently empties
+
+### Fixed
+
+- **`Signature` defined under `from __future__ import annotations` (PEP 563) no
+  longer breaks `JSONOutputParser`** (#1352). PEP 563 stores each field's
+  annotation as a _string_ (`'str'`, `'List[dict]'`) instead of a type object;
+  the parser's `isinstance(value, expected_type)` then raised
+  `TypeError: isinstance() arg 2 must be a type ...`, which was swallowed by the
+  parser's own `except (json.JSONDecodeError, TypeError)` — silently degrading a
+  valid JSON response to `{}`. Two layers fix it:
+  - `SignatureMeta` resolves string annotations to real type objects at
+    class-construction time (using the defining module's globals, exactly as
+    `typing.get_type_hints` would), so stored field types are identical with or
+    without PEP 563.
+  - `JSONOutputParser._convert_to_type` defensively returns the value unchanged
+    if an annotation string ever survives construction (dynamically-exec'd
+    Signatures, unresolvable forward refs) instead of raising and discarding the
+    parse.
+    Regression coverage: `tests/regression/test_issue_1352_pep563_signature_parser.py`.
+
 ## [2.27.0] — 2026-06-11 — RAG node honesty: strip simulated-capability over-claims
 
 ### Deprecated

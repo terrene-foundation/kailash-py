@@ -22,6 +22,7 @@ Performance Requirements:
 import logging
 import re
 import time
+import typing
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
@@ -113,6 +114,51 @@ class OutputField:
             self.desc = desc
 
         self.metadata = kwargs
+
+
+def _field_map_has_string_type(field_map: Optional[Dict[str, Dict[str, Any]]]) -> bool:
+    """True if any field in the map still stores its type as a string."""
+    if not field_map:
+        return False
+    return any(isinstance(fd.get("type"), str) for fd in field_map.values())
+
+
+def _resolve_signature_field_types(cls: type) -> None:
+    """Resolve PEP 563 string annotations on a built Signature subclass, in place.
+
+    Under ``from __future__ import annotations`` (PEP 563) every annotation in a
+    class body is stored as its source *string* (``'str'``, ``'List[dict]'``)
+    rather than a type object. The structured-output parser type-checks each
+    output field with ``isinstance(value, expected_type)``; a string predicate
+    raises ``TypeError: isinstance() arg 2 must be a type ...``, which the JSON
+    parser swallows — silently degrading a valid response to ``{}`` (issue
+    #1352). ``typing.get_type_hints`` resolves the class's annotations against
+    its own module globals, so the stored field type becomes identical whether
+    or not the Signature's module uses PEP 563.
+
+    Best-effort: if resolution fails (an unresolvable forward reference anywhere
+    on the class), the field types keep their string form and the parser's
+    defensive guard handles them — signature construction never raises. Skipped
+    entirely when no field stores a string type (the eager, non-PEP-563 case).
+    """
+    inputs = getattr(cls, "_signature_inputs", None)
+    outputs = getattr(cls, "_signature_outputs", None)
+    if not _field_map_has_string_type(inputs) and not _field_map_has_string_type(
+        outputs
+    ):
+        return
+    try:
+        hints = typing.get_type_hints(cls)
+    except Exception:
+        # Unresolvable annotation somewhere on the class — keep string forms;
+        # the parser's defensive guard coerces them (never raise here).
+        return
+    for field_map in (inputs, outputs):
+        if not field_map:
+            continue
+        for field_name, field_def in field_map.items():
+            if isinstance(field_def.get("type"), str) and field_name in hints:
+                field_def["type"] = hints[field_name]
 
 
 class SignatureMeta(type):
@@ -210,6 +256,13 @@ class SignatureMeta(type):
         )
 
         cls = super().__new__(mcs, name, bases, namespace)
+
+        # Resolve PEP 563 string annotations to real type objects so the
+        # structured-output parser's isinstance() type-check works identically
+        # with or without `from __future__ import annotations` (issue #1352).
+        # Runs after class creation so typing.get_type_hints can resolve against
+        # the class's own module globals.
+        _resolve_signature_field_types(cls)
 
         return cls
 
