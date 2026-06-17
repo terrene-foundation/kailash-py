@@ -493,24 +493,24 @@ class AsyncLocalRuntime(LocalRuntime):
         - Sync in thread pool: All sync nodes (compatibility mode)
 
     Example:
-        ```python
-        from kailash.resources import ResourceRegistry, DatabasePoolFactory
-        from kailash.runtime.async_local import AsyncLocalRuntime
+        .. code-block:: python
 
-        # Setup resources
-        registry = ResourceRegistry()
-        registry.register_factory("db", DatabasePoolFactory(...))
+            from kailash.resources import ResourceRegistry, DatabasePoolFactory
+            from kailash.runtime.async_local import AsyncLocalRuntime
 
-        # Create async runtime
-        runtime = AsyncLocalRuntime(
-            resource_registry=registry,
-            max_concurrent_nodes=10,
-            enable_analysis=True
-        )
+            # Setup resources
+            registry = ResourceRegistry()
+            registry.register_factory("db", DatabasePoolFactory(...))
 
-        # Execute workflow
-        result = await runtime.execute_workflow_async(workflow, inputs)
-        ```
+            # Create async runtime
+            runtime = AsyncLocalRuntime(
+                resource_registry=registry,
+                max_concurrent_nodes=10,
+                enable_analysis=True
+            )
+
+            # Execute workflow
+            result = await runtime.execute_workflow_async(workflow, inputs)
     """
 
     def __init__(
@@ -1947,8 +1947,10 @@ class AsyncLocalRuntime(LocalRuntime):
         P0-8 FIX: Enhanced cleanup with proper resource management.
         Safe to call multiple times - tracks cleanup state.
 
-        Recommended usage with FastAPI lifespan:
-            ```python
+        Recommended usage with a web framework lifespan:
+
+        .. code-block:: python
+
             from contextlib import asynccontextmanager
             from fastapi import FastAPI
 
@@ -1961,7 +1963,6 @@ class AsyncLocalRuntime(LocalRuntime):
                 await runtime.cleanup()
 
             app = FastAPI(lifespan=lifespan)
-            ```
         """
         # Track cleanup to make it idempotent
         if hasattr(self, "_cleaned_up") and self._cleaned_up:

@@ -582,6 +582,7 @@ Creates various performance visualizations from collected metrics.
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 **Visualization Types:**
 
@@ -702,5 +703,4 @@ See Also
 - :doc:`workflow` - Workflow execution
 - :doc:`runtime` - Runtime engines
 - Monitoring guide
-- :doc:`../guides/performance` - Performance optimization
 - Tracking examples

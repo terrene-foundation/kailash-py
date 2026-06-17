@@ -547,7 +547,5 @@ Integration Testing
 Related Documentation
 =====================
 
-- :doc:`gateway` - Complete API gateway documentation
 - :doc:`../getting_started` - Getting started with the SDK
 - :doc:`../examples/index` - Usage examples and tutorials
-- :doc:`../security` - Security and authentication details

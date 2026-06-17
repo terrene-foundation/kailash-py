@@ -620,4 +620,3 @@ See Also
 
 - :doc:`Contributing Guide <contributing>` - How to contribute tests
 - :doc:`API Reference <api/index>` - Complete API documentation
-- :doc:`Performance Guide <performance>` - Performance optimization patterns

@@ -167,6 +167,26 @@ Asynchronous runtime for I/O-bound operations.
 
    results = asyncio.run(run())
 
+BaseRuntime
+===========
+
+The abstract base class all runtimes implement.
+
+.. autoclass:: kailash.runtime.base.BaseRuntime
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Trust Runtime
+=============
+
+Trust-plane integration for runtime execution (EATP).
+
+.. automodule:: kailash.runtime.trust
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Durable Execution & Distributed Dispatch (v2.14.0+)
 ====================================================
 
@@ -645,5 +665,3 @@ See Also
 - :doc:`nodes` - Node types and development
 - :doc:`workflow` - Workflow construction
 - :doc:`tracking` - Execution tracking
-- :doc:`/performance` - Performance optimization guide
-- :doc:`/examples/runtime` - Runtime usage examples

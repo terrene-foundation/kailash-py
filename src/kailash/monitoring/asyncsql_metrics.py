@@ -162,6 +162,9 @@ class AsyncSQLMetrics:
         Context manager to time lock acquisition and automatically record metrics.
 
         Usage:
+
+        .. code-block:: python
+
             async with metrics.timed_lock_acquisition('my_pool_key'):
                 # Lock acquisition logic here
                 async with some_lock:

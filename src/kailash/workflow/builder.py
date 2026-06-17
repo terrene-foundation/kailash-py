@@ -768,6 +768,9 @@ class WorkflowBuilder:
             ConnectionError: If connection setup fails
 
         Example:
+
+        .. code-block:: python
+
             # Using predefined contract
             workflow.add_typed_connection(
                 "csv_reader", "data", "processor", "input_data",

@@ -1239,6 +1239,5 @@ Node Configuration Best Practices
 See Also
 ========
 
-- :doc:`/guides/custom_nodes` - Guide to creating custom nodes
 - :doc:`/best_practices` - Best practices for node usage
 - :doc:`/examples/index` - Example workflows using various nodes

@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Migration Guide: LLM Deployment Abstraction (kailash-kaizen v2.11+)
 
 This guide maps the legacy `kaizen.providers.*` / `kaizen.config.providers.*` surfaces to the new four-axis deployment abstraction introduced in issue #498. It covers every public symbol in the previous surface, the back-compat window, and idiomatic rewrites.

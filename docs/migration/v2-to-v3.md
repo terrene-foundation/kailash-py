@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Migration Guide: Kailash SDK v2.x to v3.0 (Platform Architecture Convergence)
 
 This guide covers migrating code from Kailash SDK v2.x to v3.0. The v3.0

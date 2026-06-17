@@ -26,7 +26,6 @@ Workflow
 --------
 
 .. autosummary::
-   :toctree: _generated
 
    kailash.workflow.builder.WorkflowBuilder
 
@@ -34,7 +33,6 @@ Runtime
 -------
 
 .. autosummary::
-   :toctree: _generated
 
    kailash.runtime.local.LocalRuntime
    kailash.runtime.async_local.AsyncLocalRuntime
@@ -44,7 +42,6 @@ Trust
 -----
 
 .. autosummary::
-   :toctree: _generated
 
    kailash.runtime.trust
 

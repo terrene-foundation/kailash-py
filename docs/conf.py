@@ -46,6 +46,11 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "README.md",
+    # Auxiliary / internal doc trees not part of the published API site nav
+    # (orphaned — not reachable from any toctree). Kept in-repo, excluded from build.
+    "00-authority/*",
+    "enterprise-infrastructure/*",
+    "ci/*",
     "SPHINX_UPDATE_PLAN.md",
     "SPHINX_UPDATE_SUMMARY.md",
     "import_cheatsheets.py",
@@ -98,7 +103,7 @@ autodoc_default_options = {
     "member-order": "bysource",
     "special-members": "__init__",
     "undoc-members": True,
-    "exclude-members": "__weakref__",
+    "exclude-members": "__weakref__,model_json_schema",
     "show-inheritance": True,
     "inherited-members": True,
 }

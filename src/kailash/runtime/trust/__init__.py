@@ -10,7 +10,8 @@ TrustOperations, and RuntimeAuditGenerator for EATP-compliant audit trails:
 - Trust verification for workflows, nodes, and resources
 - EATP-compliant audit generation
 
-Usage:
+Usage::
+
     from kailash.runtime.trust import (
         RuntimeTrustContext,
         TrustVerificationMode,

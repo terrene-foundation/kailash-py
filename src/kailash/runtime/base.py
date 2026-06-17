@@ -109,7 +109,7 @@ class BaseRuntime(ABC):
     Design Pattern:
         Follows the SecureGovernedNode mixin pattern established in the SDK:
         - Base class provides shared initialization via super().__init__()
-        - Subclasses call super().__init__(**kwargs) to initialize base
+        - Subclasses call ``super().__init__(**kwargs)`` to initialize base
         - Mixins can be added to subclasses for additional capabilities
         - Abstract methods define the runtime-specific contract
 
@@ -855,6 +855,9 @@ class BaseRuntime(ABC):
         signatures for sync/async execution:
 
         Sync Implementation (LocalRuntime):
+
+        .. code-block:: python
+
             def execute(
                 self,
                 workflow: Workflow,
@@ -869,6 +872,9 @@ class BaseRuntime(ABC):
                 pass
 
         Async Implementation (AsyncLocalRuntime):
+
+        .. code-block:: python
+
             async def execute(
                 self,
                 workflow: Workflow,

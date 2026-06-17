@@ -86,6 +86,7 @@ Internal graph representation is handled by the Workflow class.
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 **Key Methods:**
 
@@ -732,6 +733,4 @@ See Also
 - :doc:`nodes` - Available node types
 - :doc:`runtime` - Execution runtime options
 - :doc:`tracking` - Task tracking and monitoring
-- :doc:`/guides/workflows` - Workflow design guide
-- :doc:`/guides/cyclic_workflows` - Cyclic workflow guide (New)
 - :doc:`/examples/index` - Example workflows
