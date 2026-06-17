@@ -31,12 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 class CycleExecutionMixin:
-    # Declare attributes provided by BaseRuntime (used by mixin methods)
-    logger: logging.Logger
-    debug: bool
-    enable_cycles: bool
-    cyclic_executor: Any
-
     """
     Cycle execution capabilities for workflow runtimes.
 
@@ -70,20 +64,26 @@ class CycleExecutionMixin:
         - CyclicWorkflowExecutor: External component that handles actual cycles
 
     Example:
-        ```python
-        class LocalRuntime(
-            BaseRuntime,
-            ValidationMixin,
-            ParameterHandlingMixin,
-            ConditionalExecutionMixin,
-            CycleExecutionMixin  # Phase 3
-        ):
-            def execute(self, workflow, **kwargs):
-                if self._workflow_has_cycles(workflow):
-                    return self._execute_cyclic_workflow(workflow, kwargs.get('inputs'))
-                # ... other execution paths
-        ```
+        .. code-block:: python
+
+            class LocalRuntime(
+                BaseRuntime,
+                ValidationMixin,
+                ParameterHandlingMixin,
+                ConditionalExecutionMixin,
+                CycleExecutionMixin  # Phase 3
+            ):
+                def execute(self, workflow, **kwargs):
+                    if self._workflow_has_cycles(workflow):
+                        return self._execute_cyclic_workflow(workflow, kwargs.get('inputs'))
+                    # ... other execution paths
     """
+
+    # Declare attributes provided by BaseRuntime (used by mixin methods)
+    logger: logging.Logger
+    debug: bool
+    enable_cycles: bool
+    cyclic_executor: Any
 
     def __init__(self, *args, **kwargs):
         """Initialize mixin via super() for proper MRO chain.

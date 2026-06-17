@@ -97,7 +97,6 @@ Examples:
 See Also:
     - :mod:`kailash.workflow.templates` for conversion patterns
     - :mod:`kailash.workflow.validation` for workflow analysis
-    - :doc:`/guides/migration` for migration best practices
 """
 
 import re

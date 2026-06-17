@@ -650,9 +650,9 @@ def redacted_tracker_state_for_checkpoint(
         policy implementation that consults event-level context (per
         the architecture plan §3.1 invariant) sees the right scope.
 
-    Known constraints
-    -----------------
-    Synthetic events constructed by this helper use
+    Notes
+    -----
+    **Known constraints.** Synthetic events constructed by this helper use
     ``datetime.now(timezone.utc)`` as both ``started_at`` and
     ``ended_at`` because the per-node tracker state captured by
     :class:`~kailash.runtime.execution_tracker.ExecutionTracker` does

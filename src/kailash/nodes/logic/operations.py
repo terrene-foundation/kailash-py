@@ -40,7 +40,7 @@ class SwitchNode(Node):
         operator (str): Comparison operator (==, !=, >, <, >=, <=, in, contains)
         value (Any): Value to compare against for boolean conditions
         cases (list): List of values for multi-case switching
-        case_prefix (str): Prefix for case output fields (default: "case_")
+        case_prefix (str): Prefix for case output fields (default: ``"case_"``)
         pass_condition_result (bool): Include condition result in output
 
     Implementation Details:

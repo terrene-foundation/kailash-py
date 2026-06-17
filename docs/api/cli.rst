@@ -680,6 +680,5 @@ See Also
 ========
 
 - :doc:`../getting_started` - Getting started guide
-- :doc:`../guides/workflows` - Workflow development
 - Debugging workflows
 - CLI usage examples

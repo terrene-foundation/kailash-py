@@ -629,6 +629,3 @@ See Also
 
 - :doc:`nodes` - Node types reference
 - :doc:`workflow` - Workflow construction
-- :doc:`/guides/testing` - Testing guide
-- :doc:`/performance` - Performance guide
-- :doc:`/examples/utils` - Utility examples

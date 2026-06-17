@@ -328,5 +328,4 @@ See Also
 
 - :doc:`/api/workflow` - Workflow creation and management
 - :doc:`/api/runtime` - Workflow execution runtimes
-- :doc:`/examples/integration` - Integration examples
 - `FastAPI Documentation <https://fastapi.tiangolo.com/>`_

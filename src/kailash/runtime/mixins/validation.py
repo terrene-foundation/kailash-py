@@ -118,20 +118,22 @@ class ValidationMixin:
             - All logic is synchronous and shared between runtimes
 
         Examples:
-            # Basic validation
-            runtime = LocalRuntime()
-            warnings = runtime.validate_workflow(workflow)
-            if warnings:
-                for warning in warnings:
-                    print(f"Warning: {warning}")
+            .. code-block:: python
 
-            # Validation with error handling
-            try:
+                # Basic validation
+                runtime = LocalRuntime()
                 warnings = runtime.validate_workflow(workflow)
-                if not warnings:
-                    print("Workflow is valid")
-            except WorkflowValidationError as e:
-                print(f"Invalid workflow: {e}")
+                if warnings:
+                    for warning in warnings:
+                        print(f"Warning: {warning}")
+
+                # Validation with error handling
+                try:
+                    warnings = runtime.validate_workflow(workflow)
+                    if not warnings:
+                        print("Workflow is valid")
+                except WorkflowValidationError as e:
+                    print(f"Invalid workflow: {e}")
         """
         warnings = []
 
