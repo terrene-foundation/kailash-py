@@ -197,8 +197,8 @@ Complete RAG Pipeline Example
 .. code-block:: python
 
    from kailash.workflow import Workflow
-   from kailash.nodes.ai.embedding_generator import EmbeddingGeneratorNode
-   from kailash.nodes.ai.llm_agent import LLMAgentNode
+   from kaizen.nodes.ai.embedding_generator import EmbeddingGeneratorNode
+   from kaizen.nodes.ai.llm_agent import LLMAgentNode
    from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
    from kailash.nodes.data.retrieval import RelevanceScorerNode
    from kailash.nodes.transform.chunkers import HierarchicalChunkerNode

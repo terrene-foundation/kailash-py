@@ -52,7 +52,9 @@ For reading and writing data:
 AI / LLM Nodes
 ---------------
 
-For AI and language model operations:
+For AI and language model operations. These nodes are provided by the
+**Kaizen** framework — install it with ``pip install kailash-kaizen`` and they
+register automatically with the Core SDK runtime:
 
 - **LLMAgentNode**: Single LLM call with prompt
 - **IterativeLLMAgentNode**: Multi-turn LLM interactions
@@ -63,6 +65,8 @@ For AI and language model operations:
    import os
    from dotenv import load_dotenv
    load_dotenv()
+
+   import kaizen.nodes.ai  # registers the AI nodes with the Core SDK runtime
 
    model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
 

@@ -70,7 +70,7 @@ if __name__ == "__main__":
 # workflow_example.py
 from kailash import Workflow
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
+from kaizen.nodes.ai import LLMAgentNode  # pip install kailash-kaizen
 
 # Create workflow
 workflow = Workflow("mcp-workflow", "MCP Workflow")
