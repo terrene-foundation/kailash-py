@@ -436,6 +436,10 @@ class JWTAuthManager:
             # Reject revoked tokens. Checked AFTER decode so the revocation
             # identity (jti) is available — this is what a shared store keys on
             # so revocation propagates across workers (issue #1356).
+            # INVARIANT: pass BOTH jti AND token — revoke() keys on `jti or token`,
+            # so a token revoked before its jti was known (decode-failure path) is
+            # keyed by raw token; dropping `token=` here would silently stop
+            # enforcing those revocations.
             if (
                 self._revocation_store is not None
                 and self._revocation_store.is_revoked(
@@ -525,24 +529,27 @@ class JWTAuthManager:
             # Even if verification fails, revoke by raw token string so a
             # malformed/expired token presented for revocation is still recorded.
             # Bound the entry's TTL so an attacker spamming revoke with unique
-            # invalid strings cannot grow the store without limit: derive exp
-            # from an unverified decode when possible, else fall back to the
-            # longest token lifetime (no presentable token outlives it, so the
-            # entry self-purges without ever evicting a still-valid token).
-            expires_at: Optional[datetime] = None
+            # invalid strings cannot grow the store without limit. The longest a
+            # legitimately-issued token can remain presentable is the refresh
+            # window; cap the entry there so a FORGED far-future `exp` in an
+            # unverified token cannot extend the entry's lifetime beyond it
+            # (no presentable token outlives the cap, so the entry self-purges
+            # without ever evicting a still-valid token).
+            ttl_cap = datetime.now(timezone.utc) + timedelta(
+                days=self.config.refresh_token_expire_days
+            )
+            expires_at = ttl_cap
             try:
                 unverified = jwt.decode(
                     token, options={"verify_signature": False, "verify_exp": False}
                 )
                 exp = unverified.get("exp")
                 if exp:
-                    expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+                    expires_at = min(
+                        datetime.fromtimestamp(exp, tz=timezone.utc), ttl_cap
+                    )
             except Exception:
-                expires_at = None
-            if expires_at is None:
-                expires_at = datetime.now(timezone.utc) + timedelta(
-                    days=self.config.refresh_token_expire_days
-                )
+                expires_at = ttl_cap
             self._revocation_store.revoke(jti=None, token=token, expires_at=expires_at)
 
     def revoke_refresh_token(self, jti: str):
@@ -621,7 +628,15 @@ class JWTAuthManager:
         return base64.urlsafe_b64encode(number_bytes).decode("ascii").rstrip("=")
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get authentication manager statistics."""
+        """Get authentication manager statistics.
+
+        Note: ``blacklisted_tokens`` retains the legacy field name (the config
+        flag ``enable_blacklist`` likewise) for backward compatibility; the
+        underlying mechanism is the revocation store. The value is the store's
+        ``count()`` — an int for the in-memory default, but it MAY be ``None``
+        for a shared backend that cannot cheaply count (per the
+        ``TokenRevocationStore.count`` contract), meaning "unknown".
+        """
         return {
             "active_refresh_tokens": len(self._refresh_tokens),
             "blacklisted_tokens": (

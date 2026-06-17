@@ -179,6 +179,35 @@ def test_revoke_unverifiable_token_is_ttl_bounded_from_unverified_exp():
 
 
 @pytest.mark.regression
+def test_revoke_fallback_caps_forged_future_exp_at_refresh_window():
+    """A forged far-future exp on an unverifiable token cannot extend the entry TTL.
+
+    The decode-failure fallback reads exp from an UNVERIFIED decode (attacker-
+    controllable). The entry TTL MUST be capped at the longest legitimate token
+    lifetime so a forged exp=year-3000 cannot pin the entry in the store for
+    centuries (sec LOW-1).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    import jwt as pyjwt
+
+    store = InMemoryTokenRevocationStore()
+    cfg = _cfg()
+    mgr = JWTAuthManager(config=cfg, revocation_store=store)
+    far_future = datetime(3000, 1, 1, tzinfo=timezone.utc)
+    forged = pyjwt.encode(
+        {"sub": "x", "exp": far_future},
+        "a-different-secret-key-also-32-chars-x!",
+        algorithm="HS256",
+    )
+    mgr.revoke_token(forged)  # fails verify -> fallback with forged future exp
+    stored_exp = store._revoked[forged]  # inspect the entry's bound TTL
+    cap = datetime.now(timezone.utc) + timedelta(days=cfg.refresh_token_expire_days)
+    assert stored_exp is not None
+    assert stored_exp <= cap, "forged future exp was not capped at the refresh window"
+
+
+@pytest.mark.regression
 def test_in_memory_store_purges_expired_entries():
     """Expired revocation entries are purged so the store does not grow unbounded."""
     from datetime import datetime, timedelta, timezone
