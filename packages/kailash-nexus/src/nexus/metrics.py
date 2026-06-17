@@ -127,6 +127,10 @@ def observe_http_request(
         ImportError: If ``prometheus_client`` is not installed.
     """
     _init_request_metrics()
+    # _init_request_metrics() guarantees both objects are non-None; the assert
+    # makes that explicit for static analysis of the lazy-init globals.
+    assert _http_requests_total is not None  # noqa: S101
+    assert _http_request_duration_hist is not None  # noqa: S101
     status_label = str(status)
     _http_requests_total.labels(method=method, route=route, status=status_label).inc()
     _http_request_duration_hist.labels(
@@ -191,6 +195,10 @@ def _sync_from_nexus(nexus: Nexus) -> None:
     exactly once.
     """
     _init_metrics()
+    # _init_metrics() guarantees the metric objects are non-None; the asserts
+    # make that explicit for static analysis of the lazy-init globals.
+    assert _registered_workflows_gauge is not None  # noqa: S101
+    assert _active_sessions_gauge is not None  # noqa: S101
 
     perf = getattr(nexus, "_performance_metrics", {})
 
@@ -211,7 +219,7 @@ def _sync_from_nexus(nexus: Nexus) -> None:
 
     for deque_name, hist in histogram_map.items():
         deque_obj = perf.get(deque_name)
-        if deque_obj is None:
+        if deque_obj is None or hist is None:
             continue
         values = list(deque_obj)
         start = offsets.get(deque_name, 0)
