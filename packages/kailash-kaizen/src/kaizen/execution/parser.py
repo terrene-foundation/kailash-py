@@ -144,6 +144,18 @@ class JSONOutputParser(OutputParser):
         field_def = signature.output_fields.get(field_name, {})
         expected_type = field_def.get("type", str)
 
+        # PEP 563 fallback (issue #1352): if the field's expected type is still
+        # an annotation *string* — i.e. resolution at signature-build time could
+        # not run (a dynamically exec'd Signature whose module is absent from
+        # sys.modules, or an unresolvable forward ref) — we cannot pass it to
+        # isinstance(). Doing so raises `TypeError: isinstance() arg 2 must be a
+        # real type`, which parse() swallows, silently discarding an otherwise
+        # valid JSON response. Return the value unchanged instead. Normal
+        # Signatures never reach this branch: SignatureMeta resolves the string
+        # to a real annotation object at class-construction time.
+        if isinstance(expected_type, str):
+            return value
+
         # Unwrap subscripted generics (List[X], Dict[K, V], Optional[X],
         # Union[...]) before any isinstance check. On Python 3.9+,
         # `isinstance(value, typing.List[...])` raises
