@@ -213,6 +213,30 @@ class CacheConfig:
 
 Features: TTL-based expiration, LRU eviction, ETag generation (SHA-256), Cache-Control parsing, per-handler exemption, thread-safe, cache statistics, programmatic invalidation.
 
+#### RequestMetricsMiddleware
+
+**Module:** `nexus.middleware.request_metrics`
+
+Pure-ASGI middleware that records per-request HTTP metrics (`nexus_http_requests_total` + `nexus_http_request_duration_seconds`, see §14) into the prometheus default registry, so they surface on the existing `/metrics` endpoint.
+
+**Constructor:**
+
+```python
+RequestMetricsMiddleware(
+    app,
+    *,
+    exclude_paths=("/metrics", "/healthz", "/readyz", "/startup"),
+)
+```
+
+**Behavior:**
+
+- Opt-in via `NexusConfig.metrics_enabled` (default `False`); wired LAST in the `standard` / `saas` / `enterprise` preset chains so it is outermost (LIFO) and measures total request latency including all other middleware.
+- Records each request under labels `method` / `route` / `status`. The `route` label is the matched route TEMPLATE (`/users/{id}` from `scope["route"]`), never the concrete path, with an `__unmatched__` sentinel when no route matched — bounding Prometheus label cardinality against path-scanning DoS.
+- An unhandled handler exception (no `http.response.start` emitted) is recorded with `status="500"`, then re-propagated (the middleware does not swallow exceptions).
+- Detects `prometheus_client` availability once at construction; when absent it is a cheap pass-through and logs a one-time WARNING naming `pip install kailash-nexus[metrics]`.
+- Requests to `exclude_paths` are passed through without a metric (so the scrape path and probes do not pollute route labels).
+
 ---
 
 ## 12. Kubernetes Probes
@@ -333,16 +357,20 @@ class OpenApiGenerator:
 
 **Prometheus metrics registered:**
 
-| Metric                                | Type      | Description                              |
-| ------------------------------------- | --------- | ---------------------------------------- |
-| `nexus_workflow_registration_seconds` | Histogram | Time to register a workflow.             |
-| `nexus_cross_channel_sync_seconds`    | Histogram | Time to sync state across channels.      |
-| `nexus_failure_recovery_seconds`      | Histogram | Time to recover from a workflow failure. |
-| `nexus_session_sync_latency_seconds`  | Histogram | Latency of session synchronization.      |
-| `nexus_active_sessions`               | Gauge     | Number of currently active sessions.     |
-| `nexus_registered_workflows`          | Gauge     | Number of registered workflows.          |
+| Metric                                | Type      | Description                                      |
+| ------------------------------------- | --------- | ------------------------------------------------ |
+| `nexus_workflow_registration_seconds` | Histogram | Time to register a workflow.                     |
+| `nexus_cross_channel_sync_seconds`    | Histogram | Time to sync state across channels.              |
+| `nexus_failure_recovery_seconds`      | Histogram | Time to recover from a workflow failure.         |
+| `nexus_session_sync_latency_seconds`  | Histogram | Latency of session synchronization.              |
+| `nexus_active_sessions`               | Gauge     | Number of currently active sessions.             |
+| `nexus_registered_workflows`          | Gauge     | Number of registered workflows.                  |
+| `nexus_http_requests_total`           | Counter   | Total HTTP requests by method/route/status.      |
+| `nexus_http_request_duration_seconds` | Histogram | Per-request HTTP latency by method/route/status. |
 
-Metrics are synced from Nexus's internal performance deques on every `/metrics` scrape. Each deque value is observed exactly once (tracked via per-instance offset dict).
+The first six metrics are synced from Nexus's internal performance deques on every `/metrics` scrape. Each deque value is observed exactly once (tracked via per-instance offset dict).
+
+The two `nexus_http_*` metrics are recorded by `RequestMetricsMiddleware` (module `nexus.middleware.request_metrics`) — opt-in via `NexusConfig.metrics_enabled` (default `False` because `prometheus_client` is optional), wired LAST in the `standard` / `saas` / `enterprise` preset chains so it is the outermost middleware (LIFO) and measures total request latency including all other middleware. The `route` label is the matched route TEMPLATE (e.g. `/users/{id}`), never the concrete path, with an `__unmatched__` sentinel for unmatched traffic — bounding Prometheus label cardinality against path-scanning DoS. They surface on the same `/metrics` endpoint because they live in the prometheus default registry; an unhandled handler exception is recorded with `status="500"`.
 
 ---
 

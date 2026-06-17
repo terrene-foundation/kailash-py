@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["register_metrics_endpoint"]
+__all__ = ["register_metrics_endpoint", "observe_http_request"]
 
 # ---------------------------------------------------------------------------
 # Lazy import helper
@@ -59,6 +59,79 @@ _failure_recovery_hist = None
 _session_sync_latency_hist = None
 _active_sessions_gauge = None
 _registered_workflows_gauge = None
+
+# Per-request HTTP metrics — created lazily + independently of the deque-synced
+# metrics above so the request middleware can record without a registered
+# /metrics endpoint (it still surfaces on /metrics because both use the
+# prometheus DEFAULT registry).
+_request_metrics_initialized = False
+_http_requests_total = None
+_http_request_duration_hist = None
+
+
+def _init_request_metrics():
+    """Create the per-request HTTP Prometheus metric objects on first use."""
+    global _request_metrics_initialized  # noqa: PLW0603
+    global _http_requests_total, _http_request_duration_hist  # noqa: PLW0603
+    if _request_metrics_initialized:
+        return
+
+    pc = _require_prometheus_client()
+
+    _http_requests_total = pc.Counter(
+        "nexus_http_requests_total",
+        "Total HTTP requests processed by Nexus",
+        ["method", "route", "status"],
+    )
+    _http_request_duration_hist = pc.Histogram(
+        "nexus_http_request_duration_seconds",
+        "HTTP request latency in seconds by method/route/status",
+        ["method", "route", "status"],
+        buckets=(
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.1,
+            0.25,
+            0.5,
+            1.0,
+            2.5,
+            5.0,
+            10.0,
+        ),
+    )
+
+    _request_metrics_initialized = True
+
+
+def observe_http_request(
+    method: str, route: str, status: int, duration_seconds: float
+) -> None:
+    """Record one HTTP request into the per-request Nexus metrics.
+
+    Increments ``nexus_http_requests_total`` and observes
+    ``nexus_http_request_duration_seconds`` under the
+    ``(method, route, status)`` label set. Called by
+    :class:`~nexus.middleware.request_metrics.RequestMetricsMiddleware`.
+
+    Args:
+        method: HTTP method (e.g. ``"GET"``).
+        route: Matched route template (e.g. ``"/users/{id}"``), or the
+            ``"__unmatched__"`` sentinel when no route matched — the label
+            is the template, never the concrete path, to bound cardinality.
+        status: HTTP status code.
+        duration_seconds: Wall-clock request duration in seconds.
+
+    Raises:
+        ImportError: If ``prometheus_client`` is not installed.
+    """
+    _init_request_metrics()
+    status_label = str(status)
+    _http_requests_total.labels(method=method, route=route, status=status_label).inc()
+    _http_request_duration_hist.labels(
+        method=method, route=route, status=status_label
+    ).observe(duration_seconds)
 
 
 def _init_metrics():

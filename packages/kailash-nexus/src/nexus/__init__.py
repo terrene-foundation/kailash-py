@@ -57,6 +57,7 @@ from .extractors import (
 )
 from .files import NexusFile
 from .metrics import register_metrics_endpoint
+from .middleware.request_metrics import RequestMetricsMiddleware
 from .openapi import OpenApiGenerator, OpenApiInfo
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
 from .probes import ProbeManager, ProbeResponse, ProbeState
@@ -116,7 +117,7 @@ from .service_client import (
 )
 from .typed_service_client import Decoder, TypedServiceClient
 
-__version__ = "2.10.0"
+__version__ = "2.11.0"
 __all__ = [
     # Core
     "Nexus",
@@ -163,6 +164,7 @@ __all__ = [
     "OpenApiInfo",
     # Metrics & SSE
     "register_metrics_endpoint",
+    "RequestMetricsMiddleware",
     "register_sse_endpoint",
     # Class-based WebSocket message handlers (issue #448)
     "Connection",

@@ -62,6 +62,14 @@ class NexusConfig:
     rate_limit: Optional[int] = 100
     rate_limit_config: Optional[Dict[str, Any]] = None
 
+    # Per-request HTTP metrics
+    # Opt-in per-request HTTP metrics middleware (RequestMetricsMiddleware:
+    # nexus_http_requests_total + nexus_http_request_duration_seconds, labelled
+    # by method/route-template/status). Requires prometheus_client AND a
+    # registered /metrics endpoint (register_metrics_endpoint). Default False
+    # because prometheus_client is an optional dependency.
+    metrics_enabled: bool = False
+
     # Security Headers (threaded into the security-headers preset middleware)
     # csp: custom Content-Security-Policy string; None keeps SecurityHeadersConfig's
     # secure default. security_header_overrides: per-field overrides
@@ -216,6 +224,23 @@ def _rate_limit_middleware_factory(config: NexusConfig) -> Optional[tuple]:
     return (RateLimitMiddleware, {"config": rl_config})
 
 
+def _request_metrics_middleware_factory(config: NexusConfig) -> Optional[tuple]:
+    """Create the per-request HTTP metrics middleware when opted-in.
+
+    Returns None unless ``config.metrics_enabled`` is True. When enabled,
+    attaches ``RequestMetricsMiddleware`` (which records
+    ``nexus_http_requests_total`` + ``nexus_http_request_duration_seconds``).
+    Appended LAST in the standard/saas/enterprise chains so it is the OUTERMOST
+    middleware (LIFO) and measures total request latency including all others.
+    """
+    if not config.metrics_enabled:
+        return None
+
+    from nexus.middleware.request_metrics import RequestMetricsMiddleware
+
+    return (RequestMetricsMiddleware, {})
+
+
 # NOTE: The exception → canonical-error-envelope contract (the WS02
 # "error handler middleware" placeholder formerly stubbed here) ships via the
 # HTTP transport's NexusError handler — see
@@ -326,6 +351,7 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
+            _request_metrics_middleware_factory,
         ],
         plugin_factories=[],
     ),
@@ -337,6 +363,7 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
+            _request_metrics_middleware_factory,
         ],
         plugin_factories=[
             _jwt_auth_plugin_factory,
@@ -353,6 +380,7 @@ PRESETS: Dict[str, PresetConfig] = {
             _security_headers_middleware_factory,
             _csrf_middleware_factory,
             _rate_limit_middleware_factory,
+            _request_metrics_middleware_factory,
         ],
         plugin_factories=[
             _jwt_auth_plugin_factory,
