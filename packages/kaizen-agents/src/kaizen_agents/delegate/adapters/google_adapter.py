@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Google Gemini streaming chat adapter.
 
-Implements the :class:`StreamingChatAdapter` protocol using the
-``google.generativeai`` SDK.  Converts between OpenAI-format messages and
-Gemini's native content format.
+Implements the :class:`StreamingChatAdapter` protocol using the supported
+``google.genai`` SDK (the ``google-genai`` package).  Converts between
+OpenAI-format messages and Gemini's native content format.
 
-Lazy-imports the ``google-generativeai`` package so that users of other
-providers do not need it installed.
+Lazy-imports ``google.genai`` so that import of this module does not pull the
+SDK into processes that only use other providers; the package itself is a
+runtime dependency of ``kaizen-agents`` (see ``pyproject.toml``).
 """
 
 from __future__ import annotations
@@ -119,8 +120,25 @@ def _convert_tools_for_gemini(
     return [{"function_declarations": declarations}]
 
 
+def _iter_chunk_parts(chunk: Any) -> list[Any]:
+    """Yield the content parts of a ``google.genai`` streaming chunk.
+
+    The ``google.genai`` ``GenerateContentResponse`` does not expose ``parts``
+    directly (the ``google.generativeai`` SDK did); parts live under
+    ``chunk.candidates[0].content.parts``. Returns an empty list for chunks
+    with no candidate/content (e.g. a trailing usage-only chunk).
+    """
+    candidates = getattr(chunk, "candidates", None) or []
+    if not candidates:
+        return []
+    content = getattr(candidates[0], "content", None)
+    if content is None:
+        return []
+    return list(getattr(content, "parts", None) or [])
+
+
 class GoogleStreamAdapter:
-    """Adapter for Google Gemini models via the google-generativeai SDK.
+    """Adapter for Google Gemini models via the google-genai SDK.
 
     Parameters
     ----------
@@ -159,15 +177,16 @@ class GoogleStreamAdapter:
         self._default_max_tokens = default_max_tokens
 
         try:
-            import google.generativeai as genai
+            from google import genai
+            from google.genai import types as genai_types
         except ImportError as exc:
             raise ImportError(
-                "The google-generativeai package is required for Google adapters.  "
-                "Install it with: pip install google-generativeai"
+                "The google-genai package is required for Google adapters.  "
+                "Install it with: pip install google-genai"
             ) from exc
 
-        genai.configure(api_key=resolved_key)
-        self._genai = genai
+        self._client = genai.Client(api_key=resolved_key)
+        self._types = genai_types
 
     async def stream_chat(
         self,
@@ -194,21 +213,16 @@ class GoogleStreamAdapter:
         system_instruction, gemini_contents = _convert_messages_for_gemini(messages)
         gemini_tools = _convert_tools_for_gemini(tools)
 
-        generation_config = {
+        config_kwargs: dict[str, Any] = {
             "temperature": resolved_temp,
             "max_output_tokens": resolved_max,
         }
-
-        model_kwargs: dict[str, Any] = {
-            "model_name": resolved_model,
-            "generation_config": generation_config,
-        }
         if system_instruction:
-            model_kwargs["system_instruction"] = system_instruction
+            config_kwargs["system_instruction"] = system_instruction
         if gemini_tools:
-            model_kwargs["tools"] = gemini_tools
+            config_kwargs["tools"] = gemini_tools
 
-        generative_model = self._genai.GenerativeModel(**model_kwargs)
+        config = self._types.GenerateContentConfig(**config_kwargs)
 
         # Accumulate state
         content = ""
@@ -217,15 +231,18 @@ class GoogleStreamAdapter:
         usage: dict[str, int] = {}
         finish_reason: str | None = None
 
-        response = await generative_model.generate_content_async(
-            gemini_contents,
-            stream=True,
+        response = await self._client.aio.models.generate_content_stream(
+            model=resolved_model,
+            contents=gemini_contents,
+            config=config,
         )
 
         async for chunk in response:
-            # Extract text from parts
-            if chunk.parts:
-                for part in chunk.parts:
+            # Extract text from parts (google.genai nests parts under
+            # candidates[0].content.parts; see _iter_chunk_parts).
+            chunk_parts = _iter_chunk_parts(chunk)
+            if chunk_parts:
+                for part in chunk_parts:
                     # Text part
                     if hasattr(part, "text") and part.text:
                         content += part.text

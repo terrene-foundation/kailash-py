@@ -4,12 +4,12 @@ External Runtime Adapters delegate execution to specialized AI platforms while m
 
 ## Available Adapters
 
-| Adapter | Provider | Key Capabilities |
-|---------|----------|------------------|
-| **LocalKaizenAdapter** | Kaizen | Works with ANY LLM, full Kaizen tool registry |
-| **ClaudeCodeAdapter** | Anthropic | Claude Code SDK native tools (Read, Write, Bash, etc.) |
-| **OpenAICodexAdapter** | OpenAI | Code Interpreter (sandboxed Python), file search |
-| **GeminiCLIAdapter** | Google | 1M context, code execution, multi-modal |
+| Adapter                | Provider  | Key Capabilities                                       |
+| ---------------------- | --------- | ------------------------------------------------------ |
+| **LocalKaizenAdapter** | Kaizen    | Works with ANY LLM, full Kaizen tool registry          |
+| **ClaudeCodeAdapter**  | Anthropic | Claude Code SDK native tools (Read, Write, Bash, etc.) |
+| **OpenAICodexAdapter** | OpenAI    | Code Interpreter (sandboxed Python), file search       |
+| **GeminiCLIAdapter**   | Google    | 1M context, code execution, multi-modal                |
 
 ## ClaudeCodeAdapter
 
@@ -32,13 +32,13 @@ result = await adapter.execute(context)
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `working_directory` | str | cwd | Project directory |
-| `model` | str | claude-sonnet-4-20250514 | Model to use |
-| `timeout_seconds` | float | 300 | Execution timeout |
-| `custom_tools` | List[Dict] | [] | Additional tools |
-| `max_turns` | int | None | Max conversation turns |
+| Parameter           | Type       | Default                  | Description            |
+| ------------------- | ---------- | ------------------------ | ---------------------- |
+| `working_directory` | str        | cwd                      | Project directory      |
+| `model`             | str        | claude-sonnet-4-20250514 | Model to use           |
+| `timeout_seconds`   | float      | 300                      | Execution timeout      |
+| `custom_tools`      | List[Dict] | []                       | Additional tools       |
+| `max_turns`         | int        | None                     | Max conversation turns |
 
 ### Native Tools
 
@@ -137,16 +137,16 @@ result = await adapter.execute(context)
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `api_key` | str | env | OpenAI API key |
-| `model` | str | gpt-4o | Model to use |
-| `enable_code_interpreter` | bool | False | Enable Python sandbox |
-| `enable_file_search` | bool | False | Enable file search |
-| `custom_tools` | List[Dict] | [] | Additional tools |
-| `temperature` | float | 0.7 | Sampling temperature |
-| `max_output_tokens` | int | 4096 | Max response tokens |
-| `timeout_seconds` | float | 300 | Execution timeout |
+| Parameter                 | Type       | Default | Description           |
+| ------------------------- | ---------- | ------- | --------------------- |
+| `api_key`                 | str        | env     | OpenAI API key        |
+| `model`                   | str        | gpt-4o  | Model to use          |
+| `enable_code_interpreter` | bool       | False   | Enable Python sandbox |
+| `enable_file_search`      | bool       | False   | Enable file search    |
+| `custom_tools`            | List[Dict] | []      | Additional tools      |
+| `temperature`             | float      | 0.7     | Sampling temperature  |
+| `max_output_tokens`       | int        | 4096    | Max response tokens   |
+| `timeout_seconds`         | float      | 300     | Execution timeout     |
 
 ### Code Interpreter
 
@@ -226,16 +226,16 @@ result = await adapter.execute(context)
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `api_key` | str | env | Google AI API key |
-| `model` | str | gemini-1.5-pro | Model to use |
-| `enable_code_execution` | bool | False | Enable Python execution |
-| `custom_tools` | List[Dict] | [] | Additional tools |
-| `temperature` | float | 0.7 | Sampling temperature |
-| `max_output_tokens` | int | 8192 | Max response tokens |
-| `timeout_seconds` | float | 300 | Execution timeout |
-| `safety_settings` | Dict | None | Safety configuration |
+| Parameter               | Type       | Default        | Description             |
+| ----------------------- | ---------- | -------------- | ----------------------- |
+| `api_key`               | str        | env            | Google AI API key       |
+| `model`                 | str        | gemini-1.5-pro | Model to use            |
+| `enable_code_execution` | bool       | False          | Enable Python execution |
+| `custom_tools`          | List[Dict] | []             | Additional tools        |
+| `temperature`           | float      | 0.7            | Sampling temperature    |
+| `max_output_tokens`     | int        | 8192           | Max response tokens     |
+| `timeout_seconds`       | float      | 300            | Execution timeout       |
+| `safety_settings`       | Dict       | None           | Safety configuration    |
 
 ### Key Feature: 1M Token Context
 
@@ -279,21 +279,18 @@ context = ExecutionContext(
 async def execute(self, context: ExecutionContext) -> ExecutionResult:
     await self.ensure_initialized()
 
-    # Build tools configuration
+    # Build tools configuration (folded into the request config)
     tools = self._build_tools(context)
 
-    # Generate content
-    if tools:
-        response = await asyncio.to_thread(
-            self._generative_model.generate_content,
-            context.task,
-            tools=tools,
-        )
-    else:
-        response = await asyncio.to_thread(
-            self._generative_model.generate_content,
-            context.task,
-        )
+    # Generate content via the google.genai client. Generation knobs
+    # (temperature, max_output_tokens, safety, tools) live in the per-request
+    # config, not on a model object.
+    response = await asyncio.to_thread(
+        self._client.models.generate_content,
+        model=self.model,
+        contents=context.task,
+        config=self._build_generate_config(tools),
+    )
 
     return ExecutionResult(
         output=self._extract_output(response),
@@ -326,6 +323,7 @@ success = await adapter.interrupt(
 ```
 
 Note: Not all adapters support true interruption:
+
 - **ClaudeCodeAdapter**: Kills subprocess
 - **OpenAICodexAdapter**: Cancels request
 - **GeminiCLIAdapter**: Limited support (logs warning)
@@ -350,16 +348,16 @@ if await is_gemini_available():
 
 ## Comparison Table
 
-| Feature | LocalKaizen | ClaudeCode | OpenAICodex | Gemini |
-|---------|-------------|------------|-------------|--------|
-| Works with any LLM | Yes | No | No | No |
-| Native file access | Via tools | Yes | Via upload | No |
-| Code execution | Via Bash | Yes (Bash) | Yes (Python) | Yes (Python) |
-| Streaming | Yes | Yes | Yes | Yes |
-| Vision | LLM-dependent | Yes | Yes | Yes |
-| Audio | LLM-dependent | No | No | Yes |
-| Max context | LLM-dependent | 200K | 128K | 1M |
-| Internet access | Via tools | Via tools | No | No |
+| Feature            | LocalKaizen   | ClaudeCode | OpenAICodex  | Gemini       |
+| ------------------ | ------------- | ---------- | ------------ | ------------ |
+| Works with any LLM | Yes           | No         | No           | No           |
+| Native file access | Via tools     | Yes        | Via upload   | No           |
+| Code execution     | Via Bash      | Yes (Bash) | Yes (Python) | Yes (Python) |
+| Streaming          | Yes           | Yes        | Yes          | Yes          |
+| Vision             | LLM-dependent | Yes        | Yes          | Yes          |
+| Audio              | LLM-dependent | No         | No           | Yes          |
+| Max context        | LLM-dependent | 200K       | 128K         | 1M           |
+| Internet access    | Via tools     | Via tools  | No           | No           |
 
 ## When to Use Each Adapter
 

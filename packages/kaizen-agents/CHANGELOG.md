@@ -5,6 +5,28 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.11] — 2026-06-17 — Gemini adapters on supported google-genai SDK; provider SDKs are runtime deps
+
+### Changed
+
+- **Gemini adapters migrated from the deprecated `google.generativeai` SDK to
+  the supported `google.genai` SDK** (#1351). `delegate/adapters/google_adapter.py`
+  and `runtime_adapters/gemini_cli.py` now use `genai.Client` +
+  `client.aio.models.generate_content_stream` + `types.GenerateContentConfig` /
+  `types.Tool` / `types.ToolCodeExecution` (generation knobs moved from the model
+  object into the per-request config). No `FutureWarning` from the end-of-life
+  package on the Gemini path.
+
+### Fixed
+
+- **Provider SDKs declared as runtime dependencies** (#1351). `google-genai` and
+  the sibling `anthropic` (which had the identical defect) were declared only in
+  `[dev]` extras yet imported at runtime by their adapters — so a normal
+  `pip install kaizen-agents` raised `ImportError` on the Gemini / Anthropic path.
+  Both are now `[project.dependencies]`; the deprecated `google-generativeai` pin
+  is removed. Regression coverage:
+  `tests/regression/test_issue_1351_google_genai_migration.py`.
+
 ## [0.9.10] — 2026-06-11 — enforce the slim-core import fix via the kailash-kaizen floor
 
 ### Changed
