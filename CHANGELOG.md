@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.38.2] - 2026-06-18
+
+### Fixed
+
+- **(#1356) `JWTAuthManager` token revocation is now propagatable across workers.**
+  Revocation was backed by a per-instance in-memory `set`, so a token revoked on
+  one worker stayed valid on every other worker in any multi-worker / multi-pod
+  deployment — the revocation security control silently failed to take effect.
+  Token revocation now routes through a pluggable `TokenRevocationStore`
+  (exported from `kailash.middleware.auth`): inject a SHARED backend
+  (Redis / database / distributed cache) via `JWTAuthManager(revocation_store=...)`
+  and revocation propagates to every worker that shares it. The default
+  `InMemoryTokenRevocationStore` preserves the original process-local behavior
+  (single-process deployments are unaffected); the class docstring documents the
+  process-local default + the multi-worker shared-store guidance. `verify_token`
+  / `revoke_token` remain synchronous (no API break) and the revoked-token
+  exception is unchanged. The decode-failure revocation path is TTL-bounded so it
+  cannot grow the store without limit.
+
+### Added
+
+- **`TokenRevocationStore` / `InMemoryTokenRevocationStore`** in
+  `kailash.middleware.auth` — the synchronous pluggable revocation-backend
+  contract and its process-local default implementation (#1356).
+
 ## [2.38.1] - 2026-06-17
 
 ### Changed
