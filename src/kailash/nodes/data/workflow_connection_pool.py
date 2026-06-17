@@ -48,6 +48,7 @@ class ConnectionPoolMetrics:
         self.queries_executed = 0
         self.query_errors = 0
         self.acquisition_wait_times: List[float] = []
+        self.query_execution_times: List[float] = []
         self.health_check_results: List[bool] = []
         self.start_time = time.time()
 
@@ -58,6 +59,17 @@ class ConnectionPoolMetrics:
         if len(self.acquisition_wait_times) > 1000:
             self.acquisition_wait_times = self.acquisition_wait_times[-1000:]
 
+    def record_query_time(self, execution_time: float):
+        """Record wall-clock time (seconds) a query took to execute.
+
+        Mirrors record_acquisition_time: a bounded rolling window of the last
+        1000 measurements is retained so avg/p99 reflect recent behavior.
+        """
+        self.query_execution_times.append(execution_time)
+        # Keep only last 1000 measurements
+        if len(self.query_execution_times) > 1000:
+            self.query_execution_times = self.query_execution_times[-1000:]
+
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive pool statistics."""
         uptime = time.time() - self.start_time
@@ -66,6 +78,12 @@ class ConnectionPoolMetrics:
         avg_wait_time = (
             sum(self.acquisition_wait_times) / len(self.acquisition_wait_times)
             if self.acquisition_wait_times
+            else 0.0
+        )
+
+        avg_query_time = (
+            sum(self.query_execution_times) / len(self.query_execution_times)
+            if self.query_execution_times
             else 0.0
         )
 
@@ -103,6 +121,16 @@ class ConnectionPoolMetrics:
                     if self.acquisition_wait_times
                     else 0
                 ),
+                "avg_query_time_ms": avg_query_time * 1000,
+                "p99_query_time_ms": (
+                    sorted(self.query_execution_times)[
+                        int(len(self.query_execution_times) * 0.99)
+                    ]
+                    * 1000
+                    if self.query_execution_times
+                    else 0
+                ),
+                "query_samples": len(self.query_execution_times),
             },
             "health": {
                 "success_rate": health_success_rate,
@@ -643,6 +671,9 @@ class WorkflowConnectionPool(AsyncNode):
 
             # Update metrics
             self.metrics.queries_executed += 1
+            # Record the real, measured query-execution time so pool
+            # statistics report an honest avg/p99 instead of a constant.
+            self.metrics.record_query_time(result.execution_time)
             if not result.success:
                 self.metrics.query_errors += 1
                 self.metrics_collector.track_query_error(
@@ -836,16 +867,27 @@ class WorkflowConnectionPool(AsyncNode):
         connections = {}
 
         for conn_id, conn in self.all_connections.items():
-            connections[conn_id] = {
+            conn_info: Dict[str, Any] = {
                 "health_score": conn.health_score,
                 "active_queries": 1 if conn_id in self.active_connections else 0,
-                "capabilities": [
-                    "read",
-                    "write",
-                ],  # TODO: Add actual capability detection
-                "avg_latency_ms": 0.0,  # TODO: Track actual latency
-                "last_used": datetime.now().isoformat(),
             }
+
+            # Real per-connection average latency, derived from the connection
+            # actor's own execution stats. Only emit it when the connection has
+            # actually run a query — otherwise omit the key so the consumer
+            # (query_router) applies its own default. Omitting signals "no
+            # measurement yet" rather than asserting a measured 0ms; it does not
+            # fabricate a value the consumer would read as a real latency.
+            avg_latency_ms, last_used = self._connection_latency_and_last_used(conn)
+            if avg_latency_ms is not None:
+                conn_info["avg_latency_ms"] = avg_latency_ms
+            conn_info["last_used"] = last_used
+
+            # NOTE: per-connection capability detection is not yet a real
+            # signal in the pool, so the key is intentionally omitted rather
+            # than emitting a fabricated ["read", "write"] constant. The query
+            # router defaults to {"read", "write"} when the key is absent.
+            connections[conn_id] = conn_info
 
         return {
             "connections": connections,
@@ -853,6 +895,35 @@ class WorkflowConnectionPool(AsyncNode):
             "active_count": len(self.active_connections),
             "available_count": self.available_connections.qsize(),
         }
+
+    def _connection_latency_and_last_used(self, conn: Any) -> tuple:
+        """Return (avg_latency_ms, last_used_iso) from a connection's real stats.
+
+        Reads the connection actor's own execution stats
+        (``total_execution_time`` / ``queries_executed``) to compute a real
+        average latency. Returns ``(None, <now-iso>)`` when no query has run on
+        the connection (no real latency exists yet) or when the stats surface
+        is unavailable, so callers can omit the latency key instead of emitting
+        a fabricated value.
+        """
+        stats = getattr(getattr(conn, "actor", None), "stats", None)
+        if stats is None:
+            return None, datetime.now().isoformat()
+
+        executed = getattr(stats, "queries_executed", 0) or 0
+        total_time = getattr(stats, "total_execution_time", 0.0) or 0.0
+        last_used_at = getattr(stats, "last_used_at", None)
+        last_used_iso = (
+            last_used_at.isoformat()
+            if last_used_at is not None
+            else datetime.now().isoformat()
+        )
+
+        if executed <= 0:
+            return None, last_used_iso
+
+        avg_latency_ms = (total_time / executed) * 1000
+        return avg_latency_ms, last_used_iso
 
     async def adjust_pool_size(self, new_size: int) -> Dict[str, Any]:
         """Dynamically adjust pool size."""
@@ -898,6 +969,23 @@ class WorkflowConnectionPool(AsyncNode):
             "new_size": len(self.all_connections),
         }
 
+    def _pending_acquisition_waiters(self) -> int:
+        """Count consumers currently blocked waiting for a connection.
+
+        ``asyncio.Queue`` parks the futures of coroutines blocked in ``get()``
+        in its ``_getters`` deque. The deque is not pruned the instant a future
+        resolves, so we count only futures that are still pending — that is the
+        real number of acquirers waiting on an available connection right now.
+
+        Returns 0 when the underlying queue does not expose ``_getters`` (so the
+        method degrades to a truthful "no observable waiters" rather than a
+        fabricated constant).
+        """
+        getters = getattr(self.available_connections, "_getters", None)
+        if not getters:
+            return 0
+        return sum(1 for waiter in getters if not waiter.done())
+
     async def get_pool_statistics(self) -> Dict[str, Any]:
         """Get detailed pool statistics for adaptive sizing."""
         total_connections = len(self.all_connections)
@@ -915,8 +1003,11 @@ class WorkflowConnectionPool(AsyncNode):
             sum(health_scores) / len(health_scores) if health_scores else 100
         )
 
-        # Queue depth (approximate based on waiters)
-        queue_depth = 0  # TODO: Track actual queue depth
+        # Queue depth: number of consumers currently blocked in
+        # available_connections.get() waiting for a connection to free up.
+        # asyncio.Queue tracks these as pending getter futures in `_getters`;
+        # we count only the futures that are still un-resolved.
+        queue_depth = self._pending_acquisition_waiters()
 
         # Get timing metrics from pool metrics
         stats = self.metrics.get_stats()
@@ -929,7 +1020,8 @@ class WorkflowConnectionPool(AsyncNode):
             "utilization_rate": utilization_rate,
             "avg_health_score": avg_health_score,
             "avg_acquisition_time_ms": stats["performance"]["avg_acquisition_time_ms"],
-            "avg_query_time_ms": 50.0,  # TODO: Track actual query time
+            "avg_query_time_ms": stats["performance"]["avg_query_time_ms"],
+            "query_time_samples": stats["performance"]["query_samples"],
             "queries_per_second": (
                 stats["queries"]["executed"] / stats["uptime_seconds"]
                 if stats["uptime_seconds"] > 0

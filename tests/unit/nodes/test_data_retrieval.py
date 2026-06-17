@@ -8,6 +8,129 @@ from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNod
 class TestRelevanceScorerNode:
     """Test the RelevanceScorerNode."""
 
+    def test_bm25_scoring_ranks_matching_chunk_first(self):
+        """BM25 lexical scoring ranks the query-matching chunk first."""
+        chunks = [
+            {
+                "content": "Quantum mechanics describes entanglement of particles",
+                "chunk_id": "physics",
+            },
+            {
+                "content": "A recipe for chocolate cake with butter and sugar",
+                "chunk_id": "baking",
+            },
+            {
+                "content": "Distributed databases use sharding and replication for scaling",
+                "chunk_id": "databases",
+            },
+        ]
+        query = "database sharding replication scaling"
+
+        node = RelevanceScorerNode(similarity_method="bm25", top_k=3)
+        result = node.execute(chunks=chunks, query=query)
+
+        ranked = result["relevant_chunks"]
+        # The database chunk strongly matches the query and MUST rank first.
+        assert ranked[0]["chunk_id"] == "databases"
+        # Scores must be REAL — not the old constant 0.5, and must differ
+        # across chunks (proving per-chunk lexical computation).
+        scores = [c["relevance_score"] for c in ranked]
+        assert ranked[0]["relevance_score"] > 0.0
+        assert all(s != 0.5 for s in scores)
+        assert len(set(scores)) > 1
+        # Non-matching chunks have no query-term overlap -> zero score.
+        non_matching = {
+            c["chunk_id"]: c["relevance_score"]
+            for c in ranked
+            if c["chunk_id"] in ("physics", "baking")
+        }
+        assert all(score == 0.0 for score in non_matching.values())
+
+    def test_tfidf_scoring_ranks_matching_chunk_first(self):
+        """TF-IDF cosine scoring ranks the query-matching chunk first."""
+        chunks = [
+            {
+                "content": "Quantum mechanics describes entanglement of particles",
+                "chunk_id": "physics",
+            },
+            {
+                "content": "A recipe for chocolate cake with butter and sugar",
+                "chunk_id": "baking",
+            },
+            {
+                "content": "Distributed databases use sharding and replication for scaling",
+                "chunk_id": "databases",
+            },
+        ]
+        query = "database sharding replication scaling"
+
+        node = RelevanceScorerNode(similarity_method="tfidf", top_k=3)
+        result = node.execute(chunks=chunks, query=query)
+
+        ranked = result["relevant_chunks"]
+        assert ranked[0]["chunk_id"] == "databases"
+        scores = [c["relevance_score"] for c in ranked]
+        assert ranked[0]["relevance_score"] > 0.0
+        # TF-IDF cosine similarity is bounded in [0, 1].
+        assert all(0.0 <= s <= 1.0 for s in scores)
+        assert all(s != 0.5 for s in scores)
+        assert len(set(scores)) > 1
+
+    def test_bm25_requires_query_text(self):
+        """BM25 must fail loud (ValueError) when no query text is available."""
+        chunks = [{"content": "some content", "chunk_id": "c1"}]
+        node = RelevanceScorerNode(similarity_method="bm25")
+        # run() surfaces the raw ValueError (execute() wraps it).
+        with pytest.raises(
+            ValueError, match="bm25/tfidf scoring requires a 'query' text input"
+        ):
+            node.run(chunks=chunks, similarity_method="bm25")
+
+    def test_tfidf_requires_query_text(self):
+        """TF-IDF must fail loud (ValueError) when no query text is available."""
+        chunks = [{"content": "some content", "chunk_id": "c1"}]
+        node = RelevanceScorerNode(similarity_method="tfidf")
+        with pytest.raises(
+            ValueError, match="bm25/tfidf scoring requires a 'query' text input"
+        ):
+            node.run(chunks=chunks, similarity_method="tfidf")
+
+    def test_fallback_uses_real_query_text(self):
+        """No-embeddings fallback keyword-matches against the REAL query text."""
+        chunks = [
+            {"content": "Machine learning algorithms", "chunk_id": "chunk_1"},
+            {"content": "Dog training techniques", "chunk_id": "chunk_2"},
+            {"content": "Learning from data", "chunk_id": "chunk_3"},
+        ]
+
+        node = RelevanceScorerNode(top_k=3)
+        # No embeddings, but a real query naming "machine learning" terms.
+        result = node.execute(chunks=chunks, query="machine learning")
+
+        scored = {
+            c["chunk_id"]: c["relevance_score"] for c in result["relevant_chunks"]
+        }
+        # chunk_1 has both query terms -> full overlap (1.0).
+        assert scored["chunk_1"] == pytest.approx(1.0)
+        # chunk_2 (dog) shares no query term -> 0.0.
+        assert scored.get("chunk_2", 0.0) == pytest.approx(0.0)
+        # chunk_3 has only "learning" -> partial overlap (0.5).
+        assert scored["chunk_3"] == pytest.approx(0.5)
+
+    def test_fallback_no_signal_returns_zero(self):
+        """With neither embeddings nor query text, scores are an honest 0.0."""
+        chunks = [
+            {"content": "Machine learning algorithms", "chunk_id": "chunk_1"},
+            {"content": "Dog training techniques", "chunk_id": "chunk_2"},
+        ]
+
+        node = RelevanceScorerNode(top_k=2)
+        result = node.execute(chunks=chunks)  # no embeddings, no query text
+
+        # No scoring signal -> 0.0 for every chunk (never a fabricated query).
+        for chunk in result["relevant_chunks"]:
+            assert chunk["relevance_score"] == 0.0
+
     def test_cosine_similarity_scoring(self):
         """Test cosine similarity scoring with embeddings."""
         chunks = [
@@ -272,3 +395,69 @@ class TestHybridRetrieverNode:
             result["fusion_method"] == "invalid_strategy"
         )  # Reports what was requested
         assert len(result["hybrid_results"]) <= 2
+
+
+@pytest.mark.regression
+class TestRelevanceScorerLexicalRegression:
+    """Regression guards: BM25/TF-IDF must return REAL lexical scores.
+
+    Guards against the prior defect where ``_bm25_scoring`` and
+    ``_tfidf_scoring`` returned a constant ``relevance_score: 0.5`` for every
+    chunk, and the no-embeddings fallback used a hardcoded query string.
+    """
+
+    # Distinct content per chunk; the query terms strongly match exactly one.
+    _CHUNKS = [
+        {
+            "content": "Photosynthesis converts sunlight into chemical energy in plants",
+            "chunk_id": "biology",
+        },
+        {
+            "content": "The stock market closed higher on strong earnings reports",
+            "chunk_id": "finance",
+        },
+        {
+            "content": "Reinforcement learning trains agents via reward signals and policy gradients",
+            "chunk_id": "ml",
+        },
+    ]
+    _QUERY = "reinforcement learning agents reward policy"
+
+    @pytest.mark.parametrize("method", ["bm25", "tfidf"])
+    def test_lexical_scoring_is_real_not_constant(self, method):
+        """The matching chunk ranks first with non-constant, differing scores."""
+        node = RelevanceScorerNode(similarity_method=method, top_k=3)
+        result = node.execute(chunks=self._CHUNKS, query=self._QUERY)
+
+        ranked = result["relevant_chunks"]
+        # The ML chunk is the only one whose terms match the query.
+        assert ranked[0]["chunk_id"] == "ml"
+
+        scores = [c["relevance_score"] for c in ranked]
+        # The matching chunk has a positive real score.
+        assert ranked[0]["relevance_score"] > 0.0
+        # Proves real computation, not the old constant-0.5 stub:
+        assert all(s != 0.5 for s in scores), f"{method} returned a 0.5 score: {scores}"
+        # Scores differ across chunks (the stub made them all identical).
+        assert len(set(scores)) > 1, f"{method} scores are all equal: {scores}"
+
+    @pytest.mark.parametrize("method", ["bm25", "tfidf"])
+    def test_lexical_scoring_never_uniform_half(self, method):
+        """Guard: bm25/tfidf must never return a uniform 0.5 for all chunks."""
+        node = RelevanceScorerNode(similarity_method=method, top_k=3)
+        result = node.execute(chunks=self._CHUNKS, query=self._QUERY)
+
+        scores = [c["relevance_score"] for c in result["relevant_chunks"]]
+        uniform_half = len(scores) > 0 and all(s == 0.5 for s in scores)
+        assert (
+            not uniform_half
+        ), f"{method} regressed to the constant-0.5 stub: {scores}"
+
+    @pytest.mark.parametrize("method", ["bm25", "tfidf"])
+    def test_lexical_scoring_requires_query(self, method):
+        """bm25/tfidf must raise a clear ValueError with no query text."""
+        node = RelevanceScorerNode(similarity_method=method)
+        with pytest.raises(
+            ValueError, match="bm25/tfidf scoring requires a 'query' text input"
+        ):
+            node.run(chunks=self._CHUNKS, similarity_method=method)

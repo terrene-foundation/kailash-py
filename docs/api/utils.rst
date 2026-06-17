@@ -180,10 +180,15 @@ RAG Components
 
    from kailash.nodes.data.retrieval import RelevanceScorerNode
 
-   # Multi-method similarity scoring
-   relevance_scorer = RelevanceScorerNode(
-       similarity_method="cosine",  # or "text_based"
-       top_k=3
+   # Embedding-based scoring (cosine over query/chunk embeddings)
+   relevance_scorer = RelevanceScorerNode(similarity_method="cosine", top_k=3)
+
+   # Lexical scoring: real Okapi BM25 / TF-IDF over chunk text.
+   # bm25/tfidf require a ``query`` text input and score chunk["content"]:
+   lexical_scorer = RelevanceScorerNode(similarity_method="bm25", top_k=3)
+   scored = lexical_scorer.execute(
+       query="vector search relevance",
+       chunks=[{"content": "..."}, {"content": "..."}],
    )
 
 Complete RAG Pipeline Example
