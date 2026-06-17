@@ -192,30 +192,43 @@ class TestPresetRegistry:
         assert preset.middleware_factories[0] is _cors_middleware_factory
         assert preset.plugin_factories == []
 
-    def test_standard_has_four_middleware(self):
-        """'standard' preset has CORS + security headers + CSRF + rate limit.
+    def test_standard_has_five_middleware(self):
+        """'standard' preset has CORS + security headers + CSRF + rate limit
+        + request metrics (the metrics factory is LAST → outermost → total latency).
 
         (The former error-handler placeholder factory was removed — the
         exception→canonical-envelope contract ships via the HTTP transport's
-        NexusError handler, not a preset middleware.)
+        NexusError handler, not a preset middleware. The request-metrics
+        factory was appended last for #1336 gateway HTTP-middleware parity.)
         """
+        from nexus.presets import _request_metrics_middleware_factory
+
         preset = get_preset("standard")
 
-        assert len(preset.middleware_factories) == 4
+        assert len(preset.middleware_factories) == 5
+        # Metrics middleware MUST be last → outermost (LIFO) → measures total
+        # request latency including all other middleware.
+        assert preset.middleware_factories[-1] is _request_metrics_middleware_factory
         assert preset.plugin_factories == []
 
     def test_saas_has_middleware_and_plugins(self):
         """'saas' preset has middleware and plugin factories."""
+        from nexus.presets import _request_metrics_middleware_factory
+
         preset = get_preset("saas")
 
-        assert len(preset.middleware_factories) == 4
+        assert len(preset.middleware_factories) == 5
+        assert preset.middleware_factories[-1] is _request_metrics_middleware_factory
         assert len(preset.plugin_factories) == 4
 
     def test_enterprise_has_most_plugins(self):
         """'enterprise' preset has the most plugin factories."""
+        from nexus.presets import _request_metrics_middleware_factory
+
         preset = get_preset("enterprise")
 
-        assert len(preset.middleware_factories) == 4
+        assert len(preset.middleware_factories) == 5
+        assert preset.middleware_factories[-1] is _request_metrics_middleware_factory
         assert len(preset.plugin_factories) == 6
 
 
@@ -272,6 +285,27 @@ class TestFactoryFunctions:
         assert rl_config.requests_per_minute == 100
         assert rl_config.burst_size == 5
         assert rl_config.fail_open is False
+
+    def test_request_metrics_factory_returns_none_by_default(self):
+        """Request-metrics factory returns None when metrics_enabled is False (default)."""
+        from nexus.presets import _request_metrics_middleware_factory
+
+        config = NexusConfig()
+        assert config.metrics_enabled is False
+        assert _request_metrics_middleware_factory(config) is None
+
+    def test_request_metrics_factory_attaches_middleware_when_enabled(self):
+        """Opt-in via metrics_enabled wires RequestMetricsMiddleware (no kwargs)."""
+        from nexus.middleware.request_metrics import RequestMetricsMiddleware
+        from nexus.presets import _request_metrics_middleware_factory
+
+        config = NexusConfig(metrics_enabled=True)
+
+        result = _request_metrics_middleware_factory(config)
+        assert result is not None
+        middleware_class, kwargs = result
+        assert middleware_class is RequestMetricsMiddleware
+        assert kwargs == {}
 
     def test_security_headers_factory_uses_default_csp_when_unset(self):
         """No config.csp → SecurityHeadersConfig secure default CSP is kept."""

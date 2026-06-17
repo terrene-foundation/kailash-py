@@ -1,5 +1,11 @@
 # Nexus Changelog
 
+## [2.11.0] — 2026-06-17 — Per-request HTTP metrics middleware (#1336)
+
+### Added
+
+- **Per-request HTTP metrics middleware (#1336).** `RequestMetricsMiddleware` (module `nexus.middleware.request_metrics`) emits `nexus_http_requests_total` (Counter) + `nexus_http_request_duration_seconds` (Histogram) — labelled by `method` / `route` (matched route template) / `status` — for every HTTP request, on the existing `/metrics` Prometheus endpoint. Opt-in via `NexusConfig.metrics_enabled` (default False because `prometheus_client` is an optional dep); auto-wired LAST (outermost, so it measures total request latency including all other middleware) in the `standard`, `saas`, and `enterprise` preset chains. The route label is the matched TEMPLATE (`/users/{id}`), never the concrete path, with an `__unmatched__` sentinel for unmatched traffic — bounding Prometheus label cardinality against path-scanning DoS. Closes the last gateway HTTP-middleware-parity gap with the Rust engine. The middleware is a pure-ASGI implementation (not Starlette `BaseHTTPMiddleware`) and is a cheap pass-through when `prometheus_client` is absent.
+
 ## [2.10.0] — 2026-06-17 — Preset auto-wiring: rate-limit + CSP passthrough (#1336)
 
 ### Added

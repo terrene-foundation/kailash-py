@@ -11,6 +11,7 @@ from __future__ import annotations
 from nexus.middleware.cache import CacheConfig, CacheStats, ResponseCacheMiddleware
 from nexus.middleware.csrf import CSRFMiddleware
 from nexus.middleware.governance import PACTGovernanceError, PACTMiddleware
+from nexus.middleware.request_metrics import RequestMetricsMiddleware
 from nexus.middleware.security_headers import (
     SecurityHeadersConfig,
     SecurityHeadersMiddleware,
@@ -22,6 +23,7 @@ __all__ = [
     "CSRFMiddleware",
     "PACTGovernanceError",
     "PACTMiddleware",
+    "RequestMetricsMiddleware",
     "ResponseCacheMiddleware",
     "SecurityHeadersConfig",
     "SecurityHeadersMiddleware",
