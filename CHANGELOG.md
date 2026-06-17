@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.38.1] - 2026-06-17
+
+### Changed
+
+- **(Behavior change)** `EmbeddingNode` no longer returns `np.random.randn`
+  random placeholder vectors presented as real embeddings (meaningless for any
+  similarity search). It now raises a clear typed `NodeExecutionError` — the
+  node bundles no real embedding model. Provide real embeddings from an
+  embedding provider upstream, or use `RelevanceScorerNode` with
+  `similarity_method="bm25"` / `"tfidf"` for embedding-free retrieval.
+
 ## [2.38.0] - 2026-06-17
 
 ### Added
