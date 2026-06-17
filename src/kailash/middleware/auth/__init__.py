@@ -26,6 +26,7 @@ from .exceptions import (
 # Import without circular dependencies
 from .jwt_auth import JWTAuthManager
 from .models import AuthenticationResult, JWTConfig, TokenPair, TokenPayload, UserClaims
+from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 from .utils import generate_key_pair, generate_secret_key, parse_bearer_token
 
 # Import other components (check for circular deps)
@@ -52,6 +53,9 @@ __all__ = [
     "TokenPair",
     "UserClaims",
     "AuthenticationResult",
+    # Token revocation
+    "TokenRevocationStore",
+    "InMemoryTokenRevocationStore",
     # Exceptions
     "AuthenticationError",
     "TokenExpiredError",
