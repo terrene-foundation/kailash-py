@@ -2,6 +2,13 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.2.15] — 2026-06-18 — chore: release un-bumped #1258 byte-vector pins
+
+Patch release cutting the previously-unreleased `1e17d63df` source commit (#1258 —
+documented + pinned non-ASCII byte-vectors for the 4 MCP canonical encoders in
+`protocol/messages.py`). Documentation + test-vector pins only; zero runtime / API /
+behavior change. Released to keep the package source tree and PyPI in sync.
+
 ## [0.2.14] — 2026-05-09 — hotfix: aiohttp + websockets restored to core deps
 
 Hotfix release closing a pre-existing latent silent-None ImportError fallback in `transports/transports.py` that was masked by editable installs and exposed by the 0.2.13 clean-venv install verification (`pip install kailash-mcp==0.2.13` → `AttributeError: 'NoneType' object has no attribute 'ClientResponse'` at module-import time).

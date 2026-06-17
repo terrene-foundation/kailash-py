@@ -1,5 +1,13 @@
 # PACT Changelog
 
+## [0.12.1] — 2026-06-18 — chore: release un-bumped comment-only source change
+
+Patch release cutting the previously-unreleased `7abe1a2c2` source commit (reworded
+two `# type`-substring comments to dodge the `python-use-type-annotations` pygrep
+false positive + removed one verified-dead duplicate local import in
+`engine.py::verify_audit_chain`). No runtime behavior change; AST parses unchanged.
+Released to keep the package source tree and PyPI in sync.
+
 ## [0.12.0] — 2026-05-09 — slim-core decoupling: `[api]` + `[execution]` extras (#890)
 
 Minor release shipping the kailash-pact side of the kailash 2.18.0 / #890 slim-core decoupling. **Install-shape breaking change** — fastapi, slowapi, kailash-kaizen, and psycopg are no longer pulled by the bare `pip install kailash-pact`. Users hitting the governance HTTP API or kaizen-driven supervisor surfaces MUST install the matching extra (or `[all]` for the pre-0.12.0 install shape).
