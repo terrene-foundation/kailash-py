@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.36.0] - 2026-06-17
+
+### Added
+
+- **Session sliding-TTL + remaining-TTL accessor (#1336, gateway parity #1349)**:
+  `kailash.channels.CrossChannelSession` gains a `remaining_ttl(timeout=3600)`
+  accessor returning the seconds left before expiry, mirroring the two-mode logic
+  of `is_expired` exactly (absolute-deadline branch when `expires_at` is set, idle
+  branch otherwise) so the two always agree. Sessions may now opt into **sliding
+  expiration** via `SessionManager.create_session(sliding_ttl=<seconds>)`: the
+  deadline re-slides forward to `now + ttl` on every activity (`touch()`, any
+  mutator, or `get_session` access). Sliding is strictly opt-in via a new `ttl`
+  field — fixed-deadline sessions created with `timeout=` keep their existing
+  non-sliding behavior unchanged, and `timeout` / `sliding_ttl` are mutually
+  exclusive (passing both raises `ValueError`).
+
 ## [2.35.0] - 2026-06-16
 
 ### Added
