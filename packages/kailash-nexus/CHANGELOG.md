@@ -1,5 +1,16 @@
 # Nexus Changelog
 
+## [2.10.0] — 2026-06-17 — Preset auto-wiring: rate-limit + CSP passthrough (#1336)
+
+### Added
+
+- **Rate-limit preset auto-wiring (#1336, parity #1345).** The `standard`, `saas`, and `enterprise` presets now auto-attach the built `RateLimitMiddleware` (token-bucket + 429 body + `X-RateLimit-*` / `Retry-After` headers) using a `RateLimitConfig` derived from `NexusConfig.rate_limit` (per-minute limit) and `NexusConfig.rate_limit_config` (a dict of further `RateLimitConfig` fields — `burst_size`, `backend`, `route_limits`, …). Previously the preset factory was a placeholder that logged "not yet implemented (coming in WS02)" and attached nothing; the rate limiter had to be wired manually via `add_middleware`. Setting `rate_limit=None` still omits the middleware.
+- **Consumer CSP + security-header passthrough (#1336, parity #1348).** `NexusConfig` gains `csp: Optional[str]` (a custom Content-Security-Policy string) and `security_header_overrides: Optional[Dict[str, Any]]` (per-field overrides — `frame_options`, `hsts_*`, `referrer_policy`, …), both threaded into the `SecurityHeadersConfig` the security-headers preset constructs. Previously the preset hardcoded the config and ignored consumer settings; a custom CSP required an explicit `add_middleware(SecurityHeadersMiddleware, config=...)` call. Defaults are unchanged when neither field is set.
+
+### Removed
+
+- **Dead `_error_handler_middleware_factory` preset placeholder (#1336).** Removed the WS02 placeholder factory (it always returned `None`). The exception → canonical-error-envelope contract ships via the HTTP transport's `NexusError` handler (`transports/http.py::_install_exception_handlers`, installed at transport startup), not a preset middleware — so the placeholder was dead. No behavior change (it attached nothing).
+
 ## [2.9.1] — 2026-06-12 — `Nexus.close()` cascade-closes internal AsyncLocalRuntimes (#1285)
 
 ### Fixed

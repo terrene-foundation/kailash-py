@@ -8,6 +8,7 @@ Tier 1 tests - mocking allowed for isolated unit testing.
 import logging
 
 import pytest
+
 from nexus import Nexus
 from nexus.presets import (
     PRESETS,
@@ -15,11 +16,11 @@ from nexus.presets import (
     PresetConfig,
     _audit_plugin_factory,
     _cors_middleware_factory,
-    _error_handler_middleware_factory,
     _feature_flags_plugin_factory,
     _jwt_auth_plugin_factory,
     _rate_limit_middleware_factory,
     _rbac_plugin_factory,
+    _security_headers_middleware_factory,
     _sso_plugin_factory,
     _tenant_isolation_plugin_factory,
     apply_preset,
@@ -191,25 +192,30 @@ class TestPresetRegistry:
         assert preset.middleware_factories[0] is _cors_middleware_factory
         assert preset.plugin_factories == []
 
-    def test_standard_has_five_middleware(self):
-        """'standard' preset has CORS + security headers + CSRF + rate limit + error handler."""
+    def test_standard_has_four_middleware(self):
+        """'standard' preset has CORS + security headers + CSRF + rate limit.
+
+        (The former error-handler placeholder factory was removed — the
+        exception→canonical-envelope contract ships via the HTTP transport's
+        NexusError handler, not a preset middleware.)
+        """
         preset = get_preset("standard")
 
-        assert len(preset.middleware_factories) == 5
+        assert len(preset.middleware_factories) == 4
         assert preset.plugin_factories == []
 
     def test_saas_has_middleware_and_plugins(self):
         """'saas' preset has middleware and plugin factories."""
         preset = get_preset("saas")
 
-        assert len(preset.middleware_factories) == 5
+        assert len(preset.middleware_factories) == 4
         assert len(preset.plugin_factories) == 4
 
     def test_enterprise_has_most_plugins(self):
         """'enterprise' preset has the most plugin factories."""
         preset = get_preset("enterprise")
 
-        assert len(preset.middleware_factories) == 5
+        assert len(preset.middleware_factories) == 4
         assert len(preset.plugin_factories) == 6
 
 
@@ -238,22 +244,73 @@ class TestFactoryFunctions:
         result = _rate_limit_middleware_factory(config)
         assert result is None
 
-    def test_rate_limit_factory_warns_not_implemented(self, caplog):
-        """Rate limit factory logs warning (placeholder)."""
-        config = NexusConfig(rate_limit=100)
+    def test_rate_limit_factory_attaches_middleware_with_threaded_limit(self):
+        """Rate limit factory wires RateLimitMiddleware with the configured limit."""
+        from nexus.auth import RateLimitConfig, RateLimitMiddleware
 
-        with caplog.at_level(logging.WARNING):
-            result = _rate_limit_middleware_factory(config)
+        config = NexusConfig(rate_limit=42)
 
-        assert result is None
-        assert "not yet implemented" in caplog.text
+        result = _rate_limit_middleware_factory(config)
+        assert result is not None
+        middleware_class, kwargs = result
+        assert middleware_class is RateLimitMiddleware
+        rl_config = kwargs["config"]
+        assert isinstance(rl_config, RateLimitConfig)
+        assert rl_config.requests_per_minute == 42
 
-    def test_error_handler_factory_returns_none(self):
-        """Error handler factory returns None (placeholder)."""
-        config = NexusConfig()
+    def test_rate_limit_factory_merges_rate_limit_config_overrides(self):
+        """rate_limit_config dict overrides flow into the RateLimitConfig."""
+        config = NexusConfig(
+            rate_limit=100,
+            rate_limit_config={"burst_size": 5, "fail_open": False},
+        )
 
-        result = _error_handler_middleware_factory(config)
-        assert result is None
+        result = _rate_limit_middleware_factory(config)
+        assert result is not None
+        _, kwargs = result
+        rl_config = kwargs["config"]
+        assert rl_config.requests_per_minute == 100
+        assert rl_config.burst_size == 5
+        assert rl_config.fail_open is False
+
+    def test_security_headers_factory_uses_default_csp_when_unset(self):
+        """No config.csp → SecurityHeadersConfig secure default CSP is kept."""
+        from nexus.middleware.security_headers import SecurityHeadersConfig
+
+        config = NexusConfig()  # csp defaults to None
+        result = _security_headers_middleware_factory(config)
+        assert result is not None
+        _, kwargs = result
+        sec_config = kwargs["config"]
+        assert sec_config.csp == SecurityHeadersConfig().csp  # untouched default
+
+    def test_security_headers_factory_threads_custom_csp(self):
+        """config.csp is threaded into the SecurityHeadersConfig."""
+        custom_csp = "default-src 'none'; script-src 'self' https://cdn.example.com"
+        config = NexusConfig(csp=custom_csp)
+
+        result = _security_headers_middleware_factory(config)
+        assert result is not None
+        _, kwargs = result
+        assert kwargs["config"].csp == custom_csp
+
+    def test_security_headers_factory_merges_header_overrides(self):
+        """security_header_overrides flow into the SecurityHeadersConfig."""
+        config = NexusConfig(
+            security_header_overrides={
+                "frame_options": "SAMEORIGIN",
+                "hsts_preload": True,
+            }
+        )
+
+        result = _security_headers_middleware_factory(config)
+        assert result is not None
+        _, kwargs = result
+        sec_config = kwargs["config"]
+        assert sec_config.frame_options == "SAMEORIGIN"
+        assert sec_config.hsts_preload is True
+        # exclude_paths default preserved when overriding unrelated fields
+        assert "/healthz" in sec_config.exclude_paths
 
     def test_jwt_factory_returns_none_without_secret(self):
         """JWT factory returns None when no jwt_secret."""
@@ -331,6 +388,40 @@ class TestApplyPreset:
         names = [m.name for m in app._middleware_stack]
         assert "CORSMiddleware" in names
         assert "SecurityHeadersMiddleware" in names
+
+    def test_apply_standard_attaches_rate_limit_middleware(self):
+        """'standard' preset now actually attaches RateLimitMiddleware end-to-end."""
+        app = Nexus(enable_durability=False)
+        config = NexusConfig(rate_limit=100)
+
+        apply_preset(app, "standard", config)
+
+        names = [m.name for m in app._middleware_stack]
+        assert "RateLimitMiddleware" in names
+
+    def test_apply_standard_with_disabled_rate_limit_omits_middleware(self):
+        """rate_limit=None → RateLimitMiddleware is not attached."""
+        app = Nexus(enable_durability=False)
+        config = NexusConfig(rate_limit=None)
+
+        apply_preset(app, "standard", config)
+
+        names = [m.name for m in app._middleware_stack]
+        assert "RateLimitMiddleware" not in names
+
+    def test_apply_threads_custom_csp_into_security_headers(self):
+        """A custom CSP on NexusConfig reaches the attached SecurityHeadersMiddleware."""
+        custom_csp = "default-src 'none'"
+        app = Nexus(enable_durability=False)
+        config = NexusConfig(csp=custom_csp)
+
+        apply_preset(app, "lightweight", config)
+
+        sec = next(
+            m for m in app._middleware_stack if m.name == "SecurityHeadersMiddleware"
+        )
+        # The threaded CSP is carried in the middleware's stored config kwargs.
+        assert sec.kwargs["config"].csp == custom_csp
 
     def test_apply_preset_logs_info(self, caplog):
         """apply_preset() logs info messages."""
