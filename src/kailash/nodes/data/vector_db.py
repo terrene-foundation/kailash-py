@@ -319,19 +319,28 @@ class EmbeddingNode(Node):
             raise NodeExecutionError(f"Failed to generate embeddings: {str(e)}")
 
     def _generate_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for a batch of texts.
+        """Embedding generation is not implemented by this node.
 
-        This is a placeholder for actual embedding generation logic.
+        ``EmbeddingNode`` does not bundle a real embedding model. It previously
+        returned ``np.random.randn`` random placeholder vectors presented as
+        real embeddings — meaningless for any similarity search — so that
+        behavior is removed and the node now fails loudly. Supply real
+        embeddings from an embedding provider/model upstream and pass them to
+        the retrieval nodes, or use ``RelevanceScorerNode`` with
+        ``similarity_method="bm25"`` / ``"tfidf"`` for embedding-free retrieval.
 
         Args:
-            texts: List of texts to embed
+            texts: List of texts to embed (unused — no real backend exists).
 
-        Returns:
-            List of embedding vectors
+        Raises:
+            NodeExecutionError: always — there is no real embedding backend.
         """
-        # Placeholder implementation
-        dim = self._model_info.get("dimensions", 768)
-        return [np.random.randn(dim).tolist() for _ in texts]  # type: ignore[reportOptionalMemberAccess]
+        raise NodeExecutionError(
+            "EmbeddingNode does not include a real embedding model and no "
+            "longer returns random placeholder vectors. Provide real embeddings "
+            "from an embedding provider upstream, or use RelevanceScorerNode "
+            "with similarity_method='bm25'/'tfidf' for embedding-free retrieval."
+        )
 
     def _normalize_embeddings(self, embeddings: list[list[float]]) -> list[list[float]]:
         """Normalize embedding vectors to unit length.
