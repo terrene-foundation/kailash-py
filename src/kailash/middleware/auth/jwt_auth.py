@@ -29,6 +29,7 @@ from .exceptions import (
 
 # Import models and utilities (no circular dependencies)
 from .models import JWTConfig, RefreshTokenData, TokenPair, TokenPayload
+from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 from .utils import generate_secret_key, is_token_expired
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,28 @@ class JWTAuthManager:
     - Support for both HS256 (default) and RSA algorithms
     - RSA key pair generation and rotation (when using RSA)
     - Refresh token management
-    - Token blacklisting
+    - Token revocation via a pluggable revocation store
     - Comprehensive audit logging
     - Rate limiting protection
 
     This consolidates both JWTAuthManager and KailashJWTAuthManager functionality.
+
+    Token revocation in multi-worker deployments
+    ---------------------------------------------
+    Token revocation is backed by a :class:`TokenRevocationStore`. By default
+    (``revocation_store`` omitted, ``config.enable_blacklist=True``) an in-memory
+    :class:`InMemoryTokenRevocationStore` is used, which is **process-local**: a
+    token revoked through one worker is NOT rejected by other workers. For any
+    multi-worker / multi-pod deployment supply a SHARED store (Redis, database,
+    distributed cache) implementing :class:`TokenRevocationStore` via the
+    ``revocation_store`` constructor argument so revocation propagates to every
+    worker that shares it (issue #1356).
+
+    Known process-local state (NOT covered by ``revocation_store``): refresh-token
+    tracking (``refresh_access_token`` / ``revoke_refresh_token`` /
+    ``revoke_all_user_tokens``) and rate-limit accounting are also per-instance
+    in-memory and behave per-worker. Shared-backend coverage for those is tracked
+    separately; only access-token revocation propagates through the store.
     """
 
     def __init__(
@@ -55,6 +73,7 @@ class JWTAuthManager:
         secret_key: Optional[str] = None,
         algorithm: Optional[str] = None,
         use_rsa: Optional[bool] = None,
+        revocation_store: Optional[TokenRevocationStore] = None,
         **kwargs,
     ):
         """
@@ -65,6 +84,14 @@ class JWTAuthManager:
             secret_key: Secret key for HS256 (overrides config)
             algorithm: Algorithm to use (overrides config)
             use_rsa: Whether to use RSA (overrides config)
+            revocation_store: Backend that records and checks token revocation.
+                When ``config.enable_blacklist`` is True and this is omitted, a
+                process-local :class:`InMemoryTokenRevocationStore` is used —
+                which means a token revoked on one worker is NOT rejected by
+                other workers. Supply a SHARED store (Redis, database,
+                distributed cache) implementing :class:`TokenRevocationStore` so
+                revocation propagates across every worker that shares it
+                (issue #1356). Ignored when ``config.enable_blacklist`` is False.
             **kwargs: Additional config parameters
         """
         self.config = config or JWTConfig()
@@ -93,10 +120,12 @@ class JWTAuthManager:
         self._key_id = str(uuid.uuid4())
         self._key_generated_at = datetime.now(timezone.utc)
 
-        # Token tracking
-        self._blacklisted_tokens: Optional[set] = (
-            set() if self.config.enable_blacklist else None
-        )
+        # Token revocation backend. When blacklisting is enabled, use the
+        # injected shared store if provided, else a process-local default.
+        # When disabled, no store is held and revocation is a no-op.
+        self._revocation_store: Optional[TokenRevocationStore] = None
+        if self.config.enable_blacklist:
+            self._revocation_store = revocation_store or InMemoryTokenRevocationStore()
         self._refresh_tokens: Dict[str, Dict[str, Any]] = {}
         self._failed_attempts: Dict[str, List[datetime]] = {}
 
@@ -373,10 +402,6 @@ class JWTAuthManager:
             raise ImportError("PyJWT package is required for JWT operations")
 
         try:
-            # Check if token is blacklisted
-            if self._blacklisted_tokens and token in self._blacklisted_tokens:
-                raise jwt.InvalidTokenError("Token has been revoked")
-
             # Get verification key based on algorithm
             if self.config.use_rsa or self.config.algorithm.startswith("RS"):
                 # RSA verification
@@ -407,6 +432,17 @@ class JWTAuthManager:
                     issuer=self.config.issuer,
                     audience=self.config.audience,
                 )
+
+            # Reject revoked tokens. Checked AFTER decode so the revocation
+            # identity (jti) is available — this is what a shared store keys on
+            # so revocation propagates across workers (issue #1356).
+            if (
+                self._revocation_store is not None
+                and self._revocation_store.is_revoked(
+                    jti=payload.get("jti"), token=token
+                )
+            ):
+                raise jwt.InvalidTokenError("Token has been revoked")
 
             return payload
 
@@ -471,18 +507,24 @@ class JWTAuthManager:
             raise
 
     def revoke_token(self, token: str):
-        """Add token to blacklist."""
-        if self._blacklisted_tokens is None:
+        """Revoke a token via the revocation store.
+
+        With a shared store this propagates to every worker that shares it; with
+        the default in-memory store it is process-local (issue #1356).
+        """
+        if self._revocation_store is None:
             return
         try:
             payload = self.verify_token(token)
             jti = payload.get("jti")
-            if jti:
-                self._blacklisted_tokens.add(token)
-                logger.info(f"Revoked token {jti}")
+            exp = payload.get("exp")
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None
+            self._revocation_store.revoke(jti=jti, token=token, expires_at=expires_at)
+            logger.info(f"Revoked token {jti}" if jti else "Revoked token")
         except Exception:
-            # Even if verification fails, add to blacklist
-            self._blacklisted_tokens.add(token)
+            # Even if verification fails, revoke by raw token string so a
+            # malformed/expired token presented for revocation is still recorded.
+            self._revocation_store.revoke(jti=None, token=token)
 
     def revoke_refresh_token(self, jti: str):
         """Revoke specific refresh token."""
@@ -564,7 +606,9 @@ class JWTAuthManager:
         return {
             "active_refresh_tokens": len(self._refresh_tokens),
             "blacklisted_tokens": (
-                len(self._blacklisted_tokens) if self._blacklisted_tokens else 0
+                self._revocation_store.count()
+                if self._revocation_store is not None
+                else 0
             ),
             "key_id": self._key_id,
             "key_age_days": (
