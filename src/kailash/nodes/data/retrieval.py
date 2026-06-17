@@ -1,14 +1,48 @@
 """Document retrieval nodes for finding relevant content using various similarity methods."""
 
-import json
+import logging
+import math
+import re
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
+logger = logging.getLogger(__name__)
+
+# Lexical-scoring tokenizer: lowercase, split on any run of non-alphanumeric chars.
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+
+# Okapi BM25 free parameters (standard defaults).
+_BM25_K1 = 1.5
+_BM25_B = 0.75
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase a string and split it into alphanumeric tokens.
+
+    Pure-Python tokenizer used by the lexical scoring methods (BM25, TF-IDF).
+    Splitting on non-alphanumeric runs keeps the tokenization deterministic and
+    dependency-free (no numpy / nltk required).
+    """
+    return _TOKEN_PATTERN.findall(text.lower())
+
 
 @register_node()
 class RelevanceScorerNode(Node):
-    """Scores chunk relevance using various similarity methods including embeddings similarity."""
+    """Scores chunk relevance using various similarity methods.
+
+    Supported ``similarity_method`` values:
+
+    - ``cosine``: cosine similarity over precomputed embedding vectors
+      (requires ``query_embedding`` + ``chunk_embeddings``).
+    - ``bm25``: Okapi BM25 lexical scoring over chunk text vs the ``query``
+      text (k1=1.5, b=0.75).
+    - ``tfidf``: TF-IDF cosine similarity over chunk text vs the ``query`` text.
+
+    The lexical methods (``bm25``, ``tfidf``) score the ``query`` text against
+    each chunk's ``content``; they require a ``query`` text input and raise a
+    ``ValueError`` when none is available rather than returning a constant.
+    """
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -17,6 +51,15 @@ class RelevanceScorerNode(Node):
                 type=list,
                 required=False,
                 description="List of chunks to score",
+            ),
+            "query": NodeParameter(
+                name="query",
+                type=str,
+                required=False,
+                description=(
+                    "Query text for lexical scoring (bm25/tfidf) and for the "
+                    "no-embeddings keyword fallback"
+                ),
             ),
             "query_embedding": NodeParameter(
                 name="query_embedding",
@@ -35,7 +78,7 @@ class RelevanceScorerNode(Node):
                 type=str,
                 required=False,
                 default="cosine",
-                description="Similarity method: cosine, bm25, tfidf, jaccard (future)",
+                description="Similarity method: cosine, bm25, tfidf",
             ),
             "top_k": NodeParameter(
                 name="top_k",
@@ -48,55 +91,75 @@ class RelevanceScorerNode(Node):
 
     def run(self, **kwargs) -> dict[str, Any]:
         chunks = kwargs.get("chunks", [])
+        query_text = kwargs.get("query") or ""
         query_embeddings = kwargs.get("query_embedding", [])
         chunk_embeddings = kwargs.get("chunk_embeddings", [])
         similarity_method = kwargs.get("similarity_method", "cosine")
         top_k = kwargs.get("top_k", 3)
 
-        print(
-            f"Debug: chunks={len(chunks)}, query_embeddings={len(query_embeddings)}, chunk_embeddings={len(chunk_embeddings)}"
+        logger.debug(
+            "relevance_scorer.run",
+            extra={
+                "chunks": len(chunks),
+                "query_embeddings": len(query_embeddings),
+                "chunk_embeddings": len(chunk_embeddings),
+                "similarity_method": similarity_method,
+                "has_query_text": bool(query_text),
+            },
         )
 
-        # Handle case when no embeddings are available
-        if not query_embeddings or not chunk_embeddings:
-            print("Debug: No embeddings available, using fallback text matching")
-            # Simple text-based fallback scoring
-            query_text = "machine learning types"  # Extract keywords from query
-            scored_chunks = []
-            for chunk in chunks:
-                content = chunk.get("content", "").lower()
-                score = sum(1 for word in query_text.split() if word in content) / len(
-                    query_text.split()
-                )
-                scored_chunk = {**chunk, "relevance_score": score}
-                scored_chunks.append(scored_chunk)
+        if similarity_method == "bm25":
+            # Lexical method: scores query terms against chunk text. Requires a
+            # query text input — fail loud rather than return a constant.
+            if not query_text:
+                raise ValueError("bm25/tfidf scoring requires a 'query' text input")
+            scored_chunks = self._bm25_scoring(chunks, query_text)
+        elif similarity_method == "tfidf":
+            if not query_text:
+                raise ValueError("bm25/tfidf scoring requires a 'query' text input")
+            scored_chunks = self._tfidf_scoring(chunks, query_text)
+        elif not query_embeddings or not chunk_embeddings:
+            # Embedding-based methods (cosine and its aliases) but no embeddings
+            # available — fall back to honest keyword matching against the real
+            # query text. With no query text there is no scoring signal, so
+            # report 0.0 rather than fabricating a query.
+            scored_chunks = self._keyword_fallback_scoring(chunks, query_text)
+        elif similarity_method == "cosine":
+            scored_chunks = self._cosine_similarity_scoring(
+                chunks, query_embeddings, chunk_embeddings
+            )
         else:
-            # Use the specified similarity method
-            if similarity_method == "cosine":
-                scored_chunks = self._cosine_similarity_scoring(
-                    chunks, query_embeddings, chunk_embeddings
-                )
-            elif similarity_method == "bm25":
-                # Future implementation
-                scored_chunks = self._bm25_scoring(
-                    chunks, query_embeddings, chunk_embeddings
-                )
-            elif similarity_method == "tfidf":
-                # Future implementation
-                scored_chunks = self._tfidf_scoring(
-                    chunks, query_embeddings, chunk_embeddings
-                )
-            else:
-                # Default to cosine
-                scored_chunks = self._cosine_similarity_scoring(
-                    chunks, query_embeddings, chunk_embeddings
-                )
+            # Default to cosine for any unrecognized embedding-based method.
+            scored_chunks = self._cosine_similarity_scoring(
+                chunks, query_embeddings, chunk_embeddings
+            )
 
         # Sort by relevance and take top_k
         scored_chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
         top_chunks = scored_chunks[:top_k]
 
         return {"relevant_chunks": top_chunks}
+
+    def _keyword_fallback_scoring(
+        self, chunks: list[dict], query_text: str
+    ) -> list[dict]:
+        """Score chunks by query-term keyword overlap (no-embeddings fallback).
+
+        Uses the REAL query text when present. When no query text is available
+        there is no scoring signal, so every chunk gets an honest 0.0 — never a
+        fabricated query.
+        """
+        query_terms = _tokenize(query_text)
+        scored_chunks = []
+        for chunk in chunks:
+            if not query_terms:
+                score = 0.0
+            else:
+                content_tokens = set(_tokenize(chunk.get("content", "")))
+                matches = sum(1 for term in query_terms if term in content_tokens)
+                score = matches / len(query_terms)
+            scored_chunks.append({**chunk, "relevance_score": score})
+        return scored_chunks
 
     def _cosine_similarity_scoring(
         self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
@@ -123,21 +186,13 @@ class RelevanceScorerNode(Node):
             # Fallback
             query_embedding = []
 
-        print(
-            f"Debug: Query embedding extracted, type: {type(query_embedding)}, length: {len(query_embedding) if isinstance(query_embedding, list) else 'N/A'}"
-        )
-
         # Simple cosine similarity calculation
         def cosine_similarity(a, b):
             # Ensure embeddings are numeric lists
             if not isinstance(a, list) or not isinstance(b, list):
-                print(f"Debug: Non-list embeddings detected, a={type(a)}, b={type(b)}")
                 return 0.5  # Default similarity
 
             if len(a) == 0 or len(b) == 0:
-                print(
-                    f"Debug: Empty embeddings detected, len(a)={len(a)}, len(b)={len(b)}"
-                )
                 return 0.5
 
             try:
@@ -145,8 +200,7 @@ class RelevanceScorerNode(Node):
                 norm_a = sum(x * x for x in a) ** 0.5
                 norm_b = sum(x * x for x in b) ** 0.5
                 return dot_product / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
-            except (TypeError, ValueError) as e:
-                print(f"Debug: Cosine similarity error: {e}")
+            except (TypeError, ValueError):
                 return 0.5
 
         # Score each chunk
@@ -180,21 +234,128 @@ class RelevanceScorerNode(Node):
 
         return scored_chunks
 
-    def _bm25_scoring(
-        self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
-    ) -> list[dict]:
-        """Score chunks using BM25 algorithm (future implementation)."""
-        # TODO: Implement BM25 scoring
-        # For now, return chunks with default scores
-        return [{**chunk, "relevance_score": 0.5} for chunk in chunks]
+    def _bm25_scoring(self, chunks: list[dict], query_text: str) -> list[dict]:
+        """Score chunks using the Okapi BM25 algorithm (k1=1.5, b=0.75).
 
-    def _tfidf_scoring(
-        self, chunks: list[dict], query_embeddings: list, chunk_embeddings: list
-    ) -> list[dict]:
-        """Score chunks using TF-IDF similarity (future implementation)."""
-        # TODO: Implement TF-IDF scoring
-        # For now, return chunks with default scores
-        return [{**chunk, "relevance_score": 0.5} for chunk in chunks]
+        Each chunk's ``content`` is the document; the ``query`` text supplies the
+        query terms. IDF is computed over the chunk corpus. Pure Python, no numpy.
+
+        BM25 score for a document ``D`` given query terms ``q_i``::
+
+            score(D, Q) = Σ_i IDF(q_i) * f(q_i, D) * (k1 + 1)
+                          ----------------------------------------------------
+                          f(q_i, D) + k1 * (1 - b + b * |D| / avgdl)
+
+        where ``f(q_i, D)`` is the term frequency in ``D``, ``|D|`` is the
+        document length in tokens, and ``avgdl`` is the average document length.
+        IDF uses the BM25 form ``ln(1 + (N - n + 0.5) / (n + 0.5))`` which is
+        non-negative.
+        """
+        # Tokenize the document corpus once.
+        doc_tokens = [_tokenize(chunk.get("content", "")) for chunk in chunks]
+        doc_lengths = [len(tokens) for tokens in doc_tokens]
+        num_docs = len(chunks)
+
+        if num_docs == 0:
+            return []
+
+        avgdl = sum(doc_lengths) / num_docs if num_docs else 0.0
+
+        # Document frequency: how many documents contain each term at least once.
+        doc_freq: dict[str, int] = {}
+        for tokens in doc_tokens:
+            for term in set(tokens):
+                doc_freq[term] = doc_freq.get(term, 0) + 1
+
+        # Non-negative BM25 IDF per term.
+        idf: dict[str, float] = {}
+        for term, n_q in doc_freq.items():
+            idf[term] = math.log(1.0 + (num_docs - n_q + 0.5) / (n_q + 0.5))
+
+        query_terms = _tokenize(query_text)
+
+        scored_chunks = []
+        for chunk, tokens, dl in zip(chunks, doc_tokens, doc_lengths):
+            # Term frequencies within this document.
+            tf: dict[str, int] = {}
+            for term in tokens:
+                tf[term] = tf.get(term, 0) + 1
+
+            score = 0.0
+            for term in query_terms:
+                if term not in tf:
+                    continue
+                freq = tf[term]
+                numerator = idf.get(term, 0.0) * freq * (_BM25_K1 + 1.0)
+                denominator = freq + _BM25_K1 * (
+                    1.0 - _BM25_B + _BM25_B * (dl / avgdl if avgdl > 0 else 0.0)
+                )
+                score += numerator / denominator if denominator > 0 else 0.0
+
+            scored_chunks.append({**chunk, "relevance_score": score})
+
+        return scored_chunks
+
+    def _tfidf_scoring(self, chunks: list[dict], query_text: str) -> list[dict]:
+        """Score chunks using TF-IDF cosine similarity.
+
+        Builds a TF-IDF vector for the ``query`` text and for each chunk's
+        ``content`` over the chunk corpus vocabulary, then scores each chunk by
+        the cosine similarity between its vector and the query vector. Pure
+        Python, no numpy.
+
+        TF is the raw term count in the document; IDF is the smoothed inverse
+        document frequency ``ln((1 + N) / (1 + n)) + 1`` over the chunk corpus.
+        """
+        doc_tokens = [_tokenize(chunk.get("content", "")) for chunk in chunks]
+        num_docs = len(chunks)
+
+        if num_docs == 0:
+            return []
+
+        # Document frequency over the chunk corpus.
+        doc_freq: dict[str, int] = {}
+        for tokens in doc_tokens:
+            for term in set(tokens):
+                doc_freq[term] = doc_freq.get(term, 0) + 1
+
+        # Smoothed IDF (non-negative; matches the sklearn smooth_idf convention).
+        idf: dict[str, float] = {}
+        for term, n_q in doc_freq.items():
+            idf[term] = math.log((1.0 + num_docs) / (1.0 + n_q)) + 1.0
+
+        def _tfidf_vector(tokens: list[str]) -> dict[str, float]:
+            counts: dict[str, int] = {}
+            for term in tokens:
+                counts[term] = counts.get(term, 0) + 1
+            # Only terms present in the corpus vocabulary have an IDF weight.
+            return {
+                term: count * idf[term] for term, count in counts.items() if term in idf
+            }
+
+        def _cosine(vec_a: dict[str, float], vec_b: dict[str, float]) -> float:
+            if not vec_a or not vec_b:
+                return 0.0
+            # Iterate the smaller vector for the dot product.
+            small, large = (
+                (vec_a, vec_b) if len(vec_a) <= len(vec_b) else (vec_b, vec_a)
+            )
+            dot = sum(weight * large.get(term, 0.0) for term, weight in small.items())
+            norm_a = math.sqrt(sum(w * w for w in vec_a.values()))
+            norm_b = math.sqrt(sum(w * w for w in vec_b.values()))
+            if norm_a == 0.0 or norm_b == 0.0:
+                return 0.0
+            return dot / (norm_a * norm_b)
+
+        query_vector = _tfidf_vector(_tokenize(query_text))
+
+        scored_chunks = []
+        for chunk, tokens in zip(chunks, doc_tokens):
+            chunk_vector = _tfidf_vector(tokens)
+            score = _cosine(query_vector, chunk_vector)
+            scored_chunks.append({**chunk, "relevance_score": score})
+
+        return scored_chunks
 
 
 @register_node()
