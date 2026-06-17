@@ -102,7 +102,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
 
         # Gemini client (lazily initialized)
         self._client: Any | None = None
-        self._generative_model: Any | None = None
+        self._types: Any | None = None
 
         # Session tracking
         self._current_session_id: str | None = None
@@ -163,20 +163,16 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         """Ensure Gemini client is initialized."""
         if self._client is None:
             try:
-                import google.generativeai as genai
-
-                genai.configure(api_key=self.api_key)
-                self._client = genai
-                self._generative_model = genai.GenerativeModel(
-                    model_name=self.model,
-                    safety_settings=self._get_safety_settings(),
-                    generation_config=self._get_generation_config(),
-                )
+                from google import genai
+                from google.genai import types as genai_types
             except ImportError:
                 raise ImportError(
-                    "Google Generative AI package not installed. "
-                    "Install with: pip install google-generativeai"
+                    "The google-genai package is required for the Gemini runtime. "
+                    "Install with: pip install google-genai"
                 ) from None
+
+            self._client = genai.Client(api_key=self.api_key)
+            self._types = genai_types
 
         await super().ensure_initialized()
 
@@ -193,16 +189,24 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         # Production should use stricter settings
         return None
 
-    def _get_generation_config(self) -> dict[str, Any]:
-        """Get generation configuration.
+    def _build_generate_config(self, tools: list[Any] | None = None) -> Any:
+        """Build a ``google.genai`` GenerateContentConfig for one request.
 
-        Returns:
-            Generation config dict
+        Carries temperature + max_output_tokens, plus optional safety settings
+        and tools. ``self._types`` is populated by ``ensure_initialized`` (the
+        ``google.genai`` SDK moved per-request generation knobs out of the
+        model object and into the config passed to each ``generate_content``).
         """
-        return {
+        config_kwargs: dict[str, Any] = {
             "temperature": self.temperature,
             "max_output_tokens": self.max_output_tokens,
         }
+        safety = self._get_safety_settings()
+        if safety:
+            config_kwargs["safety_settings"] = safety
+        if tools:
+            config_kwargs["tools"] = tools
+        return self._types.GenerateContentConfig(**config_kwargs)
 
     async def execute(
         self,
@@ -238,18 +242,14 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             if on_progress:
                 on_progress("calling_api", {"model": self.model})
 
-            # Generate content with tools
-            if tools:
-                response = await asyncio.to_thread(
-                    self._generative_model.generate_content,
-                    context.task,
-                    tools=tools,
-                )
-            else:
-                response = await asyncio.to_thread(
-                    self._generative_model.generate_content,
-                    context.task,
-                )
+            # Generate content (tools, if any, are folded into the request
+            # config — google.genai passes generation knobs per-call).
+            response = await asyncio.to_thread(
+                self._client.models.generate_content,
+                model=self.model,
+                contents=context.task,
+                config=self._build_generate_config(tools),
+            )
 
             # Extract output and handle function calls
             output = self._extract_output(response)
@@ -304,11 +304,11 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
 
         # Add code execution if enabled
         if self.enable_code_execution:
-            # Gemini uses special tool type for code execution
+            # Gemini uses a special tool type for code execution
             try:
-                from google.generativeai.types import Tool
+                from google.genai import types
 
-                all_tools.append(Tool(code_execution={}))
+                all_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
             except (ImportError, AttributeError):
                 logger.warning("Code execution tool not available in this version")
 
@@ -326,11 +326,13 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         # Add function declarations as a tool
         if function_declarations:
             try:
-                from google.generativeai.types import Tool
+                from google.genai import types
 
-                all_tools.append(Tool(function_declarations=function_declarations))
+                all_tools.append(
+                    types.Tool(function_declarations=function_declarations)
+                )
             except (ImportError, AttributeError):
-                # Fallback for older API versions
+                # Fallback: a plain dict is coerced by GenerateContentConfig.
                 all_tools.append({"function_declarations": function_declarations})
 
         return all_tools if all_tools else None
@@ -411,22 +413,22 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         try:
             tools = self._build_tools(context)
 
-            # Generate with streaming
-            response = await asyncio.to_thread(
-                self._generative_model.generate_content,
-                context.task,
-                tools=tools,
-                stream=True,
+            # Generate with streaming via the async client.
+            response = await self._client.aio.models.generate_content_stream(
+                model=self.model,
+                contents=context.task,
+                config=self._build_generate_config(tools),
             )
 
-            for chunk in response:
-                if hasattr(chunk, "text") and chunk.text:
+            async for chunk in response:
+                if getattr(chunk, "text", None):
                     yield chunk.text
-                elif hasattr(chunk, "candidates") and chunk.candidates:
+                elif getattr(chunk, "candidates", None):
                     for candidate in chunk.candidates:
-                        if hasattr(candidate, "content"):
-                            for part in candidate.content.parts:
-                                if hasattr(part, "text") and part.text:
+                        content = getattr(candidate, "content", None)
+                        if content and getattr(content, "parts", None):
+                            for part in content.parts:
+                                if getattr(part, "text", None):
                                     yield part.text
 
         finally:
@@ -509,8 +511,10 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             await self.ensure_initialized()
             # Simple generation to verify connectivity
             response = await asyncio.to_thread(
-                self._generative_model.generate_content,
-                "Hello",
+                self._client.models.generate_content,
+                model=self.model,
+                contents="Hello",
+                config=self._build_generate_config(None),
             )
             return response is not None
         except Exception as e:
