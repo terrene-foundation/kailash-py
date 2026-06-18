@@ -9,6 +9,7 @@ Moved from middleware/auth.py to resolve directory/file confusion.
 
 import logging
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -40,6 +41,7 @@ from ...nodes.security import (
     SecurityEventNode,
 )
 from ...nodes.transform import DataTransformer
+from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,8 @@ class MiddlewareAuthManager:
         enable_api_keys: bool = True,
         enable_audit: bool = True,
         database_url: Optional[str] = None,
+        enable_blacklist: bool = True,
+        revocation_store: Optional[TokenRevocationStore] = None,
     ):
         """
         Initialize SDK Auth Manager.
@@ -86,10 +90,32 @@ class MiddlewareAuthManager:
             enable_api_keys: Enable API key authentication
             enable_audit: Enable audit logging
             database_url: Database URL for persistence
+            enable_blacklist: Enable token revocation. When True (default) a
+                ``TokenRevocationStore`` is held and ``verify_token`` rejects
+                revoked tokens; when False no store is held and revocation is a
+                no-op (issue #1356 sibling).
+            revocation_store: Backend that records and checks token revocation.
+                When ``enable_blacklist`` is True and this is omitted, a
+                process-local :class:`InMemoryTokenRevocationStore` is used —
+                revocations are visible only within this worker. In a
+                multi-worker deployment supply a shared backend (Redis, database,
+                distributed cache) implementing :class:`TokenRevocationStore` so
+                revocation propagates to every worker. Ignored when
+                ``enable_blacklist`` is False.
         """
         self.token_expiry_hours = token_expiry_hours
         self.enable_api_keys = enable_api_keys
         self.enable_audit = enable_audit
+        self.enable_blacklist = enable_blacklist
+
+        # Token revocation backend (issue #1356 sibling — MiddlewareAuthManager).
+        # When blacklisting is enabled, use the injected shared store if provided,
+        # else a process-local default. A SHARED store propagates revocation across
+        # every worker that shares it; the default InMemoryTokenRevocationStore is
+        # process-local. When disabled, no store is held and revocation is a no-op.
+        self._revocation_store: Optional[TokenRevocationStore] = None
+        if enable_blacklist:
+            self._revocation_store = revocation_store or InMemoryTokenRevocationStore()
 
         # Initialize SDK security nodes
         self._initialize_security_nodes(secret_key or "", database_url or "")
@@ -140,6 +166,25 @@ class MiddlewareAuthManager:
                 name="auth_database", connection_string=database_url
             )
 
+    def _emit_security_event(
+        self, event_type: str, severity: str, details: Dict[str, Any]
+    ) -> None:
+        """Emit a security event best-effort — observability MUST NOT break auth.
+
+        The auth decision is made by the caller (which raises the 401); security
+        logging is a side effect. If ``SecurityEventNode`` raises (bad input,
+        backend down), swallow it and record a fallback line via the module
+        logger so a logging failure can NEVER convert the caller's deliberate
+        401 into a 500. Pairs with the revoked/verification-failed call sites,
+        which raise their own ``HTTPException`` after this returns.
+        """
+        try:
+            self.security_logger.execute(
+                event_type=event_type, severity=severity, details=details
+            )
+        except Exception:  # pragma: no cover - logging failure must not break auth
+            logger.warning("security event logging failed for %s", event_type)
+
     async def create_access_token(
         self,
         user_id: str,
@@ -162,6 +207,10 @@ class MiddlewareAuthManager:
             "user_id": user_id,
             "permissions": permissions or [],
             "metadata": metadata or {},
+            # jti (JWT ID) is the canonical revocation identity a shared
+            # TokenRevocationStore keys on, so revocation propagates across
+            # workers (issue #1356 sibling).
+            "jti": str(uuid.uuid4()),
             "exp": datetime.now(timezone.utc)
             + timedelta(hours=self.token_expiry_hours),
             "iat": datetime.now(timezone.utc),
@@ -207,20 +256,104 @@ class MiddlewareAuthManager:
             # Verify JWT token
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"])
 
+            # Reject revoked tokens (issue #1356 sibling). Checked AFTER decode so
+            # the revocation identity (jti) is available — the key a shared store
+            # uses so revocation propagates across workers. Pass BOTH jti AND token:
+            # revoke() keys on `jti or token`, so a token revoked before its jti
+            # was known (decode-failure path) is keyed by raw token; dropping
+            # `token=` here would silently stop enforcing those revocations.
+            if (
+                self._revocation_store is not None
+                and self._revocation_store.is_revoked(
+                    jti=payload.get("jti"), token=token
+                )
+            ):
+                self._emit_security_event(
+                    "token_revoked",
+                    "MEDIUM",
+                    {"reason": "token presented after revocation"},
+                )
+                raise HTTPException(status_code=401, detail="Token has been revoked")
+
             # Check expiration
             if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
                 raise HTTPException(status_code=401, detail="Token has expired")
 
             return payload
 
+        except HTTPException:
+            # A deliberate auth rejection (revoked / expired) already carries its
+            # own status + detail + security-event log — propagate it as-is rather
+            # than masking it as a generic "Invalid authentication token".
+            raise
         except Exception as e:
-            # Log security event
-            self.security_logger.execute(
-                event_type="token_verification_failed",
-                severity="warning",
-                details={"error": str(e)},
+            # Log security event (best-effort — never lets logging break the 401).
+            self._emit_security_event(
+                "token_verification_failed", "MEDIUM", {"error": str(e)}
             )
             raise HTTPException(status_code=401, detail="Invalid authentication token")
+
+    async def revoke_token(self, token: str) -> None:
+        """
+        Revoke an access token so subsequent ``verify_token`` calls reject it.
+
+        With a shared :class:`TokenRevocationStore` this propagates to every
+        worker that shares it; with the default in-memory store it is
+        process-local (issue #1356 sibling — MiddlewareAuthManager). When
+        ``enable_blacklist`` is False this is a no-op.
+
+        Args:
+            token: JWT token string to revoke. A malformed/expired token is still
+                recorded (by raw token string) so a token presented for
+                revocation is never silently ignored.
+        """
+        if self._revocation_store is None:
+            return
+
+        user_id: Optional[str] = None
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=["HS256"])
+            user_id = payload.get("user_id")
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None
+            self._revocation_store.revoke(jti=jti, token=token, expires_at=expires_at)
+        except Exception:
+            # Even if verification fails, revoke by raw token string so a
+            # malformed/expired token presented for revocation is still recorded.
+            # Bound the entry's TTL so an attacker spamming revoke with unique
+            # invalid strings cannot grow the store without limit. The longest a
+            # legitimately-issued access token can remain presentable is
+            # token_expiry_hours; cap the entry there so a FORGED far-future `exp`
+            # in an unverified token cannot extend the entry's lifetime beyond it
+            # (no presentable token outlives the cap, so the entry self-purges
+            # without ever evicting a still-valid token).
+            ttl_cap = datetime.now(timezone.utc) + timedelta(
+                hours=self.token_expiry_hours
+            )
+            expires_at = ttl_cap
+            try:
+                unverified = jwt.decode(
+                    token, options={"verify_signature": False, "verify_exp": False}
+                )
+                exp = unverified.get("exp")
+                if exp:
+                    expires_at = min(
+                        datetime.fromtimestamp(exp, tz=timezone.utc), ttl_cap
+                    )
+            except Exception:
+                expires_at = ttl_cap
+            self._revocation_store.revoke(jti=None, token=token, expires_at=expires_at)
+
+        # Audit log
+        if self.enable_audit:
+            self.audit_logger.execute(
+                user_id=user_id or "unknown",
+                action="revoke_token",
+                resource_type="jwt_token",
+                resource_id=user_id or "unknown",
+                details={"revoked": True},
+            )
 
     async def create_api_key(
         self, user_id: str, key_name: str, permissions: Optional[List[str]] = None
@@ -301,11 +434,9 @@ class MiddlewareAuthManager:
         except HTTPException:
             raise
         except Exception as e:
-            # Log security event
-            self.security_logger.execute(
-                event_type="api_key_verification_failed",
-                severity="warning",
-                details={"error": str(e)},
+            # Log security event (best-effort — never lets logging break the 401).
+            self._emit_security_event(
+                "api_key_verification_failed", "MEDIUM", {"error": str(e)}
             )
             raise HTTPException(status_code=401, detail="Invalid API key")
 
