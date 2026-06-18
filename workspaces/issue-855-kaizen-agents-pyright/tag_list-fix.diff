@@ -1,0 +1,37 @@
+diff --git a/packages/kailash-kaizen/src/kaizen/memory/providers/dataflow_backend.py b/packages/kailash-kaizen/src/kaizen/memory/providers/dataflow_backend.py
+index ccb4a94ff..b6b8813b4 100644
+--- a/packages/kailash-kaizen/src/kaizen/memory/providers/dataflow_backend.py
++++ b/packages/kailash-kaizen/src/kaizen/memory/providers/dataflow_backend.py
+@@ -44,7 +44,10 @@ class DataFlowMemoryBackend:
+             timestamp: str  # ISO format
+             source: str
+             importance: float
+-            tags: str  # JSON array
++            tag_list: str  # JSON array. NOTE: NOT "tags" — a DataFlow model
++                           # field named "tags" collides with the core SDK's
++                           # reserved NodeMetadata.tags (set[str]) and fails
++                           # CreateNode validation (see issue #855).
+             metadata: str  # JSON object
+             embedding: Optional[str] = None  # JSON array
+
+@@ -126,7 +129,9 @@ class DataFlowMemoryBackend:
+                 "timestamp": entry.timestamp.isoformat(),
+                 "source": entry.source.value,
+                 "importance": entry.importance,
+-                "tags": json.dumps(entry.tags),
++                # Column is "tag_list" not "tags" — see model-schema note above
++                # (the reserved NodeMetadata.tags collision, issue #855).
++                "tag_list": json.dumps(entry.tags),
+                 "metadata": json.dumps(entry.metadata),
+                 "embedding": json.dumps(entry.embedding) if entry.embedding else None,
+             },
+@@ -166,7 +171,8 @@ class DataFlowMemoryBackend:
+                     "timestamp": entry.timestamp.isoformat(),
+                     "source": entry.source.value,
+                     "importance": entry.importance,
+-                    "tags": json.dumps(entry.tags),
++                    # Column is "tag_list" not "tags" (issue #855 collision).
++                    "tag_list": json.dumps(entry.tags),
+                     "metadata": json.dumps(entry.metadata),
+                     "embedding": (
+                         json.dumps(entry.embedding) if entry.embedding else None

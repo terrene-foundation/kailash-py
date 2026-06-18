@@ -1,0 +1,42 @@
+# Session Notes — 2026-05-31
+
+## Where we are
+
+#1174 Nexus FastAPI parity is **fully delivered AND released**. Shard 5 (AC 7 —
+migration guide + version owner) merged (PR #1214); issue #1174 auto-closed (7/7).
+kailash-nexus **2.8.0** published to PyPI + clean-venv install verified; deploy
+record landed (PR #1215). No in-flight code; working tree clean except F3 drift.
+
+## Read first
+
+1. `workspaces/nexus-fastapi-parity-py/specs/nexus-fastapi-parity.md` — canonical surface contract; the `## Follow-up` section IS the F28 deferred items
+2. `deploy/deployments/2026-05-31-nexus-v2.8.0.md` — release receipt + gate/verify evidence
+3. `packages/kailash-nexus/docs/migration-fastapi.md` — shipped migration guide (the AC-7 deliverable)
+4. `CLAUDE.md` — project baseline
+
+## In-flight state
+
+- None — #1174 closed end-to-end. nexus main == PyPI == 2.8.0 (parity).
+- F3 working-tree drift (uv.lock M + untracked sweep/deploy/workspace) still held per user.
+
+## Outstanding ledger (forest)
+
+| ID  | Item | Value-anchor (MUST-1 source) | Status |
+| --- | ---- | ---------------------------- | ------ |
+| F1  | Loom-side /sync Gate-1 of codify queue | prior user approval | BLOCKED on loom |
+| F3  | Working-tree drift hold | user 2026-05-22 "LEAVE ALONE" | held per user |
+| F10 | .session-notes split-layout migration | knowledge-convergence MUST-1 | BLOCKED on loom |
+| F12 | loom#350 pre-emit validator | loom#350 user-filed | BLOCKED loom-side |
+| F22 | TIER-3 backlog sweep | sweep-2026-05-26 user-approved | queued |
+| F24 | GH issue backlog (see `gh issue list`) | per-issue bodies | open |
+| F25 | Cross-SDK rs filing (#937 follow-up) | user "approved both" 2026-05-29 | needs rs write-auth |
+| F26 | rs Multipart/SSE/WS parity gap | #1174 surface + cross-sdk-inspection | needs rs write-auth |
+| F28 | #1174 deferred follow-ups | spec §Follow-up + S4 convergence receipt | DONE — filed #1216 (WS process_request 401/403), #1217 (WS subprotocol echo), #1218 (typed-status /workflows/{name}/execute) on 2026-05-31 |
+
+Closed this session: `F20` → #1174 delivered+released (PR #1214, tag `nexus-v2.8.0`, deploy PR #1215).
+
+## Traps
+
+- F3 drift is USER-PROTECTED — stage explicit paths only; never `git add -u`/`-A`/`reset --hard`.
+- F28 follow-ups are spec'd in `specs/nexus-fastapi-parity.md § Follow-up` (single `serve()`-rewire root) — file as issues, don't re-derive; scrub per `upstream-issue-hygiene.md` before any public filing.
+- Cross-SDK rs repo is `esperie-enterprise/kailash-rs` (PRIVATE); `terrene-foundation/kailash-rs` does NOT exist. Any rs write (F25/F26) needs separate user-auth + journaled `cross-repo-authorized` marker first.

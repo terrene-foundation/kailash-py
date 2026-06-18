@@ -1,0 +1,56 @@
+# Session Notes — 2026-06-01
+
+## Where we are
+
+#855 fully resolved, released, and closed. All work this session is committed to
+`main` and published to PyPI + clean-venv verified: kailash 2.28.2,
+kailash-kaizen 2.24.5, kaizen-agents 0.9.8. No workstream in flight. On `main`;
+the F3 working-tree drift is still held untouched.
+
+## Read first
+
+1. `CLAUDE.md` — project baseline
+2. `deploy/deployments/2026-06-01-855-3package-release.md` — this session's full release record (4 PyPI versions)
+3. `deploy/deployment-config.md` — release mechanism (OIDC tag-triggered, ubuntu-latest CI)
+4. `workspaces/issue-855-kaizen-agents-pyright/DIAGNOSIS.md` — #855 diagnosis (now resolved; historical)
+
+## In-flight state
+
+- F3 working-tree drift (root `uv.lock` M + untracked `SWEEP-*.md` / `deploy/` /
+  `workspaces/` files) still held per user "LEAVE ALONE". NEVER `git add -A/-u` —
+  stage explicit paths only.
+
+## Outstanding ledger (forest)
+
+| ID  | Item | Value-anchor (MUST-1 source) | Status |
+| --- | ---- | ---------------------------- | ------ |
+| F1  | Loom-side /sync Gate-1 of codify queue | prior user approval | BLOCKED on loom |
+| F3  | Working-tree drift hold | user 2026-05-22 "LEAVE ALONE" | held per user |
+| F10 | .session-notes split-layout migration | knowledge-convergence MUST-1 | BLOCKED on loom |
+| F12 | loom#350 pre-emit validator | loom#350 user-filed | BLOCKED loom-side |
+| F22 | TIER-3 backlog sweep | sweep-2026-05-26 user-approved | queued |
+| F24 | GH issue backlog (`gh issue list`) | per-issue bodies | open (#855 closed this session) |
+| F25 | Cross-SDK rs filing (#937 follow-up) | user "approved both" 2026-05-29 | needs rs write-auth |
+| F26 | rs Multipart/SSE/WS parity gap | #1174 surface + cross-sdk-inspection | needs rs write-auth |
+| F30 | DataFlow @db.model reserved-name collision (`NodeMetadata.tags` vs user `tags` field) | #855 root cause; cross-sdk-inspection.md | queued (file as DataFlow issue) |
+
+Closed this session: `F29` → PR #1220 (clusters A/B/C, pyright 0/0) + issue #855
+closed. New-and-closed same session: core `BaseAgentConfig`-not-iterable fix →
+PR #1221 (`v2.28.2`); aiosqlite core-dep promotion → PR #1224 (`kaizen-v2.24.5`);
+3-package + 2.24.5 release → all PyPI-verified.
+
+## Traps
+
+- kailash-py CI + `/release` are **GitHub-hosted** (ubuntu-latest), NOT self-hosted.
+  This host's self-hosted runners serve `esperie-enterprise` / `Integrum-Global`
+  (GPU only); terrene-foundation has 0 self-hosted. "Pending" CI is usually stale
+  superseded-run status (concurrency-cancel), not offline machines.
+- Probe `*_result.json` in `probes/` are STALE — probes write to `/tmp/triage/`.
+  Re-run + read `/tmp/triage/` JSON; never trust the workspace `probes/` copy.
+- F30 root cause was worked around (column `tags`→`tag_list`); the DataFlow
+  reserved-name footgun itself is unfixed + unfiled.
+
+## Unreleased packages
+
+None from this session — kailash 2.28.2, kailash-kaizen 2.24.5, kaizen-agents
+0.9.8 all tagged, published, and clean-venv verified.

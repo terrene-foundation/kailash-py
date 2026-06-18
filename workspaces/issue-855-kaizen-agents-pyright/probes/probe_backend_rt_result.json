@@ -1,0 +1,10 @@
+{
+  "dsn": "sqlite:////private/tmp/claude-501/bert_r4h8ryv6/kaizen_memory.db",
+  "direct_get_content": "direct content",
+  "direct_get_tags": [],
+  "direct_list_count": 1,
+  "direct_roundtrip": false,
+  "hier_warm_rows": 1,
+  "hier_warm_content": "warm via hier",
+  "VERDICT": "FAIL"
+}

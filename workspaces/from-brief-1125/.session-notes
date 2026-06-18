@@ -1,0 +1,68 @@
+# Session notes — from-brief-1125 (+ delegate-1035 release)
+
+**Last session:** 2026-05-27
+**Repo state:** `main` @ `4b8aac15f`, in sync with `origin/main` (0/0 divergence)
+**Status:** kailash 2.27.0 SHIPPED to production PyPI + verified. Workstream DELIVERED.
+
+## What shipped this session
+
+- **kailash 2.27.0 → production PyPI** (tag `v2.27.0`, run 26511132751):
+  from_brief #1125 feature + delegate #1035 security hardening + the
+  Connector-primitive breaking change (#1177/#1178). All three issues
+  CLOSED COMPLETED.
+- **from_brief default-deny security model** (#1125): positive 43-node
+  allowlist ∩ registry + 12-type denylist floor + choke-point enforcement at
+  `_realize()` + inverse-completeness AST/MRO test + NaN/inf confidence gate.
+  2 CRITICAL + SharePoint MEDIUM + confidence-bypass closed across redteam
+  R1–R6 (2 consecutive clean rounds). Merged PR #1184 (`5abc806f8`).
+- **Install-verified** from production PyPI in a clean venv: version 2.27.0,
+  real public surface (`Workflow.from_brief` / `kailash.bootstrap` /
+  `workflow_from_brief`), slim-core clean (no cryptography / no eager kaizen),
+  allowlist=43, denylist-floor=12 (disjoint), NaN/inf gate.
+
+## PRs this session
+
+- #1184 — security fixes (default-deny + NaN/inf gate) [merged]
+- #1186 — release prep 2.27.0 [merged `b9b0a71ed`]
+- #1187 — CHANGELOG correction: real from_brief surface [merged `ec2c99163`]
+- #1188 — CHANGELOG correction: denylist floor 8→12 [merged `1a3dab318`]
+
+## Key lesson (codified)
+
+TWO CHANGELOG-accuracy defects this session, both from trusting unverified
+output: (1) carried a compaction-summary "5 from_brief entrypoints" framing
+into the CHANGELOG — 4 of 5 names were fabricated (caught by TestPyPI-rehearsal
+clean-venv import); (2) `tail -8` truncation made the denylist read as 8 not 12
+(caught at post-publish verify). Both cost a correction PR. → Codified as
+proposal candidate `verify-claims-before-durable-write` + auto-memory
+`feedback_verify_claims_before_durable_write.md` + journal 0002-DISCOVERY.
+The TestPyPI rehearsal is the structural backstop, NOT the first line of defense.
+
+## /codify deliverables (2026-05-27)
+
+- Proposal append (`.claude/.proposals/latest.yaml`): +2 changes
+  (`verify-claims-before-durable-write`, `from-brief-default-deny-security-pattern`),
+  +1 deferred (cross-agent disagreement — withdrawn, already covered).
+  STILL `pending_review`, UNCOMMITTED (matches prior-append pattern).
+- Journal: `journal/0001-DECISION-codify-2027-release-learnings.md`,
+  `journal/0002-DISCOVERY-verify-claims-before-durable-write.md`.
+
+## Outstanding (from /sweep 2026-05-27 — see 04-validate/sweep-2026-05-27.md)
+
+1. **[MED] Commit the pending_review proposal + codify artifacts** — 3 sessions
+   of uncommitted appends in `.claude/.proposals/latest.yaml` (institutional
+   knowledge in an uncommitted file). Needs a `chore` PR (main protected).
+2. **[MED] Workspace-hygiene chore commit** — ~25 untracked prior-session
+   artifacts (issue-1035 receipts, _archive dirs, SWEEP/deploy logs).
+3. **[MED] kaizen-rag-node-coverage** — different workstream, 6d stale;
+   re-validate value-anchor with user before resuming.
+4. **[LOW] Archive from-brief-1125 active todo** — delivered in 2.27.0.
+5. **[LOW] Orphan worktree** `.claude/worktrees/nexus-fastapi-1174` (#1174
+   workstream, not mine) — route to that owner.
+
+## Next-session entry point
+
+This workstream (from_brief #1125) is DONE. The next session's first decision is
+workstream SELECTION (user's call) — the 19 open issues + the 3 hygiene/commit
+items above are candidates; none is auto-selected. If resuming codify-commit
+(#1 above), the proposal is ready at `.claude/.proposals/latest.yaml`.

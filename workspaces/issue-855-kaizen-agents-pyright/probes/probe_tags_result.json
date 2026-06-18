@@ -1,0 +1,20 @@
+{
+  "raw_read_repr": "{'id': '4d65ba3d-1973-4f35-a797-aebdba544839', 'session_id': 's1', 'content': 'c', 'role': 'assistant', 'timestamp': '2026-05-31T16:05:19.232575+00:00', 'source': 'conversation', 'importance': 0.3, 'tag_list': '[\"a\", \"b\"]', 'metadata': '{}', 'embedding': None, 'found': True}",
+  "raw_read_keys": [
+    "id",
+    "session_id",
+    "content",
+    "role",
+    "timestamp",
+    "source",
+    "importance",
+    "tag_list",
+    "metadata",
+    "embedding",
+    "found"
+  ],
+  "raw_tag_list_value": "[\"a\", \"b\"]",
+  "backend_get_tags": [],
+  "backend_get_content": "c",
+  "VERDICT": "captured"
+}

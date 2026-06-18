@@ -1,0 +1,8 @@
+{
+  "cases": {
+    "4slash_abs": "OK list={'records': [{'id': '1', 'content': 'hello', 'tag_list': '[]', 'created_at': '2026-05-31 16:03:01', 'updated_at': '2026-05-31 16:03:01'}], 'count': 1, 'limit': ",
+    "3slash_abs": "EXC RuntimeExecutionError: Unified enterprise workflow execution failed: WorkflowExecutionError: Content-aware failure in node 'create': Node 'crea",
+    "relative_in_cwd": "EXC RuntimeExecutionError: Unified enterprise workflow execution failed: WorkflowExecutionError: Content-aware failure in node 'create': Node 'crea",
+    "doc_form_relcwd": "EXC RuntimeExecutionError: Unified enterprise workflow execution failed: WorkflowExecutionError: Content-aware failure in node 'create': Node 'crea"
+  }
+}

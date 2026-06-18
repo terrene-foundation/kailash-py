@@ -1,0 +1,49 @@
+# Session Notes — 2026-05-21 (cont. 2)
+
+## Where we are
+
+#979 + #992 + #995/#996/#998 closure audit complete — 17 PRs across 3
+parallel reviewer tranches CONVERGED Round 1 (0 CRIT/HIGH/MED, 5 LOW
+all benign). Two stale 979 workspaces archived as superseded; Pyright
+deferral filed as #1131. PR #1130 still OPEN per user direction.
+
+## Read first
+
+1. `workspaces/_archive/2026-05-21-979-superseded/CLOSURE-RECEIPT.md` — full audit detail + 5 LOW + audit-agent IDs
+2. `gh pr view 1130` — open chore PR (user authorized leave-alongside)
+3. `gh issue view 1131` — Pyright tracking (non-blocking until Pyright → CI gate)
+4. `gh issue view 1129` — F11 sweep-redteam.py tooling spec
+5. `git status` — F10 working-tree state preserved verbatim
+
+## In-flight state
+
+- PR #1130 OPEN with 2 commits (`11148c38c` + `89935b27c`); leave alongside per user.
+- F10 working tree: 1602 formatter mods + 166 lint debt + `agent_test_template.py` Jinja placeholders — untouched.
+- `.gitignore` unstaged edit adding `**/.journal-skipped.log`.
+- Untracked institutional history (deploy/deployments/*, root SWEEP-2026-05-{16,18}.md, workspaces/SWEEP-2026-05-17.md, workspaces/_archive/issue-{1045,1051,1056}/, workspaces/_redteam-2026-05-18/, 3 closure journals) — preserved.
+- New this session: `workspaces/_archive/2026-05-21-979-superseded/` (2 archived workspaces + CLOSURE-RECEIPT.md).
+
+## Outstanding ledger (forest)
+
+| ID  | Item                                                          | Value-anchor                                                                | Status                               |
+| --- | ------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
+| F2  | #1035 Delegate composition primitive                          | prior-session anchor (stale)                                                | BLOCKED on external spec             |
+| F3  | #643 ml FeatureStore breaking-change deprecation              | prior Wave-D anchor (stale)                                                 | queued — re-validate before pickup   |
+| F5  | Wave-D residual re-sweep                                      | prior `.session-notes` anchor (stale)                                       | queued — re-validate before pickup   |
+| F10 | Working-tree cleanup (1602 formatter mods + 166 lint debt)    | user directive 2026-05-21 "please resolve the uncommitted warning"          | queued — dedicated session needed    |
+| F11 | `tools/sweep-redteam.py` (issue #1129)                        | `sweep-completeness.md` MUST-3 (design-time defense); 2× /sweep N/A so far  | queued                               |
+| F12 | #1131 Pyright `reportRedeclaration` rename in test-mcp helper | `zero-tolerance.md` Rule 1b (deferred-with-tracking-issue gap closure)      | non-blocking until Pyright → CI gate |
+
+Closed this session: `F13` (post-merge closure audit for #979/#992/#995/#996/#998) → CLOSURE-RECEIPT.md (17 PRs verified across 3 audit-agent tranches; 2 stale workspaces archived as superseded).
+
+## Unreleased packages
+
+None. `release-drift.js` returned empty at session start.
+
+## Traps
+
+- PR #1130 first commit `11148c38c` over-claimed; real spec edits in follow-up `89935b27c`. NEVER amend; use follow-ups per `git.md`.
+- 979/992 workspaces ARCHIVED at `workspaces/_archive/2026-05-21-979-superseded/`. Future re-pickup MUST read CLOSURE-RECEIPT.md first.
+- F12/#1131 is a ~3-line test-helper rename; fix-immediately when Pyright graduates. Not worth its own session.
+- Per `feedback_no_bulk_worktree_discard.md`: F10's 1602 mods MUST NOT be bulk-discarded; pre-commit isort loops on 13 kaizen-agents files; 80+ files need lint-clean first.
+- BUILD repo: commits stay with user. This session opened #1131 + archived 2 workspaces (mv) — both user-gated.
