@@ -983,3 +983,134 @@ class TestVerifyActionResourceScopingThroughEngine:
         )
         assert blocked.access_decision is not None
         assert blocked.access_decision.allowed is False
+
+
+class TestKSPCompartmentScopingThroughEngine:
+    """#1375 follow-up: KSP.compartments narrowing enforced at step 4d.
+
+    KnowledgeSharePolicy.compartments was a documented narrowing field accepted
+    but read by NONE of the six prior narrowing conditions in
+    _evaluate_ksp_conditions -- a zero-tolerance Rule 3c silent-drop. Condition
+    7 now enforces it fail-closed: an item is shareable under a KSP only if
+    every compartment it carries is in the KSP's authorized set
+    (item.compartments subset of ksp.compartments). Empty ksp.compartments =
+    no narrowing (empty = all).
+
+    Behavioral tests through the engine surface (NOT source-grep). Items are
+    RESTRICTED so the step-3 SECRET+ clearance compartment check does not fire;
+    the only compartment gate exercised is the new 4d KSP-compartment check.
+    """
+
+    # Source: Student Affairs (D1-R1-D3). Target: Finance team (D1-R1-D2-R1-T2).
+    # Finance Director D1-R1-D2-R1-T2-R1 holds RESTRICTED clearance, no
+    # compartments -- matches the existing KSP-scoping tests' addressing.
+    _SOURCE = "D1-R1-D3"
+    _TARGET = "D1-R1-D2-R1-T2"
+    _ROLE = "D1-R1-D2-R1-T2-R1"
+
+    def _ksp(
+        self, compartments: frozenset[str], ksp_id: str = "ksp-compartment"
+    ) -> KnowledgeSharePolicy:
+        return KnowledgeSharePolicy(
+            id=ksp_id,
+            source_unit_address=self._SOURCE,
+            target_unit_address=self._TARGET,
+            max_classification=ConfidentialityLevel.RESTRICTED,
+            created_by_role_address="D1-R1",
+            compartments=compartments,
+        )
+
+    def _item(self, compartments: frozenset[str], item_id: str) -> KnowledgeItem:
+        return KnowledgeItem(
+            item_id=item_id,
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address=self._SOURCE,
+            compartments=compartments,
+            description="Student fee records",
+        )
+
+    @pytest.mark.regression
+    def test_ksp_compartment_grant_exact_match(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """KSP compartments={FINANCE}, item in {FINANCE} -> allowed (subset holds)."""
+        engine_from_compiled.create_ksp(self._ksp(frozenset({"FINANCE"})))
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(frozenset({"FINANCE"}), "fees-finance-grant"),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is True
+
+    @pytest.mark.regression
+    def test_ksp_empty_compartments_no_narrowing(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """Default empty KSP compartments imposes no compartment narrowing (empty = all)."""
+        engine_from_compiled.create_ksp(self._ksp(frozenset()))
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(
+                frozenset({"FINANCE", "HR"}), "fees-empty-ksp-grant"
+            ),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is True
+
+    @pytest.mark.regression
+    def test_ksp_compartment_deny_disjoint(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """KSP compartments={FINANCE}, item in {HR} -> denied at 4d (HR not authorized)."""
+        engine_from_compiled.create_ksp(self._ksp(frozenset({"FINANCE"})))
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(frozenset({"HR"}), "fees-hr-deny"),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is False
+        # Deny lands at the KSP grant/deny step (4d), not the no-path step (5):
+        # the KSP applied-and-denied; it was not skipped.
+        assert decision.step_failed == 4
+
+    @pytest.mark.regression
+    def test_ksp_compartment_deny_subset_fail_closed(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """KSP compartments={FINANCE}, item in {FINANCE, HR} -> denied (fail-closed).
+
+        Subset semantics: an item carrying ANY compartment the KSP does not
+        authorize is denied, even when one of its compartments IS authorized.
+        """
+        engine_from_compiled.create_ksp(self._ksp(frozenset({"FINANCE"})))
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(
+                frozenset({"FINANCE", "HR"}), "fees-superset-deny"
+            ),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is False
+        assert decision.step_failed == 4
+
+    @pytest.mark.regression
+    def test_ksp_compartment_deny_suppresses_no_path_fallthrough(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A matching-but-compartment-denying KSP denies at 4d, not step-5 no-path.
+
+        Deny-precedence (#1372): an applicable KSP that denies on compartments
+        suppresses fallthrough to the bridge/no-path resolution. The denial is
+        attributed to the KSP (step 4d), proving the compartment condition is a
+        first-class narrowing condition that participates in deny-precedence.
+        """
+        engine_from_compiled.create_ksp(
+            self._ksp(frozenset({"FINANCE"}), ksp_id="ksp-compartment-precedence")
+        )
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(frozenset({"LEGAL"}), "fees-legal-precedence"),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is False
+        assert decision.step_failed == 4  # KSP deny, NOT step 5 (no-path)
