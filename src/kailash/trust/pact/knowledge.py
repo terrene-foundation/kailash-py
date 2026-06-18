@@ -46,6 +46,17 @@ class KnowledgeItem:
             For SECRET and TOP_SECRET items, accessing roles must hold
             ALL compartments the item belongs to.
         description: Human-readable description of the knowledge item.
+        path: Optional hierarchical path of the item (e.g. "/finance/q3").
+            Used by path-scoped sharing -- a KnowledgeSharePolicy or
+            PactBridge with ``shared_paths`` grants only items whose path
+            matches one of its patterns. ``None`` means the item is not
+            path-tagged and is denied by any policy that requires a path
+            match (fail-closed).
+        knowledge_type: Optional knowledge-type tag (e.g. "report",
+            "dataset"). Used by type-scoped sharing -- a
+            KnowledgeSharePolicy with ``shared_types`` grants only items
+            whose type is in its set. ``None`` means untyped and is denied
+            by any policy that requires a type match (fail-closed).
     """
 
     item_id: str
@@ -53,6 +64,8 @@ class KnowledgeItem:
     owning_unit_address: str  # D or T prefix that owns this data
     compartments: frozenset[str] = field(default_factory=frozenset)
     description: str = ""
+    path: str | None = None
+    knowledge_type: str | None = None
 
 
 # ---------------------------------------------------------------------------

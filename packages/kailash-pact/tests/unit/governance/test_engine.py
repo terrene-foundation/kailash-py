@@ -26,6 +26,10 @@ from typing import Any
 
 import pytest
 
+from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.audit import AuditChain
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -33,27 +37,17 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
+from kailash.trust.pact.store import MemoryAccessPolicyStore, MemoryClearanceStore
+from kailash.trust.pact.verdict import GovernanceVerdict
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
-from kailash.trust.pact.knowledge import KnowledgeItem
-from kailash.trust.pact.store import (
-    MemoryAccessPolicyStore,
-    MemoryClearanceStore,
-    MemoryEnvelopeStore,
-    MemoryOrgStore,
-)
-from kailash.trust.pact.verdict import GovernanceVerdict
-from kailash.trust.pact.audit import AuditChain
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -807,3 +801,185 @@ class TestThreadSafety:
         for v in results:
             assert isinstance(v, GovernanceVerdict)
             assert v.level in ("auto_approved", "flagged", "held", "blocked")
+
+
+# ---------------------------------------------------------------------------
+# Epic #1375: scoping & precedence through GovernanceEngine.check_access
+# ---------------------------------------------------------------------------
+
+
+class TestCheckAccessScopingThroughEngine:
+    """#1372/#1374: deny-precedence + decision-context via the engine surface."""
+
+    def test_time_window_condition_via_engine(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A KSP time_window condition is evaluated against the engine's now arg."""
+        from datetime import datetime, timezone
+
+        item = KnowledgeItem(
+            item_id="student-fees-tw",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D1-R1-D3",  # Student Affairs
+            description="Student fee records",
+        )
+        engine_from_compiled.create_ksp(
+            KnowledgeSharePolicy(
+                id="ksp-tw",
+                source_unit_address="D1-R1-D3",
+                target_unit_address="D1-R1-D2-R1-T2",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                created_by_role_address="D1-R1",
+                conditions={"time_window": {"start": "09:00", "end": "17:00"}},
+            )
+        )
+        role = "D1-R1-D2-R1-T2-R1"  # Finance Director
+
+        inside = engine_from_compiled.check_access(
+            role_address=role,
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+            now=datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc),
+        )
+        assert inside.allowed is True
+
+        outside = engine_from_compiled.check_access(
+            role_address=role,
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+            now=datetime(2026, 6, 18, 23, 0, tzinfo=timezone.utc),
+        )
+        assert outside.allowed is False
+
+    def test_environment_condition_via_engine(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A KSP environment condition is matched against the engine's environment arg."""
+        item = KnowledgeItem(
+            item_id="student-fees-env",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D1-R1-D3",
+            description="Student fee records",
+        )
+        engine_from_compiled.create_ksp(
+            KnowledgeSharePolicy(
+                id="ksp-env",
+                source_unit_address="D1-R1-D3",
+                target_unit_address="D1-R1-D2-R1-T2",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                created_by_role_address="D1-R1",
+                conditions={"environment": {"network_zone": "internal"}},
+            )
+        )
+        role = "D1-R1-D2-R1-T2-R1"
+        ok = engine_from_compiled.check_access(
+            role_address=role,
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+            environment={"network_zone": "internal"},
+        )
+        assert ok.allowed is True
+        blocked = engine_from_compiled.check_access(
+            role_address=role,
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+            environment={"network_zone": "dmz"},
+        )
+        assert blocked.allowed is False
+
+
+class TestVerifyActionResourceScopingThroughEngine:
+    """#1374 cross-cutting AC: verify_action's resource path threads now/environment.
+
+    Round-2 redteam MED-4 surfaced this path as enforced-but-untested.
+    """
+
+    def test_verify_action_resource_threads_now(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        from datetime import datetime, timezone
+
+        engine_from_compiled.create_ksp(
+            KnowledgeSharePolicy(
+                id="ksp-va-tw",
+                source_unit_address="D1-R1-D3",
+                target_unit_address="D1-R1-D2-R1-T2",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                created_by_role_address="D1-R1",
+                conditions={"time_window": {"start": "09:00", "end": "17:00"}},
+            )
+        )
+        item = KnowledgeItem(
+            item_id="va-fees",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D1-R1-D3",
+            description="fees",
+        )
+        role = "D1-R1-D2-R1-T2-R1"
+
+        inside = engine_from_compiled.verify_action(
+            role,
+            "read",
+            {
+                "resource": item,
+                "posture": TrustPostureLevel.SHARED_PLANNING,
+                "now": datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc),
+            },
+        )
+        assert inside.access_decision is not None
+        assert inside.access_decision.allowed is True
+
+        outside = engine_from_compiled.verify_action(
+            role,
+            "read",
+            {
+                "resource": item,
+                "posture": TrustPostureLevel.SHARED_PLANNING,
+                "now": datetime(2026, 6, 18, 23, 0, tzinfo=timezone.utc),
+            },
+        )
+        assert outside.access_decision is not None
+        assert outside.access_decision.allowed is False
+        assert outside.level == "blocked"
+
+    def test_verify_action_resource_threads_environment(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        engine_from_compiled.create_ksp(
+            KnowledgeSharePolicy(
+                id="ksp-va-env",
+                source_unit_address="D1-R1-D3",
+                target_unit_address="D1-R1-D2-R1-T2",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                created_by_role_address="D1-R1",
+                conditions={"environment": {"network_zone": "internal"}},
+            )
+        )
+        item = KnowledgeItem(
+            item_id="va-fees-env",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D1-R1-D3",
+            description="fees",
+        )
+        role = "D1-R1-D2-R1-T2-R1"
+        ok = engine_from_compiled.verify_action(
+            role,
+            "read",
+            {
+                "resource": item,
+                "posture": TrustPostureLevel.SHARED_PLANNING,
+                "environment": {"network_zone": "internal"},
+            },
+        )
+        assert ok.access_decision is not None and ok.access_decision.allowed is True
+        blocked = engine_from_compiled.verify_action(
+            role,
+            "read",
+            {
+                "resource": item,
+                "posture": TrustPostureLevel.SHARED_PLANNING,
+                "environment": {"network_zone": "dmz"},
+            },
+        )
+        assert blocked.access_decision is not None
+        assert blocked.access_decision.allowed is False

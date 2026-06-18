@@ -20,10 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from kailash.trust.pact.config import (
-    ConstraintEnvelopeConfig,
-    FinancialConstraintConfig,
-)
+from kailash.trust.pact.config import FinancialConstraintConfig
 
 __all__ = [
     "CheckAccessRequest",
@@ -105,6 +102,21 @@ class CheckAccessRequest(BaseModel):
     item_compartments: list[str] = Field(
         default_factory=list,
         description="Named compartments the item belongs to",
+    )
+    item_path: str | None = Field(
+        default=None,
+        description="Optional hierarchical path of the item (e.g. '/finance/q3'), "
+        "matched against KSP/bridge shared_paths scope",
+    )
+    item_knowledge_type: str | None = Field(
+        default=None,
+        description="Optional knowledge-type tag (e.g. 'report'), matched against "
+        "KSP shared_types scope",
+    )
+    environment: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional request-context facts (e.g. {'network_zone': 'internal'}) "
+        "matched against KSP conditions['environment'] requirements",
     )
     posture: str = Field(
         description="Current trust posture level of the requesting role"
@@ -245,11 +257,27 @@ class CreateBridgeRequest(BaseModel):
         default_factory=list,
         description="Limit bridge to specific operations (empty = all)",
     )
+    shared_paths: list[str] = Field(
+        default_factory=list,
+        description="Path patterns the item path must match (* / prefix/* / exact); "
+        "empty = no path narrowing. A '..' segment is rejected.",
+    )
 
     @field_validator("role_a_address")
     @classmethod
     def validate_role_a(cls, v: str) -> str:
         return _validate_dtr_address(v)
+
+    @field_validator("shared_paths")
+    @classmethod
+    def validate_shared_paths(cls, v: list[str]) -> list[str]:
+        for pat in v:
+            if ".." in pat.split("/"):
+                raise ValueError(
+                    f"shared_paths pattern '{pat}' contains a '..' traversal "
+                    f"segment (rejected fail-closed)"
+                )
+        return v
 
     @field_validator("role_b_address")
     @classmethod
@@ -291,6 +319,30 @@ class CreateKSPRequest(BaseModel):
         default_factory=list,
         description="Restrict sharing to specific compartments (empty = all)",
     )
+    min_clearance: str | None = Field(
+        default=None,
+        description="Recipient clearance floor: the requesting role's clearance "
+        "must be at or above this level (None = no floor)",
+    )
+    shared_paths: list[str] = Field(
+        default_factory=list,
+        description="Path patterns the item path must match (* / prefix/* / exact); "
+        "empty = no path narrowing. A '..' segment is rejected.",
+    )
+    shared_types: list[str] = Field(
+        default_factory=list,
+        description="Knowledge types the item type must be in (empty = no type narrowing)",
+    )
+    shared_classifications: list[str] = Field(
+        default_factory=list,
+        description="Allowed classification SET the item classification must be in "
+        "(empty = ceiling-only via max_classification)",
+    )
+    conditions: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Request-context conditions: 'time_window' ({start,end} HH:MM) and "
+        "'environment' (required key->value map). Unknown keys fail closed.",
+    )
 
     @field_validator("max_classification")
     @classmethod
@@ -299,6 +351,75 @@ class CreateKSPRequest(BaseModel):
             raise ValueError(
                 f"max_classification must be one of {sorted(_VALID_CLASSIFICATIONS)}, got '{v}'"
             )
+        return v
+
+    @field_validator("min_clearance")
+    @classmethod
+    def validate_min_clearance(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_CLASSIFICATIONS:
+            raise ValueError(
+                f"min_clearance must be one of {sorted(_VALID_CLASSIFICATIONS)}, got '{v}'"
+            )
+        return v
+
+    @field_validator("shared_classifications")
+    @classmethod
+    def validate_shared_classifications(cls, v: list[str]) -> list[str]:
+        for level in v:
+            if level not in _VALID_CLASSIFICATIONS:
+                raise ValueError(
+                    f"shared_classifications entries must be one of "
+                    f"{sorted(_VALID_CLASSIFICATIONS)}, got '{level}'"
+                )
+        return v
+
+    @field_validator("shared_paths")
+    @classmethod
+    def validate_shared_paths(cls, v: list[str]) -> list[str]:
+        for pat in v:
+            if ".." in pat.split("/"):
+                raise ValueError(
+                    f"shared_paths pattern '{pat}' contains a '..' traversal "
+                    f"segment (rejected fail-closed)"
+                )
+        return v
+
+    @field_validator("conditions")
+    @classmethod
+    def validate_conditions(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Defense-in-depth: reject malformed conditions at the API boundary.
+
+        The engine enforcement layer (access.py::_evaluate_conditions) is the
+        authoritative fail-closed gate; this validator rejects obviously
+        malformed conditions at creation so an operator does not silently
+        store a policy that always denies. Mirrors the enforcement contract:
+        only ``time_window`` / ``environment`` keys; ``time_window`` bounds
+        MUST be zero-padded HH:MM; ``environment`` MUST be a dict.
+        """
+        import re as _re
+
+        _known = {"time_window", "environment"}
+        unknown = set(v) - _known
+        if unknown:
+            raise ValueError(
+                f"conditions has unrecognized key(s) {sorted(unknown)}; "
+                f"supported: {sorted(_known)}"
+            )
+        tw = v.get("time_window")
+        if tw is not None:
+            if not isinstance(tw, dict):
+                raise ValueError("conditions.time_window must be an object")
+            hhmm = _re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+            for bound in ("start", "end"):
+                val = tw.get(bound)
+                if not isinstance(val, str) or not hhmm.match(val):
+                    raise ValueError(
+                        f"conditions.time_window.{bound} must be zero-padded "
+                        f"HH:MM (00:00-23:59), got {val!r}"
+                    )
+        env = v.get("environment")
+        if env is not None and not isinstance(env, dict):
+            raise ValueError("conditions.environment must be an object")
         return v
 
     @field_validator("created_by_role_address")

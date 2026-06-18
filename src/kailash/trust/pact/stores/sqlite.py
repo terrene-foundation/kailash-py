@@ -29,10 +29,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from kailash.trust.pact.config import ConfidentialityLevel, ConstraintEnvelopeConfig
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
+from kailash.trust.pact.config import ConfidentialityLevel, ConstraintEnvelopeConfig
 from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 from kailash.trust.pact.store import MAX_STORE_SIZE
 
@@ -48,10 +48,41 @@ __all__ = [
     "_validate_id",
 ]
 
-PACT_SCHEMA_VERSION: int = 1
-"""Current governance schema version. Increment on DDL changes."""
+PACT_SCHEMA_VERSION: int = 2
+"""Current governance schema version. Increment on DDL changes.
+
+v2 (2026-06-18): KSP/Bridge access-control scoping columns
+(min_clearance, shared_paths_json, shared_types_json,
+shared_classifications_json, conditions_json on pact_ksps;
+shared_paths_json on pact_bridges) -- added additively via
+``_add_column_if_missing`` so existing v1 databases migrate in place.
+"""
 
 _ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+# Column names are static literals defined in this module (never user input);
+# the allowlist regex is defense-in-depth per dataflow-identifier-safety Rule 5.
+_COLUMN_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, ddl_type: str
+) -> None:
+    """Idempotently add a column to a table if it is not already present.
+
+    SQLite has no ``ADD COLUMN IF NOT EXISTS``; this checks ``PRAGMA
+    table_info`` and issues the additive ``ALTER TABLE`` only when missing.
+    Used to migrate existing v1 governance databases to the v2 scoping
+    schema without dropping data. ``table``/``column`` are static module
+    literals; both are allowlist-validated as defense-in-depth (identifiers
+    cannot be bound parameters).
+    """
+    if not _COLUMN_NAME_RE.match(table) or not _COLUMN_NAME_RE.match(column):
+        raise ValueError(f"invalid identifier for migration: {table!r}.{column!r}")
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
+        logger.info("Migrated %s: added column %s %s", table, column, ddl_type)
 
 
 def _validate_id(value: str) -> None:
@@ -617,7 +648,11 @@ class SqliteAccessPolicyStore(_SqliteBase):
                     created_by TEXT NOT NULL DEFAULT '',
                     active INTEGER NOT NULL DEFAULT 1,
                     expires_at TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    min_clearance TEXT,
+                    shared_paths_json TEXT NOT NULL DEFAULT '[]',
+                    shared_types_json TEXT NOT NULL DEFAULT '[]',
+                    shared_classifications_json TEXT NOT NULL DEFAULT '[]'
                 )
                 """
             )
@@ -635,9 +670,33 @@ class SqliteAccessPolicyStore(_SqliteBase):
                     standing INTEGER NOT NULL DEFAULT 1,
                     status TEXT NOT NULL DEFAULT 'active',
                     expires_at TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    shared_paths_json TEXT NOT NULL DEFAULT '[]'
                 )
                 """
+            )
+            # v1 -> v2 additive migration: existing databases created under
+            # PACT_SCHEMA_VERSION 1 lack the scoping columns above (CREATE
+            # TABLE IF NOT EXISTS is a no-op once the table exists). Add each
+            # missing column in place so stored policies are never dropped.
+            _add_column_if_missing(conn, "pact_ksps", "min_clearance", "TEXT")
+            _add_column_if_missing(
+                conn, "pact_ksps", "shared_paths_json", "TEXT NOT NULL DEFAULT '[]'"
+            )
+            _add_column_if_missing(
+                conn, "pact_ksps", "shared_types_json", "TEXT NOT NULL DEFAULT '[]'"
+            )
+            _add_column_if_missing(
+                conn,
+                "pact_ksps",
+                "shared_classifications_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            _add_column_if_missing(
+                conn, "pact_ksps", "conditions_json", "TEXT NOT NULL DEFAULT '{}'"
+            )
+            _add_column_if_missing(
+                conn, "pact_bridges", "shared_paths_json", "TEXT NOT NULL DEFAULT '[]'"
             )
 
     # ---- KSP operations ----
@@ -649,6 +708,13 @@ class SqliteAccessPolicyStore(_SqliteBase):
 
         compartments_json = json.dumps(sorted(ksp.compartments))
         expires_at = ksp.expires_at.isoformat() if ksp.expires_at else None
+        shared_paths_json = json.dumps(list(ksp.shared_paths))
+        shared_types_json = json.dumps(sorted(ksp.shared_types))
+        shared_classifications_json = json.dumps(
+            sorted(c.value for c in ksp.shared_classifications)
+        )
+        conditions_json = json.dumps(ksp.conditions, sort_keys=True)
+        min_clearance = ksp.min_clearance.value if ksp.min_clearance else None
 
         conn = self._get_connection()
         with self._write_lock, conn:
@@ -656,8 +722,10 @@ class SqliteAccessPolicyStore(_SqliteBase):
                 """INSERT OR REPLACE INTO pact_ksps
                    (id, source_unit_address, target_unit_address,
                     max_classification, compartments_json, created_by,
-                    active, expires_at, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    active, expires_at, created_at,
+                    min_clearance, shared_paths_json, shared_types_json,
+                    shared_classifications_json, conditions_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     ksp.id,
                     ksp.source_unit_address,
@@ -668,6 +736,11 @@ class SqliteAccessPolicyStore(_SqliteBase):
                     1 if ksp.active else 0,
                     expires_at,
                     now,
+                    min_clearance,
+                    shared_paths_json,
+                    shared_types_json,
+                    shared_classifications_json,
+                    conditions_json,
                 ),
             )
 
@@ -687,7 +760,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
             row = conn.execute(
                 """SELECT id, source_unit_address, target_unit_address,
                           max_classification, compartments_json, created_by,
-                          active, expires_at
+                          active, expires_at, min_clearance, shared_paths_json,
+                          shared_types_json, shared_classifications_json,
+                          conditions_json
                    FROM pact_ksps
                    WHERE source_unit_address = ? AND target_unit_address = ?
                    LIMIT 1""",
@@ -704,7 +779,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
             rows = conn.execute(
                 """SELECT id, source_unit_address, target_unit_address,
                           max_classification, compartments_json, created_by,
-                          active, expires_at
+                          active, expires_at, min_clearance, shared_paths_json,
+                          shared_types_json, shared_classifications_json,
+                          conditions_json
                    FROM pact_ksps""",
             ).fetchall()
         return [self._row_to_ksp(row) for row in rows]
@@ -715,6 +792,16 @@ class SqliteAccessPolicyStore(_SqliteBase):
         expires_at = (
             datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
         )
+        min_clearance = (
+            ConfidentialityLevel(row["min_clearance"]) if row["min_clearance"] else None
+        )
+        shared_paths = tuple(json.loads(row["shared_paths_json"]))
+        shared_types = frozenset(json.loads(row["shared_types_json"]))
+        shared_classifications = frozenset(
+            ConfidentialityLevel(v)
+            for v in json.loads(row["shared_classifications_json"])
+        )
+        conditions = json.loads(row["conditions_json"])
         return KnowledgeSharePolicy(
             id=row["id"],
             source_unit_address=row["source_unit_address"],
@@ -724,6 +811,11 @@ class SqliteAccessPolicyStore(_SqliteBase):
             created_by_role_address=row["created_by"],
             active=bool(row["active"]),
             expires_at=expires_at,
+            min_clearance=min_clearance,
+            shared_paths=shared_paths,
+            shared_types=shared_types,
+            shared_classifications=shared_classifications,
+            conditions=conditions,
         )
 
     # ---- Bridge operations ----
@@ -735,6 +827,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
 
         scope_json = json.dumps(list(bridge.operational_scope))
         expires_at = bridge.expires_at.isoformat() if bridge.expires_at else None
+        shared_paths_json = json.dumps(list(bridge.shared_paths))
 
         conn = self._get_connection()
         with self._write_lock, conn:
@@ -742,8 +835,8 @@ class SqliteAccessPolicyStore(_SqliteBase):
                 """INSERT OR REPLACE INTO pact_bridges
                    (id, role_a_address, role_b_address, bridge_type,
                     max_classification, operational_scope_json, bilateral,
-                    standing, status, expires_at, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    standing, status, expires_at, created_at, shared_paths_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     bridge.id,
                     bridge.role_a_address,
@@ -756,6 +849,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
                     "active" if bridge.active else "inactive",
                     expires_at,
                     now,
+                    shared_paths_json,
                 ),
             )
 
@@ -776,7 +870,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
             row = conn.execute(
                 """SELECT id, role_a_address, role_b_address, bridge_type,
                           max_classification, operational_scope_json, bilateral,
-                          status, expires_at
+                          status, expires_at, shared_paths_json
                    FROM pact_bridges
                    WHERE (role_a_address = ? AND role_b_address = ?)
                       OR (role_a_address = ? AND role_b_address = ?)
@@ -794,7 +888,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
             rows = conn.execute(
                 """SELECT id, role_a_address, role_b_address, bridge_type,
                           max_classification, operational_scope_json, bilateral,
-                          status, expires_at
+                          status, expires_at, shared_paths_json
                    FROM pact_bridges""",
             ).fetchall()
         return [self._row_to_bridge(row) for row in rows]
@@ -805,6 +899,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
         expires_at = (
             datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
         )
+        shared_paths = tuple(json.loads(row["shared_paths_json"]))
         return PactBridge(
             id=row["id"],
             role_a_address=row["role_a_address"],
@@ -815,6 +910,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
             bilateral=bool(row["bilateral"]),
             expires_at=expires_at,
             active=row["status"] == "active",
+            shared_paths=shared_paths,
         )
 
 
