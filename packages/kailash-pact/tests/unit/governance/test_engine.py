@@ -1114,3 +1114,31 @@ class TestKSPCompartmentScopingThroughEngine:
         )
         assert decision.allowed is False
         assert decision.step_failed == 4  # KSP deny, NOT step 5 (no-path)
+
+    @pytest.mark.regression
+    def test_ksp_compartment_deny_precedence_granting_sibling_wins(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A granting sibling KSP (empty compartments) wins over a compartment-deny KSP.
+
+        Pins the #1372 deny-precedence composition AT THE COMPARTMENT-CONDITION
+        layer (security-review HIGH design-judgment item): compartments is a
+        per-KSP NARROWING filter, NOT a hard edge ceiling. Two applicable KSPs on
+        the same source->target edge: ksp-A denies an {HR} item on
+        compartments={FINANCE}; ksp-B (empty compartments = no narrowing) grants.
+        A grant wins over a deny -> allowed. This is the documented, intended
+        behavior; the absolute compartment ceiling for SECRET/TOP_SECRET is the
+        step-3 clearance check, not this KSP-level narrowing.
+        """
+        engine_from_compiled.create_ksp(
+            self._ksp(frozenset({"FINANCE"}), ksp_id="ksp-compartment-deny-A")
+        )
+        engine_from_compiled.create_ksp(
+            self._ksp(frozenset(), ksp_id="ksp-grant-sibling-B")
+        )
+        decision = engine_from_compiled.check_access(
+            role_address=self._ROLE,
+            knowledge_item=self._item(frozenset({"HR"}), "fees-hr-sibling-grant"),
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is True  # granting sibling wins (deny-precedence)
