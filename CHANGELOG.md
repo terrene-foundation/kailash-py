@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.38.3] - 2026-06-18
+
+### Added
+
+- **`MiddlewareAuthManager` token revocation** (sibling of #1356). The legacy
+  nodes-based JWT verifier (`kailash.middleware.auth.MiddlewareAuthManager`) had
+  no revocation capability at all — no `jti` claim, no revocation-store
+  consultation in `verify_token`, and no `revoke_token` method, so an issued
+  token could never be invalidated before its natural expiry. It now reuses the
+  SAME pluggable `TokenRevocationStore` introduced for `JWTAuthManager` in
+  #1356: tokens carry a `jti` claim, `verify_token` rejects revoked tokens
+  (HTTP 401 `Token has been revoked`), and a new `async revoke_token(token)`
+  records the revocation. Inject a SHARED backend via
+  `MiddlewareAuthManager(revocation_store=...)` so revocation propagates across
+  every worker; the default `InMemoryTokenRevocationStore` is process-local
+  (`enable_blacklist=True` by default). Purely additive — existing token claims
+  are unchanged and pre-2.38.3 tokens (no `jti`) still verify. The
+  decode-failure revoke path is TTL-bounded at `token_expiry_hours` so an
+  attacker cannot grow the store with unique invalid strings.
+
+### Fixed
+
+- **`MiddlewareAuthManager.verify_token` / `verify_api_key` returned an internal
+  error instead of HTTP 401 on an invalid token.** The security-event log calls
+  passed `severity="warning"`, which is not a valid `SeverityLevel`
+  (`CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`INFO`), so `SecurityEventNode` raised
+  `ValueError` — meaning every invalid or expired token escaped `verify_token`
+  as an unhandled exception rather than a clean 401. The severity is now
+  `MEDIUM`, and security-event logging is best-effort (a logging-backend failure
+  can no longer convert an auth rejection into a 500).
+
 ## [2.38.2] - 2026-06-18
 
 ### Fixed
