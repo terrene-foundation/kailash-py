@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import pytest
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -17,22 +20,22 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.explain import describe_address, explain_access, explain_envelope
+from kailash.trust.pact.explain import (
+    describe_address,
+    explain_access,
+    explain_envelope,
+)
 from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.store import MemoryEnvelopeStore
-
-# Import the university example to build fixtures
-from pact.examples.university.org import create_university_org
-from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
+from pact.examples.university.clearance import create_university_clearances
 
+# Import the university example to build fixtures
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -369,3 +372,90 @@ class TestExplainAccess:
             or "classification" in trace.lower()
         )
         assert "DENY" in trace.upper() or "FAIL" in trace.upper()
+
+
+# ---------------------------------------------------------------------------
+# #1374 follow-up: explain_access must thread now/environment so the trace
+# matches the enforced verdict (redteam MED-2).
+# ---------------------------------------------------------------------------
+
+
+class TestExplainEnforcementParity:
+    """explain_access verdict MUST match can_access for time/environment KSPs."""
+
+    @staticmethod
+    def _two_dept() -> CompiledOrg:
+        from kailash.trust.pact.compilation import RoleDefinition, compile_org
+        from kailash.trust.pact.config import DepartmentConfig, OrgDefinition
+
+        return compile_org(
+            OrgDefinition(
+                org_id="explain-parity-001",
+                name="Explain Parity Org",
+                departments=[
+                    DepartmentConfig(department_id="d-a", name="A"),
+                    DepartmentConfig(department_id="d-b", name="B"),
+                ],
+                teams=[],
+                roles=[
+                    RoleDefinition(
+                        role_id="r-a", name="Head A", is_primary_for_unit="d-a"
+                    ),
+                    RoleDefinition(
+                        role_id="r-b", name="Head B", is_primary_for_unit="d-b"
+                    ),
+                ],
+            )
+        )
+
+    @staticmethod
+    def _scenario():
+        from kailash.trust.pact.access import can_access  # noqa: F401
+
+        clearances = {
+            "D1-R1": RoleClearance(
+                role_address="D1-R1", max_clearance=ConfidentialityLevel.SECRET
+            )
+        }
+        item = KnowledgeItem(
+            item_id="x",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D2",
+        )
+        ksp = KnowledgeSharePolicy(
+            id="k-env",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            conditions={"environment": {"network_zone": "internal"}},
+        )
+        return clearances, item, ksp
+
+    def test_explain_matches_enforcement_for_environment_ksp(self) -> None:
+        from kailash.trust.pact.access import can_access
+
+        org = self._two_dept()
+        clearances, item, ksp = self._scenario()
+        common = dict(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances=clearances,
+            ksps=[ksp],
+            bridges=[],
+        )
+        # Ground truth: with the matching environment, enforcement GRANTS.
+        enforced = can_access(**common, environment={"network_zone": "internal"})
+        assert enforced.allowed is True
+
+        explained_with = explain_access(
+            **common, environment={"network_zone": "internal"}
+        )
+        explained_without = explain_access(**common)  # environment withheld
+
+        # The explanation must reflect the grant when environment is supplied...
+        assert "DENIED" not in explained_with
+        # ...and must DIFFER from the no-environment trace (proving it is threaded,
+        # not ignored — the MED-2 bug produced identical denied traces both ways).
+        assert explained_with != explained_without

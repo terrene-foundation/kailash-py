@@ -13,26 +13,25 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode
-from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
+from kailash.trust.pact.envelopes import RoleEnvelope
 from kailash.trust.pact.stores.backup import (
     backup_governance_store,
     restore_governance_store,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,6 +303,100 @@ class TestBackupRestore:
         restored = engine2._access_policy_store.find_ksp("D1", "D1-R1-T1")
         assert restored is not None
         assert restored.id == "ksp-backup"
+
+    def test_backup_restore_preserves_v2_scope_fields(self, tmp_path: Path) -> None:
+        """#1368-#1374 scope fields survive backup/restore — NO silent drop.
+
+        Redteam HIGH (round 3): dropping these on restore widens a narrowed
+        deny-KSP into a broad grant, reintroducing the #1372 over-grant. This
+        asserts every scope field round-trips AND that the restored deny-KSP
+        still enforces (suppresses a permissive bridge) via can_access.
+        """
+        from kailash.trust.pact.access import PactBridge, can_access
+        from kailash.trust.pact.config import TrustPostureLevel
+        from kailash.trust.pact.engine import GovernanceEngine
+        from kailash.trust.pact.knowledge import KnowledgeItem
+
+        org = _make_compiled_org("scope-roundtrip")
+        engine1 = GovernanceEngine(org, store_backend="sqlite", store_url=":memory:")
+        engine1.create_ksp(
+            KnowledgeSharePolicy(
+                id="ksp-scoped",
+                source_unit_address="D2",
+                target_unit_address="D1",
+                max_classification=ConfidentialityLevel.SECRET,
+                min_clearance=ConfidentialityLevel.CONFIDENTIAL,
+                shared_paths=("/finance/*",),
+                shared_types=frozenset({"report"}),
+                shared_classifications=frozenset({ConfidentialityLevel.RESTRICTED}),
+                conditions={"time_window": {"start": "09:00", "end": "17:00"}},
+            )
+        )
+        engine1._access_policy_store.save_bridge(
+            PactBridge(
+                id="b-scoped",
+                role_a_address="D1-R1",
+                role_b_address="D2-R1",
+                bridge_type="standing",
+                max_classification=ConfidentialityLevel.SECRET,
+                shared_paths=("/finance/*",),
+            )
+        )
+
+        backup_path = tmp_path / "backup.json"
+        backup_governance_store(engine1, str(backup_path))
+
+        # schema_version must track the store version (was hardcoded 1).
+        import json as _json
+
+        from kailash.trust.pact.stores.sqlite import PACT_SCHEMA_VERSION
+
+        meta = _json.loads(backup_path.read_text())["metadata"]
+        assert meta["schema_version"] == PACT_SCHEMA_VERSION
+
+        engine2 = GovernanceEngine(
+            _make_compiled_org("scope-roundtrip"),
+            store_backend="sqlite",
+            store_url=":memory:",
+        )
+        restore_governance_store(engine2, str(backup_path))
+
+        rk = engine2._access_policy_store.find_ksp("D2", "D1")
+        assert rk is not None
+        assert rk.min_clearance == ConfidentialityLevel.CONFIDENTIAL
+        assert rk.shared_paths == ("/finance/*",)
+        assert rk.shared_types == frozenset({"report"})
+        assert rk.shared_classifications == frozenset({ConfidentialityLevel.RESTRICTED})
+        assert rk.conditions == {"time_window": {"start": "09:00", "end": "17:00"}}
+        rb = engine2._access_policy_store.find_bridge("D1-R1", "D2-R1")
+        assert rb is not None and rb.shared_paths == ("/finance/*",)
+
+        # Enforcement parity: the RESTORED deny-KSP (item path outside /finance/*)
+        # must still DENY and suppress the permissive bridge — proving the
+        # restored scope fields are live, not inert data.
+        item = KnowledgeItem(
+            item_id="x",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D2",
+            path="/hr/payroll",  # outside shared_paths -> deny
+        )
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=engine2.get_org(),
+            clearances={
+                "D1-R1": RoleClearance(
+                    role_address="D1-R1",
+                    max_clearance=ConfidentialityLevel.SECRET,
+                )
+            },
+            ksps=engine2._access_policy_store.list_ksps(),
+            bridges=engine2._access_policy_store.list_bridges(),
+            now=datetime(2026, 6, 18, 12, 0, tzinfo=UTC),
+        )
+        assert decision.allowed is False
+        assert decision.audit_details["access_path"] == "ksp_deny"
 
     def test_restore_nonexistent_file_raises(self, tmp_path: Path) -> None:
         from kailash.trust.pact.engine import GovernanceEngine

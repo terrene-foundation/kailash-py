@@ -14,22 +14,19 @@ but are standalone so they can be used independently.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
 from kailash.trust.pact.addressing import NodeType
 from kailash.trust.pact.clearance import (
+    _CLEARANCE_ORDER,
     RoleClearance,
     VettingStatus,
-    _CLEARANCE_ORDER,
     effective_clearance,
 )
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.envelopes import compute_effective_envelope
 from kailash.trust.pact.knowledge import KnowledgeItem
 
@@ -240,6 +237,9 @@ def explain_access(
     clearances: dict[str, RoleClearance],
     ksps: list[KnowledgeSharePolicy],
     bridges: list[PactBridge],
+    *,
+    now: datetime | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> str:
     """Return a step-by-step trace of the 5-step access algorithm.
 
@@ -254,6 +254,12 @@ def explain_access(
         clearances: Map of role addresses to clearance assignments.
         ksps: All active Knowledge Share Policies.
         bridges: All active Cross-Functional Bridges.
+        now: Evaluation time for KSP ``time_window`` conditions. MUST be
+            threaded through to ``can_access`` so the explanation matches the
+            enforced verdict for time-conditioned KSPs (#1374).
+        environment: Request-context facts matched against KSP
+            ``conditions["environment"]`` requirements -- threaded through so
+            the trace does not diverge from enforcement for env-gated KSPs.
 
     Returns:
         A multi-line string showing the step-by-step access evaluation trace.
@@ -287,7 +293,7 @@ def explain_access(
             f"(vetting status is '{role_clearance.vetting_status.value}', not ACTIVE)"
         )
         lines.append("")
-        lines.append(f"Result: DENIED at Step 1 -- vetting status not ACTIVE")
+        lines.append("Result: DENIED at Step 1 -- vetting status not ACTIVE")
         return "\n".join(lines)
 
     lines.append(
@@ -361,6 +367,8 @@ def explain_access(
         clearances=clearances,
         ksps=ksps,
         bridges=bridges,
+        now=now,
+        environment=environment,
     )
 
     # Extract the access path from the decision's audit_details
@@ -409,6 +417,6 @@ def explain_access(
         lines.append("  4e: bridge -- NO")
 
         lines.append("")
-        lines.append(f"Step 5: Result -- DENIED (no access path found)")
+        lines.append("Step 5: Result -- DENIED (no access path found)")
 
     return "\n".join(lines)

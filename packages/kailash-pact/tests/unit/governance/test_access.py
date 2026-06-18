@@ -15,13 +15,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    DepartmentConfig,
-    OrgDefinition,
-    TeamConfig,
-    TrustPostureLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -30,8 +23,14 @@ from kailash.trust.pact.access import (
 )
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    DepartmentConfig,
+    OrgDefinition,
+    TeamConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -1009,3 +1008,623 @@ class TestCanAccessVettingStatus:
         )
         assert decision.allowed is False
         assert decision.step_failed == 1
+
+
+# ===========================================================================
+# Epic #1375: KSP/Bridge access-control scoping & precedence (#1368-#1374)
+# ===========================================================================
+
+
+def _clearance(addr: str, level: ConfidentialityLevel) -> RoleClearance:
+    return RoleClearance(role_address=addr, max_clearance=level)
+
+
+def _cross_barrier_item(
+    classification: ConfidentialityLevel = ConfidentialityLevel.RESTRICTED,
+    *,
+    path: str | None = None,
+    knowledge_type: str | None = None,
+) -> KnowledgeItem:
+    """Item owned by D2 (no structural path from a D1 role -> forces 4d/4e)."""
+    return KnowledgeItem(
+        item_id="x-item",
+        classification=classification,
+        owning_unit_address="D2",
+        path=path,
+        knowledge_type=knowledge_type,
+    )
+
+
+def _permissive_bridge(
+    max_classification: ConfidentialityLevel = ConfidentialityLevel.SECRET,
+    *,
+    shared_paths: tuple[str, ...] = (),
+) -> PactBridge:
+    """A bridge D1-R1 <-> D2-R1 that grants D1-R1 access to D2-owned items."""
+    return PactBridge(
+        id="b-permissive",
+        role_a_address="D1-R1",
+        role_b_address="D2-R1",
+        bridge_type="standing",
+        max_classification=max_classification,
+        shared_paths=shared_paths,
+    )
+
+
+# ---------------------------------------------------------------------------
+# #1368-#1374: new KSP scope fields (dataclass surface)
+# ---------------------------------------------------------------------------
+
+
+class TestKSPScopeFields:
+    """New KnowledgeSharePolicy scoping fields and their defaults."""
+
+    def test_scope_field_defaults(self) -> None:
+        ksp = KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.RESTRICTED,
+        )
+        assert ksp.min_clearance is None
+        assert ksp.shared_paths == ()
+        assert ksp.shared_types == frozenset()
+        assert ksp.shared_classifications == frozenset()
+        assert ksp.conditions == {}
+
+    def test_scope_fields_set(self) -> None:
+        ksp = KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            min_clearance=ConfidentialityLevel.CONFIDENTIAL,
+            shared_paths=("/finance/*",),
+            shared_types=frozenset({"report"}),
+            shared_classifications=frozenset({ConfidentialityLevel.RESTRICTED}),
+            conditions={"time_window": {"start": "09:00", "end": "17:00"}},
+        )
+        assert ksp.min_clearance == ConfidentialityLevel.CONFIDENTIAL
+        assert ksp.shared_paths == ("/finance/*",)
+        assert ksp.shared_types == frozenset({"report"})
+
+    def test_shared_paths_traversal_rejected_at_construction(self) -> None:
+        with pytest.raises(ValueError, match="traversal"):
+            KnowledgeSharePolicy(
+                id="k",
+                source_unit_address="D2",
+                target_unit_address="D1",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                shared_paths=("/finance/../etc",),
+            )
+
+
+class TestBridgeScopeFields:
+    """New PactBridge.shared_paths field and traversal rejection."""
+
+    def test_shared_paths_default_empty(self) -> None:
+        bridge = PactBridge(
+            id="b",
+            role_a_address="D1-R1",
+            role_b_address="D2-R1",
+            bridge_type="standing",
+            max_classification=ConfidentialityLevel.RESTRICTED,
+        )
+        assert bridge.shared_paths == ()
+
+    def test_shared_paths_traversal_rejected_at_construction(self) -> None:
+        with pytest.raises(ValueError, match="traversal"):
+            PactBridge(
+                id="b",
+                role_a_address="D1-R1",
+                role_b_address="D2-R1",
+                bridge_type="standing",
+                max_classification=ConfidentialityLevel.RESTRICTED,
+                shared_paths=("../secret",),
+            )
+
+
+# ---------------------------------------------------------------------------
+# #1372: deny-precedence — a matching deny-KSP suppresses a permissive bridge
+# ---------------------------------------------------------------------------
+
+
+class TestKSPDenyPrecedence:
+    """The #1372 keystone: KSP deny suppresses the bridge fallback."""
+
+    def test_matching_deny_ksp_suppresses_permissive_bridge(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        # KSP matches D2->D1 addressing but DENIES (item path outside scope);
+        # a permissive bridge that would otherwise grant MUST be suppressed.
+        ksp = KnowledgeSharePolicy(
+            id="k-deny",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            shared_paths=("/finance/*",),
+        )
+        item = _cross_barrier_item(path="/hr/payroll")  # outside /finance/*
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=two_dept_org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[_permissive_bridge()],
+        )
+        assert decision.allowed is False
+        assert decision.step_failed == 4
+        assert decision.audit_details["access_path"] == "ksp_deny"
+        assert "shared_paths" in decision.audit_details["deny_reason"]
+
+    def test_no_matching_ksp_leaves_bridge_available(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        # KSP targets a DIFFERENT unit (D3) -> does not apply -> bridge grants.
+        ksp = KnowledgeSharePolicy(
+            id="k-other",
+            source_unit_address="D2",
+            target_unit_address="D3",
+            max_classification=ConfidentialityLevel.SECRET,
+            shared_paths=("/finance/*",),
+        )
+        item = _cross_barrier_item(path="/hr/payroll")
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=two_dept_org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[_permissive_bridge()],
+        )
+        assert decision.allowed is True
+        assert decision.audit_details["access_path"] == "bridge"
+
+    def test_granting_ksp_wins_over_sibling_deny_ksp(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        deny_ksp = KnowledgeSharePolicy(
+            id="k-deny",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            shared_types=frozenset({"report"}),
+        )
+        grant_ksp = KnowledgeSharePolicy(
+            id="k-grant",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+        )
+        item = _cross_barrier_item(knowledge_type="dataset")  # fails deny_ksp
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=two_dept_org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[deny_ksp, grant_ksp],
+            bridges=[],
+        )
+        assert decision.allowed is True
+        assert decision.audit_details["ksp_id"] == "k-grant"
+
+    def test_unscoped_ksp_still_grants(self, two_dept_org: CompiledOrg) -> None:
+        ksp = KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+        )
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=_cross_barrier_item(),
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=two_dept_org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[],
+        )
+        assert decision.allowed is True
+        assert decision.audit_details["access_path"] == "ksp"
+
+
+# ---------------------------------------------------------------------------
+# #1368: recipient clearance floor
+# ---------------------------------------------------------------------------
+
+
+class TestKSPClearanceFloor:
+    def _decide(self, org, recipient_level, min_clearance):
+        ksp = KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            min_clearance=min_clearance,
+        )
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=_cross_barrier_item(ConfidentialityLevel.RESTRICTED),
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", recipient_level)},
+            ksps=[ksp],
+            bridges=[],
+        )
+
+    def test_recipient_below_floor_denied(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            ConfidentialityLevel.CONFIDENTIAL,
+            ConfidentialityLevel.SECRET,
+        )
+        assert d.allowed is False
+        assert "min_clearance" in d.audit_details["deny_reason"]
+
+    def test_recipient_at_floor_allowed(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org, ConfidentialityLevel.SECRET, ConfidentialityLevel.SECRET
+        )
+        assert d.allowed is True
+
+
+# ---------------------------------------------------------------------------
+# #1369 / #1370 / #1371: path / type / classification-set scope
+# ---------------------------------------------------------------------------
+
+
+class TestKSPItemScoping:
+    def _ksp(self, **kw) -> KnowledgeSharePolicy:
+        return KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            **kw,
+        )
+
+    def _decide(self, org, ksp, item) -> AccessDecision:
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[],
+        )
+
+    def test_shared_paths_match_allows(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(shared_paths=("/finance/*",)),
+            _cross_barrier_item(path="/finance/q3"),
+        )
+        assert d.allowed is True
+
+    def test_shared_paths_nonmatch_denies(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(shared_paths=("/finance/*",)),
+            _cross_barrier_item(path="/hr/x"),
+        )
+        assert d.allowed is False
+        assert "shared_paths" in d.audit_details["deny_reason"]
+
+    def test_shared_paths_untagged_item_denied(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org, self._ksp(shared_paths=("/finance/*",)), _cross_barrier_item()
+        )
+        assert d.allowed is False
+
+    def test_shared_paths_traversal_item_denied(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(shared_paths=("*",)),
+            _cross_barrier_item(path="/finance/../etc"),
+        )
+        assert d.allowed is False
+
+    def test_shared_types_match_allows(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(shared_types=frozenset({"report"})),
+            _cross_barrier_item(knowledge_type="report"),
+        )
+        assert d.allowed is True
+
+    def test_shared_types_nonmatch_denies(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(shared_types=frozenset({"report"})),
+            _cross_barrier_item(knowledge_type="memo"),
+        )
+        assert d.allowed is False
+        assert "shared_types" in d.audit_details["deny_reason"]
+
+    def test_shared_classifications_excluded_below_ceiling_denied(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        # ceiling SECRET admits SECRET, but the SET excludes it.
+        d = self._decide(
+            two_dept_org,
+            self._ksp(
+                shared_classifications=frozenset(
+                    {ConfidentialityLevel.RESTRICTED, ConfidentialityLevel.CONFIDENTIAL}
+                )
+            ),
+            _cross_barrier_item(ConfidentialityLevel.SECRET),
+        )
+        assert d.allowed is False
+        assert "shared_classifications" in d.audit_details["deny_reason"]
+
+    def test_shared_classifications_member_allowed(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp(
+                shared_classifications=frozenset({ConfidentialityLevel.CONFIDENTIAL})
+            ),
+            _cross_barrier_item(ConfidentialityLevel.CONFIDENTIAL),
+        )
+        assert d.allowed is True
+
+
+# ---------------------------------------------------------------------------
+# #1374: time_window / environment conditions
+# ---------------------------------------------------------------------------
+
+
+class TestKSPConditions:
+    def _ksp(self, conditions) -> KnowledgeSharePolicy:
+        return KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            conditions=conditions,
+        )
+
+    def _decide(self, org, ksp, *, now=None, environment=None) -> AccessDecision:
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=_cross_barrier_item(),
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[],
+            now=now,
+            environment=environment,
+        )
+
+    def test_time_window_inside_allows(self, two_dept_org: CompiledOrg) -> None:
+        noon = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
+        d = self._decide(
+            two_dept_org,
+            self._ksp({"time_window": {"start": "09:00", "end": "17:00"}}),
+            now=noon,
+        )
+        assert d.allowed is True
+
+    def test_time_window_outside_denies(self, two_dept_org: CompiledOrg) -> None:
+        night = datetime(2026, 6, 18, 23, 0, tzinfo=timezone.utc)
+        d = self._decide(
+            two_dept_org,
+            self._ksp({"time_window": {"start": "09:00", "end": "17:00"}}),
+            now=night,
+        )
+        assert d.allowed is False
+        assert "time_window" in d.audit_details["deny_reason"]
+
+    def test_overnight_window_allows(self, two_dept_org: CompiledOrg) -> None:
+        night = datetime(2026, 6, 18, 23, 0, tzinfo=timezone.utc)
+        d = self._decide(
+            two_dept_org,
+            self._ksp({"time_window": {"start": "22:00", "end": "06:00"}}),
+            now=night,
+        )
+        assert d.allowed is True
+
+    def test_environment_match_allows(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp({"environment": {"network_zone": "internal"}}),
+            environment={"network_zone": "internal"},
+        )
+        assert d.allowed is True
+
+    def test_environment_mismatch_denies(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            self._ksp({"environment": {"network_zone": "internal"}}),
+            environment={"network_zone": "dmz"},
+        )
+        assert d.allowed is False
+        assert "environment" in d.audit_details["deny_reason"]
+
+    def test_unknown_condition_fails_closed(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(two_dept_org, self._ksp({"bogus_key": 1}))
+        assert d.allowed is False
+        assert "unrecognized condition" in d.audit_details["deny_reason"]
+
+
+# ---------------------------------------------------------------------------
+# #1373: bridge path scope + traversal guard
+# ---------------------------------------------------------------------------
+
+
+class TestBridgeSharedPaths:
+    def _decide(self, org, bridge, item) -> AccessDecision:
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[],
+            bridges=[bridge],
+        )
+
+    def test_bridge_path_match_allows(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            _permissive_bridge(shared_paths=("/finance/*",)),
+            _cross_barrier_item(path="/finance/q3"),
+        )
+        assert d.allowed is True
+
+    def test_bridge_path_nonmatch_denies(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            _permissive_bridge(shared_paths=("/finance/*",)),
+            _cross_barrier_item(path="/hr/x"),
+        )
+        assert d.allowed is False
+        assert d.step_failed == 5  # no bridge grants -> fall-closed deny
+
+    def test_bridge_traversal_item_denied(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org,
+            _permissive_bridge(shared_paths=("*",)),
+            _cross_barrier_item(path="/a/../etc"),
+        )
+        assert d.allowed is False
+
+    def test_unscoped_bridge_still_grants(self, two_dept_org: CompiledOrg) -> None:
+        d = self._decide(
+            two_dept_org, _permissive_bridge(), _cross_barrier_item(path="/anywhere")
+        )
+        assert d.allowed is True
+
+
+# ---------------------------------------------------------------------------
+# #1374 follow-up: injected `now` governs ALL time-evaluated checks
+# (KSP expiry AND bridge expiry — determinism parity, redteam MED-1)
+# ---------------------------------------------------------------------------
+
+
+class TestExpiryNowSymmetry:
+    """Both KSP and bridge expiry MUST honor the injected `now` (not wall-clock)."""
+
+    def _decide(self, org, *, ksps, bridges, now) -> AccessDecision:
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=_cross_barrier_item(),
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=ksps,
+            bridges=bridges,
+            now=now,
+        )
+
+    def test_bridge_expired_per_injected_now_denied(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        bridge = PactBridge(
+            id="b-exp",
+            role_a_address="D1-R1",
+            role_b_address="D2-R1",
+            bridge_type="standing",
+            max_classification=ConfidentialityLevel.SECRET,
+            expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        # now is AFTER expiry -> bridge treated as expired -> no access path.
+        d = self._decide(
+            two_dept_org,
+            ksps=[],
+            bridges=[bridge],
+            now=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        )
+        assert d.allowed is False
+        assert d.step_failed == 5
+
+    def test_bridge_unexpired_per_injected_now_allowed(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        bridge = PactBridge(
+            id="b-live",
+            role_a_address="D1-R1",
+            role_b_address="D2-R1",
+            bridge_type="standing",
+            max_classification=ConfidentialityLevel.SECRET,
+            expires_at=datetime(2027, 1, 1, tzinfo=timezone.utc),
+        )
+        d = self._decide(
+            two_dept_org,
+            ksps=[],
+            bridges=[bridge],
+            now=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        )
+        assert d.allowed is True
+        assert d.audit_details["access_path"] == "bridge"
+
+    def test_ksp_expired_per_injected_now_denied(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
+        ksp = KnowledgeSharePolicy(
+            id="k-exp",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        # KSP expired per injected now -> not applicable -> falls to step 5.
+        d = self._decide(
+            two_dept_org,
+            ksps=[ksp],
+            bridges=[],
+            now=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        )
+        assert d.allowed is False
+        assert d.step_failed == 5
+
+
+class TestKSPMalformedTimeWindow:
+    """#1374 fail-closed: a str-typed-but-non-HH:MM time_window MUST deny (redteam MED-3)."""
+
+    def _decide(self, org, window, now) -> AccessDecision:
+        ksp = KnowledgeSharePolicy(
+            id="k",
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification=ConfidentialityLevel.SECRET,
+            conditions={"time_window": window},
+        )
+        return can_access(
+            role_address="D1-R1",
+            knowledge_item=_cross_barrier_item(),
+            posture=TrustPostureLevel.DELEGATED,
+            compiled_org=org,
+            clearances={"D1-R1": _clearance("D1-R1", ConfidentialityLevel.SECRET)},
+            ksps=[ksp],
+            bridges=[],
+            now=now,
+        )
+
+    def test_unpadded_hour_denies_even_at_noon(self, two_dept_org: CompiledOrg) -> None:
+        # "9" sorts lexicographically ABOVE "17"; without HH:MM validation this
+        # silently GRANTED at noon. MUST now fail closed.
+        noon = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
+        d = self._decide(two_dept_org, {"start": "9", "end": "17"}, noon)
+        assert d.allowed is False
+        assert "malformed time_window" in d.audit_details["deny_reason"]
+
+    def test_out_of_range_hour_denies(self, two_dept_org: CompiledOrg) -> None:
+        noon = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
+        d = self._decide(two_dept_org, {"start": "25:00", "end": "17:00"}, noon)
+        assert d.allowed is False
+        assert "malformed time_window" in d.audit_details["deny_reason"]
+
+    def test_non_time_garbage_denies(self, two_dept_org: CompiledOrg) -> None:
+        noon = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
+        d = self._decide(two_dept_org, {"start": "morning", "end": "evening"}, noon)
+        assert d.allowed is False

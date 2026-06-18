@@ -28,8 +28,9 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -37,7 +38,9 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.events import GovernanceEventType, emit_governance_event
 from pact.governance.api.schemas import (
@@ -52,10 +55,6 @@ from pact.governance.api.schemas import (
     VerifyActionRequest,
     VerifyActionResponse,
 )
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.knowledge import KnowledgeItem
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +120,19 @@ def create_governance_router(
             classification=ConfidentialityLevel(req.item_classification),
             owning_unit_address=req.item_owning_unit,
             compartments=frozenset(req.item_compartments),
+            path=req.item_path,
+            knowledge_type=req.item_knowledge_type,
         )
 
         # Map posture string to enum
         posture = TrustPostureLevel(req.posture)
 
-        # Delegate to engine
-        decision = engine.check_access(req.role_address, item, posture)
+        # Delegate to engine (environment carries request-context facts the
+        # engine cannot observe itself; the engine uses its own clock for
+        # time_window conditions)
+        decision = engine.check_access(
+            req.role_address, item, posture, environment=req.environment
+        )
 
         # Emit governance event (fire-and-forget)
         await emit_governance_event(
@@ -359,6 +364,7 @@ def create_governance_router(
             max_classification=ConfidentialityLevel(req.max_classification),
             operational_scope=tuple(req.operational_scope),
             bilateral=req.bilateral,
+            shared_paths=tuple(req.shared_paths),
         )
 
         try:
@@ -403,6 +409,17 @@ def create_governance_router(
             max_classification=ConfidentialityLevel(req.max_classification),
             compartments=frozenset(req.compartments),
             created_by_role_address=req.created_by_role_address,
+            min_clearance=(
+                ConfidentialityLevel(req.min_clearance)
+                if req.min_clearance is not None
+                else None
+            ),
+            shared_paths=tuple(req.shared_paths),
+            shared_types=frozenset(req.shared_types),
+            shared_classifications=frozenset(
+                ConfidentialityLevel(c) for c in req.shared_classifications
+            ),
+            conditions=req.conditions,
         )
 
         try:

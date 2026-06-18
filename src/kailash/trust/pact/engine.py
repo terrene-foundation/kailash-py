@@ -400,6 +400,8 @@ class GovernanceEngine:
         posture: TrustPostureLevel,
         *,
         query: KnowledgeQuery | None = None,
+        environment: dict[str, Any] | None = None,
+        now: datetime | None = None,
     ) -> AccessDecision:
         """Check if a role can access a knowledge item. Thread-safe, fail-closed.
 
@@ -416,6 +418,15 @@ class GovernanceEngine:
                 is configured, this describes the scope of the data request.
                 If None and a filter is configured, a default query is built
                 from the knowledge_item.
+            environment: Optional request-context facts (e.g.
+                ``{"network_zone": "internal"}``) evaluated against any KSP
+                ``conditions["environment"]`` requirement. Facts the engine
+                cannot observe itself (active session, source IP) are supplied
+                by the caller here.
+            now: Optional evaluation time for KSP ``time_window`` conditions.
+                Defaults to the current UTC time. Primarily for deterministic
+                testing -- production callers should omit it so the engine
+                uses its own clock.
 
         Returns:
             An AccessDecision indicating allow/deny with reason.
@@ -489,6 +500,8 @@ class GovernanceEngine:
                     clearances=clearances,
                     ksps=ksps,
                     bridges=bridges,
+                    now=now,
+                    environment=environment,
                 )
 
                 if not decision.allowed:
@@ -812,6 +825,8 @@ class GovernanceEngine:
                 clearances=clearances,
                 ksps=ksps,
                 bridges=bridges,
+                now=ctx.get("now") or now,
+                environment=ctx.get("environment"),
             )
 
             # Step 5: Most restrictive wins

@@ -20,6 +20,7 @@ DEFAULT IS DENY. This is fail-closed by design.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -45,6 +46,108 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
+# Path scoping + condition helpers (shared by KSP and bridge enforcement)
+# ---------------------------------------------------------------------------
+
+# Recognized KSP condition keys. An unrecognized key fails closed at access
+# time so a policy author cannot set a condition the engine silently ignores.
+_KNOWN_CONDITION_KEYS: frozenset[str] = frozenset({"time_window", "environment"})
+
+# Strict zero-padded 24h HH:MM (00:00-23:59). A time_window bound that is a
+# str but NOT this exact shape MUST fail closed -- a non-padded value like
+# "9" sorts lexicographically ABOVE "17" and would silently invert the
+# window comparison into a grant (the strftime("%H:%M") current-time is
+# always zero-padded, so only zero-padded bounds compare correctly).
+_HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _path_has_traversal(path: str) -> bool:
+    """Return True if a path contains a ``..`` segment (traversal attempt).
+
+    Knowledge paths are LOGICAL, ``/``-delimited identifiers (e.g.
+    ``/finance/q3``), NOT filesystem paths: there is no OS path resolution,
+    no URL-decoding layer, and ``\\`` is an ordinary character, not a
+    separator. The guard therefore splits on ``/`` only and rejects a literal
+    ``..`` segment. This is the same `".." in path.split("/")` invariant the
+    envelope data-access path uses (engine.py).
+    """
+    return ".." in path.split("/")
+
+
+def _reject_traversal_patterns(patterns: tuple[str, ...], *, owner: str) -> None:
+    """Raise ValueError if any pattern contains a ``..`` segment (fail-closed).
+
+    Called from KnowledgeSharePolicy / PactBridge ``__post_init__`` so a
+    policy carrying a path-traversal pattern can never be constructed,
+    stored, or round-tripped.
+    """
+    for pat in patterns:
+        if _path_has_traversal(pat):
+            raise ValueError(
+                f"{owner}: shared_paths pattern {pat!r} contains a '..' "
+                f"traversal segment (rejected fail-closed)"
+            )
+
+
+def _path_matches(item_path: str | None, patterns: tuple[str, ...]) -> bool:
+    """Check whether an item path matches any of the (non-empty) patterns.
+
+    Grammar:
+        ``*``         -> matches any (non-traversal) path
+        ``prefix/*``  -> matches ``prefix`` and anything under ``prefix/``
+        ``exact``     -> matches only the exact path
+
+    Fail-closed: returns False when ``item_path`` is None (untagged item) or
+    contains a ``..`` segment, and skips any pattern that contains ``..``.
+    Callers MUST only invoke this when ``patterns`` is non-empty -- an empty
+    pattern collection means "no narrowing" and is handled by the caller.
+    """
+    if item_path is None:
+        return False
+    if _path_has_traversal(item_path):
+        return False
+    for pat in patterns:
+        if _path_has_traversal(pat):
+            # Defense in depth: __post_init__ rejects these at construction,
+            # but a hand-built / deserialized policy could still carry one.
+            continue
+        if pat == "*":
+            return True
+        if pat.endswith("/*"):
+            prefix = pat[:-2]
+            if item_path == prefix or item_path.startswith(prefix + "/"):
+                return True
+        elif item_path == pat:
+            return True
+    return False
+
+
+def _time_in_window(now: datetime, window: Any) -> bool | None:
+    """Evaluate whether ``now`` falls within a {"start","end"} HH:MM window.
+
+    Returns True/False for a well-formed window, or None if the window is
+    malformed (caller treats None as fail-closed). Overnight ranges
+    (start > end, e.g. 22:00-06:00) are supported.
+    """
+    if not isinstance(window, dict):
+        return None
+    start = window.get("start")
+    end = window.get("end")
+    if not isinstance(start, str) or not isinstance(end, str):
+        return None
+    # A str-typed-but-non-HH:MM bound (e.g. "9", "25:00") must fail closed:
+    # lexicographic comparison against the zero-padded current time would
+    # otherwise silently invert the window into a grant (zero-tolerance 3c).
+    if not _HHMM_RE.match(start) or not _HHMM_RE.match(end):
+        return None
+    current = now.strftime("%H:%M")
+    if start <= end:
+        return start <= current <= end
+    # Overnight range: in-window if at/after start OR at/before end
+    return current >= start or current <= end
+
+
+# ---------------------------------------------------------------------------
 # KnowledgeSharePolicy
 # ---------------------------------------------------------------------------
 
@@ -56,15 +159,44 @@ class KnowledgeSharePolicy:
     KSPs are directional: source_unit shares knowledge WITH target_unit.
     The max_classification caps what classification level may be shared.
 
+    Scope fields (``shared_paths`` / ``shared_types`` / ``shared_classifications``
+    / ``min_clearance`` / ``conditions``) are NARROWING filters: an empty
+    collection (or ``None``) means "no narrowing on this dimension" and
+    preserves the policy's broad grant; a non-empty value means an item
+    must satisfy that dimension to be granted. A KSP that matches the
+    source/target addressing but fails ANY narrowing filter is a
+    *matching-but-denying* KSP and suppresses the bridge fallback
+    (see ``_check_ksps`` deny-precedence).
+
     Attributes:
         id: Unique policy identifier.
         source_unit_address: D/T prefix sharing knowledge.
         target_unit_address: D/T prefix receiving access.
-        max_classification: Maximum classification level shared.
+        max_classification: Maximum classification level shared (ceiling).
         compartments: Restrict sharing to specific compartments (empty = all).
         created_by_role_address: Role that created this policy (audit trail).
         active: Whether this policy is currently active.
         expires_at: When this policy expires (None = no expiry).
+        min_clearance: Recipient clearance floor -- the requesting role's
+            ``max_clearance`` MUST be at or above this level. ``None`` = no
+            floor (any cleared recipient that passes the global checks).
+        shared_paths: Path-prefix patterns the shared item path must match
+            (``*`` = all, ``prefix/*`` = prefix match, exact match otherwise).
+            Empty = no path narrowing. A pattern containing a ``..`` segment
+            is rejected at construction (fail-closed).
+        shared_types: Set of knowledge types the item type must be a member
+            of. Empty = no type narrowing.
+        shared_classifications: Set of classification levels the item
+            classification must be a member of. Empty = ceiling-only
+            (``max_classification``). When non-empty, membership is required
+            IN ADDITION to the ceiling -- expresses a non-contiguous allowed
+            set (e.g. {RESTRICTED, CONFIDENTIAL} but not SECRET).
+        conditions: Request-context conditions evaluated at access time.
+            Supported keys: ``"time_window"`` ({"start": "HH:MM", "end":
+            "HH:MM"}, evaluated against the ``now`` arg, overnight ranges
+            supported) and ``"environment"`` (a dict of required key->value
+            pairs matched against the ``environment`` arg). An unrecognized
+            condition key is rejected fail-closed at access time.
     """
 
     id: str
@@ -75,6 +207,17 @@ class KnowledgeSharePolicy:
     created_by_role_address: str = ""
     active: bool = True
     expires_at: datetime | None = None
+    min_clearance: ConfidentialityLevel | None = None
+    shared_paths: tuple[str, ...] = ()
+    shared_types: frozenset[str] = field(default_factory=frozenset)
+    shared_classifications: frozenset[ConfidentialityLevel] = field(
+        default_factory=frozenset
+    )
+    conditions: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Reject ``..`` traversal segments in shared_paths (fail-closed)."""
+        _reject_traversal_patterns(self.shared_paths, owner=f"KSP '{self.id}'")
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +247,12 @@ class PactBridge:
         bilateral: Whether both roles have mutual access.
         expires_at: When this bridge expires (None = no expiry).
         active: Whether this bridge is currently active.
+        shared_paths: Path patterns the shared item path must match
+            (``*`` = all, ``prefix/*`` = prefix match, exact match otherwise).
+            Empty = no path narrowing (preserves the bridge's broad grant).
+            A pattern containing a ``..`` segment is rejected at construction
+            (fail-closed); an item path containing ``..`` is denied at
+            enforcement time.
     """
 
     id: str
@@ -115,6 +264,11 @@ class PactBridge:
     bilateral: bool = True
     expires_at: datetime | None = None
     active: bool = True
+    shared_paths: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Reject ``..`` traversal segments in shared_paths (fail-closed)."""
+        _reject_traversal_patterns(self.shared_paths, owner=f"bridge '{self.id}'")
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +467,9 @@ def can_access(
     clearances: dict[str, RoleClearance],  # address -> clearance
     ksps: list[KnowledgeSharePolicy],
     bridges: list[PactBridge],
+    *,
+    now: datetime | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> AccessDecision:
     """5-step access enforcement algorithm.
 
@@ -323,7 +480,9 @@ def can_access(
         4a: Same unit -> ALLOW
         4b: Downward (role address is prefix of item owner) -> ALLOW
         4c: T-inherits-D (role in T, item in parent D) -> ALLOW
-        4d: KSP exists -> ALLOW up to KSP max_classification
+        4d: KSP check -> ALLOW if an applicable KSP grants; DENY (suppressing
+            the bridge fallback) if a KSP matches the addressing but fails a
+            narrowing condition; fall through only when NO KSP applies.
         4e: Bridge exists -> ALLOW up to bridge max_classification
     Step 5: No access path -> DENY
 
@@ -337,11 +496,17 @@ def can_access(
         clearances: Map of role addresses to their clearance assignments.
         ksps: All active Knowledge Share Policies.
         bridges: All active Cross-Functional Bridges.
+        now: Evaluation time for KSP ``time_window`` conditions. Defaults to
+            the current UTC time when not supplied.
+        environment: Request-context facts (e.g. ``{"network_zone": "internal"}``)
+            matched against KSP ``conditions["environment"]`` requirements.
 
     Returns:
         An AccessDecision indicating allow/deny with reason and audit details.
     """
     item = knowledge_item
+    if now is None:
+        now = datetime.now(UTC)
 
     # --- Step 1: Resolve role clearance ---
     role_clearance = clearances.get(role_address)
@@ -511,13 +676,22 @@ def can_access(
             },
         )
 
-    # Step 4d: KSP check
-    ksp_decision = _check_ksps(role_address, item, compiled_org, ksps)
+    # Step 4d: KSP check (deny-precedence: a matching-but-denying KSP
+    # suppresses the bridge fallback below)
+    ksp_decision = _check_ksps(
+        role_address,
+        item,
+        compiled_org,
+        ksps,
+        clearances,
+        now=now,
+        environment=environment,
+    )
     if ksp_decision is not None:
         return ksp_decision
 
     # Step 4e: Bridge check
-    bridge_decision = _check_bridges(role_address, item, compiled_org, bridges)
+    bridge_decision = _check_bridges(role_address, item, compiled_org, bridges, now=now)
     if bridge_decision is not None:
         return bridge_decision
 
@@ -551,36 +725,164 @@ def can_access(
 # ---------------------------------------------------------------------------
 
 
+def _evaluate_conditions(
+    conditions: dict[str, Any],
+    now: datetime,
+    environment: dict[str, Any] | None,
+) -> str | None:
+    """Evaluate a KSP ``conditions`` dict against request context.
+
+    Returns a human-readable deny-reason string if any condition fails (or
+    is malformed / unrecognized -- fail-closed), or None if all conditions
+    pass. An empty ``conditions`` dict always passes (no narrowing).
+    """
+    if not conditions:
+        return None
+
+    # Fail-closed on any condition key the engine does not know how to
+    # evaluate -- a silently-ignored condition is the documented-but-unenforced
+    # failure mode (zero-tolerance Rule 3c) at the policy-data level.
+    for key in conditions:
+        if key not in _KNOWN_CONDITION_KEYS:
+            return (
+                f"unrecognized condition key '{key}' "
+                f"(known: {sorted(_KNOWN_CONDITION_KEYS)}; fail-closed)"
+            )
+
+    time_window = conditions.get("time_window")
+    if time_window is not None:
+        in_window = _time_in_window(now, time_window)
+        if in_window is None:
+            return "malformed time_window condition (fail-closed)"
+        if not in_window:
+            return f"current time outside time_window {time_window}"
+
+    env_required = conditions.get("environment")
+    if env_required is not None:
+        if not isinstance(env_required, dict):
+            return "malformed environment condition (fail-closed)"
+        env = environment or {}
+        for req_key, req_value in env_required.items():
+            if env.get(req_key) != req_value:
+                return (
+                    f"environment requirement '{req_key}={req_value!r}' "
+                    f"not satisfied"
+                )
+
+    return None
+
+
+def _evaluate_ksp_conditions(
+    ksp: KnowledgeSharePolicy,
+    item: KnowledgeItem,
+    role_clearance: RoleClearance | None,
+    now: datetime,
+    environment: dict[str, Any] | None,
+) -> str | None:
+    """Evaluate every narrowing condition on an addressing-matched KSP.
+
+    Returns the deny-reason detail string for the FIRST failing condition,
+    or None if the item satisfies every condition (the KSP grants).
+    """
+    # 1. Classification ceiling (max_classification)
+    if _CLEARANCE_ORDER[item.classification] > _CLEARANCE_ORDER[ksp.max_classification]:
+        return (
+            f"item classification '{item.classification.value}' exceeds KSP "
+            f"max_classification ceiling '{ksp.max_classification.value}'"
+        )
+
+    # 2. Classification SET membership (shared_classifications, #1371)
+    if (
+        ksp.shared_classifications
+        and item.classification not in ksp.shared_classifications
+    ):
+        allowed = sorted(c.value for c in ksp.shared_classifications)
+        return (
+            f"item classification '{item.classification.value}' not in KSP "
+            f"shared_classifications set {allowed}"
+        )
+
+    # 3. Recipient clearance floor (min_clearance, #1368)
+    if ksp.min_clearance is not None:
+        have_level = (
+            _CLEARANCE_ORDER[role_clearance.max_clearance]
+            if role_clearance is not None
+            else -1
+        )
+        if have_level < _CLEARANCE_ORDER[ksp.min_clearance]:
+            have = role_clearance.max_clearance.value if role_clearance else "none"
+            return (
+                f"recipient clearance '{have}' is below KSP min_clearance floor "
+                f"'{ksp.min_clearance.value}'"
+            )
+
+    # 4. Path scope (shared_paths, #1369)
+    if ksp.shared_paths and not _path_matches(item.path, ksp.shared_paths):
+        return (
+            f"item path {item.path!r} does not match KSP shared_paths "
+            f"{list(ksp.shared_paths)}"
+        )
+
+    # 5. Type scope (shared_types, #1370)
+    if ksp.shared_types and (
+        item.knowledge_type is None or item.knowledge_type not in ksp.shared_types
+    ):
+        return (
+            f"item knowledge_type {item.knowledge_type!r} not in KSP "
+            f"shared_types {sorted(ksp.shared_types)}"
+        )
+
+    # 6. Request-context conditions (time_window / environment, #1374)
+    cond_detail = _evaluate_conditions(ksp.conditions, now, environment)
+    if cond_detail is not None:
+        return cond_detail
+
+    return None
+
+
 def _check_ksps(
     role_address: str,
     item: KnowledgeItem,
     compiled_org: CompiledOrg,
     ksps: list[KnowledgeSharePolicy],
+    clearances: dict[str, RoleClearance],
+    *,
+    now: datetime,
+    environment: dict[str, Any] | None = None,
 ) -> AccessDecision | None:
-    """Check if any active KSP grants access.
+    """Evaluate cross-unit KSP access with deny-precedence (#1372).
 
-    A KSP grants access when:
-    1. The KSP is active.
-    2. The KSP source_unit_address matches the item's owning_unit_address
-       (source is sharing, so source must be the item owner or its ancestor).
-    3. The KSP target_unit_address matches the role's containment unit
-       (target receives, so target must contain the requesting role).
-    4. The item's classification <= KSP max_classification.
+    A KSP is *applicable* when it is active, non-expired, and its
+    source/target addressing matches (source owns the item, target contains
+    the requesting role). An applicable KSP then either GRANTS (every
+    narrowing condition passes) or DENIES (some condition fails).
+
+    Composition rule:
+      - Any applicable KSP that grants -> ALLOW (a granting sibling KSP wins
+        over a denying one; deny-precedence is over the bridge, not over
+        another KSP that affirmatively grants).
+      - At least one applicable KSP but NONE grant -> DENY, suppressing the
+        bridge fallback. This is the #1372 fix: a deliberate KSP deny is no
+        longer bypassable via a more permissive bridge.
+      - No applicable KSP -> None (the bridge path remains available).
 
     Returns:
-        An AccessDecision(allowed=True) if a KSP grants access, or None
-        if no KSP applies.
+        AccessDecision(allowed=True) if a KSP grants; AccessDecision(
+        allowed=False, step_failed=4) if applicable KSPs all deny; None if
+        no KSP applies.
     """
     role_unit = _get_containment_unit(role_address, compiled_org)
+    role_clearance = clearances.get(role_address)
+
+    last_deny: tuple[str, str] | None = None  # (ksp_id, deny_detail)
 
     for ksp in ksps:
         if not ksp.active:
             continue
 
         # Expired KSP treated as non-existent (C1 security fix)
-        if ksp.expires_at is not None:
-            if ksp.expires_at < datetime.now(UTC):
-                continue
+        if ksp.expires_at is not None and ksp.expires_at < now:
+            continue
 
         # Source must match item owner (exact or prefix)
         source_matches = (
@@ -603,14 +905,18 @@ def _check_ksps(
         if not target_matches:
             continue
 
-        # Classification cap
-        ksp_level = _CLEARANCE_ORDER[ksp.max_classification]
-        item_level = _CLEARANCE_ORDER[item.classification]
-        if item_level > ksp_level:
-            continue  # Item classification exceeds KSP limit
+        # This KSP APPLIES (addressing matched). It now grants or denies.
+        deny_detail = _evaluate_ksp_conditions(
+            ksp, item, role_clearance, now, environment
+        )
+        if deny_detail is not None:
+            # Matching-but-denying KSP -- record it and keep scanning for a
+            # sibling KSP that grants.
+            last_deny = (ksp.id, deny_detail)
+            continue
 
         logger.debug(
-            "Access allowed (step 4d): KSP=%s — role_address=%s, " "item_owner=%s",
+            "Access allowed (step 4d): KSP=%s — role_address=%s, item_owner=%s",
             ksp.id,
             role_address,
             item.owning_unit_address,
@@ -631,7 +937,36 @@ def _check_ksps(
             valid_until=ksp.expires_at,
         )
 
-    return None
+    if last_deny is None:
+        # No KSP applied -- leave the bridge fallback available.
+        return None
+
+    # >=1 applicable KSP but none granted -> DENY, suppressing the bridge.
+    deny_ksp_id, deny_detail = last_deny
+    logger.info(
+        "Access denied (step 4d): KSP=%s denies (%s) — role_address=%s, "
+        "item_id=%s; bridge fallback suppressed",
+        deny_ksp_id,
+        deny_detail,
+        role_address,
+        item.item_id,
+    )
+    return AccessDecision(
+        allowed=False,
+        reason=(
+            f"KSP '{deny_ksp_id}' denies access ({deny_detail}); a matching "
+            f"deny-KSP suppresses the bridge fallback"
+        ),
+        step_failed=4,
+        audit_details={
+            "role_address": role_address,
+            "item_id": item.item_id,
+            "step": "4d",
+            "access_path": "ksp_deny",
+            "ksp_id": deny_ksp_id,
+            "deny_reason": deny_detail,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +979,8 @@ def _check_bridges(
     item: KnowledgeItem,
     compiled_org: CompiledOrg,
     bridges: list[PactBridge],
+    *,
+    now: datetime,
 ) -> AccessDecision | None:
     """Check if any active bridge grants access.
 
@@ -657,6 +994,10 @@ def _check_bridges(
     5. If bilateral=False, only role_a can access role_b's data
        (A -> B direction only).
 
+    Bridge expiry is evaluated against the injected ``now`` (symmetric with
+    the KSP expiry check in ``_check_ksps``) so the whole time-evaluated
+    access path is deterministic under an injected clock.
+
     Returns:
         An AccessDecision(allowed=True) if a bridge grants access, or None
         if no bridge applies.
@@ -665,10 +1006,10 @@ def _check_bridges(
         if not bridge.active:
             continue
 
-        # Expired bridge treated as non-existent (C1 security fix)
-        if bridge.expires_at is not None:
-            if bridge.expires_at < datetime.now(UTC):
-                continue
+        # Expired bridge treated as non-existent (C1 security fix). Uses the
+        # injected ``now`` for determinism parity with KSP expiry.
+        if bridge.expires_at is not None and bridge.expires_at < now:
+            continue
 
         # Determine direction: which side matches the requesting role,
         # and which side connects to the item owner?
@@ -690,6 +1031,22 @@ def _check_bridges(
         bridge_level = _CLEARANCE_ORDER[bridge.max_classification]
         item_level = _CLEARANCE_ORDER[item.classification]
         if item_level > bridge_level:
+            continue
+
+        # Path scope (#1373): when shared_paths is set, the item path MUST
+        # match a pattern (``*`` / ``prefix/*`` / exact). An item path
+        # containing a ``..`` segment fails closed (no match). An empty
+        # shared_paths preserves the bridge's broad, path-agnostic grant.
+        if bridge.shared_paths and not _path_matches(item.path, bridge.shared_paths):
+            logger.info(
+                "Access not granted via bridge=%s: item path %r outside "
+                "shared_paths %s — role_address=%s, item_id=%s",
+                bridge.id,
+                item.path,
+                list(bridge.shared_paths),
+                role_address,
+                item.item_id,
+            )
             continue
 
         logger.debug(

@@ -8,11 +8,8 @@ enum validation, and serialization round-trips.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 from pydantic import ValidationError
-
 
 # ---------------------------------------------------------------------------
 # Schema imports (will be created in src/pact/governance/api/schemas.py)
@@ -29,7 +26,6 @@ from pact.governance.api.schemas import (
     VerifyActionRequest,
     VerifyActionResponse,
 )
-
 
 # ===================================================================
 # CheckAccessRequest validation
@@ -512,3 +508,140 @@ class TestSetEnvelopeRequest:
                     "financial": {"max_spend_usd": float("inf")},
                 },
             )
+
+
+class TestV2ScopeRequestFields:
+    """Epic #1375: new request fields validate + carry through (#1368-#1374)."""
+
+    def test_ksp_request_accepts_scope_fields(self) -> None:
+        req = CreateKSPRequest(
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification="secret",
+            created_by_role_address="D1-R1",
+            min_clearance="confidential",
+            shared_paths=["/finance/*"],
+            shared_types=["report"],
+            shared_classifications=["restricted", "confidential"],
+            conditions={"time_window": {"start": "09:00", "end": "17:00"}},
+        )
+        assert req.min_clearance == "confidential"
+        assert req.shared_paths == ["/finance/*"]
+        assert req.shared_classifications == ["restricted", "confidential"]
+        assert req.shared_types == ["report"]
+        assert req.conditions == {"time_window": {"start": "09:00", "end": "17:00"}}
+
+    def test_ksp_request_defaults(self) -> None:
+        req = CreateKSPRequest(
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification="restricted",
+            created_by_role_address="D1-R1",
+        )
+        assert req.min_clearance is None
+        assert req.shared_paths == []
+        assert req.shared_types == []
+        assert req.shared_classifications == []
+        assert req.conditions == {}
+
+    def test_ksp_request_rejects_invalid_min_clearance(self) -> None:
+        with pytest.raises(ValidationError):
+            CreateKSPRequest(
+                source_unit_address="D2",
+                target_unit_address="D1",
+                max_classification="restricted",
+                created_by_role_address="D1-R1",
+                min_clearance="bogus",
+            )
+
+    def test_ksp_request_rejects_invalid_shared_classification(self) -> None:
+        with pytest.raises(ValidationError):
+            CreateKSPRequest(
+                source_unit_address="D2",
+                target_unit_address="D1",
+                max_classification="restricted",
+                created_by_role_address="D1-R1",
+                shared_classifications=["restricted", "nope"],
+            )
+
+    def test_ksp_request_rejects_traversal_in_shared_paths(self) -> None:
+        with pytest.raises(ValidationError, match="traversal"):
+            CreateKSPRequest(
+                source_unit_address="D2",
+                target_unit_address="D1",
+                max_classification="restricted",
+                created_by_role_address="D1-R1",
+                shared_paths=["/finance/../etc"],
+            )
+
+    def test_bridge_request_accepts_shared_paths(self) -> None:
+        req = CreateBridgeRequest(
+            role_a_address="D1-R1",
+            role_b_address="D2-R1",
+            bridge_type="standing",
+            max_classification="secret",
+            shared_paths=["/finance/*"],
+        )
+        assert req.shared_paths == ["/finance/*"]
+
+    def test_bridge_request_rejects_traversal(self) -> None:
+        with pytest.raises(ValidationError, match="traversal"):
+            CreateBridgeRequest(
+                role_a_address="D1-R1",
+                role_b_address="D2-R1",
+                bridge_type="standing",
+                max_classification="secret",
+                shared_paths=["../secret"],
+            )
+
+    def test_check_access_request_accepts_item_path_and_environment(self) -> None:
+        req = CheckAccessRequest(
+            role_address="D1-R1",
+            item_id="i1",
+            item_classification="restricted",
+            item_owning_unit="D2",
+            item_path="/finance/q3",
+            item_knowledge_type="report",
+            environment={"network_zone": "internal"},
+            posture="delegated",
+        )
+        assert req.item_path == "/finance/q3"
+        assert req.item_knowledge_type == "report"
+        assert req.environment == {"network_zone": "internal"}
+
+
+class TestV2ConditionsValidation:
+    """Defense-in-depth: CreateKSPRequest rejects malformed conditions (redteam MED-3)."""
+
+    def _ksp(self, conditions):
+        return CreateKSPRequest(
+            source_unit_address="D2",
+            target_unit_address="D1",
+            max_classification="secret",
+            created_by_role_address="D1-R1",
+            conditions=conditions,
+        )
+
+    def test_wellformed_time_window_accepted(self) -> None:
+        req = self._ksp({"time_window": {"start": "09:00", "end": "17:00"}})
+        assert req.conditions["time_window"]["start"] == "09:00"
+
+    def test_unpadded_time_window_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="HH:MM"):
+            self._ksp({"time_window": {"start": "9", "end": "17"}})
+
+    def test_out_of_range_time_window_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="HH:MM"):
+            self._ksp({"time_window": {"start": "25:00", "end": "17:00"}})
+
+    def test_unknown_condition_key_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unrecognized"):
+            self._ksp({"bogus": 1})
+
+    def test_environment_must_be_object(self) -> None:
+        with pytest.raises(ValidationError, match="environment"):
+            self._ksp({"environment": "internal"})
+
+    def test_environment_object_accepted(self) -> None:
+        req = self._ksp({"environment": {"zone": "internal"}})
+        assert req.conditions["environment"] == {"zone": "internal"}

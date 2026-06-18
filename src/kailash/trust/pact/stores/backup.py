@@ -24,13 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-)
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.config import ConfidentialityLevel, ConstraintEnvelopeConfig
 from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.stores.sqlite import PACT_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +106,10 @@ def backup_governance_store(engine: Any, path: str) -> None:
                 }
             )
 
-    # Export KSPs
+    # Export KSPs (incl. the #1368-#1374 scope fields — a KSP narrowed by
+    # any of these MUST round-trip through backup/restore; dropping them
+    # would widen a deny-KSP into a broad grant on restore, reintroducing
+    # the #1372 over-grant).
     ksps_data: list[dict[str, Any]] = []
     for ksp in engine._access_policy_store.list_ksps():
         ksps_data.append(
@@ -121,10 +122,19 @@ def backup_governance_store(engine: Any, path: str) -> None:
                 "created_by_role_address": ksp.created_by_role_address,
                 "active": ksp.active,
                 "expires_at": ksp.expires_at.isoformat() if ksp.expires_at else None,
+                "min_clearance": (
+                    ksp.min_clearance.value if ksp.min_clearance else None
+                ),
+                "shared_paths": list(ksp.shared_paths),
+                "shared_types": sorted(ksp.shared_types),
+                "shared_classifications": sorted(
+                    c.value for c in ksp.shared_classifications
+                ),
+                "conditions": ksp.conditions,
             }
         )
 
-    # Export bridges
+    # Export bridges (incl. #1373 shared_paths)
     bridges_data: list[dict[str, Any]] = []
     for bridge in engine._access_policy_store.list_bridges():
         bridges_data.append(
@@ -140,6 +150,7 @@ def backup_governance_store(engine: Any, path: str) -> None:
                     bridge.expires_at.isoformat() if bridge.expires_at else None
                 ),
                 "active": bridge.active,
+                "shared_paths": list(bridge.shared_paths),
             }
         )
 
@@ -151,7 +162,9 @@ def backup_governance_store(engine: Any, path: str) -> None:
         "bridges": bridges_data,
         "metadata": {
             "backup_timestamp": datetime.now(UTC).isoformat(),
-            "schema_version": 1,
+            # Sourced from the store schema version so backup + store never
+            # drift (was hardcoded 1; the v2 scoping columns made that stale).
+            "schema_version": PACT_SCHEMA_VERSION,
         },
     }
 
@@ -256,6 +269,10 @@ def restore_governance_store(engine: Any, path: str) -> None:
         if ksp_data.get("expires_at") is not None:
             expires_at = datetime.fromisoformat(ksp_data["expires_at"])
 
+        # Scope fields (#1368-#1374) restored with .get() defaults so a v1
+        # backup (missing these keys) restores to the same backward-compatible
+        # empty/None defaults the dataclass uses; coercions mirror
+        # SqliteAccessPolicyStore._row_to_ksp so all persistence surfaces agree.
         ksp = KnowledgeSharePolicy(
             id=ksp_data["id"],
             source_unit_address=ksp_data["source_unit_address"],
@@ -265,6 +282,18 @@ def restore_governance_store(engine: Any, path: str) -> None:
             created_by_role_address=ksp_data.get("created_by_role_address", ""),
             active=ksp_data.get("active", True),
             expires_at=expires_at,
+            min_clearance=(
+                ConfidentialityLevel(ksp_data["min_clearance"])
+                if ksp_data.get("min_clearance")
+                else None
+            ),
+            shared_paths=tuple(ksp_data.get("shared_paths", [])),
+            shared_types=frozenset(ksp_data.get("shared_types", [])),
+            shared_classifications=frozenset(
+                ConfidentialityLevel(v)
+                for v in ksp_data.get("shared_classifications", [])
+            ),
+            conditions=ksp_data.get("conditions", {}),
         )
         engine.create_ksp(ksp)
 
@@ -287,6 +316,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             bilateral=bridge_data.get("bilateral", True),
             expires_at=expires_at,
             active=bridge_data.get("active", True),
+            shared_paths=tuple(bridge_data.get("shared_paths", [])),
         )
         engine._access_policy_store.save_bridge(bridge)
 
