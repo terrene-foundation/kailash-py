@@ -2,48 +2,42 @@
 
 ## Where we are
 
-`main` clean + in sync. **kailash 2.38.3 released + install-verified** (F1 —
-`MiddlewareAuthManager` token revocation, #1356 sibling). Monorepo pristine
-(every package main == PyPI). The F3 workspace backlog is committed +
-disclosure-scrubbed. No in-repo actionable code work remains — the only open
-item is F4 (cross-repo, human-gated).
+PACT KSP/Bridge access-control scoping & precedence (epic #1375, all 7 issues
+#1368–#1374) shipped end-to-end: implemented in `src/kailash/trust/pact/` +
+`kailash-pact`, 5-round adversarial redteam converged (2 consecutive clean rounds),
+PR #1376 merged, released as **kailash 2.39.0 + kailash-pact 0.13.0**, published to
+PyPI + clean-venv verified. F5 closed. F4 (kailash-rs) still cross-repo blocked.
 
 ## Read first
 
-1. `CLAUDE.md` — repo absolutes (framework-first, zero-tolerance, .env-only)
-2. `deploy/deployment-config.md` — release runbook + versions (top of log = 2.38.3)
-3. `workspaces/issue-1356-jwt-revocation/journal/0005-DISCOVERY-kailash-rs-revocation-gap-confirmed.md` — the F4 kailash-rs gap finding + the scrubbed cross-SDK issue rationale
+1. `#1375` (gh epic) — cluster design + cross-cutting ACs (all delivered).
+2. `src/kailash/trust/pact/access.py` — `_check_ksps` deny-precedence + scope conditions (the keystone) + `_check_bridges` shared_paths.
+3. `CHANGELOG.md` [2.39.0] + `packages/kailash-pact/CHANGELOG.md` [0.13.0] — what shipped.
+4. `CLAUDE.md` — repo context (BUILD repo; commits user-gated).
 
 ## In-flight state
 
-- `.session-notes` (this file) is the only uncommitted edit; tree otherwise clean.
+- Nothing uncommitted. main @ kailash 2.39.0 / pact 0.13.0, both live on PyPI. Working tree clean except this file.
 
 ## Outstanding ledger (forest)
 
 | ID  | Item | Value-anchor (MUST-1 source) | Status |
 | --- | ---- | ---------------------------- | ------ |
-| F4  | kailash-rs Nexus JWT middleware revocation gap — FIX + scrubbed cross-SDK issue filing | `cross-sdk-inspection.md` MUST-1 + `journal/0005` (CONFIRMED: `kailash-auth::decode_jwt` has no revocation/jti; `kailash-enterprise` `TokenManager` exists but is unwired into the Nexus verify path — Rust analog of F1) | BLOCKED — cross-repo (`esperie-enterprise/kailash-rs`); needs its own kailash-rs session; issue-filing human-gated per `upstream-issue-hygiene.md` |
+| F4  | kailash-rs Nexus JWT middleware revocation gap — FIX + scrubbed cross-SDK issue filing | `cross-sdk-inspection.md` MUST-1 + journal/0005 (rs analog of F1) | BLOCKED — cross-repo (`esperie-enterprise/kailash-rs`); own session; issue-filing human-gated |
 
-Closed this session:
-- `F1` → kailash 2.38.3 (PR #1365 fix + #1366 release + #1367 deploy; tag `v2.38.3`; record `deploy/deployments/2026-06-18-v2.38.3-1356-sibling-middleware-auth-revocation.md`)
-- `F2` → kailash-rs READ + verify COMPLETE (authorized receipt `journal/0004`; finding `journal/0005`) — gap confirmed, transformed into F4
-- `F3` → workspace backlog committed + disclosure-scrubbed (commit `964aef107`)
+Closed this session: `F5` → PR #1376 (feature) + #1377 (release) + tags `v2.39.0`/`pact-v0.13.0`; issues #1368–#1374 auto-closed.
 
 ## Traps
 
-- `kailash.middleware.auth` requires the `[server]` extra (jwt/fastapi/starlette).
-- CI shows duplicate push+PR runs (same SHA); the push-event run gets
-  `cancel-in-progress`-cancelled and renders as a red "build" check while the
-  pull_request run is authoritative — check job `conclusion` (cancelled vs failure).
-- Parallel review/agent waves: cap ≤3 concurrent (`worktree-isolation.md` Rule 4) —
-  a 4-wide launch hit the synchronized server throttle this session.
-
-## Unreleased packages
-
-None — kailash 2.38.3 released + verified this session; all sub-packages at PyPI
-parity (release-drift.js clean).
+- `KSP.compartments` is accepted but NOT enforced in `_check_ksps` — PRE-EXISTING (predates #1375; surfaced redteam R5). Latent zero-tolerance-3c gap; needs its own issue + cross-SDK look, not a mid-cluster fix.
+- `KspSpec` YAML DSL (`yaml_loader.py`) can't express the new scope fields + isn't enforcement-wired — separate YAML-authoring feature, not a silent drop.
+- 11 `KAIZEN_DEFAULT_MODEL` failures + 2 `tests/performance` abstract-`Node` failures are PRE-EXISTING (proven on clean main via stash). Set `KAIZEN_DEFAULT_MODEL=<model>` locally to clear the 11.
+- Redteam workflow: cap concurrent review agents at ≤3 AND prefer sequential — a server-side rate-limit killed even a 3-wide launch this session (round 4 attempt 1).
 
 ## Open questions for the human
 
-- F4: file the scrubbed kailash-rs cross-SDK revocation issue + open a kailash-rs
-  session for the fix? Both are cross-repo + human-gated.
+- Should `KSP.compartments`-unenforced and the verify-action REST env/resource exposure become tracked workstreams? (No user value-anchor yet — surfacing, not inventing F-IDs.)
+
+## Unreleased packages
+
+None — kailash 2.39.0 + kailash-pact 0.13.0 released + published this session; all other packages verified at PyPI parity.
