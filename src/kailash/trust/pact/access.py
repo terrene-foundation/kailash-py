@@ -861,7 +861,8 @@ def _evaluate_ksp_conditions(
         return cond_detail
 
     # 7. Compartment scope (ksp.compartments, #1375 follow-up)
-    # Mirrors the step-3 clearance compartment dominance at access.py:587 --
+    # Mirrors the step-3 clearance compartment-dominance check (the
+    # `item.compartments - role_clearance.compartments` subset test) --
     # an item is shareable under this KSP only if EVERY compartment it carries
     # is authorized by the KSP's compartment set (item.compartments subset of
     # ksp.compartments). Empty ksp.compartments = no narrowing (empty = all).
