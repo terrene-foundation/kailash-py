@@ -1,5 +1,27 @@
 # PACT Changelog
 
+## [0.13.0] — 2026-06-18 — feat: KSP/Bridge access-control scoping & precedence (#1368–#1374)
+
+Exposes the new core PACT access-control scoping API (epic #1375) through the
+governance REST surface and bumps the SDK floor to the version that provides it.
+
+### Added
+
+- `CreateKSPRequest` accepts `min_clearance`, `shared_paths`, `shared_types`,
+  `shared_classifications`, and `conditions`, with validators that reject a
+  `..` traversal segment in `shared_paths`, a non-`HH:MM` `time_window` bound,
+  and an unrecognized `conditions` key (fail-closed, defense-in-depth atop the
+  core enforcement layer).
+- `CreateBridgeRequest` accepts `shared_paths` (`..` rejected).
+- `CheckAccessRequest` accepts `item_path`, `item_knowledge_type`, and
+  `environment`; the check-access handler threads them into the engine.
+
+### Changed
+
+- Requires `kailash>=2.39.0` (the core release providing the
+  `KnowledgeSharePolicy`/`PactBridge`/`KnowledgeItem` scope fields and the
+  `check_access` `now`/`environment` parameters this package now calls).
+
 ## [0.12.1] — 2026-06-18 — chore: release un-bumped comment-only source change
 
 Patch release cutting the previously-unreleased `7abe1a2c2` source commit (reworded

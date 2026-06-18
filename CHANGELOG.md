@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.39.0] - 2026-06-18
+
+### Added
+
+- **PACT KSP/Bridge access-control scoping & precedence** (`kailash.trust.pact`,
+  epic #1375 — closes #1368–#1374). Per-policy narrowing controls that were
+  previously inexpressible, so policies over-granted:
+  - `KnowledgeSharePolicy` gains `min_clearance` (recipient clearance floor,
+    #1368), `shared_paths` (path-prefix scope, #1369), `shared_types`
+    (knowledge-type scope, #1370), `shared_classifications` (allowed-level SET
+    beyond the `max_classification` ceiling, #1371), and `conditions`
+    (request-context `time_window`/`environment`, #1374).
+  - `KnowledgeItem` gains `path` and `knowledge_type` (#1369/#1370).
+  - `PactBridge` gains `shared_paths` with a `..` traversal guard, fail-closed
+    at construction AND enforcement (#1373).
+  - `can_access` / `GovernanceEngine.check_access` / `explain_access` accept
+    keyword-only `now` and `environment` for time/context-conditioned policies
+    (#1374). Unknown condition keys and malformed (non-`HH:MM`) time windows
+    fail closed.
+
+### Changed
+
+- **Deny-precedence in `can_access` Step 4d** (#1372): a `KnowledgeSharePolicy`
+  that matches the source/target addressing but fails a narrowing condition now
+  DENIES and suppresses the bridge fallback. Previously a deliberate KSP deny
+  was bypassable via a more permissive bridge (over-grant). A granting sibling
+  KSP still wins; absence of any applicable KSP still leaves the bridge path
+  available. All new scope fields default to "match-all", so the change is
+  backward-compatible.
+- `SqliteAccessPolicyStore` schema advanced to v2 with an additive, in-place
+  `v1→v2` column migration; backup/restore preserves every new scope field.
+
 ## [2.38.3] - 2026-06-18
 
 ### Added
