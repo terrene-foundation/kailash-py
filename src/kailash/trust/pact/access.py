@@ -174,6 +174,18 @@ class KnowledgeSharePolicy:
         target_unit_address: D/T prefix receiving access.
         max_classification: Maximum classification level shared (ceiling).
         compartments: Restrict sharing to specific compartments (empty = all).
+            This is a per-KSP NARROWING filter (enforced at step 4d as the
+            7th narrowing condition), NOT a hard compartment ceiling on the
+            source->target edge: an item is shareable under THIS KSP only if
+            every compartment it carries is authorized here
+            (``item.compartments`` subset of this set). Like the other
+            narrowing conditions, it composes under KSP deny-precedence
+            (#1372) -- a sibling KSP that affirmatively grants (e.g. one with
+            empty ``compartments``) still wins, so this field narrows THIS
+            policy, it does not ceiling the edge. The absolute compartment
+            ceiling for SECRET/TOP_SECRET items is the step-3 clearance check
+            (the requesting role's clearance must independently hold every
+            item compartment), which no KSP composition can bypass.
         created_by_role_address: Role that created this policy (audit trail).
         active: Whether this policy is currently active.
         expires_at: When this policy expires (None = no expiry).
@@ -781,6 +793,17 @@ def _evaluate_ksp_conditions(
 ) -> str | None:
     """Evaluate every narrowing condition on an addressing-matched KSP.
 
+    Conditions, evaluated in order (first failure short-circuits):
+      1. Classification ceiling (max_classification)
+      2. Classification set membership (shared_classifications, #1371)
+      3. Recipient clearance floor (min_clearance, #1368)
+      4. Path scope (shared_paths, #1369)
+      5. Type scope (shared_types, #1370)
+      6. Request-context conditions (time_window / environment, #1374)
+      7. Compartment scope (compartments, #1375 follow-up) -- item compartments
+         MUST be a subset of the KSP's authorized compartment set; empty
+         ksp.compartments = no narrowing (empty = all).
+
     Returns the deny-reason detail string for the FIRST failing condition,
     or None if the item satisfies every condition (the KSP grants).
     """
@@ -836,6 +859,20 @@ def _evaluate_ksp_conditions(
     cond_detail = _evaluate_conditions(ksp.conditions, now, environment)
     if cond_detail is not None:
         return cond_detail
+
+    # 7. Compartment scope (ksp.compartments, #1375 follow-up)
+    # Mirrors the step-3 clearance compartment-dominance check (the
+    # `item.compartments - role_clearance.compartments` subset test) --
+    # an item is shareable under this KSP only if EVERY compartment it carries
+    # is authorized by the KSP's compartment set (item.compartments subset of
+    # ksp.compartments). Empty ksp.compartments = no narrowing (empty = all).
+    if ksp.compartments:
+        missing = item.compartments - ksp.compartments
+        if missing:
+            return (
+                f"item compartments {sorted(missing)} not authorized by KSP "
+                f"compartments {sorted(ksp.compartments)}"
+            )
 
     return None
 
