@@ -301,6 +301,7 @@ Evaluated BEFORE the 5-step algorithm. Can deny the request outright or narrow q
 - Non-ACTIVE vetting -> DENY (step 1)
 - Insufficient clearance -> DENY (step 2)
 - Missing compartments -> DENY (step 3)
+- Item compartment not authorized by KSP `compartments` -> DENY (step 4d; item compartments must be a subset of the KSP's compartment set, empty = all)
 - No structural, KSP, or bridge path -> DENY (step 5)
 - Internal error -> DENY (step 0, fail-closed)
 - KnowledgeFilter error -> DENY (fail-closed)

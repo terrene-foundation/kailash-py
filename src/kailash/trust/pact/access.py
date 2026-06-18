@@ -781,6 +781,17 @@ def _evaluate_ksp_conditions(
 ) -> str | None:
     """Evaluate every narrowing condition on an addressing-matched KSP.
 
+    Conditions, evaluated in order (first failure short-circuits):
+      1. Classification ceiling (max_classification)
+      2. Classification set membership (shared_classifications, #1371)
+      3. Recipient clearance floor (min_clearance, #1368)
+      4. Path scope (shared_paths, #1369)
+      5. Type scope (shared_types, #1370)
+      6. Request-context conditions (time_window / environment, #1374)
+      7. Compartment scope (compartments, #1375 follow-up) -- item compartments
+         MUST be a subset of the KSP's authorized compartment set; empty
+         ksp.compartments = no narrowing (empty = all).
+
     Returns the deny-reason detail string for the FIRST failing condition,
     or None if the item satisfies every condition (the KSP grants).
     """
@@ -836,6 +847,19 @@ def _evaluate_ksp_conditions(
     cond_detail = _evaluate_conditions(ksp.conditions, now, environment)
     if cond_detail is not None:
         return cond_detail
+
+    # 7. Compartment scope (ksp.compartments, #1375 follow-up)
+    # Mirrors the step-3 clearance compartment dominance at access.py:587 --
+    # an item is shareable under this KSP only if EVERY compartment it carries
+    # is authorized by the KSP's compartment set (item.compartments subset of
+    # ksp.compartments). Empty ksp.compartments = no narrowing (empty = all).
+    if ksp.compartments:
+        missing = item.compartments - ksp.compartments
+        if missing:
+            return (
+                f"item compartments {sorted(missing)} not authorized by KSP "
+                f"compartments {sorted(ksp.compartments)}"
+            )
 
     return None
 
