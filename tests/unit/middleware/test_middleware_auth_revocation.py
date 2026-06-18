@@ -287,6 +287,33 @@ async def test_revoke_token_audit_path_does_not_raise():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
+async def test_logging_failure_does_not_break_revocation_401():
+    """A SecurityEventNode failure MUST NOT convert the revoked-token 401 into a 500.
+
+    Regression for the R1/R2 bypass-lens finding: security-event logging is
+    best-effort (`_emit_security_event` swallows backend failures), so a revoked
+    token still surfaces a clean HTTPException(401) — never a raw exception / 500 —
+    even if the logging backend raises. The auth decision is fail-closed and
+    independent of observability.
+    """
+    mgr = _mgr()
+    token = await mgr.create_access_token("u1")
+    await mgr.revoke_token(token)
+
+    # Fault-inject: the security-event logging backend raises (e.g. backend down).
+    def _boom(*args, **kwargs):
+        raise RuntimeError("security log backend down")
+
+    mgr.security_logger.execute = _boom  # type: ignore[assignment]
+
+    with pytest.raises(HTTPException) as exc:
+        await mgr.verify_token(token)
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Token has been revoked"
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
 async def test_dependency_rejects_revoked_bearer_token():
     """End-to-end through the FastAPI dependency: a revoked bearer token → 401.
 

@@ -166,6 +166,25 @@ class MiddlewareAuthManager:
                 name="auth_database", connection_string=database_url
             )
 
+    def _emit_security_event(
+        self, event_type: str, severity: str, details: Dict[str, Any]
+    ) -> None:
+        """Emit a security event best-effort — observability MUST NOT break auth.
+
+        The auth decision is made by the caller (which raises the 401); security
+        logging is a side effect. If ``SecurityEventNode`` raises (bad input,
+        backend down), swallow it and record a fallback line via the module
+        logger so a logging failure can NEVER convert the caller's deliberate
+        401 into a 500. Pairs with the revoked/verification-failed call sites,
+        which raise their own ``HTTPException`` after this returns.
+        """
+        try:
+            self.security_logger.execute(
+                event_type=event_type, severity=severity, details=details
+            )
+        except Exception:  # pragma: no cover - logging failure must not break auth
+            logger.warning("security event logging failed for %s", event_type)
+
     async def create_access_token(
         self,
         user_id: str,
@@ -249,10 +268,10 @@ class MiddlewareAuthManager:
                     jti=payload.get("jti"), token=token
                 )
             ):
-                self.security_logger.execute(
-                    event_type="token_revoked",
-                    severity="MEDIUM",
-                    details={"reason": "token presented after revocation"},
+                self._emit_security_event(
+                    "token_revoked",
+                    "MEDIUM",
+                    {"reason": "token presented after revocation"},
                 )
                 raise HTTPException(status_code=401, detail="Token has been revoked")
 
@@ -268,11 +287,9 @@ class MiddlewareAuthManager:
             # than masking it as a generic "Invalid authentication token".
             raise
         except Exception as e:
-            # Log security event
-            self.security_logger.execute(
-                event_type="token_verification_failed",
-                severity="MEDIUM",
-                details={"error": str(e)},
+            # Log security event (best-effort — never lets logging break the 401).
+            self._emit_security_event(
+                "token_verification_failed", "MEDIUM", {"error": str(e)}
             )
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
@@ -417,11 +434,9 @@ class MiddlewareAuthManager:
         except HTTPException:
             raise
         except Exception as e:
-            # Log security event
-            self.security_logger.execute(
-                event_type="api_key_verification_failed",
-                severity="MEDIUM",
-                details={"error": str(e)},
+            # Log security event (best-effort — never lets logging break the 401).
+            self._emit_security_event(
+                "api_key_verification_failed", "MEDIUM", {"error": str(e)}
             )
             raise HTTPException(status_code=401, detail="Invalid API key")
 
