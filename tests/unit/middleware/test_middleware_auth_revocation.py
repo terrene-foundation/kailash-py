@@ -266,6 +266,27 @@ async def test_invalid_token_raises_clean_401_not_valueerror():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
+async def test_revoke_token_audit_path_does_not_raise():
+    """revoke_token with enable_audit=True (the PRODUCTION default) exercises the
+    audit_logger.execute path and must not raise.
+
+    Pins the audit branch against the same kwarg/severity-mismatch bug class that
+    made the security-event log raise ValueError before this change — every other
+    test in this file sets enable_audit=False, so this is the only coverage of the
+    `if self.enable_audit: self.audit_logger.execute(...)` block in revoke_token.
+    """
+    # enable_audit defaults True; do NOT use the _mgr helper (it forces it off).
+    mgr = MiddlewareAuthManager(secret_key=SECRET, enable_audit=True)
+    token = await mgr.create_access_token("u-audit")
+    await mgr.revoke_token(token)  # audit logging runs here; must not raise
+    # The revocation still took effect through the audited path.
+    with pytest.raises(HTTPException) as exc:
+        await mgr.verify_token(token)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
 async def test_dependency_rejects_revoked_bearer_token():
     """End-to-end through the FastAPI dependency: a revoked bearer token → 401.
 
