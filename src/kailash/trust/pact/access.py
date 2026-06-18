@@ -174,6 +174,18 @@ class KnowledgeSharePolicy:
         target_unit_address: D/T prefix receiving access.
         max_classification: Maximum classification level shared (ceiling).
         compartments: Restrict sharing to specific compartments (empty = all).
+            This is a per-KSP NARROWING filter (enforced at step 4d as the
+            7th narrowing condition), NOT a hard compartment ceiling on the
+            source->target edge: an item is shareable under THIS KSP only if
+            every compartment it carries is authorized here
+            (``item.compartments`` subset of this set). Like the other
+            narrowing conditions, it composes under KSP deny-precedence
+            (#1372) -- a sibling KSP that affirmatively grants (e.g. one with
+            empty ``compartments``) still wins, so this field narrows THIS
+            policy, it does not ceiling the edge. The absolute compartment
+            ceiling for SECRET/TOP_SECRET items is the step-3 clearance check
+            (the requesting role's clearance must independently hold every
+            item compartment), which no KSP composition can bypass.
         created_by_role_address: Role that created this policy (audit trail).
         active: Whether this policy is currently active.
         expires_at: When this policy expires (None = no expiry).
