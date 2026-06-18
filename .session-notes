@@ -1,46 +1,49 @@
-# Session Notes — 2026-06-16
+# Session Notes — 2026-06-18
 
 ## Where we are
 
-Clean released terminus: `main` == PyPI. This session shipped **kailash-dataflow
-2.12.0** (#1337 — standalone callable masking + record-agnostic redaction;
-PR #1344, tag `dataflow-v2.12.0`, clean-venv verified). Next in the parity
-queue: **#1336** (gateway middleware — large, see Traps), then #1338.
+`main` clean + in sync. **kailash 2.38.3 released + install-verified** (F1 —
+`MiddlewareAuthManager` token revocation, #1356 sibling). Monorepo pristine
+(every package main == PyPI). The F3 workspace backlog is committed +
+disclosure-scrubbed. No in-repo actionable code work remains — the only open
+item is F4 (cross-repo, human-gated).
 
 ## Read first
 
-1. GH issues **#1336** (gateway middleware — next) and **#1338** (tenant topic) — the remaining parity queue. #1337 is CLOSED/COMPLETED.
-2. `packages/kailash-dataflow/src/dataflow/classification/masking.py` — the #1337 deliverable (reuse the free-fn + delegation pattern + brief-correction approach if #1338 touches the same surface).
-3. `workspaces/issue-1337-masking-callables-py/02-plans/01-plan.md` — the #1337 brief-correction + gap analysis (the model for verifying parity-issue claims before planning).
-4. `SWEEP-2026-06-16.md` — sweep findings + the held workspace-records backlog (F5).
+1. `CLAUDE.md` — repo absolutes (framework-first, zero-tolerance, .env-only)
+2. `deploy/deployment-config.md` — release runbook + versions (top of log = 2.38.3)
+3. `workspaces/issue-1356-jwt-revocation/journal/0005-DISCOVERY-kailash-rs-revocation-gap-confirmed.md` — the F4 kailash-rs gap finding + the scrubbed cross-SDK issue rationale
 
 ## In-flight state
 
-- **Workspace-records backlog STILL HELD for user decision** (F5, per SWEEP-2026-06-16): untracked
-  `workspaces/*` dirs incl. journals named `*cross-repo-authorized*` referencing the PRIVATE
-  Rust SDK repo (location in auto-memory) — do NOT bulk-commit; user adjudicating disclosure.
-- New untracked workspace this session: `issue-1337-masking-callables-py/` (no private-repo refs;
-  held consistent with the F5 hold — only src+tests+CHANGELOG were committed in PR #1344).
+- `.session-notes` (this file) is the only uncommitted edit; tree otherwise clean.
 
 ## Outstanding ledger (forest)
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F2 | log-triage-gate `EXCLUDED_FILES` fix must ALSO land at **loom** + `/sync-to-build` | prior-session user directive (literal quote): "resolve this... it will keep alarming" | OPEN — needs a loom session (cross-repo) |
-| F3 | Cross-SDK: inspect kailash-rs for the RFC-3161 fail-open + digest-binding bug | #1332 acceptance criterion 4 (user-approved issue) | OPEN — owner handles in a kailash-rs session |
-| F4 | Cross-SDK parity queue: **#1336 (gateway, NEXT)** → #1338 (tenant topic) | user quote: "approved, /wrapup for fresh session" + the GH issues | QUEUED — #1336 first (#1337 DONE) |
-| F5 | Workspace-records backlog disposition (commit vs gitignore the untracked `workspaces/*` + a 2.35.0/2.12.0 deploy record) | SWEEP-2026-06-16 § recommendations; user holding decision | OPEN — user gate |
+| ID  | Item | Value-anchor (MUST-1 source) | Status |
+| --- | ---- | ---------------------------- | ------ |
+| F4  | kailash-rs Nexus JWT middleware revocation gap — FIX + scrubbed cross-SDK issue filing | `cross-sdk-inspection.md` MUST-1 + `journal/0005` (CONFIRMED: `kailash-auth::decode_jwt` has no revocation/jti; `kailash-enterprise` `TokenManager` exists but is unwired into the Nexus verify path — Rust analog of F1) | BLOCKED — cross-repo (`esperie-enterprise/kailash-rs`); needs its own kailash-rs session; issue-filing human-gated per `upstream-issue-hygiene.md` |
 
-Shipped this session: `#1337` → PR #1344 + tag `dataflow-v2.12.0` (PyPI, clean-venv verified) → issue CLOSED/COMPLETED.
+Closed this session:
+- `F1` → kailash 2.38.3 (PR #1365 fix + #1366 release + #1367 deploy; tag `v2.38.3`; record `deploy/deployments/2026-06-18-v2.38.3-1356-sibling-middleware-auth-revocation.md`)
+- `F2` → kailash-rs READ + verify COMPLETE (authorized receipt `journal/0004`; finding `journal/0005`) — gap confirmed, transformed into F4
+- `F3` → workspace backlog committed + disclosure-scrubbed (commit `964aef107`)
 
 ## Traps
 
-- **#1336 is a 5-CLUSTER parity ASSESSMENT, not a single fix** — rate-limit / exception→HTTP / per-request metrics / CSP / session store, across `kailash.gateway`/`channels`/`middleware`/`servers`. It is a ≥3-issue brief → MUST run parallel brief-claim verification (one agent per cluster) per agents.md BEFORE planning, AND it is Nexus-domain (delegate to nexus-specialist). Likely multi-shard. Start it FRESH — do not cram into a context-heavy tail.
-- **Parity issues are framed from the Rust/Foundation side and are routinely OVERSTATED** — #1335 was ~5× over (already-conformant); #1337 AC1 was ~80% already-present (the real home was `kailash-dataflow`, not core `kailash` where the issue probed). VERIFY every claim against kailash-py source before planning; the issue's "probed surface" may have probed the wrong namespace.
-- **`#1337` IS CLOSED/COMPLETED** — masking primitives shipped in `dataflow.classification.masking`. Do NOT re-open/re-implement. If #1338 needs masking, import from there.
-- Framework `kailash>=` pins are need-based floors, NOT lockstepped to core — kailash-dataflow's pin stayed `kailash>=2.28.0` on the 2.12.0 release (core is 2.35.0). Do NOT bump sibling pins on an unrelated release.
-- The harness diagnostics LSP shows a stale-index `dataflow.classification.masking could not be resolved` false-positive after adding a new module — runtime + CI mypy resolve it fine (editable install). Don't chase it.
+- `kailash.middleware.auth` requires the `[server]` extra (jwt/fastapi/starlette).
+- CI shows duplicate push+PR runs (same SHA); the push-event run gets
+  `cancel-in-progress`-cancelled and renders as a red "build" check while the
+  pull_request run is authoritative — check job `conclusion` (cancelled vs failure).
+- Parallel review/agent waves: cap ≤3 concurrent (`worktree-isolation.md` Rule 4) —
+  a 4-wide launch hit the synchronized server throttle this session.
+
+## Unreleased packages
+
+None — kailash 2.38.3 released + verified this session; all sub-packages at PyPI
+parity (release-drift.js clean).
 
 ## Open questions for the human
 
-- Workspace-records backlog (F5): commit the institutional `workspaces/*` + add a deploy record, or gitignore? Blocked on the private-repo-reference disclosure call.
+- F4: file the scrubbed kailash-rs cross-SDK revocation issue + open a kailash-rs
+  session for the fix? Both are cross-repo + human-gated.
