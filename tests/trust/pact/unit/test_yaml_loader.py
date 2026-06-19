@@ -257,6 +257,206 @@ class TestLoadWithBridgesAndKsps:
 
 
 # ---------------------------------------------------------------------------
+# Test: KSP narrowing scope fields (compartments / shared_paths /
+# shared_types / shared_classifications / min_clearance / conditions)
+# ---------------------------------------------------------------------------
+
+
+def _write_ksp_org(tmp_path: Path, ksps_block: str) -> Path:
+    """Write a minimal two-department org with the given ``ksps:`` block."""
+    content = (
+        textwrap.dedent(
+            """\
+            org_id: "ksp-scope-001"
+            name: "KSP Scope Test"
+            departments:
+              - id: d-a
+                name: Dept A
+              - id: d-b
+                name: Dept B
+            teams: []
+            roles:
+              - id: r-head-a
+                name: Head A
+                heads: d-a
+              - id: r-head-b
+                name: Head B
+                heads: d-b
+            """
+        )
+        + textwrap.dedent(ksps_block)
+    )
+    yaml_file = tmp_path / "ksp-scope.yaml"
+    yaml_file.write_text(content)
+    return yaml_file
+
+
+class TestKspScopeFields:
+    """KSP YAML entries express the full narrowing scope-field set."""
+
+    def test_ksp_scope_fields_default_empty(self, tmp_path: Path) -> None:
+        """A KSP omitting all scope keys defaults to empty/None (no narrowing)."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+            """,
+        )
+        result = load_org_yaml(yaml_file)
+
+        ksp = result.ksps[0]
+        # Backward-compat guard: empty = all = broad grant preserved.
+        assert ksp.compartments == ()
+        assert ksp.shared_paths == ()
+        assert ksp.shared_types == ()
+        assert ksp.shared_classifications == ()
+        assert ksp.min_clearance is None
+        assert ksp.conditions == {}
+
+    def test_ksp_full_scope_roundtrip(self, tmp_path: Path) -> None:
+        """All six scope fields parse verbatim, order preserved."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: secret
+                compartments: [c1, c2]
+                shared_paths: ["proj/*", "exact/path"]
+                shared_types: [doc, memo]
+                shared_classifications: [restricted, confidential]
+                min_clearance: confidential
+                conditions:
+                  time_window:
+                    start: "09:00"
+                    end: "17:00"
+            """,
+        )
+        result = load_org_yaml(yaml_file)
+
+        ksp = result.ksps[0]
+        assert ksp.compartments == ("c1", "c2")
+        assert ksp.shared_paths == ("proj/*", "exact/path")
+        assert ksp.shared_types == ("doc", "memo")
+        assert ksp.shared_classifications == ("restricted", "confidential")
+        assert ksp.min_clearance == "confidential"
+        assert ksp.conditions == {"time_window": {"start": "09:00", "end": "17:00"}}
+
+    def test_ksp_shared_classification_invalid_level(self, tmp_path: Path) -> None:
+        """An out-of-domain shared_classification raises at parse time."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                shared_classifications: [foobar]
+            """,
+        )
+        with pytest.raises(
+            ConfigurationError, match="invalid shared_classification 'foobar'"
+        ):
+            load_org_yaml(yaml_file)
+
+    def test_ksp_min_clearance_invalid_level(self, tmp_path: Path) -> None:
+        """An out-of-domain min_clearance raises at parse time."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                min_clearance: notalevel
+            """,
+        )
+        with pytest.raises(
+            ConfigurationError, match="invalid min_clearance 'notalevel'"
+        ):
+            load_org_yaml(yaml_file)
+
+    def test_ksp_compartments_not_a_list(self, tmp_path: Path) -> None:
+        """A scalar where a list is expected raises with a shape error."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                compartments: notalist
+            """,
+        )
+        with pytest.raises(ConfigurationError, match="'compartments' must be a list"):
+            load_org_yaml(yaml_file)
+
+    def test_ksp_shared_paths_non_string_elements(self, tmp_path: Path) -> None:
+        """Non-string list elements raise a type error."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                shared_paths: [123]
+            """,
+        )
+        with pytest.raises(
+            ConfigurationError, match="'shared_paths' entries must all be strings"
+        ):
+            load_org_yaml(yaml_file)
+
+    def test_ksp_conditions_not_a_mapping(self, tmp_path: Path) -> None:
+        """A list where a mapping is expected raises a shape error."""
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                conditions: [x]
+            """,
+        )
+        with pytest.raises(ConfigurationError, match="'conditions' must be a mapping"):
+            load_org_yaml(yaml_file)
+
+    def test_ksp_traversal_path_not_rejected_at_parse(self, tmp_path: Path) -> None:
+        """The spec layer is a faithful DTO: ``..`` traversal in shared_paths
+        PARSES successfully here. The fail-closed rejection of ``..`` segments
+        is owned by KnowledgeSharePolicy.__post_init__ (access.py), NOT the
+        YAML parser -- splitting that check across two layers would be the
+        three-way-drift trap. Do NOT "fix" this by adding parse-time rejection.
+        """
+        yaml_file = _write_ksp_org(
+            tmp_path,
+            """\
+            ksps:
+              - id: ksp-a-to-b
+                source: d-a
+                target: d-b
+                max_classification: restricted
+                shared_paths: ["../etc"]
+            """,
+        )
+        result = load_org_yaml(yaml_file)
+        assert result.ksps[0].shared_paths == ("../etc",)
+
+
+# ---------------------------------------------------------------------------
 # Test: Invalid YAML
 # ---------------------------------------------------------------------------
 
@@ -269,7 +469,9 @@ class TestInvalidYaml:
         yaml_file = tmp_path / "bad.yaml"
         yaml_file.write_text("foo: [bar: baz")
 
-        with pytest.raises(ConfigurationError, match="[Ff]ailed.*pars|[Ii]nvalid.*YAML"):
+        with pytest.raises(
+            ConfigurationError, match="[Ff]ailed.*pars|[Ii]nvalid.*YAML"
+        ):
             load_org_yaml(yaml_file)
 
     def test_missing_required_field_raises(self, tmp_path: Path) -> None:
@@ -326,7 +528,9 @@ class TestInvalidYaml:
 
     def test_nonexistent_file_raises(self) -> None:
         """Attempting to load a file that does not exist raises ConfigurationError."""
-        with pytest.raises(ConfigurationError, match="[Nn]ot found|[Dd]oes not exist|[Nn]o such"):
+        with pytest.raises(
+            ConfigurationError, match="[Nn]ot found|[Dd]oes not exist|[Nn]o such"
+        ):
             load_org_yaml("/nonexistent/path/to/org.yaml")
 
     def test_empty_yaml_raises(self, tmp_path: Path) -> None:
@@ -432,7 +636,9 @@ class TestRoundtripUniversityExample:
         assert len(role_ids) == 12
 
         # Agent assignment
-        irb = next(r for r in result.org_definition.roles if r.role_id == "r-irb-director")
+        irb = next(
+            r for r in result.org_definition.roles if r.role_id == "r-irb-director"
+        )
         assert irb.agent_id == "agent-irb"
 
         # Clearances
