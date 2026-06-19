@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.41.0] - 2026-06-19
+
+### Added
+
+- **YAML governance specs now take effect at enforcement** (issue #1386,
+  `kailash.trust.pact`). `load_org_yaml` / the new `load_org_from_dict` parsed
+  `clearances` / `envelopes` / `bridges` / `ksps` from a unified YAML org file,
+  but the engine consumed only the org definition — the four governance-spec
+  lists were silently dropped, so a YAML-authored `shared_paths`, `min_clearance`,
+  bridge, or clearance had zero effect on `check_access`. The new
+  `kailash.trust.pact.yaml_resolvers` module resolves each spec to its runtime
+  type and applies it to the `GovernanceEngine` (the "engine-application layer"
+  the `KspSpec` docstring referenced). Application order: clearances → envelopes
+  (topologically parent-before-child, since `set_role_envelope` validates each
+  child against the defining role's effective envelope) → bridges (a
+  YAML-authored bridge is the org designer's LCA approval, so the loader records
+  that approval before `create_bridge`) → KSPs.
+- `kailash.trust.pact.yaml_loader.load_org_from_dict` — applies the same parse +
+  governance-spec application from an in-memory mapping (the dict construction
+  path previously dropped the spec lists).
+- `CompiledOrg.get_node_by_unit_id` — resolves a config department/team id to its
+  positional unit address (for KSP source/target resolution).
+
+### Changed
+
+- Resolution is fail-closed throughout: an unresolvable unit/role reference, an
+  invalid classification level, a `..` path-traversal pattern, a non-finite
+  (NaN/Inf) constraint, an envelope monotonic-tightening violation, or a bridge
+  with no common ancestor aborts engine construction rather than yielding a
+  silently under-enforcing engine. YAML-resolved clearances/KSPs record
+  `"yaml-org-definition"` as the grantor/creator for an attributable audit trail.
+
 ## [2.40.1] - 2026-06-19
 
 ### Fixed
