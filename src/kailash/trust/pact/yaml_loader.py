@@ -79,6 +79,22 @@ class EnvelopeSpec:
 
     Contains raw role IDs and constraint parameters before address
     resolution.
+
+    Beyond the five CARE dimension dicts, an envelope may carry two top-level
+    governance fields that map directly onto
+    :class:`~kailash.trust.pact.config.ConstraintEnvelopeConfig`. Both are
+    carried VERBATIM and coerced/validated when the envelope is resolved
+    (see :func:`kailash.trust.pact.yaml_resolvers.resolve_envelope`); omitting
+    either leaves the runtime config default in place.
+
+    Attributes:
+        confidentiality_clearance: Raw clearance-level string (e.g.
+            ``"restricted"``) capping the maximum data classification this
+            envelope's agent may access; ``None`` leaves the config default
+            (``PUBLIC``).
+        max_delegation_depth: Positive integer capping how many levels deep
+            trust may be delegated; ``None`` leaves the config default
+            (``None`` = unlimited).
     """
 
     target: str  # role_id of the target role
@@ -89,6 +105,8 @@ class EnvelopeSpec:
     data_access: dict[str, Any] | None = None
     communication: dict[str, Any] | None = None
     gradient_thresholds: dict[str, Any] | None = None
+    confidentiality_clearance: str | None = None
+    max_delegation_depth: int | None = None
 
 
 @dataclass(frozen=True)
@@ -187,7 +205,13 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     - ``teams`` (list of ``{id, name}``)
     - ``roles`` (list of ``{id, name, reports_to?, heads?, agent?}``)
     - ``clearances`` (list of ``{role, level, compartments?, nda_signed?}``)
-    - ``envelopes`` (list of ``{target, defined_by, financial?, operational?, ...}``)
+    - ``envelopes`` (list of ``{target, defined_by, financial?, operational?,
+      temporal?, data_access?, communication?, gradient_thresholds?,
+      confidentiality_clearance?, max_delegation_depth?}``) -- the optional
+      ``confidentiality_clearance`` (clearance-level string) caps the data
+      classification the envelope's agent may access; ``max_delegation_depth``
+      (positive int) caps delegation depth. Both default to the
+      ``ConstraintEnvelopeConfig`` defaults (``PUBLIC`` / unlimited) when omitted.
     - ``bridges`` (list of ``{id, role_a, role_b, type, max_classification, bilateral?}``)
     - ``ksps`` (list of ``{id, source, target, max_classification,
       compartments?, shared_paths?, shared_types?, shared_classifications?,
@@ -589,6 +613,36 @@ def _parse_envelopes(
                 f"Envelope entry {i} is missing required 'defined_by' field in '{path}'"
             )
 
+        # --- Optional top-level governance fields (map onto
+        # ConstraintEnvelopeConfig). Carried VERBATIM; Pydantic coerces the
+        # clearance string -> ConfidentialityLevel and re-checks the gt=0
+        # delegation-depth bound at resolve time. Parse-time validation is
+        # fail-closed (a malformed value raises rather than silently
+        # defaulting the authored control). ---
+        confidentiality_clearance = entry.get("confidentiality_clearance")
+        if (
+            confidentiality_clearance is not None
+            and confidentiality_clearance not in _VALID_CLEARANCE_LEVELS
+        ):
+            raise ConfigurationError(
+                f"Envelope entry {i} (target '{target}') has invalid "
+                f"confidentiality_clearance '{confidentiality_clearance}'. "
+                f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "
+                f"In YAML file '{path}'."
+            )
+
+        max_delegation_depth = entry.get("max_delegation_depth")
+        if max_delegation_depth is not None and (
+            isinstance(max_delegation_depth, bool)
+            or not isinstance(max_delegation_depth, int)
+            or max_delegation_depth <= 0
+        ):
+            raise ConfigurationError(
+                f"Envelope entry {i} (target '{target}'): 'max_delegation_depth' "
+                f"must be a positive integer, got {max_delegation_depth!r}. "
+                f"In YAML file '{path}'."
+            )
+
         envelopes.append(
             EnvelopeSpec(
                 target=target,
@@ -599,6 +653,8 @@ def _parse_envelopes(
                 data_access=entry.get("data_access"),
                 communication=entry.get("communication"),
                 gradient_thresholds=entry.get("gradient_thresholds"),
+                confidentiality_clearance=confidentiality_clearance,
+                max_delegation_depth=max_delegation_depth,
             )
         )
 
