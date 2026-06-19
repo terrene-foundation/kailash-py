@@ -351,6 +351,27 @@ class AccessDecision:
         )
 
 
+# Audit-detail keys the KSP-deny AccessDecision sets directly (see
+# ``_check_ksps``). A ``KspDenyDetail.fields`` key colliding with one of these
+# would silently overwrite the fixed key when spread into ``audit_details``
+# (dict last-wins), corrupting the SIEM-queryable deny shape. Collision is
+# rejected fail-closed at construction so a future narrowing condition cannot
+# shadow a reserved key. The established discrete-field naming convention
+# (``item_*`` / ``ksp_*`` / ``recipient_*`` / ``missing_*`` / ``condition_*``)
+# keeps every current field disjoint from this set.
+_RESERVED_KSP_DENY_AUDIT_KEYS = frozenset(
+    {
+        "role_address",
+        "item_id",
+        "step",
+        "access_path",
+        "ksp_id",
+        "deny_reason",
+        "deny_code",
+    }
+)
+
+
 @dataclass(frozen=True)
 class KspDenyDetail:
     """Structured deny-context for a single failing KSP narrowing condition.
@@ -372,11 +393,26 @@ class KspDenyDetail:
         message: Human-readable deny reason (back-compat with the prior
             string return of ``_evaluate_ksp_conditions``).
         fields: Discrete, machine-queryable values for the failed condition.
+            Keys MUST NOT collide with ``_RESERVED_KSP_DENY_AUDIT_KEYS`` --
+            a collision is rejected fail-closed at construction.
     """
 
     code: str
     message: str
     fields: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Reject discrete-field keys that collide with reserved audit keys."""
+        collisions = _RESERVED_KSP_DENY_AUDIT_KEYS & self.fields.keys()
+        if collisions:
+            raise ValueError(
+                f"KspDenyDetail.fields keys {sorted(collisions)} collide with "
+                f"reserved KSP-deny audit keys "
+                f"{sorted(_RESERVED_KSP_DENY_AUDIT_KEYS)}; rename the discrete "
+                f"field(s) (use the item_/ksp_/recipient_/missing_/condition_ "
+                f"naming convention) so the deny audit shape is not silently "
+                f"overwritten when spread into audit_details"
+            )
 
 
 # ---------------------------------------------------------------------------

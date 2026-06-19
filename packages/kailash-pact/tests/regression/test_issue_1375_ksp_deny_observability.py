@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.trust.pact.access import KnowledgeSharePolicy, can_access
+from kailash.trust.pact.access import KnowledgeSharePolicy, KspDenyDetail, can_access
 from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.compilation import RoleDefinition, compile_org
 from kailash.trust.pact.config import (
@@ -186,6 +186,28 @@ def test_classification_ceiling_deny_emits_discrete_fields() -> None:
     assert ad["deny_code"] == "classification_ceiling"
     assert ad["item_classification"] == "secret"
     assert ad["ksp_max_classification"] == "restricted"
+
+
+@pytest.mark.regression
+def test_ksp_deny_detail_rejects_reserved_audit_key() -> None:
+    """A discrete field key colliding with a reserved audit key fails closed.
+
+    Spreading KspDenyDetail.fields into the deny audit_details is dict
+    last-wins; a future condition adding a field named like a fixed audit key
+    would silently overwrite it and corrupt the SIEM-queryable deny shape.
+    Construction rejects the collision loudly instead.
+    """
+    # Sanity: a well-formed (namespace-prefixed) field is accepted.
+    ok = KspDenyDetail(
+        code="compartment_scope",
+        message="...",
+        fields={"missing_compartments": ["alpha"]},
+    )
+    assert ok.fields["missing_compartments"] == ["alpha"]
+
+    for reserved in ("ksp_id", "access_path", "deny_code", "deny_reason", "step"):
+        with pytest.raises(ValueError, match="reserved KSP-deny audit keys"):
+            KspDenyDetail(code="path_scope", message="...", fields={reserved: "x"})
 
 
 @pytest.mark.regression
