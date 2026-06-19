@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-pact"
-version = "0.13.1"
+version = "0.14.0"
 description = "PACT governance framework — D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -36,7 +36,7 @@ dependencies = [
     #   (engine.py:1216 inside method). Move to [execution] extra.
     # - psycopg / psycopg_pool — ORPHANS, zero imports anywhere. DELETE.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.39.0",
+    "kailash>=2.41.0",
     "click>=8.0",
 ]
 

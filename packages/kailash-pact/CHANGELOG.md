@@ -1,5 +1,22 @@
 # PACT Changelog
 
+## [0.14.0] — 2026-06-19 — feat: apply YAML governance specs to the runtime engine (#1386)
+
+### Added
+
+- `PactEngine` construction from a YAML file OR an in-memory dict now applies the
+  YAML-authored governance specs (`clearances` / `envelopes` / `bridges` /
+  `ksps`) to the runtime `GovernanceEngine`, so governance authored in a unified
+  org file actually takes effect at enforcement. Previously the specs were
+  parse-validated and then silently dropped (only the org definition was
+  consumed). Powered by the new `kailash.trust.pact.yaml_resolvers`
+  engine-application layer (requires `kailash>=2.41.0`).
+
+### Changed
+
+- Bumped the `kailash` floor to `>=2.41.0` (the version providing
+  `yaml_resolvers.apply_governance_specs`).
+
 ## [0.13.1] — 2026-06-19 — fix: re-export KspDenyDetail from the pact facade (#1375)
 
 ### Fixed
