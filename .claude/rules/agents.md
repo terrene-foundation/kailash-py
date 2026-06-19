@@ -76,6 +76,46 @@ Every gate-level reviewer prompt MUST include explicit mechanical sweeps that ve
 
 **Why:** Reviewers are constrained by the diff. The orphan failure mode in `orphan-detection.md` §1 is invisible at diff-level. A 4-second `grep -c` catches what 5 minutes of LLM judgment misses. See guide for full evidence.
 
+### MUST: Redteam Reviewer Dispatch — Errored/Empty Is Zero Evidence, Never A Clean Round
+
+A `/redteam` round dispatches review agents in parallel by default (per § Parallel Execution and `self-referential-codify.md` Rule 1). But the LLM provider's server-side rate limiter can throttle a concurrent fan-out so one or more agents return an errored, truncated, or empty result. An agent that produced nothing reads as "0 findings"; a round where every agent shows "0 findings" reads as CLEAN. This is **false convergence** — the round looks clean because the reviewers never ran, not because the code is clean. This clause does NOT override parallel-by-default; it governs what the orchestrator MUST do so the parallel round actually executes:
+
+1. **Evidence gate (load-bearing).** Every dispatched reviewer MUST return a `ran`/evidence signal — the verbatim commands it executed + their output. An errored, empty, or truncated result is **zero evidence**: re-run it; it does NOT contribute a "clean" verdict. A round is clean — and convergence (N consecutive clean rounds) is claimable — ONLY when EVERY dispatched agent genuinely ran. This is the redteam-specific instance of the principle that an errored or empty command is zero evidence, never confirmation, applied to the reviewer-as-detector.
+2. **Concurrency back-off (remedy on observed throttle).** When agents return errored/empty under a concurrent fan-out — the rate-limit signature — the orchestrator MUST reduce dispatch concurrency (down to one reviewer at a time if needed) and re-run until each agent executes against a fresh rate budget. Sequential dispatch is the remedy for an observed throttle, NOT an abandonment of parallel-by-default; the multi-agent requirement (≥3 independent reviewers per `self-referential-codify.md` Rule 1) is satisfied either way, so this clause complements § Parallel Execution rather than contradicting it.
+
+```python
+# DO — evidence gate; back off concurrency on throttle
+verdicts = parallel_dispatch(lenses)                 # parallel by default
+if any(v is None or not v["ran"] for v in verdicts): # throttle signature
+    verdicts = [dispatch(lens) for lens in lenses]   # back off → sequential, fresh budget each
+round_clean = all(v and v["ran"] for v in verdicts) and not any_crit_high_med(verdicts)
+
+# DO NOT — count errored/empty agents as clean
+verdicts = parallel_dispatch(lenses)                 # two throttled to empty
+round_clean = not any_crit_high_med(verdicts)        # empty = "0 findings" = CLEAN → false convergence
+```
+
+**BLOCKED rationalizations:**
+
+- "All three agents returned 0 findings, the round is clean"
+- "An empty reviewer response means it found nothing"
+- "Re-running the errored agent is wasteful; the other two were clean"
+- "Convergence was reached" (while a reviewer errored in one of the counted rounds)
+- "Parallel was rate-limited, so I'll just count the agents that did respond"
+
+**Why:** A redteam round's entire value is the reviewer actually executing against the diff. Server-side rate-limiting on a concurrent fan-out silently converts "reviewer did not run" into "reviewer found nothing" — indistinguishable in the aggregated round result, opposite in meaning. False convergence ships unreviewed code carrying a clean-redteam receipt; the evidence gate catches the throttle-to-empty case, and concurrency back-off is the remedy that lets the parallel round actually complete.
+
+**Trust Posture Wiring (this clause):**
+
+- **Severity:** `halt-and-report` at gate-review (the orchestrator re-runs any errored/empty reviewer before declaring a round clean; reviewer / cc-architect confirm at `/codify`/`/redteam` that no convergence claim rests on a round with an errored reviewer). Advisory at any hook layer (a lexical "0 findings → clean" detector cannot carry `block` per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** same-class violations (convergence claimed over a round with an errored/empty reviewer) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture).
+- **Regression-within-grace:** trigger key `false_redteam_convergence` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: redteam-dispatch-rate-limit]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate).
+- **Detection mechanism:** Phase 1 — gate-level review at `/codify`/`/redteam`: reviewer confirms every claimed-clean round names each dispatched reviewer's evidence (verbatim checks) and that no reviewer in a counted round errored/emptied. Phase 2 (deferred): a hook scanning redteam transcripts for "0 findings"/"clean" round-claims adjacent to errored/empty sub-agent results.
+- **Violation scope:** this clause (redteam reviewer dispatch under rate-limiting).
+- **Origin:** confirmed ≥2× across redteam sessions; most recently the 2026-06-19 PACT KSP.compartments holistic-redteam convergence (#1375 follow-up, PR #1379), which pre-empted the trap by dispatching three lenses sequentially with a per-agent `ran` evidence gate. Canonical principle: the errored/empty-command-is-zero-evidence discipline (loom `evidence-first-claims.md` MUST-3, not yet synced into this BUILD repo).
+
 ## Zero-Tolerance
 
 Pre-existing failures MUST be fixed (`rules/zero-tolerance.md` Rule 1). No workarounds for SDK bugs — deep-dive and fix directly (Rule 4).
