@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "AccessDecision",
     "KnowledgeSharePolicy",
+    "KspDenyDetail",
     "PactBridge",
     "can_access",
 ]
