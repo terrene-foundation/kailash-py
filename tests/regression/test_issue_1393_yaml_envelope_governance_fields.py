@@ -65,6 +65,11 @@ def test_omitted_fields_preserve_config_defaults():
     "field, bad_value",
     [
         ("confidentiality_clearance", "nonsense"),
+        # Unhashable YAML node positions (list / dict) MUST fail closed with a
+        # ConfigurationError, not raise a raw `TypeError: unhashable type` from
+        # the `in frozenset` membership test (redteam CC-1).
+        ("confidentiality_clearance", ["public"]),
+        ("confidentiality_clearance", {"level": "public"}),
         ("max_delegation_depth", 0),
         ("max_delegation_depth", -1),
         ("max_delegation_depth", True),  # bool is not a valid positive int depth

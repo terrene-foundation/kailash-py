@@ -43,6 +43,19 @@ _VALID_CLEARANCE_LEVELS = frozenset(
 )
 
 
+def _is_valid_level(value: Any) -> bool:
+    """True iff ``value`` is a string naming a valid clearance level.
+
+    The ``isinstance`` guard short-circuits BEFORE the ``in`` membership test, so
+    an unhashable YAML value (a list / dict at a clearance-level position) yields
+    a fail-closed ``ConfigurationError`` at the call site rather than a raw
+    ``TypeError: unhashable type``. All clearance-level validation in this loader
+    routes through here so every level field fails closed with the same helpful
+    message.
+    """
+    return isinstance(value, str) and value in _VALID_CLEARANCE_LEVELS
+
+
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
@@ -559,7 +572,7 @@ def _parse_clearances(
                 f"in '{path}'"
             )
 
-        if level not in _VALID_CLEARANCE_LEVELS:
+        if not _is_valid_level(level):
             raise ConfigurationError(
                 f"Clearance entry {i} for role '{role_id}' has invalid level '{level}'. "
                 f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "
@@ -620,9 +633,8 @@ def _parse_envelopes(
         # fail-closed (a malformed value raises rather than silently
         # defaulting the authored control). ---
         confidentiality_clearance = entry.get("confidentiality_clearance")
-        if (
-            confidentiality_clearance is not None
-            and confidentiality_clearance not in _VALID_CLEARANCE_LEVELS
+        if confidentiality_clearance is not None and not _is_valid_level(
+            confidentiality_clearance
         ):
             raise ConfigurationError(
                 f"Envelope entry {i} (target '{target}') has invalid "
@@ -792,7 +804,7 @@ def _parse_ksps(
             entry, "shared_classifications", ksp_id, path
         )
         for level in shared_classifications:
-            if level not in _VALID_CLEARANCE_LEVELS:
+            if not _is_valid_level(level):
                 raise ConfigurationError(
                     f"KSP '{ksp_id}': invalid shared_classification '{level}'. "
                     f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "
@@ -800,7 +812,7 @@ def _parse_ksps(
                 )
 
         min_clearance = entry.get("min_clearance")
-        if min_clearance is not None and min_clearance not in _VALID_CLEARANCE_LEVELS:
+        if min_clearance is not None and not _is_valid_level(min_clearance):
             raise ConfigurationError(
                 f"KSP '{ksp_id}': invalid min_clearance '{min_clearance}'. "
                 f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "

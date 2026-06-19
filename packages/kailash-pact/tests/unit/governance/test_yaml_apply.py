@@ -251,6 +251,77 @@ envelopes:
                 tmp_path,
             )
 
+    def test_yaml_envelope_clearance_and_depth_tighten(self, tmp_path: Path) -> None:
+        """confidentiality_clearance + max_delegation_depth authored in YAML reach
+        the runtime envelope and a child that TIGHTENS both applies cleanly.
+
+        Regression for #1393 — both fields were silently dropped before, so the
+        authored controls never reached enforcement at all.
+        """
+        engine = _build_from_yaml(
+            _BASE_ORG
+            + """
+envelopes:
+  - target: r-eng-head
+    defined_by: r-ceo
+    confidentiality_clearance: secret
+    max_delegation_depth: 3
+  - target: r-eng-junior
+    defined_by: r-eng-head
+    confidentiality_clearance: confidential
+    max_delegation_depth: 1
+""",
+            tmp_path,
+        )
+        head_env = engine.compute_envelope(_role(engine, "r-eng-head"))
+        junior_env = engine.compute_envelope(_role(engine, "r-eng-junior"))
+        assert head_env is not None and junior_env is not None
+        assert head_env.confidentiality_clearance == ConfidentialityLevel.SECRET
+        assert head_env.max_delegation_depth == 3
+        assert junior_env.confidentiality_clearance == ConfidentialityLevel.CONFIDENTIAL
+        assert junior_env.max_delegation_depth == 1
+
+    def test_yaml_envelope_clearance_widening_fails_closed(
+        self, tmp_path: Path
+    ) -> None:
+        """A child authoring a WIDER confidentiality_clearance than its YAML parent
+        aborts construction — the now-forwarded field (#1393) is
+        monotonic-tightening-checked end-to-end from YAML."""
+        with pytest.raises((MonotonicTighteningError, PactError)):
+            _build_from_yaml(
+                _BASE_ORG
+                + """
+envelopes:
+  - target: r-eng-head
+    defined_by: r-ceo
+    confidentiality_clearance: confidential
+  - target: r-eng-junior
+    defined_by: r-eng-head
+    confidentiality_clearance: secret
+""",
+                tmp_path,
+            )
+
+    def test_yaml_envelope_delegation_depth_widening_fails_closed(
+        self, tmp_path: Path
+    ) -> None:
+        """A child authoring a DEEPER max_delegation_depth than its YAML parent
+        aborts construction (the now-forwarded field is tightening-checked)."""
+        with pytest.raises((MonotonicTighteningError, PactError)):
+            _build_from_yaml(
+                _BASE_ORG
+                + """
+envelopes:
+  - target: r-eng-head
+    defined_by: r-ceo
+    max_delegation_depth: 1
+  - target: r-eng-junior
+    defined_by: r-eng-head
+    max_delegation_depth: 3
+""",
+                tmp_path,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Bridge applied: grants cross-unit access (LCA-approved from YAML)

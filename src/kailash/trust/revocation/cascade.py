@@ -38,8 +38,7 @@ Cross-SDK parity (EATP D6 — kailash-py#595 / kailash-rs ISS-04):
     MUST NOT rely on event ordering for cross-SDK correlation; correlate
     on ``event.target_id`` + ``event.affected_agents`` as a set.
 
-    Parity contract (enforced by
-    ``tests/regression/test_cascade_revocation_cross_sdk_parity.py``):
+    Parity contract:
 
     1. Given an identical delegation tree seeded on both SDKs and a revoke
        of the same root node, ``set(py.revoked_agents) ==
@@ -47,11 +46,18 @@ Cross-SDK parity (EATP D6 — kailash-py#595 / kailash-rs ISS-04):
     2. Idempotency behavior is identical: a second revoke of the same
        agent returns ``success=True, events=[], revoked_agents=[]`` on
        both sides.
-    3. Partial-failure rollback contract is identical: if any chain
-       deletion fails, prior deletions are restored (best-effort) and
-       ``success=False`` is returned with error details. Any chain that
-       cannot be restored remains revoked and is reported in
-       ``revoked_agents`` (store state and result agree).
+
+    Items 1-2 (happy-path topology + idempotency parity) are pinned by
+    ``tests/regression/test_issue_595_cascade_revocation_cross_sdk_parity.py``.
+
+    3. Partial-failure rollback behavior: if any chain deletion fails, prior
+       deletions are restored (best-effort) and ``success=False`` is returned
+       with error details; any chain that cannot be restored remains revoked
+       and is reported in ``revoked_agents`` (store state and result agree).
+       This ground-truth contract is pinned single-SDK by
+       ``tests/regression/test_issue_1394_cascade_revoke_audit_divergence.py``
+       (the cross-SDK parity file above covers happy-path topology only; a
+       cross-SDK partial-failure parity case is future work, see #1394).
 """
 
 from __future__ import annotations
