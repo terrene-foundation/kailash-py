@@ -37,9 +37,11 @@ landed and exercised by a Tier 2 end-to-end test. Shipping a public
 from __future__ import annotations
 
 import logging
+from types import TracebackType
 from typing import List, Optional
 
 import httpx
+
 from kaizen.llm.deployment import EmbedOptions, LlmDeployment, WireProtocol
 from kaizen.llm.errors import InvalidResponse, ProviderError, RateLimited, Timeout
 from kaizen.llm.http_client import LlmHttpClient
@@ -85,6 +87,36 @@ class LlmClient:
     `ClassificationPolicy` is the canonical producer. See
     `rules/observability.md` § 8 and the §6.5 security test at
     `tests/unit/llm/security/test_llmclient_redacts_classified_prompt_fields.py`.
+
+    # Lifecycle
+
+    `LlmClient` is usable as a one-shot object OR as an async context
+    manager with an opt-in pooled HTTP transport:
+
+        # One-shot (unmanaged): a fresh LlmHttpClient is constructed and
+        # closed per embed() call. No lifecycle method needed; nothing
+        # is held between calls, so nothing leaks.
+        vectors = await LlmClient.from_deployment(d).embed(texts, model=m)
+
+        # Managed (pooled): a single persistent LlmHttpClient is created
+        # on context-entry and reused across every embed() in the scope,
+        # then deterministically closed on exit. Reuse amortizes the
+        # SSRF-resolver + connection-pool setup across calls.
+        async with LlmClient.from_deployment(d) as client:
+            a = await client.embed(["text a"], model=m)
+            b = await client.embed(["text b"], model=m)  # same transport
+
+    `aclose()` (idempotent) closes the pooled transport when one was
+    created; a managed client MUST be closed via `await client.aclose()`
+    or by exiting its `async with` block. The `__del__` finalizer emits
+    `ResourceWarning` if a managed client created a transport and was
+    never closed (per `rules/patterns.md` § "Async Resource Cleanup"); it
+    does NOT call close from `__del__` -- that deadlocks on CPython's root
+    logging lock when the finalizer fires during GC. There is deliberately
+    NO sync `close()`: a sync wrapper would need `asyncio.run()` and break
+    inside any active event loop (`rules/patterns.md` § "Paired Public
+    Surface"). One-shot unmanaged callers hold no transport, so they emit
+    no warning and need no close.
     """
 
     def __init__(
@@ -97,6 +129,13 @@ class LlmClient:
         self._deployment = deployment
         self._classification_policy = classification_policy
         self._caller_clearance = caller_clearance
+        # Opt-in pooled HTTP transport. Stays None for one-shot callers
+        # (each embed() constructs + closes its own client). Set only on
+        # the managed (async-context-manager) path, where it is the
+        # persistent transport reused across embed() calls and closed at
+        # aclose().
+        self._http_client: Optional[LlmHttpClient] = None
+        self._managed: bool = False
         logger.debug(
             "llm_client.constructed",
             extra={
@@ -220,6 +259,49 @@ class LlmClient:
         )
 
     # -----------------------------------------------------------------
+    # Lifecycle — async context manager + aclose() (#1388)
+    # -----------------------------------------------------------------
+
+    async def __aenter__(self) -> "LlmClient":
+        """Enter managed mode and eagerly pool the persistent HTTP transport.
+
+        Marks the client managed so subsequent ``embed()`` calls reuse one
+        ``LlmHttpClient`` instead of constructing a fresh one per call. The
+        transport is created HERE (before any concurrent ``embed()``) so two
+        racing ``embed()`` calls cannot each construct a transport; ``embed()``
+        retains a lazy fallback for managed clients that somehow reach it with
+        no transport yet.
+        """
+        self._managed = True
+        if self._deployment is not None and self._http_client is None:
+            self._http_client = LlmHttpClient(
+                deployment_preset=self._deployment.wire.name,
+                timeout=60.0,
+            )
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        """Close the pooled transport on context exit. Delegates to aclose()."""
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        """Close the pooled HTTP transport, if one was created. Idempotent.
+
+        Closes and drops the persistent ``LlmHttpClient`` so a subsequent
+        managed ``embed()`` re-pools a fresh transport and ``__del__`` sees
+        ``None`` (no ResourceWarning). A no-op when no transport was created
+        (one-shot callers, or a managed client closed twice).
+        """
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
+    # -----------------------------------------------------------------
     # embed() — the first wire-send method on LlmClient (#462)
     # -----------------------------------------------------------------
 
@@ -330,8 +412,28 @@ class LlmClient:
 
         # LlmHttpClient owns SSRF (via SafeDnsResolver) + structured
         # logging. NEVER construct httpx.AsyncClient directly here.
+        #
+        # Transport acquisition, three cases:
+        #   1. Caller injected http_client= → caller owns it; embed() never
+        #      closes it (owns_client stays False).
+        #   2. Managed client (async-context-manager) with no injection →
+        #      reuse the INSTANCE-pooled transport, lazily creating it if the
+        #      managed scope somehow reached embed() before __aenter__ pooled
+        #      one. The INSTANCE owns it; embed() must NOT close it per-call
+        #      (it is closed at aclose()), so owns_client is False.
+        #   3. Unmanaged client with no injection → construct a fresh transport
+        #      per call and close it in the error/finally paths below
+        #      (owns_client stays True). UNCHANGED legacy one-shot behavior.
         owns_client = http_client is None
-        if owns_client:
+        if owns_client and self._managed:
+            if self._http_client is None:
+                self._http_client = LlmHttpClient(
+                    deployment_preset=wire.name,
+                    timeout=60.0,
+                )
+            http_client = self._http_client
+            owns_client = False  # instance owns it; closed at aclose(), not here
+        elif owns_client:
             http_client = LlmHttpClient(
                 deployment_preset=wire.name,
                 timeout=60.0,
@@ -448,6 +550,24 @@ class LlmClient:
             prefix_norm = prefix if prefix.startswith("/") else "/" + prefix
             return f"{base}{prefix_norm}{suffix_norm}"
         return f"{base}{suffix_norm}"
+
+    def __del__(self) -> None:
+        # Emit ResourceWarning ONLY; never call aclose()/close() from the
+        # finalizer. Mirrors LlmHttpClient.__del__ — async cleanup in __del__
+        # deadlocks on CPython's root logging lock when the finalizer fires
+        # during GC (see rules/patterns.md § "Async Resource Cleanup"). Only a
+        # managed client that pooled a transport and was never closed holds a
+        # non-None _http_client here; one-shot unmanaged callers hold None and
+        # emit no warning (no false positives).
+        if self._http_client is not None:
+            import warnings
+
+            warnings.warn(
+                "LlmClient not closed; call await client.aclose() "
+                "or use it as an async context manager",
+                ResourceWarning,
+                stacklevel=2,
+            )
 
 
 __all__ = ["LlmClient"]

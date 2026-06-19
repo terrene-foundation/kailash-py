@@ -2,6 +2,40 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased] — LlmClient lifecycle: aclose() + async context manager + opt-in HTTP pooling
+
+### Added
+
+- **`LlmClient` now exposes a lifecycle surface — `aclose()` + `__aenter__`/`__aexit__`
+  — with opt-in persistent HTTP-transport pooling** (#1388). Previously
+  `kaizen.llm.client.LlmClient` had no `close()`/`aclose()`/`__aexit__`; once a
+  client held a persistent HTTP transport its socket was released only at GC,
+  emitting `ResourceWarning: unclosed <socket.socket ...>` and failing any run
+  under `-W error::ResourceWarning`. The change is strictly additive and
+  backward-compatible:
+  - One-shot callers are unchanged: `await LlmClient.from_deployment(d).embed(...)`
+    still constructs and closes a fresh `LlmHttpClient` per `embed()` call —
+    nothing is held between calls, so nothing leaks and no warning is emitted.
+  - New managed mode pools the transport: `async with LlmClient.from_deployment(d)
+as client:` eagerly creates ONE persistent `LlmHttpClient` on entry, reuses
+    it across every `embed()` in the scope (amortizing SSRF-resolver +
+    connection-pool setup, and surviving per-call errors), and deterministically
+    closes it on exit. `await client.aclose()` is the explicit (idempotent)
+    close; a no-op when no transport was created.
+  - `__del__` is WARN-ONLY, mirroring `LlmHttpClient.__del__`: a managed client
+    that pooled a transport and was never closed emits a `ResourceWarning`
+    naming `aclose`; it never calls close from the finalizer (async cleanup in
+    `__del__` deadlocks on CPython's root logging lock per
+    `rules/patterns.md` § "Async Resource Cleanup"). One-shot unmanaged callers
+    hold no transport, so they emit no warning.
+  - No sync `close()` is provided: a sync wrapper would need `asyncio.run()` and
+    break inside any active event loop (`rules/patterns.md` § "Paired Public
+    Surface").
+    Regression coverage:
+    `tests/regression/test_issue_1388_llmclient_resourcewarning.py` (the
+    after-close GC path overrides pytest.ini's global `ignore::ResourceWarning`
+    with `error::ResourceWarning` so the no-leak assertion is real).
+
 ## [2.27.1] — 2026-06-17 — PEP 563 Signatures: structured output no longer silently empties
 
 ### Fixed
