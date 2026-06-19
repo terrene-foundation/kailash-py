@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.40.1] - 2026-06-19
+
+### Fixed
+
+- `KspDenyDetail` (the F9 KSP-deny observability type) is now importable from
+  the `kailash.trust.pact` package facade, matching its siblings
+  (`AccessDecision`, `KnowledgeSharePolicy`, `PactBridge`). It was present in
+  `kailash.trust.pact.access.__all__` but never lifted into the package
+  `__init__`, so `from kailash.trust.pact import KspDenyDetail` raised
+  `ImportError`. Surfaced by the epic #1375 holistic post-multi-wave redteam
+  (orphan-detection Rule 6). A structural parity regression test now pins
+  every `access.__all__` symbol importable from both facades.
+
 ## [2.40.0] - 2026-06-19
 
 ### Added

@@ -1,5 +1,18 @@
 # PACT Changelog
 
+## [0.13.1] — 2026-06-19 — fix: re-export KspDenyDetail from the pact facade (#1375)
+
+### Fixed
+
+- `KspDenyDetail` (the F9 KSP-deny observability type) is now importable as
+  `from pact import KspDenyDetail`, matching its access-enforcement siblings
+  (`AccessDecision`, `KnowledgeSharePolicy`, `PactBridge`). It was declared in
+  `kailash.trust.pact.access.__all__` but never re-exported through the package
+  facades, so the import raised `ImportError`. Surfaced by the epic #1375
+  holistic post-multi-wave redteam (orphan-detection Rule 6). A structural
+  parity regression test pins every `access.__all__` symbol importable from
+  both the `kailash.trust.pact` and `pact` facades.
+
 ## [0.13.0] — 2026-06-18 — feat: KSP/Bridge access-control scoping & precedence (#1368–#1374)
 
 Exposes the new core PACT access-control scoping API (epic #1375) through the

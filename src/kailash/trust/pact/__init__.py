@@ -5,6 +5,7 @@
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
+    KspDenyDetail,
     PactBridge,
     can_access,
 )
@@ -124,6 +125,7 @@ __all__ = [
     # Access enforcement (Ref-2003 through 2006)
     "AccessDecision",
     "KnowledgeSharePolicy",
+    "KspDenyDetail",
     "PactBridge",
     "can_access",
     # Agent mapping (Ref-7017)

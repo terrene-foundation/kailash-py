@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.13.0"
+__version__ = "0.13.1"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
@@ -52,6 +52,7 @@ from kailash.trust.pact import (  # Error hierarchy; Addressing; Compilation; Cl
     GrammarError,
     KnowledgeItem,
     KnowledgeSharePolicy,
+    KspDenyDetail,
     KspSpec,
     LoadedOrg,
     MemoryAccessPolicyStore,
@@ -193,6 +194,7 @@ __all__ = [
     # Access enforcement
     "AccessDecision",
     "KnowledgeSharePolicy",
+    "KspDenyDetail",
     "PactBridge",
     "can_access",
     # Agent mapping
