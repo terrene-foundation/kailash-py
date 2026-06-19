@@ -850,22 +850,33 @@ class PactEngine:
             FileNotFoundError: If the YAML file does not exist.
         """
         from kailash.trust.pact.engine import GovernanceEngine
-        from kailash.trust.pact.yaml_loader import load_org_yaml
+        from kailash.trust.pact.yaml_loader import load_org_from_dict, load_org_yaml
+        from kailash.trust.pact.yaml_resolvers import apply_governance_specs
 
         if isinstance(org, (str, Path)):
-            # Load from YAML file
+            # Load from YAML file (parses org + the four governance-spec lists).
             loaded = load_org_yaml(org)
-            org_def = loaded.org_definition
         elif isinstance(org, dict):
-            # Build OrgDefinition from dict -- use the YAML loader's parsing
-            # by writing to a temporary in-memory representation
-            org_def = _org_def_from_dict(org)
+            # Same parse semantics from an in-memory mapping, so the dict path
+            # also applies clearances/envelopes/bridges/ksps (it previously
+            # dropped them).
+            loaded = load_org_from_dict(org)
         else:
             raise TypeError(
                 f"org must be a str path, Path, or dict, got {type(org).__name__}"
             )
 
-        return GovernanceEngine(org_def, store_backend=store_backend)
+        engine = GovernanceEngine(loaded.org_definition, store_backend=store_backend)
+
+        # Apply the YAML-loaded governance specs so YAML-authored governance
+        # actually takes effect at enforcement (issue #1386). A YAML-authored
+        # bridge expresses the org designer's intent, which IS the LCA approval
+        # create_bridge requires (see yaml_resolvers.apply_governance_specs).
+        # Fail-closed: any unresolved ref, invalid level, NaN/Inf constraint, or
+        # monotonic-tightening violation aborts engine construction.
+        apply_governance_specs(engine, loaded)
+
+        return engine
 
     # -------------------------------------------------------------------
     # Absorbed governance capabilities (PR#7 of issue #567)
@@ -1297,69 +1308,6 @@ def _extract_constraints_dict(envelope: Any) -> dict[str, Any]:
             else str(expires_at)
         )
     return constraints
-
-
-def _org_def_from_dict(data: dict[str, Any]) -> Any:
-    """Build an OrgDefinition from a raw dict.
-
-    Mirrors the structure expected by the YAML loader but without
-    needing a physical file.
-
-    Args:
-        data: Dict with org_id, name, departments, teams, roles.
-
-    Returns:
-        An OrgDefinition instance.
-
-    Raises:
-        ValueError: If required fields are missing.
-    """
-    from kailash.trust.pact.compilation import RoleDefinition
-    from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
-
-    if "org_id" not in data:
-        raise ValueError("org dict must contain 'org_id'")
-    if "name" not in data:
-        raise ValueError("org dict must contain 'name'")
-
-    departments = []
-    for d in data.get("departments", []):
-        departments.append(
-            DepartmentConfig(
-                department_id=d["id"],
-                name=d.get("name", d["id"]),
-            )
-        )
-
-    teams = []
-    for t in data.get("teams", []):
-        teams.append(
-            TeamConfig(
-                id=t["id"],
-                name=t.get("name", t["id"]),
-                workspace=f"ws-{t['id']}",
-            )
-        )
-
-    roles = []
-    for r in data.get("roles", []):
-        roles.append(
-            RoleDefinition(
-                role_id=r["id"],
-                name=r.get("name", r["id"]),
-                reports_to_role_id=r.get("reports_to"),
-                is_primary_for_unit=r.get("heads"),
-                agent_id=r.get("agent"),
-            )
-        )
-
-    return OrgDefinition(
-        org_id=data["org_id"],
-        name=data["name"],
-        departments=departments,
-        teams=teams,
-        roles=roles,
-    )
 
 
 class _ReadOnlyGovernanceView:

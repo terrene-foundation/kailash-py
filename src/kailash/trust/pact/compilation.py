@@ -288,6 +288,36 @@ class CompiledOrg:
                 return node
         return None
 
+    def get_node_by_unit_id(self, unit_id: str) -> OrgNode | None:
+        """Find a department or team node by its original config unit id.
+
+        Units (departments and teams) carry positional addresses too
+        (e.g. ``"D1-R1-D3"``); KSP source/target are authored as raw config
+        unit ids and must resolve to those positional unit addresses.
+        Mirrors :meth:`get_node_by_role_id` for the unit dimension.
+
+        Args:
+            unit_id: The ``department_id`` (departments) or ``id`` (teams)
+                from the org definition.
+
+        Returns:
+            The OrgNode for that unit, or None if not found.
+        """
+        for node in self.nodes.values():
+            if (
+                node.node_type == NodeType.DEPARTMENT
+                and node.department is not None
+                and node.department.department_id == unit_id
+            ):
+                return node
+            if (
+                node.node_type == NodeType.TEAM
+                and node.team is not None
+                and node.team.id == unit_id
+            ):
+                return node
+        return None
+
     # ---- Query ----
 
     def query_by_prefix(self, prefix: str) -> list[OrgNode]:
