@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.40.0] - 2026-06-19
+
+### Added
+
+- **KSP YAML DSL scope-field expressiveness** (`kailash.trust.pact.yaml_loader`,
+  part of #1375). The YAML `ksps:` block now accepts the full narrowing
+  scope-field set the runtime `KnowledgeSharePolicy` enforces — `compartments`,
+  `shared_paths` (#1369), `shared_types` (#1370), `shared_classifications`
+  (#1371), `min_clearance` (#1368), and `conditions` (#1374, e.g. a
+  `time_window`). Previously a YAML-defined org could express only
+  `max_classification`, so the scoping features the engine enforces were
+  unreachable from configuration. Every new field is optional and defaults to
+  empty/`None` (no narrowing = broad grant), so existing YAML is unchanged.
+  `KspSpec` carries the values verbatim as a frozen DTO; the fail-closed
+  semantic checks (`..` path traversal, condition-key validity, level-string →
+  `ConfidentialityLevel`, raw id → resolved address) remain owned by
+  `KnowledgeSharePolicy` and the engine-application layer.
+
+- **Structured, SIEM-queryable KSP-deny observability** (`kailash.trust.pact`,
+  part of #1375). A KSP deny now emits a `deny_code` discriminator
+  (`compartment_scope` / `path_scope` / `type_scope` / `classification_ceiling`
+  / `classification_set` / `min_clearance` / `condition`) plus
+  condition-specific discrete fields (e.g. `missing_compartments`, `item_path`,
+  `ksp_shared_types`) as top-level `AccessDecision.audit_details` keys — parity
+  with the step-3 clearance-deny audit shape — while keeping the human
+  `deny_reason` string for backward compatibility. `/explain` surfaces the
+  `deny_code` and the denying KSP id. Deny-precedence (#1372) and fail-closed
+  behaviour are unchanged. New public type `KspDenyDetail`
+  (`kailash.trust.pact.access`), whose discrete-field keys are guarded
+  fail-closed against collision with the reserved audit keys.
+
 ## [2.39.1] - 2026-06-19
 
 ### Fixed
