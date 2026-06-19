@@ -408,15 +408,38 @@ def explain_access(
             + (f" ({decision.reason})" if decision.reason else "")
         )
     else:
-        # All sub-steps failed
+        # All sub-steps failed. A ``ksp_deny`` access_path is the deliberate
+        # #1372 case: an applicable KSP matched the addressing but failed a
+        # narrowing condition, suppressing the bridge fallback. Surface the
+        # structured deny context (denying KSP id + deny_code discriminator +
+        # human reason) so /explain mirrors the SIEM-queryable audit fields.
+        ksp_deny = access_path == "ksp_deny"
+        deny_ksp_id = decision.audit_details.get("ksp_id", "")
+        deny_code = decision.audit_details.get("deny_code", "")
+        deny_reason = decision.audit_details.get("deny_reason", "")
+
         lines.append("Step 4: Containment check:")
         lines.append("  4a: same unit -- NO")
         lines.append("  4b: downward visibility -- NO")
         lines.append("  4c: T-inherits-D -- NO")
-        lines.append("  4d: KSP -- NO")
-        lines.append("  4e: bridge -- NO")
+        if ksp_deny:
+            ksp_extra = f" ({deny_ksp_id})" if deny_ksp_id else ""
+            code_extra = f" [{deny_code}]" if deny_code else ""
+            lines.append(f"  4d: KSP -- DENY{ksp_extra}{code_extra}")
+            lines.append("  4e: bridge -- NO (suppressed by deny-KSP)")
+        else:
+            lines.append("  4d: KSP -- NO")
+            lines.append("  4e: bridge -- NO")
 
         lines.append("")
-        lines.append("Step 5: Result -- DENIED (no access path found)")
+        if ksp_deny:
+            detail = f" -- {deny_reason}" if deny_reason else ""
+            code_label = f" ({deny_code})" if deny_code else ""
+            lines.append(
+                f"Step 5: Result -- DENIED by KSP '{deny_ksp_id}'"
+                f"{code_label}{detail}"
+            )
+        else:
+            lines.append("Step 5: Result -- DENIED (no access path found)")
 
     return "\n".join(lines)

@@ -351,6 +351,34 @@ class AccessDecision:
         )
 
 
+@dataclass(frozen=True)
+class KspDenyDetail:
+    """Structured deny-context for a single failing KSP narrowing condition.
+
+    A *matching-but-denying* KSP (one whose source/target addressing matched
+    but which failed a narrowing filter) carries this structured detail so the
+    deny is SIEM-queryable, mirroring the discrete audit fields the step-3
+    clearance compartment-deny already emits. The ``code`` discriminator names
+    WHICH condition failed; ``message`` is the human-readable string preserved
+    for backward compatibility; ``fields`` carries the discrete, queryable
+    values for that condition (e.g. ``missing_compartments``), spread as
+    top-level keys into the deny ``AccessDecision.audit_details``.
+
+    Attributes:
+        code: Which narrowing condition failed. One of
+            ``"classification_ceiling"``, ``"classification_set"``,
+            ``"min_clearance"``, ``"path_scope"``, ``"type_scope"``,
+            ``"condition"``, ``"compartment_scope"``.
+        message: Human-readable deny reason (back-compat with the prior
+            string return of ``_evaluate_ksp_conditions``).
+        fields: Discrete, machine-queryable values for the failed condition.
+    """
+
+    code: str
+    message: str
+    fields: dict[str, Any] = field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Knowledge cascade helper functions
 # ---------------------------------------------------------------------------
@@ -790,7 +818,7 @@ def _evaluate_ksp_conditions(
     role_clearance: RoleClearance | None,
     now: datetime,
     environment: dict[str, Any] | None,
-) -> str | None:
+) -> KspDenyDetail | None:
     """Evaluate every narrowing condition on an addressing-matched KSP.
 
     Conditions, evaluated in order (first failure short-circuits):
@@ -804,14 +832,23 @@ def _evaluate_ksp_conditions(
          MUST be a subset of the KSP's authorized compartment set; empty
          ksp.compartments = no narrowing (empty = all).
 
-    Returns the deny-reason detail string for the FIRST failing condition,
-    or None if the item satisfies every condition (the KSP grants).
+    Returns a :class:`KspDenyDetail` carrying the deny ``code`` discriminator,
+    the human ``message`` (back-compat), and discrete ``fields`` for the FIRST
+    failing condition; or None if the item satisfies every condition (the KSP
+    grants).
     """
     # 1. Classification ceiling (max_classification)
     if _CLEARANCE_ORDER[item.classification] > _CLEARANCE_ORDER[ksp.max_classification]:
-        return (
-            f"item classification '{item.classification.value}' exceeds KSP "
-            f"max_classification ceiling '{ksp.max_classification.value}'"
+        return KspDenyDetail(
+            code="classification_ceiling",
+            message=(
+                f"item classification '{item.classification.value}' exceeds KSP "
+                f"max_classification ceiling '{ksp.max_classification.value}'"
+            ),
+            fields={
+                "item_classification": item.classification.value,
+                "ksp_max_classification": ksp.max_classification.value,
+            },
         )
 
     # 2. Classification SET membership (shared_classifications, #1371)
@@ -820,9 +857,16 @@ def _evaluate_ksp_conditions(
         and item.classification not in ksp.shared_classifications
     ):
         allowed = sorted(c.value for c in ksp.shared_classifications)
-        return (
-            f"item classification '{item.classification.value}' not in KSP "
-            f"shared_classifications set {allowed}"
+        return KspDenyDetail(
+            code="classification_set",
+            message=(
+                f"item classification '{item.classification.value}' not in KSP "
+                f"shared_classifications set {allowed}"
+            ),
+            fields={
+                "item_classification": item.classification.value,
+                "ksp_shared_classifications": allowed,
+            },
         )
 
     # 3. Recipient clearance floor (min_clearance, #1368)
@@ -834,31 +878,56 @@ def _evaluate_ksp_conditions(
         )
         if have_level < _CLEARANCE_ORDER[ksp.min_clearance]:
             have = role_clearance.max_clearance.value if role_clearance else "none"
-            return (
-                f"recipient clearance '{have}' is below KSP min_clearance floor "
-                f"'{ksp.min_clearance.value}'"
+            return KspDenyDetail(
+                code="min_clearance",
+                message=(
+                    f"recipient clearance '{have}' is below KSP min_clearance floor "
+                    f"'{ksp.min_clearance.value}'"
+                ),
+                fields={
+                    "recipient_clearance": have,
+                    "ksp_min_clearance": ksp.min_clearance.value,
+                },
             )
 
     # 4. Path scope (shared_paths, #1369)
     if ksp.shared_paths and not _path_matches(item.path, ksp.shared_paths):
-        return (
-            f"item path {item.path!r} does not match KSP shared_paths "
-            f"{list(ksp.shared_paths)}"
+        return KspDenyDetail(
+            code="path_scope",
+            message=(
+                f"item path {item.path!r} does not match KSP shared_paths "
+                f"{list(ksp.shared_paths)}"
+            ),
+            fields={
+                "item_path": item.path,
+                "ksp_shared_paths": list(ksp.shared_paths),
+            },
         )
 
     # 5. Type scope (shared_types, #1370)
     if ksp.shared_types and (
         item.knowledge_type is None or item.knowledge_type not in ksp.shared_types
     ):
-        return (
-            f"item knowledge_type {item.knowledge_type!r} not in KSP "
-            f"shared_types {sorted(ksp.shared_types)}"
+        return KspDenyDetail(
+            code="type_scope",
+            message=(
+                f"item knowledge_type {item.knowledge_type!r} not in KSP "
+                f"shared_types {sorted(ksp.shared_types)}"
+            ),
+            fields={
+                "item_knowledge_type": item.knowledge_type,
+                "ksp_shared_types": sorted(ksp.shared_types),
+            },
         )
 
     # 6. Request-context conditions (time_window / environment, #1374)
     cond_detail = _evaluate_conditions(ksp.conditions, now, environment)
     if cond_detail is not None:
-        return cond_detail
+        return KspDenyDetail(
+            code="condition",
+            message=cond_detail,
+            fields={"condition_detail": cond_detail},
+        )
 
     # 7. Compartment scope (ksp.compartments, #1375 follow-up)
     # Mirrors the step-3 clearance compartment-dominance check (the
@@ -869,9 +938,17 @@ def _evaluate_ksp_conditions(
     if ksp.compartments:
         missing = item.compartments - ksp.compartments
         if missing:
-            return (
-                f"item compartments {sorted(missing)} not authorized by KSP "
-                f"compartments {sorted(ksp.compartments)}"
+            return KspDenyDetail(
+                code="compartment_scope",
+                message=(
+                    f"item compartments {sorted(missing)} not authorized by KSP "
+                    f"compartments {sorted(ksp.compartments)}"
+                ),
+                fields={
+                    "missing_compartments": sorted(missing),
+                    "item_compartments": sorted(item.compartments),
+                    "ksp_compartments": sorted(ksp.compartments),
+                },
             )
 
     return None
@@ -911,7 +988,7 @@ def _check_ksps(
     role_unit = _get_containment_unit(role_address, compiled_org)
     role_clearance = clearances.get(role_address)
 
-    last_deny: tuple[str, str] | None = None  # (ksp_id, deny_detail)
+    last_deny: tuple[str, KspDenyDetail] | None = None  # (ksp_id, deny_detail)
 
     for ksp in ksps:
         if not ksp.active:
@@ -981,18 +1058,23 @@ def _check_ksps(
     # >=1 applicable KSP but none granted -> DENY, suppressing the bridge.
     deny_ksp_id, deny_detail = last_deny
     logger.info(
-        "Access denied (step 4d): KSP=%s denies (%s) — role_address=%s, "
+        "Access denied (step 4d): KSP=%s denies (%s: %s) — role_address=%s, "
         "item_id=%s; bridge fallback suppressed",
         deny_ksp_id,
-        deny_detail,
+        deny_detail.code,
+        deny_detail.message,
         role_address,
         item.item_id,
     )
+    # Discrete, SIEM-queryable deny context: deny_code names which narrowing
+    # condition failed; deny_detail.fields spreads as top-level keys (e.g.
+    # missing_compartments) mirroring the step-3 clearance-deny audit shape.
+    # deny_reason (the human string) is retained for backward compatibility.
     return AccessDecision(
         allowed=False,
         reason=(
-            f"KSP '{deny_ksp_id}' denies access ({deny_detail}); a matching "
-            f"deny-KSP suppresses the bridge fallback"
+            f"KSP '{deny_ksp_id}' denies access ({deny_detail.message}); a "
+            f"matching deny-KSP suppresses the bridge fallback"
         ),
         step_failed=4,
         audit_details={
@@ -1001,7 +1083,9 @@ def _check_ksps(
             "step": "4d",
             "access_path": "ksp_deny",
             "ksp_id": deny_ksp_id,
-            "deny_reason": deny_detail,
+            "deny_reason": deny_detail.message,
+            "deny_code": deny_detail.code,
+            **deny_detail.fields,
         },
     )
 
