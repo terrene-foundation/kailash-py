@@ -2,15 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Unit tests for cascade_revoke() atomicity and partial failure recovery (F-03).
+Unit tests for cascade_revoke() consistency and partial failure recovery (F-03).
 
 Verifies:
-- Transaction support: uses store.transaction() when available
-- Rollback on partial failure: restores already-deleted chains
+- Rollback on partial failure: restores already-deleted chains (best-effort)
 - Success=False on partial failure with informative errors
-- Manual rollback when store lacks transaction support
-- Complete success scenario uses transactions correctly
+- revoked_agents reflects store ground truth even when rollback CANNOT restore
+  a chain (the chain stays revoked and is reported, not silently zeroed)
+- Complete success scenario removes all affected chains
 - Backward compatibility: existing callers still work
+
+Note: cascade_revoke does NOT use a single atomic transaction. The InMemory
+transaction context snapshots only active chains and cannot roll back a
+soft-delete; durable stores expose no transaction. Consistency is best-effort
+snapshot rollback with honest ground-truth reporting in ``revoked_agents``.
+See the cascade module docstring for the full contract.
 """
 
 from __future__ import annotations
@@ -24,14 +30,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.revocation.broadcaster import (
     InMemoryDelegationRegistry,
     InMemoryRevocationBroadcaster,
 )
 from kailash.trust.revocation.cascade import RevocationResult, cascade_revoke
-from kailash.trust.chain_store.memory import InMemoryTrustStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -195,7 +200,9 @@ class TestPartialFailureRecovery:
 
         assert result.success is False
         # Check that some kind of rollback/failure warning was logged
-        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        warning_messages = [
+            r.message for r in caplog.records if r.levelno >= logging.WARNING
+        ]
         assert len(warning_messages) > 0
 
 
@@ -246,26 +253,33 @@ class TestCompleteSuccess:
 
 
 # ---------------------------------------------------------------------------
-# 3 -- Transaction support detection
+# 3 -- Full-cascade consistency (no atomic transaction is used)
 # ---------------------------------------------------------------------------
 
 
-class TestTransactionSupport:
-    """F-03: cascade_revoke must use transactions when the store supports them."""
+class TestFullCascadeConsistency:
+    """cascade_revoke removes all affected chains on the happy path.
 
-    async def test_inmemory_store_uses_transaction_path(self, store, registry, broadcaster):
-        """InMemoryTrustStore supports transaction(), cascade_revoke should use it."""
+    NOTE: cascade_revoke does NOT call ``store.transaction()`` — the InMemory
+    transaction context snapshots only active chains and cannot roll back a
+    soft-delete, and durable stores expose no transaction. This test asserts
+    the OBSERVABLE contract (every affected chain revoked on success); it does
+    NOT (and must not) claim a transaction path was taken.
+    """
+
+    async def test_inmemory_full_cascade_revokes_all_agents(
+        self, store, registry, broadcaster
+    ):
+        """A clean multi-agent cascade soft-deletes every affected chain."""
         await store.store_chain(_make_chain("agent-A"))
         await store.store_chain(_make_chain("agent-B"))
 
         registry.register_delegation("agent-A", "agent-B")
 
-        # The test verifies correctness of the result, which implies
-        # the transaction path was used (InMemoryTrustStore has transaction())
         result = await cascade_revoke(
             agent_id="agent-A",
             store=store,
-            reason="Transaction support test",
+            reason="Full cascade consistency test",
             revoked_by="admin",
             broadcaster=broadcaster,
             delegation_registry=registry,
@@ -273,6 +287,47 @@ class TestTransactionSupport:
 
         assert result.success is True
         assert set(result.revoked_agents) == {"agent-A", "agent-B"}
+
+    async def test_cascade_revoke_does_not_invoke_store_transaction(
+        self, store, registry, broadcaster
+    ):
+        """Pin reality: cascade_revoke never calls store.transaction().
+
+        The prior test/docstring claimed a transaction path was used. It was
+        not, and cannot be (the transaction context cannot roll back a
+        soft-delete). This guards against a future docstring re-introducing the
+        false claim without wiring the (currently infeasible) behavior.
+        """
+        await store.store_chain(_make_chain("agent-A"))
+        await store.store_chain(_make_chain("agent-B"))
+        registry.register_delegation("agent-A", "agent-B")
+
+        calls = {"n": 0}
+        original_transaction = store.transaction
+
+        def _counting_transaction(*args, **kwargs):
+            calls["n"] += 1
+            return original_transaction(*args, **kwargs)
+
+        store.transaction = _counting_transaction  # type: ignore[method-assign]
+        try:
+            result = await cascade_revoke(
+                agent_id="agent-A",
+                store=store,
+                reason="No-transaction pin",
+                revoked_by="admin",
+                broadcaster=broadcaster,
+                delegation_registry=registry,
+            )
+        finally:
+            store.transaction = original_transaction  # type: ignore[method-assign]
+
+        assert result.success is True
+        assert calls["n"] == 0, (
+            "cascade_revoke called store.transaction(); the consistency contract "
+            "is best-effort snapshot rollback, NOT transactional — update the docs "
+            "and this test together if that changes."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +338,9 @@ class TestTransactionSupport:
 class TestBackwardCompatibilityF03:
     """F-03: Existing callers and test patterns must still work."""
 
-    async def test_existing_cascade_revoke_api_unchanged(self, store, registry, broadcaster):
+    async def test_existing_cascade_revoke_api_unchanged(
+        self, store, registry, broadcaster
+    ):
         """cascade_revoke function signature and return type must be unchanged."""
         await store.store_chain(_make_chain("agent-A"))
 
@@ -302,7 +359,9 @@ class TestBackwardCompatibilityF03:
         assert isinstance(result.revoked_agents, list)
         assert isinstance(result.errors, dict)
 
-    async def test_idempotent_revocation_still_works(self, store, registry, broadcaster):
+    async def test_idempotent_revocation_still_works(
+        self, store, registry, broadcaster
+    ):
         """Re-revoking an already-revoked agent must still be a no-op."""
         await store.store_chain(_make_chain("agent-A"))
 

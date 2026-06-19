@@ -257,6 +257,17 @@ def resolve_envelope(spec: EnvelopeSpec, compiled: CompiledOrg) -> RoleEnvelope:
         config_kwargs["data_access"] = spec.data_access
     if spec.communication is not None:
         config_kwargs["communication"] = spec.communication
+    # Top-level governance fields beyond the five CARE dimensions. Pydantic
+    # coerces the clearance string -> ConfidentialityLevel (its enum values are
+    # exactly the loader's _VALID_CLEARANCE_LEVELS) and re-validates the gt=0
+    # delegation-depth bound; a bad value surfaces as the fail-closed
+    # ConfigurationError below. Forwarding these is what makes a YAML-authored
+    # confidentiality ceiling / delegation cap actually reach enforcement
+    # (issue #1386 follow-up — they were silently dropped before).
+    if spec.confidentiality_clearance is not None:
+        config_kwargs["confidentiality_clearance"] = spec.confidentiality_clearance
+    if spec.max_delegation_depth is not None:
+        config_kwargs["max_delegation_depth"] = spec.max_delegation_depth
     try:
         envelope_config = ConstraintEnvelopeConfig(**config_kwargs)
         gradient = (

@@ -4,15 +4,23 @@
 """Cascade revocation with TrustStore integration.
 
 Provides a high-level ``cascade_revoke()`` function that wires the existing
-``CascadeRevocationManager`` BFS cascade into ``TrustStore`` for atomic
-chain invalidation with audit trail.
+``CascadeRevocationManager`` BFS cascade into ``TrustStore`` for best-effort
+consistent chain invalidation with audit trail (see the Consistency section
+below — this is NOT a single atomic transaction).
 
-Atomicity:
-    The function uses the TrustStore's transaction support when available
-    for atomic chain invalidation. If any chain deletion fails, all
-    previously deleted chains are restored (rolled back) to maintain
-    consistency. On partial failure, success=False is returned with
-    all chains restored and errors reported.
+Consistency (best-effort rollback, NOT a single transaction):
+    Chain invalidation is NOT wrapped in one atomic transaction. The
+    InMemory TrustStore's transaction context snapshots only ACTIVE chains
+    and cannot roll back a soft-delete (which moves a chain to the inactive
+    set), and the durable stores (sqlite / filesystem) expose no transaction
+    at all. Instead, every affected chain is snapshot before deletion; if any
+    deletion fails, the successful deletions are restored from those snapshots
+    on a best-effort basis. A chain whose restore ALSO fails remains
+    soft-deleted (revoked) and is reported in
+    ``RevocationResult.revoked_agents`` — store state and the result always
+    agree. On partial failure, ``success=False`` is returned with ``errors``
+    populated. (True cross-store atomic invalidation is tracked as a
+    follow-up; see issue referenced in the cascade tests.)
 
 Idempotency:
     Revoking an already-revoked agent is a no-op: the function returns
@@ -31,8 +39,7 @@ Cross-SDK parity (EATP D6 — kailash-py#595 / kailash-rs ISS-04):
     MUST NOT rely on event ordering for cross-SDK correlation; correlate
     on ``event.target_id`` + ``event.affected_agents`` as a set.
 
-    Parity contract (enforced by
-    ``tests/regression/test_cascade_revocation_cross_sdk_parity.py``):
+    Parity contract:
 
     1. Given an identical delegation tree seeded on both SDKs and a revoke
        of the same root node, ``set(py.revoked_agents) ==
@@ -40,9 +47,18 @@ Cross-SDK parity (EATP D6 — kailash-py#595 / kailash-rs ISS-04):
     2. Idempotency behavior is identical: a second revoke of the same
        agent returns ``success=True, events=[], revoked_agents=[]`` on
        both sides.
-    3. Partial-failure rollback contract is identical: if any chain
-       deletion fails, all prior deletions roll back, and
-       ``success=False`` with error details.
+
+    Items 1-2 (happy-path topology + idempotency parity) are pinned by
+    ``tests/regression/test_issue_595_cascade_revocation_cross_sdk_parity.py``.
+
+    3. Partial-failure rollback behavior: if any chain deletion fails, prior
+       deletions are restored (best-effort) and ``success=False`` is returned
+       with error details; any chain that cannot be restored remains revoked
+       and is reported in ``revoked_agents`` (store state and result agree).
+       This ground-truth contract is pinned single-SDK by
+       ``tests/regression/test_issue_1394_cascade_revoke_audit_divergence.py``
+       (the cross-SDK parity file above covers happy-path topology only; a
+       cross-SDK partial-failure parity case is future work, see #1394).
 """
 
 from __future__ import annotations
@@ -76,7 +92,12 @@ class RevocationResult:
             True even for no-ops (already revoked).
         events: All RevocationEvent objects created during the cascade.
             Empty if the agent was already revoked (idempotent no-op).
-        revoked_agents: List of agent IDs whose chains were soft-deleted.
+        revoked_agents: List of agent IDs whose chains are soft-deleted
+            (revoked) as a result of this call — it always matches store
+            state. On a clean cascade this is every affected agent; on a
+            partial failure whose rollback fully succeeds it is empty; on a
+            partial failure whose rollback could NOT restore some chains it is
+            exactly those still-revoked agents.
         errors: Per-agent errors encountered during chain deletion.
             Non-empty errors with success=True means partial completion
             (some chains couldn't be deleted but cascade was broadcast).
@@ -124,22 +145,35 @@ async def _rollback_chains(
     store: TrustStore,
     snapshots: Dict[str, TrustLineageChain],
     deleted_agents: List[str],
-) -> None:
+) -> List[str]:
     """Attempt to restore previously deleted chains from snapshots.
 
-    Best-effort rollback: logs errors but does not raise.
+    Best-effort rollback: it does NOT raise (so a single restore failure
+    cannot abort restoration of the remaining agents), but it RETURNS the
+    agents it could not restore so the caller can report ground truth instead
+    of assuming every deletion was undone. An agent that cannot be restored
+    remains soft-deleted (revoked) in the store.
 
     Args:
         store: TrustStore to restore chains into.
         snapshots: Pre-deletion snapshots.
         deleted_agents: List of agent IDs that were successfully deleted
             and need to be restored.
+
+    Returns:
+        The subset of ``deleted_agents`` that could NOT be restored — either
+        because no snapshot exists or because ``store_chain`` raised. These
+        chains remain soft-deleted (revoked) and the store state and the
+        returned ``RevocationResult`` agree on them.
     """
+    restore_failed: List[str] = []
     for aid in deleted_agents:
         if aid not in snapshots:
             logger.warning(
-                f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore"
+                f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore "
+                f"(chain remains soft-deleted/revoked)"
             )
+            restore_failed.append(aid)
             continue
         try:
             await store.store_chain(snapshots[aid])
@@ -147,8 +181,11 @@ async def _rollback_chains(
         except Exception as restore_exc:
             logger.error(
                 f"[REVOKE-ROLLBACK] Failed to restore chain for agent "
-                f"'{aid}': {type(restore_exc).__name__}: {restore_exc}"
+                f"'{aid}': {type(restore_exc).__name__}: {restore_exc} "
+                f"(chain remains soft-deleted/revoked)"
             )
+            restore_failed.append(aid)
+    return restore_failed
 
 
 async def cascade_revoke(
@@ -170,11 +207,14 @@ async def cascade_revoke(
     5. On partial failure: rolls back all deletions for consistency
     6. Returns a complete audit trail
 
-    Atomicity:
-        All chain deletions are treated as an atomic unit. If any deletion
-        fails, all previously successful deletions are rolled back (chains
-        restored from snapshots). This prevents inconsistent state where
-        some chains are deleted and others are not.
+    Consistency (best-effort rollback, NOT one atomic transaction):
+        Chain deletions are not wrapped in a single transaction (see the
+        module docstring for why the available transaction context cannot
+        roll back soft-deletes). If any deletion fails, previously successful
+        deletions are restored from snapshots on a best-effort basis; a chain
+        whose restore ALSO fails remains soft-deleted (revoked) and is
+        reported in ``revoked_agents`` — the result never claims a chain was
+        un-revoked while it is still deleted.
 
     Args:
         agent_id: The agent to revoke.
@@ -241,15 +281,28 @@ async def cascade_revoke(
                 f"[REVOKE] Failed to soft-delete chain for agent '{affected_id}': {error_msg}"
             )
 
-    # If any errors occurred, roll back all successful deletions
+    # If any errors occurred, roll back all successful deletions.
     if errors:
         logger.warning(
             f"[REVOKE] Partial failure during cascade revocation for '{agent_id}': "
             f"{len(errors)} error(s). Rolling back {len(revoked_agents)} "
             f"successful deletion(s) for consistency."
         )
-        await _rollback_chains(store, snapshots, revoked_agents)
-        revoked_agents = []  # No agents were ultimately revoked
+        restore_failed = await _rollback_chains(store, snapshots, revoked_agents)
+        # revoked_agents MUST reflect store ground truth. The rollback is
+        # best-effort: any chain whose restore failed remains soft-deleted
+        # (revoked). Reporting [] unconditionally (the prior behavior) claimed
+        # "no agents were revoked" while those chains were still deleted —
+        # diverging the audit result from store state. Report exactly the
+        # chains that remain revoked.
+        revoked_agents = restore_failed
+        if restore_failed:
+            logger.warning(
+                f"[REVOKE] Rollback incomplete for '{agent_id}': "
+                f"{len(restore_failed)} chain(s) could not be restored and remain "
+                f"soft-deleted (revoked): {sorted(restore_failed)}. Store state and "
+                f"RevocationResult.revoked_agents agree."
+            )
 
     success = len(errors) == 0
 
