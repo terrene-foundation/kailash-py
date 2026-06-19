@@ -20,8 +20,8 @@ from typing import Any
 
 import yaml
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.compilation import RoleDefinition
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.exceptions import PactError
 
 logger = logging.getLogger(__name__)
@@ -104,12 +104,56 @@ class BridgeSpec:
 
 @dataclass(frozen=True)
 class KspSpec:
-    """A Knowledge Share Policy specification from the YAML file."""
+    """A Knowledge Share Policy specification from the YAML file.
+
+    Beyond the source/target addressing and the ``max_classification``
+    ceiling, a KSP may carry NARROWING scope filters that mirror the runtime
+    :class:`~kailash.trust.pact.access.KnowledgeSharePolicy` (see its
+    docstring for the enforcement semantics). Each scope field is a narrowing
+    filter: an empty collection (or ``None``) means "no narrowing on this
+    dimension" and preserves the policy's broad grant; a non-empty value
+    requires the item to satisfy that dimension.
+
+    Scope-field values are carried VERBATIM as the YAML author wrote them
+    (the same deferred-conversion convention the loader already uses for
+    ``max_classification``, which it keeps as a raw level string). Parse-time
+    validation is limited to shape (list / mapping / string) plus
+    classification-domain membership for the clearance-level fields; the
+    semantic fail-closed checks (``..`` path-traversal rejection, condition
+    key validity, raw-string -> ``ConfidentialityLevel`` conversion, and raw
+    dept/team id -> resolved unit address) remain owned by
+    ``KnowledgeSharePolicy`` and the engine-application layer.
+
+    Attributes:
+        id: Unique policy identifier.
+        source: Department/team ID sharing knowledge (raw, pre-resolution).
+        target: Department/team ID receiving access (raw, pre-resolution).
+        max_classification: Maximum classification level shared (raw level
+            string, e.g. ``"restricted"``).
+        compartments: Compartment names the item's compartments must be a
+            subset of (empty = no compartment narrowing).
+        shared_paths: Path-prefix patterns the item path must match
+            (empty = no path narrowing).
+        shared_types: Knowledge-type names the item type must be a member of
+            (empty = no type narrowing).
+        shared_classifications: Classification-level strings the item
+            classification must be a member of (empty = ceiling-only).
+        min_clearance: Recipient clearance floor as a raw level string, or
+            ``None`` for no floor.
+        conditions: Request-context conditions (e.g. ``time_window`` /
+            ``environment``) carried verbatim; validated at access time.
+    """
 
     id: str
     source: str  # department/team ID
     target: str  # department/team ID
     max_classification: str  # e.g. "restricted"
+    compartments: tuple[str, ...] = ()
+    shared_paths: tuple[str, ...] = ()
+    shared_types: tuple[str, ...] = ()
+    shared_classifications: tuple[str, ...] = ()
+    min_clearance: str | None = None
+    conditions: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -144,7 +188,12 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     - ``clearances`` (list of ``{role, level, compartments?, nda_signed?}``)
     - ``envelopes`` (list of ``{target, defined_by, financial?, operational?, ...}``)
     - ``bridges`` (list of ``{id, role_a, role_b, type, max_classification, bilateral?}``)
-    - ``ksps`` (list of ``{id, source, target, max_classification}``)
+    - ``ksps`` (list of ``{id, source, target, max_classification,
+      compartments?, shared_paths?, shared_types?, shared_classifications?,
+      min_clearance?, conditions?}``) -- the optional scope fields are
+      NARROWING filters mirroring ``KnowledgeSharePolicy``: an empty
+      collection or ``null`` means no narrowing on that dimension and
+      preserves the broad grant.
 
     Args:
         path: Path to the YAML file.
@@ -576,6 +625,29 @@ def _parse_bridges(
     return bridges
 
 
+def _ksp_str_tuple(
+    entry: dict[str, Any], key: str, ksp_id: str, path: Path
+) -> tuple[str, ...]:
+    """Validate an optional KSP scope field as a list of strings -> tuple.
+
+    Shape validation only (list-of-str). The empty default preserves the
+    broad grant (no narrowing on this dimension). Semantic checks live in
+    ``KnowledgeSharePolicy``.
+    """
+    val = entry.get(key, [])
+    if not isinstance(val, list):
+        raise ConfigurationError(
+            f"KSP '{ksp_id}': '{key}' must be a list, got "
+            f"{type(val).__name__}. In YAML file '{path}'."
+        )
+    if not all(isinstance(x, str) for x in val):
+        raise ConfigurationError(
+            f"KSP '{ksp_id}': '{key}' entries must all be strings. "
+            f"In YAML file '{path}'."
+        )
+    return tuple(val)
+
+
 def _parse_ksps(
     raw: list[Any],
     all_unit_ids: set[str],
@@ -613,12 +685,53 @@ def _parse_ksps(
                 f"KSP '{ksp_id}' is missing required 'max_classification' field in '{path}'"
             )
 
+        # --- Optional narrowing scope fields (backward-compatible: every
+        # field defaults to empty/None = no narrowing on that dimension).
+        # Values are carried VERBATIM; the semantic fail-closed checks
+        # ('..' path traversal, condition-key validity, raw level string ->
+        # ConfidentialityLevel, raw id -> resolved address) are owned by
+        # KnowledgeSharePolicy and the engine-application layer, NOT here. ---
+        compartments = _ksp_str_tuple(entry, "compartments", ksp_id, path)
+        shared_paths = _ksp_str_tuple(entry, "shared_paths", ksp_id, path)
+        shared_types = _ksp_str_tuple(entry, "shared_types", ksp_id, path)
+        shared_classifications = _ksp_str_tuple(
+            entry, "shared_classifications", ksp_id, path
+        )
+        for level in shared_classifications:
+            if level not in _VALID_CLEARANCE_LEVELS:
+                raise ConfigurationError(
+                    f"KSP '{ksp_id}': invalid shared_classification '{level}'. "
+                    f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "
+                    f"In YAML file '{path}'."
+                )
+
+        min_clearance = entry.get("min_clearance")
+        if min_clearance is not None and min_clearance not in _VALID_CLEARANCE_LEVELS:
+            raise ConfigurationError(
+                f"KSP '{ksp_id}': invalid min_clearance '{min_clearance}'. "
+                f"Valid levels: {sorted(_VALID_CLEARANCE_LEVELS)}. "
+                f"In YAML file '{path}'."
+            )
+
+        conditions = entry.get("conditions", {})
+        if not isinstance(conditions, dict):
+            raise ConfigurationError(
+                f"KSP '{ksp_id}': 'conditions' must be a mapping, got "
+                f"{type(conditions).__name__}. In YAML file '{path}'."
+            )
+
         ksps.append(
             KspSpec(
                 id=ksp_id,
                 source=source,
                 target=target,
                 max_classification=max_classification,
+                compartments=compartments,
+                shared_paths=shared_paths,
+                shared_types=shared_types,
+                shared_classifications=shared_classifications,
+                min_clearance=min_clearance,
+                conditions=conditions,
             )
         )
 
