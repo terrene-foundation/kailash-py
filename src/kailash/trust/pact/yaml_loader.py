@@ -34,6 +34,7 @@ __all__ = [
     "KspSpec",
     "LoadedOrg",
     "load_org_yaml",
+    "load_org_from_dict",
 ]
 
 # Valid clearance level strings
@@ -196,7 +197,7 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
       preserves the broad grant.
 
     Args:
-        path: Path to the YAML file.
+        path: str | Path to the YAML file.
 
     Returns:
         A LoadedOrg containing the OrgDefinition and all governance specs.
@@ -226,15 +227,52 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     except yaml.YAMLError as exc:
         raise ConfigurationError(f"Failed to parse YAML from '{path}': {exc}") from exc
 
+    return _loaded_org_from_data(data, path)
+
+
+def load_org_from_dict(data: Any, source: str = "<in-memory dict>") -> LoadedOrg:
+    """Load a unified org definition from an already-parsed mapping.
+
+    Identical parse + reference-validation semantics as :func:`load_org_yaml`,
+    but reads from a Python ``dict`` instead of a YAML file. This is the entry
+    point engines use when an org is supplied as a raw dict, so the dict path
+    parses (and the caller can apply) the SAME four governance-spec lists the
+    file path does -- closing the gap where dict-sourced orgs silently dropped
+    ``clearances`` / ``envelopes`` / ``bridges`` / ``ksps``.
+
+    Args:
+        data: The org-definition mapping (same shape as a parsed YAML file).
+        source: A label used in error messages (defaults to a synthetic tag).
+
+    Returns:
+        A LoadedOrg containing the OrgDefinition and all governance specs.
+
+    Raises:
+        ConfigurationError: If the mapping is invalid, required fields are
+            missing, or references are broken.
+    """
+    return _loaded_org_from_data(data, source)
+
+
+def _loaded_org_from_data(data: Any, source: str | Path) -> LoadedOrg:
+    """Parse a unified org-definition mapping into a LoadedOrg.
+
+    Shared core for :func:`load_org_yaml` (file path) and
+    :func:`load_org_from_dict` (dict path); ``source`` is the path or label
+    used in error messages. ``data`` is validated to be a mapping here so the
+    single guard serves both the file (``yaml.safe_load`` output) and dict
+    entry points.
+    """
     if not isinstance(data, dict):
         raise ConfigurationError(
-            f"YAML org definition must be a mapping (dict), got {type(data).__name__}. "
-            f"Ensure the file is not empty and starts with key-value pairs."
+            f"org definition must be a mapping (dict), got {type(data).__name__}. "
+            f"Ensure the source is not empty and starts with key-value pairs. "
+            f"In '{source}'."
         )
 
     # --- Validate required top-level fields ---
-    _require_field(data, "org_id", path)
-    _require_field(data, "name", path)
+    _require_field(data, "org_id", source)
+    _require_field(data, "name", source)
 
     org_id: str = data["org_id"]
     name: str = data["name"]
@@ -243,17 +281,17 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     raw_depts = data.get("departments", [])
     if not isinstance(raw_depts, list):
         raise ConfigurationError(
-            f"'departments' must be a list, got {type(raw_depts).__name__} in '{path}'"
+            f"'departments' must be a list, got {type(raw_depts).__name__} in '{source}'"
         )
-    departments = _parse_departments(raw_depts, path)
+    departments = _parse_departments(raw_depts, source)
 
     # --- Parse teams ---
     raw_teams = data.get("teams", [])
     if not isinstance(raw_teams, list):
         raise ConfigurationError(
-            f"'teams' must be a list, got {type(raw_teams).__name__} in '{path}'"
+            f"'teams' must be a list, got {type(raw_teams).__name__} in '{source}'"
         )
-    teams = _parse_teams(raw_teams, path)
+    teams = _parse_teams(raw_teams, source)
 
     # --- Build lookup indexes for reference validation ---
     dept_ids = {d.department_id for d in departments}
@@ -264,45 +302,45 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     raw_roles = data.get("roles", [])
     if not isinstance(raw_roles, list):
         raise ConfigurationError(
-            f"'roles' must be a list, got {type(raw_roles).__name__} in '{path}'"
+            f"'roles' must be a list, got {type(raw_roles).__name__} in '{source}'"
         )
-    roles = _parse_roles(raw_roles, all_unit_ids, path)
+    roles = _parse_roles(raw_roles, all_unit_ids, source)
 
     # --- Validate role references ---
     role_ids = {r.role_id for r in roles}
-    _validate_role_references(roles, role_ids, path)
+    _validate_role_references(roles, role_ids, source)
 
     # --- Parse clearances ---
     raw_clearances = data.get("clearances", [])
     if not isinstance(raw_clearances, list):
         raise ConfigurationError(
-            f"'clearances' must be a list, got {type(raw_clearances).__name__} in '{path}'"
+            f"'clearances' must be a list, got {type(raw_clearances).__name__} in '{source}'"
         )
-    clearances = _parse_clearances(raw_clearances, role_ids, path)
+    clearances = _parse_clearances(raw_clearances, role_ids, source)
 
     # --- Parse envelopes ---
     raw_envelopes = data.get("envelopes", [])
     if not isinstance(raw_envelopes, list):
         raise ConfigurationError(
-            f"'envelopes' must be a list, got {type(raw_envelopes).__name__} in '{path}'"
+            f"'envelopes' must be a list, got {type(raw_envelopes).__name__} in '{source}'"
         )
-    envelopes = _parse_envelopes(raw_envelopes, role_ids, path)
+    envelopes = _parse_envelopes(raw_envelopes, role_ids, source)
 
     # --- Parse bridges ---
     raw_bridges = data.get("bridges", [])
     if not isinstance(raw_bridges, list):
         raise ConfigurationError(
-            f"'bridges' must be a list, got {type(raw_bridges).__name__} in '{path}'"
+            f"'bridges' must be a list, got {type(raw_bridges).__name__} in '{source}'"
         )
-    bridges = _parse_bridges(raw_bridges, role_ids, path)
+    bridges = _parse_bridges(raw_bridges, role_ids, source)
 
     # --- Parse KSPs ---
     raw_ksps = data.get("ksps", [])
     if not isinstance(raw_ksps, list):
         raise ConfigurationError(
-            f"'ksps' must be a list, got {type(raw_ksps).__name__} in '{path}'"
+            f"'ksps' must be a list, got {type(raw_ksps).__name__} in '{source}'"
         )
-    ksps = _parse_ksps(raw_ksps, all_unit_ids, path)
+    ksps = _parse_ksps(raw_ksps, all_unit_ids, source)
 
     # --- Build OrgDefinition ---
     org_def = OrgDefinition(
@@ -314,11 +352,11 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
     )
 
     logger.info(
-        "Loaded YAML org definition '%s' from '%s': "
+        "Loaded org definition '%s' from '%s': "
         "%d departments, %d teams, %d roles, "
         "%d clearances, %d envelopes, %d bridges, %d KSPs",
         org_id,
-        path,
+        source,
         len(departments),
         len(teams),
         len(roles),
@@ -342,7 +380,7 @@ def load_org_yaml(path: str | Path) -> LoadedOrg:
 # ---------------------------------------------------------------------------
 
 
-def _require_field(data: dict[str, Any], field_name: str, path: Path) -> None:
+def _require_field(data: dict[str, Any], field_name: str, path: str | Path) -> None:
     """Raise ConfigurationError if a required field is missing."""
     if field_name not in data:
         raise ConfigurationError(
@@ -351,7 +389,7 @@ def _require_field(data: dict[str, Any], field_name: str, path: Path) -> None:
         )
 
 
-def _parse_departments(raw: list[Any], path: Path) -> list[DepartmentConfig]:
+def _parse_departments(raw: list[Any], path: str | Path) -> list[DepartmentConfig]:
     """Parse department entries from YAML."""
     departments: list[DepartmentConfig] = []
     for i, entry in enumerate(raw):
@@ -369,7 +407,7 @@ def _parse_departments(raw: list[Any], path: Path) -> list[DepartmentConfig]:
     return departments
 
 
-def _parse_teams(raw: list[Any], path: Path) -> list[TeamConfig]:
+def _parse_teams(raw: list[Any], path: str | Path) -> list[TeamConfig]:
     """Parse team entries from YAML."""
     teams: list[TeamConfig] = []
     for i, entry in enumerate(raw):
@@ -391,7 +429,7 @@ def _parse_teams(raw: list[Any], path: Path) -> list[TeamConfig]:
 def _parse_roles(
     raw: list[Any],
     all_unit_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> list[RoleDefinition]:
     """Parse role entries from YAML into RoleDefinition objects."""
     roles: list[RoleDefinition] = []
@@ -447,7 +485,7 @@ def _parse_roles(
 def _validate_role_references(
     roles: list[RoleDefinition],
     role_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> None:
     """Validate that all role cross-references are valid."""
     for role in roles:
@@ -466,7 +504,7 @@ def _validate_role_references(
 def _parse_clearances(
     raw: list[Any],
     role_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> list[ClearanceSpec]:
     """Parse clearance entries from YAML."""
     clearances: list[ClearanceSpec] = []
@@ -528,7 +566,7 @@ def _parse_clearances(
 def _parse_envelopes(
     raw: list[Any],
     role_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> list[EnvelopeSpec]:
     """Parse envelope entries from YAML."""
     envelopes: list[EnvelopeSpec] = []
@@ -570,7 +608,7 @@ def _parse_envelopes(
 def _parse_bridges(
     raw: list[Any],
     role_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> list[BridgeSpec]:
     """Parse bridge entries from YAML."""
     bridges: list[BridgeSpec] = []
@@ -626,7 +664,7 @@ def _parse_bridges(
 
 
 def _ksp_str_tuple(
-    entry: dict[str, Any], key: str, ksp_id: str, path: Path
+    entry: dict[str, Any], key: str, ksp_id: str, path: str | Path
 ) -> tuple[str, ...]:
     """Validate an optional KSP scope field as a list of strings -> tuple.
 
@@ -651,7 +689,7 @@ def _ksp_str_tuple(
 def _parse_ksps(
     raw: list[Any],
     all_unit_ids: set[str],
-    path: Path,
+    path: str | Path,
 ) -> list[KspSpec]:
     """Parse KSP entries from YAML."""
     ksps: list[KspSpec] = []
