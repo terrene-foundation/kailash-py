@@ -2,7 +2,7 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [Unreleased] — LlmClient lifecycle: aclose() + async context manager + opt-in HTTP pooling
+## [2.28.0] — 2026-06-19 — LlmClient lifecycle: aclose() + async context manager + opt-in HTTP pooling
 
 ### Added
 
