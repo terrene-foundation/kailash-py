@@ -4,8 +4,9 @@
 """Cascade revocation with TrustStore integration.
 
 Provides a high-level ``cascade_revoke()`` function that wires the existing
-``CascadeRevocationManager`` BFS cascade into ``TrustStore`` for atomic
-chain invalidation with audit trail.
+``CascadeRevocationManager`` BFS cascade into ``TrustStore`` for best-effort
+consistent chain invalidation with audit trail (see the Consistency section
+below — this is NOT a single atomic transaction).
 
 Consistency (best-effort rollback, NOT a single transaction):
     Chain invalidation is NOT wrapped in one atomic transaction. The
