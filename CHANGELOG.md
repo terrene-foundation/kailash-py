@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.39.1] - 2026-06-19
+
+### Fixed
+
+- **PACT `KnowledgeSharePolicy.compartments` now enforced** (`kailash.trust.pact`,
+  #1375 follow-up). The documented `compartments` field was accepted but never
+  applied — a silent over-grant (zero-tolerance 3c). It is now evaluated as the
+  7th KSP narrowing condition at step 4d: an item is shareable under a KSP only
+  if every compartment it carries is authorized by the KSP's compartment set
+  (`item.compartments` ⊆ `ksp.compartments`); empty `ksp.compartments` = no
+  narrowing (all compartments allowed), consistent with `shared_paths` /
+  `shared_types`. The filter narrows the individual KSP and composes under KSP
+  deny-precedence (#1372) — a sibling KSP that affirmatively grants still wins —
+  and does NOT replace the step-3 clearance compartment ceiling, which
+  independently bounds SECRET/TOP_SECRET items regardless of KSP composition.
+
 ## [2.39.0] - 2026-06-18
 
 ### Added
