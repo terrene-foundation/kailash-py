@@ -217,7 +217,9 @@ def _compute_event_hash(
         "duration_ms": duration_ms,
         "metadata": metadata,
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -1066,7 +1068,9 @@ class AuditRecord:
         payload = self.anchor.to_signing_payload()
         if self.anchor.context:
             payload["context"] = self.anchor.context
-        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        canonical = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def verify_integrity(self) -> bool:
