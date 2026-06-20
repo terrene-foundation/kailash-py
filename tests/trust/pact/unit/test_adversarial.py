@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
+
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -349,6 +350,7 @@ class TestPostureGaming:
             role_addr: RoleClearance(
                 role_address=role_addr,
                 max_clearance=ConfidentialityLevel.SECRET,
+                nda_signed=True,  # SECRET+ access requires a signed NDA
             ),
         }
         item = KnowledgeItem(

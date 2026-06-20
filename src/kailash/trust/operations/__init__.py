@@ -43,13 +43,8 @@ from kailash.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
+from kailash.trust.chain_store import TrustStore
 from kailash.trust.constraint_validator import ConstraintValidator
-from kailash.trust.signing.crypto import (
-    hash_chain,
-    serialize_for_signing,
-    sign,
-    verify_signature,
-)
 from kailash.trust.exceptions import (
     AgentAlreadyEstablishedError,
     AuthorityInactiveError,
@@ -68,7 +63,12 @@ from kailash.trust.execution_context import (
     HumanOrigin,
     get_current_context,
 )
-from kailash.trust.chain_store import TrustStore
+from kailash.trust.signing.crypto import (
+    hash_chain,
+    serialize_for_signing,
+    sign,
+    verify_signature,
+)
 
 # Logger for trust operations
 logger = logging.getLogger(__name__)
@@ -138,6 +138,28 @@ class TrustKeyManager:
             The private key or None if not found
         """
         return self._keys.get(key_id)
+
+    def remove_key(self, key_id: str) -> bool:
+        """
+        Invalidate a key by clearing its private material (tombstone).
+
+        Per trust-plane-security MUST-NOT-3, revocation clears the key
+        material while keeping a tombstone entry, so a subsequent ``sign()``
+        with the revoked ``key_id`` fails (the key is no longer usable)
+        instead of silently succeeding. ``get_key`` returns an empty string
+        (falsy) for a tombstoned key, distinguishable from ``None`` (never
+        registered).
+
+        Args:
+            key_id: Identifier for the key to invalidate.
+
+        Returns:
+            True if the key existed and was invalidated, False if not present.
+        """
+        if key_id in self._keys:
+            self._keys[key_id] = ""  # Clear material, keep tombstone
+            return True
+        return False
 
     async def sign(self, payload: str, key_id: str) -> str:
         """

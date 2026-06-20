@@ -27,6 +27,7 @@ from typing import Any
 from uuid import uuid4
 
 from kailash.trust.pact.config import VerificationLevel
+from kailash.trust.pact.exceptions import PactError
 
 logger = logging.getLogger(__name__)
 
@@ -459,6 +460,16 @@ class AuditChain:
                     "AuditChain '%s' integrity check failed after from_dict: %s",
                     chain.chain_id,
                     errors,
+                )
+                # Honor the documented contract: a corrupted audit chain MUST
+                # raise, never silently return as valid. Fail-closed — accepting
+                # a tampered/corrupted chain at the deserialization boundary
+                # defeats the tamper-evidence guarantee the audit chain exists
+                # to provide.
+                raise PactError(
+                    f"AuditChain '{chain.chain_id}' failed integrity "
+                    f"verification after deserialization",
+                    details={"chain_id": chain.chain_id, "errors": errors},
                 )
 
         return chain

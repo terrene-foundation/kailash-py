@@ -17,12 +17,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.clearance import RoleClearance
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,13 @@ class GovernanceContext:
         role_address: The D/T/R positional address of the role this context is for.
         posture: The current trust posture level.
         effective_envelope: Snapshot of the effective constraint envelope at creation time.
-            None means no envelope is assigned (maximally restrictive interpretation).
+            None means no envelope is assigned (maximally PERMISSIVE — no
+            constraints apply). This matches the enforced behavior:
+            envelopes.py::compute_effective_envelope documents a None result as
+            "maximally permissive" and the engine auto-approves actions when no
+            envelope resolves (the unconfigured-role = unconstrained model,
+            consistent with EATP "None role = all-access"). NOTE: this is the
+            opt-in governance default; configure a RoleEnvelope to constrain.
         clearance: The role's clearance assignment, or None if no clearance on record.
         effective_clearance_level: Posture-capped clearance level, computed as
             min(role.max_clearance, POSTURE_CEILING[posture]). None if no clearance.

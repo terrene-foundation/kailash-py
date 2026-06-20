@@ -661,6 +661,34 @@ def can_access(
 
     # --- Step 3: Compartment check (SECRET and TOP_SECRET only) ---
     if item_level >= _CLEARANCE_ORDER[ConfidentialityLevel.SECRET]:
+        # NDA gate: SECRET and TOP_SECRET access requires a signed NDA.
+        # RoleClearance documents nda_signed as "Required for SECRET and
+        # TOP_SECRET clearance"; enforce it fail-closed here (a documented
+        # governance control that is parsed/stored/serialized everywhere MUST
+        # be consulted on the access path, not silently dropped).
+        if not role_clearance.nda_signed:
+            logger.info(
+                "Access denied (step 3): NDA not signed for SECRET+ item — "
+                "role_address=%s, item_id=%s, item_classification=%s",
+                role_address,
+                item.item_id,
+                item.classification.value,
+            )
+            return AccessDecision(
+                allowed=False,
+                reason=(
+                    f"NDA not signed: a signed NDA is required for "
+                    f"'{item.classification.value}' classified items"
+                ),
+                step_failed=3,
+                audit_details={
+                    "role_address": role_address,
+                    "item_id": item.item_id,
+                    "step": 3,
+                    "detail": "nda_not_signed",
+                    "item_classification": item.classification.value,
+                },
+            )
         if item.compartments:
             missing = item.compartments - role_clearance.compartments
             if missing:

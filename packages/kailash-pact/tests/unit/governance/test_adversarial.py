@@ -18,15 +18,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-    DepartmentConfig,
-    OperationalConstraintConfig,
-    OrgDefinition,
-    TeamConfig,
-    TrustPostureLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -41,14 +32,21 @@ from kailash.trust.pact.compilation import (
     RoleDefinition,
     compile_org,
 )
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    ConstraintEnvelopeConfig,
+    DepartmentConfig,
+    OperationalConstraintConfig,
+    OrgDefinition,
+    TeamConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.envelopes import (
     MonotonicTighteningError,
     RoleEnvelope,
     TaskEnvelope,
-    intersect_envelopes,
 )
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -351,6 +349,7 @@ class TestPostureGaming:
             role_addr: RoleClearance(
                 role_address=role_addr,
                 max_clearance=ConfidentialityLevel.SECRET,
+                nda_signed=True,  # SECRET+ access requires a signed NDA
             ),
         }
         item = KnowledgeItem(

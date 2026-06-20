@@ -242,7 +242,9 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
             if len(self._history) >= _MAX_HISTORY:
                 trim_count = _MAX_HISTORY // 10  # Remove oldest 10%
                 self._history = self._history[trim_count:]
-                logger.debug(f"[BROADCASTER] Trimmed {trim_count} oldest events from history")
+                logger.debug(
+                    f"[BROADCASTER] Trimmed {trim_count} oldest events from history"
+                )
 
             # Store in history
             self._history.append(event)
@@ -261,38 +263,77 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
             # Call the callback
             try:
                 result = callback(event)
-                # If the callback is async, we need to run it
+                # If the callback is async, schedule it and route any later
+                # exception in the coroutine body to the dead-letter queue.
                 if asyncio.iscoroutine(result):
-                    # Run async callback in event loop if available
                     try:
-                        loop = asyncio.get_running_loop()
-                        # Schedule the coroutine to run
-                        asyncio.ensure_future(result)
+                        asyncio.get_running_loop()
+                        task = asyncio.ensure_future(result)
+                        # ensure_future schedules the coroutine DETACHED: an
+                        # exception raised inside its body after this frame exits
+                        # would otherwise surface only as an "unretrieved task
+                        # exception" warning, bypassing the dead-letter
+                        # accounting that exists to capture delivery failures
+                        # (zero-tolerance Rule 3 — no silent error hiding). The
+                        # done-callback closes that gap.
+                        task.add_done_callback(
+                            lambda t, sid=sub_id, ev=event: (
+                                self._record_async_delivery_failure(t, ev, sid)
+                            )
+                        )
                     except RuntimeError:
                         # No running event loop, run synchronously
                         asyncio.run(result)
             except Exception as e:
                 # Log error but continue with other subscribers
-                logger.error(f"Error broadcasting revocation event {event.event_id} to subscriber {sub_id}: {e}")
-                with self._lock:
-                    # Trim dead letters if at capacity (bounded collection)
-                    if len(self._dead_letters) >= _MAX_DEAD_LETTERS:
-                        trim_count = _MAX_DEAD_LETTERS // 10
-                        self._dead_letters = self._dead_letters[trim_count:]
-                        logger.debug(f"[BROADCASTER] Trimmed {trim_count} oldest dead letter entries")
-
-                    # Track in dead letter queue
-                    self._dead_letters.append(
-                        DeadLetterEntry(
-                            event=event,
-                            subscription_id=sub_id,
-                            error=str(e),
-                        )
-                    )
+                logger.error(
+                    f"Error broadcasting revocation event {event.event_id} "
+                    f"to subscriber {sub_id}: {e}"
+                )
+                self._record_dead_letter(event, sub_id, str(e))
 
         logger.debug(
             f"Broadcast revocation event {event.event_id} ({event.revocation_type.value}) for {event.target_id}"
         )
+
+    def _record_async_delivery_failure(
+        self, task: "asyncio.Future", event: RevocationEvent, sub_id: str
+    ) -> None:
+        """Route an async subscriber callback's exception to the dead-letter queue.
+
+        Invoked as a done-callback on the scheduled coroutine. A coroutine that
+        completed cleanly (or was cancelled) records nothing; one that raised is
+        logged and dead-lettered exactly like a synchronous delivery failure.
+        """
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+        if exc is not None:
+            logger.error(
+                f"Error broadcasting revocation event {event.event_id} "
+                f"to async subscriber {sub_id}: {exc}"
+            )
+            self._record_dead_letter(event, sub_id, str(exc))
+
+    def _record_dead_letter(
+        self, event: RevocationEvent, sub_id: str, error: str
+    ) -> None:
+        """Append a dead-letter entry, trimming the bounded collection at capacity."""
+        with self._lock:
+            if len(self._dead_letters) >= _MAX_DEAD_LETTERS:
+                trim_count = _MAX_DEAD_LETTERS // 10
+                self._dead_letters = self._dead_letters[trim_count:]
+                logger.debug(
+                    f"[BROADCASTER] Trimmed {trim_count} oldest dead letter entries"
+                )
+            self._dead_letters.append(
+                DeadLetterEntry(
+                    event=event,
+                    subscription_id=sub_id,
+                    error=error,
+                )
+            )
 
     def subscribe(
         self,
@@ -530,7 +571,9 @@ class CascadeRevocationManager:
             parent_id, parent_event_id, depth = queue.pop(0)
 
             if depth >= max_depth:
-                logger.warning(f"Cascade depth limit ({max_depth}) reached for '{parent_id}' at depth {depth}")
+                logger.warning(
+                    f"Cascade depth limit ({max_depth}) reached for '{parent_id}' at depth {depth}"
+                )
                 continue
 
             delegates = self._delegation_registry.get_delegates(parent_id)
@@ -567,7 +610,9 @@ class CascadeRevocationManager:
                 # Add to queue for further processing
                 queue.append((delegate_id, cascade_event.event_id, depth + 1))
 
-        logger.info(f"Cascade revocation complete for {target_id}. Total events: {len(all_events)}")
+        logger.info(
+            f"Cascade revocation complete for {target_id}. Total events: {len(all_events)}"
+        )
 
         return all_events
 
