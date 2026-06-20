@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.41.1] - 2026-06-20
+
+### Fixed
+
+- **YAML envelope `confidentiality_clearance` and `max_delegation_depth` are no
+  longer silently dropped** (issue #1393, `kailash.trust.pact`). A constraint
+  envelope authored in a unified YAML org file may carry two top-level governance
+  fields beyond the five CARE dimension dicts: `confidentiality_clearance` (the
+  data-classification ceiling) and `max_delegation_depth` (the delegation-depth
+  cap). `EnvelopeSpec` had no slot for them, `_parse_envelopes` never read them,
+  and `yaml_resolvers.resolve_envelope` never forwarded them into
+  `ConstraintEnvelopeConfig` — so a YAML-authored `max_delegation_depth: 1` (cap
+  delegation to one level) silently became `None` (UNLIMITED) at enforcement, and
+  an authored confidentiality ceiling never applied, with no error. Both fields
+  are now parsed (fail-closed on an invalid clearance level or a non-positive-int
+  depth — including unhashable list/dict values — via a shared `_is_valid_level`
+  guard) and forwarded to the runtime envelope config, where they participate in
+  monotonic-tightening validation end-to-end (a widening child envelope is
+  rejected with `MonotonicTighteningError`).
+- **`cascade_revoke` reports the true set of revoked agents on a rollback-restore
+  failure** (issue #1394, `kailash.trust.revocation.cascade`). On a partial
+  failure, `cascade_revoke` returned `RevocationResult(success=False,
+revoked_agents=[])` even when the best-effort rollback could NOT restore an
+  already-soft-deleted chain — so the audit result claimed "no agents revoked"
+  while chains remained deleted in the store (store state and result diverged).
+  `_rollback_chains` now returns the agents it could not restore (instead of
+  swallowing the failure) and `revoked_agents` reflects store ground truth: any
+  chain that remains soft-deleted (revoked) is reported, with a WARN naming it.
+  The module/function docstrings that over-claimed transaction-backed "atomic
+  chain invalidation" — which the code never performed and the InMemory
+  transaction context cannot provide (it snapshots only active chains, so a
+  soft-delete cannot be rolled back) — are reconciled to the real
+  best-effort-rollback (non-transactional) contract.
+
 ## [2.41.0] - 2026-06-19
 
 ### Added
