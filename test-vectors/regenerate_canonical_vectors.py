@@ -185,6 +185,25 @@ _AUDIT_VECTORS: list[tuple[str, dict[str, Any]]] = [
             },
         ),
     ),
+    (
+        # Pins the DELIBERATE asymmetry (see AuditAnchor._canonical_input): a
+        # WHOLE-SECOND (microsecond==0) datetime VALUE inside metadata renders
+        # bare isoformat() with NO fractional part, while the anchor's own
+        # top-level timestamp always emits six digits. A peer SDK must match.
+        "U6_whole_second_metadata_datetime",
+        dict(
+            anchor_id="anc-u6-001",
+            sequence=0,
+            previous_hash=None,
+            agent_id="agent-u6",
+            action="budget_check",
+            verification_level="AUTO_APPROVED",
+            envelope_id="env-u6",
+            result="success",
+            timestamp="2026-01-15T16:00:00.000000+00:00",
+            metadata={"when": datetime.fromisoformat("2026-03-04T05:06:00+00:00")},
+        ),
+    ),
 ]
 
 

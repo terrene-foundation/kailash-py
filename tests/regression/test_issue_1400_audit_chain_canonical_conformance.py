@@ -26,9 +26,15 @@ from decimal import Decimal
 
 import pytest
 
+from kailash.diagnostics.protocols import (
+    TraceEvent,
+    TraceEventType,
+    compute_trace_event_fingerprint,
+)
 from kailash.trust._canonical import canonical_scalars
 from kailash.trust.pact.audit import AuditAnchor, AuditChain
 from kailash.trust.pact.config import VerificationLevel
+from kailash.trust.pact.exceptions import PactError
 
 UTC = timezone.utc
 
@@ -246,3 +252,164 @@ class TestEncoderFamilyConsistency:
         assert canonical_scalars(uuid.UUID(int=0)) == (
             "00000000-0000-0000-0000-000000000000"
         )
+
+
+@pytest.mark.regression
+class TestAllowNanRejection:
+    """Round-2: non-finite floats in metadata / payload MUST raise, matching
+    serialize_for_signing + RFC-8259 (allow_nan=False), not emit invalid JSON."""
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_audit_metadata_nonfinite_raises(self, bad: float) -> None:
+        a = _anchor(timestamp=datetime(2026, 1, 1, tzinfo=UTC), metadata={"v": bad})
+        with pytest.raises(ValueError):
+            a.compute_hash()
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+    def test_trace_payload_nonfinite_raises(self, bad: float) -> None:
+        ev = TraceEvent(
+            event_id="e",
+            event_type=TraceEventType.AGENT_STEP,
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            run_id="r",
+            agent_id="ag",
+            cost_microdollars=0,
+            payload={"x": bad},
+        )
+        with pytest.raises(ValueError):
+            compute_trace_event_fingerprint(ev)
+
+
+@pytest.mark.regression
+class TestMetadataDatetimeAsymmetry:
+    """Round-2: a datetime VALUE inside metadata renders bare isoformat() (no
+    fraction at microsecond==0), while the anchor's own timestamp always emits
+    six digits — the deliberate signing-family-contract asymmetry (issue #959
+    vs #1400). Pinned so a future change to canonical_scalars is caught."""
+
+    def test_metadata_datetime_is_bare_isoformat(self) -> None:
+        a = _anchor(
+            timestamp=datetime(2026, 1, 15, 16, 0, 0, tzinfo=UTC),
+            metadata={"when": datetime(2026, 3, 4, 5, 6, 0, tzinfo=UTC)},
+        )
+        ci = a._canonical_input()
+        # Anchor's own timestamp: six digits.
+        assert "16:00:00.000000+00:00" in ci, ci
+        # Metadata datetime at microsecond==0: NO fractional part.
+        assert '"when":"2026-03-04T05:06:00+00:00"' in ci, ci
+        assert "05:06:00.000000" not in ci, ci
+
+    def test_canonical_scalars_datetime_bare(self) -> None:
+        assert canonical_scalars(datetime(2026, 3, 4, 5, 6, 0, tzinfo=UTC)) == (
+            "2026-03-04T05:06:00+00:00"
+        )
+
+
+@pytest.mark.regression
+class TestFromDictReSealSurfacing:
+    """Round-2: AuditChain.from_dict surfaces the per-anchor errors in the
+    raised message AND a machine-readable reseal_only flag, distinguishing a
+    benign pre-canonical-fix chain from possible tampering (fail-closed either
+    way)."""
+
+    def _prefix_sealed_chain_dict(self) -> dict:
+        a = _anchor(
+            timestamp=datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC),
+            metadata={"role": "x"},
+        )
+        a.content_hash = a._compute_hash_prefix_format()  # pre-fix seal
+        return {"chain_id": "c", "anchors": [a.to_dict()]}
+
+    def test_pre_fix_chain_surfaces_reseal_guidance(self) -> None:
+        with pytest.raises(PactError) as exc:
+            AuditChain.from_dict(self._prefix_sealed_chain_dict())
+        assert exc.value.details["reseal_only"] is True
+        msg = str(exc.value)
+        assert "re-seal" in msg.lower()
+        assert "NOT tampering" in msg
+
+    def test_tampered_chain_reads_possible_tampering(self) -> None:
+        a = _anchor(
+            timestamp=datetime(2026, 1, 15, 11, 0, 0, 123456, tzinfo=UTC),
+            metadata={"role": "x"},
+        )
+        a.seal()
+        a.metadata = {"role": "HACKED"}
+        with pytest.raises(PactError) as exc:
+            AuditChain.from_dict({"chain_id": "c", "anchors": [a.to_dict()]})
+        assert exc.value.details["reseal_only"] is False
+        assert "possible tampering" in str(exc.value)
+
+
+@pytest.mark.regression
+class TestPreFixNaiveNonUtcLimitation:
+    """Round-2: documents the KNOWN, NARROW limitation — a pre-fix anchor sealed
+    with an EXPLICIT naive or non-UTC timestamp cannot be byte-reproduced after
+    load-time normalization (lossy), so it reads as a hash mismatch rather than
+    a re-seal advisory. Re-seal is the correct disposition regardless. The
+    common UTC default-path population IS recognized correctly (see
+    TestBackwardCompatLadder). This test PINS the documented behavior so a
+    future change that silently alters it is caught."""
+
+    def _load_prefix_naive(self) -> tuple:
+        import json
+
+        from kailash.trust.pact.audit import GENESIS_HASH
+
+        # Reproduce the EXACT pre-fix bytes for a NAIVE timestamp (bare
+        # isoformat, no offset), then load via from_dict (which normalizes).
+        naive = "2026-01-01T12:00:00"
+        meta = {"role": "x"}
+        content = (
+            f"anc-naive:0:{GENESIS_HASH}:g:x:AUTO_APPROVED::ok:{naive}:"
+            + json.dumps(
+                meta,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+                ensure_ascii=True,
+            )
+        )
+        stored = hashlib.sha256(content.encode()).hexdigest()
+        d = {
+            "anchor_id": "anc-naive",
+            "sequence": 0,
+            "previous_hash": None,
+            "agent_id": "g",
+            "action": "x",
+            "verification_level": "AUTO_APPROVED",
+            "envelope_id": "",
+            "result": "ok",
+            "metadata": meta,
+            "timestamp": naive,
+            "content_hash": stored,
+        }
+        loaded = AuditAnchor.from_dict(d)
+        chain = AuditChain(chain_id="c")
+        chain.anchors = [loaded]
+        return chain.verify_chain_integrity()
+
+    def test_naive_prefix_anchor_documented_as_mismatch(self) -> None:
+        ok, errors = self._load_prefix_naive()
+        assert not ok
+        # Documented limitation: the lossy naive->UTC normalization means the
+        # original no-offset bytes are unrecoverable, so it reads as a mismatch
+        # (NOT a re-seal advisory). Re-seal is still the correct action.
+        assert any("tampered" in e for e in errors), errors
+
+    def test_from_dict_loads_naive_without_raising_on_normalization(self) -> None:
+        # The naive->UTC normalization itself does NOT raise (lenient on read);
+        # the integrity check is what surfaces the mismatch.
+        a = AuditAnchor.from_dict(
+            {
+                "anchor_id": "a",
+                "sequence": 0,
+                "agent_id": "g",
+                "action": "x",
+                "verification_level": "AUTO_APPROVED",
+                "result": "ok",
+                "timestamp": "2026-01-01T12:00:00",
+            }
+        )
+        assert a.timestamp.tzinfo is not None
+        assert a.timestamp.isoformat() == "2026-01-01T12:00:00+00:00"

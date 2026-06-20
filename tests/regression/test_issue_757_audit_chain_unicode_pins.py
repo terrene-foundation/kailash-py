@@ -68,6 +68,7 @@ _REQUIRED_VECTOR_NAMES = frozenset(
         "U3_nonzero_microsecond",
         "U4_whole_second_explicit_000000",
         "U5_typed_scalar_metadata",
+        "U6_whole_second_metadata_datetime",
     }
 )
 

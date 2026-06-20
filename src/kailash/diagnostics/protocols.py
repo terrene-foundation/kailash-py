@@ -291,6 +291,7 @@ def _canonical_json(event: TraceEvent) -> str:
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
+        allow_nan=False,
     )
 
 

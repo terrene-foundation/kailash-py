@@ -4,7 +4,7 @@
   "conformance_requirement": "N4",
   "genesis_hash_sentinel": "0000000000000000000000000000000000000000000000000000000000000000",
   "genesis_hash_note": "Genesis sentinel changed from 'genesis' literal to '0'*64 on 2026-04-20 per cross-SDK fingerprint reconciliation (kailash-rs#449). Breaking change — chains rooted at the prior sentinel will not verify. Canonical across all Kailash SDKs per EATP D6.",
-  "metadata_canonicalisation": "Compact JSON separators (',', ':'), sort_keys=True, ensure_ascii=True, typed scalars via kailash.trust._canonical.canonical_scalars (NO default=str). Timestamp rendered isoformat(timespec='microseconds') — six fractional digits (2026-06-20 canonical-conformance fix, issues #1400/#1405). Matches Rust serde_json::to_string(&BTreeMap) byte-for-byte.",
+  "metadata_canonicalisation": "Compact JSON separators (',', ':'), sort_keys=True, ensure_ascii=True, allow_nan=False, typed scalars via kailash.trust._canonical.canonical_scalars (NO default=str). The anchor's top-level timestamp is rendered isoformat(timespec='microseconds') — six fractional digits (2026-06-20 canonical-conformance fix, issues #1400/#1405); a datetime VALUE inside metadata renders bare isoformat() per the signing-family contract (deliberate asymmetry, see specs/trust-canonical-encoders.md). This is the INTENDED cross-SDK form matching Rust serde_json::to_string(&BTreeMap); the Rust side must land the same canonical-conformance change in lockstep (kailash-rs#449) — the byte-identical-to-Rust guarantee is verified at the cross-SDK gate, not yet in this repo.",
   "input": {
     "anchor_id": "anc-n4-001",
     "sequence": 0,

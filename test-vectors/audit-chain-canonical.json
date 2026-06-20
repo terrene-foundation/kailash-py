@@ -130,6 +130,29 @@
       },
       "expected_canonical_input": "anc-u5-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u5:budget_check:AUTO_APPROVED:env-u5:success:2026-01-15T15:00:00.500000+00:00:{\"amount\":\"1.50\",\"id\":\"12345678-1234-5678-1234-567812345678\",\"tags\":[\"alpha\",\"beta\",\"gamma\"],\"when\":\"2026-03-04T05:06:07.000123+00:00\"}",
       "expected_sha256": "da88d1a54be64a5da51097e493986b6131af0ec4fca490505ce558e3e9339263"
+    },
+    {
+      "name": "U6_whole_second_metadata_datetime",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
+      "input_repr": {
+        "anchor_id": "anc-u6-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u6",
+        "action": "budget_check",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u6",
+        "result": "success",
+        "timestamp": "2026-01-15T16:00:00.000000+00:00",
+        "metadata": {
+          "when": {
+            "__pytype__": "datetime",
+            "repr": "2026-03-04T05:06:00+00:00"
+          }
+        }
+      },
+      "expected_canonical_input": "anc-u6-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u6:budget_check:AUTO_APPROVED:env-u6:success:2026-01-15T16:00:00.000000+00:00:{\"when\":\"2026-03-04T05:06:00+00:00\"}",
+      "expected_sha256": "bc51028d10a3c760951df4f8b803cd2c8682ad8fb309f1adf1f408c341774789"
     }
   ]
 }

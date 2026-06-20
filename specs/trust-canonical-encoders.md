@@ -44,6 +44,21 @@ cross-SDK byte parity).
 Common config for Family B: `sort_keys=True, separators=(",",":"),
 ensure_ascii=True, allow_nan=False`.
 
+### Timestamp rendering — a deliberate asymmetry
+
+The PACT audit chain renders an anchor's OWN top-level `timestamp` via
+`isoformat(timespec="microseconds")` — always six fractional digits + `+00:00`
+(issue #1400). A `datetime` VALUE nested inside metadata (or a trace-event
+`payload`), however, renders via `canonical_scalars` as a plain `isoformat()`,
+so a whole-second metadata datetime emits NO fractional part. This asymmetry is
+intentional: nested datetimes follow the established `serialize_for_signing`
+signing-family contract (bare `isoformat()`, issue #959), and changing them to
+fixed-width would break every existing trust-plane signature. A peer SDK MUST
+render nested datetimes with bare `isoformat()` (and the anchor timestamp with
+six digits) to stay byte-equal — pinned by `U6_whole_second_metadata_datetime`
+in `test-vectors/audit-chain-canonical.json`; cross-SDK confirmation is part of
+the kailash-rs#449 lockstep.
+
 ---
 
 ## Status (2026-06-20 canonical-conformance fix)

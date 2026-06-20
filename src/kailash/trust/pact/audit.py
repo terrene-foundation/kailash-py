@@ -234,12 +234,26 @@ class AuditAnchor:
           is always ``+00:00`` (issue #1401).
         * Metadata: routed through ``canonical_scalars`` (the shared
           typed-scalar whitelist) then ``json.dumps`` with compact separators
-          + ``ensure_ascii=True``. NO ``default=str`` — a ``Decimal`` / ``UUID``
-          / ``datetime`` / ``set`` in metadata is encoded deterministically,
-          never via implementation-defined ``str()`` (issue #1405 / #1403).
-          A non-JSON-native, non-whitelisted value raises ``TypeError`` rather
-          than silently stringifying. Empty metadata omits the suffix entirely
-          (no trailing ``:``).
+          + ``ensure_ascii=True`` + ``allow_nan=False`` (a ``NaN`` / ``Infinity``
+          metadata value raises ``ValueError``, matching ``serialize_for_signing``
+          and RFC-8259). NO ``default=str`` — a ``Decimal`` / ``UUID`` /
+          ``datetime`` / ``set`` in metadata is encoded deterministically, never
+          via implementation-defined ``str()`` (issue #1405 / #1403). A
+          non-JSON-native, non-whitelisted value raises ``TypeError`` rather than
+          silently stringifying. Empty metadata omits the suffix entirely (no
+          trailing ``:``).
+
+          DELIBERATE ASYMMETRY: a ``datetime`` VALUE inside metadata renders via
+          ``canonical_scalars`` as a plain ``isoformat()`` (so a whole-second
+          metadata datetime emits NO fractional part), whereas the anchor's OWN
+          top-level ``timestamp`` always gets six fractional digits (above).
+          Metadata datetimes follow the established ``serialize_for_signing``
+          signing-family contract (bare ``isoformat()``, issue #959) — changing
+          them to fixed-width would break every existing trust-plane signature.
+          A peer SDK MUST therefore render metadata datetimes with bare
+          ``isoformat()`` to stay byte-equal (cross-SDK confirmation tracked with
+          the kailash-rs#449 lockstep). Pinned by the ``U6`` whole-second
+          metadata-datetime vector in ``test-vectors/audit-chain-canonical.json``.
         """
         content = (
             f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
@@ -253,6 +267,7 @@ class AuditAnchor:
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=True,
+                allow_nan=False,
             )
             content += f":{meta_str}"
         return content
@@ -322,6 +337,21 @@ class AuditAnchor:
         This is the sibling of :meth:`_compute_hash_legacy` for the newer
         format boundary; it is deliberately byte-verbatim with the pre-fix
         ``_canonical_input`` so it reproduces historically-sealed bytes exactly.
+
+        KNOWN LIMITATION (narrow): this reproducer renders ``self.timestamp``,
+        which ``__init__`` / ``from_dict`` have already normalized to UTC. A
+        pre-fix anchor sealed with an EXPLICIT naive or non-UTC timestamp had its
+        original-offset bytes (no offset / ``+08:00``) hashed; after load-time
+        normalization those original bytes are unrecoverable, so such an anchor
+        matches NEITHER this reproducer NOR :meth:`_compute_hash_legacy` and
+        reads as ``content hash mismatch (tampered?)`` rather than a re-seal
+        advisory. The common pre-fix population (the ``datetime.now(UTC)``
+        default path) IS recognized correctly; only anchors EXPLICITLY
+        constructed with a naive/non-UTC timestamp (the very class issue #1401
+        deprecates) fall here, and re-seal is the correct disposition for them
+        regardless of the label. Pinned by
+        ``TestPreFixNaiveNonUtcLimitation`` in
+        ``tests/regression/test_issue_1400_audit_chain_canonical_conformance.py``.
         """
         content = (
             f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
@@ -567,11 +597,26 @@ class AuditChain:
                 # raise, never silently return as valid. Fail-closed — accepting
                 # a tampered/corrupted chain at the deserialization boundary
                 # defeats the tamper-evidence guarantee the audit chain exists
-                # to provide.
+                # to provide. BUT surface the per-anchor errors in the message
+                # (not only details) AND distinguish a benign pre-canonical-fix
+                # chain — every error is a re-seal advisory ("NOT tampering") —
+                # from possible tampering, so the operator gets actionable
+                # re-seal guidance instead of an opaque "failed verification".
+                reseal_only = bool(errors) and all("NOT tampering" in e for e in errors)
+                summary = (
+                    "requires re-seal — pre-canonical-fix format detected "
+                    "(NOT tampering)"
+                    if reseal_only
+                    else "failed integrity verification (possible tampering)"
+                )
                 raise PactError(
-                    f"AuditChain '{chain.chain_id}' failed integrity "
-                    f"verification after deserialization",
-                    details={"chain_id": chain.chain_id, "errors": errors},
+                    f"AuditChain '{chain.chain_id}' {summary} after "
+                    f"deserialization: {errors}",
+                    details={
+                        "chain_id": chain.chain_id,
+                        "errors": errors,
+                        "reseal_only": reseal_only,
+                    },
                 )
 
         return chain

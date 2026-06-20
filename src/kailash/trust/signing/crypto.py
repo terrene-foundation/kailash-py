@@ -246,10 +246,11 @@ def serialize_for_signing(obj: Any) -> str:
       counterpart escapes non-ASCII for byte-stable signing pre-images.
       Changing it to ``ensure_ascii=False`` would invalidate every existing
       trust-plane signature AND the fixture.
-    * ``sort_keys=True`` + ``separators=(",", ":")`` — keys sorted, no
-      whitespace. The ``convert()`` whitelist below maps typed scalars
-      (Decimal / UUID / datetime / bytes / Enum / dataclass) to canonical
-      JSON forms (issue #959).
+    * ``sort_keys=True`` + ``separators=(",", ":")`` + ``allow_nan=False``
+      — keys sorted, no whitespace, non-finite floats rejected. The shared
+      ``kailash.trust._canonical.canonical_scalars`` whitelist maps typed
+      scalars (Decimal / UUID / datetime / bytes / Enum / dataclass) to
+      canonical JSON forms (issue #959); there is NO ``default=str`` fallback.
     * **No Unicode normalization** — NFC (composed, U+00E9) and NFD
       (decomposed, U+0065 U+0301) inputs are DISTINCT pre-images; their escapes differ
       (``\\u00e9`` vs ``e\\u0301``). Normalize upstream if equivalence matters.
