@@ -170,7 +170,7 @@ RESTORE_GATE_ORDER: tuple[str, ...] = (
 
 # N12-FT-03 — vault_kek_recommit, 4 steps (§4.6).
 RECOMMIT_GATE_ORDER: tuple[str, ...] = (
-    "clearance-tenant-domain",  # (1) vault:backup capability presence ONLY (CL-02a tenant/domain + CL-04 cooling-off NOT wired here — deferred, C3 #630)
+    "clearance-tenant-domain",  # (1) N12-CL-01/02a tenant→domain→token + N12-CL-04 cooling-off — full evaluate_clearance gate wired in registry_ops.py::recommit_vault_kek (F-VAULT-630; vault:backup IS cooling-off-suspended)
     "generation-vault-unchanged",  # (2) → recommit-generation-altered
     "prior-commitment-exists",  # (3) → unknown-prior-commitment
     "new-commitment-binds-secret",  # (4) → recommit-binding-mismatch
@@ -178,7 +178,7 @@ RECOMMIT_GATE_ORDER: tuple[str, ...] = (
 
 # N12-FT-03 — vault_kek_retire, 4 steps (§4.6).
 RETIRE_GATE_ORDER: tuple[str, ...] = (
-    "clearance-tenant-domain",  # (1) vault:retire-alg capability presence ONLY (CL-02a tenant/domain NOT wired here — deferred, C3 #630; no governance-HELD action)
+    "clearance-tenant-domain",  # (1) N12-CL-01/02a tenant→domain→token — full evaluate_clearance gate wired in registry_ops.py::retire_vault_kek_alg (F-VAULT-630; CL-04 cooling-off no-op: vault:retire-alg not in the suspended set)
     "generation-vault-unchanged",  # (2) → recommit-generation-altered
     "retired-entry-exists",  # (3) → unknown-prior-commitment
     "recoverability-preserved",  # (4) live non-retired strong alg MUST remain

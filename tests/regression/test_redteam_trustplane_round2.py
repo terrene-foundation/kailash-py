@@ -18,11 +18,16 @@ pre-fix code and passes against the fix.
 | EA-01      | trust.enforce.proximity             | NaN/Inf usage bypassed proximity escalation             |
 | RS-03      | trust.revocation.broadcaster        | async-subscriber exceptions bypassed dead-letter queue  |
 
-The remaining three findings (RS-02 rotation "atomic" over-claim, vault retire/
-recommit gate-label over-claim, PGC-03 context.py None-envelope doc
-contradiction) are documentation-accuracy corrections with NO behavioral
-delta — they are covered by the unchanged-behavior existing suites plus the
-corrected docstrings, so they carry no behavioral regression test here.
+Of the remaining three findings, two (RS-02 rotation "atomic" over-claim, PGC-03
+context.py None-envelope doc contradiction) are documentation-accuracy
+corrections with NO behavioral delta — covered by the unchanged-behavior existing
+suites plus the corrected docstrings, so they carry no behavioral regression test
+here. The third (the vault retire/recommit "clearance-tenant-domain" gate-label
+over-claim) was a docs-only correction AT 2.42.0, but was SUBSEQUENTLY CLOSED
+behaviorally by F-VAULT-630 — which wires the full CL-02a tenant/domain + CL-04
+cooling-off ``evaluate_clearance`` gate into both surfaces, so the gate label is
+now accurate by behavior rather than by walked-back docstring. Its behavioral
+coverage lives in ``tests/regression/test_eatp12_vault_630_clearance_wiring.py``.
 """
 
 from __future__ import annotations

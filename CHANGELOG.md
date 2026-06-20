@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.43.0] - 2026-06-20
+
+Wires the binding-owned CL-02a tenant/domain scoping and CL-04 cooling-off
+suspension (the existing `kailash.trust.vault.clearance.evaluate_clearance` gate)
+into the two KEK-commitment registry-mutating operations — `recommit_vault_kek`
+and `retire_vault_kek_alg`. This closes the clearance-gate-scoping sub-part of the
+SLIP-0039 vault-binding follow-up (#630) that the 2.42.0 deploy record flagged as
+capability-presence-only on these two surfaces (the separate §3.4 KEK
+re-establishment / encryption-hierarchy gap is unchanged). `retire_vault_kek_alg`
+gains a required `resolver` parameter — hence the minor bump.
+
+### Changed
+
+- **BREAKING — `retire_vault_kek_alg` now requires a `resolver` and enforces
+  CL-02a tenant/domain scoping** (`kailash.trust.vault.registry_ops`). The retire
+  gate named `clearance-tenant-domain` previously checked the `vault:retire-alg`
+  capability PRESENCE only; it now runs the full `evaluate_clearance` gate
+  (tenant → domain → token, fail-closed order) against the vault's RESOLVED
+  tenant/domain. Because `VaultKeyHandle` carries no tenant/domain, the operation
+  gains a REQUIRED keyword-only `resolver: VaultKeyResolver` (the only trusted
+  source), making it symmetric with `recommit_vault_kek`. The resolved KEK is
+  materialized solely to read the trusted tenant/domain and is `zeroize()`-d in a
+  `finally` (N12-IN-05) — it crosses no return value, anchor payload, or log line.
+  **Migration:** pass `resolver=<your VaultKeyResolver>` to `retire_vault_kek_alg`.
+  A retire whose clearance tenant/domain does not match/cover the vault's — and
+  that previously resolved to ALLOW — now resolves to DENY (`missing-clearance`);
+  same-tenant, covered-domain retires are unaffected.
+
+### Security
+
+- **`recommit_vault_kek` + `retire_vault_kek_alg` enforce tenant/domain isolation
+  and (recommit) post-recovery cooling-off** (`kailash.trust.vault.registry_ops`).
+  Both registry-mutating operations now perform the binding-owned CL-02a
+  tenant/domain scoping the gate label always advertised, closing the gap where a
+  `vault:backup` (recommit) or `vault:retire-alg` (retire) token granted in
+  tenant/domain A could mutate a vault's commitment registry in tenant/domain B.
+  `recommit_vault_kek` additionally honors the N12-CL-04 7-day post-recovery
+  cooling-off suspension (it rides `vault:backup`, a cooling-off-suspended
+  capability) via new optional `posture_store` / `trust_anchored_now` /
+  `approver_configured` parameters (absent → no cooling-off check, the documented
+  no-receipt default); `retire_vault_kek_alg` is a spec-faithful cooling-off no-op
+  (`vault:retire-alg` is not a suspended capability). The audit-before-mutation
+  (AU-02b) ordering and the recoverability-preserved guard are unchanged.
+
 ## [2.42.0] - 2026-06-20
 
 A holistic post-multi-wave redteam of the trust-plane surface (beyond the
