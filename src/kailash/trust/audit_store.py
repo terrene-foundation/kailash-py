@@ -788,7 +788,9 @@ class SqliteAuditStore:
                 f"got {event.prev_hash[:16]}..."
             )
 
-        meta_json = json.dumps(event.metadata, sort_keys=True, separators=(",", ":"))
+        meta_json = json.dumps(
+            event.metadata, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
         async with self._pool.acquire_write() as conn:
             await conn.execute(
                 f"""

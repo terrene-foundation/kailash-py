@@ -161,3 +161,116 @@ class TestTrustSigningPreimageRejectsNanInf:
             inherited_constraints={"max_cost": 100.0},
         )
         assert len(ctx.compute_hash()) == 64
+
+    # MED — PACT SqliteAuditLog chain content_hash over free-form details dict.
+    def test_pact_sqlite_audit_log_append_rejects_nan_inf(self, tmp_path) -> None:
+        from kailash.trust.pact.stores.sqlite import SqliteAuditLog
+
+        store = SqliteAuditLog(str(tmp_path / "audit.db"))
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                store.append("test-action", {"cost": bad})
+
+    def test_pact_sqlite_audit_log_append_finite_is_byte_neutral(
+        self, tmp_path
+    ) -> None:
+        from kailash.trust.pact.stores.sqlite import SqliteAuditLog
+
+        store = SqliteAuditLog(str(tmp_path / "audit.db"))
+        store.append("test-action", {"cost": 2.0})  # finite: must not raise
+
+
+# ---------------------------------------------------------------------------
+# Structural invariant — the multi-site contract guard (security.md Multi-Site)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
+    """AST invariant: EVERY canonical ``json.dumps`` in a hash/sign function across
+    the trust plane carries ``allow_nan=False`` — except the documented exclusions.
+
+    This is the durable guard for the trust-plane-wide NaN/Inf multi-site sweep
+    (``security.md`` Multi-Site Kwarg Plumbing). It fails loudly if a future
+    refactor (a) drops ``allow_nan=False`` from any signing/hash PRE-IMAGE site,
+    OR (b) adds a NEW canonical signing/hash ``json.dumps`` without it — the exact
+    "missed sibling" failure the sweep closed. It is a STRUCTURAL (AST-shape) probe
+    per ``probe-driven-verification.md`` Rule 3, not a source-grep: it parses the
+    AST, scopes to functions that hash/sign, and only flags CANONICAL calls
+    (``sort_keys`` / ``separators`` — i.e. deterministic pre-images), never
+    ``indent=`` human/file/CLI/dashboard output.
+
+    DOCUMENTED EXCLUSIONS (correct by design):
+    - ``pact/audit.py::_compute_hash_legacy`` / ``_compute_hash_prefix_format`` —
+      deliberately omit ``allow_nan`` to reproduce historical pre-fix bytes for
+      forensic re-seal-vs-tamper disambiguation.
+    - ``enforce/decorators.py::_hash_args`` / ``_hash_result`` — LOCAL in-process
+      memoization cache keys for the ``@verified`` / ``shadow`` decorators; never
+      signed, never cross-SDK, never tamper-evidence, and both are guarded by an
+      ``except (TypeError, ValueError)`` repr-hash fallback. Not pre-images in the
+      cross-SDK/tamper-evidence sense this contract governs.
+    """
+    import ast
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash" / "trust"
+    assert root.is_dir(), f"trust plane not found at {root}"
+
+    HASHY = (
+        "sha256",
+        "sha512",
+        "hmac",
+        "hexdigest",
+        "digest",
+        ".sign(",
+        "signing",
+        "compare_digest",
+    )
+    # (file-suffix, function-name) pairs deliberately excluded (see docstring):
+    #   pact/audit.py legacy/prefix — forensic pre-fix-byte reproduction;
+    #   enforce/decorators.py _hash_* — local in-process memoization caches.
+    EXCLUDED = {
+        ("pact/audit.py", "_compute_hash_legacy"),
+        ("pact/audit.py", "_compute_hash_prefix_format"),
+        ("enforce/decorators.py", "_hash_args"),
+        ("enforce/decorators.py", "_hash_result"),
+    }
+
+    offenders: list[str] = []
+    for p in root.rglob("*.py"):
+        txt = p.read_text()
+        try:
+            tree = ast.parse(txt)
+        except SyntaxError:
+            continue
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            src = ast.get_source_segment(txt, fn) or ""
+            if not any(h in src for h in HASHY):
+                continue
+            for node in ast.walk(fn):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "dumps"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "json"
+                ):
+                    kws = {k.arg for k in node.keywords}
+                    # Canonical pre-image shape: sort_keys/separators, NOT indent
+                    is_canonical = "sort_keys" in kws or "separators" in kws
+                    if "indent" in kws or not is_canonical:
+                        continue  # human/file output — not a deterministic pre-image
+                    if "allow_nan" in kws:
+                        continue  # correctly guarded
+                    rel = "/".join(p.parts[p.parts.index("trust") + 1 :])
+                    if any(rel.endswith(ef) and fn.name == efn for ef, efn in EXCLUDED):
+                        continue  # documented forensic omission
+                    offenders.append(f"{rel}:{node.lineno} fn={fn.name}")
+
+    assert not offenders, (
+        "Canonical signing/hash json.dumps pre-image(s) missing allow_nan=False "
+        "(security.md Multi-Site Kwarg Plumbing — cross-SDK NaN/Inf parity hazard):\n  "
+        + "\n  ".join(sorted(offenders))
+    )

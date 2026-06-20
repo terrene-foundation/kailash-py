@@ -486,7 +486,7 @@ def attenuate(
         "additional_constraints": additional_constraints,
     }
     att_block_bytes = json.dumps(
-        att_block_data, separators=(",", ":"), sort_keys=True
+        att_block_data, separators=(",", ":"), sort_keys=True, allow_nan=False
     ).encode("utf-8")
 
     # The attenuator signs: previous_signature(64 bytes) + new_attenuation_block

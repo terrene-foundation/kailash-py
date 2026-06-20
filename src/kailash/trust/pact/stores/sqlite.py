@@ -953,7 +953,7 @@ class SqliteAuditLog(_SqliteBase):
             details: Structured details dict (will be JSON-serialized).
         """
         now = datetime.now(UTC).isoformat()
-        details_json = json.dumps(details, sort_keys=True)
+        details_json = json.dumps(details, sort_keys=True, allow_nan=False)
         content_hash = hashlib.sha256(details_json.encode()).hexdigest()
 
         conn = self._get_connection()
