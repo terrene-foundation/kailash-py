@@ -18,8 +18,6 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
-import pytest
-
 from kailash.trust.pact.audit import GENESIS_HASH, AuditAnchor, AuditChain
 from kailash.trust.pact.config import VerificationLevel
 
@@ -57,49 +55,27 @@ class TestFirstAnchorUsesCanonicalGenesis:
         )
 
     def test_first_anchor_hash_uses_canonical_sentinel(self) -> None:
-        """compute_hash() substitutes GENESIS_HASH when previous_hash is None."""
+        """compute_hash() substitutes GENESIS_HASH when previous_hash is None.
+
+        Asserts against the PRODUCTION canonical builder ``_canonical_input``
+        (issue #1404) — not a hand-mirror — so a production format drift fails
+        here loudly instead of being silently re-pinned.
+        """
         anchor = self._first_anchor()
-        actual_hash = anchor.compute_hash()
-
-        # Reproduce the canonical content string with GENESIS_HASH inline.
-        # Metadata uses compact separators per kailash-rs#449 §3 — this is
-        # what Rust's serde_json::to_string(&BTreeMap) emits byte-for-byte.
-        content = (
-            f"{anchor.anchor_id}:{anchor.sequence}:{GENESIS_HASH}:"
-            f"{anchor.agent_id}:{anchor.action}:{anchor.verification_level.value}:"
-            f"{anchor.envelope_id}:{anchor.result}:{anchor.timestamp.isoformat()}"
-        )
-        import json
-
-        content += ":" + json.dumps(
-            anchor.metadata,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-            default=str,
-        )
-        expected_hash = hashlib.sha256(content.encode()).hexdigest()
-
-        assert actual_hash == expected_hash
+        canonical = anchor._canonical_input()
+        # The genesis slot is the 64-zero sentinel inline (not None / "genesis").
+        assert f":{GENESIS_HASH}:" in canonical
+        # The digest is exactly SHA-256 of that production canonical input.
+        assert anchor.compute_hash() == hashlib.sha256(canonical.encode()).hexdigest()
 
     def test_first_anchor_hash_is_not_the_legacy_sentinel(self) -> None:
-        """Legacy "genesis" literal is no longer used — chains rooted at it fail."""
+        """Legacy "genesis" literal is no longer used — chains rooted at it fail.
+
+        Compares the current digest against the PRODUCTION legacy reproducer
+        ``_compute_hash_legacy`` (issue #1404) rather than a hand-mirror.
+        """
         anchor = self._first_anchor()
-        actual_hash = anchor.compute_hash()
-
-        # What the hash WOULD be under the legacy "genesis" literal
-        # (legacy form used the default json.dumps with spaced separators).
-        content = (
-            f"{anchor.anchor_id}:{anchor.sequence}:genesis:"
-            f"{anchor.agent_id}:{anchor.action}:{anchor.verification_level.value}:"
-            f"{anchor.envelope_id}:{anchor.result}:{anchor.timestamp.isoformat()}"
-        )
-        import json
-
-        content += ":" + json.dumps(anchor.metadata, sort_keys=True, default=str)
-        legacy_hash = hashlib.sha256(content.encode()).hexdigest()
-
-        assert actual_hash != legacy_hash, (
+        assert anchor.compute_hash() != anchor._compute_hash_legacy(), (
             "First anchor hash must NOT match the legacy 'genesis' sentinel. "
             "If this assertion is passing the legacy value, the breaking change "
             "in pact/audit.py regressed."

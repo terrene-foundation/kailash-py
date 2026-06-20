@@ -37,6 +37,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
+from kailash.trust._canonical import canonical_scalars
 from kailash.trust.signing.algorithm_id import (
     AlgorithmIdentifier,
     coerce_algorithm_id,
@@ -811,10 +812,20 @@ class ConstraintEnvelope:
         """SHA-256 of constraint content for tamper detection.
 
         Uses the canonical JSON representation (sorted keys, no extra whitespace).
+        Typed scalars route through the shared ``canonical_scalars`` whitelist
+        (no ``default=str``) so the tamper hash stays byte-for-byte cross-SDK
+        conformant if a future constraint field ever carries a non-JSON-native
+        type (set / datetime / Decimal). This is byte-neutral on every current
+        envelope: the constraint ``to_dict()`` methods already pre-normalize
+        ``datetime -> isoformat``, ``tuple -> list``, ``enum -> .value``, and
+        the financial fields are ``float`` (never ``Decimal``); ``metadata`` is
+        excluded by ``_hashable_dict`` so no free-form typed scalar reaches here.
+        Issue #1403/#1405 byte-neutral-conformance pattern (see
+        ``specs/trust-canonical-encoders.md``).
         """
-        payload = self._hashable_dict()
+        payload = canonical_scalars(self._hashable_dict())
         return hashlib.sha256(
-            json.dumps(payload, sort_keys=True, default=str).encode()
+            json.dumps(payload, sort_keys=True, allow_nan=False).encode()
         ).hexdigest()
 
     def _hashable_dict(self) -> dict[str, Any]:
@@ -1036,7 +1047,12 @@ class ConstraintEnvelope:
         Suitable for cross-SDK comparison and HMAC signing payloads.
         """
         return json.dumps(
-            self.to_dict(), sort_keys=True, separators=(",", ":"), default=str
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+            default=str,
         )
 
     @classmethod

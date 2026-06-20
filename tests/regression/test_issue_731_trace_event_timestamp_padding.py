@@ -24,10 +24,12 @@ These tests are paired:
 
 from __future__ import annotations
 
-import hashlib
+import base64
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -35,12 +37,48 @@ from kailash.diagnostics.protocols import (
     TraceEvent,
     TraceEventStatus,
     TraceEventType,
+    _canonical_json,
     compute_trace_event_fingerprint,
 )
 
 _FIXTURE_PATH = (
     Path(__file__).resolve().parents[2] / "test-vectors" / "trace-event-canonical.json"
 )
+
+# Required named vectors — removing any fails loudly naming the missing vector
+# (issue #1407); a count floor cannot detect a silently-deleted pinned vector.
+_REQUIRED_VECTOR_NAMES = frozenset(
+    {
+        "V1_zero_microsecond",
+        "V2_nonzero_microsecond",
+        "V3_full_event",
+        "V4_bmp_non_ascii_agent_id",
+        "V5_above_bmp_emoji_tool_name",
+        "V6_typed_scalar_payload",
+    }
+)
+
+
+def _decode_typed(obj: object) -> object:
+    """Reconstruct ``__pytype__``-tagged typed scalars from the fixture JSON.
+
+    Inverse of ``test-vectors/regenerate_canonical_vectors.py::encode_typed``;
+    the round-trip is validated by the byte pins below.
+    """
+    if isinstance(obj, dict):
+        tag = obj.get("__pytype__")
+        if tag == "Decimal":
+            return Decimal(obj["repr"])
+        if tag == "UUID":
+            return UUID(obj["repr"])
+        if tag == "datetime":
+            return datetime.fromisoformat(obj["repr"])
+        if tag == "set":
+            return {_decode_typed(v) for v in obj["items"]}
+        if tag == "bytes":
+            return base64.b64decode(obj["b64"])
+        return {k: _decode_typed(v) for k, v in obj.items()}
+    return obj
 
 
 @pytest.mark.regression
@@ -134,28 +172,30 @@ class TestCrossSDKFixtureParity:
         )
         for field_name in optional_fields:
             if field_name in input_repr:
-                kwargs[field_name] = input_repr[field_name]
+                value = input_repr[field_name]
+                if field_name == "payload" and value is not None:
+                    value = _decode_typed(value)  # __pytype__ → real Python objects
+                kwargs[field_name] = value
         if "status" in input_repr:
             kwargs["status"] = TraceEventStatus(input_repr["status"])
         return TraceEvent(**kwargs)
 
     def test_fixture_loads(self, fixture: dict) -> None:
-        assert fixture["spec_version"] == "1.0"
-        # V1/V2/V3 (#731 microsecond padding) + V4/V5 (#756 Unicode pin).
-        # Floor stays >= so future cross-SDK additions land cleanly.
-        assert len(fixture["vectors"]) >= 5
+        assert fixture["spec_version"] == "1.1"
+
+    def test_required_vectors_present(self, fixture: dict) -> None:
+        """Issue #1407: assert each REQUIRED named vector is present. A count
+        floor cannot detect a silently-deleted pinned vector; this names it."""
+        present = {v["name"] for v in fixture["vectors"]}
+        missing = _REQUIRED_VECTOR_NAMES - present
+        assert not missing, f"trace-event fixture missing required vectors: {missing}"
 
     def test_every_vector_canonical_json_byte_equal(self, fixture: dict) -> None:
+        # Assert against the PRODUCTION canonicalizer (issue #1404), not an
+        # inline json.dumps duplicate — a production drift must fail here.
         for v in fixture["vectors"]:
             evt = self._construct_event(v["input_repr"])
-            d = evt.to_dict()
-            canonical = json.dumps(
-                d,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True,
-                default=str,
-            )
+            canonical = _canonical_json(evt)
             assert canonical == v["expected_canonical_json"], (
                 f"vector {v['name']}: byte-divergence — "
                 f"got {canonical!r}, expected {v['expected_canonical_json']!r}"
@@ -164,15 +204,7 @@ class TestCrossSDKFixtureParity:
     def test_every_vector_fingerprint_matches(self, fixture: dict) -> None:
         for v in fixture["vectors"]:
             evt = self._construct_event(v["input_repr"])
-            d = evt.to_dict()
-            canonical = json.dumps(
-                d,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True,
-                default=str,
-            )
-            fp = hashlib.sha256(canonical.encode()).hexdigest()
+            fp = compute_trace_event_fingerprint(evt)
             assert fp == v["expected_fingerprint"], (
                 f"vector {v['name']}: fingerprint divergence — "
                 f"got {fp}, expected {v['expected_fingerprint']}"
@@ -190,3 +222,44 @@ class TestCrossSDKFixtureParity:
                 f"vector {v['name']}: compute_trace_event_fingerprint() "
                 f"disagrees with fixture expected_fingerprint."
             )
+
+
+@pytest.mark.regression
+class TestTypedScalarPayload:
+    """The free ``payload`` dict is the one field ``to_dict()`` does not
+    pre-normalize, so typed scalars in it MUST route through the canonical
+    ``canonical_scalars`` whitelist, never ``default=str`` (issue #1403/#1405).
+    """
+
+    def _make_event(self, payload: dict) -> TraceEvent:
+        return TraceEvent(
+            event_id="evt-typed",
+            event_type=TraceEventType.AGENT_STEP,
+            timestamp=datetime(2026, 4, 20, 12, 0, 0, 654321, tzinfo=timezone.utc),
+            run_id="run-typed",
+            agent_id="agent-typed",
+            cost_microdollars=0,
+            payload=payload,
+        )
+
+    def test_typed_payload_uses_canonical_whitelist(self) -> None:
+        evt = self._make_event(
+            {
+                "amount": Decimal("3.14"),
+                "deadline": datetime.fromisoformat("2026-05-06T07:08:09.000999+00:00"),
+                "labels": {"z", "a", "m"},
+            }
+        )
+        canonical = _canonical_json(evt)
+        # Decimal full precision, datetime isoformat, set → sorted list — never
+        # implementation-defined str().
+        assert '"amount":"3.14"' in canonical, canonical
+        assert '"deadline":"2026-05-06T07:08:09.000999+00:00"' in canonical, canonical
+        assert '"labels":["a","m","z"]' in canonical, canonical
+
+    def test_non_whitelisted_payload_raises_not_str_coerced(self) -> None:
+        """A non-JSON-native, non-whitelisted value MUST raise (no silent
+        ``str()`` coercion) — the structural proof ``default=str`` is gone."""
+        evt = self._make_event({"obj": object()})
+        with pytest.raises(TypeError):
+            compute_trace_event_fingerprint(evt)

@@ -186,22 +186,26 @@ def canonical_json_dumps(obj: Any) -> str:
 
     Sibling encoder — divergence is intentional (issue #1258). The trust-plane
     SIGNING family (``kailash.trust.signing.crypto.serialize_for_signing`` plus
-    the selective-disclosure / PACT-audit signers) uses the OPPOSITE
-    ``ensure_ascii=True`` (``\\uXXXX``-escaped, ASCII-only) because its Rust
-    counterpart and the pinned fixture ``tests/test-vectors/trust-plane-canonical.json``
-    (issue #959) escape non-ASCII. The two families NEVER cross-mix: no delegate
-    code path calls a signing encoder, and no signing path calls
-    ``canonical_json_dumps``. Note the signing family is NOT one byte-identical
-    encoder — ``serialize_for_signing`` carries a typed-scalar whitelist
-    (Decimal/UUID/datetime/bytes/Enum/dataclass) while the selective-disclosure
-    and PACT-audit signers use their own ``json.dumps(..., ensure_ascii=True,
-    sort_keys=True)`` call sites (``default=str``, no whitelist), so they diverge
-    byte-for-byte on typed-scalar inputs; what is uniform across the signing
-    family, and OPPOSITE to delegate, is ``ensure_ascii=True``. Each family
-    matches a different Rust serde contract, so
-    unifying them is a breaking cross-SDK signing-format migration requiring
-    coordinated Rust-side regeneration — NOT a casual edit (issue #1258).
-    Byte-vectors for this encoder are pinned in
+    the PACT audit-chain hash, the trace-event fingerprint, and the
+    selective-disclosure signers) uses the OPPOSITE ``ensure_ascii=True``
+    (``\\uXXXX``-escaped, ASCII-only) because its Rust counterpart and the pinned
+    fixture ``tests/test-vectors/trust-plane-canonical.json`` (issue #959) escape
+    non-ASCII. The two families NEVER cross-mix: no delegate code path calls a
+    signing encoder, and no signing path calls ``canonical_json_dumps``. As of
+    the 2026-06-20 canonical-conformance fix (issues #1403/#1405),
+    ``serialize_for_signing``, the PACT audit-chain hash
+    (``AuditAnchor._canonical_input``), and the trace-event fingerprint
+    (``compute_trace_event_fingerprint``) all share the SAME typed-scalar
+    whitelist ``kailash.trust._canonical.canonical_scalars`` (Decimal / UUID /
+    datetime / bytes / Enum / dataclass; NO ``default=str``). The
+    selective-disclosure witness signers still use a ``default=str`` call site
+    and so diverge byte-for-byte from the whitelisted members on typed-scalar
+    inputs — a tracked same-class follow-up (see ``specs/trust-canonical-encoders.md``).
+    What is uniform across the whole signing family, and OPPOSITE to delegate,
+    is ``ensure_ascii=True``. Each family matches a different Rust serde
+    contract, so unifying delegate + signing is a breaking cross-SDK
+    signing-format migration requiring coordinated Rust-side regeneration — NOT
+    a casual edit (issue #1258). Byte-vectors for this encoder are pinned in
     ``tests/test-vectors/delegate-canonical.json``.
 
     Args:
