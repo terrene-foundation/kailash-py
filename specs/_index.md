@@ -65,11 +65,12 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Trust Plane (EATP)
 
-| File                                 | Description                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| [trust-eatp.md](trust-eatp.md)       | EATP protocol, trust chains, constraint envelope, capability attestation, delegation                         |
-| [trust-posture.md](trust-posture.md) | TrustPosture state machine, BudgetTracker, PostureStore, audit store                                         |
-| [trust-crypto.md](trust-crypto.md)   | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop, EATP-12 Trust-Vault key-binding |
+| File                                                       | Description                                                                                                                                                          |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [trust-eatp.md](trust-eatp.md)                             | EATP protocol, trust chains, constraint envelope, capability attestation, delegation                                                                                 |
+| [trust-posture.md](trust-posture.md)                       | TrustPosture state machine, BudgetTracker, PostureStore, audit store                                                                                                 |
+| [trust-crypto.md](trust-crypto.md)                         | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop, EATP-12 Trust-Vault key-binding                                                         |
+| [trust-canonical-encoders.md](trust-canonical-encoders.md) | Canonical-JSON encoder families (Family A delegate / Family B signing), typed-scalar whitelist, six-digit-microsecond timestamp contract, cross-SDK byte conformance |
 
 ## ML Lifecycle 2.0 — Engine Core
 
