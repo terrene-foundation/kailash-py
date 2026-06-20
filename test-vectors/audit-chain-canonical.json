@@ -1,10 +1,19 @@
 {
-  "spec_version": "1.0",
-  "description": "Cross-SDK canonical fixtures for AuditAnchor.compute_hash() byte-equality + SHA-256 hex digest stability between kailash-py and kailash-rs (per `kailash-rs#449` audit-chain canonical-input contract). Source: kailash-py issue #757 (U1 BMP non-ASCII, U2 above-BMP/emoji surrogate pairs). Vector inputs are reproducible from the embedded `input_repr` field. The canonical content is `{anchor_id}:{sequence}:{previous_hash_or_GENESIS_HASH}:{agent_id}:{action}:{verification_level}:{envelope_id_or_empty}:{result}:{iso8601_+00:00}[:{metadata_json_sorted_compact_ensure_ascii}]`. The `ensure_ascii=True` contract in metadata serialization requires non-ASCII codepoints render as \\uXXXX escapes (U+FFFF and below) and surrogate pairs (above U+FFFF) per RFC 8259 §7.",
+  "spec_version": "1.1",
+  "description": "Cross-SDK canonical fixtures for AuditAnchor.compute_hash() byte-equality + SHA-256 hex digest stability between kailash-py and kailash-rs (kailash-rs#449 audit-chain canonical-input contract). spec_version 1.1 (2026-06-20): timestamp is ALWAYS rendered isoformat(timespec=\"microseconds\") (six fractional digits) and metadata typed scalars route through the canonical_scalars whitelist (no default=str) — issues #1400/#1405. Canonical content: {anchor_id}:{sequence}:{previous_hash_or_GENESIS_HASH}:{agent_id}:{action}:{verification_level}:{envelope_id_or_empty}:{result}:{iso8601_+00:00_with_6_microsecond_digits}[:{metadata_json_sorted_compact_ensure_ascii}]. Typed-scalar metadata values use the __pytype__ tag convention (see test-vectors/regenerate_canonical_vectors.py).",
   "genesis_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "provenance": {
+    "producer": "kailash-py:AuditAnchor._canonical_input / compute_hash",
+    "generator_script": "test-vectors/regenerate_canonical_vectors.py",
+    "python_version": "3.13",
+    "generated_at": "2026-06-20T00:00:00+00:00",
+    "cross_impl_status": "python-self-consistent",
+    "cross_impl_note": "expected_* values are reproduced by the Python production path. kailash-rs is expected to reproduce each value byte-for-byte; the independent rust digest is verified at the post-Wave-6 cross-SDK gate, NOT in this repo's CI. See test-vectors/README.md."
+  },
   "vectors": [
     {
       "name": "U1_bmp_metadata_key_and_value",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
       "input_repr": {
         "anchor_id": "anc-u1-001",
         "sequence": 0,
@@ -15,13 +24,17 @@
         "envelope_id": "env-u1",
         "result": "success",
         "timestamp": "2026-01-15T11:00:00+00:00",
-        "metadata": { "role": "café", "中文": "value" }
+        "metadata": {
+          "role": "café",
+          "中文": "value"
+        }
       },
-      "expected_canonical_input": "anc-u1-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u1:envelope_created:AUTO_APPROVED:env-u1:success:2026-01-15T11:00:00+00:00:{\"role\":\"caf\\u00e9\",\"\\u4e2d\\u6587\":\"value\"}",
-      "expected_sha256": "6946e734daa8279d4dc173918109995e0d10b647a7d3cd0b36aeb4114e8e12c3"
+      "expected_canonical_input": "anc-u1-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u1:envelope_created:AUTO_APPROVED:env-u1:success:2026-01-15T11:00:00.000000+00:00:{\"role\":\"caf\\u00e9\",\"\\u4e2d\\u6587\":\"value\"}",
+      "expected_sha256": "f1c755c8c5ae77c7cd4d99c8e3e19a10de925f1336f7dd1826573bc675e9ff71"
     },
     {
       "name": "U2_above_bmp_emoji_metadata_value",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
       "input_repr": {
         "anchor_id": "anc-u2-001",
         "sequence": 0,
@@ -32,10 +45,91 @@
         "envelope_id": "env-u2",
         "result": "success",
         "timestamp": "2026-01-15T12:00:00+00:00",
-        "metadata": { "celebration": "🎉🚀" }
+        "metadata": {
+          "celebration": "🎉🚀"
+        }
       },
-      "expected_canonical_input": "anc-u2-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u2:envelope_created:AUTO_APPROVED:env-u2:success:2026-01-15T12:00:00+00:00:{\"celebration\":\"\\ud83c\\udf89\\ud83d\\ude80\"}",
-      "expected_sha256": "4bba3681171049d96f6ba5863ae33dafdfa6bc0d82e26dca5267f21021872427"
+      "expected_canonical_input": "anc-u2-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u2:envelope_created:AUTO_APPROVED:env-u2:success:2026-01-15T12:00:00.000000+00:00:{\"celebration\":\"\\ud83c\\udf89\\ud83d\\ude80\"}",
+      "expected_sha256": "efd824a248fbc469e1850efde6b9e0639fe30cea3d3b70cfb386f7eb107b35d9"
+    },
+    {
+      "name": "U3_nonzero_microsecond",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
+      "input_repr": {
+        "anchor_id": "anc-u3-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u3",
+        "action": "access_granted",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u3",
+        "result": "success",
+        "timestamp": "2026-01-15T13:00:00.123456+00:00",
+        "metadata": {
+          "role": "operator"
+        }
+      },
+      "expected_canonical_input": "anc-u3-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u3:access_granted:AUTO_APPROVED:env-u3:success:2026-01-15T13:00:00.123456+00:00:{\"role\":\"operator\"}",
+      "expected_sha256": "0d0f0fa443a47a30f4571c1c90bd91103451d6ed386d517adb8dc401c73388ab"
+    },
+    {
+      "name": "U4_whole_second_explicit_000000",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
+      "input_repr": {
+        "anchor_id": "anc-u4-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u4",
+        "action": "access_granted",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u4",
+        "result": "success",
+        "timestamp": "2026-01-15T14:00:00+00:00",
+        "metadata": {
+          "role": "operator"
+        }
+      },
+      "expected_canonical_input": "anc-u4-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u4:access_granted:AUTO_APPROVED:env-u4:success:2026-01-15T14:00:00.000000+00:00:{\"role\":\"operator\"}",
+      "expected_sha256": "7d5e393e867a8a85e0c9620a86860675b7715152ede274667fd90add60336372"
+    },
+    {
+      "name": "U5_typed_scalar_metadata",
+      "expected_source": "kailash-py:AuditAnchor.compute_hash (self-consistent)",
+      "input_repr": {
+        "anchor_id": "anc-u5-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u5",
+        "action": "budget_check",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u5",
+        "result": "success",
+        "timestamp": "2026-01-15T15:00:00.500000+00:00",
+        "metadata": {
+          "amount": {
+            "__pytype__": "Decimal",
+            "repr": "1.50"
+          },
+          "id": {
+            "__pytype__": "UUID",
+            "repr": "12345678-1234-5678-1234-567812345678"
+          },
+          "when": {
+            "__pytype__": "datetime",
+            "repr": "2026-03-04T05:06:07.000123+00:00"
+          },
+          "tags": {
+            "__pytype__": "set",
+            "items": [
+              "alpha",
+              "beta",
+              "gamma"
+            ]
+          }
+        }
+      },
+      "expected_canonical_input": "anc-u5-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u5:budget_check:AUTO_APPROVED:env-u5:success:2026-01-15T15:00:00.500000+00:00:{\"amount\":\"1.50\",\"id\":\"12345678-1234-5678-1234-567812345678\",\"tags\":[\"alpha\",\"beta\",\"gamma\"],\"when\":\"2026-03-04T05:06:07.000123+00:00\"}",
+      "expected_sha256": "da88d1a54be64a5da51097e493986b6131af0ec4fca490505ce558e3e9339263"
     }
   ]
 }

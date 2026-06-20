@@ -43,6 +43,8 @@ from typing import (
     runtime_checkable,
 )
 
+from kailash.trust._canonical import canonical_scalars
+
 logger_name = __name__  # deliberately NOT binding a logger at module scope —
 # zero-side-effect import is the contract for a protocol-only module.
 
@@ -264,36 +266,47 @@ class TraceEvent:
         )
 
 
+def _canonical_json(event: TraceEvent) -> str:
+    """Build the canonical JSON string the fingerprint hashes.
+
+    The SINGLE production source of the canonical bytes; both
+    :func:`compute_trace_event_fingerprint` and the regression tests assert
+    against this (no test-side re-implementation — issue #1404).
+
+    ``event.to_dict()`` already neutralizes the dataclass's own enums and
+    datetime (``isoformat(timespec="microseconds")``). The free ``payload``
+    dict is the one field whose contents are not pre-normalized, so it is
+    routed through ``canonical_scalars`` (the shared typed-scalar whitelist)
+    — replacing the former ``default=str`` (issue #1405 / #1403): a
+    ``Decimal`` / ``UUID`` / ``datetime`` / ``set`` inside ``payload`` is now
+    encoded deterministically rather than via implementation-defined
+    ``str()`` (which a peer SDK has no reason to reproduce). A non-JSON-native,
+    non-whitelisted value raises ``TypeError`` rather than silently
+    stringifying. Config: ``sort_keys=True, separators=(",", ":"),
+    ensure_ascii=True`` — matches Rust ``serde_json::to_string(&BTreeMap)``
+    byte-for-byte on the ASCII-escaped signing family.
+    """
+    return json.dumps(
+        canonical_scalars(event.to_dict()),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+
+
 def compute_trace_event_fingerprint(event: TraceEvent) -> str:
     """Compute the canonical SHA-256 fingerprint of a ``TraceEvent``.
 
     The fingerprint is the cross-SDK correlation anchor — Python and
     Rust emitters MUST produce identical 64-hex-char digests for the
-    same logical input.
-
-    Canonicalization contract (matches ``kailash-rs#449`` audit-chain
-    and ``rules/event-payload-classification.md`` §2 cost-tracker
-    fingerprint):
-
-      - ``event.to_dict()`` yields the canonical-shape dict.
-      - ``json.dumps(..., sort_keys=True, separators=(",", ":"),
-         ensure_ascii=True, default=str)`` produces compact JSON
-         matching Rust ``serde_json::to_string(&BTreeMap)`` byte-for-byte.
-      - SHA-256 of the UTF-8 bytes, hex-encoded lowercase.
+    same logical input. The canonical bytes are produced by
+    :func:`_canonical_json` (SHA-256 of the UTF-8 bytes, hex lowercase).
 
     Verification in consumers uses ``hmac.compare_digest`` — never
     ``==`` on hex strings (timing side-channel; see ``rules/security.md``
     § Rust Credential Comparison and ``rules/eatp.md`` § Cryptography).
     """
-    d = event.to_dict()
-    canonical = json.dumps(
-        d,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        default=str,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashlib.sha256(_canonical_json(event).encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------

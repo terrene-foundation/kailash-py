@@ -12,11 +12,7 @@ import base64
 import hashlib
 import json
 import secrets
-import uuid
-from dataclasses import asdict, dataclass, is_dataclass
-from datetime import date, datetime, time
-from decimal import Decimal
-from enum import Enum
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple, Union
 
 try:
@@ -30,6 +26,7 @@ except ImportError:
     VerifyKey = None
     BadSignatureError = Exception
 
+from kailash.trust._canonical import canonical_scalars
 from kailash.trust.exceptions import InvalidSignatureError
 from kailash.trust.reasoning.traces import ReasoningTrace
 
@@ -279,50 +276,12 @@ def serialize_for_signing(obj: Any) -> str:
         '{"a":1,"b":2}'
     """
 
-    def convert(item: Any) -> Any:
-        """Recursively convert objects to JSON-serializable types.
-
-        Type whitelist for byte-stable canonical bytes (issue #959):
-
-        * dataclasses → asdict() recursively
-        * dict → recursively, keys sorted
-        * frozenset / set → sorted list
-        * list / tuple → recursively
-        * datetime / date / time → isoformat() (canonical Python form)
-        * Decimal → str() with full precision preserved (e.g. ``Decimal("1.50")``
-          serializes as ``"1.50"``, NOT ``"1.5"``)
-        * UUID → hex string (``str(u)`` produces the canonical 8-4-4-4-12 form)
-        * Enum → ``.value``
-        * bytes → base64
-
-        Native JSON primitives (str, int, float, bool, None) pass through
-        unchanged. ANY other type is left for ``json.dumps`` to reject with
-        ``TypeError`` — there is no ``default=str`` fallback, because
-        ``str(obj)`` is implementation-defined and breaks cross-version /
-        cross-SDK byte parity.
-        """
-        if is_dataclass(item) and not isinstance(item, type):
-            return convert(asdict(item))
-        elif isinstance(item, dict):
-            return {k: convert(v) for k, v in sorted(item.items())}
-        elif isinstance(item, (frozenset, set)):
-            return [convert(i) for i in sorted(item)]
-        elif isinstance(item, (list, tuple)):
-            return [convert(i) for i in item]
-        elif isinstance(item, (datetime, date, time)):
-            return item.isoformat()
-        elif isinstance(item, Decimal):
-            return str(item)
-        elif isinstance(item, uuid.UUID):
-            return str(item)
-        elif isinstance(item, Enum):
-            return item.value
-        elif isinstance(item, bytes):
-            return base64.b64encode(item).decode("utf-8")
-        else:
-            return item
-
-    converted = convert(obj)
+    # The typed-scalar whitelist lives in ``kailash.trust._canonical`` so the
+    # audit-chain integrity hash and the trace-event fingerprint share ONE
+    # deterministic policy (issue #1403). Byte-output is identical to the
+    # former nested ``convert()`` closure (issue #959), pinned by
+    # ``tests/test-vectors/trust-plane-canonical.json``.
+    converted = canonical_scalars(obj)
     return json.dumps(converted, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 

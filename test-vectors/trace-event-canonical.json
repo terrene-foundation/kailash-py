@@ -1,9 +1,18 @@
 {
-  "spec_version": "1.0",
-  "description": "Cross-SDK canonical fixtures for TraceEvent.to_dict() byte-equality + fingerprint stability between kailash-py and kailash-rs. Generated 2026-04-30 from the corrected isoformat(timespec=microseconds) path. Source: kailash-py issue #731 fix (V1/V2/V3) + #756 Unicode pin (V4 BMP non-ASCII, V5 above-BMP/emoji surrogate pairs). Vector inputs are reproducible from the embedded `input_repr` field. The `ensure_ascii=True` contract requires non-ASCII codepoints render as \\uXXXX escapes (U+FFFF and below) and surrogate pairs (above U+FFFF) per RFC 8259 §7.",
+  "spec_version": "1.1",
+  "description": "Cross-SDK canonical fixtures for TraceEvent.to_dict() byte-equality + fingerprint stability between kailash-py and kailash-rs. spec_version 1.1 (2026-06-20): adds V6 typed-scalar payload exercising the canonical_scalars whitelist that replaced default=str on the fingerprint path (issues #1403/#1405). V1-V5 bytes are unchanged from spec 1.0 (to_dict already emitted timespec=microseconds). The ensure_ascii=True contract requires non-ASCII codepoints render as \\uXXXX escapes (and surrogate pairs above U+FFFF) per RFC 8259 §7. Typed payload values use the __pytype__ tag convention (see test-vectors/regenerate_canonical_vectors.py).",
+  "provenance": {
+    "producer": "kailash-py:protocols._canonical_json / compute_trace_event_fingerprint",
+    "generator_script": "test-vectors/regenerate_canonical_vectors.py",
+    "python_version": "3.13",
+    "generated_at": "2026-06-20T00:00:00+00:00",
+    "cross_impl_status": "python-self-consistent",
+    "cross_impl_note": "expected_* values are reproduced by the Python production path. kailash-rs is expected to reproduce each value byte-for-byte; the independent rust digest is verified at the post-Wave-6 cross-SDK gate, NOT in this repo's CI. See test-vectors/README.md."
+  },
   "vectors": [
     {
       "name": "V1_zero_microsecond",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
       "input_repr": {
         "event_id": "evt-V1",
         "run_id": "run-V1",
@@ -17,6 +26,7 @@
     },
     {
       "name": "V2_nonzero_microsecond",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
       "input_repr": {
         "event_id": "evt-V2",
         "run_id": "run-V2",
@@ -32,6 +42,7 @@
     },
     {
       "name": "V3_full_event",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
       "input_repr": {
         "event_id": "evt-V3",
         "run_id": "run-V3",
@@ -56,6 +67,7 @@
     },
     {
       "name": "V4_bmp_non_ascii_agent_id",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
       "input_repr": {
         "event_id": "evt-v4-bmp",
         "run_id": "run-v4",
@@ -69,6 +81,7 @@
     },
     {
       "name": "V5_above_bmp_emoji_tool_name",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
       "input_repr": {
         "event_id": "evt-v5-above-bmp",
         "run_id": "run-v5",
@@ -82,6 +95,42 @@
       },
       "expected_canonical_json": "{\"agent_id\":\"agent-v5\",\"completion_tokens\":null,\"cost_microdollars\":0,\"duration_ms\":10.0,\"envelope_id\":null,\"event_id\":\"evt-v5-above-bmp\",\"event_type\":\"tool.call.end\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":null,\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-v5\",\"span_id\":null,\"status\":\"ok\",\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.000000+00:00\",\"tool_name\":\"\\ud83c\\udf89\\ud83d\\ude80\",\"trace_id\":null}",
       "expected_fingerprint": "2d372a1a42a2221ba3fb014062d735b076d11371b0f1390919b53fe908a23d1f"
+    },
+    {
+      "name": "V6_typed_scalar_payload",
+      "expected_source": "kailash-py:compute_trace_event_fingerprint (self-consistent)",
+      "input_repr": {
+        "event_id": "evt-v6-typed",
+        "run_id": "run-v6",
+        "agent_id": "agent-v6",
+        "cost_microdollars": 99,
+        "event_type": "agent.step",
+        "timestamp": "2026-04-20T12:00:00.654321+00:00",
+        "payload": {
+          "amount": {
+            "__pytype__": "Decimal",
+            "repr": "3.14"
+          },
+          "request_id": {
+            "__pytype__": "UUID",
+            "repr": "00000000-0000-0000-0000-0000000000ff"
+          },
+          "deadline": {
+            "__pytype__": "datetime",
+            "repr": "2026-05-06T07:08:09.000999+00:00"
+          },
+          "labels": {
+            "__pytype__": "set",
+            "items": [
+              "a",
+              "m",
+              "z"
+            ]
+          }
+        }
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-v6\",\"completion_tokens\":null,\"cost_microdollars\":99,\"duration_ms\":null,\"envelope_id\":null,\"event_id\":\"evt-v6-typed\",\"event_type\":\"agent.step\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":{\"amount\":\"3.14\",\"deadline\":\"2026-05-06T07:08:09.000999+00:00\",\"labels\":[\"a\",\"m\",\"z\"],\"request_id\":\"00000000-0000-0000-0000-0000000000ff\"},\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-v6\",\"span_id\":null,\"status\":null,\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.654321+00:00\",\"tool_name\":null,\"trace_id\":null}",
+      "expected_fingerprint": "2104edf51b193eb8dfa70b564d88628c75b31ba8e0e92c77348cb45718b399f1"
     }
   ]
 }

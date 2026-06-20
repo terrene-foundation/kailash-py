@@ -4,7 +4,7 @@
   "conformance_requirement": "N4",
   "genesis_hash_sentinel": "0000000000000000000000000000000000000000000000000000000000000000",
   "genesis_hash_note": "Genesis sentinel changed from 'genesis' literal to '0'*64 on 2026-04-20 per cross-SDK fingerprint reconciliation (kailash-rs#449). Breaking change — chains rooted at the prior sentinel will not verify. Canonical across all Kailash SDKs per EATP D6.",
-  "metadata_canonicalisation": "Compact JSON separators (',', ':'), sort_keys=True, ensure_ascii=True. Matches Rust serde_json::to_string(&BTreeMap) output byte-for-byte. Python emitters MUST use json.dumps(meta, sort_keys=True, separators=(',', ':'), ensure_ascii=True, default=str).",
+  "metadata_canonicalisation": "Compact JSON separators (',', ':'), sort_keys=True, ensure_ascii=True, typed scalars via kailash.trust._canonical.canonical_scalars (NO default=str). Timestamp rendered isoformat(timespec='microseconds') — six fractional digits (2026-06-20 canonical-conformance fix, issues #1400/#1405). Matches Rust serde_json::to_string(&BTreeMap) byte-for-byte.",
   "input": {
     "anchor_id": "anc-n4-001",
     "sequence": 0,
@@ -14,9 +14,12 @@
     "verification_level": "AUTO_APPROVED",
     "envelope_id": "env-001",
     "result": "success",
-    "metadata": { "pact_action": "envelope_created", "role_address": "D1-R1" },
+    "metadata": {
+      "pact_action": "envelope_created",
+      "role_address": "D1-R1"
+    },
     "timestamp": "2026-01-15T10:30:00+00:00"
   },
-  "expected_content_hash": "ef25ab8afeb63c8d7d55d1d4583d5d0c796e74503a219bb4c400c323d5c17086",
-  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-n4-001\", \"content_hash\": \"ef25ab8afeb63c8d7d55d1d4583d5d0c796e74503a219bb4c400c323d5c17086\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"sequence\": 0, \"timestamp\": \"2026-01-15T10:30:00+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
+  "expected_content_hash": "edfdf52b3e0069081e585262193d3bcb69fadd9061703ec03da4184986fcf363",
+  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-n4-001\", \"content_hash\": \"edfdf52b3e0069081e585262193d3bcb69fadd9061703ec03da4184986fcf363\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"sequence\": 0, \"timestamp\": \"2026-01-15T10:30:00.000000+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
 }

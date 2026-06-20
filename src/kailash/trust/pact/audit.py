@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from kailash.trust._canonical import canonical_scalars
 from kailash.trust.pact.config import VerificationLevel
 from kailash.trust.pact.exceptions import PactError
 
@@ -190,11 +191,32 @@ class AuditAnchor:
         self.envelope_id = envelope_id
         self.result = result
         self.metadata = metadata or {}
-        self.timestamp = timestamp or datetime.now(UTC)
+        # Timestamp MUST be timezone-aware. A naive datetime serializes with
+        # NO offset, so its canonical pre-image drops the +00:00 field and
+        # hash-diverges from an offset-bearing peer (kailash-rs always emits
+        # +00:00). Construction is strict (reject naive — a programming error),
+        # mirroring TraceEvent.__post_init__. A non-UTC offset is normalized to
+        # UTC so the canonical pre-image always renders +00:00 for the same
+        # instant. (Issue #1401. Deserialization of historical records is the
+        # lenient counterpart — see from_dict.)
+        if timestamp is None:
+            self.timestamp = datetime.now(UTC)
+        elif timestamp.tzinfo is None:
+            raise ValueError(
+                "AuditAnchor.timestamp must be timezone-aware (UTC). "
+                "Got a naive datetime — use datetime.now(UTC) or "
+                "datetime.fromisoformat with an explicit offset."
+            )
+        else:
+            self.timestamp = timestamp.astimezone(UTC)
         self.content_hash = content_hash
 
-    def compute_hash(self) -> str:
-        """Compute the content hash for this anchor.
+    def _canonical_input(self) -> str:
+        """Build the canonical pre-image string that ``compute_hash`` hashes.
+
+        This is the SINGLE production source of the canonical-input bytes;
+        ``compute_hash`` hashes its output and the regression tests assert
+        against it directly (no test-side re-implementation — issue #1404).
 
         Canonical input format (cross-SDK contract, see kailash-rs#449 §2):
 
@@ -202,26 +224,45 @@ class AuditAnchor:
             {verification_level}:{envelope_id_or_empty}:{result}:
             {iso8601_utc_with_+00:00}[:{metadata_json_sorted_compact}]
 
-        Metadata MUST use compact separators (``","``, ``":"``) and
-        ASCII-escaped strings so Python's output matches Rust's
-        ``serde_json::to_string(&BTreeMap)`` byte-for-byte. Empty metadata
-        omits the suffix entirely (no trailing ``:``).
+        * Timestamp: ``isoformat(timespec="microseconds")`` — ALWAYS six
+          fractional-second digits and an explicit ``+00:00`` offset. Bare
+          ``isoformat()`` elides the fraction when ``microsecond == 0`` but
+          emits six digits otherwise, so a whole-second anchor and a peer SDK
+          that always emits six digits would hash-diverge (issue #1400, the
+          same fix TraceEvent.to_dict already carries). ``__init__`` /
+          ``from_dict`` guarantee ``self.timestamp`` is UTC-aware so the offset
+          is always ``+00:00`` (issue #1401).
+        * Metadata: routed through ``canonical_scalars`` (the shared
+          typed-scalar whitelist) then ``json.dumps`` with compact separators
+          + ``ensure_ascii=True``. NO ``default=str`` — a ``Decimal`` / ``UUID``
+          / ``datetime`` / ``set`` in metadata is encoded deterministically,
+          never via implementation-defined ``str()`` (issue #1405 / #1403).
+          A non-JSON-native, non-whitelisted value raises ``TypeError`` rather
+          than silently stringifying. Empty metadata omits the suffix entirely
+          (no trailing ``:``).
         """
         content = (
             f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
             f"{self.agent_id}:{self.action}:{self.verification_level.value}:"
-            f"{self.envelope_id or ''}:{self.result}:{self.timestamp.isoformat()}"
+            f"{self.envelope_id or ''}:{self.result}:"
+            f"{self.timestamp.isoformat(timespec='microseconds')}"
         )
         if self.metadata:
             meta_str = json.dumps(
-                self.metadata,
+                canonical_scalars(self.metadata),
                 sort_keys=True,
                 separators=(",", ":"),
-                default=str,
                 ensure_ascii=True,
             )
             content += f":{meta_str}"
-        return hashlib.sha256(content.encode()).hexdigest()
+        return content
+
+    def compute_hash(self) -> str:
+        """Compute the SHA-256 content hash for this anchor.
+
+        Hashes the canonical pre-image built by :meth:`_canonical_input`.
+        """
+        return hashlib.sha256(self._canonical_input().encode()).hexdigest()
 
     def seal(self) -> None:
         """Seal this anchor by computing and storing its content hash."""
@@ -260,6 +301,44 @@ class AuditAnchor:
             content += f":{meta_str}"
         return hashlib.sha256(content.encode()).hexdigest()
 
+    def _compute_hash_prefix_format(self) -> str:
+        """Recompute the content hash under the 2026-04-20 .. 2026-06-20 contract.
+
+        Used ONLY for forensic disambiguation in ``verify_chain_integrity`` to
+        distinguish chains sealed AFTER the GENESIS_HASH migration but BEFORE
+        the 2026-06-20 canonical-conformance fix (issue #1400/#1405) from real
+        tampering. That prefix format used the ``GENESIS_HASH`` sentinel (so it
+        is NOT a pre-2026-04-20 legacy chain) BUT still carried the two pre-fix
+        byte differences:
+
+        * bare ``isoformat()`` — fractional second elided when ``microsecond``
+          is 0 (the issue #1400 bug, now fixed to ``timespec="microseconds"``);
+        * metadata ``json.dumps(..., default=str)`` — implementation-defined
+          ``str()`` on typed scalars (the issue #1405 bug, now routed through
+          ``canonical_scalars``).
+
+        An anchor whose stored ``content_hash`` matches this recompute is a
+        pre-2026-06-20 chain that requires re-sealing, NOT a tampered record.
+        This is the sibling of :meth:`_compute_hash_legacy` for the newer
+        format boundary; it is deliberately byte-verbatim with the pre-fix
+        ``_canonical_input`` so it reproduces historically-sealed bytes exactly.
+        """
+        content = (
+            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
+            f"{self.agent_id}:{self.action}:{self.verification_level.value}:"
+            f"{self.envelope_id or ''}:{self.result}:{self.timestamp.isoformat()}"
+        )
+        if self.metadata:
+            meta_str = json.dumps(
+                self.metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+                ensure_ascii=True,
+            )
+            content += f":{meta_str}"
+        return hashlib.sha256(content.encode()).hexdigest()
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
         return {
@@ -272,7 +351,7 @@ class AuditAnchor:
             "envelope_id": self.envelope_id,
             "result": self.result,
             "metadata": self.metadata,
-            "timestamp": self.timestamp.isoformat(),
+            "timestamp": self.timestamp.isoformat(timespec="microseconds"),
             "content_hash": self.content_hash,
         }
 
@@ -282,6 +361,14 @@ class AuditAnchor:
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
+        if isinstance(ts, datetime) and ts.tzinfo is None:
+            # Lenient on read (issue #1401): a historical record may have been
+            # persisted with a naive timestamp (pre-fix to_dict emitted whatever
+            # tz the anchor held). Normalize naive→UTC so AuditChain.from_dict
+            # can LOAD it instead of fail-closed raising — contrast __init__,
+            # which REJECTS naive on NEW construction. Re-sealing under the
+            # fixed canonical format then re-anchors it with an explicit +00:00.
+            ts = ts.replace(tzinfo=UTC)
         return cls(
             anchor_id=data.get("anchor_id", ""),
             sequence=data.get("sequence", 0),
@@ -394,11 +481,26 @@ class AuditChain:
                 )
 
             if not anchor.verify_integrity():
-                # Distinguish legacy-sentinel chains (pre-2026-04-20 migration)
-                # from real tampering. An anchor whose stored content_hash
-                # matches the legacy compute is a pre-migration chain that
-                # requires re-seal, not a forensic incident.
+                # The stored content_hash does not match the CURRENT canonical
+                # format. Before calling it tampering, try the two historical
+                # format recomputes — a match means the chain pre-dates a
+                # canonical-format migration and needs re-sealing, NOT a
+                # forensic incident. Ladder (newest → oldest): current
+                # (already failed above) → pre-2026-06-20 prefix format
+                # (whole-second timestamp and/or default=str typed-scalar
+                # metadata) → pre-2026-04-20 legacy genesis sentinel → tampered.
                 if anchor.is_sealed and hmac_mod.compare_digest(
+                    anchor.content_hash, anchor._compute_hash_prefix_format()
+                ):
+                    errors.append(
+                        f"Anchor {i}: pre-2026-06-20 canonical format detected "
+                        f"(whole-second timestamp and/or default=str typed-scalar "
+                        f"metadata) — chain pre-dates the canonical-conformance fix "
+                        f"(issue #1400/#1405). Re-seal required: re-invoke "
+                        f"AuditAnchor.seal() across every anchor in the chain. "
+                        f"This is NOT tampering."
+                    )
+                elif anchor.is_sealed and hmac_mod.compare_digest(
                     anchor.content_hash, anchor._compute_hash_legacy()
                 ):
                     errors.append(
