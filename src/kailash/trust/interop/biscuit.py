@@ -166,7 +166,9 @@ def _serialize_authority_block(envelope: ChainConstraintEnvelope) -> bytes:
         "constraints": constraint_facts,
     }
 
-    return json.dumps(block, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return json.dumps(
+        block, separators=(",", ":"), sort_keys=True, allow_nan=False
+    ).encode("utf-8")
 
 
 def _deserialize_authority_block(data: bytes) -> ChainConstraintEnvelope:

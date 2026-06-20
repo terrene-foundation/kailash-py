@@ -187,18 +187,30 @@ class TestTrustSigningPreimageRejectsNanInf:
 
 @pytest.mark.regression
 def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
-    """AST invariant: EVERY canonical ``json.dumps`` in a hash/sign function across
-    the trust plane carries ``allow_nan=False`` — except the documented exclusions.
+    """AST invariant: EVERY canonical ``json.dumps`` in a sign/hash MODULE across
+    the trust plane + PACT carries ``allow_nan=False`` — except documented exclusions.
 
     This is the durable guard for the trust-plane-wide NaN/Inf multi-site sweep
     (``security.md`` Multi-Site Kwarg Plumbing). It fails loudly if a future
     refactor (a) drops ``allow_nan=False`` from any signing/hash PRE-IMAGE site,
     OR (b) adds a NEW canonical signing/hash ``json.dumps`` without it — the exact
-    "missed sibling" failure the sweep closed. It is a STRUCTURAL (AST-shape) probe
-    per ``probe-driven-verification.md`` Rule 3, not a source-grep: it parses the
-    AST, scopes to functions that hash/sign, and only flags CANONICAL calls
-    (``sort_keys`` / ``separators`` — i.e. deterministic pre-images), never
-    ``indent=`` human/file/CLI/dashboard output.
+    "missed sibling" failure the sweep closed. STRUCTURAL (AST-shape) probe per
+    ``probe-driven-verification.md`` Rule 3, not a source-grep.
+
+    MODULE-granularity (NOT per-function): a pre-image ``json.dumps`` often lives
+    in a tiny bytes-producing HELPER (``_serialize_authority_block`` /
+    ``_b64url_encode_json`` / ``_json_encode_canonical``) while the ``_ed25519_sign``
+    call is in the CALLER — a per-function check false-negatives (the 2026-06-21
+    convergence redteam found biscuit/sd_jwt/ucan exactly this way). Gating on the
+    MODULE containing any sign/hash token catches the helper-encoder pattern. Only
+    CANONICAL calls (``sort_keys`` / ``separators`` — deterministic pre-images) are
+    flagged, never ``indent=`` human/file/CLI/dashboard output.
+
+    LIMITATION (honest): a cross-FILE helper that returns a canonical STRING whose
+    CALLER (in another file whose own module has no sign/hash token) hashes it is
+    NOT caught structurally — that pattern is the semantic ``/redteam`` gate's job
+    (it traced ``pact/conformance/vectors.py::canonical_json_dumps`` →
+    ``runner.py::_sha256_hex`` and surfaced it; now fixed + guarded here).
 
     DOCUMENTED EXCLUSIONS (correct by design):
     - ``pact/audit.py::_compute_hash_legacy`` / ``_compute_hash_prefix_format`` —
@@ -213,9 +225,16 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
     import ast
     import pathlib
 
-    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash" / "trust"
-    assert root.is_dir(), f"trust plane not found at {root}"
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    roots = [
+        repo / "src" / "kailash" / "trust",
+        repo / "packages" / "kailash-pact" / "src",
+    ]
 
+    # MODULE-granularity sign/hash signal — a json.dumps pre-image is often in a
+    # tiny bytes-producing HELPER while the _ed25519_sign / sha256 call is in the
+    # CALLER, so a per-function check false-negatives (the 2026-06-21 redteam found
+    # biscuit/sd_jwt/ucan that way). Gate on the MODULE containing any sign/hash token.
     HASHY = (
         "sha256",
         "sha512",
@@ -223,10 +242,13 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
         "hexdigest",
         "digest",
         ".sign(",
+        "_sign",
         "signing",
         "compare_digest",
+        "ed25519",
+        "Ed25519",
     )
-    # (file-suffix, function-name) pairs deliberately excluded (see docstring):
+    # (path-suffix, function-name) deliberately excluded (see docstring):
     #   pact/audit.py legacy/prefix — forensic pre-fix-byte reproduction;
     #   enforce/decorators.py _hash_* — local in-process memoization caches.
     EXCLUDED = {
@@ -236,41 +258,96 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
         ("enforce/decorators.py", "_hash_result"),
     }
 
-    offenders: list[str] = []
-    for p in root.rglob("*.py"):
-        txt = p.read_text()
-        try:
-            tree = ast.parse(txt)
-        except SyntaxError:
-            continue
+    def _enclosing_fn(tree: ast.AST, lineno: int) -> str:
+        best = None
         for fn in ast.walk(tree):
-            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+                fn.lineno <= lineno <= (fn.end_lineno or fn.lineno)
+            ):
+                if best is None or fn.lineno > best.lineno:
+                    best = fn
+        return best.name if best else "<module>"
+
+    offenders: list[str] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for p in root.rglob("*.py"):
+            if "test" in p.parts or p.name.startswith("test_"):
                 continue
-            src = ast.get_source_segment(txt, fn) or ""
-            if not any(h in src for h in HASHY):
+            txt = p.read_text()
+            try:
+                tree = ast.parse(txt)
+            except SyntaxError:
                 continue
-            for node in ast.walk(fn):
-                if (
+            if not any(h in txt for h in HASHY):  # MODULE-granularity gate
+                continue
+            for node in ast.walk(tree):
+                if not (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
                     and node.func.attr == "dumps"
                     and isinstance(node.func.value, ast.Name)
                     and node.func.value.id == "json"
                 ):
-                    kws = {k.arg for k in node.keywords}
-                    # Canonical pre-image shape: sort_keys/separators, NOT indent
-                    is_canonical = "sort_keys" in kws or "separators" in kws
-                    if "indent" in kws or not is_canonical:
-                        continue  # human/file output — not a deterministic pre-image
-                    if "allow_nan" in kws:
-                        continue  # correctly guarded
-                    rel = "/".join(p.parts[p.parts.index("trust") + 1 :])
-                    if any(rel.endswith(ef) and fn.name == efn for ef, efn in EXCLUDED):
-                        continue  # documented forensic omission
-                    offenders.append(f"{rel}:{node.lineno} fn={fn.name}")
+                    continue
+                kws = {k.arg for k in node.keywords}
+                # Canonical pre-image shape: sort_keys/separators, NOT indent.
+                is_canonical = "sort_keys" in kws or "separators" in kws
+                if "indent" in kws or not is_canonical:
+                    continue  # human/file output — not a deterministic pre-image
+                if "allow_nan" in kws:
+                    continue  # correctly guarded
+                idx = p.parts.index("src") if "src" in p.parts else -1
+                rel = "/".join(p.parts[idx + 1 :])
+                fn_name = _enclosing_fn(tree, node.lineno)
+                if any(rel.endswith(ef) and fn_name == efn for ef, efn in EXCLUDED):
+                    continue  # documented exclusion
+                offenders.append(f"{rel}:{node.lineno} fn={fn_name}")
 
     assert not offenders, (
         "Canonical signing/hash json.dumps pre-image(s) missing allow_nan=False "
         "(security.md Multi-Site Kwarg Plumbing — cross-SDK NaN/Inf parity hazard):\n  "
         + "\n  ".join(sorted(offenders))
     )
+
+
+# ---------------------------------------------------------------------------
+# Behavioral — interop cross-impl token signing pre-images + cross-SDK serialization
+# (the helper-encoder sites the per-function guard missed; found 2026-06-21 redteam)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+class TestInteropCrossSDKSerializationRejectNanInf:
+    def test_sd_jwt_b64url_encode_json_rejects_nan_inf(self) -> None:
+        from kailash.trust.interop.sd_jwt import _b64url_encode_json
+
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                _b64url_encode_json({"claim": bad})
+        # finite still encodes (byte-neutral)
+        assert isinstance(_b64url_encode_json({"claim": 1.5}), str)
+
+    def test_ucan_json_encode_canonical_rejects_nan_inf(self) -> None:
+        from kailash.trust.interop.ucan import _json_encode_canonical
+
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                _json_encode_canonical({"fct": bad})
+        assert isinstance(_json_encode_canonical({"fct": 1.5}), bytes)
+
+    def test_pact_conformance_canonical_json_dumps_rejects_nan_inf(self) -> None:
+        from pact.conformance.vectors import canonical_json_dumps
+
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                canonical_json_dumps({"score": bad})
+        assert isinstance(canonical_json_dumps({"score": 1.5}), str)
+
+    def test_secure_message_to_json_rejects_nan_inf(self) -> None:
+        # cross-SDK wire format — a NaN would emit invalid JSON a Rust receiver rejects
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                _envelope({"amount": bad}).to_json()
+        assert isinstance(_envelope({"amount": 1.5}).to_json(), str)

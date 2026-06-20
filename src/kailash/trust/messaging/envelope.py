@@ -335,7 +335,7 @@ class SecureMessageEnvelope:
         Returns:
             JSON string representation.
         """
-        return json.dumps(self.to_dict(), sort_keys=True)
+        return json.dumps(self.to_dict(), sort_keys=True, allow_nan=False)
 
     @classmethod
     def from_json(cls, json_str: str) -> "SecureMessageEnvelope":

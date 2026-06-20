@@ -98,6 +98,7 @@ def canonical_json_dumps(value: Any) -> str:
         ensure_ascii=False,
         separators=_CANONICAL_SEPARATORS,
         sort_keys=False,
+        allow_nan=False,
     )
 
 

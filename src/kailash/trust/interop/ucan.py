@@ -125,7 +125,9 @@ def _json_encode_canonical(obj: Any) -> bytes:
     Returns:
         UTF-8 encoded canonical JSON bytes.
     """
-    return json.dumps(obj, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return json.dumps(
+        obj, separators=(",", ":"), sort_keys=True, allow_nan=False
+    ).encode("utf-8")
 
 
 # ---------------------------------------------------------------------------

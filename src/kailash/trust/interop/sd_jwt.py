@@ -45,6 +45,11 @@ import logging
 import secrets
 from typing import Any, Dict, List, Optional
 
+from kailash.trust.chain import CapabilityAttestation, TrustLineageChain
+from kailash.trust.exceptions import InvalidSignatureError
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.crypto import hash_reasoning_trace
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -57,11 +62,6 @@ except ImportError:
     SigningKey = None  # type: ignore[assignment, misc]
     VerifyKey = None  # type: ignore[assignment, misc]
     BadSignatureError = Exception  # type: ignore[assignment, misc]
-
-from kailash.trust.chain import CapabilityAttestation, TrustLineageChain
-from kailash.trust.signing.crypto import hash_reasoning_trace
-from kailash.trust.exceptions import InvalidSignatureError
-from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -81,7 +81,9 @@ def _b64url_decode_str(s: str) -> bytes:
 
 def _b64url_encode_json(obj: Any) -> str:
     """JSON-serialize then base64url-encode an object."""
-    json_bytes = json.dumps(obj, separators=(",", ":"), sort_keys=False).encode("utf-8")
+    json_bytes = json.dumps(
+        obj, separators=(",", ":"), sort_keys=False, allow_nan=False
+    ).encode("utf-8")
     return _b64url_encode_bytes(json_bytes)
 
 

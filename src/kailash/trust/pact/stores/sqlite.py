@@ -713,7 +713,7 @@ class SqliteAccessPolicyStore(_SqliteBase):
         shared_classifications_json = json.dumps(
             sorted(c.value for c in ksp.shared_classifications)
         )
-        conditions_json = json.dumps(ksp.conditions, sort_keys=True)
+        conditions_json = json.dumps(ksp.conditions, sort_keys=True, allow_nan=False)
         min_clearance = ksp.min_clearance.value if ksp.min_clearance else None
 
         conn = self._get_connection()
