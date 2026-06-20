@@ -245,6 +245,26 @@ class TestEnvelopeCanonicalJsonCrossSDKBlockedBytes:
             '"metadata":{"audit_ts":"2026-01-15 11:00:00+00:00"}}'
         )
 
+    def test_to_canonical_json_rejects_nan_inf_metadata(self) -> None:
+        """A NaN/Inf in free-form metadata MUST raise (allow_nan=False) rather than
+        emit RFC-8259-invalid ``NaN``/``Infinity`` literals. Such literals sign
+        fine in Python's permissive json but are rejected by a strict cross-SDK
+        parser (Rust ``serde_json``), so a Python-signed envelope carrying a NaN/Inf
+        metadata value cannot be HMAC-re-verified cross-SDK. The financial fields
+        are isfinite-guarded at construction; the free-form ``metadata`` dict is the
+        sole unguarded ingress, so ``to_canonical_json`` MUST fail closed here.
+
+        This is byte-neutral for every valid (finite) envelope — see the datetime
+        pin above, which is unchanged — and is NOT the deferred default=str ->
+        canonical_scalars migration (kailash-rs#1451)."""
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            env = ConstraintEnvelope(
+                financial=FinancialConstraint(budget_limit=100.0, currency="USD"),
+                metadata={"score": bad},
+            )
+            with pytest.raises(ValueError, match="JSON compliant"):
+                env.to_canonical_json()
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))

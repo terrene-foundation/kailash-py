@@ -1047,7 +1047,12 @@ class ConstraintEnvelope:
         Suitable for cross-SDK comparison and HMAC signing payloads.
         """
         return json.dumps(
-            self.to_dict(), sort_keys=True, separators=(",", ":"), default=str
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+            default=str,
         )
 
     @classmethod
