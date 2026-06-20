@@ -1,91 +1,51 @@
-# Session Notes — 2026-06-20 (continued)
+# Session Notes — 2026-06-20
 
 ## Where we are
 
-Canonical-encoder cross-SDK conformance, on branch
-`fix/audit-chain-canonical-conformance` (HEAD `3629a49ca`, **8 commits ahead of
-origin — UNPUSHED**). PR #1411 DRAFT, BLOCKED. Main unchanged.
-
-This session extended the audit-chain work into a **full canonical-encoder family
-sweep** + redteam convergence + a cross-SDK filing:
-
-1. Re-attached the branch — 5 commits (incl. test fix `e00f07872`) were stranded
-   in detached HEAD from the prior wrapup; recovered via safe fast-forward.
-2. Independently re-verified the audit-chain conformance (PR #1411): **1503 tests
-   pass** (1244 + 35 + 32 + 192), canonical vectors reproduce byte-for-byte. No
-   regression. Still correctly draft-blocked.
-3. Empirically classified all 97 trust-plane `default=str` sites (8 canonical
-   candidates, 89 local). Shipped the one byte-neutral fix; pinned the rest.
-4. Redteam **converged** (2 consecutive clean rounds, 0 CRIT / 0 HIGH,
-   evidence-gated, throttle-aware). 2 LOW findings fixed same-shard (`3629a49ca`).
-5. Filed `esperie-enterprise/kailash-rs#1451` (user-authorized) — the
-   canonical-conformance lockstep is **broader** than the audit chain.
+Canonical-encoder cross-SDK conformance on `fix/audit-chain-canonical-conformance`
+(HEAD pushed to origin). PR #1411 DRAFT, BLOCKED. This session: full `default=str`
+family sweep + redteam-converged + cross-SDK `kailash-rs#1451` filed. Main
+unchanged; working tree clean.
 
 ## Read first
 
-1. `workspaces/cross-sdk-audit/journal/0011` — the family sweep + dispositions
-   (the broadened cross-SDK lockstep scope).
-2. `workspaces/cross-sdk-audit/journal/0012` — the rs#1451 filing receipt
-   (cross-repo-authorized).
-3. `specs/trust-canonical-encoders.md` — the full encoder-family map + dispositions.
-4. `tests/regression/test_canonical_encoder_family_conformance.py` — 9 tests;
-   `selective_disclosure.py`'s FIRST tests (byte pins + intra-SDK round-trip).
-5. PR #1411 body — the audit-chain blocker.
+1. `workspaces/cross-sdk-audit/journal/0011` — family sweep + dispositions (broadened lockstep)
+2. `workspaces/cross-sdk-audit/journal/0012` — rs#1451 filing receipt (cross-repo-authorized)
+3. `workspaces/cross-sdk-audit/04-validate/sweep-2026-06-20.md` — repo-wide sweep + ranked next items
+4. `specs/trust-canonical-encoders.md` — encoder-family map (conformant / blocked / local sites)
+5. `tests/regression/test_canonical_encoder_family_conformance.py` — the byte pins (re-pin only in rs lockstep)
 
 ## In-flight state
 
-- PR #1411 DRAFT, BLOCKED on **two** cross-SDK lockstep items now:
-  - `kailash-rs#1448` — audit-chain 6-digit-micros timestamp.
-  - `kailash-rs#1451` — canonical-encoder family (witness-export + envelope HMAC
-    preimage) conformance; a coordination item (no divergence today).
-  Do NOT un-draft/merge/release until BOTH land + the shared fixtures regen.
-- Local branch 8 commits ahead of origin — **decide whether to push** (syncs the
-  draft PR + durably backs up the converged state; triggers CI on the draft; stays
-  draft so no merge risk). NOT pushed this session.
-- `.session-notes` modified-uncommitted (this wrapup).
+- Branch pushed; PR #1411 reflects the converged state but stays DRAFT until rs#1448 + rs#1451 land.
+- Nothing uncommitted.
 
 ## Outstanding ledger (forest)
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F-AUDIT-XSDK | audit-chain 6-digit lockstep (rs match + shared-fixture regen) | user "coordinate lockstep" + EATP D6 / kailash-rs#449 | BLOCKED — rs#1448; py PR #1411 draft; re-verified converged |
-| F-SELDISC | selective_disclosure witness family — byte-CHANGING under canonical (nested AuditAnchor) | #1403/#1405 cross-impl byte parity (EATP D6) | RESOLVED-as-BLOCKED — current bytes pinned; rs#1451 filed; NOT switched py-only |
-| F-ENVELOPE-817 | envelope_hash → canonical_scalars (byte-neutral conformance) | #1403/#1405 latent-divergence closure | DONE — shipped `ae0118b64`, byte-neutral, pinned |
-| F-ENVELOPE-1039 | to_canonical_json HMAC preimage — byte-CHANGING (free-form metadata) | kailash-rs#449 cross-SDK byte parity | RESOLVED-as-BLOCKED — current bytes pinned; rs#1451 filed; NOT switched py-only |
-| F-DFAUDIT | dataflow compute_query_hash + _hash_result | cross-package audit parity (EATP D6) | NO_CHANGE — local hashes, no cross-SDK contract (documented in spec) |
-| F-VAULT-S34 | §3.4 KEK re-establishment hierarchy gap (#630) | project_trustplane_day1 "no deferring gaps" | DEFERRED |
-| F-XSDK-VAULT-630 | rs vault N12-CL-02a + recommit/retire ops | EATP D6 cross-SDK | FILED rs#1442 |
-| F-XSDK-TRUST-R2 | rs parity for 2.42.0 defect classes | EATP D6 cross-SDK | SURFACED — human-gated |
+| ID | Item | Value-anchor (MUST-1) | Status |
+| -- | ---- | --------------------- | ------ |
+| F-AUDIT-XSDK | cross-SDK canonical lockstep (audit-chain + witness-family + envelope HMAC) | user "coordinate lockstep" + kailash-rs#449/#1448/#1451 | BLOCKED — rs#1448+#1451; PR #1411 draft |
+| F-STUB-1406 | package-wide stub-marker audit vs Production/Stable | #1406 [gap] / zero-tolerance R2 | queued — top next-session item |
+| F-XSDK-TRUST-R2 | rs parity for 2.42.0 trust defect classes | EATP D6 cross-SDK | SURFACED — human-gated |
 | F-XSDK-PACT | rs parity for #1393/#1394 | EATP D6 cross-SDK | SURFACED — human-gated |
-| F-ATOMIC | cross-store atomic cascade invalidation | trust-plane revocation correctness | DEFERRED |
-| F-XSDK | rs LlmClient lifecycle parity | EATP D6 cross-SDK | filed rs#1420 |
 | F7 | rs KSP.compartments-unenforced parity | EATP D6 cross-SDK | BLOCKED — human-gated |
 | F4 | rs Nexus JWT middleware revocation gap | EATP trust-plane revocation | BLOCKED — human-gated |
+| F-VAULT-S34 | §3.4 KEK re-establishment hierarchy gap (#630) | project_trustplane_day1 | DEFERRED |
+| F-ATOMIC | cross-store atomic cascade invalidation | trust-plane revocation correctness | DEFERRED |
+| F-XSDK-VAULT-630 | rs vault N12-CL-02a + recommit/retire | EATP D6 cross-SDK | FILED rs#1442 — awaiting rs |
+| F-XSDK | rs LlmClient lifecycle parity | EATP D6 cross-SDK | FILED rs#1420 — awaiting rs |
 | F10 | loom Gate-1 Rule-10 proximity + evidence-first sync into py | loom artifact-flow Gate-1 | queued — loom-side |
 
-Closed/resolved this session: F-SELDISC (pinned+filed), F-ENVELOPE-817 (shipped),
-F-ENVELOPE-1039 (pinned+filed), F-DFAUDIT (NO_CHANGE). rs#1451 filed.
+Closed this session: `F-SELDISC` → ae0118b64 + rs#1451 + journal/0011 (pinned, folds into F-AUDIT-XSDK); `F-ENVELOPE-817` → ae0118b64 (byte-neutral shipped); `F-ENVELOPE-1039` → ae0118b64 + rs#1451 (pinned); `F-DFAUDIT` → journal/0011 (NO_CHANGE, documented in spec).
 
 ## Traps
 
-- PR #1411 BLOCKED on rs#1448 AND rs#1451 — never merge/release py-only; the
-  audit-chain AND the canonical-family byte contracts are SHARED with rs. See
-  journal/0009, 0011.
-- The canonical-encoder family is byte-CHANGING on `default=str` ONLY because a
-  nested `chain.AuditAnchor` dataclass (seldisc) / free-form envelope `metadata`
-  (1039) reaches the encoder un-normalized. envelope_hash (817) is the ONLY
-  byte-neutral one (metadata excluded + constraints pre-normalized). Do NOT
-  "unify" the blocked sites py-only — the pins in
-  `test_canonical_encoder_family_conformance.py` break loudly if you try.
-- `envelope_hash` uses SPACED default separators `(", ", ": ")`, NOT the compact
-  `(",",":")` of the wire-format sites — deliberate, matched by the rs envelope
-  fixtures. (Fixed a wrong spec footnote this session.)
-- pact/audit.py `_compute_hash_legacy` / `_compute_hash_prefix_format` keep
-  default=str BY DESIGN (historical byte reproducers) — never add canonical.
-- metadata-datetime asymmetry is DELIBERATE (nested datetime → bare isoformat per
-  signing #959; anchor ts → 6-digit) — pinned by U6; do NOT add timespec to
-  `canonical_scalars`.
-- Workflow parallel fan-out throttles errored agents to null — the `ran`-evidence
-  gate caught it; both this session's workflows ran clean with the gate.
-- Cross-repo to kailash-rs needs ALL 5 repo-scope-discipline conditions +
-  receipt-BEFORE-acting; journal/0011→0012 are the latest templates.
+- PR #1411 BLOCKED on rs#1448 AND rs#1451 — never merge/release py-only (shared byte contracts).
+- Witness-family + envelope `to_canonical_json` are byte-CHANGING — the pins in `test_canonical_encoder_family_conformance.py` break loudly if you "unify" py-only; re-pin ONLY in lockstep with rs.
+- `envelope_hash` uses SPACED default separators (not compact); pact/audit legacy `_compute_hash_*` keep default=str by design.
+- Workflow parallel fan-out throttles errored agents to null — use the `ran`-evidence gate (caught it twice this session).
+- Cross-repo to kailash-rs needs ALL 5 repo-scope conditions + receipt-BEFORE-acting (journal/0011→0012 are the templates).
+
+## Unreleased packages
+
+None on `main` (latest tag `v2.43.0`; `pyproject` 2.43.0 matches). The canonical-conformance work is blocked-in-PR (#1411), not releasable until the rs lockstep.
