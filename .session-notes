@@ -2,49 +2,64 @@
 
 ## Where we are
 
-Canonical-encoder cross-SDK conformance, `fix/audit-chain-canonical-conformance`.
-Continuation: rs#1448 + rs#1451 both landed on rs side; fresh holistic /redteam → 2 clean
-passes; cross-repo-verified the audit-chain lockstep; corrected a now-false cross-SDK
-claim; PR #1411 UN-DRAFTED, CI running. NOT merged/released yet.
+Canonical-encoder cross-SDK conformance, `fix/audit-chain-canonical-conformance` (PR #1411).
+This session (`/autonomize` + `/redteam` to convergence) found the prior "converged + ready"
+claim was CONTRADICTED by ground truth — fixed two real gaps, re-converged (2 clean rounds),
+CI now fully green. **PR #1411 merge-ready (review-gated); NOT merged/released yet.**
 
 ## Read first
 
-1. `workspaces/cross-sdk-audit/journal/0014` — cross-repo verify: rs#1448 lockstep (0 divergence on shared inputs); rs#1451=tripwires (rs PR #1452); rs is on `canonicalize` (INVERSE of py's default=str)
-2. `workspaces/cross-sdk-audit/journal/0013` — this session's redteam re-convergence receipt
-3. PR #1411 (un-drafted; `gh pr checks 1411` for CI) — body reframed to verified state
-4. `specs/trust-canonical-encoders.md` + `tests/regression/test_canonical_encoder_family_conformance.py` — encoder map + byte pins (re-pin ONLY in rs lockstep)
+1. `workspaces/cross-sdk-audit/journal/0015` — THIS session: the two gaps + fixes + convergence receipts
+2. PR #1411 — HEAD `9dfb1d968`; `gh pr checks 1411` → 23 pass / 0 fail; BLOCKED = REVIEW_REQUIRED only
+3. `workspaces/cross-sdk-audit/journal/0013`/`0014` — prior redteam + rs#1448/#1451 cross-repo verify
 
-## In-flight state
+## This session's fixes (committed + pushed to PR branch)
 
-- PR #1411 ready-for-review, CI PENDING (commits fe77d4133 + da0ac3b06 pushed to branch). Not merged.
-- R2 user-CONFIRMED this session: align py witness-family + `to_canonical_json` → `canonical_scalars` to MATCH rs's `canonicalize` (the #1451 direction — see F-XSDK-1451).
+- **`b4929d924`** — re-pin `PACT_VECTORS.sha256` `audit_anchor.json` `f7ba0381→3873da28` (the PR
+  changed the vector for #1400 six-digit-microsecond but never re-pinned the manifest → red
+  `Cross-SDK Conformance` CI) + register `specs/trust-canonical-encoders.md` in `specs/_index.md`.
+- **`9dfb1d968`** — add `allow_nan=False` (+ `ensure_ascii=True`) to `ConstraintEnvelope.to_canonical_json`
+  (NaN/Inf in metadata emitted RFC-invalid JSON that Python signs but Rust serde_json rejects = cross-SDK
+  verify-break; the PR's sibling fix did `envelope_hash` but missed this member). Byte-neutral on valid
+  envelopes; `default=str` PRESERVED (#1451 byte-changing migration stays deferred); + regression test.
 
-## Outstanding ledger (forest)
+## Convergence (durable receipts)
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F-AUDIT-XSDK | audit-chain canonical lockstep (PR #1411) | user "coordinate lockstep" + rs#449/#1448 | VERIFIED lockstep; PR ready → MERGE when CI green, then RELEASE in lockstep w/ rs#1448 release |
-| F-XSDK-1451 | py witness-family + to_canonical_json → canonical_scalars (match rs canonicalize) | user "approved" R2 + journal/0014 + rs#1451 | QUEUED — top follow-up; byte-CHANGING |
-| F-XSDK-4A | unify drifted audit-chain shared fixture across both repos | cross-sdk-inspection Rule 4a + journal/0014 | QUEUED — cross-SDK test-infra |
-| F-STUB-1406 | package-wide stub-marker audit vs Production/Stable | #1406 [gap] / zero-tolerance R2 | queued |
-| F-XSDK-TRUST-R2 | rs parity for 2.42.0 trust defect classes | EATP D6 cross-SDK | SURFACED — human-gated |
-| F-XSDK-PACT | rs parity for #1393/#1394 | EATP D6 cross-SDK | SURFACED — human-gated |
-| F7 | rs KSP.compartments-unenforced parity | EATP D6 cross-SDK | BLOCKED — human-gated |
-| F4 | rs Nexus JWT middleware revocation gap | EATP trust-plane revocation | BLOCKED — human-gated |
-| F-VAULT-S34 | §3.4 KEK re-establishment hierarchy gap (#630) | project_trustplane_day1 | DEFERRED |
-| F-ATOMIC | cross-store atomic cascade invalidation | trust-plane revocation correctness | DEFERRED |
-| F-XSDK-VAULT-630 | rs vault N12-CL-02a + recommit/retire | EATP D6 cross-SDK | FILED rs#1442 — awaiting rs |
-| F-XSDK | rs LlmClient lifecycle parity | EATP D6 cross-SDK | FILED rs#1420 — awaiting rs |
-| F10 | loom Gate-1 Rule-10 + evidence-first sync into py | loom artifact-flow Gate-1 | queued — loom-side |
+- Round 1 clean: `wf_f746f707-f30` (5/5 lenses findings:[])
+- Round 2 clean (SERIAL): `wf_7775fe4c-ef2` (3/3 lenses findings:[]) → converged, rounds_clean: 2
+- 112 canonical-conformance regression tests pass; both byte-pins byte-neutral under the fix.
 
-Closed this session: none fully closed (F-AUDIT-XSDK advanced to ready-to-merge; not merged).
+## Next actions (human-gated — BUILD repo)
+
+| Action | Status |
+| ------ | ------ |
+| MERGE PR #1411 | READY — `gh pr merge 1411 --admin --merge --delete-branch` (review-gated; owner bypass). Safe now (rs main has #1448). |
+| RELEASE | After merge, RELEASE must lockstep with rs#1448's RELEASE (not just merge) — else released py(6-digit) vs released rs diverge. |
+
+## Outstanding ledger (forest) — unchanged, human-gated cross-SDK
+
+| ID | Item | Status |
+| -- | ---- | ------ |
+| F-AUDIT-XSDK | audit-chain canonical lockstep (PR #1411) | CONVERGED + CI-green → MERGE then RELEASE in lockstep w/ rs#1448 |
+| F-XSDK-1451 | py witness-family + `to_canonical_json` → `canonical_scalars` (match rs `canonicalize`) | QUEUED — byte-CHANGING; this session's allow_nan fix is orthogonal/byte-neutral, does NOT pre-empt |
+| F-XSDK-4A | unify drifted audit-chain shared fixture across both repos | QUEUED — cross-SDK test-infra |
+| F-STUB-1406 | package-wide stub-marker audit vs Production/Stable | queued |
+| F-XSDK-TRUST-R2 / F-XSDK-PACT / F7 / F4 | rs parity (trust defects / #1393-4 / KSP.compartments / Nexus JWT revocation) | SURFACED/BLOCKED — human-gated |
+| F-VAULT-S34 / F-ATOMIC | KEK re-establishment (#630) / cross-store atomic cascade invalidation | DEFERRED |
+| F-XSDK-VAULT-630 (rs#1442) / F-XSDK (rs#1420) | rs vault N12-CL-02a / rs LlmClient lifecycle parity | FILED — awaiting rs |
+| F10 | loom Gate-1 Rule-10 + evidence-first sync into py | queued — loom-side |
 
 ## Traps
 
-- PR #1411 MERGE is safe now (rs main has #1448); but RELEASE must lockstep with rs's #1448 RELEASE (not just merge) — else released py(6-digit) vs released rs(whole-second) diverge.
-- #1451 direction is py→canonical_scalars (NOT the old "keep default=str"); to_canonical_json switch invalidates on-disk HMAC envelopes + HMAC has no rs equivalent (rs uses Ed25519) — handle separately.
-- Redteam parallel fan-out hits a synchronized "(not your usage limit)" throttle → dispatch SERIAL.
+- Prior redteam (0013) declared convergence but its lenses never ran `shasum -c` (manifest) nor probed
+  NaN/Inf ingress — both gaps shipped through it. The redteam now has an integrity-manifest-sweep lens
+  + a NaN/Inf regression test; re-promote both for any future canonical-vector PR.
+- Redteam parallel fan-out on THIS machine hits the synchronized `(not your usage limit)` throttle →
+  dispatch confirmation rounds SERIAL. Account-quota exhaustion is a DIFFERENT signal (remedy: csq swap).
+- #1451 direction is py→`canonical_scalars` (byte-CHANGING, invalidates on-disk HMAC envelopes; HMAC has
+  no rs equivalent — rs uses Ed25519) — handle separately, in lockstep, never py-only.
 
 ## Unreleased packages
 
-None on `main` (latest tag v2.43.0). PR #1411 ready-to-merge (CI running); release follows merge + rs#1448 release coordination.
+None on `main` (latest tag v2.43.0). PR #1411 converged + CI-green; merge + release stay with the user;
+release follows merge + rs#1448 release coordination.
