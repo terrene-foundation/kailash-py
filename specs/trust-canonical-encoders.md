@@ -43,10 +43,15 @@ cross-SDK byte parity).
 | `ConstraintEnvelope.to_canonical_json` (HMAC preimage) | `kailash/trust/envelope.py`                     | `default=str` — byte-CHANGING under `canonical_scalars` † |
 | selective-disclosure witness family                    | `kailash/trust/enforce/selective_disclosure.py` | `default=str` — byte-CHANGING under `canonical_scalars` † |
 
-Common config for Family B: `sort_keys=True, separators=(",",":"),
-ensure_ascii=True, allow_nan=False` (the `envelope_hash`/audit-anchor metadata
-sites omit `separators` — compact whitespace is already the default for those
-sort-keyed dumps).
+Common config for the Family-B **wire-format** members (`serialize_for_signing`,
+`AuditAnchor._canonical_input`, `compute_trace_event_fingerprint`,
+`to_canonical_json`): `sort_keys=True, separators=(",",":"), ensure_ascii=True,
+allow_nan=False`. **`envelope_hash` is the deliberate exception:** it omits
+`separators`, so it serialises with Python's DEFAULT `(", ", ": ")` (spaced, NOT
+compact) and the default `ensure_ascii=True`. The spaced form is itself part of
+the envelope tamper-hash contract — the Rust SDK + the `tests/fixtures/cross-sdk/envelope/`
+vectors reproduce this exact (spaced) serialisation; the `canonical_scalars`
+switch left it byte-identical.
 
 † **Byte-changing members are pinned on `default=str` by the cross-SDK byte
 contract, not by an oversight.** `to_canonical_json` serializes the free-form
@@ -111,9 +116,11 @@ dispositions landed:
   vectors together, never py-only.
 
 **Local (no cross-SDK contract) sites keep `default=str` by design:**
-`decorators._hash_result` (a local 16-char fingerprint of an arbitrary
-decorated-function return; the cross-SDK contract is downstream at
-`serialize_for_signing`) and `dataflow/trust/audit.py::compute_query_hash` (a
+`_hash_result` (`src/kailash/trust/enforce/decorators.py:302-307` — a local
+16-char fingerprint of an arbitrary decorated-function return; the cross-SDK
+contract is downstream at `serialize_for_signing`, which signs the already-hashed
+string) and `compute_query_hash`
+(`packages/kailash-dataflow/src/dataflow/trust/audit.py:663-687` — a
 DataFlow-local privacy-truncated dedup hash, self-verified, no Rust counterpart).
 
 ## Cross-SDK note
