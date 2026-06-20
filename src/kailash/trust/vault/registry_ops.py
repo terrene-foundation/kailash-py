@@ -19,11 +19,13 @@ top of the C2a additive commitment registry
   specific ``(kek_commitment_alg -> kek_identity_commitment)`` registry entry
   ``retired=True`` (producing a NEW frozen :class:`CommitmentEntry` — registry
   entries are additive/immutable). Requires the distinct ``vault:retire-alg``
-  capability (NOT ordinary ``vault:restore`` / ``vault:backup``); enforces the
-  **recoverability guard** (a live, non-retired strong-alg commitment ``C_Y`` for
-  the same ``(vault_id, kek_generation)`` MUST already exist so retirement never
-  strands the corpus); and dispatches a ``vault_kek_retire`` OUTCOME anchor (D2,
-  ``recovery`` tier, AU-02b).
+  capability (NOT ordinary ``vault:restore`` / ``vault:backup``), scoped by the
+  full §4.2 clearance gate (CL-02a tenant/domain against the RESOLVED vault
+  tenant/domain — the handle carries none, so the resolver is the trusted-module
+  source); enforces the **recoverability guard** (a live, non-retired strong-alg
+  commitment ``C_Y`` for the same ``(vault_id, kek_generation)`` MUST already
+  exist so retirement never strands the corpus); and dispatches a
+  ``vault_kek_retire`` OUTCOME anchor (D2, ``recovery`` tier, AU-02b).
 
 Both operations drive their checks through the canonical first-failing gate
 orders (:data:`~kailash.trust.vault.errors.RECOMMIT_GATE_ORDER` /
@@ -39,22 +41,27 @@ does (register only after the anchor lands).
 
 The reconstructed secret is supplied by the same injected
 :class:`~kailash.trust.vault.input_gates.VaultKeyResolver` boundary the
-backup/restore surface uses; it is consumed for the binding-mismatch check and
-``del``-ed in a ``finally`` (N12-IN-05). No plaintext crosses any return value,
-anchor payload, or log line.
+backup/restore surface uses; it is consumed for the recommit binding-mismatch
+recompute AND to source the trusted vault tenant/domain the retire CL-02a gate
+scopes against (the handle carries no tenant/domain), then ``zeroize()``-d in a
+``finally`` (N12-IN-05). No plaintext crosses any return value, anchor payload,
+or log line.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from kailash.delegate.types import DelegateIdentity
+from kailash.trust.posture.postures import PostureStore
 from kailash.trust.vault.anchors import (
     build_kek_recommit_anchor,
     build_kek_retire_anchor,
 )
 from kailash.trust.vault.backup import AnchorSigner, _sign_and_dispatch
+from kailash.trust.vault.clearance import evaluate_clearance
 from kailash.trust.vault.commitment import verify_commitment
 from kailash.trust.vault.dispatch import AuditDispatcher, AuditTier
 from kailash.trust.vault.errors import (
@@ -64,7 +71,12 @@ from kailash.trust.vault.errors import (
     VaultBindingError,
     first_failing,
 )
-from kailash.trust.vault.input_gates import ResolvedKek, VaultKeyResolver
+from kailash.trust.vault.input_gates import (
+    BACKUP_CAPABILITY,
+    ResolvedKek,
+    VaultKeyResolver,
+    require_clearance,
+)
 from kailash.trust.vault.registry import (
     CommitmentEntry,
     CommitmentRegistry,
@@ -103,6 +115,9 @@ def recommit_vault_kek(
     timestamp: Optional[str] = None,
     time_attested: bool = False,
     principal: Optional[str] = None,
+    posture_store: Optional[PostureStore] = None,
+    trust_anchored_now: Optional[datetime] = None,
+    approver_configured: bool = False,
 ) -> CommitmentEntry:
     """ADDITIVELY recommit a KEK commitment under a new algorithm (N12-CB-04(c)).
 
@@ -115,9 +130,18 @@ def recommit_vault_kek(
 
     FT-03 gate order (``RECOMMIT_GATE_ORDER``, fail-closed first-failing):
 
-    1. ``clearance-tenant-domain`` — ``clearance.has_capability("vault:backup")``
-       (the recommit capability; a cooling-off check is C3's) else
-       ``missing-clearance``;
+    1. ``clearance-tenant-domain`` — the FULL §4.2 clearance gate
+       (:func:`~kailash.trust.vault.clearance.evaluate_clearance`) for the
+       recommit capability ``vault:backup``: the binding-OWNED CL-02a
+       tenant→domain→token fail-closed scoping against the RESOLVED vault
+       tenant/domain (the substrate gate is domain-blind) PLUS the N12-CL-04
+       cooling-off suspension — ``vault:backup`` is a cooling-off-suspended
+       capability, so a principal inside the 7-day post-recovery window cannot
+       recommit without a verified governance-approver. Any failure →
+       ``missing-clearance``. A cheap presence-only check
+       (:func:`~kailash.trust.vault.input_gates.require_clearance`) runs BEFORE
+       resolution so a token-less caller is denied without materializing the
+       secret (same ``missing-clearance`` code).
     2. ``generation-vault-unchanged`` — the recommit MUST NOT alter
        ``kek_generation`` or ``vault_id`` (it operates on the resolved handle's
        own generation/vault) else ``recommit-generation-altered``;
@@ -152,6 +176,13 @@ def recommit_vault_kek(
             default when omitted.
         timestamp / time_attested: N12-AU-04a two-state grammar.
         principal: The acting principal; defaults to ``clearance.principal``.
+        posture_store: The PostureStore the CL-04 cooling-off read consults
+            (``None`` → no-receipt conservative default: not suspended).
+        trust_anchored_now: The trust-anchored clock the CL-04 window is
+            evaluated against (NEVER a locally-mutable wall clock).
+        approver_configured: The X1 CL-03 seam — recorded on a cooling-off
+            denial for audit; a configured-but-unexercised approver does NOT by
+            itself lift the suspension.
 
     Returns:
         The newly-registered live :class:`CommitmentEntry` for
@@ -180,8 +211,14 @@ def recommit_vault_kek(
         },
     )
 
+    # Gate 1 (cheap presence-only) — vault:backup token check BEFORE resolution
+    # (mirror the backup/rotation gate-1-cheap): a token-less caller is denied
+    # without materializing the KEK secret. Same missing-clearance code as the
+    # full gate below, so the first-failing determinism is preserved.
+    require_clearance(clearance, BACKUP_CAPABILITY)
+
     # Resolve the KEK inside the trusted module; consumed for the binding check
-    # and del-ed in the finally (N12-IN-05).
+    # and the CL-02a tenant/domain read, then del-ed in the finally (N12-IN-05).
     resolved = resolver.resolve_kek(key_handle)
     if not isinstance(resolved, ResolvedKek):
         raise VaultBindingError(
@@ -197,10 +234,27 @@ def recommit_vault_kek(
         def check(gate: str) -> Optional[N12FT01Code]:
             """The FT-03 recommit per-gate predicate (steps 1-4)."""
             if gate == "clearance-tenant-domain":
-                # (1) The recommit rides the ordinary vault:backup capability
-                # (a distinct cooling-off / tenant-domain check is C3's #630).
-                if not clearance.has_capability("vault:backup"):
-                    return N12FT01Code.MISSING_CLEARANCE
+                # (1) The FULL §4.2 clearance gate for the recommit capability
+                # vault:backup: binding-OWNED CL-02a tenant→domain→token
+                # fail-closed scoping against the RESOLVED vault tenant/domain
+                # (the substrate gate is domain-blind) + N12-CL-04 cooling-off
+                # suspension (vault:backup IS a suspended capability, so a
+                # principal inside the 7-day post-recovery window is suspended).
+                # A vault:backup granted in tenant/domain A fails against this
+                # vault in tenant/domain B. evaluate_clearance raises on failure;
+                # translate to the typed code for first_failing (preserves the
+                # missing-clearance first-failing determinism, N12-FT-03).
+                try:
+                    evaluate_clearance(
+                        clearance,
+                        resolved,
+                        BACKUP_CAPABILITY,
+                        posture_store=posture_store,
+                        now=trust_anchored_now,
+                        approver_configured=approver_configured,
+                    )
+                except VaultBindingError as exc:
+                    return exc.code
                 return None
             if gate == "generation-vault-unchanged":
                 # (2) The recommit MUST NOT alter kek_generation / vault_id. We
@@ -347,6 +401,7 @@ def retire_vault_kek_alg(
     key_handle: VaultKeyHandle,
     clearance: ClearanceContext,
     *,
+    resolver: VaultKeyResolver,
     dispatcher: AuditDispatcher,
     signer: AnchorSigner,
     signer_identity: DelegateIdentity,
@@ -357,6 +412,9 @@ def retire_vault_kek_alg(
     timestamp: Optional[str] = None,
     time_attested: bool = False,
     principal: Optional[str] = None,
+    posture_store: Optional[PostureStore] = None,
+    trust_anchored_now: Optional[datetime] = None,
+    approver_configured: bool = False,
 ) -> CommitmentEntry:
     """Retire a specific commitment-registry entry as non-verifiable (N12-CB-04(e)).
 
@@ -370,9 +428,21 @@ def retire_vault_kek_alg(
 
     FT-03 gate order (``RETIRE_GATE_ORDER``, fail-closed first-failing):
 
-    1. ``clearance-tenant-domain`` — ``clearance.has_capability("vault:retire-alg")``
-       (the DISTINCT high-consequence capability; NOT ``vault:restore`` /
-       ``vault:backup``) else ``missing-clearance``;
+    1. ``clearance-tenant-domain`` — the FULL §4.2 clearance gate
+       (:func:`~kailash.trust.vault.clearance.evaluate_clearance`) for the
+       DISTINCT high-consequence ``vault:retire-alg`` capability (NOT
+       ``vault:restore`` / ``vault:backup``): the binding-OWNED CL-02a
+       tenant→domain→token fail-closed scoping against the RESOLVED vault
+       tenant/domain (the handle carries no tenant/domain — the resolver is the
+       only trusted-module source). N12-CL-04 cooling-off is a structural no-op
+       here: ``vault:retire-alg`` is NOT in
+       :data:`~kailash.trust.vault.clearance.COOLING_OFF_SUSPENDED_CAPABILITIES`,
+       so a retire is never suspended by the post-recovery window (spec-faithful;
+       retire is not a materializing-restore-class op). Any failure →
+       ``missing-clearance``. A cheap presence-only check
+       (:func:`~kailash.trust.vault.input_gates.require_clearance`) runs BEFORE
+       resolution so a token-less caller is denied without materializing the
+       secret (same ``missing-clearance`` code).
     2. ``generation-vault-unchanged`` — the retire MUST NOT alter
        ``kek_generation`` or ``vault_id`` else ``recommit-generation-altered``;
     3. ``retired-entry-exists`` — a LIVE (non-retired) registry entry MUST exist
@@ -386,12 +456,24 @@ def retire_vault_kek_alg(
 
     AU-02b: the ``vault_kek_retire`` anchor is dispatched to the ``recovery``
     tier BEFORE the registry entry is replaced. A dispatch failure RAISES and
-    the entry stays live.
+    the entry stays live. The resolve + gate machinery + AU-02b dispatch +
+    registry mutation are wrapped in a ``try`` / ``finally`` that ``zeroize()``-s
+    the resolved KEK on EVERY exit (N12-IN-05), preserving the anchor-before-
+    mutation ordering.
 
     Args:
-        key_handle: The target KEK handle (vault_id + generation). NO resolver
-            is needed — retire touches no secret (it marks an existing entry).
+        key_handle: The target KEK handle (vault_id + generation). Retire
+            resolves it via ``resolver`` to source the trusted vault
+            tenant/domain for the CL-02a clearance scoping — the handle itself
+            carries no tenant/domain (``VaultKeyHandle`` has only key_id /
+            vault_id / kek_generation), so the resolver is the ONLY trusted-
+            module source. The materialized secret is consumed only to read the
+            trusted tenant/domain and ``zeroize()``-d in the ``finally``; it
+            never crosses a return value, anchor payload, or log line (N12-IN-05).
         clearance: MUST carry ``vault:retire-alg`` (N12-CB-04(e)(2)).
+        resolver: The injected trusted-module resolver — the trusted source of
+            the vault's tenant/domain for the CL-02a scoping (consume-and-
+            ``zeroize``).
         dispatcher: The named-tier audit dispatcher (D1).
         signer / signer_identity: The anchor signer + identity.
         alg_id: The deployment SLIP-0039 algorithm id (rides
@@ -402,6 +484,13 @@ def retire_vault_kek_alg(
             omitted.
         timestamp / time_attested: N12-AU-04a two-state grammar.
         principal: The acting principal; defaults to ``clearance.principal``.
+        posture_store: The PostureStore the CL-04 cooling-off read consults
+            (``None`` → no-receipt conservative default). CL-04 is a structural
+            no-op for ``vault:retire-alg`` (not a suspended capability) — this
+            is threaded for signature symmetry with recommit + future-proofing.
+        trust_anchored_now: The trust-anchored clock for the CL-04 window
+            (NEVER a locally-mutable wall clock).
+        approver_configured: The X1 CL-03 seam (recorded on a denial for audit).
 
     Returns:
         The new retired :class:`CommitmentEntry` (``retired=True``).
@@ -428,137 +517,183 @@ def retire_vault_kek_alg(
         },
     )
 
-    def check(gate: str) -> Optional[N12FT01Code]:
-        """The FT-03 retire per-gate predicate (steps 1-4)."""
-        if gate == "clearance-tenant-domain":
-            # (1) The DISTINCT vault:retire-alg capability (N12-CB-04(e)(2)) —
-            # NOT the ordinary vault:restore / vault:backup capability.
-            #
-            # SCOPE (honest disclosure — matches the recommit gate's #630
-            # note): this gate enforces capability PRESENCE only. The CL-02a
-            # tenant/domain scoping + CL-04 cooling-off that the gate NAME and
-            # the spec (N12-FT-03 §4.6) imply are NOT yet wired at this surface
-            # (deferred — C3 #630; the tenant/domain + cooling-off logic exists
-            # in clearance.py but is currently invoked only on the restore
-            # path). Until #630 lands, a vault:retire-alg holder is not
-            # tenant/domain-scoped here; the recoverability-preserved gate
-            # (step 4) bounds the blast radius (the corpus cannot be stranded).
-            if not clearance.has_capability(RETIRE_ALG_CAPABILITY):
-                return N12FT01Code.MISSING_CLEARANCE
-            return None
-        if gate == "generation-vault-unchanged":
-            # (2) Retire MUST NOT alter generation/vault. The handle carries the
-            # captured generation; a negative generation would have been rejected
-            # at VaultKeyHandle construction, so this gate is structurally a
-            # no-op on a well-formed handle, BUT it stays in the order so the
-            # first-failing sequence matches the recommit path + the spec FT-03
-            # ordering. (A later C3 ordinal-generation surface may strengthen it.)
-            if kek_generation != key_handle.kek_generation:  # pragma: no cover
-                return N12FT01Code.RECOMMIT_GENERATION_ALTERED
-            return None
-        if gate == "retired-entry-exists":
-            # (3) A LIVE entry MUST exist under retired_kek_commitment_alg whose
-            # commitment equals retired_kek_identity_commitment.
-            lookup = active_registry.lookup(
-                vault_id=vault_id,
-                kek_generation=kek_generation,
-                kek_commitment_alg=retired_kek_commitment_alg,
-            )
-            target_entry = lookup.entry
-            if (
-                target_entry is None
-                or target_entry.retired
-                or target_entry.commitment != retired_kek_identity_commitment
-            ):
-                return N12FT01Code.UNKNOWN_PRIOR_COMMITMENT
-            return None
-        if gate == "recoverability-preserved":
-            # (4) Recoverability guard (N12-CB-04(e)(4)): a LIVE non-retired
-            # commitment C_Y for the SAME (vault_id, gen) under a DIFFERENT alg
-            # MUST already exist, so the retire does NOT strand the corpus. The
-            # live_algs() growth metric is the source of truth: after removing
-            # the alg about to be retired, at least one OTHER live alg MUST
-            # remain. Refused with a missing-clearance-class typed error (the
-            # spec's "missing-clearance-class rejection, never stranding
-            # recoverability").
-            live = set(
-                active_registry.live_algs(
-                    vault_id=vault_id, kek_generation=kek_generation
-                )
-            )
-            live.discard(retired_kek_commitment_alg)
-            if not live:
-                return N12FT01Code.MISSING_CLEARANCE
-            return None
+    # Gate 1 (cheap presence-only) — vault:retire-alg token check BEFORE
+    # resolution: a token-less caller is denied without materializing the KEK
+    # secret. Same missing-clearance code as the full gate below, so the
+    # first-failing determinism is preserved.
+    require_clearance(clearance, RETIRE_ALG_CAPABILITY)
+
+    # Resolve the KEK inside the trusted module — the ONLY trusted-module source
+    # of the vault's tenant/domain for the CL-02a scoping (the handle carries
+    # none). The secret is materialized solely to read the trusted tenant/domain
+    # and zeroize()-d in the finally on EVERY exit (N12-IN-05); it never crosses
+    # a return value, anchor payload, or log line.
+    resolved = resolver.resolve_kek(key_handle)
+    if not isinstance(resolved, ResolvedKek):
         raise VaultBindingError(
-            N12FT01Code.PARAMETER_MISMATCH,
-            f"retire gate {gate!r} is not a recognized FT-03 gate "
-            f"(closed order: {list(RETIRE_GATE_ORDER)})",
-            details={"gate": gate},
+            N12FT01Code.NOT_A_KEK,
+            "resolver.resolve_kek MUST return a ResolvedKek; got "
+            f"{type(resolved).__name__}",
+            details={"returned_type": type(resolved).__name__},
         )
 
-    first = first_failing(RETIRE_GATE_ORDER, check)
-    if first is not None:
-        logger.warning(
-            "vault.retire.gate_failed",
+    try:
+
+        def check(gate: str) -> Optional[N12FT01Code]:
+            """The FT-03 retire per-gate predicate (steps 1-4)."""
+            if gate == "clearance-tenant-domain":
+                # (1) The FULL §4.2 clearance gate for the DISTINCT
+                # vault:retire-alg capability (N12-CB-04(e)(2)) — NOT the
+                # ordinary vault:restore / vault:backup capability. Runs the
+                # binding-OWNED CL-02a tenant→domain→token fail-closed scoping
+                # against the RESOLVED vault tenant/domain (the resolver is the
+                # only trusted-module source; the handle carries no
+                # tenant/domain). A vault:retire-alg holder in tenant/domain A
+                # is denied against this vault in tenant/domain B even with a
+                # live recoverability sibling alg present.
+                #
+                # CL-04 cooling-off is a STRUCTURAL no-op here: vault:retire-alg
+                # is NOT in COOLING_OFF_SUSPENDED_CAPABILITIES (it is not a
+                # materializing-restore-class op), so is_in_cooling_off is never
+                # consulted for it — a principal inside the 7-day post-recovery
+                # window is NOT suspended for a retire. This is spec-faithful;
+                # we do NOT force-suspend retire.
+                #
+                # evaluate_clearance raises on failure; translate to the typed
+                # code for first_failing (preserves the missing-clearance
+                # first-failing determinism, N12-FT-03).
+                try:
+                    evaluate_clearance(
+                        clearance,
+                        resolved,
+                        RETIRE_ALG_CAPABILITY,
+                        posture_store=posture_store,
+                        now=trust_anchored_now,
+                        approver_configured=approver_configured,
+                    )
+                except VaultBindingError as exc:
+                    return exc.code
+                return None
+            if gate == "generation-vault-unchanged":
+                # (2) Retire MUST NOT alter generation/vault. The handle carries
+                # the captured generation; a negative generation would have been
+                # rejected at VaultKeyHandle construction, so this gate is
+                # structurally a no-op on a well-formed handle, BUT it stays in
+                # the order so the first-failing sequence matches the recommit
+                # path + the spec FT-03 ordering. (A later C3 ordinal-generation
+                # surface may strengthen it.)
+                if kek_generation != key_handle.kek_generation:  # pragma: no cover
+                    return N12FT01Code.RECOMMIT_GENERATION_ALTERED
+                return None
+            if gate == "retired-entry-exists":
+                # (3) A LIVE entry MUST exist under retired_kek_commitment_alg
+                # whose commitment equals retired_kek_identity_commitment.
+                lookup = active_registry.lookup(
+                    vault_id=vault_id,
+                    kek_generation=kek_generation,
+                    kek_commitment_alg=retired_kek_commitment_alg,
+                )
+                target_entry = lookup.entry
+                if (
+                    target_entry is None
+                    or target_entry.retired
+                    or target_entry.commitment != retired_kek_identity_commitment
+                ):
+                    return N12FT01Code.UNKNOWN_PRIOR_COMMITMENT
+                return None
+            if gate == "recoverability-preserved":
+                # (4) Recoverability guard (N12-CB-04(e)(4)): a LIVE non-retired
+                # commitment C_Y for the SAME (vault_id, gen) under a DIFFERENT
+                # alg MUST already exist, so the retire does NOT strand the
+                # corpus. The live_algs() growth metric is the source of truth:
+                # after removing the alg about to be retired, at least one OTHER
+                # live alg MUST remain. Refused with a missing-clearance-class
+                # VaultBindingError (the spec's "missing-clearance-class rejection,
+                # never stranding recoverability"). UNCHANGED by #630.
+                live = set(
+                    active_registry.live_algs(
+                        vault_id=vault_id, kek_generation=kek_generation
+                    )
+                )
+                live.discard(retired_kek_commitment_alg)
+                if not live:
+                    return N12FT01Code.MISSING_CLEARANCE
+                return None
+            raise VaultBindingError(
+                N12FT01Code.PARAMETER_MISMATCH,
+                f"retire gate {gate!r} is not a recognized FT-03 gate "
+                f"(closed order: {list(RETIRE_GATE_ORDER)})",
+                details={"gate": gate},
+            )
+
+        first = first_failing(RETIRE_GATE_ORDER, check)
+        if first is not None:
+            logger.warning(
+                "vault.retire.gate_failed",
+                extra={
+                    "vault_id": vault_id,
+                    "kek_generation": kek_generation,
+                    "gate_code": first.value,
+                },
+            )
+            raise VaultBindingError(
+                first,
+                f"retire gate failed: {first.value} (vault_id={vault_id})",
+                details={"gate_code": first.value, "vault_id": vault_id},
+            )
+
+        ts = timestamp if (time_attested and timestamp is not None) else "unverified"
+        payload = build_kek_retire_anchor(
+            alg_id=alg_id,
+            vault_id=vault_id,
+            kek_generation=kek_generation,
+            retired_kek_commitment_alg=retired_kek_commitment_alg,
+            retired_kek_identity_commitment=retired_kek_identity_commitment,
+            principal=acting_principal,
+            timestamp=ts,
+            time_attested=time_attested,
+        )
+
+        # AU-02b: dispatch the OUTCOME anchor to the recovery tier BEFORE
+        # replacing the registry entry. A dispatch failure RAISES (no receipt)
+        # and the entry stays live — the registry mirrors the audited recovery-
+        # tier chain. The resolve/zeroize try/finally WRAPS this dispatch +
+        # mutation so the anchor-before-mutation ordering is preserved and the
+        # secret is always zeroized on every exit (N12-IN-05).
+        _sign_and_dispatch(
+            dispatcher=dispatcher,
+            signer=signer,
+            signer_identity=signer_identity,
+            event_payload=payload,
+            tier=AuditTier.RECOVERY,
+        )
+
+        # Replace the entry with a new frozen retired one (entries are immutable
+        # — the retire produces a NEW CommitmentEntry, never mutates in place).
+        # The commitment + key_id carry through verbatim; only `retired` flips.
+        retired_entry = _mark_entry_retired(
+            active_registry,
+            vault_id=vault_id,
+            kek_generation=kek_generation,
+            kek_commitment_alg=retired_kek_commitment_alg,
+        )
+        logger.info(
+            "vault.retire.ok",
             extra={
                 "vault_id": vault_id,
                 "kek_generation": kek_generation,
-                "gate_code": first.value,
+                "retired_kek_commitment_alg": retired_kek_commitment_alg,
+                "live_algs": list(
+                    active_registry.live_algs(
+                        vault_id=vault_id, kek_generation=kek_generation
+                    )
+                ),
             },
         )
-        raise VaultBindingError(
-            first,
-            f"retire gate failed: {first.value} (vault_id={vault_id})",
-            details={"gate_code": first.value, "vault_id": vault_id},
-        )
-
-    ts = timestamp if (time_attested and timestamp is not None) else "unverified"
-    payload = build_kek_retire_anchor(
-        alg_id=alg_id,
-        vault_id=vault_id,
-        kek_generation=kek_generation,
-        retired_kek_commitment_alg=retired_kek_commitment_alg,
-        retired_kek_identity_commitment=retired_kek_identity_commitment,
-        principal=acting_principal,
-        timestamp=ts,
-        time_attested=time_attested,
-    )
-
-    # AU-02b: dispatch the OUTCOME anchor to the recovery tier BEFORE replacing
-    # the registry entry. A dispatch failure RAISES (no receipt) and the entry
-    # stays live — the registry mirrors the audited recovery-tier chain.
-    _sign_and_dispatch(
-        dispatcher=dispatcher,
-        signer=signer,
-        signer_identity=signer_identity,
-        event_payload=payload,
-        tier=AuditTier.RECOVERY,
-    )
-
-    # Replace the entry with a new frozen retired one (entries are immutable —
-    # the retire produces a NEW CommitmentEntry, never mutates in place). The
-    # commitment + key_id carry through verbatim; only `retired` flips True.
-    retired_entry = _mark_entry_retired(
-        active_registry,
-        vault_id=vault_id,
-        kek_generation=kek_generation,
-        kek_commitment_alg=retired_kek_commitment_alg,
-    )
-    logger.info(
-        "vault.retire.ok",
-        extra={
-            "vault_id": vault_id,
-            "kek_generation": kek_generation,
-            "retired_kek_commitment_alg": retired_kek_commitment_alg,
-            "live_algs": list(
-                active_registry.live_algs(
-                    vault_id=vault_id, kek_generation=kek_generation
-                )
-            ),
-        },
-    )
-    return retired_entry
+        return retired_entry
+    finally:
+        # N12-IN-05: consume-and-zeroize the resolved KEK material on every exit.
+        resolved.zeroize()
 
 
 def _mark_entry_retired(

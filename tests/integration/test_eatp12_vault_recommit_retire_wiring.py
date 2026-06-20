@@ -331,6 +331,7 @@ def test_retire_old_alg_then_restore_fails_retired_commitment_alg():
     retired_entry = retire_vault_kek_alg(
         _handle(),
         _clearance("vault:retire-alg"),
+        resolver=resolver,
         dispatcher=dispatcher,
         signer=signer,
         signer_identity=identity,
@@ -393,6 +394,7 @@ def test_retire_only_live_entry_is_refused_recoverability_guard():
         retire_vault_kek_alg(
             _handle(),
             _clearance("vault:retire-alg"),
+            resolver=_DeterministicResolver(),
             dispatcher=dispatcher,
             signer=signer,
             signer_identity=identity,
@@ -547,6 +549,7 @@ def test_retire_missing_retire_alg_capability():
         retire_vault_kek_alg(
             _handle(),
             _clearance("vault:backup", "vault:restore"),
+            resolver=resolver,
             dispatcher=dispatcher,
             signer=signer,
             signer_identity=identity,
@@ -626,6 +629,7 @@ def test_retire_au02b_failing_dispatch_aborts_entry_stays_live():
         retire_vault_kek_alg(
             _handle(),
             _clearance("vault:retire-alg"),
+            resolver=resolver,
             dispatcher=wrong_dispatcher,
             signer=signer,
             signer_identity=signer_identity,
