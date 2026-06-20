@@ -34,3 +34,15 @@ cross-repo-authorized: esperie-enterprise/kailash-rs
   hand-off to the rs team. kailash-py side: branch
   `fix/audit-chain-canonical-conformance`, public issues #1400/#1401/#1402/#1403/
   #1404/#1405/#1407, redteam-converged.
+
+---
+
+## OUTCOME (filed, 2026-06-20)
+
+Filed ONE issue per the authorization: **esperie-enterprise/kailash-rs#1448** —
+"fix(audit): align audit-chain canonical timestamp to fixed 6-digit microseconds
+(cross-SDK lockstep)" (labels: `cross-sdk`, `bug`). Body shown to + approved by the
+user before submission (upstream-issue-hygiene MUST-1). Scrubbed to SDK-API surface +
+public canonical-byte vectors + public kailash-py issue numbers; no session internals.
+Scope honored: exactly one issue, no other cross-repo writes. The user will route it to
+the rs team for prioritization; the rs CODE change remains a separate future workstream.
