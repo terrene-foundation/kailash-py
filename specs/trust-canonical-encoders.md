@@ -59,10 +59,14 @@ contract, not by an oversight.** `to_canonical_json` serializes the free-form
 `set` / `bytes` — renders differently under `canonical_scalars`), and the
 selective-disclosure witness family hashes a nested `chain.AuditAnchor`
 dataclass that `_audit_record_to_dict` does not pre-normalize. Switching either
-to `canonical_scalars` py-only would diverge the emitted bytes from the
-kailash-rs counterpart that mirrors the current `default=str` output — the same
-class of breaking change as the audit-chain timestamp format (`kailash-rs#449`
-lockstep). The current bytes are pinned by
+to `canonical_scalars` py-only is an UNCOORDINATED cross-SDK byte change and is
+BLOCKED. Per `kailash-rs#1452` (2026-06-20), kailash-rs is on its `#449`-conformant
+`canonicalize` encoder for these surfaces — NOT a `default=str`-class encoder (the
+INVERSE of py here). Whether py's current `default=str` bytes equal rs's
+`canonicalize` bytes for every input type, and the direction of any alignment, is
+the open cross-SDK coordination item `kailash-rs#1451`; any change MUST land as a
+coordinated lockstep, never py-only — the same discipline as the audit-chain
+timestamp format (`kailash-rs#449`/`#1448`). The current bytes are pinned by
 `tests/regression/test_canonical_encoder_family_conformance.py` so a silent
 py-only switch fails loudly. See § Cross-SDK note.
 
@@ -105,13 +109,18 @@ dispositions landed:
   selective-disclosure witness family (`_hash_value` / `_compute_chain_hash` /
   the export+verify sign-payloads) and `ConstraintEnvelope.to_canonical_json`
   are byte-CHANGING under `canonical_scalars` (nested `chain.AuditAnchor`
-  dataclass and free-form envelope `metadata`, respectively). Because they are
-  documented cross-SDK byte contracts that kailash-rs mirrors on the current
-  `default=str` output, a py-only switch would diverge the SDKs — the same class
-  as the audit-chain timestamp change. They remain on `default=str` and their
-  CURRENT bytes are pinned by
-  `tests/regression/test_canonical_encoder_family_conformance.py` (these are
-  also `selective_disclosure.py`'s first tests). A coordinated cross-SDK
+  dataclass and free-form envelope `metadata`, respectively). They are documented
+  cross-SDK byte contracts, so a py-only switch is an uncoordinated cross-SDK change
+  and is BLOCKED. Per `kailash-rs#1452` (2026-06-20), kailash-rs is on its
+  `#449`-conformant `canonicalize` encoder for these surfaces (the INVERSE of py's
+  `default=str`); whether the two are byte-equal for every input type, and the
+  alignment direction, is the open cross-SDK item `kailash-rs#1451`. They remain on
+  `default=str` and their CURRENT bytes are pinned by
+  `tests/regression/test_canonical_encoder_family_conformance.py` (the first
+  byte-conformance tests of `selective_disclosure.py`'s witness-encoder family —
+  `_hash_value` / `_compute_chain_hash` / the export+verify sign-payloads; the
+  module's redaction helpers `_redact_record` / `RedactedAuditRecord` already
+  have prior coverage in `tests/trust/unit/`). A coordinated cross-SDK
   migration, if undertaken, must change both SDKs in lockstep and re-pin the
   vectors together, never py-only.
 

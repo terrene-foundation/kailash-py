@@ -22,16 +22,24 @@ signing/hash/cross-SDK-byte sites into two dispositions (see
    ``ConstraintEnvelope.to_canonical_json`` (the HMAC sign/verify pre-image) are
    byte-CHANGING under ``canonical_scalars``: a nested ``chain.AuditAnchor``
    dataclass reaches the witness encoders by default, and ``to_canonical_json``
-   includes the unvalidated free-form ``metadata`` dict. Both explicitly claim
-   byte-for-byte parity with kailash-rs (``kailash-rs#449``). Switching py-only
-   would diverge the two SDKs — the same disposition as the audit-chain #1400
-   timestamp change (BLOCKED on ``kailash-rs#1448``).
+   includes the unvalidated free-form ``metadata`` dict. These surfaces target the
+   ``kailash-rs#449`` cross-SDK byte contract, so switching py-only is an
+   UNCOORDINATED cross-SDK change — BLOCKED. Per ``kailash-rs#1452`` (2026-06-20),
+   kailash-rs is on its ``#449``-conformant ``canonicalize`` encoder for these
+   surfaces (the INVERSE of py's ``default=str``); the cross-SDK byte-equality and
+   the alignment direction are the open coordination item ``kailash-rs#1451``. Any
+   change MUST land as a coordinated lockstep, never py-only — the same discipline
+   as the audit-chain #1400 timestamp change (``kailash-rs#1448``, now landed).
 
    The tests below pin the CURRENT (``default=str``) bytes so a silent py-only
    canonical switch breaks LOUDLY (per ``cross-sdk-inspection.md`` Rule 4).
    When the cross-SDK canonical migration is authorised, these literals MUST be
    re-pinned IN LOCKSTEP in BOTH kailash-py and kailash-rs together — never
-   py-only. These are kailash-py's first tests for ``selective_disclosure.py``.
+   py-only. These are kailash-py's first byte-conformance tests for the
+   ``selective_disclosure.py`` witness-encoder family (``_hash_value`` /
+   ``_compute_chain_hash`` / the export+verify sign-payloads); the module's
+   redaction helpers (``_redact_record`` / ``RedactedAuditRecord``) already have
+   prior coverage under ``tests/trust/unit/``.
 
 Every pinned literal here was captured from the live production path, not copied
 from a summary.
