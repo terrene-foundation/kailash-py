@@ -433,6 +433,16 @@ def retire_vault_kek_alg(
         if gate == "clearance-tenant-domain":
             # (1) The DISTINCT vault:retire-alg capability (N12-CB-04(e)(2)) —
             # NOT the ordinary vault:restore / vault:backup capability.
+            #
+            # SCOPE (honest disclosure — matches the recommit gate's #630
+            # note): this gate enforces capability PRESENCE only. The CL-02a
+            # tenant/domain scoping + CL-04 cooling-off that the gate NAME and
+            # the spec (N12-FT-03 §4.6) imply are NOT yet wired at this surface
+            # (deferred — C3 #630; the tenant/domain + cooling-off logic exists
+            # in clearance.py but is currently invoked only on the restore
+            # path). Until #630 lands, a vault:retire-alg holder is not
+            # tenant/domain-scoped here; the recoverability-preserved gate
+            # (step 4) bounds the blast radius (the corpus cannot be stranded).
             if not clearance.has_capability(RETIRE_ALG_CAPABILITY):
                 return N12FT01Code.MISSING_CLEARANCE
             return None

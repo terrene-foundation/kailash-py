@@ -54,12 +54,16 @@ def _two_dept_org():
 
 def _secret_clearance() -> dict[str, RoleClearance]:
     # SECRET clearance holding both compartments so the requesting role passes
-    # the Step-3 clearance checks and the KSP narrowing (Step-4d) is reached.
+    # the Step-3 clearance checks (NDA + compartments) and the KSP narrowing
+    # (Step-4d) is reached. nda_signed=True is required for SECRET+ items now
+    # that can_access enforces the NDA gate (else a SECRET item short-circuits
+    # at Step 3 before the KSP deny_code is computed).
     return {
         _ROLE: RoleClearance(
             role_address=_ROLE,
             max_clearance=ConfidentialityLevel.SECRET,
             compartments=frozenset({"alpha", "beta"}),
+            nda_signed=True,
         )
     }
 

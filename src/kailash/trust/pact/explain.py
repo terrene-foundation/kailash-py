@@ -327,8 +327,20 @@ def explain_access(
         f"item classification={item.classification.value})"
     )
 
-    # --- Step 3: Compartment check ---
+    # --- Step 3: NDA + compartment check (SECRET and TOP_SECRET only) ---
     if item_level >= _CLEARANCE_ORDER[ConfidentialityLevel.SECRET]:
+        if not role_clearance.nda_signed:
+            lines.append(
+                "Step 3: NDA check -- FAIL "
+                "(SECRET+ access requires a signed NDA; nda_signed=False)"
+            )
+            lines.append("")
+            lines.append(
+                f"Result: DENIED at Step 3 -- NDA not signed for "
+                f"{item.classification.value} item"
+            )
+            return "\n".join(lines)
+        lines.append("Step 3: NDA check -- PASS (NDA signed)")
         if item.compartments:
             missing = item.compartments - role_clearance.compartments
             if missing:

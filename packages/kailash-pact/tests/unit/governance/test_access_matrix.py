@@ -369,6 +369,10 @@ def test_clearance_level_matrix(
         role_addr: RoleClearance(
             role_address=role_addr,
             max_clearance=role_clearance,
+            # SECRET+ access requires a signed NDA (enforced in can_access).
+            # This matrix isolates the clearance-LEVEL axis, so every cell
+            # carries a signed NDA to keep level the only varying dimension.
+            nda_signed=True,
         ),
     }
     item = KnowledgeItem(
@@ -429,6 +433,10 @@ def test_posture_capping_matrix(
         role_addr: RoleClearance(
             role_address=role_addr,
             max_clearance=ConfidentialityLevel.TOP_SECRET,
+            # SECRET+ access requires a signed NDA (enforced in can_access).
+            # This matrix isolates the POSTURE-capping axis, so the clearance
+            # carries a signed NDA to keep posture the only varying dimension.
+            nda_signed=True,
         ),
     }
     item = KnowledgeItem(

@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.42.0] - 2026-06-20
+
+A holistic post-multi-wave redteam of the trust-plane surface (beyond the
+2.41.1 PACT KSP/Bridge + cascade scope) surfaced ten confirmed defects across
+`kailash.trust.{pact,plane,operations,signing,enforce,revocation,vault}`. Nine
+are non-breaking correctness/security fixes; one (`nda_signed` enforcement) is a
+behavior change to knowledge-access control — hence the minor bump.
+
+### Changed
+
+- **BREAKING — `nda_signed` is now ENFORCED for SECRET / TOP_SECRET knowledge
+  access** (`kailash.trust.pact.access.can_access`). `RoleClearance.nda_signed`
+  is documented "Required for SECRET and TOP_SECRET clearance" and is
+  parsed/stored/serialized across the YAML loader, SQLite store, and backup
+  paths — but no access-decision path ever consulted it, so a role with
+  `nda_signed=False` (the field default) was granted SECRET/TOP_SECRET access.
+  `can_access` now denies SECRET+ items when `nda_signed` is `False` (fail-closed
+  with `deny detail="nda_not_signed"`). **Migration:** any `RoleClearance`
+  granting SECRET or TOP_SECRET access MUST set `nda_signed=True` (the value the
+  conformance vector + canonical fixtures already use); a default-`False` SECRET
+  clearance that previously resolved to ALLOW now resolves to DENY. CONFIDENTIAL
+  and below are unaffected.
+
+### Security
+
+- **Rotation `revoke_old_key` now invalidates the key**
+  (`kailash.trust.signing.rotation` + `kailash.trust.operations.TrustKeyManager`).
+  `revoke_old_key` emitted a `rotation_key_revoked` audit event and cleared
+  grace-period tracking but never removed the key from the key manager — so the
+  "revoked" key kept signing while the audit trail asserted revocation. A new
+  `TrustKeyManager.remove_key` tombstones the private material and
+  `revoke_old_key` now calls it.
+- **`TrustProject.verify` rejects a decision record missing its `content_hash`**
+  (`kailash.trust.plane.project`). The tamper check was guarded by
+  `if stored_hash and …`, so a decision record whose `content_hash` was stripped
+  (the field is a computed property, not a required deserialization field) slipped
+  past verification — even in `strict=True` mode. A missing/empty `content_hash`
+  is now a verification failure (strict: raises `ChainHashMismatchError`;
+  non-strict: `chain_valid=False` + integrity issue).
+- **Corrupted persisted trust posture now fails closed to PSEUDO**
+  (`kailash.trust.plane.project`). An unrecognized persisted `trust_posture` was
+  swallowed by `except (ValueError, Exception): pass`, silently downgrading the
+  agent to the permissive `SUPERVISED` constructor default. The handler now
+  narrows to `ValueError`, logs a WARN, and restores the most-restrictive posture
+  (`PSEUDO`) — never a silent autonomy widening (legacy aliases remain handled by
+  `TrustPosture._missing_`).
+- **Proximity scanning fails closed on non-finite usage**
+  (`kailash.trust.enforce.proximity`). A `NaN`/`Inf` usage value bypassed every
+  `>=` threshold comparison (`NaN >= x` is always `False`), so a corrupt budget
+  reading produced NO proximity alert. Non-finite usage now escalates to `HELD`,
+  and a non-finite limit is treated as unmeasurable (skipped, not crashed).
+
+### Fixed
+
+- **`AuditChain.from_dict` now raises on a corrupted chain**
+  (`kailash.trust.pact.audit`). The docstring promised "Raises PactError if the
+  chain is corrupted" (the P-H10 contract), but the code only logged a warning and
+  returned the corrupted chain — silently accepting a tampered audit chain as
+  valid. It now raises `PactError` with the integrity errors in `details`.
+- **Revocation broadcaster routes async-subscriber failures to the dead-letter
+  queue** (`kailash.trust.revocation.broadcaster`). Async subscriber callbacks
+  were scheduled via `ensure_future` with no done-callback, so an exception raised
+  inside the coroutine body surfaced only as an "unretrieved task exception"
+  warning — bypassing the dead-letter accounting that captures delivery failures.
+  A done-callback now records async failures the same as synchronous ones.
+- **`CredentialRotationManager` docstring reconciled to its real best-effort
+  contract** (`kailash.trust.signing.rotation`). The class advertised "atomic
+  updates to prevent partial rotations", but `rotate_key` commits the authority's
+  new key before re-signing chains and does not roll back on a re-sign failure
+  (the registry exposes no transaction primitive). The docstring now documents the
+  non-atomic, partial-rotation-possible behavior surfaced via `RotationError`.
+- **Vault retire/recommit gate labels corrected to match enforcement**
+  (`kailash.trust.vault.errors` + `registry_ops`). The `clearance-tenant-domain`
+  gate labels asserted tenant/domain scoping (CL-02a), cooling-off (CL-04), and a
+  governance-HELD action; the gates enforce capability-presence ONLY (the
+  tenant/domain + cooling-off wiring is deferred). Labels + the retire gate now
+  honestly disclose the capability-only scope and the deferred check.
+- **`GovernanceContext.effective_envelope` None docstring corrected**
+  (`kailash.trust.pact.context`). It read "maximally restrictive interpretation",
+  contradicting `compute_effective_envelope` ("maximally permissive") and the
+  engine's enforced auto-approve-on-None behavior. Corrected to the enforced
+  permissive semantics (the opt-in governance default).
+
 ## [2.41.1] - 2026-06-20
 
 ### Fixed

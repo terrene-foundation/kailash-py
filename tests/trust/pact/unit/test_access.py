@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -443,6 +444,7 @@ class TestCanAccessCompartments:
                 role_address="D1-R1",
                 max_clearance=ConfidentialityLevel.SECRET,
                 compartments=frozenset({"alpha", "beta"}),
+                nda_signed=True,  # SECRET+ access requires a signed NDA
             ),
         }
         item = KnowledgeItem(
@@ -462,6 +464,39 @@ class TestCanAccessCompartments:
         )
         assert decision.allowed is True
 
+    def test_secret_item_without_nda_denied(self, simple_org: CompiledOrg) -> None:
+        """PGC-01: SECRET/TOP_SECRET access is denied without a signed NDA.
+
+        nda_signed is documented "Required for SECRET and TOP_SECRET clearance";
+        can_access enforces it fail-closed at step 3 (previously parsed/stored
+        everywhere but never consulted on the access path).
+        """
+        clearances = {
+            "D1-R1": RoleClearance(
+                role_address="D1-R1",
+                max_clearance=ConfidentialityLevel.SECRET,
+                compartments=frozenset({"alpha", "beta"}),
+                nda_signed=False,  # the governance-field-drop PGC-01 closes
+            ),
+        }
+        item = KnowledgeItem(
+            item_id="secret-item",
+            classification=ConfidentialityLevel.SECRET,
+            owning_unit_address="D1",
+            compartments=frozenset({"alpha"}),
+        )
+        decision = can_access(
+            role_address="D1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.DELEGATING,
+            compiled_org=simple_org,
+            clearances=clearances,
+            ksps=[],
+            bridges=[],
+        )
+        assert decision.allowed is False
+        assert decision.audit_details.get("detail") == "nda_not_signed"
+
     def test_secret_item_missing_compartment_denies(
         self, simple_org: CompiledOrg
     ) -> None:
@@ -470,6 +505,9 @@ class TestCanAccessCompartments:
                 role_address="D1-R1",
                 max_clearance=ConfidentialityLevel.SECRET,
                 compartments=frozenset({"alpha"}),
+                # NDA signed so the test reaches the compartment check (the
+                # path it targets) rather than short-circuiting at the NDA gate.
+                nda_signed=True,
             ),
         }
         item = KnowledgeItem(
@@ -663,6 +701,9 @@ class TestCanAccessKSP:
             "D2-R1-T1-R1": RoleClearance(
                 role_address="D2-R1-T1-R1",
                 max_clearance=ConfidentialityLevel.SECRET,
+                # NDA signed so the test reaches the KSP classification-limit
+                # check (step 4) rather than short-circuiting at the NDA gate.
+                nda_signed=True,
             ),
         }
         item = KnowledgeItem(
@@ -768,6 +809,9 @@ class TestCanAccessBridge:
             "D2-R1": RoleClearance(
                 role_address="D2-R1",
                 max_clearance=ConfidentialityLevel.SECRET,
+                # NDA signed so the test reaches the bridge classification-limit
+                # check (step 4) rather than short-circuiting at the NDA gate.
+                nda_signed=True,
             ),
         }
         item = KnowledgeItem(

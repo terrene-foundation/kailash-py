@@ -331,8 +331,26 @@ class TrustProject:
                 self._posture_machine.set_posture(
                     self._agent_id, TrustPosture(posture_name)
                 )
-            except (ValueError, Exception):
-                pass  # Invalid posture name — use default
+            except ValueError:
+                # Corrupted/unknown persisted posture name (legacy aliases are
+                # already handled by TrustPosture._missing_, so this is a truly
+                # unrecognized value). Fail-closed to the MOST-restrictive
+                # posture (PSEUDO) rather than silently keeping the permissive
+                # SUPERVISED default — a corrupted posture MUST NOT widen
+                # autonomy (trust-plane-security MUST-NOT-2 "no trust
+                # downgrade"; eatp.md "unknown/error states -> deny"). Surfaced
+                # LOUD, never swallowed (zero-tolerance Rule 3 / observability
+                # Rule 5). A non-ValueError (e.g. a real store error) is NOT
+                # caught here — it propagates as a genuine construction failure.
+                logger.warning(
+                    "trust_posture.invalid_persisted_posture",
+                    extra={
+                        "agent_id": self._agent_id,
+                        "posture_name": posture_name,
+                        "fallback": TrustPosture.PSEUDO.value,
+                    },
+                )
+                self._posture_machine.set_posture(self._agent_id, TrustPosture.PSEUDO)
 
     @classmethod
     async def create(
@@ -1095,7 +1113,36 @@ class TrustProject:
             stored_hash = data.get("content_hash", "")
             record = DecisionRecord.from_dict(data)
             computed_hash = record.content_hash()
-            if stored_hash and not hmac_mod.compare_digest(stored_hash, computed_hash):
+            # A decision record with NO stored content_hash is unverifiable.
+            # Treat its absence as a verification failure (fail-closed): an
+            # attacker who tampers a record AND strips its content_hash field
+            # would otherwise slip past the tamper check via the truthiness
+            # short-circuit, passing even strict verification. content_hash is a
+            # computed property (not a required from_dict field), so a record
+            # JSON with the key removed loads cleanly — the guard MUST live here.
+            if not stored_hash:
+                logger.warning(
+                    "trust_chain.hash_missing",
+                    extra={
+                        "record_id": record.decision_id,
+                        "record_type": "decision",
+                        "file": df.name,
+                    },
+                )
+                if strict:
+                    raise ChainHashMismatchError(
+                        f"decision record {record.decision_id} is missing its "
+                        f"content_hash (unverifiable)",
+                        record_id=record.decision_id,
+                        stored_hash="",
+                        computed_hash=computed_hash,
+                        record_type="decision",
+                    )
+                integrity_issues.append(
+                    f"{df.name}: missing content_hash (unverifiable)"
+                )
+                chain_valid = False
+            elif not hmac_mod.compare_digest(stored_hash, computed_hash):
                 # WARN log per observability.md Rule 5 (log triage gate) +
                 # Rule 8 (no schema-revealing field values at WARN — record_id
                 # is the identifier, not classified content).

@@ -23,6 +23,7 @@ Integration:
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -52,9 +53,13 @@ class ProximityConfig:
     def __post_init__(self):
         """Validate thresholds and dimension overrides."""
         if not 0.0 < self.flag_threshold < 1.0:
-            raise ValueError(f"flag_threshold must be between 0 and 1, got {self.flag_threshold}")
+            raise ValueError(
+                f"flag_threshold must be between 0 and 1, got {self.flag_threshold}"
+            )
         if not 0.0 < self.hold_threshold <= 1.0:
-            raise ValueError(f"hold_threshold must be between 0 and 1, got {self.hold_threshold}")
+            raise ValueError(
+                f"hold_threshold must be between 0 and 1, got {self.hold_threshold}"
+            )
         if self.flag_threshold >= self.hold_threshold:
             raise ValueError(
                 f"flag_threshold ({self.flag_threshold}) must be less than hold_threshold ({self.hold_threshold})"
@@ -62,14 +67,22 @@ class ProximityConfig:
         # Validate per-dimension overrides
         for dim_name, thresholds in self.dimension_overrides.items():
             if not isinstance(thresholds, tuple) or len(thresholds) != 2:
-                raise ValueError(f"dimension_overrides['{dim_name}'] must be a (flag, hold) tuple")
+                raise ValueError(
+                    f"dimension_overrides['{dim_name}'] must be a (flag, hold) tuple"
+                )
             flag, hold = thresholds
             if not 0.0 < flag < 1.0:
-                raise ValueError(f"dimension_overrides['{dim_name}'] flag must be between 0 and 1, got {flag}")
+                raise ValueError(
+                    f"dimension_overrides['{dim_name}'] flag must be between 0 and 1, got {flag}"
+                )
             if not 0.0 < hold <= 1.0:
-                raise ValueError(f"dimension_overrides['{dim_name}'] hold must be between 0 and 1, got {hold}")
+                raise ValueError(
+                    f"dimension_overrides['{dim_name}'] hold must be between 0 and 1, got {hold}"
+                )
             if flag >= hold:
-                raise ValueError(f"dimension_overrides['{dim_name}'] flag ({flag}) must be less than hold ({hold})")
+                raise ValueError(
+                    f"dimension_overrides['{dim_name}'] flag ({flag}) must be less than hold ({hold})"
+                )
 
 
 CONSERVATIVE_PROXIMITY = ProximityConfig(flag_threshold=0.70, hold_threshold=0.90)
@@ -169,15 +182,44 @@ class ProximityScanner:
         alerts: List[ProximityAlert] = []
 
         for result in results:
-            if result.limit is None or result.limit <= 0:
-                # Cannot compute usage ratio without a valid limit
+            if (
+                result.limit is None
+                or not math.isfinite(result.limit)
+                or result.limit <= 0
+            ):
+                # Cannot compute a usage ratio without a finite, positive limit.
                 continue
 
             if result.used is None:
                 continue
 
-            usage_ratio = result.used / result.limit
             dim_name = dimension_name or "unknown"
+
+            if not math.isfinite(result.used):
+                # Fail-closed: a non-finite usage value (NaN/Inf) against a
+                # valid limit is an unmeasurable/corrupt reading. NaN bypasses
+                # every ``>=`` comparison (``NaN >= x`` is always False), so
+                # without this guard the budget-proximity check would silently
+                # emit NO alert (trust-plane-security Rule 3 / MUST-NOT-5).
+                # Escalate to HELD — an unmeasurable budget is treated as
+                # breached, never silently waved through.
+                alerts.append(
+                    ProximityAlert(
+                        dimension=dim_name,
+                        usage_ratio=float("inf"),
+                        used=result.used,
+                        limit=result.limit,
+                        escalated_verdict=Verdict.HELD,
+                        original_verdict=Verdict.AUTO_APPROVED,
+                    )
+                )
+                logger.warning(
+                    f"[PROXIMITY] HOLD alert: {dim_name} usage is non-finite "
+                    f"({result.used}) — unmeasurable budget, failing closed"
+                )
+                continue
+
+            usage_ratio = result.used / result.limit
 
             # Get thresholds (per-dimension override or global)
             flag_thresh, hold_thresh = self._get_thresholds(dim_name)
@@ -207,7 +249,9 @@ class ProximityScanner:
                         original_verdict=Verdict.AUTO_APPROVED,
                     )
                 )
-                logger.info(f"[PROXIMITY] FLAG alert: {dim_name} at {usage_ratio:.1%} (threshold: {flag_thresh:.0%})")
+                logger.info(
+                    f"[PROXIMITY] FLAG alert: {dim_name} at {usage_ratio:.1%} (threshold: {flag_thresh:.0%})"
+                )
 
         return alerts
 
@@ -253,12 +297,16 @@ class ProximityScanner:
             return base_verdict
 
         # Find the highest escalation level from alerts
-        max_alert_level = max(_VERDICT_ORDER.get(a.escalated_verdict, 0) for a in alerts)
+        max_alert_level = max(
+            _VERDICT_ORDER.get(a.escalated_verdict, 0) for a in alerts
+        )
         base_level = _VERDICT_ORDER.get(base_verdict, 0)
 
         # Monotonic: only escalate, never downgrade
         if max_alert_level > base_level:
-            escalated = [v for v, level in _VERDICT_ORDER.items() if level == max_alert_level][0]
+            escalated = [
+                v for v, level in _VERDICT_ORDER.items() if level == max_alert_level
+            ][0]
             logger.info(
                 f"[PROXIMITY] Escalating verdict from {base_verdict.value} "
                 f"to {escalated.value} based on {len(alerts)} alert(s)"

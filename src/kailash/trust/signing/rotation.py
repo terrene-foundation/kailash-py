@@ -7,9 +7,14 @@ EATP Credential Rotation Management.
 Provides automated credential rotation for organizational authorities with:
 - Keypair rotation with grace period support
 - Audit logging for all rotation events
-- Atomic updates to prevent partial rotations (CARE-008)
+- Best-effort (non-atomic) sequential updates: the authority record is committed
+  with the new key BEFORE the trust chains are re-signed; a re-sign failure
+  raises RotationError (and emits a rotation_failed audit event) but does NOT
+  roll the authority record back (the registry exposes no transaction
+  primitive), so a partial rotation is possible and is surfaced via the raised
+  error, never silently swallowed.
 - Concurrent rotation prevention (only one rotation per authority at a time)
-- Transactional re-signing of trust chains after key rotation
+- Re-signing of trust chains after key rotation
 """
 
 import asyncio
@@ -20,19 +25,16 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
 
-from kailash.trust.authority import (
-    AuthorityRegistryProtocol,
-    OrganizationalAuthority,
-)
+from kailash.trust.authority import AuthorityRegistryProtocol, OrganizationalAuthority
 from kailash.trust.chain import TrustLineageChain
-from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
+from kailash.trust.chain_store import TrustStore
 from kailash.trust.exceptions import (
     AuthorityInactiveError,
     AuthorityNotFoundError,
     TrustError,
 )
 from kailash.trust.operations import TrustKeyManager
-from kailash.trust.chain_store import TrustStore
+from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
 
 
 class RotationStatus(str, Enum):
@@ -166,12 +168,21 @@ class CredentialRotationManager:
     Manages credential rotation for organizational authorities.
 
     Provides automated key rotation with grace periods, audit logging,
-    and atomic updates to prevent partial rotations.
+    and best-effort (non-atomic) sequential updates across the authority
+    record and the re-signed trust chains.
 
     Features:
     - Grace period support (default 24 hours)
     - Audit logging for all rotation events
-    - Atomic updates to prevent partial rotations
+    - Best-effort sequential updates (NOT atomic): the authority record is
+      committed with the new key BEFORE the trust chains are re-signed. If
+      re-signing fails, ``rotate_key`` raises ``RotationError`` (and emits a
+      ``rotation_failed`` audit event), but the already-committed authority
+      record is NOT rolled back — the underlying registry exposes no
+      transaction primitive, so true atomicity is infeasible. A partial
+      rotation (the authority advertises the new key while some chains still
+      carry old-key signatures) is therefore possible and is surfaced via the
+      raised ``RotationError``, never silently swallowed.
     - Concurrent rotation prevention (only one rotation per authority at a time)
     - Automatic re-signing of trust chains after rotation
     - Scheduled rotation support
@@ -866,9 +877,13 @@ class CredentialRotationManager:
         # Remove from grace period tracking
         del self._grace_period_keys[authority_id][key_id]
 
-        # Remove from key manager (if it exists)
-        # Note: TrustKeyManager doesn't have a remove method in the current implementation,
-        # but in production this would remove the key from the HSM/KMS
+        # Invalidate the key in the key manager so it can no longer sign.
+        # Without this, revoke_old_key emitted a rotation_key_revoked audit
+        # event while the key stayed live in the manager — the audit trail
+        # asserted revocation while the "revoked" key kept signing and
+        # verifying (audit-store divergence). remove_key tombstones the
+        # private material per trust-plane-security MUST-NOT-3.
+        self.key_manager.remove_key(key_id)
 
         # Log audit event
         await self._log_rotation_event(
