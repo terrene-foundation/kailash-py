@@ -340,6 +340,66 @@ class TestFromDictReSealSurfacing:
         assert exc.value.details["reseal_only"] is False
         assert "possible tampering" in str(exc.value)
 
+    @staticmethod
+    def _make(
+        *, seq: int, prev: str | None, meta: dict, anchor_id: str, ts: datetime
+    ) -> AuditAnchor:
+        return AuditAnchor(
+            anchor_id=anchor_id,
+            sequence=seq,
+            previous_hash=prev,
+            agent_id="g",
+            action="x",
+            verification_level=VerificationLevel.AUTO_APPROVED,
+            envelope_id="e",
+            result="ok",
+            metadata=meta,
+            timestamp=ts,
+        )
+
+    def test_multi_anchor_pre_fix_chain_is_reseal_only(self) -> None:
+        """A realistic >=2-anchor pure pre-fix chain (links intact) MUST read
+        reseal_only=True — pins the all("NOT tampering") predicate for the
+        production re-seal case, not just single-anchor chains."""
+        ts = datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC)
+        a0 = self._make(seq=0, prev=None, meta={"role": "x"}, anchor_id="a0", ts=ts)
+        a0.content_hash = a0._compute_hash_prefix_format()
+        a1 = self._make(
+            seq=1, prev=a0.content_hash, meta={"role": "y"}, anchor_id="a1", ts=ts
+        )
+        a1.content_hash = a1._compute_hash_prefix_format()
+        with pytest.raises(PactError) as exc:
+            AuditChain.from_dict(
+                {"chain_id": "c", "anchors": [a0.to_dict(), a1.to_dict()]}
+            )
+        assert exc.value.details["reseal_only"] is True
+        assert "NOT tampering" in str(exc.value)
+
+    def test_mixed_reseal_and_tampered_is_possible_tampering(self) -> None:
+        """Pins the load-bearing all("NOT tampering") predicate: a chain with
+        ONE benign pre-fix re-seal anchor AND ONE genuinely tampered anchor MUST
+        read reseal_only=False. A future refactor to any() would mislabel a
+        tampered-plus-benign chain as a safe re-seal advisory — this fails
+        loudly if that happens."""
+        ts = datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC)
+        a0 = self._make(seq=0, prev=None, meta={"role": "x"}, anchor_id="a0", ts=ts)
+        a0.content_hash = a0._compute_hash_prefix_format()  # benign pre-fix re-seal
+        a1 = self._make(
+            seq=1,
+            prev=a0.content_hash,
+            meta={"role": "y"},
+            anchor_id="a1",
+            ts=datetime(2026, 1, 15, 11, 0, 0, 123456, tzinfo=UTC),
+        )
+        a1.seal()  # current format
+        a1.metadata = {"role": "HACKED"}  # tamper after sealing
+        with pytest.raises(PactError) as exc:
+            AuditChain.from_dict(
+                {"chain_id": "c", "anchors": [a0.to_dict(), a1.to_dict()]}
+            )
+        assert exc.value.details["reseal_only"] is False
+        assert "possible tampering" in str(exc.value)
+
 
 @pytest.mark.regression
 class TestPreFixNaiveNonUtcLimitation:
