@@ -34,15 +34,32 @@ Matches Rust `serde_json::to_string(&BTreeMap)` with non-ASCII escaped to
 fallback (`str(obj)` is implementation-defined and breaks cross-version /
 cross-SDK byte parity).
 
-| Encoder                                               | Location                                        | Typed-scalar policy                                   |
-| ----------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
-| `serialize_for_signing`                               | `kailash/trust/signing/crypto.py`               | `canonical_scalars` whitelist (no `default=str`)      |
-| `AuditAnchor._canonical_input` (metadata)             | `kailash/trust/pact/audit.py`                   | `canonical_scalars` whitelist (no `default=str`)      |
-| `compute_trace_event_fingerprint` (`_canonical_json`) | `kailash/diagnostics/protocols.py`              | `canonical_scalars` whitelist (no `default=str`)      |
-| selective-disclosure witness signers                  | `kailash/trust/enforce/selective_disclosure.py` | **still `default=str`** — NOT yet unified (follow-up) |
+| Encoder                                                | Location                                        | Typed-scalar policy                                       |
+| ------------------------------------------------------ | ----------------------------------------------- | --------------------------------------------------------- |
+| `serialize_for_signing`                                | `kailash/trust/signing/crypto.py`               | `canonical_scalars` whitelist (no `default=str`)          |
+| `AuditAnchor._canonical_input` (metadata)              | `kailash/trust/pact/audit.py`                   | `canonical_scalars` whitelist (no `default=str`)          |
+| `compute_trace_event_fingerprint` (`_canonical_json`)  | `kailash/diagnostics/protocols.py`              | `canonical_scalars` whitelist (no `default=str`)          |
+| `ConstraintEnvelope.envelope_hash`                     | `kailash/trust/envelope.py`                     | `canonical_scalars` whitelist (no `default=str`)          |
+| `ConstraintEnvelope.to_canonical_json` (HMAC preimage) | `kailash/trust/envelope.py`                     | `default=str` — byte-CHANGING under `canonical_scalars` † |
+| selective-disclosure witness family                    | `kailash/trust/enforce/selective_disclosure.py` | `default=str` — byte-CHANGING under `canonical_scalars` † |
 
 Common config for Family B: `sort_keys=True, separators=(",",":"),
-ensure_ascii=True, allow_nan=False`.
+ensure_ascii=True, allow_nan=False` (the `envelope_hash`/audit-anchor metadata
+sites omit `separators` — compact whitespace is already the default for those
+sort-keyed dumps).
+
+† **Byte-changing members are pinned on `default=str` by the cross-SDK byte
+contract, not by an oversight.** `to_canonical_json` serializes the free-form
+`metadata: dict[str, Any]` (an unvalidated typed scalar there — `datetime` /
+`set` / `bytes` — renders differently under `canonical_scalars`), and the
+selective-disclosure witness family hashes a nested `chain.AuditAnchor`
+dataclass that `_audit_record_to_dict` does not pre-normalize. Switching either
+to `canonical_scalars` py-only would diverge the emitted bytes from the
+kailash-rs counterpart that mirrors the current `default=str` output — the same
+class of breaking change as the audit-chain timestamp format (`kailash-rs#449`
+lockstep). The current bytes are pinned by
+`tests/regression/test_canonical_encoder_family_conformance.py` so a silent
+py-only switch fails loudly. See § Cross-SDK note.
 
 ### Timestamp rendering — a deliberate asymmetry
 
@@ -61,20 +78,43 @@ the kailash-rs#449 lockstep.
 
 ---
 
-## Status (2026-06-20 canonical-conformance fix)
+## Status (2026-06-20 canonical-conformance fix + family sweep)
 
-Before this fix the Family-B members **diverged on typed-scalar inputs**:
-`serialize_for_signing` carried the whitelist while the audit-chain and
-trace-event fingerprint paths used `json.dumps(..., default=str)`. The fix
-extracted the whitelist into `kailash.trust._canonical.canonical_scalars` and
-routed the audit + fingerprint paths through it, so those three members now
-share **one** deterministic typed-scalar policy (issues #1403 / #1405).
+The #1400-#1407 fix extracted the typed-scalar whitelist into
+`kailash.trust._canonical.canonical_scalars` and routed the audit-chain +
+trace-event fingerprint paths through it, joining `serialize_for_signing` so
+those three members share **one** deterministic policy (issues #1403 / #1405).
 
-**Remaining non-conformant member:** the selective-disclosure witness signers
-(`selective_disclosure.py`) still use `default=str`. They are a distinct
-cross-SDK signing contract with their own fixtures and rust counterpart;
-unifying them is a separate same-class follow-up (out of the #1400-#1407 scope),
-tracked so the family is not silently assumed fully unified.
+A follow-up empirical byte-diff sweep then classified **every** remaining
+`json.dumps(..., default=str)` site in the trust plane against
+`canonical_scalars` (97 occurrences; 8 candidate signing/hash sites, 89 local
+persistence/display/dedup sites where `default=str` is correct). Two further
+dispositions landed:
+
+- **`ConstraintEnvelope.envelope_hash` → `canonical_scalars` (shipped).** The
+  constraint `to_dict()` layer already pre-normalizes every divergent type and
+  `_hashable_dict` excludes the free-form `metadata` dict, so the swap is
+  byte-neutral on every current envelope — the #1403/#1405 latent-divergence
+  closure pattern. Pinned by `test_envelope_hash_pinned_byte_vector`.
+- **Byte-changing members stay on `default=str`, pinned, not switched.** The
+  selective-disclosure witness family (`_hash_value` / `_compute_chain_hash` /
+  the export+verify sign-payloads) and `ConstraintEnvelope.to_canonical_json`
+  are byte-CHANGING under `canonical_scalars` (nested `chain.AuditAnchor`
+  dataclass and free-form envelope `metadata`, respectively). Because they are
+  documented cross-SDK byte contracts that kailash-rs mirrors on the current
+  `default=str` output, a py-only switch would diverge the SDKs — the same class
+  as the audit-chain timestamp change. They remain on `default=str` and their
+  CURRENT bytes are pinned by
+  `tests/regression/test_canonical_encoder_family_conformance.py` (these are
+  also `selective_disclosure.py`'s first tests). A coordinated cross-SDK
+  migration, if undertaken, must change both SDKs in lockstep and re-pin the
+  vectors together, never py-only.
+
+**Local (no cross-SDK contract) sites keep `default=str` by design:**
+`decorators._hash_result` (a local 16-char fingerprint of an arbitrary
+decorated-function return; the cross-SDK contract is downstream at
+`serialize_for_signing`) and `dataflow/trust/audit.py::compute_query_hash` (a
+DataFlow-local privacy-truncated dedup hash, self-verified, no Rust counterpart).
 
 ## Cross-SDK note
 
