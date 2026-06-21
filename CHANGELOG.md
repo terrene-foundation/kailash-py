@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.43.1] - 2026-06-21
+
+Cross-SDK canonical-encoder conformance plus a trust-plane-wide NaN/Inf signing
+pre-image sweep. Brings Python's audit-chain canonical hash into lockstep with the
+Rust SDK (kailash-rs v4.12.0, rs#1448) and closes an RFC-8259 cross-SDK
+re-verification hazard at every trust-plane signing/hash pre-image (PR #1411, #1412).
+
+### Changed
+
+- **BREAKING (audit-chain byte-shape) — audit-chain canonical hash now uses fixed
+  6-digit microseconds for cross-SDK conformance** (`kailash.trust` audit-chain
+  canonical encoder; issue #1400 via PR #1411). The Python audit-chain canonical
+  pre-image now matches the Rust SDK (kailash-rs v4.12.0) so a Python-anchored audit
+  chain re-verifies under Rust `serde_json` and vice-versa. **Migration:** audit
+  anchors created under ≤2.43.0 whose timestamps differ in microsecond representation
+  (e.g. whole-second timestamps, previously emitted without a trailing `.000000`)
+  recompute to a different integrity hash under 2.43.1 — re-anchor persisted chains
+  after upgrade. This is a byte-shape change to the canonical pre-image, not a
+  public-API change.
+
+### Security
+
+- **Reject NaN/Inf at every trust-plane signing / hash / cross-SDK pre-image**
+  (`allow_nan=False`; PR #1411, #1412). A `json.dumps` over a signing or
+  integrity-hash pre-image that omitted `allow_nan=False` emitted RFC-8259-invalid
+  `NaN` / `Infinity` literals: Python signs and hashes them, but a strict cross-SDK
+  parser (Rust `serde_json`) rejects them, so a Python-signed artifact whose
+  pre-image carried a non-finite float could not be re-verified cross-SDK. Every
+  pre-image now rejects NaN/Inf at serialization (fail-closed), and the change is
+  byte-neutral on all finite input. Covers: envelope HMAC, audit-chain Merkle digest,
+  selective-disclosure witness export/verify, A2A JWT, interop tokens
+  (Biscuit / SD-JWT / UCAN), delegation execution-context state hash,
+  multi-signature, verification-bundle + archive integrity, PACT SQLite audit/policy,
+  and the cross-SDK delegate-conformance digest. A durable AST-invariant regression
+  guard now locks every signing/hash pre-image module to carry `allow_nan=False`.
+
 ## [2.43.0] - 2026-06-20
 
 Wires the binding-owned CL-02a tenant/domain scoping and CL-04 cooling-off
