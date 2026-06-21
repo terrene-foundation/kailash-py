@@ -287,5 +287,6 @@ def compute_wal_hash(wal_data: dict[str, Any]) -> str:
             "reason": wal_data["reason"],
         },
         sort_keys=True,
+        allow_nan=False,  # RFC-8259: reject NaN/Inf in the WAL tamper-detection hash
     )
     return hashlib.sha256(payload.encode()).hexdigest()

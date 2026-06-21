@@ -134,7 +134,7 @@ class AgentCard:
         import hashlib
         import json
 
-        content = json.dumps(self.to_dict(), sort_keys=True)
+        content = json.dumps(self.to_dict(), sort_keys=True, allow_nan=False)
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 

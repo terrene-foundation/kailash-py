@@ -213,6 +213,32 @@ class TestSelectiveDisclosureCrossSDKBlockedBytes:
         assert result.chain_integrity_valid is True
         assert result.valid is True
 
+    def test_witness_family_hash_preimages_reject_nan_inf(self) -> None:
+        """The witness-family signing/hash PRE-IMAGE encoders — ``_hash_value``
+        (redaction SHA-256 pre-image) and ``_compute_chain_hash`` (the chain-hash
+        signing pre-image) — MUST reject NaN/Inf via ``allow_nan=False`` rather than
+        emit RFC-8259-invalid ``NaN``/``Infinity`` literals. Such literals sign fine
+        in Python's permissive ``json`` but a strict cross-SDK parser (Rust
+        ``serde_json``) rejects them, so a Python-signed witness whose pre-image
+        carried a NaN/Inf value could not be re-verified cross-SDK — the exact parity
+        hazard this family exists to close, and the witness-family sibling of the
+        envelope ``to_canonical_json`` fix (commit 9dfb1d968 / kailash-rs#1452).
+
+        Byte-neutral for every finite input: the ``default=str`` byte pins above
+        (``_hash_value`` / ``_compute_chain_hash``) are UNCHANGED — this is NOT the
+        deferred ``default=str`` -> ``canonical_scalars`` migration (kailash-rs#1451);
+        ``default=str`` is preserved at every site. The export/verify sign-payload
+        sites carry the same ``allow_nan=False`` for a UNIFORM canonicalisation
+        contract (no site can drift back); their ``metadata`` is internally built and
+        the public ``export_for_witness`` path additionally normalises untyped record
+        fields (e.g. ``context`` -> ``None``), so the load-bearing exploitable
+        pre-images are the two asserted here directly."""
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with pytest.raises(ValueError, match="JSON compliant"):
+                sd._hash_value(bad)
+            with pytest.raises(ValueError, match="JSON compliant"):
+                sd._compute_chain_hash([{"amount": bad}])
+
 
 # ---------------------------------------------------------------------------
 # 3. Cross-SDK-blocked — envelope to_canonical_json (HMAC sign/verify pre-image)

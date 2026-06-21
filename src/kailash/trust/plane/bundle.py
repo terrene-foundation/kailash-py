@@ -34,9 +34,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from kailash.trust.reasoning.traces import ConfidentialityLevel
-
 from kailash.trust._locking import safe_read_json
+from kailash.trust.reasoning.traces import ConfidentialityLevel
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +132,9 @@ class VerificationBundle:
                         reasoning_traces.append(trace)
                     else:
                         # Redact: preserve hash for chain integrity, remove content
-                        content_str = json.dumps(trace, sort_keys=True, default=str)
+                        content_str = json.dumps(
+                            trace, sort_keys=True, default=str, allow_nan=False
+                        )
                         redacted = {
                             "redacted": True,
                             "confidentiality": trace_conf,
@@ -172,7 +173,9 @@ class VerificationBundle:
 
         # Compute chain hash from anchors
         chain_content = json.dumps(
-            [a.get("anchor_id", "") for a in anchors], sort_keys=True
+            [a.get("anchor_id", "") for a in anchors],
+            sort_keys=True,
+            allow_nan=False,
         )
         chain_hash = hashlib.sha256(chain_content.encode()).hexdigest()
 
@@ -358,7 +361,7 @@ async function verifyBundle() {{
         # 1. Chain hash verification
         anchors = data.get("anchors", [])
         anchor_ids = [a.get("anchor_id", "") for a in anchors]
-        content = json.dumps(anchor_ids, sort_keys=True)
+        content = json.dumps(anchor_ids, sort_keys=True, allow_nan=False)
         computed_hash = hashlib.sha256(content.encode()).hexdigest()
         chain_hash_valid = hmac_mod.compare_digest(
             computed_hash, data.get("chain_hash", "")

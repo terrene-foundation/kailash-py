@@ -203,7 +203,7 @@ def _compute_integrity_hash(
     for h in holds:
         all_ids.append(h["hold_id"])
     all_ids.sort()
-    payload = json.dumps(all_ids, sort_keys=True)
+    payload = json.dumps(all_ids, sort_keys=True, allow_nan=False)
     return hashlib.sha256(payload.encode()).hexdigest()
 
 

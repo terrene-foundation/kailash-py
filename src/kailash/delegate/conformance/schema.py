@@ -446,7 +446,11 @@ def _canonical_json_bytes(obj: Any) -> bytes:
     so the OSS mirror has the narrowest possible boundary).
     """
     return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
     ).encode("utf-8")
 
 

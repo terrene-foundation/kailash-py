@@ -218,6 +218,7 @@ class SecureMessageEnvelope:
             self.payload,
             sort_keys=True,
             separators=(",", ":"),  # No whitespace
+            allow_nan=False,  # RFC-8259: reject NaN/Inf (cross-SDK Ed25519 re-verify)
         )
 
         # Serialize metadata if present
@@ -228,6 +229,7 @@ class SecureMessageEnvelope:
                 metadata_dict,
                 sort_keys=True,
                 separators=(",", ":"),
+                allow_nan=False,  # RFC-8259: reject NaN/Inf (cross-SDK Ed25519 re-verify)
             )
 
         # Create canonical string
@@ -333,7 +335,7 @@ class SecureMessageEnvelope:
         Returns:
             JSON string representation.
         """
-        return json.dumps(self.to_dict(), sort_keys=True)
+        return json.dumps(self.to_dict(), sort_keys=True, allow_nan=False)
 
     @classmethod
     def from_json(cls, json_str: str) -> "SecureMessageEnvelope":

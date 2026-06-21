@@ -44,7 +44,7 @@ NON_REDACTABLE_FIELDS: FrozenSet[str] = frozenset(
 
 def _hash_value(value: Any) -> str:
     """Create SHA-256 hash of a value for redaction."""
-    data = json.dumps(value, sort_keys=True, default=str)
+    data = json.dumps(value, sort_keys=True, allow_nan=False, default=str)
     return f"REDACTED:sha256:{hashlib.sha256(data.encode()).hexdigest()}"
 
 
@@ -276,6 +276,7 @@ def _compute_chain_hash(records: List[Dict[str, Any]]) -> List[str]:
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,
+            allow_nan=False,
             default=str,
         )
         current_hash = hashlib.sha256(payload.encode()).hexdigest()
@@ -338,6 +339,7 @@ def export_for_witness(
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
+        allow_nan=False,
         default=str,
     )
     signature = sign(sign_payload, signing_key)
@@ -382,6 +384,7 @@ def verify_witness_export(
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
+        allow_nan=False,
         default=str,
     )
 
@@ -401,12 +404,14 @@ def verify_witness_export(
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,
+            allow_nan=False,
         ),
         json.dumps(
             export.chain_hashes,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,
+            allow_nan=False,
         ),
     )
     if not chain_valid:

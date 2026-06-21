@@ -60,8 +60,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from kailash.trust.signing.crypto import serialize_for_signing, verify_signature
 from kailash.trust.key_manager import KeyManagerInterface
+from kailash.trust.signing.crypto import serialize_for_signing, verify_signature
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +435,9 @@ class MultiSigManager:
         # Remove from pending
         del self._pending[operation_id]
 
-        return json.dumps(combined, sort_keys=True, separators=(",", ":"))
+        return json.dumps(
+            combined, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
 
     def get_pending(self, operation_id: str) -> Optional[PendingMultiSig]:
         """

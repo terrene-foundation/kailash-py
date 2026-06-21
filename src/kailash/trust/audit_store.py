@@ -217,7 +217,9 @@ def _compute_event_hash(
         "duration_ms": duration_ms,
         "metadata": metadata,
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -786,7 +788,9 @@ class SqliteAuditStore:
                 f"got {event.prev_hash[:16]}..."
             )
 
-        meta_json = json.dumps(event.metadata, sort_keys=True, separators=(",", ":"))
+        meta_json = json.dumps(
+            event.metadata, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
         async with self._pool.acquire_write() as conn:
             await conn.execute(
                 f"""
@@ -1066,7 +1070,9 @@ class AuditRecord:
         payload = self.anchor.to_signing_payload()
         if self.anchor.context:
             payload["context"] = self.anchor.context
-        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        canonical = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def verify_integrity(self) -> bool:
