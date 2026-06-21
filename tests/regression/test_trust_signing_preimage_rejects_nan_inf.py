@@ -179,6 +179,35 @@ class TestTrustSigningPreimageRejectsNanInf:
         store = SqliteAuditLog(str(tmp_path / "audit.db"))
         store.append("test-action", {"cost": 2.0})  # finite: must not raise
 
+    # FAMILY ORIGIN — the selective-disclosure WITNESS export is the family the
+    # whole sweep started from (commit f888ee65e). The producer (export_for_witness)
+    # signs with allow_nan=False; the verifier's canonical pre-image dumps
+    # (selective_disclosure.py:378 + 402-415) now reject NaN/Inf too. A hand-forged
+    # non-finite-bearing ExportPackage therefore fails CLOSED — verify can never
+    # return valid=True for it; it raises before reaching verify_signature. A
+    # legitimately-produced export can NEVER reach this path (the producer also
+    # carries allow_nan=False, and chain_hashes are sha256 hex strings / metadata is
+    # str/int/list[str]), so only adversarial/forged input triggers the raise. This
+    # pins the intended fail-closed contract: a forged adversarial input gets a loud
+    # raise, NEVER a quiet WitnessVerificationResult(valid=False) — so a future
+    # refactor that wraps the verify body cannot silently downgrade the raise to a
+    # verdict (or, worse, a false valid=True).
+    def test_verify_witness_export_rejects_nan_inf_fail_closed(self) -> None:
+        from kailash.trust.enforce.selective_disclosure import (
+            ExportPackage,
+            verify_witness_export,
+        )
+
+        for bad in _NONFINITE:
+            forged = ExportPackage(
+                records=[],
+                export_metadata={"poisoned": bad},
+                chain_hashes=[],
+                signature="00" * 32,
+            )
+            with pytest.raises(ValueError, match=_MATCH):
+                verify_witness_export(forged, "ab" * 32)
+
 
 # ---------------------------------------------------------------------------
 # Structural invariant — the multi-site contract guard (security.md Multi-Site)
