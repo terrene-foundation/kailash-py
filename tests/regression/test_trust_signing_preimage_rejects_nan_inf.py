@@ -282,6 +282,24 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
                 continue
             if not any(h in txt for h in HASHY):  # MODULE-granularity gate
                 continue
+            # Pre-image-by-encode: linenos of ``json.dumps(...).encode(...)`` — a
+            # bytes-producing chain feeding a signature/hash even when the dumps is
+            # BARE (no sort_keys/separators). The 2026-06-21 redteam found
+            # a2a/auth.py signing a bare-json.dumps JWT pre-image exactly this way,
+            # which the canonical-shape predicate alone missed.
+            encoded_dumps: set[int] = set()
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "encode"
+                    and isinstance(node.func.value, ast.Call)
+                    and isinstance(node.func.value.func, ast.Attribute)
+                    and node.func.value.func.attr == "dumps"
+                    and isinstance(node.func.value.func.value, ast.Name)
+                    and node.func.value.func.value.id == "json"
+                ):
+                    encoded_dumps.add(node.func.value.lineno)
             for node in ast.walk(tree):
                 if not (
                     isinstance(node, ast.Call)
@@ -292,9 +310,11 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
                 ):
                     continue
                 kws = {k.arg for k in node.keywords}
-                # Canonical pre-image shape: sort_keys/separators, NOT indent.
+                # A pre-image is canonical (sort_keys/separators) OR bytes-chained
+                # (.encode()). Human/file output (indent=) is never a pre-image.
                 is_canonical = "sort_keys" in kws or "separators" in kws
-                if "indent" in kws or not is_canonical:
+                is_preimage = is_canonical or node.lineno in encoded_dumps
+                if "indent" in kws or not is_preimage:
                     continue  # human/file output — not a deterministic pre-image
                 if "allow_nan" in kws:
                     continue  # correctly guarded
@@ -351,3 +371,42 @@ class TestInteropCrossSDKSerializationRejectNanInf:
             with pytest.raises(ValueError, match=_MATCH):
                 _envelope({"amount": bad}).to_json()
         assert isinstance(_envelope({"amount": 1.5}).to_json(), str)
+
+    def test_a2a_encode_token_rejects_nan_inf_constraint(self) -> None:
+        # Ed25519-signed A2A JWT pre-image — a non-finite constraint claim must
+        # fail closed at the bare json.dumps (before sign()), not emit an
+        # RFC-8259-invalid Infinity a cross-SDK verifier rejects on re-parse.
+        from datetime import timedelta
+
+        from kailash.trust.a2a.auth import A2AAuthenticator
+        from kailash.trust.a2a.models import A2AToken
+        from kailash.trust.signing.crypto import generate_keypair
+
+        priv, _pub = generate_keypair()
+        # _encode_token does not touch trust_operations; None is safe at runtime.
+        auth = A2AAuthenticator(
+            trust_operations=None,  # type: ignore[arg-type]
+            agent_id="agent-1",
+            private_key=priv,
+        )
+        now = datetime(2026, 1, 15, 11, 0, 0, tzinfo=UTC)
+
+        def _tok(constraints: dict) -> A2AToken:
+            return A2AToken(
+                sub="a",
+                iss="a",
+                aud="b",
+                exp=now + timedelta(seconds=60),
+                iat=now,
+                jti="j",
+                authority_id="x",
+                trust_chain_hash="h",
+                capabilities=[],
+                constraints=constraints,
+            )
+
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                auth._encode_token(_tok({"max_cost": bad}))
+        # finite constraint still signs (byte-neutral)
+        assert isinstance(auth._encode_token(_tok({"max_cost": 100.0})), str)

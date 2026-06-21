@@ -23,8 +23,8 @@ from kailash.trust.a2a.exceptions import (
     TrustVerificationError,
 )
 from kailash.trust.a2a.models import A2AToken
-from kailash.trust.signing.crypto import sign, verify_signature
 from kailash.trust.operations import TrustOperations
+from kailash.trust.signing.crypto import sign, verify_signature
 
 logger = logging.getLogger(__name__)
 
@@ -201,11 +201,15 @@ class A2AAuthenticator:
         """Encode token to JWT string."""
         # Header
         header = {"alg": "EdDSA", "typ": "JWT"}
-        header_b64 = self._base64url_encode(json.dumps(header).encode())
+        header_b64 = self._base64url_encode(
+            json.dumps(header, allow_nan=False).encode()
+        )
 
         # Payload
         payload = token.to_claims()
-        payload_b64 = self._base64url_encode(json.dumps(payload).encode())
+        payload_b64 = self._base64url_encode(
+            json.dumps(payload, allow_nan=False).encode()
+        )
 
         # Sign header.payload
         message = f"{header_b64}.{payload_b64}".encode()
