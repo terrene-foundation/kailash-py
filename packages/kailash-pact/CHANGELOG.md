@@ -1,5 +1,16 @@
 # PACT Changelog
 
+## [0.14.1] — 2026-06-21 — fix: reject NaN/Inf in the conformance canonical encoder (#1412)
+
+### Security
+
+- `pact.conformance.vectors.canonical_json_dumps` now rejects RFC-8259-invalid
+  `NaN` / `Infinity` (`allow_nan=False`), so a PACT conformance vector generated
+  with a non-finite float fails closed at serialization instead of emitting
+  invalid JSON a strict cross-SDK parser (Rust `serde_json`) cannot re-parse.
+  Byte-neutral on all finite input. Part of the trust-plane-wide NaN/Inf
+  signing/hash pre-image sweep (kailash 2.43.1, PR #1412).
+
 ## [0.14.0] — 2026-06-19 — feat: apply YAML governance specs to the runtime engine (#1386)
 
 ### Added
