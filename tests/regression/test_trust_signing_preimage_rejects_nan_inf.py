@@ -229,6 +229,10 @@ def test_trust_plane_signing_preimages_all_carry_allow_nan() -> None:
     roots = [
         repo / "src" / "kailash" / "trust",
         repo / "packages" / "kailash-pact" / "src",
+        # Cross-SDK conformance encoders (vendored from rs per cross-sdk-inspection
+        # Rule 4a) — tamper-evidence digests persisted to a cross-SDK-readable
+        # fixture; the 2026-06-21 redteam found _canonical_json_bytes drifted here.
+        repo / "src" / "kailash" / "delegate" / "conformance",
     ]
 
     # MODULE-granularity sign/hash signal — a json.dumps pre-image is often in a
@@ -410,3 +414,13 @@ class TestInteropCrossSDKSerializationRejectNanInf:
                 auth._encode_token(_tok({"max_cost": bad}))
         # finite constraint still signs (byte-neutral)
         assert isinstance(auth._encode_token(_tok({"max_cost": 100.0})), str)
+
+    def test_delegate_conformance_canonical_bytes_rejects_nan_inf(self) -> None:
+        # cross-SDK tamper-evidence digest pre-image (vendored from rs per Rule 4a);
+        # its docstring claims canonical_json_dumps parity, which carries allow_nan.
+        from kailash.delegate.conformance.schema import _canonical_json_bytes
+
+        for bad in _NONFINITE:
+            with pytest.raises(ValueError, match=_MATCH):
+                _canonical_json_bytes({"v": bad})
+        assert isinstance(_canonical_json_bytes({"v": 1.5}), bytes)
