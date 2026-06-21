@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.14.0"
+__version__ = "0.14.1"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
