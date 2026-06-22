@@ -47,10 +47,10 @@ Scoped to the `kailash` core and categorised, the real picture is:
 
 | Metric                                                  | Count |
 | ------------------------------------------------------- | ----- |
-| Files with ≥1 marker (`src/kailash`)                    | 38    |
-| Total marker lines                                      | 66    |
+| Files with ≥1 marker (`src/kailash`)                    | 39    |
+| Total marker lines                                      | 67    |
 | — false-positive (not a real marker)                    | 31    |
-| — sentinel (intentional contract)                       | 24    |
+| — sentinel (intentional contract)                       | 25    |
 | — gap (genuine deferred work)                           | 11    |
 | — tracked (deferred + issue-linked)                     | 0     |
 | **Genuine gaps reachable from a documented public API** | **4** |
@@ -121,26 +121,27 @@ These raise `NotImplementedError` **by contract** (abstract method / typed-node 
 a base without implementing the required method, or by calling a deliberately
 unsupported operation, and the error message names the fix.
 
-| Location                                   | Contract                                                                               |
-| ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `nodes/base_async.py:190`, `:210`          | `AsyncNode.run()` guard — async nodes must implement `async_run()`.                    |
-| `nodes/base.py:2056`                       | `AsyncTypedNode.run()` guard — must implement `async_run()`.                           |
-| `nodes/base_with_acl.py:147`, `:258`       | Access-controlled node must implement `_execute()`.                                    |
-| `runtime/base.py:940`                      | `BaseRuntime.execute()` — implemented by `LocalRuntime` / `AsyncLocalRuntime`.         |
-| `delegate/dispatch.py:643`                 | Abstract connector primitive (`# pragma: no cover (abstract)`).                        |
-| `delegate/dispatch.py:769`                 | Guard for legacy `invoke()`-only connectors — directs to `connector.invoke(...)`.      |
-| `utils/migrations/models.py:196`           | Abstract template method — "Override in subclasses".                                   |
-| `nodes/edge/edge_data.py:564`, `:574`      | Strong-consistency / primary-refresh need an inter-edge transport (subclass supplies). |
-| `nodes/edge/edge_warming_node.py:348`      | Edge warming needs infrastructure integration (subclass supplies).                     |
-| `nodes/edge/edge_state.py:622`             | State replication needs an edge transport (subclass supplies).                         |
-| `edge/consistency.py:214`, `:241`          | 2PC prepare / abort need a replica transport (subclass supplies).                      |
-| `edge/prediction/predictive_warmer.py:524` | Edge warming needs infrastructure integration (subclass supplies).                     |
-| `workflow/convergence.py:28`               | Abstract `ConvergenceCondition.should_terminate()`.                                    |
-| `trust/audit_service.py:488`               | Guard — `get_unattested_reasoning()` requires a store with `list_records()`.           |
-| `trust/plane/conformance/__init__.py:602`  | Dispatch guard for a conformance test name with no `_test_<name>` method.              |
-| `trust/pact/stores/sqlite.py:176`          | Abstract `_create_tables()` — "Override in subclasses".                                |
-| `channels/mcp/http.py:130`                 | `HttpTransport.receive()` — HTTP is request/response only (documented design).         |
-| `channels/mcp/base.py:80`, `:99`, `:108`   | Abstract `Transport` base — `send` / `receive` / `close`.                              |
+| Location                                   | Contract                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `nodes/base_async.py:190`, `:210`          | `AsyncNode.run()` guard — async nodes must implement `async_run()`.                                                                                    |
+| `nodes/base.py:2056`                       | `AsyncTypedNode.run()` guard — must implement `async_run()`.                                                                                           |
+| `nodes/data/async_sql.py:1103`             | Abstract `DatabaseAdapter.stream()` (`# pragma: no cover - abstract`) — each dialect adapter supplies the server-side-cursor streaming implementation. |
+| `nodes/base_with_acl.py:147`, `:258`       | Access-controlled node must implement `_execute()`.                                                                                                    |
+| `runtime/base.py:940`                      | `BaseRuntime.execute()` — implemented by `LocalRuntime` / `AsyncLocalRuntime`.                                                                         |
+| `delegate/dispatch.py:643`                 | Abstract connector primitive (`# pragma: no cover (abstract)`).                                                                                        |
+| `delegate/dispatch.py:769`                 | Guard for legacy `invoke()`-only connectors — directs to `connector.invoke(...)`.                                                                      |
+| `utils/migrations/models.py:196`           | Abstract template method — "Override in subclasses".                                                                                                   |
+| `nodes/edge/edge_data.py:564`, `:574`      | Strong-consistency / primary-refresh need an inter-edge transport (subclass supplies).                                                                 |
+| `nodes/edge/edge_warming_node.py:348`      | Edge warming needs infrastructure integration (subclass supplies).                                                                                     |
+| `nodes/edge/edge_state.py:622`             | State replication needs an edge transport (subclass supplies).                                                                                         |
+| `edge/consistency.py:214`, `:241`          | 2PC prepare / abort need a replica transport (subclass supplies).                                                                                      |
+| `edge/prediction/predictive_warmer.py:524` | Edge warming needs infrastructure integration (subclass supplies).                                                                                     |
+| `workflow/convergence.py:28`               | Abstract `ConvergenceCondition.should_terminate()`.                                                                                                    |
+| `trust/audit_service.py:488`               | Guard — `get_unattested_reasoning()` requires a store with `list_records()`.                                                                           |
+| `trust/plane/conformance/__init__.py:602`  | Dispatch guard for a conformance test name with no `_test_<name>` method.                                                                              |
+| `trust/pact/stores/sqlite.py:176`          | Abstract `_create_tables()` — "Override in subclasses".                                                                                                |
+| `channels/mcp/http.py:130`                 | `HttpTransport.receive()` — HTTP is request/response only (documented design).                                                                         |
+| `channels/mcp/base.py:80`, `:99`, `:108`   | Abstract `Transport` base — `send` / `receive` / `close`.                                                                                              |
 
 ---
 
@@ -180,10 +181,10 @@ Documented so the count is complete and the guard's raw hits are explained.
 {
   "scope": "src/kailash",
   "regex": "\\b(TODO|FIXME|HACK|STUB|XXX)\\b|NotImplementedError",
-  "total": 66,
+  "total": 67,
   "category_tally": {
     "false_positive": 31,
-    "sentinel": 24,
+    "sentinel": 25,
     "gap": 11,
     "tracked": 0
   },
@@ -202,6 +203,7 @@ Documented so the count is complete and the guard's raw hits are explained.
     "src/kailash/nodes/base_async.py": 4,
     "src/kailash/nodes/base_with_acl.py": 2,
     "src/kailash/nodes/compliance/gdpr.py": 1,
+    "src/kailash/nodes/data/async_sql.py": 1,
     "src/kailash/nodes/data/bulk_operations.py": 1,
     "src/kailash/nodes/edge/edge_data.py": 2,
     "src/kailash/nodes/edge/edge_monitoring_node.py": 1,
