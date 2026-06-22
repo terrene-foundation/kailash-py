@@ -164,6 +164,85 @@ $ git add bindings/kailash-rs/test-vectors/trace-event-canonical.json
 
 Origin: kailash-rs PR #761 (merged 8286775f, 2026-05-02) — vendored `test-vectors/trace-event-canonical.json` from `terrene-foundation/kailash-py:main`. Pre-vendor: rs-side fixture had `id`/`input` shape with V1-V3 inputs cosmetically different from py-side; V4-V5 fingerprints already matched (Unicode coverage tests aligned, V1-V3 weren't). Post-vendor: all 5 V1-V5 fingerprints reproduce byte-for-byte through both Rust `compute_trace_event_fingerprint` AND Python binding `serialize_canonical_json`. Same-shard sibling consumer fix per `autonomous-execution.md` Rule 4 (Python binding test orphaned at first push, CI surfaced it, fix-immediately landed in same PR commit `10274a5d`). Codified GLOBAL via /sync rs Gate 1 (2026-05-02 second cycle).
 
+### 4b. Byte-CHANGING Canonical-Encoder Switches Are Cross-SDK Lockstep, Not Single-SDK
+
+When migrating a canonical-encoder / serialization helper that feeds a cross-SDK signing or hash pre-image (e.g. `json.dumps(..., default=str)` → a stricter `canonical_scalars`), you MUST first classify the switch as **byte-NEUTRAL** or **byte-CHANGING** by EMPIRICALLY byte-diffing production output on fixed inputs — NOT by reasoning about it. A byte-CHANGING switch where the sibling SDK mirrors this SDK's CURRENT bytes MUST NOT ship single-SDK; it is a coordinated cross-SDK lockstep (one re-pin event in both repos) and the current bytes MUST be pinned in a regression test as a loud tripwire until the lockstep lands. A byte-NEUTRAL switch (the `to_dict()` / normalization layer already pre-normalizes every divergent type, so the swap changes zero currently-emitted bytes) MAY ship single-SDK.
+
+```python
+# DO — empirically classify, then pin current bytes for the byte-CHANGING site
+@pytest.mark.regression
+def test_witness_sign_payload_pins_current_default_str_bytes():
+    # CROSS_SDK_BLOCKED: AuditAnchor reaches the encoder un-normalized; default=str
+    # stringifies the dataclass repr, canonical_scalars asdict-expands it → different SHA.
+    # kailash-rs mirrors these CURRENT bytes; a py-only switch diverges the two SDKs.
+    assert _sign_payload(fixture) == "edfdf52b…"   # tripwire until rs#NNNN lockstep
+# (the byte-NEUTRAL sibling — envelope_hash, where to_dict() pre-normalizes — SHIPPED py-only)
+
+# DO NOT — switch a byte-CHANGING signing encoder single-SDK
+def to_canonical_json(self):
+    return json.dumps(self._hashable_dict(), default=canonical_scalars)  # was default=str
+    # ↑ silently diverges every on-disk signed artifact from the sibling SDK's bytes;
+    #   no test pins the old bytes, so the cross-SDK break is invisible until a verify fails.
+```
+
+**BLOCKED rationalizations:**
+
+- "canonical_scalars is stricter / more correct, so switching is an improvement"
+- "I reasoned through the types; it can't change the bytes" (reason is not a byte-diff)
+- "The sibling SDK will catch up on its next release"
+- "It's one encoder; the lockstep ceremony is overkill"
+- "Pinning the OLD bytes blocks the migration I'm trying to do"
+
+**Why:** A canonical signing encoder is a byte-for-byte cross-SDK contract (Rule 4); switching it single-SDK silently diverges every artifact the sibling SDK must re-verify, and the break surfaces only when a cross-SDK verify fails in production. Empirical byte-diff (run the code, compare SHAs) is the only sound classifier — "I reasoned the types are equivalent" is exactly how the audit-chain / witness-family / envelope-HMAC sites were each almost switched py-only. Pinning the current bytes converts the deferred lockstep from an un-tracked memory into a test that fails loudly the moment someone switches one side.
+
+**Trust Posture Wiring (byte-changing cross-SDK lockstep):**
+
+- **Severity:** `halt-and-report` at gate-review (reviewer + security-reviewer at `/implement` confirm any canonical-encoder switch on a signing/hash site is classified byte-neutral-vs-byte-changing with an empirical byte-diff, and byte-changing switches carry a pinned-bytes tripwire + cross-SDK issue); `advisory` at hook layer.
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** same-class violations (a byte-changing canonical switch shipped single-SDK, or unclassified) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** trigger key `cross_sdk_canonical_single_sdk_switch` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate).
+- **Detection mechanism:** Phase 1 — gate-level reviewer at `/implement`: for any diff touching a canonical-encoder/serialization helper on a signing/hash path, demand the empirical byte-diff classification + (for byte-changing) the pinned-current-bytes regression test + the cross-SDK lockstep issue. Phase 2 (deferred): a regression-suite invariant enumerating signing-site encoders and asserting each pinned.
+- **Violation scope:** this clause (canonical-encoder switches on cross-SDK signing/hash pre-images). Every violation row names the encoder site + the missing classification or tripwire.
+- **Origin:** kailash 2.43.1 cross-SDK canonical-encoder family sweep (2026-06-20) — `workspaces/cross-sdk-audit/journal/0011` (byte-diff classification of 97 `default=str` sites: audit-chain + witness-family + envelope-HMAC byte-CHANGING/lockstep, envelope_hash byte-NEUTRAL/shipped); `specs/trust-canonical-encoders.md`.
+
+### 4c. Conformance-Vector Changes Re-Pin Their Integrity Manifest In The Same Commit
+
+When a commit changes a cross-SDK conformance vector / test-fixture file pinned by a committed integrity manifest (`*.sha256`, e.g. `PACT_VECTORS.sha256`), the manifest MUST be re-pinned in the SAME commit. A `/redteam` over any canonical-vector change MUST include an **integrity-manifest sweep** lens: enumerate every `*.sha256` and run `shasum -a256 -c` on each.
+
+```bash
+# DO — re-pin the manifest in the same commit that changes the vector
+$ edit tests/trust/pact/conformance/vectors/audit_anchor.json   # the canonical fix
+$ shasum -a256 tests/trust/.../audit_anchor.json                 # recompute
+$ edit PACT_VECTORS.sha256                                       # re-pin in SAME commit
+$ shasum -a256 -c PACT_VECTORS.sha256                            # verify green before push
+
+# DO NOT — change the vector, leave the manifest stale
+$ edit tests/trust/.../audit_anchor.json && git commit           # manifest unchanged
+# ↑ remote `Verify vector integrity` (shasum -c) goes RED ("audit_anchor.json: FAILED");
+#   a "converged" redteam that never ran shasum -c declares clean over a red CI gate.
+```
+
+**BLOCKED rationalizations:**
+
+- "The vector change is correct; the manifest is a separate concern"
+- "CI will catch the manifest if it's stale" (catching it red ≠ shipping it green)
+- "The redteam already converged" (a convergence claim over a red remote gate is false — `verify-resource-existence.md` MUST-4)
+- "shasum -c isn't part of the canonical-conformance lens-set"
+
+**Why:** An integrity manifest exists to make silent tampering of a pinned vector loud; a vector change that omits the re-pin either reds the CI gate (best case) or — if the manifest also drifts — silently no-ops the integrity check for that file until a future real tamper goes undetected. The redteam integrity-manifest sweep is the lens that makes a "converged" claim cite `shasum -c` evidence rather than assume it; without it a round can declare 2-clean-rounds while the remote conformance gate is red. Evidence: PR #1411 (2026-06-20) shipped the correct `audit_anchor.json` canonical fix but omitted the `PACT_VECTORS.sha256` re-pin → red `Cross-SDK Conformance` gate that a prior "converged (2 clean passes)" redteam missed because no round ran `shasum -c`.
+
+**Trust Posture Wiring (conformance-vector integrity-manifest re-pin):**
+
+- **Severity:** `halt-and-report` at gate-review (reviewer at `/implement` + release-specialist at `/release` confirm any conformance-vector diff re-pins its `*.sha256`); `block` at the structural CI gate (`shasum -a256 -c` is a structural exit-code signal per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** same-class violations (vector changed without manifest re-pin) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** trigger key `integrity_manifest_not_repinned` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate; shared with Rule 4b).
+- **Detection mechanism:** Phase 1 — the CI `Verify vector integrity` step (`shasum -a256 -c *.sha256`) is the structural detector; the canonical-vector `/redteam` integrity-manifest-sweep lens enumerates every `*.sha256` and runs the check. Phase 2 (deferred): a pre-commit hook asserting that a changed `*.json` under a vectors dir co-changes its manifest.
+- **Violation scope:** this clause (conformance-vector integrity-manifest re-pin). Every violation row names the vector file + its stale manifest.
+- **Origin:** PR #1411 Gap 1 (2026-06-20) — `workspaces/cross-sdk-audit/journal/0015` (the `PACT_VECTORS.sha256` re-pin omission a "converged" redteam missed because no round ran `shasum -c`; closed by commit `b4929d924` + a new integrity-manifest-sweep lens).
+
 ### 5. Inspection Checklist
 
 When closing any issue, verify:
