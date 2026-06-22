@@ -1665,29 +1665,56 @@ class MySQLAdapter(DatabaseAdapter):
         """Stream MySQL rows via an UNBUFFERED ``aiomysql.SSCursor``.
 
         ``SSCursor`` does not buffer the whole result set client-side — rows
-        are pulled from the server in ``batch_size`` chunks via
-        ``fetchmany``. The cursor holds the result set, so it MUST be fully
-        drained/closed before the connection is released; the
-        ``async with conn.cursor(SSCursor)`` block guarantees that on
-        ``__aexit__`` (normal completion, early ``break``, or exception
-        unwind). The acquired connection is likewise held open by THIS
-        context manager for the full iteration and released on exit.
+        are pulled from the server in ``batch_size`` chunks via ``fetchmany``.
+        The cursor holds the server-side result set, so the lifecycle ORDER is
+        load-bearing on every exit path (completion / early ``break`` /
+        exception unwind):
+
+        1. the SSCursor is opened and closed in THIS context-manager body (not
+           the inner row generator) so ``cursor.close()`` sequences strictly
+           before the connection is released;
+        2. the read transaction is rolled back before the connection returns
+           to the pool — the pool runs ``autocommit=False``, so a streamed
+           SELECT leaves an open read transaction; returning the connection
+           dirty makes the NEXT query (especially DDL, which implicitly
+           commits) block on the prior open transaction.
+
+        Closing the SSCursor before draining (early break) also discards the
+        remaining server-side rows so the connection is not left mid-result.
+        The acquired connection is held open by this CM for the whole
+        iteration and released on exit.
         """
         import aiomysql
 
-        async def _iter_rows(conn):
-            async with conn.cursor(aiomysql.SSCursor) as cursor:
-                await cursor.execute(query, params)
-                columns = [d[0] for d in cursor.description]
-                while True:
-                    batch = await cursor.fetchmany(batch_size)
-                    if not batch:
-                        break
-                    for row in batch:
-                        yield self._convert_row(dict(zip(columns, row)))
+        async def _iter_rows(cursor, columns):
+            while True:
+                batch = await cursor.fetchmany(batch_size)
+                if not batch:
+                    break
+                for row in batch:
+                    yield self._convert_row(dict(zip(columns, row)))
 
         async with self._pool.acquire() as conn:
-            yield _iter_rows(conn)
+            cursor = await conn.cursor(aiomysql.SSCursor)
+            try:
+                await cursor.execute(query, params)
+                columns = [d[0] for d in cursor.description]
+                yield _iter_rows(cursor, columns)
+            finally:
+                # Close the SSCursor FIRST (discards any unread server-side
+                # rows on an early break), THEN clear the read transaction so
+                # the connection returns to the pool clean.
+                await cursor.close()
+                try:
+                    await conn.rollback()
+                except Exception:  # noqa: BLE001 - best-effort txn reset
+                    # A rollback failure here must not mask the real exception
+                    # being unwound; the connection will be recycled by the
+                    # pool's own health check. Logged for triage.
+                    logger.warning(
+                        "async_sql.mysql_stream.rollback_failed",
+                        exc_info=True,
+                    )
 
     async def execute_many(
         self,
