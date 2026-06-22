@@ -49,6 +49,27 @@ For reading and writing data:
        "parameter_types": ["BOOLEAN"]
    })
 
+For large result sets, ``AsyncSQLDatabaseNode.stream()`` returns an async context
+manager that yields rows lazily from a server-side cursor (PostgreSQL, MySQL) or a
+chunked fetch (SQLite), so peak memory is bounded by ``batch_size`` rather than the
+full result. The connection is held open for the duration of iteration and released
+on every exit path — normal completion, early ``break``, or exception. Streamed rows
+are identical to ``fetch_mode="all"`` rows, and query validation plus access-control
+masking apply on the stream path exactly as on the materialized path:
+
+.. code-block:: python
+
+   node = AsyncSQLDatabaseNode(
+       database_type="postgresql",
+       connection_string=os.environ.get("DATABASE_URL"),
+   )
+
+   async with node.stream(
+       query="SELECT * FROM events ORDER BY id", batch_size=1000
+   ) as cursor:
+       async for row in cursor:
+           process(row)
+
 AI / LLM Nodes
 ---------------
 
