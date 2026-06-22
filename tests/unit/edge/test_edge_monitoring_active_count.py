@@ -80,6 +80,36 @@ async def test_active_count_excludes_inactive_alerts():
 
 
 @pytest.mark.regression
+async def test_get_alerts_active_only_uses_is_alert_active():
+    """Pin the unified `active` semantic on the public `get_alerts(active_only=True)`
+    path: `is_alert_active` is the single predicate for both `get_alerts` filtering
+    and the node's `active_count`. An alert with a live cooldown entry is returned;
+    a stale-cooldown alert and a no-history alert are both excluded.
+
+    Note: the no-history case is the one deliberate change from the pre-extraction
+    `get_alerts` (which kept no-history alerts via a `key in alert_history` guard).
+    Unifying on `is_alert_active` makes filtering and counting agree. The live path
+    is unaffected — every generated alert records its cooldown entry at creation
+    (`EdgeMonitor._check_thresholds`).
+    """
+    monitor = EdgeMonitor(alert_cooldown=300)
+    active = _alert("n1", MetricType.LATENCY, "active")
+    stale = _alert("n2", MetricType.ERROR_RATE, "stale")
+    no_history = _alert("n3", MetricType.THROUGHPUT, "nohist")
+    monitor.alerts = [active, stale, no_history]
+    monitor.alert_history["n1:latency"] = datetime.now()
+    monitor.alert_history["n2:error_rate"] = datetime.now() - timedelta(seconds=600)
+    # n3 has no alert_history entry.
+
+    returned = await monitor.get_alerts(active_only=True)
+    returned_ids = {a.alert_id for a in returned}
+    assert returned_ids == {"active"}
+
+    # active_only=False returns everything (filtering unchanged on that path).
+    assert len(await monitor.get_alerts(active_only=False)) == 3
+
+
+@pytest.mark.regression
 async def test_active_count_zero_when_no_history():
     """When no alert has a live cooldown entry, active_count is 0 even though
     alerts are returned — the no-op filter would have reported the full count."""
