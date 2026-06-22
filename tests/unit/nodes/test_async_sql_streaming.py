@@ -379,3 +379,191 @@ def test_stream_uses_default_batch_size_signature():
 
     sig = inspect.signature(SQLiteAdapter.stream)
     assert sig.parameters["batch_size"].default == DEFAULT_STREAM_BATCH_SIZE
+
+
+# ---------------------------------------------------------------------------
+# Node-layer stream() — public surface (node.stream), masking, lifetime
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def seeded_node(sqlite_db_path):
+    """An AsyncSQLDatabaseNode over a seeded file-backed SQLite DB."""
+    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+    node = AsyncSQLDatabaseNode(
+        name="stream_test_node",
+        database_type="sqlite",
+        database=sqlite_db_path,
+        validate_queries=True,
+        allow_admin=True,  # needed only to seed the schema below
+        share_pool=False,
+    )
+    await node.async_run(
+        query="CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT, ssn TEXT)"
+    )
+    for i, name, ssn in [
+        (1, "Alice", "111-11-1111"),
+        (2, "Bob", "222-22-2222"),
+        (3, "Carol", "333-33-3333"),
+    ]:
+        await node.async_run(
+            query="INSERT INTO people (id, name, ssn) VALUES (:id, :name, :ssn)",
+            params={"id": i, "name": name, "ssn": ssn},
+        )
+    return node
+
+
+@pytest.mark.asyncio
+async def test_node_stream_round_trip_matches_async_run(seeded_node):
+    """node.stream rows equal the node's materialized async_run data."""
+    materialized = await seeded_node.async_run(
+        query="SELECT id, name FROM people ORDER BY id"
+    )
+    expected = materialized["result"]["data"]
+
+    streamed = []
+    async with seeded_node.stream(
+        query="SELECT id, name FROM people ORDER BY id", batch_size=2
+    ) as cursor:
+        async for row in cursor:
+            streamed.append(row)
+
+    assert streamed == expected
+    assert [r["id"] for r in streamed] == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_node_stream_positional_params(seeded_node):
+    """Positional params are converted (node→named→adapter→positional)."""
+    streamed = []
+    async with seeded_node.stream(
+        query="SELECT id FROM people WHERE id > ? ORDER BY id", params=[1]
+    ) as cursor:
+        async for row in cursor:
+            streamed.append(row["id"])
+    assert streamed == [2, 3]
+
+
+@pytest.mark.asyncio
+async def test_node_stream_early_break_then_reuse(seeded_node):
+    """Early break releases the connection; the node is reusable after."""
+    seen = []
+    async with seeded_node.stream(query="SELECT id FROM people ORDER BY id") as cursor:
+        async for row in cursor:
+            seen.append(row["id"])
+            break
+    assert seen == [1]
+
+    after = await seeded_node.async_run(query="SELECT COUNT(*) AS c FROM people")
+    assert after["result"]["data"][0]["c"] == 3
+
+
+@pytest.mark.asyncio
+async def test_node_stream_validates_query(seeded_node):
+    """Streaming honors the same query validation gate as async_run.
+
+    A UNION-based injection pattern is rejected regardless of allow_admin,
+    proving the validation gate fires on the streaming path too.
+    """
+    from kailash.sdk_exceptions import NodeExecutionError
+
+    with pytest.raises(NodeExecutionError, match="Query validation failed"):
+        async with seeded_node.stream(
+            query="SELECT id FROM people UNION SELECT ssn FROM people"
+        ):
+            pass
+
+
+class _MaskingAccessControlManager:
+    """Deterministic access-control manager (Protocol-satisfying, NOT a mock).
+
+    Allows EXECUTE and masks the ``ssn`` field per row. Deterministic output
+    over deterministic input — per testing.md § "Protocol Adapters", this is a
+    real adapter, not a mock.
+    """
+
+    class _Decision:
+        allowed = True
+        reason = "ok"
+
+    def check_node_access(self, user_context, node_name, permission):
+        return self._Decision()
+
+    def apply_data_masking(self, user_context, node_name, row):
+        masked = dict(row)
+        if "ssn" in masked and masked["ssn"] is not None:
+            masked["ssn"] = "***-**-****"
+        return masked
+
+
+@pytest.mark.asyncio
+async def test_node_stream_applies_masking_per_row(seeded_node):
+    """Per-row masking MUST be applied to streamed rows (no silent bypass).
+
+    The materialized path masks per row; streaming MUST do the same, or
+    streaming becomes a masking-bypass security gap.
+    """
+    seeded_node.access_control_manager = _MaskingAccessControlManager()
+    user_context = {"user_id": "u1"}
+
+    streamed = []
+    async with seeded_node.stream(
+        query="SELECT id, name, ssn FROM people ORDER BY id",
+        user_context=user_context,
+    ) as cursor:
+        async for row in cursor:
+            streamed.append(row)
+
+    # Every streamed row has the ssn masked, names intact.
+    assert [r["name"] for r in streamed] == ["Alice", "Bob", "Carol"]
+    assert all(r["ssn"] == "***-**-****" for r in streamed), streamed
+    # No raw SSN leaked through the stream.
+    assert all("111-11-1111" != r["ssn"] for r in streamed)
+
+
+@pytest.mark.asyncio
+async def test_node_stream_no_masking_when_no_user_context(seeded_node):
+    """With a manager set but no user_context, masking is NOT applied.
+
+    Mirrors async_run: masking requires BOTH the manager AND a user_context.
+    """
+    seeded_node.access_control_manager = _MaskingAccessControlManager()
+
+    streamed = []
+    async with seeded_node.stream(
+        query="SELECT id, ssn FROM people ORDER BY id"
+    ) as cursor:  # no user_context
+        async for row in cursor:
+            streamed.append(row)
+
+    # Unmasked — the raw SSNs come through (no user_context → no masking).
+    assert [r["ssn"] for r in streamed] == [
+        "111-11-1111",
+        "222-22-2222",
+        "333-33-3333",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_node_stream_access_denied_blocks(seeded_node):
+    """A denying access-control manager blocks streaming before it opens."""
+    from kailash.sdk_exceptions import NodeExecutionError
+
+    class _DenyManager:
+        class _Decision:
+            allowed = False
+            reason = "no access"
+
+        def check_node_access(self, user_context, node_name, permission):
+            return self._Decision()
+
+        def apply_data_masking(self, user_context, node_name, row):
+            return row
+
+    seeded_node.access_control_manager = _DenyManager()
+    with pytest.raises(NodeExecutionError, match="Access denied"):
+        async with seeded_node.stream(
+            query="SELECT id FROM people", user_context={"user_id": "u1"}
+        ):
+            pass

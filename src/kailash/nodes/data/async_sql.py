@@ -36,6 +36,7 @@ import sys
 import threading
 import time
 import traceback
+import uuid
 import warnings
 import weakref
 from abc import ABC, abstractmethod
@@ -2027,44 +2028,61 @@ class SQLiteAdapter(DatabaseAdapter):
         SQLite has no true server-side cursor; ``fetchmany(batch_size)`` bounds
         peak Python-object memory by pulling at most ``batch_size`` rows per
         round trip. The connection is reused from the pool / shared-memory
-        helper / inline-file path (mirroring ``execute``); the cursor is closed
-        in a ``finally``. The shared ``:memory:`` connection is NEVER closed
+        helper / inline-file path (mirroring ``execute``).
+
+        Cursor + connection lifecycle ORDER is load-bearing: the cursor MUST
+        be closed BEFORE its connection is released, on every exit path
+        (normal completion, early ``break``, exception unwind). The cursor is
+        therefore opened and closed in THIS context-manager body — not inside
+        the row-yielding inner generator — so the explicit ``await
+        cursor.close()`` sequences strictly before the connection's
+        ``__aexit__`` runs. The shared ``:memory:`` connection is NEVER closed
         here — ``disconnect()`` owns that connection's lifecycle (issue #1051).
         """
         assert self._aiosqlite is not None
 
-        async def _iter_rows(db):
-            cursor = await db.execute(query, params or [])
-            try:
-                while True:
-                    batch = await cursor.fetchmany(batch_size)
-                    if not batch:
-                        break
-                    for row in batch:
-                        yield self._convert_row(dict(row))
-            finally:
-                await cursor.close()
+        async def _iter_rows(cursor):
+            while True:
+                batch = await cursor.fetchmany(batch_size)
+                if not batch:
+                    break
+                for row in batch:
+                    yield self._convert_row(dict(row))
 
         if self._pool is not None:
             # Pool path: hold the acquired connection open for the whole
             # iteration. ``acquire`` keeps the connection checked out until
             # the ``async with`` block exits (i.e. __aexit__).
             async with self._pool.acquire(query) as db:
-                yield _iter_rows(db)
+                cursor = await db.execute(query, params or [])
+                try:
+                    yield _iter_rows(cursor)
+                finally:
+                    await cursor.close()
         elif self._is_memory_db:
             # Shared :memory: connection — owned by disconnect(); do NOT close.
             db = await self._get_connection()
-            yield _iter_rows(db)
+            cursor = await db.execute(query, params or [])
+            try:
+                yield _iter_rows(cursor)
+            finally:
+                await cursor.close()
         else:
             # File DB with no pool — own the connection for the iteration's
             # lifetime; the ``async with aiosqlite.connect`` closes it on
-            # __aexit__ (normal completion, break, or exception unwind).
+            # __aexit__. The cursor is closed FIRST (the explicit finally
+            # below), then the connection, so an early break never closes a
+            # connection out from under a still-open cursor.
             async with self._aiosqlite.connect(
                 self._db_path, **self._connect_kwargs
             ) as db:
                 db.row_factory = self._aiosqlite.Row
                 await self._configure_connection(db)
-                yield _iter_rows(db)
+                cursor = await db.execute(query, params or [])
+                try:
+                    yield _iter_rows(cursor)
+                finally:
+                    await cursor.close()
 
     async def execute_many(
         self,
@@ -4929,6 +4947,140 @@ class AsyncSQLDatabaseNode(AsyncNode):
     async def process(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Async process method for middleware compatibility."""
         return await self.async_run(**inputs)
+
+    @contextlib.asynccontextmanager
+    async def stream(
+        self,
+        query: Optional[str] = None,
+        params: Optional[Union[tuple, dict, list]] = None,
+        batch_size: int = DEFAULT_STREAM_BATCH_SIZE,
+        user_context: Any | None = None,
+    ):
+        """Stream query results lazily via a server-side cursor.
+
+        Public streaming surface — the replacement for the removed
+        ``FetchMode.ITERATOR``. Use it for result sets too large to
+        materialize:
+
+            async with node.stream(query=q, params=p, batch_size=1000) as cursor:
+                async for row in cursor:        # row is a dict, _convert_row-converted
+                    ...
+
+        LIFETIME CONTRACT: the underlying connection (and PostgreSQL
+        transaction) stay open for the whole iteration and are released on
+        ``__aexit__`` — normal completion, early ``break``, or exception
+        unwind. The connection cannot be returned from a call and iterated
+        later; it MUST be consumed inside the ``async with`` block.
+
+        RETRY: streaming does NOT use ``_execute_with_retry``. A transient
+        failure may be retried only during the connect + cursor-open phase
+        (before the first row); once iteration has begun, errors propagate to
+        the caller (re-driving mid-iteration would double-yield rows). The
+        connect/cursor-open phase is covered by the adapter pool's own
+        connection acquisition.
+
+        ACCESS CONTROL: when ``access_control_manager`` + ``user_context`` are
+        set, EXECUTE access is checked before streaming and ``apply_data_masking``
+        is applied PER ROW (the materialized path masks per row too — streaming
+        MUST NOT silently bypass masking).
+
+        Args:
+            query: SQL query (falls back to the node's configured ``query``).
+            params: Query parameters (tuple/list positional or dict named).
+            batch_size: Rows pulled per server round trip.
+            user_context: Access-control context for the EXECUTE check + masking.
+        """
+        # Pre-flight mirrors async_run: resolve query/params, convert param
+        # style, validate, check access — all BEFORE opening the cursor.
+        query = query if query is not None else self.config.get("query")
+        if params is None:
+            params = self.config.get("params")
+        if not query:
+            raise NodeExecutionError("No query provided")
+
+        db_type = self.config.get("database_type", "").lower()
+
+        if params is not None:
+            if db_type == "mysql":
+                if isinstance(params, dict):
+                    pass  # aiomysql handles dict params directly
+                elif isinstance(params, (list, tuple)):
+                    params = tuple(params) if isinstance(params, list) else params
+                else:
+                    params = (params,)
+            else:
+                # PostgreSQL/SQLite: convert positional → named (:p0, :p1 ...);
+                # the adapter then re-converts named → dialect-positional.
+                if isinstance(params, (list, tuple)):
+                    query, params = self._convert_to_named_parameters(query, params)
+                elif not isinstance(params, dict):
+                    query, params = self._convert_to_named_parameters(query, [params])
+
+        # Validate query for security (same gate as async_run).
+        if self._validate_queries:
+            try:
+                QueryValidator.validate_query(query, allow_admin=self._allow_admin)
+            except NodeValidationError as e:
+                raise NodeExecutionError(
+                    f"Query validation failed: {e}. "
+                    "Set validate_queries=False to bypass (not recommended)."
+                )
+
+        # Access-control EXECUTE check (same gate as async_run).
+        if self.access_control_manager and user_context:
+            from kailash.access_control import NodePermission
+
+            decision = self.access_control_manager.check_node_access(
+                user_context, self.metadata.name, NodePermission.EXECUTE
+            )
+            if not decision.allowed:
+                raise NodeExecutionError(f"Access denied: {decision.reason}")
+
+        adapter = await self._get_adapter()
+
+        correlation_id = uuid.uuid4().hex
+        start_time = time.monotonic()
+        rows_yielded = 0
+        # Observability: structured log at stream OPEN (intent + batch_size +
+        # correlation id). Do NOT log per row (hot-loop spam).
+        logger.info(
+            "async_sql.stream.open",
+            extra={
+                "node_id": self.id,
+                "correlation_id": correlation_id,
+                "database_type": db_type,
+                "batch_size": batch_size,
+                "has_masking": bool(self.access_control_manager and user_context),
+            },
+        )
+
+        async def _masked_rows(raw_cursor):
+            nonlocal rows_yielded
+            apply_mask = bool(self.access_control_manager and user_context)
+            async for row in raw_cursor:
+                if apply_mask:
+                    # Per-row masking — streaming MUST NOT bypass the
+                    # masking the materialized path applies (security gap).
+                    row = self.access_control_manager.apply_data_masking(
+                        user_context, self.metadata.name, row
+                    )
+                rows_yielded += 1
+                yield row
+
+        try:
+            async with adapter.stream(query, params, batch_size=batch_size) as cursor:
+                yield _masked_rows(cursor)
+        finally:
+            # Observability: structured log at stream CLOSE (rows + duration).
+            logger.info(
+                "async_sql.stream.close",
+                extra={
+                    "node_id": self.id,
+                    "correlation_id": correlation_id,
+                    "rows_yielded": rows_yielded,
+                    "duration_ms": round((time.monotonic() - start_time) * 1000, 2),
+                },
+            )
 
     async def execute_many_async(
         self, query: str, params_list: list[dict[str, Any]]
