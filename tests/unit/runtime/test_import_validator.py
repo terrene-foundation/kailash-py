@@ -223,6 +223,29 @@ class TestImportPathValidator:
 
         assert len(issues) == 0  # Test files should be skipped
 
+    def test_include_tests_flag_validates_test_files(self):
+        """Regression (#1406 gap #4): the --include-tests flag was parsed by the
+        CLI but never reached validate_directory, so test files were always
+        skipped. With include_tests=True their import issues MUST be reported."""
+        self._create_test_file(
+            "src/mymodule/test_processor.py", "from .processor import process"
+        )
+        self._create_test_file(
+            "src/mymodule/processor_test.py", "from .processor import process"
+        )
+
+        module_dir = Path(self.temp_dir) / "src" / "mymodule"
+
+        # Default: test files skipped.
+        assert self.validator.validate_directory(module_dir) == []
+
+        # include_tests=True: both test files are validated and their relative
+        # imports flagged.
+        included = self.validator.validate_directory(module_dir, include_tests=True)
+        assert len(included) == 2
+        assert any("test_processor.py" in issue.file_path for issue in included)
+        assert any("processor_test.py" in issue.file_path for issue in included)
+
     def test_generate_report(self):
         """Test report generation."""
         # Create files with different issue types

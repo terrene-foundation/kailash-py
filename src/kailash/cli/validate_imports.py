@@ -115,9 +115,10 @@ For more info, see: .claude/skills/17-gold-standards/gold-absolute-imports.md
             print(f"Include tests: {args.include_tests}")
             print()
 
-        # TODO: Add support for include_tests flag in validator
         issues = validator.validate_directory(
-            str(path), recursive=not args.no_recursive
+            str(path),
+            recursive=not args.no_recursive,
+            include_tests=args.include_tests,
         )
 
     # Handle results

@@ -9,12 +9,10 @@ Based on Gold Standard: .claude/skills/17-gold-standards/gold-absolute-imports.m
 
 import ast
 import logging
-import os
-import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +323,10 @@ class ImportPathValidator:
             return f"from {suggested_module} import ..."
 
     def validate_directory(
-        self, directory: str | Path, recursive: bool = True
+        self,
+        directory: str | Path,
+        recursive: bool = True,
+        include_tests: bool = False,
     ) -> List[ImportIssue]:
         """
         Validate all Python files in a directory.
@@ -333,6 +334,8 @@ class ImportPathValidator:
         Args:
             directory: Directory path to validate
             recursive: Whether to scan subdirectories
+            include_tests: When True, also validate test files (files whose
+                name contains ``test``). Defaults to False, which skips them.
 
         Returns:
             List of all import issues found
@@ -345,8 +348,10 @@ class ImportPathValidator:
 
         pattern = "**/*.py" if recursive else "*.py"
         for py_file in dir_path.glob(pattern):
-            # Skip test files by default (can be configured)
-            if "test" in py_file.name or "__pycache__" in str(py_file):
+            if "__pycache__" in str(py_file):
+                continue
+            # Skip test files unless explicitly included.
+            if not include_tests and "test" in py_file.name:
                 continue
 
             issues = self.validate_file(py_file)

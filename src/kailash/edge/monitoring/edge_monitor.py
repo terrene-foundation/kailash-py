@@ -11,7 +11,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class MetricType(Enum):
@@ -336,18 +336,32 @@ class EdgeMonitor:
                 continue
 
             # Active filter
-            if active_only:
-                # Check if alert is still active (within cooldown)
-                key = f"{alert.edge_node}:{alert.metric_type.value}"
-                if key in self.alert_history:
-                    if (
-                        datetime.now() - self.alert_history[key]
-                    ).total_seconds() > self.alert_cooldown:
-                        continue
+            if active_only and not self.is_alert_active(alert):
+                continue
 
             results.append(alert)
 
         return sorted(results, key=lambda a: a.timestamp, reverse=True)
+
+    def is_alert_active(self, alert: EdgeAlert) -> bool:
+        """Return True if an alert is still active (within its cooldown window).
+
+        An alert is "active" when its issue key (``edge_node:metric_type``) has a
+        recorded last-fire time AND that fire happened no longer ago than
+        ``alert_cooldown`` seconds. An alert whose key has no history entry is
+        treated as inactive — there is no live cooldown keeping it open.
+
+        Args:
+            alert: The alert to evaluate.
+
+        Returns:
+            True if the alert is within its cooldown window, else False.
+        """
+        key = f"{alert.edge_node}:{alert.metric_type.value}"
+        last_fired = self.alert_history.get(key)
+        if last_fired is None:
+            return False
+        return (datetime.now() - last_fired).total_seconds() <= self.alert_cooldown
 
     def get_analytics(self, edge_node: str) -> Dict[str, Any]:
         """Get analytics for an edge node.

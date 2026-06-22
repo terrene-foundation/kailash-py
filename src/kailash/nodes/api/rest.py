@@ -430,7 +430,8 @@ class RESTClientNode(Node):
 
         pagination_type = pagination_params.get("type", "page")
         items_path = pagination_params.get("items_path", "data")
-        # max_pages = pagination_params.get("max_pages", 10)  # TODO: Implement max pages limit
+        # The max_pages cap is read and enforced in the remaining-pages fetch
+        # loop below (see `while pages_fetched < max_pages`).
 
         # Extract items from initial response
         all_items = self._get_nested_value(initial_response, items_path, [])
