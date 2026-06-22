@@ -36,3 +36,10 @@ cross-repo-authorized: esperie-enterprise/kailash-rs
 4. Journaled before acting — THIS entry, written before `gh issue create` runs. ✓
 5. Scoped exactly — only this one issue against only this repo; no incidental reads,
    no scope creep. ✓
+
+## Result
+
+- **Filed:** `esperie-enterprise/kailash-rs#1465` (labels: `cross-sdk`, `enhancement`)
+  — https://github.com/esperie-enterprise/kailash-rs/issues/1465
+- Body filed verbatim as approved; no labels-fallback needed (both labels existed).
+- Ledger: `F-XSDK-STREAMING` → FILED (rs#1465), awaiting rs maintainer.
