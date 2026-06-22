@@ -411,7 +411,8 @@ async def seeded_node(sqlite_db_path):
             query="INSERT INTO people (id, name, ssn) VALUES (:id, :name, :ssn)",
             params={"id": i, "name": name, "ssn": ssn},
         )
-    return node
+    yield node
+    await node.cleanup()
 
 
 @pytest.mark.asyncio

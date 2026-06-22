@@ -30,6 +30,13 @@ from tests.utils.docker_config import (
     get_postgres_connection_string,
 )
 
+# `DROP TABLE IF EXISTS <t>` against a not-yet-created table emits a benign MySQL
+# NOTE (1051 "Unknown table") that aiomysql surfaces as a base `Warning` — the
+# `IF EXISTS` is doing exactly its job. Accept it explicitly, message-scoped so it
+# cannot mask any real warning (zero-tolerance.md Rule 1 — documented third-party
+# note suppression). PostgreSQL tests never emit this message.
+pytestmark = pytest.mark.filterwarnings("ignore:Unknown table:Warning")
+
 # ===========================================================================
 # PostgreSQL
 # ===========================================================================
@@ -74,6 +81,7 @@ async def pg_node():
                 "ssn": f"{i:03d}-00-0000",
             },
         )
+    await setup.cleanup()
 
     node = AsyncSQLDatabaseNode(
         name="pg_stream_node",
@@ -83,6 +91,7 @@ async def pg_node():
         share_pool=False,
     )
     yield node
+    await node.cleanup()
 
     teardown = AsyncSQLDatabaseNode(
         name="pg_stream_teardown",
@@ -92,6 +101,7 @@ async def pg_node():
         share_pool=False,
     )
     await teardown.async_run(query=f"DROP TABLE IF EXISTS {PG_TABLE}")
+    await teardown.cleanup()
 
 
 @pytest.mark.integration
@@ -482,6 +492,7 @@ async def mysql_node():
                 f"{i:03d}-00-0000",
             ),
         )
+    await setup.cleanup()
 
     node = AsyncSQLDatabaseNode(
         name="mysql_stream_node",
@@ -491,6 +502,7 @@ async def mysql_node():
         share_pool=False,
     )
     yield node
+    await node.cleanup()
 
     teardown = AsyncSQLDatabaseNode(
         name="mysql_stream_teardown",
@@ -500,6 +512,7 @@ async def mysql_node():
         share_pool=False,
     )
     await teardown.async_run(query=f"DROP TABLE IF EXISTS {MYSQL_TABLE}")
+    await teardown.cleanup()
 
 
 @pytest.mark.integration
