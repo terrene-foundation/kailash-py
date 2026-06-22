@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.44.1] - 2026-06-22
+
+Closes the three implementable public-reachable gaps from the Production/Stable
+stub-marker inventory (#1406, PR #1420). Each was a documented feature the code
+did not actually perform.
+
+### Fixed
+
+- **Edge monitoring `active_count` no longer always equals the total alert
+  count** (`kailash.nodes.edge.edge_monitoring_node`). The `active_count` field
+  of the `get_alerts` action used `[a for a in alerts if active_only or True]` —
+  the `or True` made the comprehension a no-op, so `active_count` reported the
+  full alert count regardless of how many alerts were actually active. A new
+  `EdgeMonitor.is_alert_active()` predicate (the cooldown-window check, extracted
+  from the inline logic in `get_alerts`) now drives `active_count`. Note:
+  `EdgeMonitor.get_alerts(active_only=True)` now also treats an alert with no
+  cooldown-history entry as inactive (previously kept) — unifying the filter and
+  the count on one predicate; unreachable on the normal alert path (every
+  generated alert records its cooldown entry at creation).
+- **`ImportPathValidator.validate_directory(...)` honours `include_tests`**
+  (`kailash.runtime.validation`, `kailash.cli.validate_imports`). The
+  `--include-tests` CLI flag was parsed but never forwarded to the validator, so
+  test files were always skipped. `validate_directory` now accepts
+  `include_tests: bool = False` and the CLI forwards `--include-tests`.
+
+### Changed
+
+- Removed a stale, misleading commented-out `max_pages` line in
+  `kailash.nodes.api.rest._handle_pagination`. The `max_pages` pagination cap was
+  already read and enforced in the page-fetch loop; only the dead comment
+  implied otherwise. No behaviour change; a regression test now pins the cap.
+
 ## [2.44.0] - 2026-06-22
 
 Replaces the never-functional `FetchMode.ITERATOR` on `AsyncSQLDatabaseNode` with a
