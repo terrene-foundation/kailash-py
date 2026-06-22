@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.44.0] - 2026-06-22
+
+Replaces the never-functional `FetchMode.ITERATOR` on `AsyncSQLDatabaseNode` with a
+real, memory-bounded streaming API and closes a silent-fallback bug class in the
+async-SQL fetch dispatch (PR #1416, #1417). Resolves the top public-reachable gaps
+(#1/#2) of the Production/Stable stub-marker inventory (#1406).
+
+### Added
+
+- **Memory-bounded SQL streaming — `AsyncSQLDatabaseNode.stream()` (+ adapter
+  `stream()`)** (`kailash.nodes.data.async_sql`; PR #1417). An async-context-manager
+  that pulls rows lazily via server-side cursors — asyncpg cursor inside a
+  transaction (PostgreSQL), unbuffered `SSCursor` (MySQL), chunked `fetchmany`
+  (SQLite) — so large result sets do not materialize in memory:
+
+  ```python
+  async with node.stream(query="SELECT * FROM big_table", batch_size=1000) as cursor:
+      async for row in cursor:        # peak memory bounded by batch_size
+          process(row)                # each row already converted, masked if access-controlled
+  ```
+
+  The connection (and, for PostgreSQL, its transaction) is held open for the entire
+  iteration and released on every exit path (completion, early `break`, exception).
+  Streamed rows are byte-identical to `fetch_mode="all"` rows; access-control masking
+  and query validation apply on the stream path exactly as on the materialized path.
+  New module constant `DEFAULT_STREAM_BATCH_SIZE = 1000` (distinct from `fetch_size`).
+
+### Removed
+
+- **BREAKING — `FetchMode.ITERATOR` removed** (`kailash.nodes.data.async_sql.FetchMode`;
+  PR #1416). The member never produced a working result on any dialect — it raised
+  `NotImplementedError` on PostgreSQL and silently returned `None` (MySQL) / `[]`
+  (SQLite). A lazily-yielding stream cannot be a materializing fetch _return value_
+  the way `ONE`/`ALL`/`MANY` are, so it was a category error. **Migration:** for
+  streaming, use the new `node.stream()` async-context-manager (see Added); for
+  bounded batches, use `fetch_mode="many"` with `fetch_size`. No working code breaks —
+  the member never returned usable data. `fetch_mode="iterator"` is now rejected at
+  node validation with `Invalid fetch_mode: iterator. Must be one of: one, all, many`.
+
+### Fixed
+
+- **Silent-fallback in async-SQL fetch dispatch** (`kailash.nodes.data.async_sql`;
+  PR #1416). An unrecognized fetch mode previously fell through the MySQL/SQLite
+  dispatch to `None`/`[]` instead of raising; every adapter dispatch now ends in a
+  typed `ValueError("Unsupported fetch_mode: …")` so a wrong-but-plausible empty
+  result can never again be returned silently.
+- **MySQL streaming connection leak** (`kailash.nodes.data.async_sql`; PR #1417).
+  An unbuffered `SSCursor` left an open read transaction holding a table metadata
+  lock, deadlocking subsequent DDL; the cursor is now closed and the read
+  transaction rolled back on every exit path before the connection returns to the
+  pool.
+
 ## [2.43.1] - 2026-06-21
 
 Cross-SDK canonical-encoder conformance plus a trust-plane-wide NaN/Inf signing
