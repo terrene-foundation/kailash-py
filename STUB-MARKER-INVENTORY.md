@@ -47,13 +47,13 @@ Scoped to the `kailash` core and categorised, the real picture is:
 
 | Metric                                                  | Count |
 | ------------------------------------------------------- | ----- |
-| Files with ≥1 marker (`src/kailash`)                    | 39    |
-| Total marker lines                                      | 67    |
+| Files with ≥1 marker (`src/kailash`)                    | 36    |
+| Total marker lines                                      | 64    |
 | — false-positive (not a real marker)                    | 31    |
 | — sentinel (intentional contract)                       | 25    |
-| — gap (genuine deferred work)                           | 11    |
+| — gap (genuine deferred work)                           | 8     |
 | — tracked (deferred + issue-linked)                     | 0     |
-| **Genuine gaps reachable from a documented public API** | **4** |
+| **Genuine gaps reachable from a documented public API** | **1** |
 
 ---
 
@@ -84,34 +84,42 @@ SDK itself is complete; the `TODO`/`NotImplementedError` lives in the scaffold
 `public` = reachable from a documented public API (a stub a consumer can hit matters
 more than an internal one).
 
-| #   | Location                                         | Marker                                                                                         | public  | Disposition        | Note                                                                                                                                                                      |
-| --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | :-----: | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `nodes/edge/edge_monitoring_node.py:359`         | `# TODO: proper active check`                                                                  | **yes** | implement          | `[a for a in alerts if active_only or True]` — the `or True` makes the filter a no-op, so `active_count` **always equals the total alert count**. Latent correctness bug. |
-| 2   | `nodes/api/rest.py:433`                          | `# max_pages = ... # TODO: Implement max pages limit`                                          | **yes** | implement / remove | `max_pages` pagination cap is commented out, so the param is silently ignored — a caller passing `max_pages` gets no effect (over-fetch risk).                            |
-| 3   | `nodes/monitoring/performance_benchmark.py:2155` | `raise NotImplementedError("Anomaly detector training requires a machine learning library …")` | **yes** | track              | The anomaly-detection benchmark path raises; needs an ML dependency to implement.                                                                                         |
-| 4   | `cli/validate_imports.py:118`                    | `# TODO: Add support for include_tests flag in validator`                                      | **yes** | track              | The `--include-tests` CLI flag is parsed and printed but never passed to `validate_directory()` (`zero-tolerance` Rule 3c).                                               |
-| 5   | `nodes/monitoring/deadlock_detector.py:919`      | `# TODO: Send alerts or take automatic resolution actions`                                     |   no    | track              | Deadlocks are detected and recorded; alerting / auto-resolution is deferred (enhancement, not a broken contract).                                                         |
-| 6   | `middleware/communication/events.py:210`         | `# TODO: Replace with BatchProcessorNode for production use`                                   |   no    | track              | `EventBatch` is deprecated (emits a `DeprecationWarning`); replacement deferred.                                                                                          |
-| 7   | `middleware/communication/events.py:279`         | `# TODO: Add CacheNode when available for event history`                                       |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
-| 8   | `middleware/communication/events.py:280`         | `# TODO: Add AsyncQueueNode when available for event buffering`                                |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
-| 9   | `middleware/communication/events.py:281`         | `# TODO: Add MetricsCollectorNode when available for performance tracking`                     |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
-| 10  | `nodes/data/bulk_operations.py:269`              | `# TODO: Implement COPY FROM for maximum performance`                                          |   no    | track              | Performance optimisation only — functionally complete via the multi-row-`INSERT` fallback directly below it.                                                              |
-| 11  | `runtime/parallel_cyclic.py:224`                 | `# TODO: Add cycle-aware parallel execution optimizations`                                     |   no    | track              | Performance optimisation; the path executes correctly without it.                                                                                                         |
+| #   | Location                                         | Marker                                                                                         | public  | Disposition | Note                                                                                                                                              |
+| --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | :-----: | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `nodes/monitoring/performance_benchmark.py:2155` | `raise NotImplementedError("Anomaly detector training requires a machine learning library …")` | **yes** | track       | The anomaly-detection benchmark path raises a clear typed error when no ML library is present; needs an ML dependency to implement the full path. |
+| 2   | `nodes/monitoring/deadlock_detector.py:919`      | `# TODO: Send alerts or take automatic resolution actions`                                     |   no    | track       | Deadlocks are detected and recorded; alerting / auto-resolution is deferred (enhancement, not a broken contract).                                |
+| 3   | `middleware/communication/events.py:210`         | `# TODO: Replace with BatchProcessorNode for production use`                                    |   no    | track       | `EventBatch` is deprecated (emits a `DeprecationWarning`); replacement deferred.                                                                 |
+| 4   | `middleware/communication/events.py:279`         | `# TODO: Add CacheNode when available for event history`                                        |   no    | track       | Depends on a node that does not yet exist.                                                                                                       |
+| 5   | `middleware/communication/events.py:280`         | `# TODO: Add AsyncQueueNode when available for event buffering`                                 |   no    | track       | Depends on a node that does not yet exist.                                                                                                       |
+| 6   | `middleware/communication/events.py:281`         | `# TODO: Add MetricsCollectorNode when available for performance tracking`                      |   no    | track       | Depends on a node that does not yet exist.                                                                                                       |
+| 7   | `nodes/data/bulk_operations.py:269`              | `# TODO: Implement COPY FROM for maximum performance`                                           |   no    | track       | Performance optimisation only — functionally complete via the multi-row-`INSERT` fallback directly below it.                                     |
+| 8   | `runtime/parallel_cyclic.py:224`                 | `# TODO: Add cycle-aware parallel execution optimizations`                                      |   no    | track       | Performance optimisation; the path executes correctly without it.                                                                                |
 
-**Resolved:** the two former gaps #1/#2 (`nodes/data/async_sql.py:1268,1319` —
-`FetchMode.ITERATOR`) are closed. `FetchMode.ITERATOR` was a category error (a lazy
-async stream cannot be a materializing fetch _return value_); it never produced a
-working result (raised on PostgreSQL, returned `None`/`[]` on MySQL/SQLite). The enum
-member is removed, the silent MySQL/SQLite fallbacks now raise a typed `ValueError`,
-and a dedicated memory-bounded `stream()` API replaces the streaming use case
-(follow-up workstream). This drops the gap count 13 → 11 and the public-reachable
-gap count 6 → 4.
+**Resolved this cycle (3 of the 4 former public-reachable gaps):**
 
-**Recommended follow-ups (highest value first):** #1 (`edge_monitoring`
-active-count bug) is the only remaining entry that alters or blocks observable
-behaviour on a public surface; #2 and #4 are silently-ignored public params; the
-remainder are enhancements/perf with a working code path.
+- **`edge_monitoring_node.py` active-count no-op (former gap #1)** — `[a for a in
+  alerts if active_only or True]` made `active_count` always equal the total alert
+  count. Fixed by extracting `EdgeMonitor.is_alert_active()` (the cooldown-window
+  predicate, previously inline in `get_alerts`) and computing `active_count` from
+  it. The marker line is removed.
+- **`rest.py` `max_pages` (former gap #2)** — the prior inventory called this
+  "silently ignored". Ground truth contradicts that: `max_pages` **is** read and
+  enforced in the remaining-pages fetch loop (`max_pages = int(...)` →
+  `while pages_fetched < max_pages`). The only defect was a stale, misleading
+  commented-out line (`# max_pages = ... # TODO`) earlier in the method; it is
+  removed and a regression test pins the cap behaviour.
+- **`cli/validate_imports.py` `--include-tests` (former gap #4)** — the flag was
+  parsed but never passed to `validate_directory()` (`zero-tolerance` Rule 3c —
+  documented kwarg with no effect). `validate_directory` now takes
+  `include_tests: bool = False`; the CLI forwards `args.include_tests`.
 
+Earlier cycle (`FetchMode.ITERATOR`, `nodes/data/async_sql.py`) dropped the
+public-reachable count 6 → 4; this cycle drops it 4 → 1. The one remaining
+public-reachable gap (#1) needs an ML dependency and stays `track`.
+
+**Recommended follow-ups:** the remaining entries are all `track` — #1 needs an ML
+dependency; #2–#8 are enhancements/perf with a working code path. None alters or
+blocks observable behaviour on a public surface today.
 ---
 
 ## Sentinels (category `sentinel`) — intentional, no action
@@ -181,24 +189,22 @@ Documented so the count is complete and the guard's raw hits are explained.
 {
   "scope": "src/kailash",
   "regex": "\\b(TODO|FIXME|HACK|STUB|XXX)\\b|NotImplementedError",
-  "total": 67,
+  "total": 64,
   "category_tally": {
     "false_positive": 31,
     "sentinel": 25,
-    "gap": 11,
+    "gap": 8,
     "tracked": 0
   },
-  "public_reachable_gaps": 4,
+  "public_reachable_gaps": 1,
   "per_file": {
     "src/kailash/channels/mcp/base.py": 5,
     "src/kailash/channels/mcp/http.py": 2,
-    "src/kailash/cli/validate_imports.py": 1,
     "src/kailash/delegate/dispatch.py": 2,
     "src/kailash/delegate/trust.py": 1,
     "src/kailash/edge/consistency.py": 2,
     "src/kailash/edge/prediction/predictive_warmer.py": 1,
     "src/kailash/middleware/communication/events.py": 4,
-    "src/kailash/nodes/api/rest.py": 1,
     "src/kailash/nodes/base.py": 2,
     "src/kailash/nodes/base_async.py": 4,
     "src/kailash/nodes/base_with_acl.py": 2,
@@ -206,7 +212,6 @@ Documented so the count is complete and the guard's raw hits are explained.
     "src/kailash/nodes/data/async_sql.py": 1,
     "src/kailash/nodes/data/bulk_operations.py": 1,
     "src/kailash/nodes/edge/edge_data.py": 2,
-    "src/kailash/nodes/edge/edge_monitoring_node.py": 1,
     "src/kailash/nodes/edge/edge_state.py": 1,
     "src/kailash/nodes/edge/edge_warming_node.py": 1,
     "src/kailash/nodes/monitoring/deadlock_detector.py": 1,

@@ -4,15 +4,13 @@ This node integrates edge monitoring capabilities into workflows,
 providing metrics collection, health monitoring, alerting, and analytics.
 """
 
-import asyncio
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from kailash.edge.monitoring.edge_monitor import (
     AlertSeverity,
     EdgeMetric,
     EdgeMonitor,
-    HealthStatus,
     MetricType,
 )
 from kailash.nodes.base import NodeParameter, register_node
@@ -354,9 +352,7 @@ class EdgeMonitoringNode(AsyncNode):
             "status": "success",
             "alerts": [a.to_dict() for a in alerts],
             "count": len(alerts),
-            "active_count": len(
-                [a for a in alerts if active_only or True]
-            ),  # TODO: proper active check
+            "active_count": sum(1 for a in alerts if self.monitor.is_alert_active(a)),
         }
 
     async def _get_analytics(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
