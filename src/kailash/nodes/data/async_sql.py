@@ -25,6 +25,7 @@ Key Features:
 """
 
 import asyncio
+import contextlib
 import inspect
 import json
 import logging
@@ -224,6 +225,14 @@ class FetchMode(Enum):
     ONE = "one"  # Fetch single row
     ALL = "all"  # Fetch all rows
     MANY = "many"  # Fetch specific number of rows
+
+
+# Default number of rows pulled per server-side-cursor round trip for
+# ``stream()``. This is SEPARATE from ``fetch_size`` (which selects how many
+# rows ``FetchMode.MANY`` materializes in a single ``execute()`` call); a
+# streaming cursor keeps its connection open and pulls rows lazily in batches
+# of this size so peak memory stays bounded regardless of result-set size.
+DEFAULT_STREAM_BATCH_SIZE = 1000
 
 
 @dataclass
@@ -1052,6 +1061,48 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
+    def stream(
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        batch_size: int = DEFAULT_STREAM_BATCH_SIZE,
+    ) -> "contextlib.AbstractAsyncContextManager":
+        """Stream query results lazily via a server-side cursor.
+
+        Returns an async context manager whose ``__aenter__`` yields an async
+        iterator of rows. Each yielded row is a ``dict`` already passed through
+        ``self._convert_row`` — byte-identical to a row materialized by
+        ``execute(..., fetch_mode=FetchMode.ALL)``.
+
+        LIFETIME CONTRACT (load-bearing): the underlying connection (and, for
+        PostgreSQL, the wrapping transaction) MUST stay OPEN for the entire
+        duration of iteration. The connection/transaction are owned by the
+        context-manager body and are NOT released until ``__aexit__`` — which
+        MUST release them on normal completion, early ``break``, AND exception
+        unwind. This is exactly why streaming cannot be a value returned from
+        ``execute()``: a returned cursor would outlive its connection scope.
+
+        Streaming does NOT use the node's retry logic: a transient failure may
+        be retried only during the connect + cursor-open phase (before the
+        first row is yielded). Once the first row has been yielded, errors
+        propagate to the caller — re-driving the query mid-iteration would
+        double-yield already-consumed rows.
+
+        Args:
+            query: SQL query to stream. Parameters arrive positionally by the
+                time they reach the adapter (the node converts dict→named→
+                positional), mirroring ``execute``.
+            params: Query parameters (tuple/list positional, or dict for the
+                PostgreSQL ``:name`` style mirrored from ``execute``).
+            batch_size: Rows pulled per server-round-trip / ``fetchmany`` chunk
+                (prefetch for asyncpg). Bounds peak memory.
+
+        Yields:
+            dict: One converted row at a time.
+        """
+        raise NotImplementedError  # pragma: no cover - abstract
+
+    @abstractmethod
     async def execute_many(
         self,
         query: str,
@@ -1317,6 +1368,78 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 else:
                     raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
 
+    @contextlib.asynccontextmanager
+    async def stream(
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        batch_size: int = DEFAULT_STREAM_BATCH_SIZE,
+    ):
+        """Stream PostgreSQL rows via an asyncpg server-side cursor.
+
+        asyncpg's ``connection.cursor()`` requires an explicit transaction —
+        the transaction + acquired connection are held open by THIS context
+        manager for the full duration of iteration and released on
+        ``__aexit__`` (normal completion, early ``break``, or exception
+        unwind). ``prefetch`` bounds how many rows asyncpg buffers per
+        server round trip.
+
+        Dict params are converted to positional ``$N`` placeholders mirroring
+        ``execute`` (asyncpg has no native named-parameter support).
+        """
+        # Mirror execute()'s dict→positional ($N) conversion so a streamed
+        # query accepts the same param shapes the materialized path does.
+        if isinstance(params, dict):
+            query, positional = self._convert_named_to_positional(query, params)
+            params = positional
+        elif params is None:
+            params = ()
+        elif not isinstance(params, (list, tuple)):
+            params = (params,)
+
+        async def _iter_rows(conn):
+            # asyncpg server-side cursor — REQUIRES an open transaction.
+            async with conn.transaction():
+                cur = conn.cursor(query, *params, prefetch=batch_size)
+                async for record in cur:
+                    yield self._convert_row(dict(record))
+
+        async with self._pool.acquire() as conn:
+            yield _iter_rows(conn)
+
+    def _convert_named_to_positional(
+        self, query: str, params: dict
+    ) -> tuple[str, tuple]:
+        """Convert a ``:name`` dict-param query to asyncpg ``$N`` positional.
+
+        Mirrors the dict-handling half of ``execute`` (longest-key-first
+        replacement to avoid prefix collisions, bool/int explicit casts to
+        avoid asyncpg type-inference ambiguity), but returns the rewritten
+        query + positional tuple instead of executing.
+        """
+        original_items = list(params.items())
+        query_params = []
+        for _key, value in original_items:
+            if isinstance(value, dict):
+                value = json.dumps(value)
+            query_params.append(value)
+
+        # Replace longer keys first so ":userid" isn't clobbered by ":user".
+        keys_by_length = sorted(params.keys(), key=len, reverse=True)
+        for key in keys_by_length:
+            position = (
+                next(i for i, (k, _v) in enumerate(original_items) if k == key) + 1
+            )
+            value = original_items[position - 1][1]
+            if isinstance(value, bool):
+                query = query.replace(f":{key}", f"${position}::boolean")
+            elif isinstance(value, int):
+                query = query.replace(f":{key}", f"${position}::integer")
+            else:
+                query = query.replace(f":{key}", f"${position}")
+
+        return query, tuple(query_params)
+
     async def execute_many(
         self,
         query: str,
@@ -1530,6 +1653,40 @@ class MySQLAdapter(DatabaseAdapter):
                         return []
                     else:
                         raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
+
+    @contextlib.asynccontextmanager
+    async def stream(
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        batch_size: int = DEFAULT_STREAM_BATCH_SIZE,
+    ):
+        """Stream MySQL rows via an UNBUFFERED ``aiomysql.SSCursor``.
+
+        ``SSCursor`` does not buffer the whole result set client-side — rows
+        are pulled from the server in ``batch_size`` chunks via
+        ``fetchmany``. The cursor holds the result set, so it MUST be fully
+        drained/closed before the connection is released; the
+        ``async with conn.cursor(SSCursor)`` block guarantees that on
+        ``__aexit__`` (normal completion, early ``break``, or exception
+        unwind). The acquired connection is likewise held open by THIS
+        context manager for the full iteration and released on exit.
+        """
+        import aiomysql
+
+        async def _iter_rows(conn):
+            async with conn.cursor(aiomysql.SSCursor) as cursor:
+                await cursor.execute(query, params)
+                columns = [d[0] for d in cursor.description]
+                while True:
+                    batch = await cursor.fetchmany(batch_size)
+                    if not batch:
+                        break
+                    for row in batch:
+                        yield self._convert_row(dict(zip(columns, row)))
+
+        async with self._pool.acquire() as conn:
+            yield _iter_rows(conn)
 
     async def execute_many(
         self,
@@ -1857,6 +2014,57 @@ class SQLiteAdapter(DatabaseAdapter):
 
         await db.commit()
         return result
+
+    @contextlib.asynccontextmanager
+    async def stream(
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        batch_size: int = DEFAULT_STREAM_BATCH_SIZE,
+    ):
+        """Stream SQLite rows via a chunked ``fetchmany`` loop.
+
+        SQLite has no true server-side cursor; ``fetchmany(batch_size)`` bounds
+        peak Python-object memory by pulling at most ``batch_size`` rows per
+        round trip. The connection is reused from the pool / shared-memory
+        helper / inline-file path (mirroring ``execute``); the cursor is closed
+        in a ``finally``. The shared ``:memory:`` connection is NEVER closed
+        here — ``disconnect()`` owns that connection's lifecycle (issue #1051).
+        """
+        assert self._aiosqlite is not None
+
+        async def _iter_rows(db):
+            cursor = await db.execute(query, params or [])
+            try:
+                while True:
+                    batch = await cursor.fetchmany(batch_size)
+                    if not batch:
+                        break
+                    for row in batch:
+                        yield self._convert_row(dict(row))
+            finally:
+                await cursor.close()
+
+        if self._pool is not None:
+            # Pool path: hold the acquired connection open for the whole
+            # iteration. ``acquire`` keeps the connection checked out until
+            # the ``async with`` block exits (i.e. __aexit__).
+            async with self._pool.acquire(query) as db:
+                yield _iter_rows(db)
+        elif self._is_memory_db:
+            # Shared :memory: connection — owned by disconnect(); do NOT close.
+            db = await self._get_connection()
+            yield _iter_rows(db)
+        else:
+            # File DB with no pool — own the connection for the iteration's
+            # lifetime; the ``async with aiosqlite.connect`` closes it on
+            # __aexit__ (normal completion, break, or exception unwind).
+            async with self._aiosqlite.connect(
+                self._db_path, **self._connect_kwargs
+            ) as db:
+                db.row_factory = self._aiosqlite.Row
+                await self._configure_connection(db)
+                yield _iter_rows(db)
 
     async def execute_many(
         self,
