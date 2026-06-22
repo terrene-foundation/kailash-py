@@ -98,3 +98,87 @@ changes:
       COC-orchestration discipline every repo running /redteam inherits; the
       failure mode (provider rate-limit -> false convergence) is CLI-neutral and
       language-neutral. Refines the global agents.md, no py-specific content.'
+
+  # ---- APPENDED 2026-06-22 codify cycle (kailash 2.43.1 / 2.44.x; since 2026-06-19) ----
+  - type: rule_update
+    artifact: trust-plane-security
+    files:
+      - .claude/rules/trust-plane-security.md
+    classification_suggestion: global
+    context: 'ADDS MUST clause 8 "Every Signing / Hash Pre-Image MUST Reject
+      NaN/Inf (allow_nan=False)" + in-clause 8-field Trust Posture Wiring.
+
+
+      Lesson: a json.dumps producing a signing/HMAC/integrity-hash/cross-SDK
+      pre-image without allow_nan=False emits RFC-8259-invalid NaN/Infinity
+      literals. Python signs them; a strict cross-SDK parser (Rust serde_json)
+      REJECTS them on parse — so a Python-signed envelope/witness/audit-anchor
+      carrying a non-finite float in free-form metadata can NEVER be re-verified
+      by the sibling SDK. Distinct from the EXISTING NaN coverage: Rule 3 +
+      MUST-NOT-5 (this file) and pact-governance.md Rule 6 guard the
+      VALUE-COMPARISON axis (NaN < limit silently passing a budget check); this
+      new clause guards the SERIALIZATION axis (NaN/Infinity literals in the
+      signed bytes). grep confirms allow_nan appeared in ZERO rules pre-this-codify.
+      The fix is byte-neutral on every finite input, so it ships WITHOUT a
+      cross-SDK lockstep; the durable guard is a module-granularity AST invariant
+      over every signing/hash root (per-function spot-checks miss sibling sites).
+
+
+      Classification rationale: GLOBAL — the failure mode is the cross-SDK
+      conformance contract both SDKs share; CLI- and language-neutral (the rs
+      sibling is the serde_json strict-parser end of the same contract). Gate-1
+      MAY also classify a kailash-rs variant note (the rs end enforces strictness
+      on parse). Origin: kailash 2.43.1 NaN/Inf trust-plane sweep, PR #1411 +
+      #1412; workspaces/cross-sdk-audit/journal/0015 + 0017.
+
+
+      rule-authoring Rule 10: trust-plane-security.md is priority:10/path-scoped
+      (NOT baseline) -> proximity-band gate does NOT fire. Grandfathered rule with
+      no prior Trust Posture Wiring; the new clause ships clause-scoped 8-field
+      wiring per the artifact-flow.md "Intake Disclosure Scrub" precedent (loom
+      Gate-1 may decide on full-rule wiring retrofit).'
+
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+    classification_suggestion: global
+    context:
+      'ADDS two sub-rules + in-clause 8-field Trust Posture Wiring on each.
+
+
+      Rule 4b "Byte-CHANGING Canonical-Encoder Switches Are Cross-SDK Lockstep,
+      Not Single-SDK": a canonical-encoder migration feeding a cross-SDK signing/
+      hash pre-image (e.g. default=str -> canonical_scalars) MUST be classified
+      byte-NEUTRAL vs byte-CHANGING by EMPIRICAL byte-diff (run the code, compare
+      SHAs — not by reasoning). A byte-CHANGING switch where the sibling mirrors
+      CURRENT bytes MUST NOT ship single-SDK (coordinated lockstep + pin current
+      bytes as a tripwire until lockstep lands); a byte-NEUTRAL switch (to_dict()
+      pre-normalizes) MAY ship single-SDK. Distinct from the existing Rule 4 (pin
+      >=3 parity byte-vectors): Rule 4 covers a parity-helper''s vectors; 4b covers
+      the migrate-or-not decision + the neutral/changing classification + the
+      lockstep-not-single-SDK rule. Origin: 2.43.1 canonical-encoder family sweep,
+      journal/0011 (97 default=str sites classified: audit-chain + witness-family +
+      envelope-HMAC byte-CHANGING/lockstep; envelope_hash byte-NEUTRAL/shipped);
+      specs/trust-canonical-encoders.md.
+
+
+      Rule 4c "Conformance-Vector Changes Re-Pin Their Integrity Manifest In The
+      Same Commit": changing a cross-SDK conformance vector pinned by a committed
+      *.sha256 manifest (e.g. PACT_VECTORS.sha256) MUST re-pin the manifest in the
+      SAME commit; a /redteam over canonical-vector changes MUST include an
+      integrity-manifest sweep lens (enumerate every *.sha256, shasum -a256 -c).
+      grep confirms no rule covered integrity-manifest re-pin. Origin: PR #1411
+      Gap 1 — the audit_anchor.json canonical fix omitted the PACT_VECTORS.sha256
+      re-pin -> red Cross-SDK Conformance gate a prior "converged (2 clean passes)"
+      redteam missed because no round ran shasum -c; journal/0015; closed by
+      b4929d924 + a new integrity-manifest-sweep lens.
+
+
+      Classification rationale: GLOBAL — both sub-rules govern the cross-SDK
+      conformance contract shared by kailash-py and kailash-rs; CLI- and
+      language-neutral. cross-sdk-inspection.md is priority:10/path-scoped -> Rule
+      10 proximity-band gate does NOT fire. Grandfathered (no prior wiring); both
+      sub-rules ship clause-scoped 8-field wiring.'
+
+  # ---- end 2026-06-22 append ----
