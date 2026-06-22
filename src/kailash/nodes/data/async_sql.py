@@ -18,7 +18,7 @@ Key Features:
 - Connection pooling with configurable limits
 - Support for PostgreSQL (asyncpg), MySQL (aiomysql), SQLite (aiosqlite)
 - Parameterized queries to prevent SQL injection
-- Multiple fetch modes (one, all, many, iterator)
+- Multiple fetch modes (one, all, many)
 - Transaction management
 - Timeout handling
 - Retry logic with exponential backoff
@@ -224,7 +224,6 @@ class FetchMode(Enum):
     ONE = "one"  # Fetch single row
     ALL = "all"  # Fetch all rows
     MANY = "many"  # Fetch specific number of rows
-    ITERATOR = "iterator"  # Return async iterator
 
 
 @dataclass
@@ -1264,8 +1263,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 else:
                     rows = await conn.fetch(query, *params)
                 return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
-            elif fetch_mode == FetchMode.ITERATOR:
-                raise NotImplementedError("Iterator mode not yet implemented")
+            else:
+                raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
         else:
             # Use pool connection
             async with self._pool.acquire() as conn:
@@ -1315,8 +1314,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     else:
                         rows = await conn.fetch(query, *params)
                     return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
-                elif fetch_mode == FetchMode.ITERATOR:
-                    raise NotImplementedError("Iterator mode not yet implemented")
+                else:
+                    raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
 
     async def execute_many(
         self,
@@ -1484,6 +1483,8 @@ class MySQLAdapter(DatabaseAdapter):
                             self._convert_row(dict(zip(columns, row))) for row in rows
                         ]
                     return []
+                else:
+                    raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
         else:
             async with self._pool.acquire() as conn:
                 async with conn.cursor() as cursor:
@@ -1527,6 +1528,8 @@ class MySQLAdapter(DatabaseAdapter):
                                 for row in rows
                             ]
                         return []
+                    else:
+                        raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
 
     async def execute_many(
         self,
@@ -1772,7 +1775,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     rows = await cursor.fetchmany(fetch_size)
                     result = [self._convert_row(dict(row)) for row in rows]
                 else:
-                    result = []
+                    raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
 
                 # Check if this was an INSERT and capture lastrowid for SQLite
                 if query_type == "INSERT" and (
@@ -1844,7 +1847,7 @@ class SQLiteAdapter(DatabaseAdapter):
             rows = await cursor.fetchmany(fetch_size)
             result = [self._convert_row(dict(row)) for row in rows]
         else:
-            result = []
+            raise ValueError(f"Unsupported fetch_mode: {fetch_mode}")
 
         if query_type == "INSERT" and (not result or result == []):
             lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
@@ -4249,10 +4252,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         # Validate fetch mode
         fetch_mode = self.config.get("fetch_mode", "all").lower()
-        if fetch_mode not in ["one", "all", "many", "iterator"]:
+        if fetch_mode not in ["one", "all", "many"]:
             raise NodeValidationError(
-                f"Invalid fetch_mode: {fetch_mode}. "
-                "Must be one of: one, all, many, iterator"
+                f"Invalid fetch_mode: {fetch_mode}. " "Must be one of: one, all, many"
             )
 
         if fetch_mode == "many" and not self.config.get("fetch_size"):

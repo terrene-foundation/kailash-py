@@ -47,13 +47,13 @@ Scoped to the `kailash` core and categorised, the real picture is:
 
 | Metric                                                  | Count |
 | ------------------------------------------------------- | ----- |
-| Files with ≥1 marker (`src/kailash`)                    | 39    |
-| Total marker lines                                      | 68    |
+| Files with ≥1 marker (`src/kailash`)                    | 38    |
+| Total marker lines                                      | 66    |
 | — false-positive (not a real marker)                    | 31    |
 | — sentinel (intentional contract)                       | 24    |
-| — gap (genuine deferred work)                           | 13    |
+| — gap (genuine deferred work)                           | 11    |
 | — tracked (deferred + issue-linked)                     | 0     |
-| **Genuine gaps reachable from a documented public API** | **6** |
+| **Genuine gaps reachable from a documented public API** | **4** |
 
 ---
 
@@ -84,26 +84,33 @@ SDK itself is complete; the `TODO`/`NotImplementedError` lives in the scaffold
 `public` = reachable from a documented public API (a stub a consumer can hit matters
 more than an internal one).
 
-| #   | Location                                         | Marker                                                                                         | public  | Disposition             | Note                                                                                                                                                                                                          |
-| --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | :-----: | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `nodes/data/async_sql.py:1268`                   | `raise NotImplementedError("Iterator mode not yet implemented")`                               | **yes** | implement / remove enum | `FetchMode.ITERATOR` is a public enum value accepted then rejected at runtime (`zero-tolerance` Rule 3c). Fix: implement a server-side-cursor iterator **or** remove the enum member via a deprecation cycle. |
-| 2   | `nodes/data/async_sql.py:1319`                   | `raise NotImplementedError("Iterator mode not yet implemented")`                               | **yes** | implement / remove enum | Second `FetchMode.ITERATOR` site (the `execute`-variant path). Must be fixed together with #1.                                                                                                                |
-| 3   | `nodes/edge/edge_monitoring_node.py:359`         | `# TODO: proper active check`                                                                  | **yes** | implement               | `[a for a in alerts if active_only or True]` — the `or True` makes the filter a no-op, so `active_count` **always equals the total alert count**. Latent correctness bug.                                     |
-| 4   | `nodes/api/rest.py:433`                          | `# max_pages = ... # TODO: Implement max pages limit`                                          | **yes** | implement / remove      | `max_pages` pagination cap is commented out, so the param is silently ignored — a caller passing `max_pages` gets no effect (over-fetch risk).                                                                |
-| 5   | `nodes/monitoring/performance_benchmark.py:2155` | `raise NotImplementedError("Anomaly detector training requires a machine learning library …")` | **yes** | track                   | The anomaly-detection benchmark path raises; needs an ML dependency to implement.                                                                                                                             |
-| 6   | `cli/validate_imports.py:118`                    | `# TODO: Add support for include_tests flag in validator`                                      | **yes** | track                   | The `--include-tests` CLI flag is parsed and printed but never passed to `validate_directory()` (`zero-tolerance` Rule 3c).                                                                                   |
-| 7   | `nodes/monitoring/deadlock_detector.py:919`      | `# TODO: Send alerts or take automatic resolution actions`                                     |   no    | track                   | Deadlocks are detected and recorded; alerting / auto-resolution is deferred (enhancement, not a broken contract).                                                                                             |
-| 8   | `middleware/communication/events.py:210`         | `# TODO: Replace with BatchProcessorNode for production use`                                   |   no    | track                   | `EventBatch` is deprecated (emits a `DeprecationWarning`); replacement deferred.                                                                                                                              |
-| 9   | `middleware/communication/events.py:279`         | `# TODO: Add CacheNode when available for event history`                                       |   no    | track                   | Depends on a node that does not yet exist.                                                                                                                                                                    |
-| 10  | `middleware/communication/events.py:280`         | `# TODO: Add AsyncQueueNode when available for event buffering`                                |   no    | track                   | Depends on a node that does not yet exist.                                                                                                                                                                    |
-| 11  | `middleware/communication/events.py:281`         | `# TODO: Add MetricsCollectorNode when available for performance tracking`                     |   no    | track                   | Depends on a node that does not yet exist.                                                                                                                                                                    |
-| 12  | `nodes/data/bulk_operations.py:269`              | `# TODO: Implement COPY FROM for maximum performance`                                          |   no    | track                   | Performance optimisation only — functionally complete via the multi-row-`INSERT` fallback directly below it.                                                                                                  |
-| 13  | `runtime/parallel_cyclic.py:224`                 | `# TODO: Add cycle-aware parallel execution optimizations`                                     |   no    | track                   | Performance optimisation; the path executes correctly without it.                                                                                                                                             |
+| #   | Location                                         | Marker                                                                                         | public  | Disposition        | Note                                                                                                                                                                      |
+| --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | :-----: | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `nodes/edge/edge_monitoring_node.py:359`         | `# TODO: proper active check`                                                                  | **yes** | implement          | `[a for a in alerts if active_only or True]` — the `or True` makes the filter a no-op, so `active_count` **always equals the total alert count**. Latent correctness bug. |
+| 2   | `nodes/api/rest.py:433`                          | `# max_pages = ... # TODO: Implement max pages limit`                                          | **yes** | implement / remove | `max_pages` pagination cap is commented out, so the param is silently ignored — a caller passing `max_pages` gets no effect (over-fetch risk).                            |
+| 3   | `nodes/monitoring/performance_benchmark.py:2155` | `raise NotImplementedError("Anomaly detector training requires a machine learning library …")` | **yes** | track              | The anomaly-detection benchmark path raises; needs an ML dependency to implement.                                                                                         |
+| 4   | `cli/validate_imports.py:118`                    | `# TODO: Add support for include_tests flag in validator`                                      | **yes** | track              | The `--include-tests` CLI flag is parsed and printed but never passed to `validate_directory()` (`zero-tolerance` Rule 3c).                                               |
+| 5   | `nodes/monitoring/deadlock_detector.py:919`      | `# TODO: Send alerts or take automatic resolution actions`                                     |   no    | track              | Deadlocks are detected and recorded; alerting / auto-resolution is deferred (enhancement, not a broken contract).                                                         |
+| 6   | `middleware/communication/events.py:210`         | `# TODO: Replace with BatchProcessorNode for production use`                                   |   no    | track              | `EventBatch` is deprecated (emits a `DeprecationWarning`); replacement deferred.                                                                                          |
+| 7   | `middleware/communication/events.py:279`         | `# TODO: Add CacheNode when available for event history`                                       |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
+| 8   | `middleware/communication/events.py:280`         | `# TODO: Add AsyncQueueNode when available for event buffering`                                |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
+| 9   | `middleware/communication/events.py:281`         | `# TODO: Add MetricsCollectorNode when available for performance tracking`                     |   no    | track              | Depends on a node that does not yet exist.                                                                                                                                |
+| 10  | `nodes/data/bulk_operations.py:269`              | `# TODO: Implement COPY FROM for maximum performance`                                          |   no    | track              | Performance optimisation only — functionally complete via the multi-row-`INSERT` fallback directly below it.                                                              |
+| 11  | `runtime/parallel_cyclic.py:224`                 | `# TODO: Add cycle-aware parallel execution optimizations`                                     |   no    | track              | Performance optimisation; the path executes correctly without it.                                                                                                         |
 
-**Recommended follow-ups (highest value first):** #1+#2 (`FetchMode.ITERATOR`) and
-#3 (`edge_monitoring` active-count bug) are the only entries that alter or block
-observable behaviour on a public surface; #4 and #6 are silently-ignored public
-params; the remainder are enhancements/perf with a working code path.
+**Resolved:** the two former gaps #1/#2 (`nodes/data/async_sql.py:1268,1319` —
+`FetchMode.ITERATOR`) are closed. `FetchMode.ITERATOR` was a category error (a lazy
+async stream cannot be a materializing fetch _return value_); it never produced a
+working result (raised on PostgreSQL, returned `None`/`[]` on MySQL/SQLite). The enum
+member is removed, the silent MySQL/SQLite fallbacks now raise a typed `ValueError`,
+and a dedicated memory-bounded `stream()` API replaces the streaming use case
+(follow-up workstream). This drops the gap count 13 → 11 and the public-reachable
+gap count 6 → 4.
+
+**Recommended follow-ups (highest value first):** #1 (`edge_monitoring`
+active-count bug) is the only remaining entry that alters or blocks observable
+behaviour on a public surface; #2 and #4 are silently-ignored public params; the
+remainder are enhancements/perf with a working code path.
 
 ---
 
@@ -173,14 +180,14 @@ Documented so the count is complete and the guard's raw hits are explained.
 {
   "scope": "src/kailash",
   "regex": "\\b(TODO|FIXME|HACK|STUB|XXX)\\b|NotImplementedError",
-  "total": 68,
+  "total": 66,
   "category_tally": {
     "false_positive": 31,
     "sentinel": 24,
-    "gap": 13,
+    "gap": 11,
     "tracked": 0
   },
-  "public_reachable_gaps": 6,
+  "public_reachable_gaps": 4,
   "per_file": {
     "src/kailash/channels/mcp/base.py": 5,
     "src/kailash/channels/mcp/http.py": 2,
@@ -195,7 +202,6 @@ Documented so the count is complete and the guard's raw hits are explained.
     "src/kailash/nodes/base_async.py": 4,
     "src/kailash/nodes/base_with_acl.py": 2,
     "src/kailash/nodes/compliance/gdpr.py": 1,
-    "src/kailash/nodes/data/async_sql.py": 2,
     "src/kailash/nodes/data/bulk_operations.py": 1,
     "src/kailash/nodes/edge/edge_data.py": 2,
     "src/kailash/nodes/edge/edge_monitoring_node.py": 1,

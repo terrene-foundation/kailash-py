@@ -508,8 +508,9 @@ class TestAsyncSQLFeatureParity:
 
     def test_fetch_mode_parameter_handling(self):
         """Test fetch mode parameter handling."""
-        # Test all valid fetch modes
-        valid_modes = ["one", "all", "many", "iterator"]
+        # Test all valid fetch modes (iterator removed — see
+        # tests/unit/nodes/test_async_sql_fetchmode_iterator_removal.py)
+        valid_modes = ["one", "all", "many"]
 
         for mode in valid_modes:
             if mode == "many":
