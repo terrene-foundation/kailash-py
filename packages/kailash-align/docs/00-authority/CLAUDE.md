@@ -14,7 +14,9 @@ The framework value is orchestration, not training innovation. TRL does the trai
 AlignmentConfig
     |
     +-- LoRAConfig (rank, alpha, target_modules, dropout)
-    +-- SFTConfig / DPOConfig / KTOConfig / ORPOConfig / GRPOConfig / RLOOConfig / OnlineDPOConfig
+    +-- SFTConfig / DPOConfig / KTOConfig / GRPOConfig / RLOOConfig
+    |     (ORPOConfig / OnlineDPOConfig dataclasses still exist but their
+    |      to_trl_config() raises under trl >=1.0 — see Supported Methods below)
     |
     v
 AlignmentPipeline
@@ -49,7 +51,13 @@ AlignmentResult
 6. If `AdapterRegistry` is provided, registers the trained adapter with signature and metrics
 7. Returns `AlignmentResult` with paths, metrics, and adapter version
 
-## Supported Methods (12)
+## Supported Methods (10 registered)
+
+> Note: `orpo` and `online_dpo` are **NOT available with trl >=1.0** — upstream removed
+> `ORPOTrainer`/`ORPOConfig` and `OnlineDPOTrainer`/`OnlineDPOConfig`. They are de-registered
+> from `METHOD_REGISTRY`; selecting `method="orpo"` or `method="online_dpo"` raises
+> `ValueError: Unknown training method`. Use **DPO** (or **sft_then_dpo** for the two-stage
+> path) / **GRPO** instead. The rows below annotate them in-place so the removal is documented.
 
 ### Offline Preference (category: "offline")
 
@@ -72,23 +80,34 @@ KTO and BCO use binary labels (True/False or 1/0) instead of paired preferences.
 
 ### Monolithic (category: "monolithic")
 
-| Method   | TRL Trainer   | Data Format            | Config Class |
-| -------- | ------------- | ---------------------- | ------------ |
-| **orpo** | `ORPOTrainer` | prompt/chosen/rejected | `ORPOConfig` |
+| Method                                           | TRL Trainer   | Data Format            | Config Class |
+| ------------------------------------------------ | ------------- | ---------------------- | ------------ |
+| ~~`orpo`~~ (removed in trl >=1.0 — use dpo/grpo) | `ORPOTrainer` | prompt/chosen/rejected | `ORPOConfig` |
 
-ORPO combines SFT and preference alignment in a single training pass. Eliminates the need for `sft_then_dpo`.
+ORPO (Odds Ratio Preference Optimization) combines SFT and preference alignment in a single
+training pass. **Not available with trl >=1.0 — upstream removed the `ORPOTrainer`/`ORPOConfig`
+classes; it is de-registered from `METHOD_REGISTRY`.** Use **DPO** (or **sft_then_dpo** for the
+two-stage path) instead. The `ORPOConfig` dataclass still exists for back-compat, but
+`ORPOConfig.to_trl_config()` raises a `TrainingError` redirecting to DPO/GRPO.
 
 ### Online RL (category: "online")
 
-| Method         | TRL Trainer        | Data Format | Config Class              | Reward Required        |
-| -------------- | ------------------ | ----------- | ------------------------- | ---------------------- |
-| **grpo**       | `GRPOTrainer`      | prompt      | `GRPOConfig`              | Yes                    |
-| **rloo**       | `RLOOTrainer`      | prompt      | `RLOOConfig`              | Yes                    |
-| **online_dpo** | `OnlineDPOTrainer` | prompt      | `OnlineDPOConfig`         | No (uses reward model) |
-| **xpo**        | `XPOTrainer`       | prompt      | falls back to `SFTConfig` | Yes                    |
-| **nash_md**    | `NashMDTrainer`    | prompt      | falls back to `SFTConfig` | Yes                    |
+| Method                                                 | TRL Trainer        | Data Format | Config Class              | Reward Required        |
+| ------------------------------------------------------ | ------------------ | ----------- | ------------------------- | ---------------------- |
+| **grpo**                                               | `GRPOTrainer`      | prompt      | `GRPOConfig`              | Yes                    |
+| **rloo**                                               | `RLOOTrainer`      | prompt      | `RLOOConfig`              | Yes                    |
+| ~~`online_dpo`~~ (removed in trl >=1.0 — use dpo/grpo) | `OnlineDPOTrainer` | prompt      | `OnlineDPOConfig`         | No (uses reward model) |
+| **xpo**                                                | `XPOTrainer`       | prompt      | falls back to `SFTConfig` | Yes                    |
+| **nash_md**                                            | `NashMDTrainer`    | prompt      | falls back to `SFTConfig` | Yes                    |
 
 Online methods generate completions at training time and score them. GRPO and RLOO require reward functions from `RewardRegistry`. All online methods support optional vLLM for fast generation.
+
+> **`online_dpo` not available with trl >=1.0** — upstream removed `OnlineDPOTrainer`/`OnlineDPOConfig`;
+> it is de-registered, so `method="online_dpo"` raises `ValueError: Unknown training method`. Use
+> **GRPO** (online RL with reward functions) or **DPO** (offline paired preference) instead.
+> Note: the experimental trainers `xpo` / `nash_md` (and `ppo`) are still registered but their trl
+> classes were also removed in trl >=1.0 — selecting them raises an informative `TrainingError` at
+> training time naming the absent class and the supported alternatives (sft/dpo/kto/grpo/rloo).
 
 ### Pipeline Combo
 
@@ -110,12 +129,16 @@ Online methods generate completions at training time and score them. GRPO and RL
 - **`SFTConfig`** -- SFT training: `num_train_epochs`, `per_device_train_batch_size`, `learning_rate`, `max_seq_length`, etc.
 - **`DPOConfig`** -- DPO training: adds `beta`, `max_length`, `max_prompt_length`.
 - **`KTOConfig`** -- KTO training: adds `desirable_weight`, `undesirable_weight`.
-- **`ORPOConfig`** -- ORPO training: adds `beta`, `max_length`, `max_prompt_length`.
+- **`ORPOConfig`** -- ORPO config: `beta`, `max_length`, `max_prompt_length`. **Dataclass still
+  exists for back-compat, but `to_trl_config()` raises a `TrainingError` under trl >=1.0** (upstream
+  removed `ORPOConfig`); the `orpo` method is de-registered. Use DPO/GRPO.
 - **`GRPOConfig`** -- GRPO training: adds `num_generations`, `temperature`, `max_completion_length`, `kl_coef`, `use_vllm`.
 - **`RLOOConfig`** -- RLOO training: same fields as GRPOConfig.
-- **`OnlineDPOConfig`** -- Online DPO: adds `beta`, `max_completion_length`, `use_vllm`.
+- **`OnlineDPOConfig`** -- Online DPO config: `beta`, `max_completion_length`, `use_vllm`. **Dataclass
+  still exists for back-compat, but `to_trl_config()` raises a `TrainingError` under trl >=1.0**
+  (upstream removed `OnlineDPOConfig`); the `online_dpo` method is de-registered. Use GRPO/DPO.
 
-All method configs are `@dataclass(frozen=True)` with `__post_init__` validation (NaN/Inf checks, range checks). Each provides `to_trl_config(output_dir)` to convert to TRL's native config class.
+All method configs are `@dataclass(frozen=True)` with `__post_init__` validation (NaN/Inf checks, range checks). Each provides `to_trl_config(output_dir)` to convert to TRL's native config class (except `ORPOConfig`/`OnlineDPOConfig`, whose `to_trl_config()` raises under trl >=1.0 — see above).
 
 ### Registry
 
@@ -167,17 +190,17 @@ All config dataclasses validate numeric fields with `math.isfinite()` in `__post
 
 ### Required (installed with `pip install kailash-align`)
 
-| Package          | Version       | Purpose                                                  |
-| ---------------- | ------------- | -------------------------------------------------------- |
-| `torch`          | `>=2.2,<3.0`  | PyTorch runtime                                          |
-| `transformers`   | `>=4.40,<5.0` | Model loading, tokenizers                                |
-| `trl`            | `>=1.0,<2.0`  | All TRL trainers (SFT, DPO, KTO, ORPO, GRPO, RLOO, etc.) |
-| `peft`           | `>=0.10,<1.0` | LoRA/QLoRA adapter management                            |
-| `accelerate`     | `>=1.4,<2.0`  | Distributed training, mixed precision                    |
-| `datasets`       | `>=3.0,<4.0`  | HuggingFace dataset loading                              |
-| `kailash`        | `>=0.4.0`     | Core SDK (workflow runtime)                              |
-| `kailash-ml`     | `>=0.1.0`     | ModelRegistry, ML lifecycle                              |
-| `kailash-kaizen` | `>=0.3.0`     | Agent framework (for KaizenModelBridge)                  |
+| Package          | Version       | Purpose                                                                       |
+| ---------------- | ------------- | ----------------------------------------------------------------------------- |
+| `torch`          | `>=2.2,<3.0`  | PyTorch runtime                                                               |
+| `transformers`   | `>=4.40,<5.0` | Model loading, tokenizers                                                     |
+| `trl`            | `>=1.0,<2.0`  | TRL trainers (SFT, DPO, KTO, GRPO, RLOO; ORPO/OnlineDPO removed in trl >=1.0) |
+| `peft`           | `>=0.10,<1.0` | LoRA/QLoRA adapter management                                                 |
+| `accelerate`     | `>=1.4,<2.0`  | Distributed training, mixed precision                                         |
+| `datasets`       | `>=3.0,<4.0`  | HuggingFace dataset loading                                                   |
+| `kailash`        | `>=0.4.0`     | Core SDK (workflow runtime)                                                   |
+| `kailash-ml`     | `>=0.1.0`     | ModelRegistry, ML lifecycle                                                   |
+| `kailash-kaizen` | `>=0.3.0`     | Agent framework (for KaizenModelBridge)                                       |
 
 ### Optional Extras
 

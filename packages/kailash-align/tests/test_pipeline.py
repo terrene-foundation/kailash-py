@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from kailash_align.config import AlignmentConfig
 from kailash_align.exceptions import TrainingError
 from kailash_align.pipeline import AlignmentPipeline, AlignmentResult
@@ -42,6 +41,78 @@ class TestAlignmentPipelineTrainDispatch:
             TrainingError, match="sft_then_dpo requires preference_dataset"
         ):
             await pipeline.train(dataset=None, adapter_name="test")
+
+
+class TestTrlAbsentTrainerGuard:
+    """trl >=1.0 removed several trainer classes still in METHOD_REGISTRY
+    (xpo/nash_md/ppo/cpo/bco). _run_training MUST convert the raw ImportError
+    from the trainer lazy-import into an informative TrainingError (#1426).
+    """
+
+    @pytest.mark.asyncio
+    async def test_xpo_trl_absent_trainer_raises_training_error(
+        self, monkeypatch, tmp_path: Path
+    ):
+        pytest.importorskip("trl")
+        pytest.importorskip("torch")
+        pytest.importorskip("transformers")
+        pytest.importorskip("peft")
+
+        import peft
+        import transformers
+
+        # Stub the heavy boundaries so _run_training reaches the real
+        # _lazy_import("trl", "XPOTrainer") guard against the installed trl
+        # (which has no XPOTrainer) -- no network, no model download, no GPU.
+        class _FakeParam:
+            def numel(self) -> int:
+                return 1
+
+            requires_grad = True
+
+        class _FakeModel:
+            def parameters(self):
+                return [_FakeParam()]
+
+        class _FakeTokenizer:
+            pad_token = "<pad>"
+            eos_token = "<eos>"
+
+        monkeypatch.setattr(
+            transformers.AutoModelForCausalLM,
+            "from_pretrained",
+            classmethod(lambda cls, **kw: _FakeModel()),
+        )
+        monkeypatch.setattr(
+            transformers.AutoTokenizer,
+            "from_pretrained",
+            classmethod(lambda cls, **kw: _FakeTokenizer()),
+        )
+        monkeypatch.setattr(peft, "get_peft_model", lambda model, cfg: model)
+
+        class _FakeDataset:
+            column_names = ["prompt"]
+
+            def __len__(self) -> int:
+                return 1
+
+        cfg = AlignmentConfig(
+            base_model_id="test/model",
+            method="xpo",
+            experiment_dir=str(tmp_path),
+        )
+        pipeline = AlignmentPipeline(config=cfg)
+
+        with pytest.raises(TrainingError) as exc_info:
+            await pipeline._run_training(
+                "xpo", _FakeDataset(), "test-adapter", reward_funcs=[]
+            )
+        msg = str(exc_info.value)
+        # Informative message, NOT a raw "cannot import name 'XPOTrainer'".
+        assert "xpo" in msg
+        assert "XPOTrainer" in msg
+        assert "trl" in msg
+        assert not isinstance(exc_info.value, ImportError)
 
 
 class TestDatasetValidation:

@@ -6,11 +6,7 @@ Tier 1 unit tests -- no torch, TRL, or GPU dependencies required.
 """
 from __future__ import annotations
 
-import math
-import warnings
-
 import pytest
-
 from kailash_align.config import (
     AdapterSignature,
     AlignmentConfig,
@@ -30,7 +26,6 @@ from kailash_align.method_registry import (
     validate_method_name,
 )
 
-
 # =============================================================================
 # Section 1: Method Registry
 # =============================================================================
@@ -39,14 +34,14 @@ from kailash_align.method_registry import (
 class TestMethodRegistryCompleteness:
     """All expected methods are registered with correct metadata."""
 
+    # orpo / online_dpo are NOT registered: trl >=1.0 removed their trainer
+    # classes upstream (issue #1426). The remaining 10 are the registrable set.
     EXPECTED_METHODS = {
         "sft",
         "dpo",
         "kto",
-        "orpo",
         "grpo",
         "rloo",
-        "online_dpo",
         "xpo",
         "nash_md",
         "cpo",
@@ -55,12 +50,27 @@ class TestMethodRegistryCompleteness:
     }
 
     def test_all_methods_registered(self):
-        """All 12 built-in methods are present in the registry."""
+        """All 10 built-in methods are present in the registry."""
         assert self.EXPECTED_METHODS == set(METHOD_REGISTRY.keys())
 
     def test_registry_count(self):
-        """Exactly 12 methods are registered (no accidental extras)."""
-        assert len(METHOD_REGISTRY) == 12
+        """Exactly 10 methods are registered (no accidental extras)."""
+        assert len(METHOD_REGISTRY) == 10
+
+    def test_orpo_online_dpo_not_registered(self):
+        """trl >=1.0 removed ORPO/OnlineDPO trainers; they MUST be absent (#1426)."""
+        assert "orpo" not in METHOD_REGISTRY
+        assert "online_dpo" not in METHOD_REGISTRY
+        with pytest.raises(AlignmentError, match="Unknown training method 'orpo'"):
+            get_method("orpo")
+        with pytest.raises(
+            AlignmentError, match="Unknown training method 'online_dpo'"
+        ):
+            get_method("online_dpo")
+        with pytest.raises(ValueError, match="Unknown training method"):
+            validate_method_name("orpo")
+        with pytest.raises(ValueError, match="Unknown training method"):
+            validate_method_name("online_dpo")
 
 
 class TestGetMethod:
@@ -72,10 +82,8 @@ class TestGetMethod:
             "sft",
             "dpo",
             "kto",
-            "orpo",
             "grpo",
             "rloo",
-            "online_dpo",
             "xpo",
             "nash_md",
             "cpo",
@@ -107,10 +115,8 @@ class TestValidateMethodName:
             "sft",
             "dpo",
             "kto",
-            "orpo",
             "grpo",
             "rloo",
-            "online_dpo",
             "xpo",
             "nash_md",
             "cpo",
@@ -175,8 +181,8 @@ class TestCategoryClassification:
 
     OFFLINE_METHODS = {"sft", "dpo", "cpo"}
     UNPAIRED_METHODS = {"kto", "bco"}
-    MONOLITHIC_METHODS = {"orpo"}
-    ONLINE_METHODS = {"grpo", "rloo", "online_dpo", "xpo", "nash_md", "ppo"}
+    # The lone monolithic method (orpo) is de-registered in trl >=1.0 (#1426).
+    ONLINE_METHODS = {"grpo", "rloo", "xpo", "nash_md", "ppo"}
 
     @pytest.mark.parametrize("name", OFFLINE_METHODS)
     def test_offline_category(self, name: str):
@@ -185,10 +191,6 @@ class TestCategoryClassification:
     @pytest.mark.parametrize("name", UNPAIRED_METHODS)
     def test_unpaired_category(self, name: str):
         assert get_method(name).category == "unpaired"
-
-    @pytest.mark.parametrize("name", MONOLITHIC_METHODS)
-    def test_monolithic_category(self, name: str):
-        assert get_method(name).category == "monolithic"
 
     @pytest.mark.parametrize("name", ONLINE_METHODS)
     def test_online_category(self, name: str):
@@ -199,8 +201,8 @@ class TestMethodFlags:
     """Method boolean flags are set correctly."""
 
     REWARD_FUNC_METHODS = {"grpo", "rloo", "xpo", "nash_md", "ppo"}
-    GENERATION_BACKEND_METHODS = {"grpo", "rloo", "online_dpo", "xpo", "nash_md", "ppo"}
-    PREFERENCE_DATA_METHODS = {"dpo", "orpo", "cpo"}
+    GENERATION_BACKEND_METHODS = {"grpo", "rloo", "xpo", "nash_md", "ppo"}
+    PREFERENCE_DATA_METHODS = {"dpo", "cpo"}
     SUPPORTS_LOSS_TYPE_METHODS = {"dpo"}
 
     @pytest.mark.parametrize("name", REWARD_FUNC_METHODS)
@@ -209,7 +211,7 @@ class TestMethodFlags:
 
     @pytest.mark.parametrize(
         "name",
-        ["sft", "dpo", "kto", "orpo", "online_dpo", "cpo", "bco"],
+        ["sft", "dpo", "kto", "cpo", "bco"],
     )
     def test_requires_reward_func_false(self, name: str):
         assert get_method(name).requires_reward_func is False
@@ -220,7 +222,7 @@ class TestMethodFlags:
 
     @pytest.mark.parametrize(
         "name",
-        ["sft", "dpo", "kto", "orpo", "cpo", "bco"],
+        ["sft", "dpo", "kto", "cpo", "bco"],
     )
     def test_requires_generation_backend_false(self, name: str):
         assert get_method(name).requires_generation_backend is False
@@ -231,7 +233,7 @@ class TestMethodFlags:
 
     @pytest.mark.parametrize(
         "name",
-        ["sft", "kto", "grpo", "rloo", "online_dpo", "xpo", "nash_md", "bco"],
+        ["sft", "kto", "grpo", "rloo", "xpo", "nash_md", "bco"],
     )
     def test_requires_preference_data_false(self, name: str):
         assert get_method(name).requires_preference_data is False
@@ -600,15 +602,15 @@ class TestAlignmentConfigAutoCreate:
         assert config.rloo is not None
         assert isinstance(config.rloo, RLOOConfig)
 
-    def test_orpo_auto_creates_config(self):
-        config = AlignmentConfig(method="orpo", base_model_id="test/model")
-        assert config.orpo is not None
-        assert isinstance(config.orpo, ORPOConfig)
+    def test_orpo_method_rejected(self):
+        """orpo is de-registered (trl >=1.0 removed ORPOTrainer); selecting it raises (#1426)."""
+        with pytest.raises(ValueError, match="Unknown training method"):
+            AlignmentConfig(method="orpo", base_model_id="test/model")
 
-    def test_online_dpo_auto_creates_config(self):
-        config = AlignmentConfig(method="online_dpo", base_model_id="test/model")
-        assert config.online_dpo is not None
-        assert isinstance(config.online_dpo, OnlineDPOConfig)
+    def test_online_dpo_method_rejected(self):
+        """online_dpo is de-registered (trl >=1.0 removed OnlineDPOTrainer); selecting it raises (#1426)."""
+        with pytest.raises(ValueError, match="Unknown training method"):
+            AlignmentConfig(method="online_dpo", base_model_id="test/model")
 
     def test_cpo_works_without_dedicated_config(self):
         """CPO is an experimental method with no dedicated config class."""
@@ -744,8 +746,6 @@ class TestAdapterSignatureTrainingMethods:
             "kto",
             "grpo",
             "rloo",
-            "orpo",
-            "online_dpo",
             "xpo",
             "nash_md",
             "cpo",
@@ -755,6 +755,12 @@ class TestAdapterSignatureTrainingMethods:
     def test_registered_methods_valid(self, method: str):
         sig = AdapterSignature(base_model_id="test/model", training_method=method)
         assert sig.training_method == method
+
+    @pytest.mark.parametrize("method", ["orpo", "online_dpo"])
+    def test_de_registered_methods_rejected(self, method: str):
+        """orpo/online_dpo are de-registered (trl >=1.0); AdapterSignature rejects them (#1426)."""
+        with pytest.raises(ValueError, match="Unknown training method"):
+            AdapterSignature(base_model_id="test/model", training_method=method)
 
     def test_sft_then_dpo_still_valid(self):
         sig = AdapterSignature(

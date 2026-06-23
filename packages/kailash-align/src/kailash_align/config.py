@@ -689,9 +689,13 @@ class AlignmentConfig:
     """Top-level configuration for AlignmentPipeline.
 
     Supports all training methods registered in MethodRegistry:
-    - Offline: sft, dpo, sft_then_dpo, orpo, cpo
+    - Offline: sft, dpo, sft_then_dpo, cpo
     - Unpaired: kto, bco
-    - Online: grpo, rloo, online_dpo, xpo, nash_md
+    - Online: grpo, rloo, xpo, nash_md
+
+    Note: orpo and online_dpo are NOT registered — trl >=1.0 removed
+    ORPOTrainer/ORPOConfig and OnlineDPOTrainer/OnlineDPOConfig upstream.
+    Use dpo or grpo instead.
 
     Args:
         method: Training method -- any key in METHOD_REGISTRY or 'sft_then_dpo'.
@@ -744,17 +748,19 @@ class AlignmentConfig:
                     "QLoRA requires bitsandbytes. "
                     "Install with: pip install kailash-align[rlhf]"
                 ) from exc
-        # Auto-create method-specific configs with defaults if not provided
+        # Auto-create method-specific configs with defaults if not provided.
+        # NOTE: orpo / online_dpo are NOT auto-created -- trl >=1.0 removed those
+        # trainer/config classes upstream, so they are de-registered from
+        # METHOD_REGISTRY and validate_method_name() rejects them above before
+        # this point is reached (see method_registry.py + issue #1426). The
+        # ORPOConfig/OnlineDPOConfig dataclasses remain constructible directly
+        # (their to_trl_config() raises an informative DPO/GRPO redirect).
         if self.method == "kto" and self.kto is None:
             self.kto = KTOConfig()
-        if self.method == "orpo" and self.orpo is None:
-            self.orpo = ORPOConfig()
         if self.method == "grpo" and self.grpo is None:
             self.grpo = GRPOConfig()
         if self.method == "rloo" and self.rloo is None:
             self.rloo = RLOOConfig()
-        if self.method == "online_dpo" and self.online_dpo is None:
-            self.online_dpo = OnlineDPOConfig()
 
     def get_method_config(self, method_name: str):
         """Get the method-specific config for TRL config generation.

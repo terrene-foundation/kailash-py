@@ -312,7 +312,23 @@ class AlignmentPipeline:
             trl_config.loss_type = self._config.loss_type
 
         # 4. Create trainer
-        TrainerClass = _lazy_import(method.trainer_module, method.trainer_class_name)
+        # trl >=1.0 removed several trainer classes that older kailash-align
+        # registered (ORPOTrainer, OnlineDPOTrainer are de-registered; the
+        # experimental methods xpo/nash_md/ppo/cpo/bco may also be absent in a
+        # given trl release). _lazy_import raises a raw ImportError when the
+        # class is gone; convert it to an informative TrainingError naming the
+        # method, the absent trl class, and the supported alternatives.
+        try:
+            TrainerClass = _lazy_import(
+                method.trainer_module, method.trainer_class_name
+            )
+        except (ImportError, AttributeError) as exc:
+            raise TrainingError(
+                f"Training method '{method.name}' requires trl class "
+                f"'{method.trainer_class_name}', which is unavailable in the "
+                f"installed trl (>=1.0 removed it). "
+                f"Supported: sft, dpo, kto, grpo, rloo."
+            ) from exc
 
         trainer_kwargs: dict[str, Any] = {
             "model": model,
