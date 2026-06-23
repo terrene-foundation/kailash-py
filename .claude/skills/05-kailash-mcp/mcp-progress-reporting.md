@@ -11,7 +11,7 @@ Report progress for long-running MCP operations.
 > Category: `mcp`
 > Priority: `LOW`
 > SDK Version: `0.9.25+`
-> Related Skills: [`mcp-resources`](mcp-resources.md), [`mcp-integration-guide`](../../01-core-sdk/mcp-integration-guide.md)
+> Related Skills: [`mcp-resources`](mcp-resources.md), [`mcp-integration-guide`](../01-core-sdk/mcp-integration-guide.md)
 > Related Subagents: `mcp-specialist` (streaming patterns)
 
 ## Quick Reference
@@ -27,7 +27,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Process large dataset"}],
@@ -54,6 +54,6 @@ workflow.add_node("PythonCodeNode", "agent", {
 ## Related Patterns
 
 - **Resources**: [`mcp-resources`](mcp-resources.md)
-- **MCP Integration**: [`mcp-integration-guide`](../../01-core-sdk/mcp-integration-guide.md)
+- **MCP Integration**: [`mcp-integration-guide`](../01-core-sdk/mcp-integration-guide.md)
 
 <!-- Trigger Keywords: MCP progress, progress reporting, long operation, progress updates, mcp streaming -->

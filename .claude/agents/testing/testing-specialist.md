@@ -3,6 +3,13 @@ name: testing-specialist
 description: "3-tier testing specialist with Playwright E2E. Use for test architecture, E2E generation, or infra compliance."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Testing Specialist Agent

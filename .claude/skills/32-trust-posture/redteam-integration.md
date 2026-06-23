@@ -1,20 +1,24 @@
 # /redteam Integration — Posture-Scaled Audit Depth
 
-/redteam audit rigor scales with posture. Higher trust = lighter touch; lower trust = full red-team.
+/redteam audit DEPTH scales with posture: higher trust = lighter touch PER ROUND; lower trust = deeper checks per round. **Convergence is NOT posture-scaled** — every `/redteam` at L2–L5 runs to 2 consecutive clean rounds (per `commands/redteam.md` § Convergence Criteria). Posture sets how deep each round digs, never whether convergence is reached.
 
 ## Audit Depth By Posture
 
-| Posture               | /redteam mandatory rounds                                                                                          | Optional rounds                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| L5 DELEGATED          | Round 1 OPTIONAL (agent's discretion)                                                                              | Round 2+ on agent's discretion      |
-| L4 CONTINUOUS_INSIGHT | **Round 1 MANDATORY** before merge — mechanical sweeps (grep, AST, pytest --collect-only, file-existence)          | Round 2 closure-parity recommended  |
-| L3 SHARED_PLANNING    | **Round 1 + Round 2 MANDATORY** — closure-parity verification of every prior-round finding                         | Round 3 spec-compliance recommended |
-| L2 SUPERVISED         | **Full red-team (Round 1+2+3) MANDATORY** — including spec compliance grep against every pending_verification rule | Round 4 if surface > 1000 LOC       |
-| L1 PSEUDO_AGENT       | **N/A** — no autonomous /implement to red-team. /redteam invocations at L1 are advisory simulation only            |
+Depth is **cumulative down the ladder** (each lower posture's per-round floor includes every higher posture's). The convergence target — 2 consecutive clean rounds + Convergence Criteria 4–6 — is **invariant** at L2–L5.
+
+| Posture               | Per-round audit DEPTH floor (cumulative)                                                             | Convergence target             |
+| --------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------ |
+| L5 DELEGATED          | Mechanical sweeps (grep, AST, pytest --collect-only, file-existence, marker scrub)                   | **2 consecutive clean rounds** |
+| L4 CONTINUOUS_INSIGHT | **+ closure-parity** verification of every prior-round finding                                       | **2 consecutive clean rounds** |
+| L3 SHARED_PLANNING    | **+ spec-compliance** audit (literal assertions AST/grep-verified per `specs-authority.md`)          | **2 consecutive clean rounds** |
+| L2 SUPERVISED         | **+ full spec-compliance** grep against every pending_verification rule                              | **2 consecutive clean rounds** |
+| L1 PSEUDO_AGENT       | **N/A** — no autonomous /implement to red-team; /redteam at L1 is advisory simulation only (no loop) | N/A (no convergence loop)      |
+
+The round depth-sections below (Mechanical Sweeps / Closure-Parity / Spec Compliance) name the depth RUNGS, not a per-round count: at L5 every round applies ≥ the Mechanical-Sweeps rung and the loop runs until 2 are clean; at L2 every round applies all rungs. UNDER-applying the posture's depth floor (e.g., skipping closure-parity at L4) OR stopping before 2 consecutive clean rounds at L2–L5 is the violation logged via `appendViolation` against `redteam/posture-aware-depth`.
 
 ### Carve-out — Self-Referential /codify Surface
 
-The L5_DELEGATED row's "Round 1 OPTIONAL" default does NOT apply when a `/codify` proposal touches the self-referential surface allowlist enumerated in `rules/self-referential-codify.md` Rule 2 (codify-class commands, codify-discipline skills/rules, codify-class hooks/bin, audit fixtures, management agents). On that surface every `/codify` MUST dispatch multi-agent redteam-with-tests in parallel — reviewer + security-reviewer + cc-architect (or analyst / gold-standards-validator per surface) — REGARDLESS of posture. See `rules/self-referential-codify.md` Rule 1 for the dispatch contract and Rule 3 for the one-time-per-rule bootstrap-circularity carve-out.
+When a `/codify` proposal touches the self-referential surface allowlist enumerated in `rules/self-referential-codify.md` Rule 2 (codify-class commands, codify-discipline skills/rules, codify-class hooks/bin, audit fixtures, management agents), every round MUST dispatch the full multi-agent team in parallel — reviewer + security-reviewer + cc-architect (or analyst / gold-standards-validator per surface) — REGARDLESS of posture, rather than the posture-reduced per-round depth above. Convergence (2 consecutive clean rounds) is already invariant; this carve-out additionally raises the per-round DEPTH to full-multi-agent on the self-referential surface. See `rules/self-referential-codify.md` Rule 1 for the dispatch contract and Rule 3 for the one-time-per-rule bootstrap-circularity carve-out.
 
 ## Mechanical Sweeps (Round 1)
 
@@ -167,4 +171,4 @@ closed the entire substring-mask + normalization-collision + arrow-split
 /redteam --posture L4   # forces L4 audit depth even if posture.json says L5
 ```
 
-The invocation logs a violation if the agent attempts to UNDER-audit (e.g., running Round 1 only at L3 posture).
+The invocation logs a violation if the agent attempts to UNDER-audit (e.g., skipping the spec-compliance depth floor at L3, or stopping before 2 consecutive clean rounds at L2–L5).

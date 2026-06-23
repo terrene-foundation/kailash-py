@@ -11,7 +11,7 @@ Fix the most common Kailash SDK error - forgetting to call `.build()` before exe
 > Category: `cross-cutting` (error-resolution)
 > Priority: `CRITICAL` (Most common SDK error)
 > SDK Version: `0.9.0+`
-> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`runtime-execution`](../../01-core-sdk/runtime-execution.md)
+> Related Skills: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md), [`runtime-execution`](../01-core-sdk/runtime-execution.md)
 > Related Subagents: `pattern-expert` (complex debugging)
 
 ## The Error
@@ -143,9 +143,9 @@ results, run_id = runtime.execute(workflow.build())
 
 ## Related Patterns
 
-- **Workflow creation**: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md)
-- **Runtime options**: [`runtime-execution`](../../01-core-sdk/runtime-execution.md)
-- **Other common errors**: [`common-mistakes-catalog`](../../06-cheatsheets/common-mistakes-catalog.md)
+- **Workflow creation**: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md)
+- **Runtime options**: [`runtime-execution`](../01-core-sdk/runtime-execution.md)
+- **Other common errors**: [`common-mistakes-catalog`](../06-cheatsheets/common-mistakes-catalog.md)
 - **Parameter errors**: [`error-parameter-validation`](error-parameter-validation.md)
 - **Connection errors**: [`error-connection-params`](error-connection-params.md)
 
@@ -160,8 +160,8 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Pattern Expert**: [`.claude/agents/pattern-expert.md` (lines 257-264)](../../../agents/pattern-expert.md#L257-L264)
-- **Essential Pattern**: [`CLAUDE.md` (lines 139-141)](../../../../CLAUDE.md#L139-L141)
+- **Pattern Expert**: [`.claude/agents/implementation/pattern-expert.md` (lines 257-264)](../../agents/implementation/pattern-expert.md#L257-L264)
+- **Essential Pattern**: [`CLAUDE.md` (lines 139-141)](../../../CLAUDE.md#L139-L141)
 
 ### Related Documentation
 

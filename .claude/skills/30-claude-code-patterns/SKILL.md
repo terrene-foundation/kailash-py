@@ -121,12 +121,13 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 
 ## Detailed Reference
 
-- **[Sync Flow](sync-flow.md)** — Full /sync protocol (loaded by sync-reviewer + coc-sync agents)
+- **[Sync Flow](sync-flow.md)** — Full sync-family protocol (loaded by sync-reviewer + coc-sync agents)
 - **[Multi-CLI Migration](multi-cli-migration.md)** — Loom's variant + emit pipeline reference
 - **[SDK Upstream Donation](sdk-upstream-donation.md)** — BUILD repo → loom → USE template flow
 - **[Parallel Merge Workflow](parallel-merge-workflow.md)** — Merging 5+ parallel worktree changes to the same file via specialist delegation
 - **[Worktree Orchestration Protocol](worktree-orchestration.md)** — Extended evidence + post-mortems for `rules/agents.md` worktree MUSTs and `rules/worktree-isolation.md`
 - **[Closure-Parity Specialist Discipline](closure-parity-specialist-discipline.md)** — BLOCKED-rationalization corpus + delegation-time detection signals + Origin evidence for `rules/agents.md` § "MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read"
+- **[Workflow-Orchestration Throughput](workflow-orchestration-throughput.md)** — CC how-to for `rules/governed-throughput.md` + throttle-aware concurrency (`rules/worktree-isolation.md` Rule 4): read-only fan-out, verify→implement pipeline, schema returns, resumeFromRunId, the L2 curated-slice injection, the journal/0193 over-injection-degrades evidence
 
 ## When to Use This Skill
 

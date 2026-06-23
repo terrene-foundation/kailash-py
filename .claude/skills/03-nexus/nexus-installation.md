@@ -9,7 +9,7 @@ description: "Nexus installation and setup. Use when asking 'install nexus', 'ne
 > Category: `nexus`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`nexus-specialist`](nexus-specialist.md), [`nexus-quickstart`](nexus-quickstart.md)
+> Related Skills: [`nexus-specialist`](../../agents/frameworks/nexus-specialist.md), [`nexus-quickstart`](nexus-quickstart.md)
 
 ## Installation
 

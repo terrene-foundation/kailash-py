@@ -7,7 +7,6 @@ scope: baseline
 
 See `.claude/guides/rule-extracts/coc-sync-landing.md` for BLOCKED-rationalizations, extended bash examples, origin post-mortem, MUST NOT clauses, and cross-rule relationships.
 
-<!-- slot:neutral-body -->
 
 Loom's `/sync-to-build` delivery MUST land on `main` BEFORE any other session work. Pairs with `.claude/hooks/multi-operator-sessionstart.js` (SessionStart).
 
@@ -32,5 +31,3 @@ After CI green or path-filter auto-skip, run `gh pr merge <N> --admin --merge --
 **Why:** `--admin` is the owner-class bypass for chore PRs; without it the PR drifts open across sessions and the failure mode resumes.
 
 Origin: 2026-05-02 — `/autonomize` unknown at session start despite prior `/sync-to-build` delivery. See guide.
-
-<!-- /slot:neutral-body -->

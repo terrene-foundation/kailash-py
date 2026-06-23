@@ -166,19 +166,19 @@ Origin: kailash-rs PR #761 (merged 8286775f, 2026-05-02) — vendored `test-vect
 
 ### 4b. Byte-CHANGING Canonical-Encoder Switches Are Cross-SDK Lockstep, Not Single-SDK
 
-When migrating a canonical-encoder / serialization helper that feeds a cross-SDK signing or hash pre-image (e.g. `json.dumps(..., default=str)` → a stricter `canonical_scalars`), you MUST first classify the switch as **byte-NEUTRAL** or **byte-CHANGING** by EMPIRICALLY byte-diffing production output on fixed inputs — NOT by reasoning about it. A byte-CHANGING switch where the sibling SDK mirrors this SDK's CURRENT bytes MUST NOT ship single-SDK; it is a coordinated cross-SDK lockstep (one re-pin event in both repos) and the current bytes MUST be pinned in a regression test as a loud tripwire until the lockstep lands. A byte-NEUTRAL switch (the `to_dict()` / normalization layer already pre-normalizes every divergent type, so the swap changes zero currently-emitted bytes) MAY ship single-SDK.
+When migrating a canonical-encoder / serialization helper that feeds a cross-SDK signing or hash pre-image (e.g. `json.dumps(..., default=str)` → a stricter `canonical_scalars`), you MUST first classify the switch as **byte-NEUTRAL** or **byte-CHANGING** by EMPIRICALLY byte-diffing production output on fixed inputs — NOT by reasoning about it. A byte-CHANGING switch where the sibling SDK mirrors this SDK's CURRENT bytes MUST NOT ship single-SDK; it is a coordinated cross-SDK lockstep (one re-pin event in both repos) and the current bytes MUST be pinned in a regression test as a loud tripwire until the lockstep lands. A byte-NEUTRAL switch (the normalization layer already pre-normalizes every divergent type, so the swap changes zero currently-emitted bytes) MAY ship single-SDK.
 
 ```python
-# DO — empirically classify, then pin current bytes for the byte-CHANGING site
+# DO — empirically classify, then pin current bytes for the byte-CHANGING site (py-illustrative)
 @pytest.mark.regression
 def test_witness_sign_payload_pins_current_default_str_bytes():
     # CROSS_SDK_BLOCKED: AuditAnchor reaches the encoder un-normalized; default=str
     # stringifies the dataclass repr, canonical_scalars asdict-expands it → different SHA.
-    # kailash-rs mirrors these CURRENT bytes; a py-only switch diverges the two SDKs.
-    assert _sign_payload(fixture) == "edfdf52b…"   # tripwire until rs#NNNN lockstep
-# (the byte-NEUTRAL sibling — envelope_hash, where to_dict() pre-normalizes — SHIPPED py-only)
+    # the sibling SDK mirrors these CURRENT bytes; a single-SDK switch diverges the two SDKs.
+    assert _sign_payload(fixture) == "edfdf52b…"   # tripwire until the sibling-SDK lockstep
+# (the byte-NEUTRAL sibling — envelope_hash, where normalization pre-normalizes — SHIPPED single-SDK)
 
-# DO NOT — switch a byte-CHANGING signing encoder single-SDK
+# DO NOT — switch a byte-CHANGING signing encoder single-SDK (py-illustrative)
 def to_canonical_json(self):
     return json.dumps(self._hashable_dict(), default=canonical_scalars)  # was default=str
     # ↑ silently diverges every on-disk signed artifact from the sibling SDK's bytes;
@@ -193,7 +193,7 @@ def to_canonical_json(self):
 - "It's one encoder; the lockstep ceremony is overkill"
 - "Pinning the OLD bytes blocks the migration I'm trying to do"
 
-**Why:** A canonical signing encoder is a byte-for-byte cross-SDK contract (Rule 4); switching it single-SDK silently diverges every artifact the sibling SDK must re-verify, and the break surfaces only when a cross-SDK verify fails in production. Empirical byte-diff (run the code, compare SHAs) is the only sound classifier — "I reasoned the types are equivalent" is exactly how the audit-chain / witness-family / envelope-HMAC sites were each almost switched py-only. Pinning the current bytes converts the deferred lockstep from an un-tracked memory into a test that fails loudly the moment someone switches one side.
+**Why:** A canonical signing encoder is a byte-for-byte cross-SDK contract (Rule 4); switching it single-SDK silently diverges every artifact the sibling SDK must re-verify, and the break surfaces only when a cross-SDK verify fails in production. Empirical byte-diff (run the code, compare SHAs) is the only sound classifier — "I reasoned the types are equivalent" is exactly how the audit-chain / witness-family / envelope-HMAC sites were each almost switched single-SDK. Pinning the current bytes converts the deferred lockstep from an un-tracked memory into a test that fails loudly the moment someone switches one side.
 
 **Trust Posture Wiring (byte-changing cross-SDK lockstep):**
 
@@ -204,7 +204,7 @@ def to_canonical_json(self):
 - **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate).
 - **Detection mechanism:** Phase 1 — gate-level reviewer at `/implement`: for any diff touching a canonical-encoder/serialization helper on a signing/hash path, demand the empirical byte-diff classification + (for byte-changing) the pinned-current-bytes regression test + the cross-SDK lockstep issue. Phase 2 (deferred): a regression-suite invariant enumerating signing-site encoders and asserting each pinned.
 - **Violation scope:** this clause (canonical-encoder switches on cross-SDK signing/hash pre-images). Every violation row names the encoder site + the missing classification or tripwire.
-- **Origin:** kailash 2.43.1 cross-SDK canonical-encoder family sweep (2026-06-20) — `workspaces/cross-sdk-audit/journal/0011` (byte-diff classification of 97 `default=str` sites: audit-chain + witness-family + envelope-HMAC byte-CHANGING/lockstep, envelope_hash byte-NEUTRAL/shipped); `specs/trust-canonical-encoders.md`.
+- **Origin:** kailash 2.43.1 cross-SDK canonical-encoder family sweep (2026-06-20) — byte-diff classification of 97 `default=str` sites: audit-chain + witness-family + envelope-HMAC byte-CHANGING/lockstep, envelope_hash byte-NEUTRAL/shipped; `specs/trust-canonical-encoders.md`.
 
 ### 4c. Conformance-Vector Changes Re-Pin Their Integrity Manifest In The Same Commit
 
@@ -241,7 +241,7 @@ $ edit tests/trust/.../audit_anchor.json && git commit           # manifest unch
 - **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate; shared with Rule 4b).
 - **Detection mechanism:** Phase 1 — the CI `Verify vector integrity` step (`shasum -a256 -c *.sha256`) is the structural detector; the canonical-vector `/redteam` integrity-manifest-sweep lens enumerates every `*.sha256` and runs the check. Phase 2 (deferred): a pre-commit hook asserting that a changed `*.json` under a vectors dir co-changes its manifest.
 - **Violation scope:** this clause (conformance-vector integrity-manifest re-pin). Every violation row names the vector file + its stale manifest.
-- **Origin:** PR #1411 Gap 1 (2026-06-20) — `workspaces/cross-sdk-audit/journal/0015` (the `PACT_VECTORS.sha256` re-pin omission a "converged" redteam missed because no round ran `shasum -c`; closed by commit `b4929d924` + a new integrity-manifest-sweep lens).
+- **Origin:** PR #1411 Gap 1 (2026-06-20) — the `PACT_VECTORS.sha256` re-pin omission a "converged" redteam missed because no round ran `shasum -c`; closed by commit `b4929d924` + a new integrity-manifest-sweep lens.
 
 ### 5. Inspection Checklist
 

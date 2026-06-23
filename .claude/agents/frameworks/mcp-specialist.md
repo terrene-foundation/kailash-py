@@ -3,6 +3,13 @@ name: mcp-specialist
 description: "MCP specialist. Use for MCP servers, tools, resources, exposing APIs as LLM tools — raw JSON-RPC BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # MCP (Model Context Protocol) Specialist

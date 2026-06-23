@@ -4,7 +4,12 @@ How to apply updates from the canonical source to other repositories.
 
 ## Canonical Source
 
-The canonical source repository for shared CO components is:
+The canonical source for shared CO/COC components is the **loom** artifact-management
+platform (the single source of truth for all CO/COC artifacts), which classifies and
+distributes them per `rules/artifact-flow.md` § Authority Chain. (CC/CO _methodology_
+itself — base rules, guides — originates in `atelier/`; it flows through loom, which
+splits global vs variant and distributes via `/sync-to-use` + `/sync-to-build`.) The
+shared components propagated this way include:
 
 - Core workflow improvements (implement.md, codify.md, todos.md)
 - Shared agents (analysis, review, management, standards experts)
@@ -46,7 +51,7 @@ The canonical source repository for shared CO components is:
 ### Step 1: Identify what changed
 
 ```bash
-# In the terrene repo
+# In the canonical-source (loom) repo
 git diff --name-only HEAD~N -- .claude/commands/ .claude/guides/ .claude/rules/
 ```
 
@@ -55,7 +60,7 @@ git diff --name-only HEAD~N -- .claude/commands/ .claude/guides/ .claude/rules/
 For each modified file, determine:
 
 - **Shared structure change** (e.g., new workflow step in implement.md) → Propagate to all repos
-- **Terrene-specific content change** (e.g., new governance agent in implement.md agent teams) → Do not propagate
+- **Canonical-source-specific content change** (e.g., new governance agent in implement.md agent teams) → Do not propagate
 - **New shared component** (e.g., new guide) → Propagate to all repos
 
 ### Step 3: Apply changes
@@ -78,7 +83,7 @@ After propagation, verify:
 
 - [ ] Step numbering is consistent in each command
 - [ ] Agent teams reference agents that exist in the target repo
-- [ ] No terrene-specific references leaked (anchor docs, constitution, publications)
+- [ ] No canonical-source-specific or org-internal references leaked (internal anchor docs, governance charters, publications)
 - [ ] All shared content is identical across repos
 
 ## Repository Inventory

@@ -52,6 +52,55 @@ loom/.claude/
   sync-manifest.yaml   # Declares tier membership and variant mappings
 ```
 
+### Overlay Axes
+
+The directory structure above shows the **language / stack** axis
+(`py`, `rs`) for brevity, but `.claude/variants/` carries TWO orthogonal
+overlay axes plus their composition. The authoritative axis set is
+whatever `.claude/variants/*` holds on disk, declared in
+`sync-manifest.yaml` (the top-level `variants:` map for the language
+axis; `multi_cli_overlays` + `cli_variants` for the CLI axis). On disk
+today `.claude/variants/` holds ten dirs: `base`, `py`, `rs`, `prism`,
+`codex`, `gemini`, `py-codex`, `py-gemini`, `rs-codex`, `rs-gemini`
+(plus a `README.md`). The three axes are:
+
+- **Language / stack axis** — `base`, `py`, `rs`, `prism` (on disk) plus
+  `rb` (a declared manifest axis with NO on-disk dir). Each selects the
+  SDK-language overlay for a target (`/sync-to-use py` applies
+  `variants/py/`). Status notes: `rb` (Ruby) has NO on-disk dir and no
+  language overlay; in the manifest `variants:` map it is left UNDECLARED on
+  most rules (and set `rb: null` on the few rules that carry an explicit
+  per-axis list) — either way `resolveOverlay` treats an absent key and an
+  explicit `null` identically (skip the axis), so `rb` resolves to the global
+  and ships via the `rs` all-bindings template. The dedicated
+  `kailash-coc-claude-rb` USE template was retired (`#423` Phase 1;
+  `sync-manifest.yaml` header), so there is no `variants/rb/` dir. `prism`
+  retains an on-disk `variants/prism/` dir reserved for the kailash-prism
+  BUILD repo even though the `kailash-coc-claude-prism` USE template was
+  retired in v2.9.4 (`sync-manifest.yaml` header); it is not an active
+  USE-template target.
+- **CLI axis** — `codex`, `gemini`. Selects the per-CLI overlay applied
+  when emitting a multi-CLI artifact body (the Claude-Code baseline is
+  the un-overlaid global; Codex/Gemini bodies overlay `variants/codex/`
+  or `variants/gemini/`). Composed into the emitted body by
+  `.claude/bin/emit.mjs::composeRule`.
+- **Composed (ternary) axis** — `py-codex`, `py-gemini`, `rs-codex`,
+  `rs-gemini`. A composed dir holds overlays needed ONLY when a specific
+  language AND a specific CLI coincide — i.e. `py-codex` = the `py` ∩
+  `codex` intersection, applied LAST so it can override both single-axis
+  overlays (`rules/variant-authoring.md` § Composition precedence).
+
+**Composition precedence** (per `rules/variant-authoring.md` Rule 4,
+implemented at `.claude/bin/emit.mjs::composeRule`, lines 257-315): for a
+target with language `<lang>` and CLI `<cli>`, overlays compose in order
+**global → `variants/<lang>/` → `variants/<cli>/` → `variants/<lang>-<cli>/`**,
+each present overlay applied additively (a slot-keyed overlay replaces the
+matching global slot; a full-file overlay replaces the composed body — last
+writer wins). Axis membership defers to `sync-manifest.yaml::variants` via
+`resolveOverlay()` — a `null` declaration skips an axis even when a legacy
+file exists on disk. So `py-codex` does NOT stand alone; it refines the
+result of the `py` and `codex` overlays for the one target where both apply.
+
 ### Sync Logic
 
 When syncing to a **py** target:
@@ -132,17 +181,17 @@ bug / code / feature / code-improvement (SDK code)
     - Needs alignment → cross-SDK task created for other language
 ```
 
-### Outbound: /sync-to-build + /sync
+### Outbound: /sync-to-build + /sync-to-use
 
 ```
 loom/ SPLITTER
   ├─ /sync-to-build ──→ kailash-py / kailash-rs (BUILD; canonical pushed back)
-  └─ /sync py|rs|rb  ──→ kailash-coc-claude-{py,rs,rb}/ (USE templates)
-                              ↓ downstream USE/project repos pull via own /sync
+  └─ /sync-to-use py|rs|rb → kailash-coc-claude-{py,rs,rb}/ (USE templates)
+                              ↓ downstream USE/project repos pull via own /sync-from-template
                               └──→ cycle repeats
 ```
 
-USE templates are BOTH proposal originators (for COC-artifact improvements) AND distribution points (re-synced from loom) — never terminal-only. The `/sync` command reads `sync-manifest.yaml`, applies the correct variant overlay, and produces the target artifacts.
+USE templates are BOTH proposal originators (for COC-artifact improvements) AND distribution points (re-synced from loom) — never terminal-only. The `/sync-to-use` command reads `sync-manifest.yaml`, applies the correct variant overlay, and produces the target artifacts.
 
 ### Control Gates
 
@@ -190,8 +239,6 @@ tiers:
     - rules/communication.md
     - rules/journal.md
     - rules/zero-tolerance.md
-    - rules/terrene-naming.md
-    - rules/independence.md
     - rules/git.md
     - rules/git.md
     - rules/security.md
@@ -336,7 +383,7 @@ After migration, ~/repos/.claude/ can be reduced to a thin settings.json (for ba
 ## Standalone-Consumer Model — `client` is intentionally NOT a variant axis (yet)
 
 Ratified 2026-05-16 (issue #243). Generalized pattern for any enterprise
-consumer that runs its own downstream `/sync` against a USE template.
+consumer that runs its own downstream `/sync-from-template` against a USE template.
 
 ### The situation
 
@@ -346,10 +393,10 @@ the consumer's own policy/directive set. The characteristic artifact
 split observed:
 
 - **~80% canonical base** — security, EATP, PACT, ISO / EU-AI-Act
-  scaffolding. Stays loom-canonical; re-syncs via `/sync`.
+  scaffolding. Stays loom-canonical; re-syncs via `/sync-from-template`.
 - **~15%+5% consumer overlay** — consumer compliance rules, ITSM
   commands, enforcement hooks, project-scoped skills/agents. Authored
-  in the consumer repo; MUST survive every `/sync`.
+  in the consumer repo; MUST survive every `/sync-from-template`.
 
 ### The decision
 
@@ -359,19 +406,21 @@ consumer with additive overlays**.
 
 Rationale:
 
-- The variant axes (`py`, `rs`, `rb`, `base`, `prism`) are the
-  **language / stack** axis. loom AUTHORS and SHIPS every variant's
-  content. A `client` axis would, by the same mechanic, require loom to
-  author and ship client-specific content — which loom MUST NOT do.
-  Consumer policy content is client-confidential and
+- `py`, `rs`, `rb`, `base`, `prism` are the **language / stack** axis —
+  one of two overlay axes loom ships (see § Overlay Axes above for the
+  full set, including the `codex` / `gemini` CLI axis and the composed
+  `py-codex` / … ternary dirs). loom AUTHORS and SHIPS every variant's
+  content on BOTH axes. A `client` axis would, by the same mechanic,
+  require loom to author and ship client-specific content — which loom
+  MUST NOT do. Consumer policy content is client-confidential and
   jurisdiction-specific; it has no place in the loom source of truth.
 - There is exactly **one** enterprise consumer. A first-class axis is
   infrastructure built for N consumers; building it for N=1 is premature
   generalisation. The additive-overlay model (the consumer authors its
-  own overlay in its own repo, loom's `/sync` preserves it) fully
+  own overlay in its own repo, the consumer's `/sync-from-template` preserves it) fully
   satisfies the N=1 requirement with zero loom-side client content.
 - The ~80% canonical base already flows correctly through the existing
-  tier-subscription `/sync` model. The only gap was preservation of the
+  tier-subscription `/sync-from-template` model. The only gap was preservation of the
   consumer's ~15%+5% — solved by the per-consumer boundary contract
   (below), not by a new axis.
 
@@ -392,12 +441,12 @@ It is **consumer-targeted** (keyed by the consumer's GitHub slug),
 NEVER applied to the kailash-coc-claude-{py,rs,rb} USE templates. It
 declares three surfaces:
 
-| Surface                | Purpose                                                                    |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `preserved:`           | GLOB set of consumer-authored paths /sync never overwrites or purges       |
-| `canonical_protected:` | loom-owned paths the consumer must not edit; divergence is BLOCK-gated     |
-| `codify_back:`         | exceptional upstreaming policy; consumer-confidential content never leaves |
+| Surface                | Purpose                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `preserved:`           | GLOB set of consumer-authored paths /sync-from-template never overwrites or purges |
+| `canonical_protected:` | loom-owned paths the consumer must not edit; divergence is BLOCK-gated             |
+| `codify_back:`         | exceptional upstreaming policy; consumer-confidential content never leaves         |
 
-The downstream `/sync` enforcement is specified in
+The downstream `/sync-from-template` enforcement is specified in
 `skills/30-claude-code-patterns/sync-flow.md` § Downstream Sync (step 5
 preservation extension + the new step 5a canonical-divergence gate).

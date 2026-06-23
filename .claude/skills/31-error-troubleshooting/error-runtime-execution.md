@@ -11,7 +11,7 @@ Fix common runtime execution errors including wrong runtime usage, execution fai
 > Category: `cross-cutting` (error-resolution)
 > Priority: `HIGH`
 > SDK Version: `0.9.0+`
-> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`runtime-execution`](../../01-core-sdk/runtime-execution.md), [`decide-runtime`](../decisions/decide-runtime.md)
+> Related Skills: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md), [`runtime-execution`](../01-core-sdk/runtime-execution.md), `decide-runtime`
 > Related Subagents: `pattern-expert` (complex debugging)
 
 ## Common Errors
@@ -103,8 +103,7 @@ async def execute():
 
 ## Related Patterns
 
-- **Runtime selection**: [`decide-runtime`](../decisions/decide-runtime.md)
-- **Execution guide**: [`runtime-execution`](../../01-core-sdk/runtime-execution.md)
+- **Execution guide**: [`runtime-execution`](../01-core-sdk/runtime-execution.md)
 - **Parameter errors**: [`error-parameter-validation`](error-parameter-validation.md)
 
 ## When to Escalate to Subagent
@@ -117,7 +116,7 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **CLAUDE.md**: [`CLAUDE.md` (lines 106-137)](../../../../CLAUDE.md#L106-L137)
+- **CLAUDE.md**: [`CLAUDE.md` (lines 106-137)](../../../CLAUDE.md#L106-L137)
 
 ## Quick Tips
 

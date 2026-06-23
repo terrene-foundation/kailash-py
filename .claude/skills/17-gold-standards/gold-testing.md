@@ -205,8 +205,6 @@ def test_workflow_with_both_runtimes(runtime_class):
 
 ## Related Patterns
 
-- **Test organization**: [`test-organization`](../../07-development-guides/test-organization.md)
-- **Testing best practices**: [`testing-best-practices`](../../07-development-guides/testing-best-practices.md)
-- **Runtime execution**: [`runtime-execution`](../../01-core-sdk/runtime-execution.md)
+- **Runtime execution**: [`runtime-execution`](../01-core-sdk/runtime-execution.md)
 
 <!-- Trigger Keywords: testing standard, testing best practices, how to test, testing gold standard, test guidelines -->

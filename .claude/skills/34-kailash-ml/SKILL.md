@@ -21,7 +21,7 @@ server = await km.serve("demo@production")                 # Group 1 lifecycle
 # $ kailash-ml-dashboard  (separate shell)                 # Group 1 lifecycle
 
 km.diagnose(model)                                         # Group 1 — DLDiagnostics / RAGDiagnostics / RLDiagnostics
-km.watch(model_uri, reference=reference_df)                # Group 1 — DriftMonitor
+km.watch(model, reference_df)                              # Group 1 — DriftMonitor
 km.seed(42); await km.reproduce(run_id)                    # Group 1 — reproducibility
 await km.resume(run_id)                                    # Group 1 — checkpoint resume
 graph = await km.lineage("demo@v1", tenant_id=None)        # Group 1 — LineageGraph; ambient tenant via get_current_tenant_id()
@@ -149,7 +149,7 @@ pip install kailash-ml[all-gpu]   # Everything (GPU)
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
+from kailash_ml import FeatureStore
 from kailash_ml.types import FeatureSchema, FeatureField
 import polars as pl
 
@@ -161,40 +161,34 @@ schema = FeatureSchema(
     features=[
         FeatureField(name="age", dtype="float"),
         FeatureField(name="tenure_months", dtype="float"),
-        FeatureField(name="churned", dtype="int"),  # the target column
     ],
-    entity_id_column="user_id",
+    target=FeatureField(name="churned", dtype="int"),
 )
 
 fs = FeatureStore(conn, table_prefix="kml_feat_")
 await fs.initialize()
 
 df = pl.read_csv("data.csv")
-await fs.register_features(schema)
-await fs.store(fs.compute(df, schema), schema)
+await fs.ingest("user_features", schema, df)
 
 # Point-in-time retrieval
-features = await fs.get_features(
-    ["u1", "u2"], ["age", "tenure_months"], schema=schema,
-)
+features = await fs.get_features("user_features", entity_ids=["u1", "u2"])
 ```
 
 ### Training
 
 ```python
-from kailash_ml import TrainingPipeline, ModelRegistry
-from kailash_ml.engines.training_pipeline import ModelSpec, EvalSpec
-from kailash_ml.engines.model_registry import LocalFileArtifactStore
+from kailash_ml import TrainingPipeline, ModelRegistry, ModelSpec, EvalSpec
+from kailash_ml.engines import LocalFileArtifactStore
 
-registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))  # no initialize()
+registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
+await registry.initialize()
 
-pipeline = TrainingPipeline(feature_store=fs, registry=registry)
+pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
 result = await pipeline.train(
-    df,
-    schema,
-    ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
-    EvalSpec(metrics=["accuracy", "f1"]),
-    experiment_name="user_churn",
+    schema=schema,
+    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
+    eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
 )
 ```
 
@@ -205,9 +199,10 @@ from kailash_ml import DriftMonitor
 
 # W26.e: tenant_id is REQUIRED at construction. One monitor per tenant.
 monitor = DriftMonitor(conn, tenant_id="acme")
-await monitor.set_reference_data("model_v1", reference_df, feature_columns=["age", "tenure_months"])
+await monitor.initialize()
+await monitor.set_reference("model_v1", reference_df)
 report = await monitor.check_drift("model_v1", current_df)
-# report.overall_drift_detected, report.overall_severity, report.feature_results
+# report.overall_drift, report.feature_results, report.recommendations
 ```
 
 ### Model Explainability (requires `[explain]`)
@@ -225,27 +220,26 @@ fig = explainer.to_plotly("summary")  # "summary", "beeswarm", "dependence"
 
 ```python
 from kailash_ml import AutoMLEngine
-from kailash_ml.automl import AutoMLConfig
+from kailash_ml.engines.automl_engine import AutoMLConfig
 
 config = AutoMLConfig(
     task_type="classification",
-    metric_name="f1",
+    metric_to_optimize="f1",
     search_strategy="bayesian",
-    max_trials=50,
+    search_n_trials=50,
     agent=True,            # LLM augmentation (requires kailash-ml[agents])
     auto_approve=False,    # Human approval gate
     max_llm_cost_usd=5.0,
 )
-engine = AutoMLEngine(config=config, tenant_id="default", actor_id="ci")
-# run() drives a search space + trial function — see ml-agent-guardrails.md
-result = await engine.run(space=search_space, trial_fn=trial_fn)
+engine = AutoMLEngine(feature_store=fs, model_registry=registry, config=config)
+result = await engine.run(schema=schema, data=df)
 ```
 
 ### Model Registry Lifecycle
 
 ```python
 # Stage transitions: staging → shadow → production → archived
-await registry.promote_model("model_v1", version_id, target_stage="production")
+await registry.promote("model_v1", version_id, target_stage="production")
 
 # Valid transitions:
 # staging    → shadow, production, archived
@@ -257,24 +251,25 @@ await registry.promote_model("model_v1", version_id, target_stage="production")
 ### Preprocessing Pipeline
 
 ```python
-from kailash_ml import PreprocessingPipeline
+from kailash_ml.engines import PreprocessingPipeline
 
-prep = PreprocessingPipeline()
-result = prep.setup(
-    df, target="churned",
-    normalize=True, normalize_method="zscore",            # zscore, minmax, robust, maxabs
-    imputation_strategy="knn", impute_n_neighbors=5,      # knn, iterative, mean
+pipeline = PreprocessingPipeline()
+result = pipeline.setup(
+    data=df, target="churned",
+    normalize=True, normalize_method="zscore",       # zscore, minmax, robust, maxabs
+    imputation="knn", impute_n_neighbors=5,           # knn, iterative, default
     remove_multicollinearity=True, multicollinearity_threshold=0.9,
-    fix_imbalance=True, imbalance_method="smote",         # smote, adasyn ([imbalance])
+    fix_imbalance=True, imbalance_method="smote",     # smote, adasyn ([imbalance])
 )
 ```
 
 ### Nested Runs & Auto-Logging
 
 ```python
-from kailash_ml.engines.experiment_tracker import ExperimentTracker
+from kailash_ml import ExperimentTracker
 
 tracker = ExperimentTracker(conn)
+await tracker.initialize()
 
 async with tracker.run("hyperopt-sweep") as parent:
     for params in param_grid:
@@ -303,7 +298,7 @@ Every engine accepts and returns `polars.DataFrame`. Conversion to numpy/pandas/
 ```python
 # DO: Work in polars throughout
 df = pl.read_csv("data.csv")
-await fs.store(fs.compute(df, schema), schema)
+await fs.ingest("features", schema, df)
 
 # DO NOT: Convert to pandas first
 df_pd = pd.read_csv("data.csv")  # WRONG — polars is the native format
@@ -379,18 +374,13 @@ See [ml-agent-guardrails](ml-agent-guardrails.md) for the 5 mandatory guardrails
 ## RL Module (kailash-ml[rl])
 
 ```python
-from kailash_ml.rl import RLTrainer, EnvironmentRegistry, PolicyRegistry, RLTrainingConfig
+from kailash_ml.rl import RLTrainer, EnvironmentRegistry, PolicyRegistry
 
 env_reg = EnvironmentRegistry()
 env_reg.register("CartPole-v1")
 
 trainer = RLTrainer(env_registry=env_reg, policy_registry=PolicyRegistry())
-# train(env_name, policy_name, config) — algorithm + timesteps live on the config
-result = await trainer.train(
-    "CartPole-v1",
-    "ppo-policy",
-    RLTrainingConfig(algorithm="PPO", total_timesteps=100_000),
-)
+result = await trainer.train(env_id="CartPole-v1", algorithm="PPO", total_timesteps=100_000)
 ```
 
 ## Security Checklist

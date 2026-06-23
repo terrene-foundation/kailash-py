@@ -5,7 +5,6 @@ Save and restore agent execution state for long-running workflows.
 ## Concept
 
 Checkpointing lets you:
-
 - Save agent state mid-execution
 - Resume from saved state after failures
 - Interrupt and continue later
@@ -14,7 +13,7 @@ Checkpointing lets you:
 ## AgentCheckpoint
 
 ```python
-from kaizen.checkpoint import AgentCheckpoint, InMemoryCheckpointStorage
+from kailash_kaizen.checkpoint import AgentCheckpoint, InMemoryCheckpointStorage
 
 # Create checkpoint storage
 storage = InMemoryCheckpointStorage()
@@ -36,7 +35,7 @@ print(restored.iteration)  # 3
 ## File-Based Storage
 
 ```python
-from kaizen.checkpoint import FileCheckpointStorage
+from kailash_kaizen.checkpoint import FileCheckpointStorage
 
 # Persist checkpoints to disk
 storage = FileCheckpointStorage("/tmp/agent_checkpoints")
@@ -49,7 +48,7 @@ restored = storage.load("researcher")
 ## Agent Interrupts
 
 ```python
-from kaizen.interrupt import AgentInterrupt
+from kailash_kaizen.interrupt import AgentInterrupt
 
 # Create an interrupt with chaining
 interrupt = (
@@ -69,8 +68,8 @@ print(interrupt.resume_hint)  # "Wait 60 seconds before resuming"
 ## Resumable Agent Pattern
 
 ```python
-from kaizen import BaseAgent
-from kaizen.checkpoint import InMemoryCheckpointStorage, AgentCheckpoint
+from kailash_kaizen import BaseAgent
+from kailash_kaizen.checkpoint import InMemoryCheckpointStorage, AgentCheckpoint
 
 class ResumableAgent(BaseAgent):
     def __init__(self, name, storage=None):

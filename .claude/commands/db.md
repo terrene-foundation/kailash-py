@@ -1,3 +1,8 @@
+---
+name: db
+description: "DataFlow quick reference: DB, CRUD, bulk, migrations, multi-tenancy, fabric engine."
+---
+
 # /db - DataFlow Quick Reference
 
 ## Purpose
@@ -61,7 +66,7 @@ class User:
 When working with DataFlow, deploy:
 
 - **dataflow-specialist** — Database operations, auto-generated nodes, bulk operations
-- **testing-specialist** — Real database test fixtures (NO MOCKING)
+- **testing-specialist** — Real database test fixtures (Real infrastructure recommended)
 
 ## Related Commands
 

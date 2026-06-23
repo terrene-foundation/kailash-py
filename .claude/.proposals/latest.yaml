@@ -1,6 +1,16 @@
 source_repo: kailash-py
 codify_date: "2026-06-19"
-status: pending_review
+status: distributed
+reviewed_date: "2026-06-22"
+distributed_date: "2026-06-23"
+# Gate-1 (loom) 2026-06-22: 3 changes classified + placed on loom branch
+# sync/from-build-2026-06-22. agents (py-1) GLOBAL baseline → agents.md MUST
+# clause + extraction to skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md
+# (headroom net-neutral, Rule-10 via extraction); trust-plane-security (py-2)
+# GLOBAL → clause 8 (py-paths genericized); cross-sdk-inspection (py-3) GLOBAL
+# → Rule 4b+4c (genericized). 0 variant, 0 skip. Disclosure scan exit 0; bodies
+# human-scrubbed clean. FOLLOW-UP (not Gate-1): evidence-first-claims.md is a
+# loom baseline rule ABSENT from kailash-py — close via /sync-to-build py.
 codify_session: "Session 2026-06-19 — /codify of the redteam reviewer-dispatch
   rate-limit trap, surfaced during the PACT KSP.compartments (#1375 follow-up,
   PR #1379) holistic-redteam convergence. The session ran a 3-lens holistic

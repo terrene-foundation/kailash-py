@@ -3,6 +3,13 @@ name: analyst
 description: "Analysis specialist. Use for failure point analysis, risk assessment, requirements breakdown, or ADRs."
 tools: Read, Grep, Glob
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Analysis Specialist Agent

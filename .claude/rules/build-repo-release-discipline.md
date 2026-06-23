@@ -16,7 +16,6 @@ paths:
 
 # BUILD Repo Release Discipline
 
-<!-- slot:neutral-body -->
 
 ## Scope
 
@@ -242,5 +241,3 @@ Origin: 2026-04-26 — a sub-package security fix merged without bumping its ver
 - `rules/autonomous-execution.md` § "Fix-Immediately When Review Surfaces A Same-Class Gap Within Shard Budget" — sibling rule. Both mandate closing loops within-session rather than deferring to next-session context reload.
 - `rules/zero-tolerance.md` Rule 5 (Version Consistency on Release) — the atomicity requirement for pyproject.toml + **version**. This rule is the orchestration layer that ensures the consistency-checked bump reaches PyPI.
 - `rules/artifact-flow.md` — separate artifact lifecycle (proposals → loom → templates). Code releases follow this rule; COC artifact proposals follow artifact-flow.
-
-<!-- /slot:neutral-body -->

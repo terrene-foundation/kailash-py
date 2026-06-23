@@ -52,242 +52,66 @@ Every SDK MUST have `deploy/deployment-config.md`. Run `/deploy` to create it.
 
 **Why:** Without a deployment config, release agents guess at package names, registries, and credentials, leading to failed or misdirected publishes.
 
-## MUST: Optional Dependencies Pin to PyPI-Resolvable Versions
+## MUST: Eagerly-Imported Transitive Dependencies Are Declared By The Importing Package
 
-`[project.optional-dependencies]` extras MUST pin to versions already on PyPI at the time of the commit. Bumping an extras pin to the version being released in the same commit is BLOCKED — CI installs from PyPI before the release is published, so the pin fails to resolve.
-
-```toml
-# DO — extras pin to currently-published minimum compatible version
-[project.optional-dependencies]
-dataflow = ["kailash-dataflow>=2.0.3"]   # 2.0.3 is on PyPI; 2.0.8 is being released
-nexus    = ["kailash-nexus>=2.0.0"]
-kaizen   = ["kailash-kaizen>=2.7.1"]
-
-# DO NOT — extras pin to the version being released
-[project.optional-dependencies]
-dataflow = ["kailash-dataflow>=2.0.8"]   # 2.0.8 is not on PyPI yet → pip resolution fails
-```
-
-**BLOCKED rationalizations:**
-
-- "The version will exist by the time CI runs"
-- "We can fix CI after the release lands"
-- "The lockfile pins the right version anyway"
-
-**Why:** CI for the release PR runs `pip install -e ".[dev]"` against PyPI, which has the OLD versions. Pinning to the unreleased version produces `ERROR: No matching distribution found for kailash-mcp>=0.2.4` and the release CI fails. The framework SDK pins inside each package's own pyproject.toml (`kailash>=2.8.6` in `packages/kailash-dataflow/pyproject.toml`) ARE allowed to bump because they resolve against the local editable install of kailash, not PyPI. Source: PR #467 fix (commit a50d3119).
-
-## MUST: All Files Imported By package `__init__.py` Tracked In Git
-
-Before tagging a release, every `from .X import Y` and `from .pkg import Z` in any package's `__init__.py` MUST resolve to a file tracked in git. Imports that resolve to local-only files (untracked, .gitignored, generated) are BLOCKED — the published wheel will `ImportError` from a clean checkout.
+A package whose import graph eagerly pulls in a third-party library — directly OR transitively via an upstream Kailash package's `__init__.py` re-export — MUST declare that library in its own `[project.dependencies]`. Assuming an upstream optional extra will install it is BLOCKED.
 
 ```bash
-# DO — verify all package imports are tracked
-for init in packages/*/src/*/__init__.py; do
-  pkg_dir="$(dirname "$init")"
-  python -c "import ast, pathlib
-init = pathlib.Path('$init')
-tree = ast.parse(init.read_text())
-for node in ast.walk(tree):
-    if isinstance(node, ast.ImportFrom) and node.level > 0 and node.module:
-        candidate = init.parent / node.module.replace('.', '/')
-        for path in (candidate.with_suffix('.py'), candidate / '__init__.py'):
-            if path.exists():
-                rel = path.relative_to(pathlib.Path.cwd())
-                import subprocess
-                tracked = subprocess.run(['git', 'ls-files', '--error-unmatch', str(rel)],
-                                         capture_output=True).returncode == 0
-                if not tracked:
-                    print(f'UNTRACKED: {rel} imported by {init}')
-                break
-"
-done
+# DO — clean-venv install + import proves every eager dependency is declared
+python -m venv /tmp/verify --clear && /tmp/verify/bin/pip install dist/*.whl
+/tmp/verify/bin/python -c "import kailash_ml"   # fails loudly if a transitive eager import is undeclared
 
-# DO NOT — release with untracked files imported by __init__.py
-# packages/kailash-nexus/src/nexus/__init__.py:
-#   from .auth.guards import AuthGuard          # auth/guards.py UNTRACKED
-#   from .errors import NexusError              # errors.py UNTRACKED
-# Result: pip install kailash-nexus → ImportError on first import
+# DO NOT — rely on an upstream package's optional extra
+# kailash.core.pool.__init__ eagerly re-exports aiosqlite (a `kailash` extra);
+# bare `pip install kailash-ml` never installs extras → clean-venv ImportError
 ```
 
-**BLOCKED rationalizations:**
+**BLOCKED rationalizations:** "the upstream package brings it in" / "it works in editable-install CI" / "the extra is effectively always installed" / "we'll declare it if a user reports the import error".
 
-- "The file exists on my machine, the test passed"
-- "It was supposed to be in the previous PR"
-- "We'll add it in the next release"
-- "The CI passed because it uses editable install"
+**Why:** `pip install <pkg>` installs declared dependencies and their core dependencies — never optional extras — so a clean-venv user of the bare package hits `ImportError` at first import while editable-install CI stays green. Sibling to the "All Files Imported By package `__init__.py` Tracked In Git" discipline: same clean-venv import-failure family.
 
-**Why:** Editable installs see the local working tree, including untracked files. PyPI users get only what's in the wheel, which is built from `git ls-files`. PR #459/#460 merged with `nexus/__init__.py` importing `.auth.guards` and `.errors` — both untracked. Tests passed because the local files existed. The wheel published to PyPI would have failed with `ImportError` on every fresh install. Caught by `/release` audit and fixed in PR #467.
+**Trust Posture Wiring:**
 
-Origin: PR #467 (2026-04-14) — bundled the missing nexus/auth/guards.py and nexus/errors.py files that PR #459/#460 left untracked.
+- **Severity:** `halt-and-report` at the /release gate (release-specialist mechanical clean-venv eager-import sweep).
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** 3× same-rule in 30d → drop 1 posture per `trust-posture.md` MUST-4.
+- **Regression-within-grace:** emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: deployment-transitive-deps]` IFF `posture.json::pending_verification` includes this rule_id.
+- **Detection mechanism:** /release-time mechanical sweep — clean venv, install the built wheel of every published package, import each top-level module; any `ImportError` = release halt.
+- **Violation scope:** this clause (declare-eager-transitive-deps).
+- **Origin:** 2026-05-18 — kailash-ml clean-venv `pip install` failed at `import` on an upstream-extra-only library; same pattern hit kailash-mcp 0.2.13 → 0.2.14 the same day (issue #1086 candidate 1).
 
-## MUST: Multi-Package Release Tags Pushed Individually
+## MUST: Pre-Pledge Release Disclosure For Pre-1.0 / v0 New Public APIs
 
-Coordinated multi-package releases MUST push each release tag in a separate `git push` command, with a brief pause between pushes. Batch-pushing 3+ tags in a single command is BLOCKED — GitHub's `push.tags` webhook drops workflow triggers silently.
+Any /release that ships a NEW public API (new module, new top-level package, new framework primitive) at a pre-1.0 / v0 / pre-pledge version anchor MUST include a "Pre-Pledge v0" disclosure section in the package README or top-level docs BEFORE the release tag is cut. The disclosure MUST enumerate five fields: (a) invariants enforced TODAY, (b) items DEFERRED to later versions, (c) explicit NON-PROMISES users MUST NOT assume, (d) how-to-verify commands exercising the enforced invariants, (e) the version status.
 
-```bash
-# DO — one tag per push, trigger fires reliably
-for tag in v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4; do
-  git push origin "$tag"
-  sleep 1
-done
+```markdown
+# DO — README § "Pre-Pledge v0" enumerating all five fields
 
-# DO NOT — batch push, workflows silently skipped
-git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4
-# Observed 2026-04-14: ZERO of 5 tags triggered publish-pypi.yml.
-# Required manual workflow_dispatch for each package.
+## <Primitive> — Pre-Pledge v0
+
+Enforced today: signed audit chain, capability snapshot, posture ladder, ...
+Deferred: cross-SDK byte-determinism conformance for vectors X/Y/Z
+Non-promises: no implicit retries, no shadow audit chains, no posture auto-upgrade
+Verify: `pytest tests/conformance/ -k <primitive>` ...
+Status: v0 (pre-pledge — deferred items may change semantics before 1.0)
+
+# DO NOT — v0 README advertising every aspirational feature as if enforced today
 ```
 
-**BLOCKED rationalizations:**
+**BLOCKED rationalizations:** "it's v0, users know it's unstable" / "the CHANGELOG covers it" / "we'll add the disclosure when the API stabilizes" / "the docs are illustrative, not a pledge".
 
-- "Batch push is faster"
-- "The workflow should handle multiple tag events"
-- "We can check for missing runs after"
-- "It worked last time with 2 tags"
+**Why:** The disclosure structurally separates "what we pledge" from "what we aspire to", preventing the silent-pledge failure mode: users adopt v0 assuming all advertised features are enforced today, then break when a previously-aspirational feature ships with different semantics. Inverse of `zero-tolerance.md` Rule 6 at the docs surface — the README MUST distinguish surfaces that return real data today from surfaces whose docs reserve a contract a later version satisfies.
 
-**Why:** GitHub Actions' `push.tags` webhook delivery has undocumented rate-limiting when multiple tags arrive in a single push event. Batch pushes of 3+ tags fail to trigger the workflow for most (or all) of the tags. The failure is silent — the tags are created successfully, but `publish-pypi.yml` runs never appear in the Actions tab. Recovery requires manual `workflow_dispatch` per package, which is error-prone (must remember every package) and leaves a paper-trail asymmetry. Source: 2026-04-14 release where `git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4` triggered zero workflow runs.
+**Trust Posture Wiring:**
 
-Origin: PR #469 (2026-04-14) — validated empirically when the single-tag push of nexus-v2.0.3 auto-triggered correctly while the prior 5-tag batch push triggered zero runs.
-
-## MUST: TestPyPI Trusted-Publisher Registration Is Per-Package
-
-Every package published via PyPI OIDC trusted-publishing MUST be registered as a pending publisher on BOTH `pypi.org` AND `test.pypi.org` separately. TestPyPI registration does NOT carry over from PyPI — they are independent indexes with independent publisher configs.
-
-```yaml
-# DO — register the package on test.pypi.org BEFORE the first
-# workflow_dispatch run with publish_to=testpypi:
-# https://test.pypi.org/manage/account/publishing/
-#
-# Required field values MUST match exactly:
-#   PyPI Project Name:  kailash-ml
-#   Owner:              terrene-foundation
-#   Repository:         kailash-py
-#   Workflow filename:  publish-pypi.yml
-#   Environment name:   testpypi
-
-# DO NOT — assume PyPI registration carries over
-# pypi.org publisher config exists for kailash-ml ✓
-# test.pypi.org publisher config does NOT exist ✗
-# → workflow_dispatch publish_to=testpypi fails:
-#   400 "Non-user identities cannot create new projects"
-```
-
-**BLOCKED rationalizations:**
-
-- "We registered on PyPI, TestPyPI should work"
-- "TestPyPI is just a mirror"
-- "We can register after the first failed run"
-- "The CI error message will explain it"
-
-**Why:** Tag-triggered publishes (`push` of `v*` / `<pkg>-v*`) flow direct to PyPI only and never touch TestPyPI. The TestPyPI path requires `workflow_dispatch` with `publish_to=testpypi`, which requires the project to be pre-registered on test.pypi.org as a pending publisher. Without that one-time UI step, the upload returns `400 "Non-user identities cannot create new projects"` — a confusing error message that costs a release-cycle round-trip. Registration is a one-time UI step per package; document it in the repo's release runbook so the next package release does not re-discover it.
-
-Origin: kailash-py 2026-04-19 release — kailash-ml PyPI publish succeeded via tag push, TestPyPI workflow_dispatch failed with 400 because `kailash_ml` was not pre-registered on test.pypi.org.
-
-## MUST: Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules
-
-When a new public module lands in `src/kailash/` (or any core SDK module tree) and is not yet published to PyPI, every sibling-package CI workflow that imports from it MUST prepend `uv pip install -e "."` to its install block BEFORE installing the sub-package's own `[dev]` extras. Sub-package CI workflows that install only `packages/<pkg>[dev]` silently resolve `kailash>=X.Y.Z` from PyPI — where the new module does NOT yet exist — and every test importing the new module fails at collection with `ModuleNotFoundError`.
-
-```yaml
-# DO — root kailash editable installed FIRST, then sub-package
-- name: Install kailash-<subpkg>[dev]
-  run: |
-    uv venv .venv
-    # Install root kailash first so kailash.<new_module> resolves
-    # (not yet on PyPI; depends on PR #<N> of issue #<M>).
-    uv pip install -e "." --python .venv/bin/python
-    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
-
-# DO NOT — only sub-package; transitively pulls kailash from PyPI
-- name: Install kailash-<subpkg>[dev]
-  run: |
-    uv venv .venv
-    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
-    # → ModuleNotFoundError: No module named 'kailash.<new_module>'
-```
-
-**BLOCKED rationalizations:**
-
-- "The sub-package's `kailash>=X.Y.Z` dep should pull it in"
-- "We'll publish kailash first, then the sub-package CI will resolve"
-- "This workflow happened to pass last time; must be fine"
-- "The leading `uv pip install -e \".\"` is redundant with the sub-package dep"
-- "We'll add the root install when we see the first failure"
-
-**Why:** The sub-package's declared `kailash>=X.Y.Z` dependency resolves against PyPI, where the NEW module is not yet published. The build step succeeds (installs stable kailash from PyPI) but test collection fails because tests import the new module that exists only in the local editable source tree. Every `uv pip install -e "packages/..."` block in every sibling-package CI workflow MUST be preceded by `uv pip install -e "."`. No exceptions — even workflows that happen to pass today silently "work" because they do not import the new module yet. The comment in the CI step explaining the ordering is mandatory institutional knowledge: future contributors must understand that the leading root install is NOT redundant with the sub-package's declared kailash dep.
-
-Origin: kailash-py Session 2026-04-20 (issue #567 Session 3b) — PR #570 landed `kailash.diagnostics.protocols` in `src/kailash/` (not yet on PyPI). PR #577 extended the editable-root prepend to Base/DL/RL/Unit/Inter-Package CI jobs across `test-kailash-ml.yml` + `test-kailash-align.yml`, unblocking PRs #574/#575/#576 which all failed at collection with `ModuleNotFoundError: No module named 'kailash.diagnostics'`.
-
-### Bi-Directional At Bridge Boundaries (MUST)
-
-The rule above covers the one-way case (sub-package imports from root core). At cross-package BRIDGE boundaries — where two sub-packages import each other's modules (e.g. `kailash-ml` ↔ `kailash-align` RL bridge; `kailash-dataflow` ↔ `kailash-ml` fabric bridge) — BOTH sibling CI jobs MUST install BOTH packages editable. The uni-directional form is insufficient at bridges.
-
-```yaml
-# DO — BOTH directions install BOTH packages at bridge boundaries
-# .github/workflows/test-kailash-ml.yml (bridge: ml tests import kailash_align)
-- run: |
-    uv venv .venv
-    uv pip install -e "." --python .venv/bin/python
-    uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python   # reciprocal
-    uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
-# .github/workflows/test-kailash-align.yml (bridge: align tests import kailash_ml.rl.align_adapter)
-- run: |
-    uv venv .venv
-    uv pip install -e "." --python .venv/bin/python
-    uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python      # reciprocal
-    uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
-
-# DO NOT — install only one direction; the other fails on the next test run that imports across
-- run: |
-    uv pip install -e "packages/kailash-ml[dev]"   # ml tests import kailash_align
-    # → ModuleNotFoundError: No module named 'kailash_align'
-```
-
-**BLOCKED rationalizations:**
-
-- "The bridge module is in one direction only" (false — bridges are dual by nature)
-- "We'll add the reverse install when tests fail on it" (cascades: one direction surfaces, the other waits until next PR)
-- "Editable installs are dev-only, CI can rely on PyPI for the sibling"
-- "The sibling's declared version is enough"
-- "We can lazy-import across the bridge to avoid the editable"
-
-**Why:** Bridge modules are by definition dual-import — each side's tests exercise paths that import the other package's modules. A one-way editable install surfaces only one direction's `ModuleNotFoundError`; the other direction surfaces in the NEXT PR that runs the opposite test suite, cascading fixes across two release cycles. Pre-declaring BOTH reciprocal installs in BOTH CI workflows catches it at the FIRST collection pass. Evidence: PR #611 release cycle — align→ml reciprocal install landed at commit `e7c5a33b`; the ml→align direction surfaced as the next collection failure at commit `c59c30da`. Both directions needed identical discipline.
-
-Origin: kailash-py PR #611 release cycle (2026-04-23) — ML↔Align bridge CI cascade.
-
-## MUST: Eagerly-Imported Transitive Deps Are Declared By The Importing Package
-
-A package whose `__init__.py` (or any module on an eager import path) imports a third-party dependency MUST declare that dependency in its OWN `pyproject.toml` — even when the dependency is also pulled in transitively by an upstream package or an upstream `[extra]`. Relying on "the upstream extra installs it" is BLOCKED.
-
-```python
-# DO — kailash-ml declares aiosqlite because its eager import path needs it
-# packages/kailash-ml/pyproject.toml
-dependencies = ["kailash>=2.28.0", "aiosqlite>=0.19"]  # ml eagerly imports via kailash.core.pool
-
-# DO NOT — assume the upstream extra provides it
-dependencies = ["kailash>=2.28.0"]  # kailash[server] happens to install aiosqlite TODAY
-# → clean-venv `pip install kailash-ml` (no [server]) fails at FIRST import:
-#   ModuleNotFoundError: No module named 'aiosqlite'
-#   (kailash.core.pool.__init__ re-exports it eagerly)
-```
-
-**BLOCKED rationalizations:**
-
-- "The upstream extra installs it, so it's always present"
-- "It works in our dev env where the extra is installed"
-- "Declaring it duplicates the upstream dependency"
-- "The transitive resolution covers it"
-- "CI passes because CI installs the full extra set"
-
-**Why:** A clean-venv `pip install <package>` resolves ONLY that package's declared deps; an eagerly-imported transitive dep that is undeclared fails at first import for every user who does not ALSO install the upstream extra. Evidence: kailash-ml imported `aiosqlite` via `kailash.core.pool.__init__`'s eager re-export but never declared it — clean-venv install failed at import; the same pattern hit kailash-mcp 0.2.13 → 0.2.14 the same day. Declaration by the importing package is the only resolution that survives a minimal install.
-
-**Trust Posture Wiring (this clause):**
-
-- **Severity:** `halt-and-report` at `/release` gate-review (release-specialist confirms a clean-venv import of each sub-package; cc-architect / reviewer at `/codify`). Advisory at any future hook layer (an import-vs-declared-dep static check is structural but not yet wired).
-- **Grace period:** 7 days from this clause landing.
-- **Cumulative posture impact:** contributes to `trust-posture.md` MUST Rule 4 cumulative math (3× same-rule / 5× total in 30d → drop 1 posture).
-- **Regression-within-grace:** a release within 7 days that ships a sub-package whose eager import path references an undeclared transitive dep = emergency downgrade per `trust-posture.md` MUST Rule 4 (`regression_within_grace`; 1× = drop 1 posture).
-- **Receipt requirement:** SessionStart MUST require `[ack: deployment-transitive-dep]` in the agent's first response IF `posture.json::pending_verification` includes this rule_id. Soft-gate.
-- **Detection mechanism:** Phase 1 — release-specialist clean-venv import at `/release` (`pip install <pkg>` in a fresh venv with NO extras → import the package → exit 0); cc-architect / reviewer mechanical sweep at `/codify`. Phase 2 (deferred) — a static `import`-vs-`pyproject.dependencies` checker; audit fixtures attach there per `cc-artifacts.md` Rule 9.
-- **Violation scope:** this single MUST clause (eager-import transitive-dep declaration). Every violation row names the package + the undeclared dep + the eager import path.
-- **Origin:** issue #1086 candidate 1; evidence kailash-ml `aiosqlite` clean-venv failure + kailash-mcp 0.2.13 → 0.2.14 same-day repeat (2026-05-18).
+- **Severity:** `halt-and-report` at the /release gate (release-specialist mechanical sweep on any new public API with a `0.*` / `v0.*` / pre-pledge version anchor).
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** 3× same-rule in 30d → drop 1 posture per `trust-posture.md` MUST-4.
+- **Regression-within-grace:** trigger key `prepledge_release_no_disclosure` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart hard-gate `[ack: pre-pledge-disclosure]` IFF `posture.json::pending_verification` includes this rule_id AND the impending /release anchor is `0.*` AND the release diff adds a NEW public API surface.
+- **Detection mechanism:** /release-time release-specialist sweep — for every new public module/package shipping at `0.*`, grep README.md + docs/ for a section titled "Pre-Pledge" / "v0 Disclosure" / "Pre-1.0 Status" (or equivalent) AND assert the 5 required fields are enumerated. Phase 2 (deferred): hook detector `.claude/hooks/lib/violation-patterns.js::detectPrePledgeReleaseMissingDisclosure`; audit fixtures land with the detector under the violation-patterns detectPrePledgeReleaseMissingDisclosure subdir per `cc-artifacts.md` Rule 9.
+- **Violation scope:** this clause (5-field disclosure for new-public-API pre-1.0 releases).
+- **Origin:** PR #1144 README § "Pre-Pledge v0" (2026-05-22) — pre-merge co-owner review of the disclosure caught one "we enforce X" claim the implementation actually deferred; it would have shipped as a silent pledge otherwise.
 
 <!-- /slot:neutral-body -->

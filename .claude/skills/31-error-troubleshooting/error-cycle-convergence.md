@@ -11,7 +11,7 @@ Fix cyclic workflow convergence issues including infinite loops, max iterations 
 > Category: `cross-cutting` (error-resolution)
 > Priority: `HIGH`
 > SDK Version: `0.9.0+`
-> Related Skills: [`cycle-workflows-basics`](../../06-cheatsheets/cycle-workflows-basics.md), [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md)
+> Related Skills: [`cycle-workflows-basics`](../01-core-sdk/cycle-workflows-basics.md), [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md)
 > Related Subagents: `pattern-expert` (complex cycle debugging)
 
 ## Common Issues
@@ -102,8 +102,8 @@ print(f"Final count: {results['counter']['result']['count']}")  # Should be 5
 
 ## Related Patterns
 
-- **Cyclic basics**: [`cycle-workflows-basics`](../../06-cheatsheets/cycle-workflows-basics.md)
-- **Cycle debugging**: [`cycle-debugging`](../../06-cheatsheets/cycle-debugging.md)
+- **Cyclic basics**: [`cycle-workflows-basics`](../01-core-sdk/cycle-workflows-basics.md)
+- **Cycle debugging**: [`cycle-debugging`](../06-cheatsheets/cycle-debugging.md)
 
 ## When to Escalate to Subagent
 

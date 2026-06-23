@@ -3,6 +3,13 @@ name: cc-architect
 description: CC artifact architect. Use for auditing, designing, or improving agents, skills, rules, commands, hooks.
 tools: Read, Write, Edit, Grep, Glob, Bash, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Claude Code Architecture Specialist
@@ -60,10 +67,12 @@ Expert in Claude Code's architecture, configuration system, and the CO/COC five-
 
 ## Audit Dimensions
 
-1. **Competency** — Are instructions precise enough for correct behavior?
-2. **Completeness** — Are edge cases handled? Cross-references for handoff?
-3. **Effectiveness** — Output format specified? Does it actually get used?
-4. **Token Efficiency** — Redundancies? Path-scoping used? Waste is waste.
+The rubric composes a MECHANICAL signal + LLM judgment per dimension, with an adversarial A/B on the highest-blast-radius artifacts — NOT four standalone judgments. Run the Phase-0 mechanical battery from `commands/cc-audit.md` FIRST (`emit.mjs --all --dry-run` + `validate-*.mjs` + `cli-drift-audit.mjs`); a red mechanical gate BLOCKS regardless of dimension judgment. Structural + adversarial signals are load-bearing; LLM judgment corroborates.
+
+1. **Competency** — [LLM] instructions precise enough for correct behavior + [mechanical] `validate-xref-integrity.mjs` resolves every referenced artifact.
+2. **Completeness** — [LLM] edge cases handled, cross-references for handoff + [mechanical] orphan/parity grep (`orphan-detection.md` — no undeclared `variants/` file, no eager-import/`__all__` omission).
+3. **Effectiveness** — [LLM] output format specified, actually used + [ADVERSARIAL, in-scope only] subprocess A/B per `guides/deterministic-quality/01-rule-authoring-principles.md` PROVING the artifact changes agent behavior. In-scope by a MECHANICAL trigger (NOT author narration): (a) `priority:0` baseline rules, OR (b) any artifact this audit modifies whose diff touches a behavior-shaping line — instruction / `MUST` / `MUST NOT` / `BLOCKED` / decision-routing / signature-output-contract, OR any prose-line edit changing what the agent is licensed to do / what value-threshold it uses / what it treats as authoritative (a reworded instruction with no `MUST`, `TIMEOUT_MS=5000`→`500`, a flipped rationale polarity all qualify). An author cannot dodge by omitting a behavioral assertion (positive-trigger per `cc-artifacts.md` Rule 10); when instruction-vs-reference is AMBIGUOUS the trigger FIRES (`self-referential-codify.md` Rule 2 boundary). Every other artifact (UNAMBIGUOUSLY reference/example/typo-only) clears on LLM + Phase-0 probe-coverage (no A/B — cost discipline). Per `rules/probe-driven-verification.md` the A/B IS the probe — lexical checks are not.
+4. **Token Efficiency** — [mechanical ONLY] `emit.mjs` `headroom_pct` from Phase 0. NOT an LLM token estimate.
 5. **Trust Posture Wiring (rules only, ENFORCED)** — Per `rules/trust-posture.md` MUST 7 + MUST 8 + `commands/codify.md` Step 6b: every NEW rule file (post-trust-posture grandfather cutoff) MUST end with `## Trust Posture Wiring` containing all 8 canonical fields (per `trust-posture.md` MUST 8). Audit step:
 
    ```bash
@@ -102,10 +111,12 @@ Expert in Claude Code's architecture, configuration system, and the CO/COC five-
 
    The sweep is 4 seconds. It catches Wiring sections that look complete on visual inspection but drift on the canonical-template contract. Surface findings as audit FAIL → /codify halts until the rule is brought to canonical-template compliance OR a follow-up `/codify` explicitly grandfathers the rule with named rationale.
 
+7. **Curation / Over-Density (per journal/0193)** — [LLM] the artifact's load-bearing clauses (`MUST` / `MUST NOT` / decision-routing / output-contract) are NOT drowned in non-load-bearing prose (extended rationale, redundant examples, narration); depth that belongs in a guide/skill is extracted, not inline. Over-density degrades the OUTPUT of the agent that LOADS the artifact — not just its token budget (journal/0193 ablation, directional: a dense rule-slice dropped a consuming agent's plan 93→82; curated-minimal beat verbose, more so as the model weakened). Disposition: **advisory FINDING** (recommend extraction to a guide/skill + slot markers) — a quality risk, NOT a structural FAIL. This is the artifact-authoring complement to `rules/governed-throughput.md`'s injection-time "curated minimal slices" MUST; cross-ref `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines" (now output-quality-grounded). Codex/Gemini-architect mirror + `/cc-audit` rubric line landed F112 (`codex-architect.md` / `gemini-architect.md` § Curation / Over-Density + `cc-audit.md` Phase-1 Token-Efficiency companion; journal/0196).
+
 ## Related Agents
 
 - **reviewer** — General code/artifact review
-- **gold-standards-validator** — Terrene naming, licensing compliance
+- **gold-standards-validator** — terminology consistency, cross-reference integrity
 
 ## Full Documentation
 

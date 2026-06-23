@@ -11,7 +11,6 @@ paths:
 # DataFlow Identifier Safety Rules
 
 
-<!-- slot:neutral-body -->
 
 SQL parameter binding works for VALUES, not for identifiers. Column names, table names, index names, and schema names cannot be passed as bound parameters — they MUST be interpolated into the SQL string. That interpolation is an injection vector if the value comes from user input, from a model name, from a tenant prefix, or from any dynamic source.
 
@@ -216,5 +215,3 @@ Origin: 2026-04-19 — conflating primitive-vs-orchestrator inside an earlier `d
 - `rules/zero-tolerance.md` Rule 4 — this rule is the DDL-specific form of "no workarounds for SDK bugs." If the dialect helper is missing a capability, fix the helper, don't inline raw interpolation.
 - `rules/schema-migration.md` § "All Schema Changes Through Numbered Migrations" — DDL lives in numbered migrations; numbered migrations use `quote_identifier`.
 - `rules/infrastructure-sql.md` — this rule's companion for VALUES-path parameter binding.
-
-<!-- /slot:neutral-body -->

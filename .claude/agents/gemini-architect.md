@@ -3,6 +3,13 @@ name: gemini-architect
 description: Gemini artifact architect. Use for .gemini/**, GEMINI.md, @agent delegation, hooks, skills, commands.
 tools: Read, Write, Edit, Grep, Glob, Bash, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Gemini CLI Architecture Specialist
@@ -120,6 +127,10 @@ Per `rules/cross-cli-parity.md`:
 3. DO / DO NOT example blocks preserved only when under 200 bytes — larger blocks belong in path-scoped or skill-embedded emissions
 4. Slot overlays replace content at the slot level; avoid full-file variants (violates `rules/variant-authoring.md` Rule 1)
 5. Gemini's `@file.md` import mechanism in `GEMINI.md` is a compression tool — keep the baseline lean and import detail as needed
+
+## Curation / Over-Density (audit dimension — advisory; mirror of cc-architect dimension 7)
+
+When emitting `GEMINI.md` / `.gemini/skills/**` OR participating in a `/cli-audit` of the Gemini surface, check that an artifact's load-bearing clauses (`MUST` / `MUST NOT` / decision-routing / output-contract) are NOT drowned in non-load-bearing prose (extended rationale, redundant examples, narration); depth that belongs in a guide/skill is extracted, not inline. Over-density degrades the OUTPUT of the agent that LOADS the artifact — not just its byte budget (journal/0193 ablation, **directional**: a dense rule-slice dropped a consuming agent's plan 93→82; curated-minimal beat verbose, more so as the model weakened). Disposition: **advisory FINDING** (recommend extraction to a guide/skill + `@file.md` import) — a quality risk, NOT a structural FAIL. This is the Gemini-emission complement to `rules/governed-throughput.md`'s injection-time "curated minimal slices" MUST; the abridgement protocol above is the byte-budget half, this is the output-quality half.
 
 ## Common Anti-Patterns
 

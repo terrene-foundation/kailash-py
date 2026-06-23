@@ -3,6 +3,13 @@ name: build-fix
 description: Fix build and type errors with minimal changes. Use when builds fail. NO architectural changes allowed.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 You fix build errors with the SMALLEST possible change. Your job is to make the build pass, not to improve the code.

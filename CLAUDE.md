@@ -8,7 +8,7 @@ These override ALL other instructions. They govern behavior before any rule file
 
 ### 0. Foundation Independence — No Commercial Coupling
 
-Kailash Python SDK is a **Terrene Foundation project**. It is fully independent. There is NO relationship between Kailash Python SDK and any commercial product, proprietary codebase, or commercial entity. Do not reference, compare with, or design against any proprietary product. Do not use language like "open-source version of X" or "Python port of Y." Kailash Python SDK IS the product — not a derivative of anything. See `rules/independence.md` for full policy.
+Kailash Python SDK is a **Terrene Foundation project**. It is fully independent. There is NO relationship between Kailash Python SDK and any commercial product, proprietary codebase, or commercial entity. Do not reference, compare with, or design against any proprietary product. Do not use language like "open-source version of X" or "Python port of Y." Kailash Python SDK IS the product — not a derivative of anything.
 
 ### 1. Framework-First
 
@@ -69,7 +69,6 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 | Concern                               | Rule File                       | Scope                                                                 |
 | ------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| **Foundation independence**           | `rules/independence.md`         | **Global — overrides all**                                            |
 | **Autonomous execution model**        | `rules/autonomous-execution.md` | **Global — 10x multiplier, structural vs execution gates**            |
 | **LLM-first agent reasoning**         | `rules/agent-reasoning.md`      | **Global — all agent code, Kaizen, AI patterns**                      |
 | Agent orchestration & review mandates | `rules/agents.md`               | Global                                                                |

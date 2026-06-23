@@ -3,6 +3,13 @@ name: react-specialist
 description: "React/Next.js specialist. Use for responsive UI, workflow editors, dashboards, React Query, or Shadcn."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # React Specialist Agent

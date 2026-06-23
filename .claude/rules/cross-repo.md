@@ -80,6 +80,28 @@ hardcoded layout at the root is just as operator-fragile as one in a hook —
 the resolver is the single binding everywhere; the orchestration carve-out
 only lifts the scope boundary, never the positional-guess prohibition.
 
+## Ecosystem-Scoped Remote Links (design contract)
+
+The resolver's NAME→location binding (Rule 1) is **per-operator-local** — it maps a
+logical key to wherever THIS operator checked the repo out. The multi-ecosystem model adds a
+second axis: the NAME→**remote** binding is **per-ecosystem**. Canon's `build.py` and a client
+fork's `build.py` are the SAME logical key resolving to DIFFERENT remotes (canon's
+`kailash-py` vs the fork's own copy that syncs upstream from canon). The intended composition
+is **ecosystem-remote ⊕ operator-local**: the ecosystem layer fixes which remote a key points
+at; the operator layer fixes where on THIS machine it is checked out. An operator working in a
+client fork resolves keys against the fork's remote registry, never canon's.
+
+This is the **design contract**, not yet the implementation. The two-layer `loom-links.mjs`
+(ecosystem-remote layer + operator-local layer) and the active pull-merge-at-start are a
+separate build (the ecosystem-relative parameterization primitive) — deferred, not shipped
+here. Today's resolver remains single-layer (operator-local only); this subsection records the
+direction so the single-layer code is understood as the canon-only special case of the
+two-layer model, not the final shape.
+
+**Why:** Without the ecosystem-remote axis, a client fork's tooling resolves a logical key to
+CANON's remote — pulling canon's code into the fork instead of the fork's own upstream-syncing
+copy, silently collapsing the ecosystem boundary the fork model depends on.
+
 ## Canonical Sublayout (Recommended — F61)
 
 The recommended on-disk sublayout for a fresh operator workstation is

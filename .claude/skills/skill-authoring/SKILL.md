@@ -75,7 +75,7 @@ The emitter at `/sync` distribute time renames `allowed-tools:` to `tools:` for 
 
 ### Tool Names Are Identifiers, Not Verbs
 
-Tool entries are identifiers the runtime maps to its native primitives. CLI translation tables live at `variants/<cli>/tool-translation.yaml`. Skill frontmatter is the contract: list every tool the SKILL.md body or its sub-files actually invoke.
+Tool entries are identifiers the emitter maps to each CLI's native primitives at `/sync` distribute time: the **Gemini** lane translates them (`Read`→`read_file`, `Grep`→`grep_search`, `Glob`→`glob`, …) and the **Codex** lane strips the `tools:` block entirely (Codex prompts/skills carry no per-artifact tool restriction, mirroring how agent prompts emit). The translation table is `CC_TO_GEMINI_TOOLS` in `.claude/bin/emit-cli-artifacts.mjs` (the same table the agents lane uses); skills are translated by `translateSkillFrontmatterTools` there. Skill frontmatter is the contract: list every tool the SKILL.md body or its sub-files actually invoke.
 
 ```yaml
 # DO — minimal, accurate list
@@ -111,7 +111,9 @@ sub-topic-2.md   ← Specialist deep-dive (e.g., fixture patterns, error taxonom
 fixtures/        ← Optional: example payloads the skill references
 ```
 
-The SKILL.md body should be enough that a session resolves common questions without expanding sub-files into context. Sub-files load on demand via explicit cross-reference (`See [topic.md](topic.md) for the full taxonomy`).
+The SKILL.md body should be enough that a session resolves common questions without expanding sub-files into context. Sub-files load on demand via explicit cross-reference (`See [<topic>.md](<topic>.md) for the full taxonomy`).
+
+Progressive disclosure is also an **output-quality** discipline, not only a token-budget one: per the curation/over-density principle (`rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines" + cc-architect dimension 7, grounded in journal/0193's directional ablation), an artifact whose load-bearing content is drowned in non-load-bearing prose degrades the OUTPUT of the agent that loads it — extract depth to sub-files, keep the body curated. Surfacing this at audit time is an advisory FINDING (recommend extraction), never a structural FAIL.
 
 ### DO — Index With Cross-References
 

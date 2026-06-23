@@ -10,8 +10,8 @@ PACT wraps agent execution with governance enforcement. Agents receive a frozen 
 ## PactGovernedAgent
 
 ```python
-from kailash.trust.pact.agent import PactGovernedAgent, GovernanceBlockedError, GovernanceHeldError
-from kailash.trust.pact.config import TrustPostureLevel
+from pact.governance.agent import PactGovernedAgent, GovernanceBlockedError, GovernanceHeldError
+from pact.governance.config import TrustPostureLevel
 
 agent = PactGovernedAgent(
     engine=engine,
@@ -77,7 +77,7 @@ except GovernanceHeldError as e:
 The anti-self-modification defense: agents get an immutable snapshot of their governance state.
 
 ```python
-from kailash.trust.pact.context import GovernanceContext
+from pact.governance.context import GovernanceContext
 
 # Created by engine.get_context() -- NOT by agents
 ctx = engine.get_context(
@@ -106,7 +106,7 @@ ctx2 = GovernanceContext.from_dict(d)
 Marks functions with governance metadata for auto-registration.
 
 ```python
-from kailash.trust.pact.decorators import governed_tool
+from pact.governance.decorators import governed_tool
 
 @governed_tool("write_report", cost=50.0)
 def write_report(content: str) -> str:
@@ -134,7 +134,7 @@ agent.execute_tool("write_report", _tool_fn=lambda: write_report("Q4 Summary"))
 Low-level building block that returns verdicts (does NOT raise exceptions). Use this for integration with custom agent frameworks.
 
 ```python
-from kailash.trust.pact.middleware import PactGovernanceMiddleware
+from pact.governance.middleware import PactGovernanceMiddleware
 
 middleware = PactGovernanceMiddleware(
     engine=engine,
@@ -172,7 +172,7 @@ elif verdict.level == "flagged":
 - `pact-governance-engine.md` -- engine.get_context(), engine.verify_action()
 - `pact-envelopes.md` -- effective envelope in context
 - `pact-kaizen-integration.md` -- wrapping Kaizen agents
-- Source: `src/kailash/trust/pact/agent.py`
-- Source: `src/kailash/trust/pact/decorators.py`
-- Source: `src/kailash/trust/pact/middleware.py`
-- Source: `src/kailash/trust/pact/context.py`
+- Source: `pact/governance/agent.py`
+- Source: `pact/governance/decorators.py`
+- Source: `pact/governance/middleware.py`
+- Source: `pact/governance/context.py`

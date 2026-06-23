@@ -14,13 +14,13 @@ description: "Documentation validation patterns including test file creation, in
 
 ### Phase 1: Example Extraction
 
-````python
+```python
 # For each documentation file:
 1. Extract all code blocks (```python, ```bash, etc.)
 2. Identify imports, setup requirements, and dependencies
 3. Determine which infrastructure is needed (Docker services, etc.)
 4. Map examples to their test categories (unit, integration, E2E)
-````
+```
 
 ### Phase 2: Test File Creation
 
@@ -69,14 +69,12 @@ pytest /tmp/test_docs_feature.py -v
 ## Documentation Validation: [file_path]
 
 ### Summary
-
 - Total examples: 12
 - Validated: 11
 - Fixed: 1
 - Blocked: 0
 
 ### Validation Details
-
 1. **Example: CSV Processing** (lines 23-45)
    - Test: /tmp/test_csv_example.py::test_csv_processing
    - Result: PASSED
@@ -89,13 +87,11 @@ pytest /tmp/test_docs_feature.py -v
    - Fix: Updated to current API
 
 ### Infrastructure Requirements
-
 - Docker services: PostgreSQL, Redis
 - Python packages: All from requirements.txt
 - Environment variables: None required
 
 ### User Journey Validation
-
 - New user quickstart: ✅ Works as documented
 - Database integration: ✅ Connects successfully
 - Error handling: ✅ Errors match documentation
@@ -104,7 +100,6 @@ pytest /tmp/test_docs_feature.py -v
 ## Common Documentation Issues
 
 ### 1. Outdated API Examples
-
 ```python
 # ❌ OUTDATED
 workflow.addNode("CSVReader", {...})  # Old camelCase
@@ -114,7 +109,6 @@ workflow.add_node("CSVReaderNode", "reader", {...})  # Current snake_case
 ```
 
 ### 2. Missing Infrastructure Setup
-
 ```python
 # ❌ INCOMPLETE - no mention of Docker requirement
 
@@ -124,16 +118,12 @@ workflow.add_node("CSVReaderNode", "reader", {...})  # Current snake_case
 ```
 
 ### 3. Incorrect Parameter Names
-
 ```python
-# ❌ WRONG (phantom node type — LLMAgentNode does not exist)
-workflow.add_node("LLMAgentNode", "agent", {"max_tokens": 1000})
+# ❌ WRONG (parameter renamed)
+workflow.add_node("LLMAgentNode", "agent", {"max_length": 1000})
 
-# ✅ CORRECT — use PythonCodeNode for LLM calls, or Kaizen agents
-workflow.add_node("PythonCodeNode", "agent", {
-    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=messages, max_tokens=1000); result = {'response': resp.choices[0].message.content}",
-    "input_variables": ["messages"]
-})
+# ✅ CORRECT
+workflow.add_node("LLMAgentNode", "agent", {"max_tokens": 1000})
 ```
 
 ## Documentation Directories

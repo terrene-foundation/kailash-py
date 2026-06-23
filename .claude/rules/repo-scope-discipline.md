@@ -35,12 +35,12 @@ The agent never self-authorizes. But the user owns the operating envelope (`rule
 4. **Journaled before acting** — a journal entry (requester, target, action, timestamp, verbatim instruction) + a greppable `cross-repo-authorized: <owner/repo>` marker line lands BEFORE the command runs.
 5. **Scoped exactly** — only the named action against only the named repo; no incidental reads, no scope creep.
 
-**Why:** The pre-action journal receipt is what distinguishes an authorized cross-repo write from an unauthorized one — without it the two are identical after the fact, keeping `rules/trust-posture.md` MUST-4's "cross-repo write outside scope → L1" trigger intact (receipt present = in-scope; absent = critical L1).
+**Why:** The pre-action journal receipt is what distinguishes an authorized cross-repo write from an unauthorized one; receipt present = in-scope, absent = critical L1 per `rules/trust-posture.md` MUST-4.
 
 ## Exceptions
 
-NONE the agent may invoke on its own judgment (see § User-Authorized Exception for the only user-initiated path). Descriptive sibling mentions are OK when informational, not prescriptive. The rule does NOT apply at orchestration roots (`~/repos/`, `loom/`) where cross-repo coordination IS the purpose (`/sync`, `/sync-to-build`, `/inspect`, `/repos`).
+NONE the agent may invoke on its own judgment (§ User-Authorized Exception is the only user-initiated path). Descriptive sibling mentions are OK when informational, not prescriptive. The rule does NOT apply at orchestration roots (`~/repos/`, `loom/`) where cross-repo coordination IS the purpose (artifact-distribution via `/sync`/`/sync-to-build`/`/inspect`/`/repos` + co-owner-directed governance reads per a grant). **loom is the SOLE carve-out holder**; a downstream consumer is never an orchestration root. The carve-out lifts the scope boundary for the _operation_ only: a cross-repo WRITE still needs the five conditions; a READ outside artifact-distribution still needs a journaled grant. See extract.
 
-Note: at the orchestration root, cross-repo targets are enumerated _explicitly_ via `bin/lib/loom-links.mjs::resolveRepo` / `resolveAll` (per `cross-repo.md` MUST-1) — there is no positional discovery of sibling repos. Explicit enumeration reinforces this in-repo-scope boundary: a session can only reach a repo that the operator declared a linkage for; the orchestration-root carve-out above (`:42`) is unchanged — it lifts the scope boundary for the _operation_, never the resolver requirement.
+Note: at the orchestration root, targets are enumerated via `bin/lib/loom-links.mjs::resolveRepo` / `resolveAll` (per `cross-repo.md` MUST-1) — never positional discovery; the carve-out never lifts the resolver requirement.
 
 Origin: 2026-05-03 (kailash-rs cross-repo surfacing); amended 2026-05-16 (User-Authorized Exception added after a downstream-consumer session over-blocked a user-authorized filing). Full post-mortem in extract.

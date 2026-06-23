@@ -12,8 +12,6 @@ paths:
 # Tenant Isolation Rules
 
 
-<!-- slot:neutral-body -->
-
 In a multi-tenant SaaS, tenant isolation is the difference between an API that scales to a thousand customers and a P0 incident that destroys the company's reputation. Cross-tenant data leaks happen because some piece of state — a cache key, a query filter, a metric label, an audit row — was constructed without a tenant dimension. The leak doesn't surface until two tenants happen to share a primary key, at which point one of them sees the other's data.
 
 This rule mandates a tenant dimension on every piece of state that can hold per-tenant data. The audit is mechanical: grep for cache key construction, query filter construction, metric label construction, and verify that each one accepts a `tenant_id` and uses it.
@@ -155,6 +153,32 @@ Every audit row written by the trust plane / governance layer MUST persist `tena
 
 **Why:** Audit queries are the primary forensic tool when responding to a tenant-reported incident. Forcing a full table scan converts a 30-second query into a 30-minute query and means the response team is hours behind the customer.
 
+### 6. Every Write Path Reads Tenant From One Canonical Source
+
+When a model is `multi_tenant=True`, EVERY write/scope path — single-record AND bulk (`bulk_create` / `bulk_update` / `bulk_upsert`, `upsert`) — MUST read the tenant from the SAME canonical source (the live tenant contextvar via `get_current_tenant_id()`), never a parallel legacy dict/field. A subsystem that builds its own SQL MUST still resolve tenant from the canonical source and fail closed (typed error per Rule 2) when none is bound.
+
+```python
+# DO — every path, including bulk, reads the live canonical source
+tenant_id = get_current_tenant_id()          # same source for single-record AND bulk
+if tenant_id is None and model.multi_tenant:
+    raise TenantRequiredError(model.name)
+
+# DO NOT — bulk subsystem reads a parallel legacy dict
+tenant_id = self._tenant_context.get("tenant_id")   # stale after switch();
+# bulk writes land tenant_id=NULL — rows invisible to EVERY tenant
+```
+
+**BLOCKED rationalizations:**
+
+- "Single-record writes are correct, bulk shares the engine"
+- "The legacy dict is kept in sync by switch()"
+- "The bulk path builds its own SQL, the contextvar doesn't apply there"
+- "NULL tenant rows are harmless — no tenant can see them"
+
+**Why:** A dual-tenant-source split is the failure mode: single-record correctness does NOT imply bulk correctness, and a stale parallel dict silently writes `tenant_id=NULL` rows invisible to every tenant (evidence: issue #1252 — the bulk subsystem read a stale `_tenant_context` dict instead of the `switch()` contextvar). Extends Rules 1–5, which audit cache-key / filter / label / audit sites but not write-path tenant-source parity.
+
+**Trust Posture Wiring (Rule 6):** Severity `halt-and-report` at the /implement gate (reviewer mechanical sweep: every write/scope path of a `multi_tenant=True` model resolves tenant via the canonical accessor — `rg 'get_current_tenant_id|_tenant_context'` and flag any parallel source) · Grace 7 days from landing · Cumulative per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture) · Regression-within-grace → emergency downgrade (1 step) per MUST-4 · Receipt soft-gate `[ack: tenant-one-canonical-source]` IFF `posture.json::pending_verification` includes this rule_id · Detection: the Audit Protocol grep below + gate-level sweep · **Violation scope:** Rule 6 (write-path tenant-source parity) · Origin: issue #1252 (2026-06, bulk tenant-source mismatch).
+
 ## MUST NOT
 
 - Default missing tenant_id to a placeholder ("default", "global", "")
@@ -185,8 +209,10 @@ rg '\.labels\(' .
 
 # Find every audit-row write; verify it persists tenant_id
 rg 'audit_store\.append|record_query_success|record_query_failure' .
+
+# Find every write/scope path; verify each resolves tenant via the canonical source (Rule 6)
+rg 'def (bulk_create|bulk_update|bulk_upsert|upsert|create|update)' .
+rg '_tenant_context\[|_tenant_context\.get' .   # any hit on a write path = HIGH (parallel source)
 ```
 
 Any match that fails the contract above is a HIGH finding.
-
-<!-- /slot:neutral-body -->

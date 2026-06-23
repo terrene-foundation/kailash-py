@@ -3,6 +3,13 @@ name: release-specialist
 description: "SDK release specialist. Use for PyPI publishing, pre-commit validation, PR workflows, or CI/CD pipelines."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: sonnet
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Release Specialist Agent
@@ -141,10 +148,12 @@ python -m venv /tmp/verify --clear
 
 ### 5. CI Monitoring
 
+**MUST use `gh run watch`, NEVER a tight `gh run view` loop.** `gh run watch <run-id> --exit-status` server-side long-polls (ONE REST call, blocks until the run completes + sets exit status). A loop of `gh run view`/`gh run list`/`gh pr checks` is ONE REST **core** call per iteration; a tight loop drains the 5000/hr core quota in minutes (observed 2026-05-31: release-specialist sub-agents exhausted core 0/5000, blocking all `gh` core ops until reset). BLOCKED: `while …; do gh run view …; done`, repeated `gh pr checks` without watch. If watch is unavailable, `sleep 60` between checks — never sub-minute. Full discipline + BLOCKED corpus: `skills/10-deployment-git/deployment-ci.md` § "Agent-Side CI Watching MUST NOT Tight-Poll".
+
 ```bash
-gh run list --limit 5
-gh run watch [run-id]
-gh pr checks [pr-number]
+gh run watch "$RUN_ID" --exit-status   # one long-poll call; blocks until done
+gh run list --limit 5                  # one-shot status check (NOT in a loop)
+gh pr checks "$PR"                      # one-shot (NOT a watch-loop)
 ```
 
 ## Release Checklist

@@ -26,6 +26,26 @@
  *      cc-artifacts.md Rule 9 false-positive class.
  *    - Refs inside fenced code blocks (treated as example/illustration).
  *    - Template placeholders: `<id>`, `<file>`, `<NN>`, `<NNNN>`, etc.
+ *    - `.claude/audit-fixtures/**` is NOT scanned as a SOURCE (FC, journal/0186):
+ *      audit-fixture markdown is synthetic test INPUT for the validator battery;
+ *      its cross-refs are intentional fakes (`rules/foo.md`, `skills/foo`,
+ *      `path.md`) or illustrative. Scanning fixtures for xref integrity is a
+ *      category error — they are test corpora, not real-artifact sources. The
+ *      fixtures are still exercised by the test harness (which calls the
+ *      exported functions directly) and by an explicit `--scope .claude/audit-fixtures`.
+ *      Bounded residual (R1 security-reviewer MED-1): a fixture `README.md` MAY
+ *      carry a REAL institutional cross-ref (e.g. `rules/<real>.md`) that the
+ *      default scan no longer validates. Accepted as bounded — those targets are
+ *      authoritatively validated where the target itself is scanned and where
+ *      real rules reference it; the example-bearing fixture READMEs additionally
+ *      carry intentional-fake refs in table-cell code spans (un-fenceable) that a
+ *      README-only re-scan would re-flag. `--scope .claude/audit-fixtures` is the
+ *      audit path for fixture-README cross-refs.
+ *    - Cross-CLI dispatcher tokens `bin/coc` / `bin/coc-<phase>` (FC, journal/0186):
+ *      the Codex CLI phase dispatcher emitted to `<USE>/bin/coc` (loom source is
+ *      `.claude/codex-templates/bin/coc`), referenced by NAME in cross-CLI prose
+ *      per cross-cli-artifact-hygiene.md. It is never a loom-root `bin/` file, so
+ *      the `bin/` prefix match is a structural false-positive.
  *
  *  Resolver (per cross-repo.md Rule 1 — local-only, no positional cross-repo):
  *    - Tokens starting with `.claude/`: resolve against `<repo-root>/.claude/`.
@@ -112,14 +132,24 @@ function isPlaceholder(token) {
   return false;
 }
 
+// Cross-CLI dispatcher tokens are not loom files (see docstring EXCLUDED note).
+// `bin/coc` and `bin/coc-<phase>` name the Codex CLI dispatcher emitted to
+// `<USE>/bin/coc`; the loom source is `.claude/codex-templates/bin/coc`.
+const CROSS_CLI_DISPATCHER_RE = /^bin\/coc(-[a-z0-9-]+)?$/;
+function isCrossCliDispatcher(token) {
+  return CROSS_CLI_DISPATCHER_RE.test(token);
+}
+
 // --- Walker -------------------------------------------------------------
 
+// NOTE: `.claude/audit-fixtures` is intentionally NOT a default SOURCE scope
+// (FC, journal/0186) — fixture markdown is synthetic test input; see the
+// EXCLUDED note in the header. It remains scannable via `--scope .claude/audit-fixtures`.
 const DEFAULT_SCOPE_DIRS = [
   ".claude/commands",
   ".claude/rules",
   ".claude/skills",
   ".claude/agents",
-  ".claude/audit-fixtures",
 ];
 const DEFAULT_SCOPE_ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "STACK.md"];
 
@@ -205,6 +235,7 @@ function extractTokens(text, sourcePath) {
     for (const m of line.matchAll(BACKTICK_RE)) {
       const token = m[1];
       if (isPlaceholder(token)) continue;
+      if (isCrossCliDispatcher(token)) continue;
       findings.push({ token, kind: "backtick", line: lineNo, source: sourcePath });
     }
     // Backtick journal
@@ -342,7 +373,7 @@ usage:
 
 flags:
   --json        emit JSON report to stdout (machine-readable)
-  --scope DIR   limit scan to DIR (default: .claude/{commands,rules,skills,agents,audit-fixtures})
+  --scope DIR   limit scan to DIR (default: .claude/{commands,rules,skills,agents}; audit-fixtures excluded — see header)
   --help, -h    show this message and exit 0
 
 exit codes:
@@ -464,7 +495,9 @@ export {
   resolveOne,
   stripFencedBlocks,
   isPlaceholder,
+  isCrossCliDispatcher,
   findRepoRoot,
+  DEFAULT_SCOPE_DIRS,
 };
 
 if (isMain) main();

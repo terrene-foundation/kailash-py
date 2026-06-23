@@ -155,6 +155,26 @@ jobs:
 
 ## CI Efficiency Patterns
 
+### Agent-Side CI Watching MUST NOT Tight-Poll The REST API (MUST)
+
+When an agent watches a CI run to completion, it MUST use `gh run watch <run-id> --exit-status` (server-side long-poll: ONE REST call that blocks until the run finishes and sets the exit status) OR the harness `Monitor` primitive. A loop of `gh run view` / `gh run list` / `gh pr checks` is BLOCKED — each iteration is ONE authenticated **REST core** call, and a tight loop drains the entire 5000-requests/hour core quota in minutes, after which every `gh` core operation (including teammates' sessions) fails until the hourly reset. If `gh run watch` is genuinely unavailable, poll with `sleep 60` between checks — never sub-minute.
+
+```bash
+# DO — one long-poll call, blocks until done, exit status reflects success/failure
+gh run watch "$RUN_ID" --exit-status
+
+# DO — if you must poll, sleep ≥60s between checks
+while :; do gh run view "$RUN_ID" --json status -q .status | grep -q completed && break; sleep 60; done
+
+# DO NOT — tight-poll: drains core 5000/hr in minutes (observed 2026-05-31: core 0/5000)
+while :; do gh run view "$RUN_ID"; done          # one REST core call PER iteration
+gh pr checks "$PR" ; gh pr checks "$PR" ; ...     # repeated checks without watch
+```
+
+**BLOCKED rationalizations:** "I'll just poll `gh run view` every few seconds to see when it's done" / "polling is simpler than watch" / "the run-id isn't known yet" (`gh run watch` resolves the latest run, or accepts the run id from the push you just made) / "watch isn't available in this gh version" (it has shipped since gh 2.x; verify before falling back to sleep-60 polling) / "it's just one build, a few extra calls won't matter".
+
+**Why:** `gh run view`/`gh run list`/`gh pr checks` each consume one REST **core** token; the authenticated bucket is 5000/hour and is SHARED across every `gh` core call the operator (and concurrent teammates) make. A tight watch-loop exhausts it in minutes — turning a non-blocker (watching a build) into an hour-long outage of all `gh` core operations. `gh run watch` long-polls server-side (one call, blocks), and `git push` + `gh pr create` (GraphQL) use separate buckets — so the correct primitive costs ~1 core call for an entire build watch. Origin: journal/0181 (2026-05-31) — release-specialist sub-agents tight-polled `gh run view` and exhausted core 0/5000.
+
 ### Every Workflow MUST Have
 
 1. **Concurrency group** — prevents queue flooding on rapid pushes:

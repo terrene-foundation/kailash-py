@@ -3,6 +3,13 @@ name: uiux-designer
 description: "UI/UX design specialist. Use for enterprise SaaS design, AI chat interfaces, prompt UX, or visual hierarchy."
 tools: Read, Write, Edit, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # UI/UX Designer Agent

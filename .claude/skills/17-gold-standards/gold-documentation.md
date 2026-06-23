@@ -13,7 +13,6 @@ description: "Gold standard for documentation. Use when asking 'documentation st
 ## Documentation Principles
 
 ### 1. Code-Level Documentation
-
 ```python
 def process_payment(amount: float, customer_id: str) -> dict:
     """Process a payment for a customer.
@@ -42,7 +41,6 @@ def process_payment(amount: float, customer_id: str) -> dict:
 ```
 
 ### 2. Workflow Documentation
-
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -70,8 +68,7 @@ workflow.add_connection("charge_card", "result", "record_transaction", "transact
 ```
 
 ### 3. README Structure
-
-````markdown
+```markdown
 # Project Name
 
 Brief description of what this project does.
@@ -81,7 +78,6 @@ Brief description of what this project does.
 ```bash
 pip install package-name
 ```
-````
 
 ## Quick Start
 
@@ -110,8 +106,7 @@ See [examples/](examples/) directory.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-````
+```
 
 ### 4. Inline Comments
 ```python
@@ -123,7 +118,7 @@ delay = 2 ** retry_count
 # ❌ BAD: Stating the obvious
 # Increment the counter by 1
 counter += 1
-````
+```
 
 ## Documentation Checklist
 

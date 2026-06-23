@@ -7,7 +7,6 @@ paths: ["**/*.py", "packages/**"]
 # Refactor Invariant Rules
 
 
-<!-- slot:neutral-body -->
 
 Every refactor that claims to shrink a file MUST land a numeric invariant test in the same commit. Without the test, the next session's merge or edit silently re-inlines the extracted code with no signal.
 
@@ -71,5 +70,3 @@ Before merging any branch that touches a file with a LOC invariant, MUST verify 
 - Merge branches that predate a file extraction without rebasing
 
 **Why:** Git's 3-way merge sees the pre-extraction file as the "newer" version and silently re-inlines the extracted code.
-
-<!-- /slot:neutral-body -->

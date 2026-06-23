@@ -130,6 +130,19 @@ Disposition per unique entry (not per occurrence):
 
 **Why:** Logs nobody reads are worse than no logs — illusion of observability while the underlying problem festers. Dedup turns 200-warning run from 200 lines into 5-10 tractable entries.
 
+#### Rule 5a: Audit-Log Files Are NOT Runtime Logs — Use An EXCLUDED_FILES Allowlist
+
+A hook-layer or CI scanner that greps `*.log` for `WARN|ERROR|FAIL` MUST treat structured append-only AUDIT-log files (machine-readable records of classifier decisions, skipped events, redteam verdicts) as distinct from runtime stderr/stdout and exclude them by filename via an `EXCLUDED_FILES` allowlist constant. Per-finding suppression (regex tweaks, line-content filters, ad-hoc `grep -v`) is BLOCKED. Composes with the existing `EXCLUDED_DIRS` exclusion.
+
+```bash
+# DO — filename-keyed allowlist; composes with EXCLUDED_DIRS
+EXCLUDED_FILES=".journal-skipped.log"; find . -name '*.log' ! -name "$EXCLUDED_FILES" ...
+# DO NOT — per-finding regex suppression (every new audit log re-discovers the problem)
+... | grep -v 'commit subject: fix.*ERROR'
+```
+
+**Why:** An audit log records commit subjects verbatim — `fix(nexus): return INTERNAL_ERROR on …` matches a WARN+ scanner as a guaranteed false positive. Filename-keyed exclusion is the only structural fix that closes the class; regex suppression is unbounded. Evidence + posture wiring: guide § Rule 5a.
+
 ### 6. Mask Helper Output Forms
 
 #### 6.1 Mask Failure Sentinels Distinct From Masked Output
@@ -160,6 +173,21 @@ return f"redis://***@cache:6379/0"
 ```
 
 **Why:** Grep audit for credential leakage searches `***@`. Helpers that strip userinfo silently bypass that audit.
+
+#### 6.3 Credential Redaction Covers Every Observable Surface
+
+When a value that may embed credentials (connection string, pool key, DSN) is masked for one surface, the SAME redaction MUST apply at EVERY surface that interpolates it — log lines, metric label values, exception messages AND attributes, and any public diagnostic return (`get_pool_info`/`pool_keys`/health-report). Masking only the log line is BLOCKED. For composite keys reconstruct the credential segment from the middle fields so a literal delimiter inside a password cannot leak the tail.
+
+```python
+# DO — mask at every surface the value reaches
+key = mask_pool_key(raw_key); logger.warning("pool.evict", key=key)
+metric.labels(pool=key).inc(); return {"pool_key": key}  # return value masked too
+# DO NOT — mask the log line only
+logger.warning("pool.evict", key=mask_pool_key(raw_key))
+return {"pool_key": raw_key}  # diagnostic return leaks the credential
+```
+
+**Why:** Metric labels ship to the same aggregators as logs and exception/return surfaces are read by callers; masking one surface leaves the credential on every other. Extends §6.2 (mask-helper form) with the multi-surface sweep. Evidence + posture wiring: guide § Rule 6.3.
 
 ### 7. Bulk Operations MUST Log Partial Failures At WARN
 

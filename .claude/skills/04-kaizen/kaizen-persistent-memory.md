@@ -398,4 +398,4 @@ worker2 = WorkerAgent(config, db, agent_id=shared_id)
 
 - **[kaizen-memory-system](kaizen-memory-system.md)** - Complete memory system overview
 - **[kaizen-checkpoint-resume](kaizen-checkpoint-resume.md)** - Checkpoint and resume
-- **[02-dataflow](../../02-dataflow/SKILL.md)** - DataFlow framework
+- **[02-dataflow](../02-dataflow/SKILL.md)** - DataFlow framework

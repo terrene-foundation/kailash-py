@@ -11,7 +11,7 @@ Fix Nexus blocking and 5-30 second startup delays when integrating with DataFlow
 > Category: `cross-cutting` (error-resolution)
 > Priority: `HIGH` (Critical integration issue)
 > SDK Version: `0.9.0+` (Nexus + DataFlow)
-> Related Skills: [`dataflow-quickstart`](../../02-dataflow/dataflow-quickstart.md), [`nexus-quickstart`](../../03-nexus/nexus-quickstart.md)
+> Related Skills: [`dataflow-quickstart`](../02-dataflow/dataflow-quickstart.md), [`nexus-quickstart`](../03-nexus/nexus-quickstart.md)
 > Related Subagents: `nexus-specialist` (integration debugging), `dataflow-specialist`
 
 ## The Problem
@@ -106,9 +106,9 @@ With `auto_discovery=False`:
 
 ## Related Patterns
 
-- **Nexus basics**: [`nexus-quickstart`](../../03-nexus/nexus-quickstart.md)
-- **DataFlow basics**: [`dataflow-quickstart`](../../02-dataflow/dataflow-quickstart.md)
-- **Integration guide**: [`dataflow-nexus-integration`](../integrations/dataflow-nexus-integration.md)
+- **Nexus basics**: [`nexus-quickstart`](../03-nexus/nexus-quickstart.md)
+- **DataFlow basics**: [`dataflow-quickstart`](../02-dataflow/dataflow-quickstart.md)
+- **Integration guide**: [`dataflow-nexus-integration`](../02-dataflow/dataflow-nexus-integration.md)
 
 ## When to Escalate to Subagent
 
@@ -123,8 +123,8 @@ Use `nexus-specialist` subagent when:
 
 ### Primary Sources
 
-- **Nexus Specialist**: [`.claude/agents/frameworks/nexus-specialist.md` (lines 320-386)](../../../../.claude/agents/frameworks/nexus-specialist.md#L320-L386)
-- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md` (lines 13-25)](../../../../.claude/agents/frameworks/dataflow-specialist.md#L13-L25)
+- **Nexus Specialist**: [`.claude/agents/frameworks/nexus-specialist.md` (lines 320-386)](../../../.claude/agents/frameworks/nexus-specialist.md#L320-L386)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md` (lines 13-25)](../../../.claude/agents/frameworks/dataflow-specialist.md#L13-L25)
 - **Integration Guide**: [`.claude/skills/03-nexus/nexus-dataflow-integration.md`](../../skills/03-nexus/nexus-dataflow-integration.md)
 
 ### Related Documentation

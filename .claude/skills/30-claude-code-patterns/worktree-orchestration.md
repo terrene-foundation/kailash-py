@@ -50,6 +50,8 @@ Agent(
 )
 ```
 
+**BLOCKED rationalizations:** "Absolute paths are unambiguous" / "The agent should figure out its own cwd" / "This worked the one time I tested it".
+
 ## Rule 3 — Worktree Agents Commit Incremental Progress
 
 **Rule:** `rules/agents.md` § "MUST: Worktree Agents Commit Incremental Progress".
@@ -85,6 +87,17 @@ Agent(
 )
 ```
 
+## Rule 3b — Continuation-Agent Recovery For Mid-Shard Agent Death
+
+When a worktree agent dies mid-shard (server-side throttle, account session limit, swap, crash), Rule 3's commit-per-milestone discipline makes the relaunch LOSSLESS — if the orchestrator follows this recovery protocol instead of relaunching from scratch:
+
+1. **Inspect before relaunching:** `git -C <dead-worktree> log main..HEAD --oneline` (committed milestones) + `git -C <dead-worktree> status --porcelain` (dangling WIP).
+2. **Checkpoint the dangling WIP** as a commit in the dead worktree (`git add -A && git commit -m "wip: checkpoint from rate-limited agent"`) so the branch carries EVERYTHING — auto-clean only deletes zero-commit worktrees, and the branch survives even when the worktree is removed.
+3. **Launch the continuation agent** (fresh worktree) with an explicit recovery step: `git merge <dead-agent-branch>` as STEP 1, then "READ what it already built before writing anything — audit, fix, fill; do not rewrite working code."
+4. **Tell the continuation agent what the predecessor claimed** (its last commit subjects) so the audit is targeted.
+
+Evidence: 2026-06-11 Wave-3 session — a rate-limited agent left 1 commit + uncommitted edits; checkpoint + merge-continuation recovered all of it, and the continuation agent completed the shard auditing rather than re-implementing (~1,400 LOC retained). Same protocol applied across the F16 W2 fix-wave (journal 0178 §FD: 3 of 4 agents died mid-run; resumption lossless).
+
 ## Rule 4 — Verify Agent Deliverables Exist After Exit
 
 **Rule:** `rules/agents.md` § "MUST: Verify Agent Deliverables Exist After Exit".
@@ -100,6 +113,36 @@ The `ls` check is O(1) and converts silent no-op into loud retry.
 - Rule 3 (commit discipline) protects against worktree auto-cleanup
 - Rule 4 (post-exit verify) protects against the main checkout
 - Both are needed: Rule 3 alone misses truncated-in-main cases; Rule 4 alone misses truncated-worktree cases
+- Rule 4a (below) is the recovery path when Rule 3 was missed and the worktree is already cleaned
+
+## Rule 4a — Recover Orphan Writes From Zero-Commit Worktree Agents
+
+**Rule:** `rules/agents.md` § "MUST: Recover Orphan Writes From Zero-Commit Worktree Agents".
+
+An agent that wrote via ABSOLUTE paths resolves those writes to the MAIN checkout cwd (not its worktree). When such an agent reports done but its branch has zero commits AND the worktree was auto-cleaned, the work is NOT lost — it is orphaned, uncommitted, and reachable in the main checkout.
+
+### 4-step recovery protocol
+
+```bash
+git worktree list | grep <expected-branch>     # empty if cleaned
+git status --short                              # "??" entries surface the orphans
+git checkout -b recovery/<original-branch>      # rescue branch (greppable across history)
+git add -- "<orphan-path>" && git commit -m "recover(<branch>): orphaned worktree writes"
+```
+
+Quote each orphan path and terminate option parsing with `--` (`git add -- "path/with spaces.py"`) — never substitute an unquoted `$(...)` expansion, which word-splits on spaces/shell-meta. Stage the explicit orphan paths from `git status --short`, NOT `git add .`/`-A` (which would sweep unrelated working-tree state per `git.md` § "Stage Explicit Paths").
+
+### BLOCKED rationalizations
+
+- "The agent said it was done, the work must be committed somewhere"
+- "Re-launching is cleaner"
+- "If the branch has zero commits, the work is gone"
+- "The main checkout is clean"
+- "recovery/ branches are a workaround; feat/ is more correct"
+
+### Why it is load-bearing
+
+Re-launching abandons real work every time an absolute-path agent truncates. `git status` reveals the orphans; the `recovery/` branch prefix surfaces this class of rescue across history. PR #574 recovered 1129 LOC of `alignment.py` this way.
 
 ## Rule 5 — Parallel-Worktree Package Ownership Coordination
 
@@ -159,36 +202,38 @@ Mechanical sweeps (run BEFORE LLM judgment):
 """)
 ```
 
-## Rule 6 — Parallel-Launch Burst Size Limit (≤3 Opus agents per wave)
+## Rule 6 — Parallel-Launch Concurrency Is Throttle-Aware Adaptive (cold-start ~3, back off on signal)
 
-**Rule:** Orchestrators MUST cap concurrent worktree agent launches at **3 Opus-tier agents per wave**. Launching 4+ simultaneously is BLOCKED — Anthropic's service-side rate limiter returns `API Error: Server is temporarily limiting requests` and every agent in the burst fails with no partial progress.
+**Rule:** Orchestrators MUST govern concurrent agent launches by an ADAPTIVE back-off model, NOT a fixed cap and NOT the runtime's native ceiling. Cold start (no throttle signal this session): cap the first wave at **~3 Opus-tier agents** — NOT the runtime's native `min(16, cores−2)=14` (empirically too high — it throttles at sub-quota concurrency) and NOT unlimited. Back off to serial waves of ~3 ONLY on the falsifiable throttle signal; do NOT preemptively serialize below ~3, and do NOT assert "no cap." This mirrors `rules/worktree-isolation.md` Rule 4 (the rule body; this depth-file carries the how-to).
 
-### Failure mode evidence
+### The falsifiable throttle signal
 
-Session 2026-04-23 kailash-ml 1.0.0 M1 `/implement` for branch `feat/kailash-ml-1.0.0-m1-foundations` attempted to launch all 6 M10 shards (W31a/b/c + W32a/b/c) simultaneously. **All 6 agents** returned `API Error: Server is temporarily limiting requests` within seconds of launch. Fell back to two sequential waves of 3; both waves landed cleanly (6 shards merged, 189 M10 tests passing).
+Back off to waves of ~3 when AND ONLY when ≥2 agents in the same wave fail within a **~30–48s synchronized window** AND the failure carries the server string `Server is temporarily limiting requests` with `(not your usage limit)` / `Rate limited`. A single agent dying, an OOM, a 2-minute timeout, or a quota error that says "usage limit" is NOT this signal.
 
-### Why ≤3 is the ceiling
+### Failure-mode evidence (two incidents)
 
-Each Opus worktree agent consumes a full Anthropic API session plus its tool calls. Six simultaneous sessions against the same account key trigger burst-window throttling at the service tier. The throttle is ALL-OR-NOTHING per burst — no partial backoff, no queueing — so a 6-agent launch produces 6 failures, not 3 successes + 3 retries.
+1. **2026-04-23 kailash-ml M1:** a 6-agent worktree burst (W31a/b/c + W32a/b/c) — **all 6** returned `Server is temporarily limiting requests` within seconds; two sequential waves of 3 then landed cleanly (6 shards, 189 tests).
+2. **2026-06-01 #419:** a **7-agent READ-ONLY fan-out** (zero compile contention, well under the native cap of 14) synchronized-died at ~37–48s with verbatim `(not your usage limit) · Rate limited`; waves-of-3 → 7/7 returned. This is the receipt that the binding constraint is server-side CONCURRENCY (sub-quota, sub-native-cap), NOT account quota and NOT a fixed batch number — #419 falsified #418's "trust the native cap."
 
 ### Prompt template
 
 ```python
-# DO — two waves of 3, second wave launched after first wave reports
-for wave in [shards[0:3], shards[3:6]]:
-    agents = [Agent(isolation="worktree", prompt=s.prompt) for s in wave]
-    wait_for_all(agents)  # wave barrier
+# DO — cold-start wave of ~3; back off to waves of 3 ONLY on the synchronized-throttle signal
+wave = launch(shards[:3])                    # cold start ~3, NOT native 14, NOT unlimited
+wait_for_all(wave)                           # wave barrier
+# if ≥2 of `wave` died within ~30-48s carrying "(not your usage limit)" → keep next waves ≤3
+# else (clean) → the SIGNAL is the gate, not a fixed number
 
-# DO NOT — single 6-agent burst
-agents = [Agent(isolation="worktree", prompt=s.prompt) for s in all_6_shards]
-# → all 6 hit "Server is temporarily limiting requests" simultaneously
+# DO NOT — trust the runtime's native min(16,cores-2)=14 cap
+agents = [launch(s) for s in all_shards]     # 7 read-only agents synchronized-died at ~37-48s
+# DO NOT — hardcode "always waves-of-3" with no throttle signal (over-serializes headroom)
 ```
 
-**BLOCKED rationalizations:** "Anthropic's limits are generous" / "5 worked last week, 6 should too" / "A retry loop will handle throttles" / "Parallelism maximizes throughput regardless of cap".
+**BLOCKED rationalizations:** "The native cap (14) is the ceiling to trust" (7 agents throttled sub-quota) / "It's a quota / usage-limit problem" (the string says `not your usage limit`) / "Always waves-of-3 is the safe rule" (over-serializes) / "A retry loop will handle throttles" / "5 worked last week, 6 should too".
 
-**Why:** The cap is empirically grounded in a single session's reproducible failure. Waves of 3 are both the observed success threshold AND a safe margin — the second wave starts only after the first wave's agents have all reported, giving the rate-limit window time to close.
+**Why:** The throttle is server-side CONCURRENCY-shaped and time-windowed, NOT quota-shaped and NOT fixed-count. "No cap / trust native 14" re-ships the synchronized burst-death; "always ≤3" wastes the multiplier on low-contention sessions. The adaptive model (cold-start ~3, back off on the falsifiable synchronized-death + `not your usage limit` signal) is neither. Worktree isolation itself is unaffected — only the concurrency-governance mechanism is reframed.
 
-Origin: Session 2026-04-23 kailash-ml-audit M1 — 6-agent burst 100% failure, 3+3 wave pattern 100% success.
+Origin: Session 2026-04-23 kailash-ml-audit M1 (6-agent burst 100% failure, 3+3 success) + 2026-06-01 F110 / #419 reframe (7-read-only-agent sub-quota throttle falsified #418's native-cap trust). Receipts journal/0193 + journal/0194.
 
 ## Rule 7 — Pre-Flight Merge-Base Check Before Launch
 
@@ -264,9 +309,60 @@ Agent(isolation="worktree", prompt="Implement W33 km.* wrappers...")
 
 Origin: Session 2026-04-23 — W33 initial launch lost to `worktree-agent-<hash>`; re-launched with explicit `feat/W33-km-wrappers`.
 
+## Rule 9 — Worktree-Isolate Shared-Source Editors; Concurrent Readers Read Committed HEAD
+
+**Rule:** `rules/agents.md` § Worktree Orchestration — shared-source editor isolation. Rule 1's isolation mandate generalizes beyond compilation: ANY background/parallel agent that EDITS shared repo source (`sync-manifest.yaml`, rules, `bin/`, config) MUST be worktree-isolated, even if it never compiles. Any concurrent agent that READS that source MUST read the committed HEAD (`git show HEAD:<path>`), never the working tree.
+
+### Failure mode evidence (2026-05-16 post-mortem)
+
+Three agents ran against the SAME loom checkout: a background agent EDITING `sync-manifest.yaml` (issue #243), and two `/sync` catch-up agents READING loom source. The editor's mid-edit WIP left the manifest with a transient YAML syntax error; both readers flagged "the manifest is broken repo-wide" — correct for the working tree, false at committed HEAD. ~2 agents' analysis cycles were spent reconciling a phantom defect. Root cause: the isolation MUST was framed compiling-only, so the orchestrator launched the editor non-isolated precisely because "it doesn't compile."
+
+### The two structural halves
+
+1. **Editor isolation** — any shared-source editor is worktree-isolated, compiling or not.
+2. **Reader discipline** — concurrent readers read committed HEAD; this is the half that actually saved the cycle (once the catch-up agents were told to read `git show HEAD:<path>`, they produced correct plans despite the broken WIP in the shared tree).
+
+### Prompt template
+
+```python
+# DO — a background agent that EDITS shared source is worktree-isolated
+Agent(isolation="worktree", prompt="Edit sync-manifest.yaml: add consumer_overlays ...")
+# DO — a concurrent agent that READS that source reads committed HEAD
+Agent(prompt="""Catch-up sync. Read loom source via `git show HEAD:.claude/bin/emit.mjs`
+(committed HEAD), NOT the working tree — a parallel agent may be mid-edit.""")
+
+# DO NOT — non-isolated editor + working-tree reader, same checkout
+Agent(prompt="Edit sync-manifest.yaml ...")          # mid-edit WIP visible to all
+Agent(prompt="Catch-up: copy .claude/bin/emit.mjs")  # may copy broken mid-edit state
+```
+
+**BLOCKED rationalizations:** "It's not a compiling agent, the worktree rule doesn't apply" / "The edit is quick, a collision is unlikely" / "Both agents are careful" / "I'll serialize them in my head".
+
+**Why:** A non-isolated editor's mid-edit WIP is visible in the shared checkout; a reader copying the working tree mid-edit ships the broken state. Had the editor been isolated (or the readers HEAD-pinned from the start), zero reader cycles would have been spent on a phantom defect.
+
+Origin: 2026-05-16 loom session (issue #243 manifest editor vs py/rs catch-up readers); full post-mortem in `guides/rule-extracts/agents.md` § Post-mortem 2026-05-16.
+
+## Rule 10 — Binding/Package-Scoped Shard PRs Touch Only Their Own Package
+
+**Rule:** `rules/agents.md` § Worktree Orchestration — binding-scope discipline. When ≥2 parallel worktree agents each ship a binding/package-scoped shard, each shard's PR MUST limit its diff to its OWN binding/package directory. Incidental fixes to sibling-package files (clippy lints, fmt drift, doc typos) discovered mid-shard ship as a separate PR or a dedicated cross-package cleanup shard — bundling is BLOCKED. This is the file-overlap variant of Rule 5: that clause forbids two agents editing the version anchor; this one forbids two agents editing the same sibling-package source.
+
+### Failure mode evidence
+
+F9 Wave 3c (2026-05-22): PR #1084 (a Java MCP shard) bundled an incidental Ruby clippy fix on a Ruby binding source file; concurrent PR #1085 (a broader Ruby MCP shard) edited the same file; #1085's auto-merge hit a 3-way conflict resolved mid-flight at merge commit `69bed4e0` (~10 min of churn binding-scope discipline would have prevented). Same trap precedent: Wave 3b PR #1081 on the parity-matrix file.
+
+### Detection sweep (reviewer mechanical sweep at /implement)
+
+`git diff --name-only main...HEAD`, map each changed path to its top-2 directory components, flag any binding-scoped PR (title `feat(go|java|ruby|python|nodejs):`) whose changed-file roots span >1 binding directory WITHOUT a cross-package-cleanup title prefix (`chore(bindings):` / `fix(bindings):` are carved out — they MAY touch multiple binding dirs by design).
+
+**BLOCKED rationalizations:** "It's only a one-liner lint fix" / "Both bindings rebuild anyway" / "Filing a separate PR is overhead for trivial drift" / "I'm already touching the workspace anyway" / "The fix is in a different file from the sibling shard" / "Concurrent PRs on different files don't conflict".
+
+**Why:** When two concurrent binding-scoped shards touch the SAME sibling-package file (one shard's incidental fix + a concurrent shard that owns that file), the second-to-merge hits a 3-way conflict the orchestrator resolves mid-flight. Trust Posture Wiring for this clause: `guides/rule-extracts/agents.md` § Binding-Scoped Shard PRs.
+
+Origin: F9 Wave 3c (2026-05-22), PR #1084/#1085 conflict on a Ruby binding source file.
+
 ## Related rules & skills
 
-- `rules/agents.md` — the load-bearing MUST clauses for all 5 worktree rules
+- `rules/agents.md` § Worktree Orchestration — the load-bearing MUST cluster this skill carries the depth for (one structural assertion per clause in the rule; protocol, templates, BLOCKED corpora + post-mortems here)
 - `rules/orphan-detection.md` — §1 (facade call site) and §6 (`__all__` eager import) are what the mechanical sweep verifies
 - `skills/30-claude-code-patterns/parallel-merge-workflow.md` — merge-step patterns for collecting worktree branches into an integration branch
 - `guides/deterministic-quality/02-session-architecture.md` — session-level architecture for multi-agent orchestration

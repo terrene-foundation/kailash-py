@@ -52,16 +52,18 @@ process.stdin.on("end", () => {
       console.log(JSON.stringify(out.json));
       process.exit(out.exitCode);
     }
-    // Legacy advisory path
-    console.log(
-      JSON.stringify({
-        continue: result.continue,
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          validation: result.message,
-        },
-      }),
-    );
+    // Legacy advisory path. Non-blocking advisories reach the agent via
+    // additionalContext — the delivered PreToolUse field; the prior
+    // `validation` sibling was silently dropped (loom #466). Emit the context
+    // block only when there's an advisory message.
+    const advisory = { continue: result.continue };
+    if (result.message) {
+      advisory.hookSpecificOutput = {
+        hookEventName: "PreToolUse",
+        additionalContext: result.message,
+      };
+    }
+    console.log(JSON.stringify(advisory));
     process.exit(result.exitCode);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
@@ -69,6 +71,172 @@ process.stdin.on("end", () => {
     process.exit(1);
   }
 });
+
+// Command-wrappers that may precede a `git` invocation. Each may carry its
+// own flags AND a bare flag-operand (e.g. `sudo -u root`, `nice -n 10`); the
+// scan below skips a bare operand ONLY inside an established wrapper context.
+const GIT_WRAPPERS = new Set([
+  "sudo",
+  "doas",
+  "env",
+  "command",
+  "nice",
+  "nohup",
+  "time",
+  "timeout",
+  "ionice",
+  "setsid",
+  "stdbuf",
+  "chrt",
+  "taskset",
+]);
+// `git`, `/usr/bin/git`, `./git`, `\git` — a path-qualified, bare, or
+// backslash-escaped git token. The optional leading `\` closes the
+// MED-R3-1 alias-bypass form (`\git clean` runs the git binary at bash
+// runtime; the backslash only skips alias/function lookup). The `$IFS`
+// form (`git$IFS clean`) is NOT closable here — it requires shell
+// expansion the hook MUST NOT perform (hook-output-discipline.md Rule 3 /
+// security.md § no-eval) — and stays an accepted residual backed by the
+// sync-tier-aware pre-write snapshot (the surface-agnostic forever-layer).
+const isGitToken = (t) => /^\\?(?:[^\s]*\/)?git$/.test(t);
+
+/**
+ * Parse a shell segment as a git invocation, tolerant of command-prefixes
+ * (sudo/doas/env/command/nice/… including their `-flag operand` forms, plus
+ * `VAR=val` assignments and a path-qualified `git`) AND git global options
+ * (`-C <dir>`, `-c <k=v>`, `--git-dir[=]`, `--work-tree[=]`, `-p`, `--bare`,
+ * …) that sit BEFORE the subcommand. Returns { sub (lowercased), dir (the
+ * effective work-tree for the structural check — `--work-tree` wins over
+ * `-C`, else null=cwd), args (post-subcommand remainder) } or null when the
+ * segment is not a git invocation.
+ *
+ * HIGH-1 (R1): the prior `^git\s+<sub>` anchors were bypassed by
+ * `git -C <dir> <sub>` — the cross-tree form the #401 incident used.
+ * HIGH-R2-1 (R2): the prefix-stripper regex was bypassed by `sudo -u root
+ * git …` (the `-u` operand is not a dash-flag), `command git …`, and
+ * `/usr/bin/git …`. This tokenize-and-skip scan closes that class.
+ * MED-R2-1 (R2): `--work-tree=<dir>` attached form is now captured so the
+ * porcelain check inspects the SAME tree the destructive op mutates.
+ */
+function parseGitInvocation(seg) {
+  const raw = (seg || "").trim();
+  if (!raw) return null;
+  const toks = raw.split(/\s+/).filter(Boolean);
+
+  // (1) Skip leading wrappers + their flags/operands + VAR=val until `git`.
+  let i = 0;
+  let sawWrapper = false;
+  while (i < toks.length) {
+    const t = toks[i];
+    if (isGitToken(t)) break; // the git command token
+    if (/^[A-Za-z_]\w*=/.test(t)) {
+      i++;
+      continue;
+    } // VAR=val assignment
+    if (GIT_WRAPPERS.has(t.replace(/^.*\//, ""))) {
+      sawWrapper = true;
+      i++;
+      continue;
+    } // wrapper command name (basename, so `/usr/bin/sudo` counts)
+    if (t.startsWith("-")) {
+      i++;
+      continue;
+    } // a flag (wrapper's or env's)
+    if (sawWrapper) {
+      i++;
+      continue;
+    } // bare flag-operand inside wrapper context (e.g. `-u root`)
+    return null; // bare non-git command outside wrapper context → not git
+  }
+  if (i >= toks.length || !isGitToken(toks[i])) return null;
+  i++; // consume the git token
+
+  // (2) Skip git global options; capture the effective work-tree for the
+  // structural porcelain check. A bare `--git-dir` does NOT set the target
+  // (its work-tree defaults to cwd); only `--work-tree`/`-C` relocate it.
+  let cDir = null;
+  let workTree = null;
+  while (i < toks.length) {
+    const t = toks[i];
+    if (t === "--") {
+      i++;
+      break;
+    }
+    if (t === "-C") {
+      if (toks[i + 1]) cDir = toks[i + 1];
+      i += 2;
+      continue;
+    }
+    if (t === "--work-tree") {
+      if (toks[i + 1]) workTree = toks[i + 1];
+      i += 2;
+      continue;
+    }
+    if (
+      t === "-c" ||
+      t === "--git-dir" ||
+      t === "--namespace" ||
+      t === "--super-prefix"
+    ) {
+      i += 2;
+      continue;
+    }
+    const wt = t.match(/^--work-tree=(.+)$/);
+    if (wt) {
+      workTree = wt[1];
+      i++;
+      continue;
+    }
+    if (t.startsWith("-")) {
+      i++; // --git-dir=X, -p, --paginate, --bare, --no-pager, etc.
+      continue;
+    }
+    break; // first non-option token = the subcommand
+  }
+  if (i >= toks.length) return null;
+  return {
+    sub: toks[i].toLowerCase(),
+    dir: workTree || cDir,
+    args: toks.slice(i + 1).join(" "),
+  };
+}
+
+/**
+ * Structural working-tree signal — the canonical example hook-output-
+ * discipline.md MUST-2 names as the basis for `severity: "block"` ("git
+ * status --porcelain non-empty before --hard"). Runs in the `-C` target dir
+ * (or the session cwd). Returns { ok, dirty, untracked }; ok=false means git
+ * could not be queried (not a repo, timeout) — the caller fails OPEN to
+ * halt-and-report rather than hard-blocking on an unverifiable signal (the
+ * MUST-2 anti-false-positive default).
+ */
+function gitWorkingTreeStatus(dir, cwd) {
+  try {
+    const { spawnSync } = require("child_process");
+    const r = spawnSync(
+      "git",
+      [
+        "-C",
+        dir || cwd || ".",
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+      ],
+      { encoding: "utf8", timeout: 2500, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    if (r.status !== 0 || typeof r.stdout !== "string") {
+      return { ok: false, dirty: false, untracked: false };
+    }
+    const lines = r.stdout.split("\n").filter(Boolean);
+    return {
+      ok: true,
+      dirty: lines.length > 0,
+      untracked: lines.some((l) => l.startsWith("??")),
+    };
+  } catch {
+    return { ok: false, dirty: false, untracked: false };
+  }
+}
 
 function validateBashCommand(data) {
   const command = data.tool_input?.command || "";
@@ -190,9 +358,15 @@ function validateBashCommand(data) {
   }
 
   // BLOCK: Three-layer Bash mutation detection against trust-posture state files.
-  // Mitigates the gap where `permissions.deny` on Edit/Write is bypassable via
-  // bash redirects, file utils, or interpreter -c/-e/-m bodies. Pattern adopted
-  // from a downstream state-file-write-guard (issue #25, c0aeff73).
+  // This is the PRIMARY structural control for Bash-mediated state-file writes
+  // (F123): settings.json's Bash(verb:path) deny-matrix was removed as
+  // structurally incompletable — a verb-enumerating denylist can never cover
+  // every write-capable shell verb (awk/dd/perl/printf>/sponge/...) nor the
+  // redirect operator itself. This interceptor matches on the TARGET PATH
+  // regardless of verb, so it supersedes the denylist instead of racing it.
+  // Edit/Write tool writes remain fenced by the settings.json Edit/Write+path
+  // deny rules + posture-gate + integrity-guard. Pattern adopted from a
+  // downstream state-file-write-guard (issue #25, c0aeff73).
   //
   // Protected paths:
   //   .claude/learning/posture.json, posture.json.bak, posture.json.tmp.N
@@ -316,42 +490,123 @@ function validateBashCommand(data) {
   // commit-message bodies (e.g. `git commit -m "...git reset --hard..."`) do NOT
   // false-positive. Each segment's LEADING token determines the actual command.
   const segments = command.split(/(?:\|\||&&|;|\|(?!\|))/);
-  const isLeadingCmd = (seg, re) => re.test(seg.trim());
 
-  // BLOCK: git reset --hard without preceding porcelain check (rules/git.md MUST 7)
-  if (segments.some((s) => isLeadingCmd(s, /^git\s+reset\s+--hard\b/))) {
+  // git reset --hard — STRUCTURAL severity (hook-output-discipline.md MUST-2:
+  // `git status --porcelain` non-empty is the canonical structural signal that
+  // justifies `block`). BLOCK only when the resolved working tree is DIRTY (a
+  // dirty-tree --hard silently discards unstaged mods + untracked files with no
+  // reflog); a clean-tree --hard is safe and is ALLOWED (removes the prior
+  // lexical-block false-positive). Anchor tolerates `git -C <dir>`/sudo/env
+  // (HIGH-1 — the cross-tree form the #401 incident used). git-unverifiable →
+  // fail-open to halt-and-report (do not hard-block on an unconfirmable signal).
+  for (const seg of segments) {
+    const g = parseGitInvocation(seg);
+    if (!g || g.sub !== "reset" || !/(^|\s)--hard\b/.test(g.args)) continue;
+    const st = gitWorkingTreeStatus(g.dir, cwd);
+    if (st.ok && st.dirty) {
+      return {
+        severity: "block",
+        what_happened: `Bash invoked \`git reset --hard\` against a DIRTY working tree: ${command.slice(0, 120)}`,
+        why: "git.md MUST 'Destructive Working-Tree Ops MUST Verify Clean Working Tree' — a dirty-tree --hard discards unstaged modifications AND untracked files with no reflog. Structural signal (`git status --porcelain` non-empty), per hook-output-discipline.md MUST-2.",
+        agent_must_report: [
+          "The working tree is DIRTY — `git reset --hard` would discard the listed changes unrecoverably",
+          "Use `git reset --keep <ref>` (aborts on a dirty tree) OR commit/stash the changes first",
+          "If the loss is genuinely intended, confirm the user authorized it IN THIS CONVERSATION",
+        ],
+        agent_must_wait:
+          "Do not retry --hard while the tree is dirty. Use --keep, or stash/commit first.",
+        user_summary:
+          "git reset --hard blocked — DIRTY working tree (use --keep or stash first)",
+      };
+    }
     return {
-      severity: "block",
+      severity: "halt-and-report",
       what_happened: `Bash invoked \`git reset --hard\`: ${command.slice(0, 120)}`,
-      why: "git.md MUST 'git reset --hard MUST verify clean working tree' — prefer git reset --keep which aborts on local changes",
+      why: "git.md MUST 'Destructive Working-Tree Ops' — prefer `git reset --keep` (aborts on a dirty tree). Tree appears clean or is unverifiable; surfacing per hook-output-discipline.md MUST-2 (no structural dirty-tree signal → not block).",
       agent_must_report: [
-        "Show `git status --porcelain` output proving the working tree is clean",
-        "OR rewrite the command to use `git reset --keep <ref>` which aborts on dirty tree",
-        "Explain why --hard was chosen if the user explicitly authorized it",
+        "Confirm `git status --porcelain` is empty before --hard, OR use `git reset --keep <ref>`",
+        "Explain why --hard was chosen over --keep",
       ],
       agent_must_wait:
-        "Do not retry --hard until porcelain check is shown OR user authorizes after seeing the risk.",
-      user_summary:
-        "git reset --hard blocked — needs porcelain check or --keep",
+        "Prefer --keep; proceed with --hard only after confirming the tree is clean.",
+      user_summary: "git reset --hard — verify clean tree or use --keep",
     };
   }
 
-  // BLOCK: force-push to main/master (segment-anchored to avoid commit-msg false-positives)
-  const forcePushPattern =
-    /^git\s+push\b[^|;]*--force(?:-with-lease)?\b[^|;]*\b(main|master)\b|^git\s+push\b[^|;]*\b(main|master)\b[^|;]*--force(?:-with-lease)?\b/;
-  if (segments.some((s) => isLeadingCmd(s, forcePushPattern))) {
+  // git clean -f[d] — STRUCTURAL severity. `git clean -f` deletes UNTRACKED-not-
+  // ignored files irreversibly (#401 data-loss class — no git object, no
+  // reflog). BLOCK only when the resolved tree HAS untracked-not-ignored files
+  // (porcelain `??`) that a force-clean would delete; clean-of-nothing →
+  // halt-and-report (surface, allow). `-n`/`--dry-run` exempt. Anchor tolerates
+  // `git -C <dir>`/sudo/env (HIGH-1). The sync-tier-aware pre-write snapshot
+  // covers the tool's own fs purge; this is the cross-tool tripwire for an
+  // OPERATOR-typed destructive clean.
+  for (const seg of segments) {
+    const g = parseGitInvocation(seg);
+    if (!g || g.sub !== "clean") continue;
+    const a = g.args;
+    // -n / --dry-run overrides force in git and only previews — exempt.
+    if (/(^|\s)-[a-zA-Z]*n[a-zA-Z]*\b/.test(a) || /(^|\s)--dry-run\b/.test(a)) {
+      continue;
+    }
+    const force =
+      /(^|\s)-[a-zA-Z]*f[a-zA-Z]*\b/.test(a) || /(^|\s)--force\b/.test(a);
+    if (!force) continue; // `git clean` without -f is a no-op
+    const st = gitWorkingTreeStatus(g.dir, cwd);
+    if (st.ok && st.untracked) {
+      return {
+        severity: "block",
+        what_happened: `Bash invoked \`git clean\` with force against a tree that HAS untracked files: ${command.slice(0, 120)}`,
+        why: "git.md MUST 'Destructive Working-Tree Ops' — `git clean -f[d]` deletes untracked-not-ignored files irreversibly (no git object, no reflog; the #401 data-loss class). Structural signal (`git status --porcelain` shows `??` entries), per hook-output-discipline.md MUST-2.",
+        agent_must_report: [
+          "Untracked-not-ignored files EXIST — `git clean -f` would delete them unrecoverably",
+          "Run `git clean -n` (dry-run) to see exactly what would be deleted; use `git stash -u` to preserve it",
+          "If the deletion is genuinely intended, confirm the user authorized it IN THIS CONVERSATION",
+        ],
+        agent_must_wait:
+          "Do not retry the clean while untracked work exists. Dry-run + stash first.",
+        user_summary:
+          "git clean -f blocked — untracked files present, would be deleted irreversibly",
+      };
+    }
     return {
-      severity: "block",
-      what_happened: `Bash attempted force-push to protected branch: ${command.slice(0, 120)}`,
-      why: "git.md branch protection — main/master direct push is rejected; force-push is destructive",
+      severity: "halt-and-report",
+      what_happened: `Bash invoked \`git clean\` with force: ${command.slice(0, 120)}`,
+      why: "git.md MUST 'Destructive Working-Tree Ops' — `git clean -f[d]` deletes untracked-not-ignored files. No untracked-not-ignored files detected (or unverifiable); surfacing per hook-output-discipline.md MUST-2.",
       agent_must_report: [
-        "State which branch was being force-pushed",
-        "Explain the user-facing reason (commit history rewrite? recovery? bug?)",
-        "Confirm whether the user explicitly authorized force-push to main/master IN THIS CONVERSATION",
+        "Confirm via `git clean -n` (dry-run) that nothing of value would be deleted",
+        "Prefer `git stash -u` over a destructive clean when in doubt",
+      ],
+      agent_must_wait:
+        "Dry-run first if there is any chance of untracked work.",
+      user_summary:
+        "git clean -f — verify with dry-run (no untracked detected)",
+    };
+  }
+
+  // force-push to main/master — HALT-AND-REPORT (hook-output-discipline.md
+  // MUST-2: lexical command-string signal → not block). GitHub branch
+  // protection REJECTS direct/force push to main server-side (git.md § Branch
+  // Protection) — the remote rejection is the structural backstop; the hook
+  // surfaces the intent. Anchor tolerates `git -C <dir>`/sudo/env (HIGH-1).
+  for (const seg of segments) {
+    const g = parseGitInvocation(seg);
+    if (!g || g.sub !== "push") continue;
+    const force = /(^|\s)--force(?:-with-lease)?\b/.test(g.args);
+    const toMain = /(^|\s)(main|master)\b/.test(g.args);
+    if (!force || !toMain) continue;
+    return {
+      severity: "halt-and-report",
+      what_happened: `Bash attempted force-push to a protected branch: ${command.slice(0, 120)}`,
+      why: "git.md branch protection — main/master direct/force push is rejected server-side by GitHub; force-push rewrites history. Lexical signal → halt-and-report per hook-output-discipline.md MUST-2 (the server-side rejection is the structural defense).",
+      agent_must_report: [
+        "State which branch was being force-pushed and why (history rewrite? recovery?)",
+        "Confirm the user explicitly authorized force-push to main/master IN THIS CONVERSATION",
       ],
       agent_must_wait:
         "Do not retry. Force-push to main requires explicit per-action user authorization.",
-      user_summary: "force-push to main/master blocked",
+      user_summary:
+        "force-push to main/master — requires explicit authorization",
     };
   }
 

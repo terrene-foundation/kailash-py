@@ -50,7 +50,9 @@ Reference plans in `workspaces/<project>/02-plans/` and work through every singl
 - Cover backend, frontend, testing, deployment, documentation — everything
 - Each todo should be detailed enough to implement independently
 - If the plans reference it, there must be a todo for it
-- For large projects (20+ todos), organize into numbered milestones/groups for clarity
+- For large projects (20+ todos), organize into numbered milestones/groups for clarity.
+- **Declare the wave sequence — COMPULSORY for EVERY plan, not just large ones** (`rules/wave-loop.md` MUST-1). Each value-ranked milestone-group IS a wave. Every plan MUST declare an explicit Wave 1…N sequence: a project with ≥2 value-distinct milestone-groups (or a group whose cumulative invariant surface exceeds one convergence pass) MUST be ≥2 waves so an inter-wave gate fires before the terminal redteam; size each wave so its invariant surface fits one convergence pass (split a value-coherent but high-invariant group at the invariant boundary). A genuinely single-milestone, single-convergence-surface project declares ONE wave WITH its stated serial-carve-out justification. **A flat todo list with no declared wave sequence is BLOCKED** — it makes the inter-wave gate inert (no boundary to fire at).
+- **Later waves are PROVISIONAL, not frozen** (`rules/wave-loop.md` MUST-4): write ALL todos now (the forest MUST stay visible per `rules/value-prioritization.md` MUST-1), but todos in not-yet-started waves are re-validated + re-ranked at each inter-wave gate — never frozen-final, never deleted down to "wave 1 only".
 - Each todo MUST reference which spec file(s) it implements (e.g., "Implements: specs/authentication.md §Login Flow")
 - Update spec files if /todos planning reveals new contracts or interfaces (first-instance update discipline)
 

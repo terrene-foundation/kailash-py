@@ -10,7 +10,7 @@ Credentials flow through a **CredentialStore** — never stored in serializable 
 BaseAgentConfig(api_key="sk-tenant-123")
   → WorkflowGenerator registers with CredentialStore
     → node_config["credential_ref"] = "cred_abc123"  (safe to serialize)
-      → Kaizen agent resolves from CredentialStore at runtime
+      → LLMAgentNode resolves from CredentialStore at runtime
         → provider.chat(..., api_key="sk-tenant-123")
 ```
 
@@ -23,7 +23,7 @@ from kaizen.core.config import BaseAgentConfig
 
 # Tenant-specific config — api_key flows through CredentialStore
 config = BaseAgentConfig(
-    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    llm_provider="openai",
     model=os.environ["LLM_MODEL"],
     api_key="sk-tenant-123",        # Per-request override
     base_url="https://proxy.example.com/v1",  # Optional proxy
@@ -107,4 +107,4 @@ All provider exceptions pass through `sanitize_provider_error()` which strips AP
 
 ## Cross-References
 
-- ADR-001: `workspaces/byok-hardening/02-plans/01-adr-credential-flow.md`
+- ADR-001: BYOK credential flow architecture decision (byok-hardening analysis)

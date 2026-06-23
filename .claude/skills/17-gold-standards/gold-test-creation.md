@@ -289,8 +289,6 @@ def test_db():
 
 ## Related Patterns
 
-- **Testing best practices**: [`testing-best-practices`](../../07-development-guides/testing-best-practices.md)
-- **Test organization**: [`test-organization`](../../07-development-guides/test-organization.md)
 - **Gold testing standard**: [`gold-testing`](gold-testing.md)
 
 ## When to Escalate

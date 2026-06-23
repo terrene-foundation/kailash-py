@@ -57,10 +57,6 @@ The highest-leverage artifact in any project. 3-6 numbered directives loaded int
 ```markdown
 ## Absolute Directives
 
-### 0. Foundation Independence — No Commercial Coupling
-
-[1-2 lines]. See `rules/independence.md`.
-
 ### 1. Framework-First
 
 Never write code from scratch before checking the Kailash frameworks.
@@ -144,7 +140,7 @@ State + intent from the previous session. NOT a recap of what was done (that's i
 | communication.md          | schema-migration.md (`**/migrations/**`)               |
 | git.md                    | dataflow-pool.md (`**/dataflow/**`)                    |
 | security.md               | infrastructure-sql.md (`**/*.sql`)                     |
-| independence.md           | tenant-isolation.md (`**/tenant*`, `**/multi_tenant*`) |
+| agents.md                 | tenant-isolation.md (`**/tenant*`, `**/multi_tenant*`) |
 | autonomous-execution.md   | cross-sdk-inspection.md (`**/src/**`, `**/tests/**`)   |
 
 **Test**: Does the rule apply to every session regardless of what files are touched? If yes, always-load. If no, path-scope.

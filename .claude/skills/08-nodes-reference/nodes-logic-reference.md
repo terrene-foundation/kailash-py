@@ -11,7 +11,7 @@ Complete reference for control flow and logic nodes.
 > Category: `nodes`
 > Priority: `MEDIUM`
 > SDK Version: `0.9.25+`
-> Related Skills: [`switchnode-patterns`](../../01-core-sdk/switchnode-patterns.md), [`nodes-quick-index`](nodes-quick-index.md)
+> Related Skills: [`switchnode-patterns`](../01-core-sdk/switchnode-patterns.md), [`nodes-quick-index`](nodes-quick-index.md)
 > Related Subagents: `pattern-expert` (control flow patterns)
 
 ## Quick Reference
@@ -21,14 +21,14 @@ from kailash.nodes.logic import (
     SwitchNode,
     MergeNode,
     ConditionalRouterNode,
-    LoopNode
+    LoopNode,
+    WhileNode
 )
 ```
 
 ## Switch Node
 
 ### SwitchNode
-
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -54,14 +54,12 @@ workflow.add_node("SwitchNode", "status_router", {
 SwitchNode outputs are **mutually exclusive** (one is always `None`). Dot notation behavior depends on execution mode:
 
 **✅ skip_branches mode** (recommended): Dot notation works - inactive branches skipped
-
 ```python
 workflow.add_connection("router", "true_output.name", "processor", "name")
 runtime = LocalRuntime(conditional_execution="skip_branches")
 ```
 
 **⚠️ route_data mode**: Avoid dot notation - connect full output
-
 ```python
 workflow.add_connection("router", "true_output", "processor", "data")
 # Extract field in code: name = data.get('name') if data else None
@@ -71,7 +69,6 @@ runtime = LocalRuntime(conditional_execution="route_data")
 ## Merge Node
 
 ### MergeNode
-
 ```python
 workflow.add_node("MergeNode", "combine", {
     "strategy": "all",  # or "any", "first"
@@ -82,7 +79,6 @@ workflow.add_node("MergeNode", "combine", {
 ## Conditional Router
 
 ### ConditionalRouterNode
-
 ```python
 workflow.add_node("ConditionalRouterNode", "conditional", {
     "filter": [
@@ -96,7 +92,6 @@ workflow.add_node("ConditionalRouterNode", "conditional", {
 ## Loop Nodes
 
 ### LoopNode
-
 ```python
 workflow.add_node("LoopNode", "loop", {
     "iterations": 5,
@@ -104,11 +99,20 @@ workflow.add_node("LoopNode", "loop", {
 })
 ```
 
+### WhileNode
+```python
+workflow.add_node("WhileNode", "while_loop", {
+    "condition": "count < 100",
+    "body": "increment_counter"
+})
+```
+
 ## Related Skills
 
-- **SwitchNode Patterns**: [`switchnode-patterns`](../../01-core-sdk/switchnode-patterns.md)
+- **SwitchNode Patterns**: [`switchnode-patterns`](../01-core-sdk/switchnode-patterns.md)
 - **Node Index**: [`nodes-quick-index`](nodes-quick-index.md)
 
 ## Documentation
+
 
 <!-- Trigger Keywords: Switch node, Merge node, conditional, routing, logic nodes, SwitchNode, MergeNode, ConditionalRouterNode -->

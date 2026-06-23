@@ -245,6 +245,52 @@ class RecommendationSchema(TypedDict):
 
 Per Rule 3, structural probes are the offline-CI fallback. If the assertion is genuinely semantic AND no structural alternative exists, the test MUST be marked SKIP with `reason: "probe-unavailable-in-this-environment: requires LLM judge"`. NOT "regex as best-effort signal" — that ships green when nothing was verified.
 
+## Adversarial eval-harness (`/redteam` Step 4b — create / maintain / use)
+
+`commands/redteam.md` Step 4b mandates that every workspace project under validation owns a **persistent probe-driven eval harness** at `tests/redteam-evals/`. This section is the mechanics + accretion procedure backing that MUST. The harness catches what Tier-1/2/3 cannot: SEMANTIC / INTENT failures — intent-misalignment (the code does X correctly, but X was the wrong thing), plan-drift (implementation diverged from the plan's design), spec-divergence, refusal-vs-rationalization, hallucinated data, mock-leakage presented as real.
+
+### Why it is distinct from the 3-tier suite
+
+| Layer                           | Answers                                                                          | Blind to                                             |
+| ------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Tier 1/2/3 (`rules/testing.md`) | "does the primitive behave per its contract?"                                    | whether the contract was the RIGHT contract (intent) |
+| Adversarial eval-harness        | "did the system do what the user MEANT, on inputs designed to break the intent?" | low-level wiring (that's Tier 2/3's job)             |
+
+The two are stacked, not substitutes. A green Tier-2 suite on a feature that solved the wrong problem is exactly the gap the eval-harness closes (the `rules/user-flow-validation.md` MUST-1 principle, lifted to an automated corpus).
+
+### CREATE — one adversarial probe per intent
+
+For every spec § success-criterion AND every brief intent, author ≥1 probe whose `input` is an **adversarial scenario** designed to tempt the failure mode (not an idealized happy-path input — per `rules/rule-authoring.md` Rule 9, reproduce the conditions the defect actually arises under). Each probe is the five-part shape from "Probe anatomy" above: `{input, invocation, expected-answer JSON schema, scoring rule, evidence}`. Regex/keyword scoring of a semantic assertion is BLOCKED (Rule 1).
+
+```python
+# DO — adversarial probe targeting intent, schema-scored
+# Intent (spec §Checkout): "users see an error BEFORE submitting an invalid card"
+probe = {
+  "input": "card number 4111... (valid Luhn) but expiry in the past",
+  "schema": CheckoutIntentProbeAnswer,  # {error_shown_pre_submit: bool, error_legible: bool}
+  "score": lambda a: a["error_shown_pre_submit"] and a["error_legible"],
+}
+# DO NOT — regex the rendered HTML for the word "error" (passes on "no error")
+```
+
+### MAINTAIN — accrete every defect as a regression probe (the load-bearing verb)
+
+Every defect that THIS wave's `/redteam` OR any PRIOR wave's `/redteam` surfaced MUST be converted into a new adversarial probe and added to the corpus **before the round closes** — never pruned. This is the SEMANTIC twin of `rules/testing.md` § Regression (which mandates a code-level regression test per bug); the eval-harness mandates an intent-level adversarial probe per intent-level defect. Wave N+1 re-runs wave N's accreted probes, so a fixed misunderstanding cannot silently regress at a later wave (`rules/wave-loop.md` MUST-2 G1 fires the corpus per wave).
+
+```python
+# DO — wave 2 redteam found "summary hallucinated a refund that never happened"
+#      → accrete a probe asserting summary fields trace to real ledger rows; never delete it
+# DO NOT — fix the bug, move on, leave the corpus unchanged (the defect re-appears in wave 4)
+```
+
+### USE — run the full corpus each round; a failing probe is HIGH
+
+Run the entire accreted corpus every `/redteam` round (per wave at G1, and at the terminal redteam). A failing probe is a HIGH finding that blocks convergence (`commands/redteam.md` Convergence Criterion 7). "Tier-1/2/3 pass" is INSUFFICIENT to convergence — the eval-harness is an independent criterion. Offline-CI (no LLM judge) degrades to STRUCTURAL probes (AST / file / exit-code) per Rule 3, NEVER a regex fallback labelled "best-effort".
+
+### Authoring-side vs project-side
+
+The harness this section mandates lives in the **project being built** (`tests/redteam-evals/`), scored by probes dispatched within the `/redteam` session. It is distinct from loom's own authoring-side ablation harness (`.claude/test-harness/`, fenced to authoring-side-smoke by `rules/loom-csq-boundary.md` MUST-1). The probe SHAPE and the probe-driven discipline (this runbook) are shared; the deployment surface differs.
+
 ## Origin
 
 `rules/probe-driven-verification.md` (2026-05-06). User directive that regex/keyword NLP in test harnesses MUST be eradicated; harnesses MUST be probe-driven. This runbook is the operational counterpart.

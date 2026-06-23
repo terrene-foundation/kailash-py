@@ -119,18 +119,16 @@ Surface: uncommitted changes, branch ahead/behind origin/main, new stub markers 
 
 ### Sweep 8: Release readiness (publishing repos only)
 
-For repos that publish version anchors (`pyproject.toml` + `__init__.py`), determine what is GENUINELY unreleased. The diff base MUST be derived mechanically from the latest tag — hand-picking a base tag is BLOCKED. A stale base re-flags already-released fixes as "unreleased" on every sweep (the false-positive that makes sweeps feel neverending).
+For repos that publish version anchors (`pyproject.toml` + `__init__.py`, or language equivalent), determine what is GENUINELY unreleased. The diff base MUST be derived mechanically from the latest stable tag — hand-picking a base tag is BLOCKED (a stale base re-flags already-released fixes as "unreleased" on every sweep). Non-publishing repos: record "N/A — non-publishing" and move on.
 
 ```bash
-# plain vX.Y.Z stable tags ONLY — `$`-anchor excludes prerelease (-rc1) + package-
-# prefixed (dataflow-v*) tags; else a future v2.29.0-rc1 sorts above v2.29.0 (stale-base bug)
+# plain vX.Y.Z stable tags ONLY — `$`-anchor excludes prerelease (-rc1) and
+# package-prefixed (pkg-v*) tags so a future v2.29.0-rc1 cannot sort above v2.29.0
 LATEST=$(git tag --sort=-version:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-# shippable code ONLY (docs/.claude/workspace do NOT ship); `packages/*/src` is a repo-root glob
-git log --oneline "$LATEST"..HEAD -- src/ packages/*/src 2>/dev/null
-grep -m1 '^version' pyproject.toml   # anchor must match $LATEST unless mid-release
+git log --oneline "$LATEST"..HEAD -- src/ packages/*/src 2>/dev/null   # shippable code ONLY
 ```
 
-Flag "unreleased work" ONLY when the shippable-code diff above is non-empty. If the only diff since `$LATEST` is docs / `.claude/` / workspace files → record "no shippable change since `$LATEST`", NOT a release finding. Before naming any merged PR as unreleased, confirm it via `git merge-base --is-ancestor <sha> "$LATEST"` (ancestor = already released).
+Flag "unreleased work" ONLY when the shippable-code diff is non-empty; docs / `.claude/` / workspace diffs do NOT ship → record "no shippable change since `$LATEST`". Before naming any merged PR as unreleased, confirm via `git merge-base --is-ancestor <sha> "$LATEST"` (ancestor = already released).
 
 ## Output
 
