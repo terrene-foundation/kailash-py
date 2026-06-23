@@ -1,0 +1,194 @@
+source_repo: kailash-py
+codify_date: "2026-06-19"
+status: distributed
+reviewed_date: "2026-06-22"
+distributed_date: "2026-06-23"
+# Gate-1 (loom) 2026-06-22: 3 changes classified + placed on loom branch
+# sync/from-build-2026-06-22. agents (py-1) GLOBAL baseline → agents.md MUST
+# clause + extraction to skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md
+# (headroom net-neutral, Rule-10 via extraction); trust-plane-security (py-2)
+# GLOBAL → clause 8 (py-paths genericized); cross-sdk-inspection (py-3) GLOBAL
+# → Rule 4b+4c (genericized). 0 variant, 0 skip. Disclosure scan exit 0; bodies
+# human-scrubbed clean. FOLLOW-UP (not Gate-1): evidence-first-claims.md is a
+# loom baseline rule ABSENT from kailash-py — close via /sync-to-build py.
+codify_session: "Session 2026-06-19 — /codify of the redteam reviewer-dispatch
+  rate-limit trap, surfaced during the PACT KSP.compartments (#1375 follow-up,
+  PR #1379) holistic-redteam convergence. The session ran a 3-lens holistic
+  redteam to convergence (2 clean rounds, 0 real findings) and shipped kailash
+  2.39.1; the trap it pre-empted (dispatching reviewers sequentially with a
+  per-agent ran/evidence gate to avoid false convergence) was confirmed >=2x
+  and lived only in .session-notes. Prior distributed proposal (2026-05-18
+  cycle, distributed 2026-06-11 at loom 2.42.x) archived to
+  .claude/.proposals/archive/2026-05-18-kailash-py.yaml per artifact-flow.md
+  Archive-Before-Fresh."
+
+changes:
+  - type: rule_update
+    artifact: agents
+    files:
+      - .claude/rules/agents.md
+    classification_suggestion: global
+    context: 'ADDS one MUST clause under § Quality Gates:
+      "### MUST: Redteam Reviewer Dispatch — Errored/Empty Is Zero Evidence,
+      Never A Clean Round".
+
+
+      Lesson: a /redteam round dispatches review agents in parallel by default
+      (per § Parallel Execution + self-referential-codify.md Rule 1), but the LLM
+      provider''s server-side rate limiter can throttle the concurrent fan-out so
+      one or more agents return errored/empty/truncated. An agent that produced
+      nothing reads as "0 findings"; a round where every agent shows "0 findings"
+      reads as CLEAN — false convergence, where the round looks clean because the
+      reviewers never ran, not because the code is clean. Defense (two axes):
+      (1) EVIDENCE GATE (load-bearing) — every dispatched reviewer MUST return a
+      ran/evidence signal (verbatim commands + output); errored/empty = zero
+      evidence, re-run, never counts as a clean lens; a round/convergence is
+      claimable ONLY when EVERY dispatched agent genuinely ran. (2) CONCURRENCY
+      BACK-OFF (remedy on observed throttle) — reduce dispatch concurrency, down
+      to sequential, until each agent executes against a fresh rate budget. This
+      COMPLEMENTS parallel-by-default (the lens count / multi-agent requirement is
+      invariant under back-off), it does NOT override it.
+
+
+      Evidence: confirmed >=2x across redteam sessions; most recently the
+      2026-06-19 PACT KSP.compartments holistic-redteam convergence (#1375
+      follow-up, PR #1379), which pre-empted the trap by dispatching three lenses
+      sequentially with a per-agent ran evidence gate. The trap previously lived
+      only in .session-notes "Traps". Canonical principle: loom
+      evidence-first-claims.md MUST-3 ("an errored or empty command is zero
+      evidence, never confirmation") — applied to the reviewer-as-detector.
+
+
+      Refines the loom-canonical agents.md § "Holistic Post-Multi-Wave Redteam"
+      (which currently prescribes ">=3 parallel reviewers" with no rate-limit
+      caveat). At loom integration the clause MAY re-add the hard
+      evidence-first-claims.md MUST-3 cross-reference (the file exists at loom; it
+      is NOT synced into the kailash-py BUILD repo, so the BUILD-local clause
+      states the principle inline to avoid a dangling reference). FOLLOW-UP for
+      Gate-1: evidence-first-claims.md is a loom-canonical priority:0/baseline
+      rule absent from kailash-py — a pre-existing baseline-sync gap that
+      /sync-to-build should close (flagged, out of scope for this codify).
+
+
+      Trust Posture Wiring (in-clause, canonical 8-field): severity
+      halt-and-report at gate-review; 7-day grace; cumulative per trust-posture
+      MUST-4 (3x same-rule in 30d -> drop 1); regression-within-grace trigger key
+      false_redteam_convergence -> emergency downgrade (1 step); receipt
+      [ack: redteam-dispatch-rate-limit] (soft-gate); detection = Phase-1
+      gate-level review at /codify+/redteam (reviewer confirms each claimed-clean
+      round names every dispatched reviewer''s evidence + no reviewer errored),
+      Phase-2 deferred hook; violation scope = this clause; origin = this session.
+
+
+      rule-authoring.md Rule 10 (proximity-band) disposition: agents.md is
+      priority:0/scope:baseline and this ADDS a new MUST clause + new BLOCKED
+      corpus (~39 lines; agents.md now 356 lines, covered by its existing named
+      length-rationale). The headroom sweep (emit.mjs::validateAggregateHeadroom)
+      CANNOT run in the BUILD repo: emit.mjs IS present (synced) but imports the
+      un-synced .claude/codex-mcp-guard/extract-policies.mjs, so
+      `node .claude/bin/emit.mjs --all --dry-run` aborts with ERR_MODULE_NOT_FOUND
+      before producing headroom rows. Gate-1 MUST run the proximity-band sweep at
+      loom (full toolchain present) and pair an extraction OR a named-rationale
+      exception per Rule 10 if any cli×lang lane is within 15% of the floor.
+
+
+      Self-referential /codify gate (self-referential-codify.md Rule 1): agents.md
+      is on the self-referential allowlist, so this codify ran the MANDATORY
+      multi-agent redteam-with-tests round at L5/L2 posture. Three lenses
+      dispatched SEQUENTIALLY (dogfooding this very clause), each evidence-gated:
+      reviewer (Round 1 found 2 CRIT — an inverted + phantom citation falsely
+      claiming self-referential-codify Rule 1 endorsed sequential dispatch when it
+      mandates parallel; fixed by reframing as complement; Round 2 confirmed all
+      resolved, raised + independently-closed MED-1 dangling-ref), security-reviewer
+      (clean), cc-architect (clause structurally clean; all 8 wiring fields in
+      order; confirmed MED-1 closure). Net: zero clause defects; converged.
+
+
+      Classification rationale: GLOBAL — redteam reviewer-dispatch integrity is a
+      COC-orchestration discipline every repo running /redteam inherits; the
+      failure mode (provider rate-limit -> false convergence) is CLI-neutral and
+      language-neutral. Refines the global agents.md, no py-specific content.'
+
+  # ---- APPENDED 2026-06-22 codify cycle (kailash 2.43.1 / 2.44.x; since 2026-06-19) ----
+  - type: rule_update
+    artifact: trust-plane-security
+    files:
+      - .claude/rules/trust-plane-security.md
+    classification_suggestion: global
+    context: 'ADDS MUST clause 8 "Every Signing / Hash Pre-Image MUST Reject
+      NaN/Inf (allow_nan=False)" + in-clause 8-field Trust Posture Wiring.
+
+
+      Lesson: a json.dumps producing a signing/HMAC/integrity-hash/cross-SDK
+      pre-image without allow_nan=False emits RFC-8259-invalid NaN/Infinity
+      literals. Python signs them; a strict cross-SDK parser (Rust serde_json)
+      REJECTS them on parse — so a Python-signed envelope/witness/audit-anchor
+      carrying a non-finite float in free-form metadata can NEVER be re-verified
+      by the sibling SDK. Distinct from the EXISTING NaN coverage: Rule 3 +
+      MUST-NOT-5 (this file) and pact-governance.md Rule 6 guard the
+      VALUE-COMPARISON axis (NaN < limit silently passing a budget check); this
+      new clause guards the SERIALIZATION axis (NaN/Infinity literals in the
+      signed bytes). grep confirms allow_nan appeared in ZERO rules pre-this-codify.
+      The fix is byte-neutral on every finite input, so it ships WITHOUT a
+      cross-SDK lockstep; the durable guard is a module-granularity AST invariant
+      over every signing/hash root (per-function spot-checks miss sibling sites).
+
+
+      Classification rationale: GLOBAL — the failure mode is the cross-SDK
+      conformance contract both SDKs share; CLI- and language-neutral (the rs
+      sibling is the serde_json strict-parser end of the same contract). Gate-1
+      MAY also classify a kailash-rs variant note (the rs end enforces strictness
+      on parse). Origin: kailash 2.43.1 NaN/Inf trust-plane sweep, PR #1411 +
+      #1412; workspaces/cross-sdk-audit/journal/0015 + 0017.
+
+
+      rule-authoring Rule 10: trust-plane-security.md is priority:10/path-scoped
+      (NOT baseline) -> proximity-band gate does NOT fire. Grandfathered rule with
+      no prior Trust Posture Wiring; the new clause ships clause-scoped 8-field
+      wiring per the artifact-flow.md "Intake Disclosure Scrub" precedent (loom
+      Gate-1 may decide on full-rule wiring retrofit).'
+
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+    classification_suggestion: global
+    context:
+      'ADDS two sub-rules + in-clause 8-field Trust Posture Wiring on each.
+
+
+      Rule 4b "Byte-CHANGING Canonical-Encoder Switches Are Cross-SDK Lockstep,
+      Not Single-SDK": a canonical-encoder migration feeding a cross-SDK signing/
+      hash pre-image (e.g. default=str -> canonical_scalars) MUST be classified
+      byte-NEUTRAL vs byte-CHANGING by EMPIRICAL byte-diff (run the code, compare
+      SHAs — not by reasoning). A byte-CHANGING switch where the sibling mirrors
+      CURRENT bytes MUST NOT ship single-SDK (coordinated lockstep + pin current
+      bytes as a tripwire until lockstep lands); a byte-NEUTRAL switch (to_dict()
+      pre-normalizes) MAY ship single-SDK. Distinct from the existing Rule 4 (pin
+      >=3 parity byte-vectors): Rule 4 covers a parity-helper''s vectors; 4b covers
+      the migrate-or-not decision + the neutral/changing classification + the
+      lockstep-not-single-SDK rule. Origin: 2.43.1 canonical-encoder family sweep,
+      journal/0011 (97 default=str sites classified: audit-chain + witness-family +
+      envelope-HMAC byte-CHANGING/lockstep; envelope_hash byte-NEUTRAL/shipped);
+      specs/trust-canonical-encoders.md.
+
+
+      Rule 4c "Conformance-Vector Changes Re-Pin Their Integrity Manifest In The
+      Same Commit": changing a cross-SDK conformance vector pinned by a committed
+      *.sha256 manifest (e.g. PACT_VECTORS.sha256) MUST re-pin the manifest in the
+      SAME commit; a /redteam over canonical-vector changes MUST include an
+      integrity-manifest sweep lens (enumerate every *.sha256, shasum -a256 -c).
+      grep confirms no rule covered integrity-manifest re-pin. Origin: PR #1411
+      Gap 1 — the audit_anchor.json canonical fix omitted the PACT_VECTORS.sha256
+      re-pin -> red Cross-SDK Conformance gate a prior "converged (2 clean passes)"
+      redteam missed because no round ran shasum -c; journal/0015; closed by
+      b4929d924 + a new integrity-manifest-sweep lens.
+
+
+      Classification rationale: GLOBAL — both sub-rules govern the cross-SDK
+      conformance contract shared by kailash-py and kailash-rs; CLI- and
+      language-neutral. cross-sdk-inspection.md is priority:10/path-scoped -> Rule
+      10 proximity-band gate does NOT fire. Grandfathered (no prior wiring); both
+      sub-rules ship clause-scoped 8-field wiring.'
+
+  # ---- end 2026-06-22 append ----
