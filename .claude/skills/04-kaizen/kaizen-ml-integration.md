@@ -36,9 +36,8 @@ pip install kailash-ml[explore]  # + plotly (DataExplorer)
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
 from kailash_ml import (
-    ModelRegistry, TrainingPipeline,
+    FeatureStore, ModelRegistry, TrainingPipeline,
     InferenceServer, DriftMonitor,
 )
 
@@ -48,12 +47,10 @@ await conn.initialize()
 
 # Initialize engines
 features = FeatureStore(conn)
-await features.initialize()
 registry = ModelRegistry(conn)
-pipeline = TrainingPipeline(feature_store=features, registry=registry)
-# InferenceServer is per-model, built from the registry:
-server = InferenceServer.from_registry("churn_predictor", registry=registry)
-monitor = DriftMonitor(conn, tenant_id="default")
+pipeline = TrainingPipeline(registry)
+server = InferenceServer(registry)
+monitor = DriftMonitor(conn, tenant_id="acme")  # W26.e: tenant_id is required
 ```
 
 ## Type Contracts (kailash_ml.types)
@@ -81,32 +78,27 @@ staging -> shadow -> production -> archived
 ```
 
 ```python
-# Register a model version (artifact is bytes; metrics is a list of MetricSpec)
-version = await registry.register_model(
-    "churn_predictor",
-    model_bytes,
-    metrics=[MetricSpec(name="accuracy", value=0.92), MetricSpec(name="f1", value=0.87)],
-    signature=ModelSignature(
-        input_schema=schema,
-        output_columns=["prediction"],
-        output_dtypes=["int"],
-        model_type="sklearn",
-    ),
+# Register a model version
+version = await registry.register_version(
+    name="churn_predictor",
+    artifact=model_bytes,
+    signature=ModelSignature(input_schema=[...], output_schema=[...]),
+    metrics={"accuracy": 0.92, "f1": 0.87},
 )
 
 # Promote through stages
-await registry.promote_model("churn_predictor", version.version, "shadow")
-await registry.promote_model("churn_predictor", version.version, "production")
+await registry.transition_stage(name, version.version, "shadow")
+await registry.transition_stage(name, version.version, "production")
 
 # ONNX export (requires [onnx] extra)
 from kailash_ml import OnnxBridge
 bridge = OnnxBridge()
-export = bridge.export(model, framework="sklearn", n_features=10, output_path="model.onnx")
+onnx_bytes = bridge.export(model, input_schema)
 
-# MLflow MLmodel format compatibility — write a registered version out
+# MLflow v1 format compatibility
 from kailash_ml import MlflowFormatReader, MlflowFormatWriter
 writer = MlflowFormatWriter()
-writer.write(version, output_dir="./mlflow_out")
+writer.save(model_dir, flavor="sklearn", model=model)
 ```
 
 ## AutoMLEngine (5 LLM Guardrails)
@@ -123,25 +115,17 @@ All 5 guardrails are opt-in. Without an LLM, AutoML runs purely algorithmically.
 
 ```python
 from kailash_ml import AutoMLEngine
-from kailash_ml.automl import AutoMLConfig
 
-# Pure algorithmic (no LLM): agent defaults to False on the config
+# Pure algorithmic (no LLM)
+automl = AutoMLEngine(registry=registry, pipeline=pipeline)
+
+# With LLM augmentation (5 guardrails)
 automl = AutoMLEngine(
-    config=AutoMLConfig(task_type="classification", metric_name="f1", max_trials=50),
-    tenant_id="default",
-    actor_id="ci",
+    registry=registry,
+    pipeline=pipeline,
+    agent_infusion=my_agent_infusion,  # AgentInfusionProtocol
 )
-
-# With LLM augmentation (5 guardrails): set agent=True + pass a governance engine
-automl = AutoMLEngine(
-    config=AutoMLConfig(task_type="classification", metric_name="f1", agent=True),
-    tenant_id="default",
-    actor_id="ci",
-    governance_engine=my_governance_engine,
-)
-
-# run() drives a search space + trial function (see ml-agent-guardrails.md)
-result = await automl.run(space=search_space, trial_fn=trial_fn)
+result = await automl.run(data=df, target="churn", task="classification")
 ```
 
 ## Interop Module (8 Converters)
@@ -161,6 +145,6 @@ See `skills/02-dataflow/dataflow-ml-integration.md` for the full converter table
 ## Cross-References
 
 - `skills/02-dataflow/dataflow-ml-integration.md` -- FeatureStore + DataFlow integration details
-- `kailash_ml.engines` -- Engine implementations
-- `kailash_ml.interop` -- Polars converters
+- `packages/kailash-ml/src/kailash_ml/engines/` -- Engine implementations
+- `packages/kailash-ml/src/kailash_ml/interop.py` -- Polars converters
 - `rules/infrastructure-sql.md` -- SQL safety patterns used by FeatureStore/ModelRegistry

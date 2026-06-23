@@ -45,7 +45,7 @@ async def main():
     transport = CLITransport()
     await transport.connect()
     protocol = ControlProtocol(transport)
-    config = BaseAgentConfig(agent_id="file-processor", model=os.environ.get("LLM_MODEL", ""))
+    config = BaseAgentConfig(agent_id="file-processor", model=os.environ.get("LLM_MODEL", "gpt-4"))
     agent = InteractiveFileProcessor(config=config, control_protocol=protocol)
 
     async with anyio.create_task_group() as tg:

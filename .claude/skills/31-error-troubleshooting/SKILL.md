@@ -43,7 +43,7 @@ Use when encountering errors, debugging issues, or asking about error, troublesh
 
 ### Kaizen Provider Errors
 
-- **[error-kaizen-provider-config](error-kaizen-provider-config.md)** - Provider configuration issues
+- **error-kaizen-provider-config** - Provider configuration issues
   - Azure 400 "messages must contain 'json'" | Use `json_prompt_suffix()` or set `response_format`
   - "Missing required parameter: response_format.type" | Don't put `api_version` in `response_format`
   - DeprecationWarning about `provider_config` | Migrate to `response_format` field

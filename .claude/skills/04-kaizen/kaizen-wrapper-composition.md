@@ -95,7 +95,7 @@ Three convergence SPECs have shipped on the `feat/spec04-baseagent-slim` branch:
 
 ### SPEC-02 (Provider Split)
 
-The provider monolith (`kaizen.nodes.ai.ai_providers`) is now split into per-provider modules under `kaizen/providers/`. See [kaizen-multi-provider](kaizen-multi-provider.md) for the updated registry, protocols, and CostTracker.
+The provider monolith (`kaizen.nodes.ai.ai_providers`) is now split into per-provider modules under `kaizen/providers/`. See kaizen-multi-provider for the updated registry, protocols, and CostTracker.
 
 - `kaizen.providers.base` -- `ProviderCapability` enum (10 members), 5 runtime-checkable protocols
 - `kaizen.providers.registry` -- `ProviderRegistry` with 14 provider entries and prefix-dispatch model detection

@@ -196,7 +196,6 @@ See **`.claude/skills/test-skip-discipline/SKILL.md`** for the full rule on when
 ## Relationship
 
 - `rules/observability.md` § 2 (Integration Points) + Rule 8 (Mask HTTP Auth Headers) — 5xx responses MUST log `upstream_status` + `upstream_reason` with any auth-header content pre-masked.
-- `rules/llm-auth-strategy-hygiene.md` (where present) — auth error variants and their correct status-code mapping (Missing → 500; provider rejection → 502 / 503).
 - `.claude/skills/03-nexus/nexus-essential-patterns.md` — where rate-limit (429) and body-limit middleware sit in the request pipeline.
 - `.claude/skills/03-nexus/nexus-troubleshooting.md` — operator-side debugging once the status code is correct.
 

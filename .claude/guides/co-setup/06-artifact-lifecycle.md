@@ -37,9 +37,9 @@
               │   loom/ DISTRIBUTE (Gate-2)      │
               │  /sync-to-build ──► kailash-py / kailash-rs
               │                     (BUILD; canonical pushed back)
-              │  /sync py|rs|rb ──► kailash-coc-claude-{py,rs,rb}/
+              │  /sync-to-use py|rs|rb ──► kailash-coc-claude-{py,rs,rb}/
               │                     ──► downstream USE/project repos
-              │                          pull via own /sync
+              │                          pull via own /sync-from-template
               │              └──► cycle repeats
               └─────────────────────────────────┘
 ```
@@ -94,7 +94,7 @@ status: pending_review # Waiting for upstream review at loom/
 3. Tells the developer:
 
 > Artifacts updated locally and available in this repo. A proposal has been created
-> for upstream review. When ready, open loom/ and run `/sync py` to
+> for upstream review. When ready, open loom/ and run `/sync-from-build` to
 > classify and upstream these changes.
 
 **What /codify does NOT do anymore:**
@@ -102,9 +102,9 @@ status: pending_review # Waiting for upstream review at loom/
 - Does NOT sync directly to kailash-coc-claude-py or kailash-coc-claude-rs
 - Does NOT modify any repo other than the current BUILD repo
 
-### Phase 3: /sync Gate 1 (Review) — The Control Gate
+### Phase 3: /sync-from-build + /sync-from-use Gate 1 (Review) — The Control Gate
 
-The developer moves to loom/ and runs `/sync py` (or `/sync rs`). The command auto-detects unreviewed changes and enters the review gate.
+The developer moves to loom/ and runs `/sync-from-build` (to ingest the BUILD proposal stream) or `/sync-from-use` (the USE-template stream). The command auto-detects unreviewed changes and enters the review gate.
 
 **Input**: Which BUILD repo to review
 
@@ -153,9 +153,9 @@ If yes → creates an alignment task (GitHub issue or local task) for the rs rep
 
 6. **Update manifest**: Mark the proposal as reviewed in the BUILD repo's `.claude/.proposals/latest.yaml`
 
-### Phase 4: /sync — Outbound Distribution
+### Phase 4: /sync-to-use — Outbound Distribution
 
-After review is complete, the human runs `/sync py` and/or `/sync rs` from loom/.
+After review is complete, the human runs `/sync-to-use py` and/or `/sync-to-use rs` from loom/.
 
 This applies the variant architecture (guide 05): global files + variant overlay → produces the correct output for each template repo.
 
@@ -173,36 +173,36 @@ When a developer opens a BUILD repo in a new session:
 
 At any point in time, an artifact exists in up to three places:
 
-| Location                              | Role                      | Updated by                                |
-| ------------------------------------- | ------------------------- | ----------------------------------------- |
-| `loom/.claude/` (or `variants/`)      | **Source of truth**       | /sync (inbound from BUILD repos)          |
-| `kailash-coc-claude-{py,rs}/.claude/` | **Distribution template** | /sync (outbound from loom/)               |
-| `kailash-{py,rs}/.claude/`            | **Working copy**          | /codify (local), session-start sync check |
+| Location                              | Role                      | Updated by                                  |
+| ------------------------------------- | ------------------------- | ------------------------------------------- |
+| `loom/.claude/` (or `variants/`)      | **Source of truth**       | /sync-from-build + /sync-from-use (inbound) |
+| `kailash-coc-claude-{py,rs}/.claude/` | **Distribution template** | /sync-to-use (outbound from loom/)          |
+| `kailash-{py,rs}/.claude/`            | **Working copy**          | /codify (local), session-start sync check   |
 
 ## Timing: When Does Each Step Happen?
 
-| Step                      | When                                        | Who                        |
-| ------------------------- | ------------------------------------------- | -------------------------- |
-| /codify (local)           | End of implementation cycle                 | Autonomous (in BUILD repo) |
-| /sync Gate 1 (Review)     | After /codify, when developer is ready      | Human at loom/             |
-| /sync Gate 2 (Distribute) | After review is approved                    | Human at loom/             |
-| Session-start check       | Every new Claude Code session in BUILD repo | Automatic                  |
+| Step                                              | When                                        | Who                        |
+| ------------------------------------------------- | ------------------------------------------- | -------------------------- |
+| /codify (local)                                   | End of implementation cycle                 | Autonomous (in BUILD repo) |
+| /sync-from-build + /sync-from-use Gate 1 (Review) | After /codify, when developer is ready      | Human at loom/             |
+| /sync-to-use (Gate 2)                             | After review is approved                    | Human at loom/             |
+| Session-start check                               | Every new Claude Code session in BUILD repo | Automatic                  |
 
-The human gates are at **/sync Gate 1** (classification) and **/sync Gate 2** (distribution authorization). Everything else is autonomous.
+The human gates are at **/sync-from-build + /sync-from-use Gate 1** (classification) and **/sync-to-use Gate 2** (distribution authorization). Everything else is autonomous.
 
 ## Edge Cases
 
 ### What if the BUILD repo already has changes that aren't in loom/?
 
-/sync handles this. It diffs the BUILD repo against expected output, catching ALL changes — not just those from /codify. Ad-hoc edits, manual fixes, and experimental changes all surface during review.
+/sync-from-build handles this. It diffs the BUILD repo against expected output, catching ALL changes — not just those from /codify. Ad-hoc edits, manual fixes, and experimental changes all surface during review.
 
 ### What if both py and rs have changes?
 
-Run `/sync py` and `/sync rs` separately. Each is independent. If both propose changes to the same global file, the second review will see a conflict and ask the human to resolve.
+Run `/sync-from-build` separately for each BUILD repo (py, rs). Each is independent. If both propose changes to the same global file, the second review will see a conflict and ask the human to resolve.
 
 ### What if a global change breaks the other SDK?
 
-The cross-SDK alignment check in step 5 of /sync flags this proactively. The human can:
+The cross-SDK alignment check in step 5 of /sync-from-build flags this proactively. The human can:
 
 - Create an alignment task for the other SDK
 - Reclassify the change as variant (not global) if it's actually language-specific
@@ -210,7 +210,7 @@ The cross-SDK alignment check in step 5 of /sync flags this proactively. The hum
 
 ### What if someone syncs directly from BUILD to template (old way)?
 
-The `/sync` command at loom/ is the only authorized outbound path. The BUILD repo's /codify no longer calls coc-sync. If someone manually runs the old sync, the next /sync from loom/ will overwrite with the correct state.
+The `/sync-to-use` command at loom/ is the only authorized outbound path to templates. The BUILD repo's /codify no longer calls coc-sync. If someone manually runs the old sync, the next /sync-to-use from loom/ will overwrite with the correct state.
 
 ### What about the COC templates for other LLMs?
 
@@ -218,14 +218,15 @@ The multi-CLI USE templates (`kailash-coc-py`, `kailash-coc-rs`) emit `CLAUDE.md
 
 ## What Changes in Existing Commands
 
-| Command                           | Change                                                         |
-| --------------------------------- | -------------------------------------------------------------- |
-| `/codify` (BUILD repos)           | Step 7 creates proposal instead of direct sync                 |
-| `/codify` (USE-template repos)    | Originates COC-artifact proposal (target flow; see 09 Step 7b) |
-| `/sync` (loom/)                   | Two-gate: Gate 1 reviews inbound, Gate 2 distributes outbound  |
-| `/sync-to-build` (loom/)          | Distributes canonical artifacts back to BUILD repos (py/rs)    |
-| `/sync` (BUILD/USE repos)         | Downstream pull from template (variant command)                |
-| `/repos`, `/inspect`, `/settings` | Absorbed from ~/repos to loom/                                 |
+| Command                                       | Change                                                         |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| `/codify` (BUILD repos)                       | Step 7 creates proposal instead of direct sync                 |
+| `/codify` (USE-template repos)                | Originates COC-artifact proposal (target flow; see 09 Step 7b) |
+| `/sync-from-build` + `/sync-from-use` (loom/) | Gate 1: review + scrub + classify inbound proposals            |
+| `/sync-to-use` (loom/)                        | Gate 2: distribute outbound to USE templates                   |
+| `/sync-to-build` (loom/)                      | Distributes canonical artifacts back to BUILD repos (py/rs)    |
+| `/sync-from-template` (consumer repos)        | Downstream pull from template (variant command)                |
+| `/repos`, `/inspect`, `/settings`             | Absorbed from ~/repos to loom/                                 |
 
 ## What Changes in Existing Agents
 
@@ -239,7 +240,7 @@ The multi-CLI USE templates (`kailash-coc-py`, `kailash-coc-rs`) emit `CLAUDE.md
 
 ## What Changes in Existing Rules
 
-| Rule                        | Change                                                        |
-| --------------------------- | ------------------------------------------------------------- |
-| `cross-sdk-inspection.md`   | Updated: cross-SDK alignment happens during /sync, not ad-hoc |
-| **NEW**: `artifact-flow.md` | Codifies the inbound/outbound flow rules                      |
+| Rule                        | Change                                                                   |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `cross-sdk-inspection.md`   | Updated: cross-SDK alignment happens during /sync-from-build, not ad-hoc |
+| **NEW**: `artifact-flow.md` | Codifies the inbound/outbound flow rules                                 |

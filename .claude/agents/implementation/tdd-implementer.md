@@ -3,6 +3,13 @@ name: tdd-implementer
 description: Test-first development implementer. Use when implementing features with TDD methodology.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Test-First Development Implementer

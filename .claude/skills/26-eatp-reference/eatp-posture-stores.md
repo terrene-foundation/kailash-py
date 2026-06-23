@@ -2,14 +2,14 @@
 
 SQLite-backed persistence for agent posture state, the PostureStore protocol, PostureEvidence, PostureEvaluationResult, and the PostureStateMachine with store integration.
 
-**Source**: `src/kailash/trust/posture/posture_store.py`, `src/kailash/trust/posture/postures.py`
+**Source**: `kailash/trust/posture_store.py`, `kailash/trust/postures.py`
 
 ## PostureStore Protocol
 
-The `PostureStore` protocol (`kailash.trust.posture.postures.PostureStore`) defines the 4-method contract for posture persistence backends. It is `@runtime_checkable`, so `isinstance()` checks work at runtime.
+The `PostureStore` protocol (`kailash.trust.postures.PostureStore`) defines the 4-method contract for posture persistence backends. It is `@runtime_checkable`, so `isinstance()` checks work at runtime.
 
 ```python
-from kailash.trust.posture.postures import PostureStore, TrustPosture, TransitionResult
+from kailash.trust.postures import PostureStore, TrustPosture, TransitionResult
 
 class PostureStore(Protocol):
     def get_posture(self, agent_id: str) -> TrustPosture:
@@ -38,8 +38,8 @@ Thread-safe SQLite persistence for agent postures and transition history.
 ### Setup
 
 ```python
-from kailash.trust.posture.posture_store import SQLitePostureStore
-from kailash.trust.posture.postures import TrustPosture
+from kailash.trust.posture_store import SQLitePostureStore
+from kailash.trust.postures import TrustPosture
 
 # Option 1: Context manager (recommended)
 with SQLitePostureStore("/tmp/eatp/postures.db") as store:
@@ -108,7 +108,7 @@ store.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
 Persist a `TransitionResult`. The `agent_id` is extracted from `result.metadata["agent_id"]`. Stores `reason` and `blocked_by` inside the metadata JSON for full round-trip fidelity. The `transition_type` is stored in a dedicated column to preserve `EMERGENCY_DOWNGRADE`.
 
 ```python
-from kailash.trust.posture.postures import TransitionResult, PostureTransition, TrustPosture
+from kailash.trust.postures import TransitionResult, PostureTransition, TrustPosture
 from datetime import datetime, timezone
 
 result = TransitionResult(
@@ -142,8 +142,8 @@ Close the calling thread's database connection. After calling `close()`, further
 The `PostureStateMachine` accepts an optional `store` parameter to delegate persistence:
 
 ```python
-from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
-from kailash.trust.posture.posture_store import SQLitePostureStore
+from kailash.trust.postures import PostureStateMachine, TrustPosture
+from kailash.trust.posture_store import SQLitePostureStore
 
 store = SQLitePostureStore("/tmp/eatp/postures.db")
 
@@ -159,7 +159,7 @@ posture = machine.get_posture("agent-001")
 machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
 
 # transition() persists results via store.record_transition()
-from kailash.trust.posture.postures import PostureTransitionRequest
+from kailash.trust.postures import PostureTransitionRequest
 result = machine.transition(PostureTransitionRequest(
     agent_id="agent-001",
     from_posture=TrustPosture.SHARED_PLANNING,
@@ -180,7 +180,7 @@ Per CARE spec compliance (RT-17), the `PostureStateMachine` defaults to `TrustPo
 Structured evidence supporting posture transition evaluations.
 
 ```python
-from kailash.trust.posture.postures import PostureEvidence
+from kailash.trust.postures import PostureEvidence
 from datetime import datetime, timezone
 
 evidence = PostureEvidence(
@@ -216,7 +216,7 @@ NaN and Inf are rejected for both float fields. This prevents constraint bypass 
 Structured result of a posture evaluation.
 
 ```python
-from kailash.trust.posture.postures import PostureEvaluationResult, TrustPosture
+from kailash.trust.postures import PostureEvaluationResult, TrustPosture
 
 eval_result = PostureEvaluationResult(
     decision="approved",           # Must be "approved", "denied", or "deferred"
@@ -286,7 +286,7 @@ result = machine.emergency_downgrade(
 Guards validate posture transitions. The default guard requires `requester_id` for upgrades:
 
 ```python
-from kailash.trust.posture.postures import TransitionGuard, PostureTransition
+from kailash.trust.postures import TransitionGuard, PostureTransition
 
 # Custom guard example
 guard = TransitionGuard(
@@ -303,8 +303,8 @@ Guards can be listed (`machine.list_guards()`) and removed by name (`machine.rem
 ## Complete Example: Persistent Posture Management
 
 ```python
-from kailash.trust.posture.posture_store import SQLitePostureStore
-from kailash.trust.posture.postures import (
+from kailash.trust.posture_store import SQLitePostureStore
+from kailash.trust.postures import (
     PostureStateMachine,
     PostureTransitionRequest,
     PostureEvidence,
@@ -363,7 +363,7 @@ with SQLitePostureStore("/tmp/eatp/postures.db") as store:
 
 ## Cross-References
 
-- **Agent**: `eatp-expert` — Full EATP framework knowledge
+- **Skill**: `co-reference` — Full EATP framework knowledge
 - **Budget tracking**: `eatp-budget-tracking.md` — Related persistence pattern for budgets
 - **Security patterns**: `eatp-security-patterns.md` — Lock ordering, integer arithmetic, symlink rejection
-- **Source**: `src/kailash/trust/posture/posture_store.py`, `src/kailash/trust/posture/postures.py`
+- **Source**: `kailash/trust/posture_store.py`, `kailash/trust/postures.py`

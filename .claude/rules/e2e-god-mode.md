@@ -10,7 +10,6 @@ paths:
 # E2E God-Mode Testing Rules
 
 
-<!-- slot:neutral-body -->
 
 ### 1. Create ALL Missing Records
 
@@ -47,5 +46,3 @@ During multi-persona testing, log in as the role needed for each operation (admi
 - Backend and frontend running
 - .env loaded and verified
 - Required users, resources, and access records exist (query API, create if missing)
-
-<!-- /slot:neutral-body -->

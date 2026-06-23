@@ -89,6 +89,23 @@ from kaizen.core import BaseAgent, Signature, InputField, OutputField
 - **Docker/Nexus**: `AsyncLocalRuntime` + `await runtime.execute_workflow_async(workflow.build())`
 - **CLI/Scripts**: `LocalRuntime` + `runtime.execute(workflow.build())`
 
+## Propagate Caller Context Across Every Thread-Boundary Dispatch (MUST)
+
+Any runtime that dispatches a sync callable across a thread boundary MUST snapshot the caller's context in the caller frame and run the callable inside that snapshot — a fresh copy per concurrent dispatch so one context is never entered concurrently. Caller-bound context (tenant, trace, request scope) set before the dispatch MUST be visible inside the callable; dropping it across the boundary is BLOCKED.
+
+```python
+# DO — snapshot in the caller frame, run via the snapshot (fresh copy per dispatch)
+import contextvars
+ctx = contextvars.copy_context()
+result = await loop.run_in_executor(pool, lambda: ctx.copy().run(node.run, payload))
+
+# DO NOT — dispatch the bare callable; the executor thread sees default context
+result = await loop.run_in_executor(pool, node.run, payload)
+# a tenant/trace ContextVar set before execute() reads its DEFAULT inside node.run()
+```
+
+**Why:** A thread spawned by `run_in_executor` / `ThreadPoolExecutor.submit` / raw `threading.Thread` does NOT inherit the caller's context automatically; a ContextVar set before the dispatch reads its default inside the callable, silently de-scoping tenant/trace. Snapshotting `copy_context()` in the caller frame and running via `ctx.run(...)` matches the `asyncio.to_thread` convention. Evidence: guide § contextvars thread-boundary.
+
 ## Paired Public Surface — Consistent Async-ness (MUST)
 
 When two top-level functions form a canonical user pipeline — pairs like `train`/`register`, `fit`/`predict`, `encrypt`/`decrypt`, `publish`/`subscribe`, `login`/`logout` — BOTH MUST be either async OR sync. Mixing (one `async def`, one sync-wrapping-`asyncio.run()`) is BLOCKED. Agents, Nexus handlers, pytest-asyncio tests, and Jupyter kernels all run inside an active event loop; a sync function that internally calls `asyncio.run()` raises `RuntimeError: This event loop is already running` in every async caller.
@@ -121,7 +138,7 @@ km.register(result, name="demo")  # RuntimeError: This event loop is already run
 - "The async caller is a rare case, the sync path covers 95%"
 - "We'll document the async requirement in the docstring"
 
-**Why:** `asyncio.run()` creates a new event loop and raises if one is already running. Every modern Python async context — `pytest.mark.asyncio`, Nexus's FastAPI handlers, Jupyter's IPKernel, any Kaizen agent loop — has a running loop. A sync-wrapping-`asyncio.run()` surface works only in pure-CLI contexts and crashes everywhere else with an opaque `RuntimeError`. The "both shapes" trap (offering `km.register` sync AND `km.register_async`) doubles the public API surface, forces every caller to remember which variant their context permits, and ships two implementations of the same primitive that drift. Canonical pairs MUST pick one async-ness and commit. Evidence: kailash-ml 1.0.0 W33/W33c — `km.train` was async (W33), `km.register` landed sync (W33c) with internal `asyncio.run()`; the canonical 3-line Quick Start `result = await km.train(...); registered = km.register(result, ...)` crashed in every async context. Fix commit `fdd3040e` converted `km.register` to `async def`, matching `km.train`.
+**Why:** `asyncio.run()` creates a new event loop and raises if one is already running. Every modern Python async context — `pytest.mark.asyncio`, Nexus's async HTTP handlers, Jupyter's IPKernel, any Kaizen agent loop — has a running loop. A sync-wrapping-`asyncio.run()` surface works only in pure-CLI contexts and crashes everywhere else with an opaque `RuntimeError`. The "both shapes" trap (offering `km.register` sync AND `km.register_async`) doubles the public API surface, forces every caller to remember which variant their context permits, and ships two implementations of the same primitive that drift. Canonical pairs MUST pick one async-ness and commit. Evidence: kailash-ml 1.0.0 W33/W33c — `km.train` was async (W33), `km.register` landed sync (W33c) with internal `asyncio.run()`; the canonical 3-line Quick Start `result = await km.train(...); registered = km.register(result, ...)` crashed in every async context. Fix commit `fdd3040e` converted `km.register` to `async def`, matching `km.train`.
 
 Origin: kailash-ml-audit session 2026-04-23 — W33c async/sync inconsistency caught by end-to-end README regression test.
 

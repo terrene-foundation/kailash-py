@@ -1,158 +1,143 @@
 ---
-name: nexus-transport-architecture
-description: "Nexus Transport ABC, HTTPTransport, MCPTransport, and HandlerRegistry architecture. Use when asking about 'Transport ABC', 'HTTPTransport', 'MCPTransport', 'HandlerRegistry', 'HandlerDef', 'custom transport', 'transport architecture', or 'handler extraction'."
+skill: nexus-transport-architecture
+description: Transport abstraction layer, built-in transports (HTTP, MCP, CLI), handler registry, and custom transport interface
+priority: MEDIUM
+tags: [nexus, transport, http, mcp, cli, registry, handler]
 ---
 
 # Nexus Transport Architecture
 
-Transport abstraction layer that maps registered handlers to protocol-specific dispatch.
+## Overview
 
-## Quick Reference
+Nexus uses a transport abstraction layer to decouple handler registration from protocol-specific dispatch. Handlers are registered once in a central registry, and each transport maps them to protocol-appropriate endpoints. This is what enables "register once, serve everywhere" across API, CLI, and MCP.
 
-| Component         | Purpose                                                |
-| ----------------- | ------------------------------------------------------ |
-| `Transport` ABC   | Base class for all transports                          |
-| `HTTPTransport`   | Maps handlers to Nexus HTTP routes                     |
-| `MCPTransport`    | Maps handlers to FastMCP tools                         |
-| `HandlerRegistry` | Central registry for all handler definitions           |
-| `HandlerDef`      | Handler metadata (name, function, params, description) |
-| `HandlerParam`    | Parameter metadata (name, type, default, required)     |
+## When to Use
 
-## Transport ABC
+- Understanding how Nexus multi-channel delivery works internally
+- Adding a custom transport (WebSocket, gRPC, message queue)
+- Debugging transport-specific behavior
+- Building protocol adapters for new integration channels
 
-```python
-from nexus.transports.base import Transport
+## Architecture
 
-class Transport(ABC):
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Unique transport name (e.g., 'http', 'mcp')."""
+### Component Relationships
 
-    @abstractmethod
-    async def start(self, registry: HandlerRegistry) -> None:
-        """Start transport, reading handlers from registry."""
-
-    @abstractmethod
-    async def stop(self) -> None:
-        """Stop transport gracefully. Must be idempotent."""
-
-    @property
-    @abstractmethod
-    def is_running(self) -> bool:
-        """True if transport is currently running."""
-
-    def on_handler_registered(self, handler_def: HandlerDef) -> None:
-        """Called when a new handler is registered after start().
-        Default no-op. Override for hot-reload support."""
-        pass
 ```
+Handler Registration
+    |
+    v
+Handler Registry (central store of all handler definitions)
+    |
+    +---> HTTP Transport (maps handlers to REST endpoints)
+    +---> MCP Transport (maps handlers to MCP tools)
+    +---> CLI Transport (maps handlers to CLI commands)
+    +---> Custom Transport (maps handlers to custom protocol)
+```
+
+### Core Components
+
+| Component            | Purpose                                                                      |
+| -------------------- | ---------------------------------------------------------------------------- |
+| Handler Registry     | Central store for all handler definitions                                    |
+| Handler Definition   | Metadata for a single handler: name, function, parameters, description, tags |
+| Handler Parameter    | Metadata for a single parameter: name, type, default value, required flag    |
+| Transport (abstract) | Base interface that all transports implement                                 |
+
+## Transport Interface
+
+Every transport must provide:
+
+| Method/Property                      | Purpose                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `name`                               | Unique transport identifier (e.g., "http", "mcp")                   |
+| `start(registry)`                    | Initialize transport, reading handler definitions from the registry |
+| `stop()`                             | Graceful shutdown (must be idempotent)                              |
+| `is_running`                         | Whether the transport is currently active                           |
+| `on_handler_registered(handler_def)` | Callback for hot-reload when handlers are added after start         |
 
 ## Transport Lifecycle
 
-1. Transport instantiated with protocol-specific config
-2. Registered with Nexus via `app.add_transport(transport)`
-3. `Nexus.start()` calls `transport.start(registry)`
-4. As handlers are registered, `on_handler_registered()` fires
-5. `Nexus.stop()` calls `transport.stop()`
+1. Transport instantiated with protocol-specific configuration (port, options)
+2. Transport registered with Nexus
+3. On `Nexus.start()`, each transport's `start(registry)` is called with the handler registry
+4. Transport reads all handler definitions and sets up protocol-specific dispatch
+5. As new handlers are registered after start, `on_handler_registered()` fires for hot-reload
+6. On `Nexus.stop()`, each transport's `stop()` is called for graceful shutdown
 
 ## Built-in Transports
 
-### HTTPTransport
+### HTTP Transport
 
-Creates Nexus HTTP routes from registered handlers:
+Maps registered handlers to HTTP REST endpoints. Handles:
 
-```python
-from nexus.transports.http import HTTPTransport
+- Route generation from handler names
+- Request body parsing into handler parameters
+- Response serialization
+- CORS, middleware, and authentication integration
+- File upload via multipart form data
 
-transport = HTTPTransport(
-    port=8000,
-    cors_origins=["*"],
-)
-```
+### MCP Transport
 
-### MCPTransport
+Maps registered handlers to MCP (Model Context Protocol) tools. Handles:
 
-Registers handlers as FastMCP tools:
+- Tool registration with name and description
+- Parameter schema generation from handler definitions
+- Tool invocation dispatch to handler functions
+- File transfer via base64 encoding
 
-```python
-from nexus.transports.mcp import MCPTransport
+### CLI Transport
 
-transport = MCPTransport()
-```
+Maps registered handlers to command-line interface commands. Handles:
 
-## HandlerRegistry
+- Command generation from handler names
+- Argument parsing from handler parameters
+- File input from filesystem paths
+- Output formatting for terminal display
 
-Central store for all handler definitions. Handlers are registered via `@app.handler()` or `app.register()`.
+## Handler Registry
 
-```python
-from nexus.registry import HandlerRegistry, HandlerDef, HandlerParam
+The registry is the single source of truth for all handlers. It stores:
 
-# HandlerDef contains:
-handler_def = HandlerDef(
-    name="greet",
-    func=greet_function,
-    params=[
-        HandlerParam(name="name", param_type="string", default=None, required=True),
-        HandlerParam(name="greeting", param_type="string", default="Hello", required=False),
-    ],
-    description="Greet a user",
-    tags=["greeting"],
-)
-```
+- **Handler name** -- unique identifier used across all transports
+- **Handler function** -- the actual callable
+- **Parameters** -- extracted from function signatures (name, type, default, required)
+- **Description** -- human-readable explanation (critical for MCP/AI agent discovery)
+- **Tags** -- optional grouping metadata
 
 ### Parameter Extraction
 
-`_extract_params(func)` introspects Python function signatures to produce `HandlerParam` lists. It handles:
+Handler parameters are introspected from function signatures:
 
-- Type annotations (str, int, float, bool, list, dict)
-- Default values
-- Required vs optional parameters
-- `NexusFile` type detection (for file upload handling)
+- Type annotations map to transport-appropriate types
+- Default values determine required vs optional status
+- File type parameters are detected and handled specially per transport (multipart upload for HTTP, file path for CLI, base64 for MCP)
 
-```python
-@app.handler("upload", description="Upload a file")
-async def upload(file: NexusFile, name: str = "untitled") -> dict:
-    # NexusFile is detected and handled specially per transport:
-    # - HTTP: multipart upload -> NexusFile.from_upload_file()
-    # - CLI: file path -> NexusFile.from_path()
-    # - MCP: base64 string -> NexusFile.from_base64()
-    return {"size": file.size, "name": name}
-```
+## Custom Transports
 
-## Custom Transport
+New transports can be created by implementing the transport interface. The transport receives the full handler registry at startup, allowing it to set up protocol-specific dispatch for every registered handler. The `on_handler_registered()` callback enables adding handlers while the transport is running.
 
-```python
-from nexus.transports.base import Transport
-from nexus.registry import HandlerRegistry, HandlerDef
+Common custom transport candidates:
 
-class WebSocketTransport(Transport):
-    @property
-    def name(self) -> str:
-        return "websocket"
+| Transport     | Protocol  | Use Case                              |
+| ------------- | --------- | ------------------------------------- |
+| WebSocket     | WS        | Real-time bidirectional communication |
+| gRPC          | HTTP/2    | High-performance service-to-service   |
+| Message Queue | AMQP/MQTT | Async event-driven architectures      |
+| GraphQL       | HTTP      | Flexible query-based APIs             |
 
-    async def start(self, registry: HandlerRegistry) -> None:
-        # Read all handlers and set up WS dispatch
-        for handler_def in registry.list_handlers():
-            self._register_ws_handler(handler_def)
-        self._running = True
+## Best Practices
 
-    async def stop(self) -> None:
-        self._running = False
+1. **Write handler descriptions** -- MCP and CLI transports use them for discovery and help text
+2. **Use standard types in handler signatures** -- ensures all transports can serialize/deserialize correctly
+3. **Test across all active transports** -- behavior can differ per protocol
+4. **Implement idempotent stop** -- transports may be stopped multiple times during shutdown
+5. **Support hot-reload** -- implement `on_handler_registered()` for dynamic handler addition
 
-    @property
-    def is_running(self) -> bool:
-        return self._running
+See language-specific variant for implementation details and code examples.
 
-    def on_handler_registered(self, handler_def: HandlerDef) -> None:
-        # Hot-reload: add handler while running
-        if self._running:
-            self._register_ws_handler(handler_def)
-```
+## Related Skills
 
-## Source Code
-
-- `packages/kailash-nexus/src/nexus/transports/base.py` -- Transport ABC
-- `packages/kailash-nexus/src/nexus/transports/http.py` -- HTTPTransport
-- `packages/kailash-nexus/src/nexus/transports/mcp.py` -- MCPTransport
-- `packages/kailash-nexus/src/nexus/registry.py` -- HandlerRegistry, HandlerDef, HandlerParam
+- [nexus-multi-channel](nexus-multi-channel.md) - Multi-channel usage patterns
+- [nexus-mcp-channel](nexus-mcp-channel.md) - MCP channel details
+- [nexus-api-patterns](nexus-api-patterns.md) - API transport patterns
+- [nexus-cli-patterns](nexus-cli-patterns.md) - CLI transport patterns

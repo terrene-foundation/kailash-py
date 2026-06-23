@@ -37,7 +37,7 @@ Walk these surfaces in fixed order; for each, summarize in plain language (per `
 
 1. `specs/_index.md` if present (domain truth surface). If absent, surface "this repo has no specs index; brief covers rules + journal only."
 2. Repo `CLAUDE.md` — the always-loaded directives and navigation.
-3. CO-category rules in this fixed order: `rules/independence.md`, `rules/autonomous-execution.md`, `rules/agent-reasoning.md`, `rules/artifact-flow.md`. These are the four load-bearing CO rules; if the consumer repo lacks one, note it explicitly in the receipt.
+3. CO-category rules in this fixed order: `rules/autonomous-execution.md`, `rules/agent-reasoning.md`, `rules/artifact-flow.md`. These are the load-bearing CO rules; if the consumer repo lacks one, note it explicitly in the receipt.
 4. `/posture show` output — current trust posture, repo floor, pending verifications.
 5. `.claude/team-memory/` — list each `<slug>.md` with its signed/promoted_by metadata (skip `README.md`).
 6. Last 5 `journal/DECISION-*.md` entries — read filename + first H2.
@@ -175,7 +175,7 @@ bank_version: "<repo>-2026-05-25" # operator-visible bank version (free text)
 sections:
   - id: <slug> # e.g. "co-foundations", "trust-posture", "framework-first"
     title: <human-readable name>
-    cites_spec: <path:line-range> # e.g. "rules/independence.md:1-40"
+    cites_spec: <path:line-range> # e.g. "rules/artifact-flow.md:1-40"
     questions:
       - id: <slug>-q1 # unique across the whole bank
         prompt: <one or two sentences>

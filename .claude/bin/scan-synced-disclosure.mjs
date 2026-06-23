@@ -158,6 +158,14 @@ function isNeverSynced(relPath, base, segs) {
   // gitignored per `permissions.deny` convention and carries genuine
   // per-operator local overrides.
   if (base === "settings.local.json") return true;
+  // sync-preserve.local.yaml is the consumer-owned half of the scenario-11
+  // sanctioned-local-preserve pair (sync-flow.md § Downstream Sync step 5b):
+  // consumer-local, in the fixed NEVER-overwritten set, never propagates
+  // upstream — same never-synced class as settings.local.json. The
+  // template-carried `sync-preserve.yaml` (no `.local`) IS synced and is NOT
+  // excluded here (it ships template→consumer and must be scanned like any
+  // other synced artifact).
+  if (base === "sync-preserve.local.yaml") return true;
   if (base === ".coc-sync-marker") return true;
   if (base === "scheduled_tasks.lock") return true;
   if (base === ".env" || /\.env$/.test(base)) return true;
@@ -186,6 +194,25 @@ function isExcluded(relPath) {
   if (segs[0] === ".git" || segs.includes(".git")) return true;
   if (path.resolve(REPO_ROOT_ACTIVE, relPath) === SCRIPT_PATH) return true;
   if (base === "scan-synced-disclosure.mjs") return true;
+  // The loom-only tenant denylist (journal/0214) carries the literal
+  // customer-identity tokens the `customer-identity-token` shape flags.
+  // It MUST NOT be scanned-as-content (its own tokens would self-flag) and
+  // it is never synced (sync-manifest.yaml `loom_only:`). Same self-exclude
+  // pattern as the scanner's own file above.
+  if (base === "disclosure-tenant-denylist.json") return true;
+  // The D6 ecosystem registry (ECO-IMPL W1) carries the REAL per-ecosystem org
+  // slugs by design — it is loom-only (sync-manifest.yaml loom_only:) and
+  // never reaches a consumer. The exclusion is SOURCE-ONLY (mirrors the #352
+  // `*.local.json` destination-mode flip at :250): at loom-source
+  // (REPO_ROOT_ACTIVE === REPO_ROOT) it is self-excluded so its OWN legitimate
+  // slugs do not self-flag (preserving zero-findings-on-main). At a DESTINATION
+  // scan (`--root <consumer>`), a committed `ecosystem.json` IS the disclosure
+  // event the loom_only fence forbids (it shipped past the never-sync skip) —
+  // so it is SCANNED there, and any bare non-allowlisted org/host slug fails
+  // loud via the ecosystem-bare-org-slug shape below. ONLY the exact
+  // `ecosystem.json` basename — `ecosystem.example.json` (synthetic tokens)
+  // stays SCANNED in BOTH modes and is the positive fixture for that shape.
+  if (base === "ecosystem.json" && REPO_ROOT_ACTIVE === REPO_ROOT) return true;
 
   // This scanner's OWN audit fixtures intentionally embed SYNTHETIC
   // disclosure shapes (invented `acme-*` / `Fakename-*` / `fakeuser`
@@ -197,6 +224,20 @@ function isExcluded(relPath) {
   // points `--root` AT a fixture (relPath is then fixture-root-relative
   // and the runner's whole purpose is to scan those planted shapes).
   if (relPath.includes("audit-fixtures/scan-synced-disclosure")) return true;
+
+  // ALLOWLIST-NOTE (#584 follow-up): the cross-ecosystem-disclosure-guard
+  // audit fixtures intentionally embed SYNTHETIC canon/fork org slugs
+  // (`ssh://canon/loom.git`, `canon-origin`) to exercise the guard's own
+  // boundary recognition — `canon` is the architectural placeholder for the
+  // canonical upstream (artifact-flow.md § "Ecosystem Forks vs Downstream
+  // Consumers"), NOT a real org slug. The `nonfoundation-org-slug` shape
+  // over-matches that synthetic token, exactly the by-design-synthetic case
+  // the scan-synced-disclosure exclusion above covers. Same loom-relative-path
+  // keying: it does NOT fire when the guard's own fixture runner points
+  // `--root` AT the fixture dir (relPath then fixture-root-relative). #584
+  // landed these fixtures without extending this exclusion; this closes the gap.
+  if (relPath.includes("audit-fixtures/cross-ecosystem-disclosure-guard"))
+    return true;
 
   // accepted-history sweep reports + journals + proposals + session notes
   //
@@ -296,6 +337,19 @@ const ALLOWLIST = [
   /terrene-foundation(\/[A-Za-z0-9._-]+)?/i,
   /terrene\.foundation/i,
   /terrene\.dev/i,
+  // ALLOWLIST-NOTE (W6b-i 2026-06-17): `terrenefoundation` (NO hyphen) is the
+  // canon Docker Hub REGISTRY org — the Docker-namespace form of the Foundation
+  // GitHub org `terrene-foundation` above (Docker Hub org slugs disallow the
+  // hyphen). It is the SAME Foundation-public identity, not a client/3rd-party
+  // org. It appears in the py dev-container emit TEST as the substituted-registry
+  // assertion (`terrenefoundation/kailash-coc-py`) — the real registry org lives
+  // only in the loom-only `ecosystem.json` and is substituted into the synthetic
+  // `{{REGISTRY_*}}` placeholders at emit time (it never ships as a literal in the
+  // synced template SOURCE). The trailing `(?![\w-])` non-word/non-hyphen boundary
+  // anchors to the EXACT own Docker org (mirrors the `esperie-enterprise` entry's
+  // anchoring): a typosquat `terrenefoundation-evil/loom` no longer matches the
+  // allowlist and is still flagged by the nonfoundation-org-slug shape.
+  /terrenefoundation(?![\w-])(\/[A-Za-z0-9._-]+)?/i,
   // ALLOWLIST-NOTE: `esperie-enterprise` is loom's own GitHub host org
   // per co-owner Option-1 ruling 2026-05-17 (#263); self-coordinates,
   // not a client/3rd-party disclosure. The scanner still flags genuine
@@ -402,6 +456,13 @@ const ALLOWLIST = [
   //      covered by the anchored Foundation entry above, independent
   //      of this entry.
   /github\.com[:/]kailash-sdk\/[A-Za-z0-9._-]+|(?<![\w-]\/)\bkailash-sdk\b(?!\/)/i,
+  // ALLOWLIST-NOTE (Gate-1 2026-06-11, human-adjudicated): `include/kailash`
+  // is the SDK's own C-ABI header path (kailash-capi emits include/kailash.h);
+  // the nonfoundation-org-slug shape reads the `<dir>/<file>` form as an
+  // org/repo slug in the kailash-rs build-speed.md prose. The SDK's own
+  // header path is not an operator/3rd-party token; allowlist the exact
+  // path span only (NOT bare `kailash`, which other anchored entries govern).
+  /\binclude\/kailash\b/i,
   // ratified generic placeholder vocabulary (issue #263)
   /example-[a-z0-9-]*/i,
   /<runner-host(-\d+)?>/,
@@ -455,6 +516,19 @@ const ALLOWLIST = [
   // the operator's actual lowercase username, not `runner`/`me`.
   /\/Users\/runner\//,
   /\/(?:Users|home)\/me\//,
+  // ALLOWLIST-NOTE (W6b-i 2026-06-17): `/home/dev/` is the CONTAINER-INTERNAL
+  // devcontainer user home, NOT a host operator home. The py dev-container
+  // Dockerfile creates it with `useradd ... dev` + `USER dev` and the
+  // devcontainer.json sets `remoteUser: "dev"`; every consumer's container gets
+  // the identical fixed `dev` user. The mount/volume targets
+  // (`target=/home/dev/.cache/uv`, `- uv-cache:/home/dev/.cache/uv`) are
+  // in-container destination paths, carrying zero operator/tenant identity —
+  // exact precedent class as `/Users/runner/` (GitHub hosted-runner home) and
+  // `/home/me/` (CC teaching placeholder) above. Anchored to the EXACT
+  // fixed container username `dev`: a real operator home (`/home/<operator>/`)
+  // carries the operator's actual username, fails this anchored prefix, and is
+  // still flagged by the operator-home-path shape.
+  /\/home\/dev\//,
   // ALLOWLIST-NOTE: a `/Users/<PascalCase>/` span (e.g. `/Users/Items/`
   // from the `mockData/Users/Items/Records/Response*` glob comment in
   // validate-workflow.js) is a fake-data FIELD-NAME path, not a home
@@ -688,7 +762,7 @@ const SHAPES = [
     // suppressed by the anchored ALLOWLIST, identical to the other
     // four alternatives. Disposition: CLOSED (not documented-residual).
     id: "nonfoundation-org-slug",
-    rx: /\b[a-z][a-z0-9-]*-enterprise(?:-[a-z0-9]+)*\b|(?:git@github\.com:|github\.com[:/]|gh api repos\/|--repo\s+)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)[a-z0-9._-]*(?:#\d+)?|gh api orgs\/[a-z][a-z0-9-]{2,}\b|(?<![\w./-])(?!(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier|repos|agents|skills|commands|rules|bin|lib|hooks|guides|variants|specs|chore|csq|workspaces|feat|fix|docs|test|refactor|style|src|packages|pkg|pkgs|tests|crates|cmd|internal|node_modules|dist|build|target|bindings|ffi|python|java|deployment|localhost|service|statefulset|daemonset|pod|svc|refs(?=\/))\b)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)(?:#\d+)?\b|(?:\b(?:chore|feat|fix|release|docs|test|refactor|style)\/|[a-z][a-z0-9+.-]*:\/\/)(?!(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier|repos|agents|skills|commands|rules|bin|lib|hooks|guides|variants|specs|chore|csq|workspaces|feat|fix|docs|test|refactor|style|src|packages|pkg|pkgs|tests|crates|cmd|internal|node_modules|dist|build|target|bindings|ffi|python|java|deployment|localhost|service|statefulset|daemonset|pod|svc|refs(?=\/))\b)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)(?:#\d+)?\b/g,
+    rx: /\b[a-z][a-z0-9-]*-enterprise(?:-[a-z0-9]+)*\b|(?:git@github\.com:|github\.com[:/]|gh api repos\/|--repo\s+)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)[a-z0-9._-]*(?:#\d+)?|gh api orgs\/[a-z][a-z0-9-]{2,}\b|(?<![\w./-])(?!(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier|repos|agents|skills|commands|rules|bin|lib|hooks|guides|variants|specs|chore|csq|workspaces|feat|fix|docs|test|refactor|style|src|packages|pkg|pkgs|tests|crates|ext|cmd|internal|node_modules|dist|build|target|bindings|ffi|python|java|deployment|localhost|service|statefulset|daemonset|pod|svc|refs(?=\/))\b)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)(?:#\d+)?\b|(?:\b(?:chore|feat|fix|release|docs|test|refactor|style)\/|[a-z][a-z0-9+.-]*:\/\/)(?!(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier|repos|agents|skills|commands|rules|bin|lib|hooks|guides|variants|specs|chore|csq|workspaces|feat|fix|docs|test|refactor|style|src|packages|pkg|pkgs|tests|crates|ext|cmd|internal|node_modules|dist|build|target|bindings|ffi|python|java|deployment|localhost|service|statefulset|daemonset|pod|svc|refs(?=\/))\b)[a-z][a-z0-9-]{2,}\/(?:loom|kailash[a-z0-9-]*|coc[a-z0-9-]*|atelier)(?:#\d+)?\b/g,
   },
   {
     // R2 detection-completeness hardening (#263): the prior arch
@@ -723,7 +797,11 @@ const SHAPES = [
     // F77 (#386): synced settings.json `permissions.allow` / `permissions.deny`
     // matcher entries of the form `Edit(/<absolute-path>/...)`,
     // `Write(/<absolute-path>/...)`, `Read(/<absolute-path>/...)` (and the
-    // sibling `Bash`/`MultiEdit`/`Glob`/`Grep` tool-name forms) carry a
+    // sibling `Bash`/`MultiEdit`/`Glob`/`Grep` tool-name forms — MultiEdit
+    // was removed from CC ~v2.0.8/journal/0276 but is deliberately RETAINED
+    // in this scan vocabulary: stale consumer settings may still carry
+    // `MultiEdit(...)` entries and a legacy entry leaks operator PII exactly
+    // like a current one) carry a
     // structural defect distinct from the prose `/Users/<op>/` leak class:
     // the matcher itself encodes a runtime authorization scope keyed to an
     // absolute filesystem path, so every downstream consumer's session
@@ -742,7 +820,85 @@ const SHAPES = [
     id: "settings-permission-absolute-path",
     rx: /"(?:Edit|Write|Read|Bash|MultiEdit|Glob|Grep|NotebookEdit)\((\/(?:Users|home)\/[^"\)]+)\)"/g,
   },
+  {
+    // D6-1 (ECO-IMPL W1-S3 / redteam/01 HIGH promoted to impl). The
+    // nonfoundation-org-slug shape above flags an org ONLY inside a
+    // <org>/<repo-family> slug, a git/gh context, or an `-enterprise` suffix —
+    // it is structurally BLIND to a BARE JSON value like `"org": "acme-corp"`
+    // (no `/`, no repo-family, no git context). The D6 ecosystem registry is
+    // exactly that shape: { "remote_links": { "build.py": { "org":
+    // "acme-corp", "repo": "..." } } }. This FILE-SCOPED shape (ecosystem*
+    // files ONLY — NOT every repo-wide JSON value, which would flood) flags a
+    // bare lowercase-slug "org" / "host" value. The REAL ecosystem.json is
+    // self-excluded (isExcluded) and never reaches here; ecosystem.example.json
+    // IS scanned and its synthetic `example-*` / `<org>` values pass via the
+    // POSITIVE allowlist (allowlistCovers applies to this shape) — it is the
+    // positive fixture proving the shape catches a real bare slug. A bare host
+    // WITH a dot ("docker.io") does not match (the closing quote is not
+    // adjacent to the [a-z0-9-] run), so public registry hosts stay clean.
+    id: "ecosystem-bare-org-slug",
+    fileScope: /^ecosystem.*\.json$/,
+    rx: /"(?:org|host)"\s*:\s*"[a-z][a-z0-9-]{2,}"/g,
+  },
 ];
+
+// ────────────────────────────────────────────────────────────────
+// CUSTOMER-IDENTITY TENANT DENYLIST (loom-only; journal/0214, loom#411)
+// ────────────────────────────────────────────────────────────────
+//
+// The customer-identity token list lives in a LOOM-ONLY file
+// (`.claude/disclosure-tenant-denylist.json` — a TOP-LEVEL .claude/ file,
+// NOT under bin/**, so it sits outside every synced-tier glob and the
+// `loom_only:` declaration passes the loom-only-mutual-exclusion
+// validator; /sync NEVER ships it). The scanner
+// reads it RELATIVE TO THE SCANNED ROOT and builds a flag-shape from it:
+//   • loom Gate-2 (root = loom): real tokens load → a SYNCED artifact
+//     naming a customer flags BEFORE it can ship.
+//   • a consumer / a fixture without the file: the shape is INERT (the
+//     token list never synced down → the customer-identity surface is
+//     empty). Each repo populates its OWN tenant tokens.
+//   • a fixture WITH its own synthetic denylist: synthetic tokens load,
+//     proving the mechanism without committing a real token to the
+//     (synced) fixture surface.
+// The literal tokens are therefore NEVER embedded in this synced scanner
+// file — inlining a real customer token here would re-create the very leak
+// the shape prevents (a consumer greps the synced scanner source). The denylist
+// file is excluded from the scan (isExcluded) so its own tokens do not
+// self-flag. Only the GENERIC concept terms (`works-council` /
+// `co-determination`) are safe in synced prose — they identify no
+// customer and are deliberately NOT tokens.
+const TENANT_DENYLIST_REL = path.join(
+  ".claude",
+  "disclosure-tenant-denylist.json",
+);
+
+function escapeForRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Build the `customer-identity-token` SHAPE from the loom-only tenant
+// denylist at `rootActive`, or return null when the file is absent / empty
+// (the inert consumer/fixture case). A PRESENT-but-unparseable file throws
+// — a guard that silently disables itself on a typo is worse than no guard.
+function loadCustomerIdentityShape(rootActive) {
+  const p = path.join(rootActive, TENANT_DENYLIST_REL);
+  if (!fs.existsSync(p)) return null; // inert: no tenant list at this root
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch (e) {
+    throw new Error(
+      `disclosure-tenant-denylist.json present but unparseable at ${p}: ` +
+        `${e.message} (refusing to run a silently-disabled tenant guard)`,
+    );
+  }
+  const tokens = Array.isArray(parsed && parsed.tokens)
+    ? parsed.tokens.filter((t) => typeof t === "string" && t.trim())
+    : [];
+  if (tokens.length === 0) return null; // inert: empty list
+  const alt = tokens.map((t) => `\\b${escapeForRegex(t)}\\b`).join("|");
+  return { id: "customer-identity-token", rx: new RegExp(alt, "gi") };
+}
 
 // ────────────────────────────────────────────────────────────────
 // Scan
@@ -760,7 +916,7 @@ function redactContext(line, matchStart, matchText) {
     .trim();
 }
 
-function scanFile(file, findings) {
+function scanFile(file, findings, shapes) {
   let buf;
   try {
     buf = fs.readFileSync(file);
@@ -769,12 +925,17 @@ function scanFile(file, findings) {
   }
   if (isProbablyBinary(buf)) return;
   const rel = path.relative(REPO_ROOT_ACTIVE, file);
+  const base = path.basename(file);
   const text = buf.toString("utf8");
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line) continue;
-    for (const shape of SHAPES) {
+    for (const shape of shapes) {
+      // A shape may declare `fileScope` (a basename regex); it then applies
+      // ONLY to matching files. File-scoped shapes (e.g. the ecosystem
+      // bare-org-slug shape) avoid flooding every repo-wide JSON value.
+      if (shape.fileScope && !shape.fileScope.test(base)) continue;
       shape.rx.lastIndex = 0;
       let m;
       while ((m = shape.rx.exec(line)) !== null) {
@@ -791,6 +952,7 @@ function scanFile(file, findings) {
         // the Option-1 allowlist semantics unchanged.
         if (
           shape.id !== "settings-permission-absolute-path" &&
+          shape.id !== "customer-identity-token" &&
           allowlistCovers(matchText)
         )
           continue;
@@ -815,9 +977,20 @@ if (args.help) {
 }
 
 const root = args.root ? path.resolve(args.root) : REPO_ROOT;
-const files = collectFiles(root);
+const files = collectFiles(root); // sets REPO_ROOT_ACTIVE
+// Build the loom-only customer-identity shape from the tenant denylist at
+// the SCANNED root (inert when absent; throws loud on a malformed file so
+// the guard never silently disables itself).
+let customerShape;
+try {
+  customerShape = loadCustomerIdentityShape(REPO_ROOT_ACTIVE);
+} catch (e) {
+  console.error(`scan-synced-disclosure: ${e.message}`);
+  process.exit(2);
+}
+const activeShapes = customerShape ? [...SHAPES, customerShape] : SHAPES;
 const findings = [];
-for (const f of files) scanFile(f, findings);
+for (const f of files) scanFile(f, findings, activeShapes);
 
 if (args.mode === "check") {
   if (findings.length > 0) {

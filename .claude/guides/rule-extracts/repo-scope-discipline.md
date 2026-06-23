@@ -173,3 +173,44 @@ The 6-hour window enforces condition 5 (scoped to ONE action): a days-old receip
 ### Propagation
 
 This rule is GLOBAL (`scope: baseline`). Downstream sessions (enterprise-consumer repos, kailash-\*, USE templates) enforce a _synced copy_. The amendment changes downstream behavior only after `/sync` propagates it (or the downstream repo's local copy is updated out-of-band). The originating downstream session does not retroactively gain the exception.
+
+## loom-sole-holder rationale + governance-read carve-out (walkthrough)
+
+The rule body's § Exceptions carve-out names loom (and the `~/repos/` orchestration
+root) as the SOLE holder of the cross-repo carve-out. This walkthrough is the
+elaboration the body points to.
+
+**Why loom alone.** loom is the COC artifact splitter/distributor (`CLAUDE.md`): its
+entire purpose is to coordinate ACROSS repos (`/sync`, `/sync-to-build`, `/inspect`,
+`/repos`). A consumer repo (any USE-template-derived repo, kailash-\*, a project repo)
+has the opposite purpose — it does its own work in its own tree. The carve-out lifts
+the in-repo scope boundary for loom's coordination OPERATIONS; it would be actively
+harmful in a consumer (a consumer reaching into a sibling re-creates the
+framing-contamination + cross-repo-write failure modes the rule's MUST NOT clauses
+block). Because every consumer enforces a SYNCED COPY of this baseline rule, the
+carve-out is written so it can only ever apply where the session IS an orchestration
+root — a consumer is structurally never one, so the synced copy is strict-by-default
+with no consumer-side exemption. This is why the carve-out widening (governance reads)
+is safe to distribute: it changes nothing for the 30+ consumers.
+
+**The governance-read sub-carve-out (2026-06-01).** Originally the carve-out enumerated
+only the four artifact-distribution commands. F101 (governance-as-DNA, issue #411)
+surfaced a second legitimate loom cross-repo operation: reading a sibling GOVERNANCE
+repo's prior-art to design a loom-emitted artifact (the loom↔csq seam needs csq's
+event-schema + the aegis `.codex-mcp-guard/` fail-open→fail-closed prior-art). This is
+not artifact-distribution, but it IS co-owner-directed cross-repo coordination at the
+orchestration root. The carve-out now covers it, BOUNDED by:
+
+- **Grant-gated, not self-authorized.** A governance READ outside artifact-distribution
+  requires a User-Authorized Exception grant (the five conditions + the journaled
+  `cross-repo-authorized: <slug>` marker). The carve-out lifts the OPERATION boundary;
+  it does not make cross-repo reads the agent's default even at loom.
+- **Resolver-enumerated.** The governance sibling MUST be a declared `loom-links` key
+  (`governance.csq`, `governance.aegis`), never a positional `~/repos/<name>` guess
+  (`cross-repo.md` MUST-1). The resolver config is gitignored + operator-local.
+- **Writes still gated.** A cross-repo WRITE (filing an issue/PR, editing a sibling)
+  still requires the full five-condition User-Authorized Exception every time — the
+  governance-read carve-out does NOT extend to writes.
+
+Origin of the widening: co-owner directive 2026-06-01 (journal/0188 § B), receipt-first
+per `artifact-flow.md` § Co-Owner-Directed Origination.

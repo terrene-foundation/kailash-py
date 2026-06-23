@@ -11,7 +11,7 @@ Database connection pool exhaustion in multi-worker deployments.
 > Category: `cross-cutting` (error-resolution)
 > Priority: `HIGH` (Production stability issue)
 > SDK Version: `0.9.0+` (AsyncSQLDatabaseNode)
-> Related Skills: [`asyncsql-advanced`](../../06-cheatsheets/asyncsql-advanced.md)
+> Related Skills: [`asyncsql-advanced`](../06-cheatsheets/asyncsql-advanced.md)
 > Related Subagents: `dataflow-specialist`, `nexus-specialist`
 
 ## The Problem
@@ -127,8 +127,8 @@ Leave a buffer of ~20% for admin connections and migrations.
 
 ## Related Patterns
 
-- **Async SQL patterns**: [`asyncsql-advanced`](../../06-cheatsheets/asyncsql-advanced.md) for full external pool patterns
-- **Nexus basics**: [`nexus-quickstart`](../../03-nexus/nexus-quickstart.md)
+- **Async SQL patterns**: [`asyncsql-advanced`](../06-cheatsheets/asyncsql-advanced.md) for full external pool patterns
+- **Nexus basics**: [`nexus-quickstart`](../03-nexus/nexus-quickstart.md)
 
 ## When to Escalate to Subagent
 

@@ -63,12 +63,8 @@ def __del__(self, _warnings=warnings):
 
 ### Where this applies in Kailash
 
-| Location                                                               | Class                         | Pattern                                                                    |
-| ---------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
-| `packages/kailash-dataflow/src/dataflow/adapters/sqlite_enterprise.py` | `SQLiteEnterpriseTransaction` | `_warnings=warnings`, class-level `_committed`                             |
-| `packages/kailash-dataflow/src/dataflow/adapters/postgresql.py`        | `PostgreSQLTransaction`       | Same pattern                                                               |
-| `packages/kailash-dataflow/src/dataflow/adapters/mysql.py`             | `MySQLTransaction`            | Same pattern                                                               |
-| `src/kailash/nodes/data/async_sql.py`                                  | `AsyncSQLDatabaseNode`        | Same pattern (node, not transaction — `__del__` guards connection cleanup) |
+| Location                                                           | Class                         | Pattern                                                                    |
+| ------------------------------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------- |
 
 ## 2. Double-Check Locking for asyncio
 
@@ -112,10 +108,8 @@ Key invariants:
 
 ### Where this applies in Kailash
 
-| Location                                                        | Class                              |
-| --------------------------------------------------------------- | ---------------------------------- |
-| `packages/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `WarmMemoryTier._get_connection()` |
-| `packages/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `ColdMemoryTier._get_connection()` |
+| Location                                                    | Class                              |
+| ----------------------------------------------------------- | ---------------------------------- |
 
 ## 3. Pool Closed-State Guards
 
@@ -158,7 +152,6 @@ async def acquire_write(self):
 
 | Location                               | Class                                               |
 | -------------------------------------- | --------------------------------------------------- |
-| `src/kailash/core/pool/sqlite_pool.py` | `AsyncSQLitePool.acquire_read()`, `acquire_write()` |
 
 ## 4. Memory Database URI Detection
 
@@ -205,7 +198,7 @@ class TestNoDirectAiosqliteConnect:
 
     def test_no_bare_aiosqlite_connect(self):
         violations = []
-        for py in Path("src/kailash/nodes/data").rglob("*.py"):
+        for py in Path("kailash/nodes/data").rglob("*.py"):
             if py.name in self._ALLOWED_FILES:
                 continue
             text = py.read_text()

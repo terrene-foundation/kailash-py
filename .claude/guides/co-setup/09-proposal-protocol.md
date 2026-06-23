@@ -10,7 +10,7 @@ The protocol covers three originating directions, each with its own Step below. 
 
 **Scope**: SDK-code-originated proposals. The BUILD repo considers **cross-SDK FIRST** (per `rules/artifact-flow.md` § "Issue Routing By Change Type") before originating; Gate-1 sync-reviewer records/flags the cross-SDK alignment as an advisory note.
 
-**DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync`.
+**DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync-to-use`.
 
 ### Proposal lifecycle
 
@@ -69,13 +69,13 @@ status: pending_review  # reset if was reviewed
 
 ### Reporting
 
-**Fresh:** "Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml` with {N} changes. Run `/sync {py|rs}` at loom/ to classify and distribute."
+**Fresh:** "Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml` with {N} changes. Run `/sync-from-build` at loom/ to classify, then `/sync-to-use {py|rs}` to distribute."
 
 **Appended:** "Artifacts updated locally. Appended {N} new changes to existing proposal (now {total} changes, status reset to pending_review). Prior changes preserved."
 
 ## Step 7b: USE-Template Repo → loom/ Proposal
 
-**Applies to USE-template repos only** (`kailash-coc-claude-py`, `kailash-coc-claude-rs`, `kailash-coc-claude-rb`, `kailash-coc-py`, `kailash-coc-rs`; canonical enumeration via `sync-manifest.yaml::sync_targets[].templates[].repo` per `rules/sync-completeness.md` MUST-1). Detect by: git remote matches a USE-template slug from that enumeration OR `.claude/VERSION::type == "coc-template"`.
+**Applies to USE-template repos only** (`kailash-coc-claude-py`, `kailash-coc-claude-rs`, `kailash-coc-claude-rb`, `kailash-coc-py`, `kailash-coc-rs`; canonical enumeration via `sync-manifest.yaml::sync_targets[].templates[].repo` per `rules/sync-completeness.md` MUST-1). Detect by: git remote matches a USE-template slug from that enumeration OR `.claude/VERSION::type == "coc-use-template"`.
 
 **Scope**: COC-artifact improvements ONLY — method, rules, skills, agents, commands, guides, hooks, COC-tooling. SDK code routing is the BUILD lane (Step 7a); filing SDK code via this lane is BLOCKED — caught mechanically at origination time (see "Mechanical wrong-lane defense" below) and again at Gate-1 review by sync-reviewer Step 5 classification.
 
@@ -125,9 +125,62 @@ USE-template-origin proposals usually suggest `cc` or `coc` tier. The originatin
 
 ### Reporting
 
-**Fresh**: "Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml` with {N} changes for USE-template origination. Run `/sync` at loom/ to classify and distribute."
+**Fresh**: "Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml` with {N} changes for USE-template origination. Run `/sync-from-use` at loom/ to classify, then `/sync-to-use` to distribute."
 
 **Appended**: same shape as Step 7a.
+
+## Step 7c: Downstream Consumer → USE-Template Proposal (upflow)
+
+**Applies to downstream `coc-project` consumers only** — any repo that pulled COC artifacts FROM a USE template (end-user project repos, kaizen-cli-py, kz-engage, etc.). Detect by: `.claude/VERSION::type == "coc-project"` (NOT `coc-use-template`). This is the consumer-side originator lane the directive added — "projects downstream to the use templates does not have a proposal mechanism on artifacts update (build has it)."
+
+> **Schema-authority note (loom-only guide):** this guide is `use_excluded` — downstream consumers do NOT receive `guides/co-setup/**`. The synced schema authority a consumer `/codify` session resolves is `skills/30-claude-code-patterns/sync-flow.md` § "Downstream Upflow Proposal Schema (Step 7c)". This guide carries the same schema PLUS the rationale below; it MUST NOT be cited as the schema authority in consumer context (it is absent there).
+
+**Scope**: COC-artifact improvements ONLY (same as Step 7b) — method, rules, skills, agents, commands, guides, hooks, COC-tooling. SDK code routes to the BUILD lane; the mechanical wrong-lane defense (below) enforces it at origination.
+
+### Why push-only + human-gated (rationale)
+
+Downstream consumers are **unenumerable and often private** — templates and loom can never PULL from them (no inventory, no access). So the upflow is structurally consumer-INITIATED: the consumer's `/codify` Step 7c offers a **human-gated PR** adding `.claude/.proposals/inbox/<date>-<slug>.yaml` to the USE template it pulled from (per `upstream-issue-hygiene.md` MUST-1 — no auto-submission, no standing approval). The template's `/sync-from-downstream` (inbox ingest) reviews it as untrusted data, dedups, and relays it into the template's own Step-7b manifest with hop-level provenance (`origin: downstream, via: <template-slug>` — never client-identifying), whence it flows to loom Gate-1 on the normal cadence. No-fork-permission consumers fall back to **Route A** (an issue on the template). This is the triple fence (consumer scrub → template ingest scrub → loom Gate-1 scrub) on the disclosure axis.
+
+### Identity-field pinning
+
+Read identity from the on-disk `.claude/VERSION` shapes (per `rules/sync-completeness.md` Rule 3):
+
+- `template_slug` ← `upstream.template` (the template **NAME**, preserved unchanged across pulls — NOT `upstream.template_repo`, which tracks the immediate parent and is the wrong lane-head anchor for grandchildren / deeper descendants). If `upstream.template` is absent (stale consumer) → **HALT** with the self-service fix named FIRST: "set `upstream.template` in `.claude/VERSION` to your template's name, then re-run /codify — or use Route A."
+- `template_version` ← `upstream.template_version` (fallback `upstream.version` for pre-field consumers).
+- `loom_sha` ← `upstream.loom_sha` when present — the monotonic freshness axis (a triage hint for the template's dedup, never the authoritative check).
+
+### Mechanical wrong-lane defense (MUST)
+
+Before writing the manifest, glob-check every candidate change-path against the disallowed-glob set `src/**`, `packages/**`, `pyproject.toml`, `Cargo.toml` (byte-identical to Step 7b). All disallowed → HALT ("refile against BUILD repo issue queue"); mixed → skip-with-warning; all in-scope → proceed.
+
+### Fresh proposal format
+
+```yaml
+# NO source_repo — hop-level-only provenance: the downstream consumer is
+# deliberately NOT identified (scenario 8/9 disclosure fence). The lane head
+# is template_slug; at relay the template stamps `via: <template-slug>`.
+origin: downstream # explicit class discriminator
+codify_date: YYYY-MM-DD
+codify_session: "type(scope): description of work" # work description, not repo-identifying
+template_slug: <template-name> # from .claude/VERSION::upstream.template (NAME, not template_repo)
+template_version: "X.Y.Z" # from upstream.template_version ∥ upstream.version
+loom_sha: "<sha>" # from upstream.loom_sha when present (monotonic freshness axis)
+
+changes:
+  - file: .claude/rules/some-rule.md
+    action: created | modified | obsolete
+    base_version: "X.Y.Z" # template_version this change was authored against (modifications)
+    reason: "Why this artifact was created/changed"
+    diff_lines: "+N -N"
+
+status: pending_review
+```
+
+**Schema notes**: OMIT `sdk_version` / `sdk_packages` (artifact-only, same asymmetry as Step 7b). `action: obsolete` carries a deletion/obsoletion proposal (loom decides via manifest `obsoleted:`). Lifecycle is the standard three-state; append-not-overwrite per `rules/artifact-flow.md` § "Proposal Lifecycle". **Free-text residual**: `codify_session` + each `reason:` are NOT reached by the mechanical scanner (the `.proposals/` body is `isNeverSynced`) — they are the human-body-scrub-only surface; keep them work-descriptive, never consumer-identifying.
+
+### Reporting
+
+**Fresh**: "Proposal created at `.claude/.proposals/latest.yaml` (`origin: downstream`) with {N} changes for upflow to `<template-slug>`. Offer the human-gated inbox PR (or Route A issue) — no auto-submission."
 
 ## Step 8: loom/ → atelier/ Proposal
 

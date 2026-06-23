@@ -454,11 +454,63 @@ async def test_by_id_filters_by_tenant(conn):
 | App schema owned by app role                                                       | T10 — `CREATE OR REPLACE` preserves GRANTs. Schema owned by superuser/dedicated role; app_role has no CREATE |
 | GUCs set from user code paths                                                      | `app.role` / `app.tenant_id` MUST be set by trusted middleware only; no `execute_raw` reachable SET          |
 
+## Using the builder (kailash-rs only)
+
+The four-statement emission (`CREATE OR REPLACE FUNCTION`, `COMMENT ON FUNCTION`, `REVOKE`, `GRANT`) is also available as a typed builder so every adopter does not hand-rewrite the SQL. The builder lives at `crates/kailash-dataflow/src/migration/security_definer.rs` and is re-exported as `kailash_dataflow::migration::SecurityDefinerBuilder`.
+
+```rust
+use kailash_dataflow::migration::SecurityDefinerBuilder;
+
+// Returns Vec<String> — embed in a Migration::up_sql; the builder itself
+// does not execute SQL. Application flows through the numbered-migration
+// path (.claude/rules/schema-migration.md).
+let stmts = SecurityDefinerBuilder::new("resolve_user_by_email")
+    .search_path("app")
+    .authenticator_role("app_role")
+    .user_table("users")
+    .password_column("password_hash")
+    .tenant_column("tenant_id")          // omit for single-tenant deployments
+    .active_column("is_active")          // omit for schemas without a boolean activity flag
+    // .primary_lookup_column("email")    // omit when param uses the canonical `p_<col>` convention
+    .param("p_email", "text")
+    .param("p_tenant_id", "bigint")       // MUST match tenant_column presence
+    .return_column("id", "bigint")
+    .return_column("email", "text")
+    .return_column("password_hash", "text")  // login variant includes hash
+    .return_column("is_active", "boolean")
+    .build()
+    .expect("identifier validation passes");
+// stmts now holds:
+//   [0] CREATE OR REPLACE FUNCTION ... SECURITY DEFINER SET search_path = app, pg_temp STABLE STRICT
+//   [1] COMMENT ON FUNCTION ... (names the password column + T7 dummy-bcrypt reminder)
+//   [2] REVOKE ALL ON FUNCTION ... FROM PUBLIC
+//   [3] GRANT EXECUTE ON FUNCTION ... TO "app_role"
+```
+
+What the builder enforces for you:
+
+1. **Pinned `search_path`** — `SET search_path = <schema>, pg_temp` is emitted unconditionally; there is no path through the builder that skips it.
+2. **REVOKE PUBLIC + GRANT <role>** — the pair is emitted as two separate statements with the same type-qualified signature.
+3. **T7 timing-close reminder** — the emitted `COMMENT ON FUNCTION` names your password column and restates "CALLER MUST run a dummy bcrypt compare on 0-row results." You still have to implement the caller side (the Python pseudocode above); the comment makes the contract un-missable for every downstream reader.
+4. **T8 multi-tenant filter** — calling `.tenant_column("tenant_id")` wires `AND "tenant_id" = p_tenant_id` into the function body. Setting `tenant_column` without also declaring a `p_tenant_id` param is a typed `DataFlowError::QueryBuild` at `build()` time.
+5. **Activity-flag guard** — calling `.active_column("is_active")` appends `AND "is_active" = true`. Omit for schemas whose activity signal is a text `status` column, a soft-delete `deleted_at IS NULL`, or simply absent.
+6. **Explicit lookup column** — calling `.primary_lookup_column("email")` pins the `WHERE` column name explicitly; useful when the param name is not the canonical `p_<col>` form (e.g. `.param("p_user_email", ...)` targeting schema column `email`).
+
+Identifier safety:
+
+- Every user-supplied identifier (function name, schema, role, table, column, param names) routes through `sql_safety::validate_identifier` + `quote_identifier` before interpolation. Injection payloads (`"; DROP TABLE users; --`, `name WITH DATA`, `123abc`) are rejected with a typed error.
+- `pg_type` strings in params and return columns are checked against `ALLOWED_PG_TYPES`; `bigint; DROP TABLE users` fails at `build()`.
+
+Tier 2 integration test (feature-gated on `integration`) lives at `crates/kailash-dataflow/tests/security_definer_builder.rs` and exercises the four invariants against a real PostgreSQL instance: introspects `pg_proc` for `prosecdef` / `provolatile='s'` / `proisstrict` / pinned search_path in `proconfig`; asserts `has_function_privilege(public, ...)` = false and the authenticator role's privilege = true; drives the T8 cross-tenant regression by seeding two tenants; and asserts median-latency symmetry between unknown-user and wrong-tenant calls (25ms tolerance across 20 iterations — a regression test that the helper does NOT branch on existence).
+
+Added in kailash-rs v3.21+ (issue #571).
+
 ## Cross-references
 
 - Companion skill: `dataflow-rls-posture.md` (why DataFlow does not emit RLS by default).
 - Rule: `.claude/rules/tenant-isolation.md` (multi-tenant invariants beyond RLS).
 - Rule: `.claude/rules/security.md` (parameterized queries, input validation).
+- Rule: `.claude/rules/dataflow-identifier-safety.md` (the identifier validation contract the `SecurityDefinerBuilder` satisfies).
 
 ## Origin
 

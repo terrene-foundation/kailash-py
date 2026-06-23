@@ -1,11 +1,15 @@
 ---
 name: dataflow
-description: "Kailash DataFlow — MANDATORY for DB/CRUD/bulk/migrations/multi-tenancy. Raw SQL/ORMs BLOCKED."
+description: "Kailash DataFlow — DB, CRUD, bulk, migrations, multi-tenancy, fabric engine."
 ---
 
 # Kailash DataFlow - Zero-Config Database Framework
 
 DataFlow is a zero-config database framework built on Kailash Core SDK that automatically generates workflow nodes from database models.
+
+## When to Use
+
+Use DataFlow when asking about database operations, DataFlow, database models, CRUD operations, bulk operations, database queries, database migrations, multi-tenancy, multi-instance, database transactions, PostgreSQL, MySQL, SQLite, MongoDB, pgvector, vector search, document database, RAG, semantic search, existing database, database performance, database deployment, database testing, TDD with databases, external data sources, data products, `db.source`, `db.product`, `db.start`, fabric engine, source adapters, REST source, webhooks, or data fabric. DataFlow is NOT an ORM — it generates 11 workflow nodes per SQL model, 8 nodes for MongoDB, and 3 nodes for vector operations.
 
 ## Overview
 
@@ -85,7 +89,7 @@ Each `@db.model` class generates:
 ## Critical Rules
 
 - ✅ String IDs preserved (no UUID conversion)
-- ✅ Deferred schema operations (safe for Docker/async)
+- ✅ Deferred schema operations (safe for Docker/FastAPI)
 - ✅ Multi-instance isolation (one DataFlow per database)
 - ✅ Result access: `results["node_id"]["result"]`
 - ❌ NEVER use truthiness checks on filter/data parameters (empty dict `{}` is falsy)

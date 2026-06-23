@@ -25,7 +25,7 @@ Invalid:  D1-R1-T1                  # Ends with T, no R -> GrammarError
 ## NodeType Enum
 
 ```python
-from kailash.trust.pact.addressing import NodeType
+from pact.governance.addressing import NodeType
 
 NodeType.DEPARTMENT  # "D"
 NodeType.TEAM        # "T"
@@ -35,7 +35,7 @@ NodeType.ROLE        # "R"
 ## Parsing Addresses
 
 ```python
-from kailash.trust.pact.addressing import Address, AddressSegment
+from pact.governance.addressing import Address, AddressSegment
 
 # Parse from string
 addr = Address.parse("D1-R1-T1-R1")
@@ -61,7 +61,7 @@ str(seg)        # "D1"
 ## Error Hierarchy
 
 ```python
-from kailash.trust.pact.addressing import AddressError, GrammarError
+from pact.governance.addressing import AddressError, GrammarError
 
 # AddressError: malformed segments, empty strings
 # GrammarError(AddressError): D/T not followed by R
@@ -144,4 +144,4 @@ addr.last_segment   # AddressSegment(NodeType.ROLE, 2)
 
 - `pact-governance-engine.md` -- engine uses addresses for verify_action()
 - `pact-access-enforcement.md` -- containment checks use address prefix matching
-- Source: `src/kailash/trust/pact/addressing.py`
+- Source: `pact/governance/addressing.py`

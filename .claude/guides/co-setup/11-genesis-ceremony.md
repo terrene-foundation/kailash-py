@@ -105,6 +105,69 @@ local agent cannot forge, and both are immutably captured in the signed
 `genesis-anchor` record's `content`. The colluding-distinct-owner
 residual (multi-operator-coordination.md §4.5) is unchanged.
 
+## Azure DevOps provider
+
+The genesis + owner-lifecycle ceremonies support Azure DevOps as an additive provider alongside GitHub. The GitHub path is byte-unchanged; ADO is selected per-repo by `roster.genesis.provider: "azure-devops"` (absent ⇒ github). Origin: F122 (Azure DevOps ceremony port).
+
+### Roster shape (ADO)
+
+```jsonc
+"genesis": {
+  "provider": "azure-devops",
+  "repo_owner": "myorg",        // the ADO org
+  "repo_owner_kind": "org",      // ADO coordination repos are org-owned
+  "ado_project": "myproject",    // the ADO project ref the coord repo lives under
+  "root_commit": "<sha>",
+  "genesis_generation": 0
+},
+"persons": {
+  "pid-owner": { "role": "owner", "host_role": "human",
+                 "principal": "alice@contoso.com", "keys": [ ... ] }
+}
+```
+
+Operators bind via `principal` (Entra userPrincipalName), NOT `github_login`. The signing key (SSH/GPG fingerprint = `verified_id`) is provider-neutral and works identically on both providers.
+
+### The `adoApi` transport contract
+
+Every ADO ceremony takes an injected `adoApi` callable (the analogue of GitHub's `ghApi(endpointString)`):
+
+```
+adoApi({ service: "core" | "graph", path: string, meta?: object })
+  => { ok, status, body, error? }
+```
+
+- `service: "core"` → `dev.azure.com` REST (repos, commits).
+- `service: "graph"` → `vssps.dev.azure.com` Graph REST (members, Project Collection Administrators membership).
+
+The production transport binds the host + `api-version` + PAT/Entra auth and implements the multi-step Graph resolution below. The adapter (`vcs-azure-adapter.js`) constructs the paths; it does NOT hardcode unverified Graph response parsing — the live-API mapping is the operator-verified runbook's job per `rules/verify-resource-existence.md` MUST-2.
+
+### ADO Graph PCA-membership resolution (the org-admin anchor)
+
+ADO exposes no `orgs/{org}/memberships/{login}` endpoint and no commit-signature-verification API. The verified-identity anchor for ADO enrollment/migration is therefore the **Project Collection Administrators (PCA) membership attestation** (the issue #358 org-bootstrap relaxation, generalized to the provider): `role: "admin"` + `state: "active"`. The production transport's `service: "graph"` admin-membership determination implements:
+
+1. `GET vssps {org}/_apis/graph/users?subjectTypes=aad` → the user descriptor whose `principalName` matches the signer's UPN.
+2. `GET vssps {org}/_apis/graph/groups` → the "Project Collection Administrators" group descriptor.
+3. `GET vssps {org}/_apis/graph/memberships/{userDescriptor}?direction=up` → `role: "admin"` iff the PCA group descriptor is in the membership set; `state: "active"` iff the user's storage-key membership is active.
+
+The operator MUST verify this sequence against live ADO (existence-check-first) before trusting it.
+
+### Owner-lifecycle ceremonies on ADO
+
+The three lifecycle ceremonies dispatch on `roster.genesis.provider` and emit honestly-named ADO records (`content.provider: "azure-devops"` + `content.principal` + `ado_api_*` capture fields):
+
+- **`--owner-add`** (`runAttestationCeremony`): captures `{org}/_apis/graph/members`; fails CLOSED unless the attested `principal` IS a member.
+- **`--owner-depart`** (`runRevocationCeremony`): captures fresh members; fails CLOSED if the departing `principal` is STILL a member (a revocation without proof of departure defeats omission). The R10-A-02 evidence window is provider-neutral.
+- **reap** (`buildReapRecord`): the cross-operator stale-claim reap carries `ado_api_members_capture`; the fold (`fold-rule-reap.js`) binds reaper+cosigner via `principal` and applies the `principalsEqual` distinctness predicate.
+
+Derived-N (`derive-n.js`) and the rule-10 revocation contest (`fold-rule-10.js`) read the provider-neutral identity field (`principal` on ADO) below a single dispatch point.
+
+### ADO residuals (documented, surfaced honestly — NOT papered over)
+
+1. **Owner check is "exists under the auth-scoped org", not "server-asserts-owner".** A 200 from `{org}/{project}/_apis/git/repositories/{repo}` confirms the authenticated caller can reach the repo under the asserted org (the org is in the URL, not the body). The PAT/Entra auth being org-scoped is what makes the 200 meaningful.
+2. **No commit-signature verification.** The ADO commits API returns no GPG/SSH verification result; `verified` is recorded faithfully as `false` and the ceremony anchors via the org-admin (PCA) attestation, NOT a verified root commit.
+3. **No `refs/coc/**`ruleset equivalent — MUST-5 is client-side-detection-only on ADO, AS ON github.com.** Neither provider has a server-side ref-protection mechanism for the`refs/coc/\*\*` equivocation-parity residual: github.com rulesets reject a custom-ref target pattern (`422 "Invalid target patterns"`, live-verified 2026-06-07 — see `rules/multi-operator-coordination.md`MUST-5 + journal/0233 / GH #367; the journal/0125 "GitHub ruleset is prevention-primary" verdict was REFUTED) and ADO has no equivalent ref-namespace ruleset. On BOTH providers, MUST-5 is the provider-neutral client-side detection layer (F51 archive-tip-pin verification + fold-rule equivocation detection) as the PRIMARY defense. This is a documented detection-eventually residual — see`rules/multi-operator-coordination.md` MUST-5 ADO clause + the forest item in that rule's § Origin registry.
+
 ## Failure-mode reference
 
 | Failure                                                  | Returned step        | Returned error                                                         |
@@ -219,3 +282,4 @@ git -c credential.helper='!gh auth git-credential' push origin <branch>
 - Tests: `tests/integration/genesis-anchor.test.js` (suites 1, 2, 2b, 3, 4)
 - Originating issue: #358 (org-owned bootstrap relaxation)
 - Substrate spec: `rules/multi-operator-coordination.md` §§1, 2, 6
+- Azure DevOps provider (F122): adapter `.claude/hooks/lib/vcs-azure-adapter.js`; allowlist `.claude/hooks/lib/ado-api-allowlist.js`; identity `.claude/hooks/lib/ado-login.js`; tests `tests/integration/multi-operator/azure-{enrollment,migration,provider-adapter,owner-lifecycle}-ceremony.test.js`

@@ -54,17 +54,17 @@ Strategic, legal, or governance knowledge work. The AI researches, drafts, revie
 
 **Archetype-specific components**:
 
-| Component | What to include                                                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Commands  | `/arxiv`, `/publish`, `/governance-layer`, `/co-domain`                                                                                                |
-| Agents    | Standards: `constitution-expert`, `governance-layer-expert`, `care-implementation-expert`, `co-domain-expert`                                          |
-| Agents    | Architecture: `care-platform-architect`                                                                                                                |
-| Agents    | Publications: `publication-expert`                                                                                                                     |
-| Skills    | Standards reference (26-eatp, 27-care, 28-coc, co-reference)                                                                                           |
-| Skills    | Governance (29-constitution, 30-arxiv, 31-publication, 32-governance-layer, 33-care-implementation, 34-co-domain)                                      |
-| Rules     | `zero-tolerance.md` (soft — RECOMMENDED), `agents.md` (RECOMMENDED)                                                                                    |
-| Rules     | `constitution.md`, `publication-quality.md`, `arxiv-submission.md`, `governance-layer-positioning.md`, `co-domain-application.md`, `terrene-naming.md` |
-| Hooks     | `validate-arxiv-content.js`, `validate-publication-content.js`                                                                                         |
+| Component | What to include                                                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commands  | `/arxiv`, `/publish`, `/governance-layer`, `/co-domain`                                                                                                                                           |
+| Agents    | Standards: `constitution-expert`, `governance-layer-expert`, `care-implementation-expert`, `co-domain-expert`                                                                                     |
+| Agents    | Architecture: `care-platform-architect`                                                                                                                                                           |
+| Agents    | Publications: `publication-expert`                                                                                                                                                                |
+| Skills    | Standards reference (26-eatp, 27-care, 28-coc, co-reference)                                                                                                                                      |
+| Skills    | Governance (29-constitution, 30-arxiv, 31-publication, 32-governance-layer, 33-care-implementation, 34-co-domain)                                                                                 |
+| Rules     | `zero-tolerance.md` (soft — RECOMMENDED), `agents.md` (RECOMMENDED)                                                                                                                               |
+| Rules     | `constitution.md`, `publication-quality.md`, `arxiv-submission.md`, `governance-layer-positioning.md`, `co-domain-application.md`, plus the Foundation's own naming/branding rules (atelier-side) |
+| Hooks     | `validate-arxiv-content.js`, `validate-publication-content.js`                                                                                                                                    |
 
 **`start.md` orientation**: Research and governance. "The AI helps you research, draft, review, and publish."
 

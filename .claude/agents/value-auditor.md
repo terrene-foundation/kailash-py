@@ -3,6 +3,13 @@ name: value-auditor
 description: "Enterprise demo QA auditor. Use for value proposition testing, narrative coherence, or data credibility checks."
 tools: Read, Bash, Grep, Glob
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Value Auditor — Enterprise Demo QA

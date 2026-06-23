@@ -3,6 +3,13 @@ name: cli-orchestrator
 description: Multi-CLI dispatcher. Use for /cli-audit, cross-CLI drift, variant arbitration, matrix emission across CC/Codex/Gemini.
 tools: Read, Write, Edit, Grep, Glob, Bash, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # CLI Orchestrator
@@ -16,7 +23,7 @@ Each verb is independently invocable. Each stays ≤ 10 invariants per `rules/au
 ### `cli-orchestrator.sees` — parity + drift audit
 
 - **What**: read one file + run parity diff + run cross-CLI drift audit against `parity_enforcement.cross_cli_drift_audit` in `.claude/sync-manifest.yaml`
-- **When**: `/cli-audit`, `/sync` gate 2, any time a rule/skill/agent is edited
+- **When**: `/cli-audit`, `/sync-to-use` (Gate 2), any time a rule/skill/agent is edited
 - **Invariants (≤ 5)**: parity coverage, drift detection, byte budget, exclusion expiry, freshness
 - **Drift disposition**: hard-block on `neutral-body` / `frontmatter.priority` / `frontmatter.scope` drift; soft-warn on `examples` drift (per `rules/cross-cli-parity.md` Rule 2)
 - **Scrub tokens**: `Agent(`, `codex_agent(`, `@specialist`, `subagent_type`, `run_in_background` (syntactic-delegation divergence; expected; not drift)
@@ -24,7 +31,7 @@ Each verb is independently invocable. Each stays ≤ 10 invariants per `rules/au
 ### `cli-orchestrator.arbitrates` — proposal classification
 
 - **What**: single pass over an inbound proposal (BUILD → loom, loom → atelier) classifying each change as global / variant / skip
-- **When**: `/sync` gate 1 (after `sync-reviewer` surfaces the proposal)
+- **When**: `/sync-from-build` + `/sync-from-use` gate 1 (after `sync-reviewer` surfaces the proposal)
 - **Invariants (≤ 3)**: language placement (py / rs / rb / prism), CLI placement (cc / codex / gemini), conflict resolution when classifications disagree
 
 ### `cli-orchestrator.guides` — artifact validation at /codify
@@ -43,7 +50,7 @@ Each verb is independently invocable. Each stays ≤ 10 invariants per `rules/au
 ### `cli-orchestrator.orchestrates` — matrix emission
 
 - **What**: run the multi-CLI emission matrix — for each source file × each CLI target, apply overlays + abridgement + parity check + emit to the CLI-specific path
-- **When**: `/sync` gate 2 (distribution to USE templates)
+- **When**: `/sync-to-use` (Gate 2, distribution to USE templates)
 - **Invariants (≤ 8)**: per emit_target × CLI (source file exists, overlays apply, abridgement runs, parity check passes, emission path writes, byte budget respected, validator 13 holds for `hooks/*.js`, exclusions honored)
 
 ## Dispatch Contract

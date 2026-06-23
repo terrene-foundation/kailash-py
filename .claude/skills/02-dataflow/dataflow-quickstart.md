@@ -10,7 +10,7 @@ Zero-config database framework built on Core SDK with automatic node generation 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`dataflow-models`](dataflow-models.md), [`dataflow-queries`](dataflow-queries.md)
+> Related Skills: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md), [`dataflow-models`](dataflow-models.md), [`dataflow-queries`](dataflow-queries.md)
 > Related Subagents: `dataflow-specialist` (enterprise features, migrations), `nexus-specialist` (DataFlow+Nexus integration)
 
 ## Quick Reference
@@ -110,7 +110,7 @@ Each `@db.model` automatically creates:
 | ------------------------- | ------------------ | ------------------------------------------------------------- |
 | **{Model}CreateNode**     | Single insert      | `{"name": "John", "email": "john@example.com"}`               |
 | **{Model}ReadNode**       | Single select      | `{"id": 123}` or `{"filter": {"email": "alice@example.com"}}` |
-| **{Model}UpdateNode**     | Single update      | `{"filter": {"id": 123}, "fields": {"name": "Jane"}}`         |
+| **{Model}UpdateNode**     | Single update      | `{"id": 123, "name": "Jane"}`                                 |
 | **{Model}DeleteNode**     | Single delete      | `{"id": 123}` or `{"soft_delete": True}`                      |
 | **{Model}ListNode**       | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}`               |
 | **{Model}UpsertNode**     | Insert or update   | `{"data": {"email": "a@b.com"}, "match_fields": ["email"]}`   |
@@ -386,9 +386,9 @@ app.start()
 
 - **Model definition**: [`dataflow-models`](dataflow-models.md)
 - **Query patterns**: [`dataflow-queries`](dataflow-queries.md)
-- **Bulk operations**: [`dataflow-bulk-operations`](dataflow-bulk-operations.md)
+- **Bulk operations**: [`dataflow-bulk-ops`](dataflow-bulk-operations.md)
 - **Nexus integration**: [`dataflow-nexus-integration`](dataflow-nexus-integration.md)
-- **Migration guide**: [`dataflow-migrations-quick`](dataflow-migrations-quick.md)
+- **Migration guide**: [`dataflow-migration-quick`](dataflow-migrations-quick.md)
 
 ## When to Escalate to Subagent
 

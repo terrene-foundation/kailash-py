@@ -11,7 +11,6 @@ paths:
 # Connection Pool Safety Rules
 
 
-<!-- slot:neutral-body -->
 
 > **Scope**: Application code MUST go through DataFlow (`@db.model`, `db.express`) which manages pools for you — see `framework-first.md` § Work-Domain Binding. These rules are for SDK-level pool tuning and for advanced consumers who own the pool lifecycle.
 
@@ -113,5 +112,3 @@ async def lifespan(app):
   **Why:** A loop creating one connection per iteration can open thousands of connections in seconds, exhausting PostgreSQL and crashing all other applications sharing the database.
 - No pool size from user input (API params, form fields)
   **Why:** A malicious request setting `pool_size=100000` triggers mass connection creation, instantly exhausting database resources and causing a denial-of-service.
-
-<!-- /slot:neutral-body -->

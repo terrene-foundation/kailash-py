@@ -3,6 +3,13 @@ name: mcp-platform-specialist
 description: "MCP Platform specialist. Use for FastMCP, contributor plugins, security tiers — custom plugin loaders BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # MCP Platform Specialist Agent

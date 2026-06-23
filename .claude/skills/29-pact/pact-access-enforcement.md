@@ -20,9 +20,9 @@ Step 5: Default deny          -> DENY if no containment path found
 ### Using check_access()
 
 ```python
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.knowledge import KnowledgeItem
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.engine import GovernanceEngine
+from pact.governance.knowledge import KnowledgeItem
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 
 item = KnowledgeItem(
     item_id="financial-report-q4",
@@ -49,7 +49,7 @@ decision.valid_until  # datetime | None (KSP/bridge expiry)
 Roles must have a `RoleClearance` with `VettingStatus.ACTIVE`.
 
 ```python
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from pact.governance.clearance import RoleClearance, VettingStatus
 
 clearance = RoleClearance(
     role_address="D1-R1-T1-R1",
@@ -70,24 +70,20 @@ engine.grant_clearance("D1-R1-T1-R1", clearance)
 Effective clearance = `min(role.max_clearance, POSTURE_CEILING[posture])`.
 
 ```python
-from kailash.trust.pact.clearance import POSTURE_CEILING, effective_clearance
+from pact.governance.clearance import POSTURE_CEILING, effective_clearance
 
-# Canonical POSTURE_CEILING mapping (Decision 007):
-# PSEUDO       -> PUBLIC        (autonomy_level=1)
-# TOOL         -> RESTRICTED    (autonomy_level=2)
-# SUPERVISED   -> CONFIDENTIAL  (autonomy_level=3)
-# DELEGATING   -> SECRET        (autonomy_level=4)
-# AUTONOMOUS   -> TOP_SECRET    (autonomy_level=5)
-#
-# Backward-compatible aliases (enum aliases, not _missing_):
-#   PSEUDO_AGENT -> PSEUDO, SHARED_PLANNING -> SUPERVISED,
-#   CONTINUOUS_INSIGHT -> DELEGATING, DELEGATED -> AUTONOMOUS
+# The mapping:
+# PSEUDO_AGENT     -> PUBLIC
+# SUPERVISED       -> RESTRICTED
+# SUPERVISED  -> CONFIDENTIAL
+# DELEGATING  -> SECRET
+# AUTONOMOUS  -> TOP_SECRET
 
-eff = effective_clearance(clearance, TrustPostureLevel.TOOL)
-# Even SECRET clearance is capped at RESTRICTED when TOOL posture
+eff = effective_clearance(clearance, TrustPostureLevel.SUPERVISED)
+# Even SECRET clearance is capped at RESTRICTED when SUPERVISED
 ```
 
-A role with TOP_SECRET clearance operating at TOOL posture can only access RESTRICTED data.
+A role with TOP_SECRET clearance operating at SUPERVISED posture can only access RESTRICTED data.
 
 ## Step 3: Compartment Check
 
@@ -141,7 +137,7 @@ Item: D1-R1-D2             (owned by Dept D2, which contains T1)
 ### 4d: KnowledgeSharePolicy (KSP)
 
 ```python
-from kailash.trust.pact.access import KnowledgeSharePolicy
+from pact.governance.access import KnowledgeSharePolicy
 
 ksp = KnowledgeSharePolicy(
     id="ksp-finance-to-legal",
@@ -169,7 +165,7 @@ KSP grants access when:
 Cross-functional bridges connect specific roles across organizational boundaries.
 
 ```python
-from kailash.trust.pact.access import PactBridge
+from pact.governance.access import PactBridge
 
 bridge = PactBridge(
     id="bridge-eng-sales",
@@ -193,7 +189,7 @@ If no containment path (4a-4e) grants access, the decision is DENY.
 ## Using can_access() Directly
 
 ```python
-from kailash.trust.pact.access import can_access
+from pact.governance.access import can_access
 
 decision = can_access(
     role_address="D1-R1-D3-R1-T1-R1",
@@ -211,6 +207,6 @@ decision = can_access(
 - `pact-governance-engine.md` -- engine.check_access() wraps can_access()
 - `pact-envelopes.md` -- confidentiality_clearance in envelope config
 - `pact-dtr-addressing.md` -- containment checks use address prefix matching
-- Source: `src/kailash/trust/pact/access.py`
-- Source: `src/kailash/trust/pact/clearance.py`
-- Source: `src/kailash/trust/pact/knowledge.py`
+- Source: `pact/governance/access.py`
+- Source: `pact/governance/clearance.py`
+- Source: `pact/governance/knowledge.py`

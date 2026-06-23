@@ -18,13 +18,40 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
+const { instructAndWait } = require("./lib/instruct-and-wait");
 
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
   // Timeout = allow (fail-open to avoid blocking all Bash commands)
   process.exit(0);
 }, TIMEOUT_MS);
+
+/**
+ * Emit a halting block via instructAndWait per hook-output-discipline.md MUST-1.
+ * Structural evidence (file existence / git rev) is the basis for block severity
+ * per MUST-2 — never lexical regex alone.
+ */
+function emitBlock({
+  what_happened,
+  why,
+  agent_must_report,
+  agent_must_wait,
+  user_summary,
+}) {
+  const out = instructAndWait({
+    hookEvent: "PreToolUse",
+    severity: "block",
+    what_happened,
+    why,
+    agent_must_report,
+    agent_must_wait,
+    user_summary,
+  });
+  clearTimeout(timeout);
+  console.log(JSON.stringify(out.json));
+  process.exit(out.exitCode);
+}
 
 async function main() {
   try {
@@ -111,7 +138,7 @@ async function main() {
     // Locate repo root by walking up from cwd or script location
     let repoRoot;
     try {
-      repoRoot = execSync("git rev-parse --show-toplevel", {
+      repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
         encoding: "utf8",
         timeout: 3000,
       }).trim();
@@ -124,26 +151,23 @@ async function main() {
 
     const markerPath = path.join(repoRoot, ".staging-passed");
 
-    // Check that .staging-passed exists
+    // Check that .staging-passed exists.
+    // Structural signal per hook-output-discipline.md MUST-2: file existence
+    // (fs.existsSync) — not a lexical regex. Block severity is grounded.
     if (!fs.existsSync(markerPath)) {
-      console.error(
-        "\n" +
-          "╔══════════════════════════════════════════════════════════╗\n" +
-          "║  BLOCKED: Production deploy without staging             ║\n" +
-          "║                                                          ║\n" +
-          "║  Run staging first:                                      ║\n" +
-          "║    bash deploy/scripts/promote.sh                        ║\n" +
-          "║                                                          ║\n" +
-          "║  Or step-by-step on the server:                          ║\n" +
-          "║    bash deploy/scripts/stage.sh                          ║\n" +
-          "║    bash deploy/scripts/deploy.sh                         ║\n" +
-          "║                                                          ║\n" +
-          "║  Emergency bypass (document the reason afterward):       ║\n" +
-          "║    Add --skip-staging to your command                    ║\n" +
-          "╚══════════════════════════════════════════════════════════╝\n",
-      );
-      clearTimeout(timeout);
-      process.exit(2); // Block
+      emitBlock({
+        what_happened: `Production deploy attempted without staging verification (no .staging-passed marker at ${markerPath})`,
+        why: "deploy-hygiene.md — staging MUST pass before production deploy; .staging-passed is the structural verification marker written by deploy/scripts/stage.sh",
+        agent_must_report: [
+          "Quote the exact deploy command that was attempted",
+          "State whether staging has been run (run `bash deploy/scripts/promote.sh` or staging+deploy step-by-step)",
+          "If emergency bypass is needed, re-issue the command with `--skip-staging` AND document the reason in deploy/deployment-config.md",
+        ],
+        agent_must_wait:
+          "Do not retry until staging has produced .staging-passed at the current commit, OR --skip-staging is passed with a documented reason.",
+        user_summary:
+          "Production deploy blocked — staging verification missing",
+      });
       return;
     }
 
@@ -151,7 +175,7 @@ async function main() {
     const marker = fs.readFileSync(markerPath, "utf8").trim();
     let currentCommit;
     try {
-      currentCommit = execSync("git rev-parse HEAD", {
+      currentCommit = execFileSync("git", ["rev-parse", "HEAD"], {
         cwd: repoRoot,
         encoding: "utf8",
         timeout: 3000,
@@ -164,22 +188,22 @@ async function main() {
     }
 
     const shortHash = currentCommit.substring(0, 7);
+    // Structural signal per hook-output-discipline.md MUST-2: process state
+    // (git rev-parse) compared against a file content (.staging-passed marker).
+    // Mismatch is structural evidence that staging is stale; block is grounded.
     if (!marker.includes(shortHash)) {
-      console.error(
-        "\n" +
-          "╔══════════════════════════════════════════════════════════╗\n" +
-          "║  BLOCKED: Staging marker is stale                        ║\n" +
-          "║                                                          ║\n" +
-          "║  Code has changed since staging last passed.             ║\n" +
-          `║  Current commit: ${shortHash.padEnd(42)}║\n` +
-          `║  Staging marker: ${marker.substring(0, 7).padEnd(42)}║\n` +
-          "║                                                          ║\n" +
-          "║  Re-run staging:                                         ║\n" +
-          "║    bash deploy/scripts/promote.sh                        ║\n" +
-          "╚══════════════════════════════════════════════════════════╝\n",
-      );
-      clearTimeout(timeout);
-      process.exit(2); // Block
+      emitBlock({
+        what_happened: `Production deploy attempted with stale staging marker (HEAD=${shortHash}, marker contains ${marker.substring(0, 7)})`,
+        why: "deploy-hygiene.md — code has changed since staging last passed; staging MUST be re-run against the current commit before production deploy",
+        agent_must_report: [
+          "Quote the deploy command",
+          `State the current HEAD (${shortHash}) and the stale marker (${marker.substring(0, 7)})`,
+          "Re-run `bash deploy/scripts/promote.sh` to refresh staging at HEAD before retrying",
+        ],
+        agent_must_wait:
+          "Do not retry until staging has been re-run at the current commit and .staging-passed contains the current HEAD short hash.",
+        user_summary: `Production deploy blocked — staging stale (HEAD=${shortHash}, marker=${marker.substring(0, 7)})`,
+      });
       return;
     }
 

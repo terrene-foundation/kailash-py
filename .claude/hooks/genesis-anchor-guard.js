@@ -245,6 +245,14 @@ function loadRoster(rosterPath) {
   }
 }
 
+// NOTE (F72 anti-narrowing): this counts ANY parseable JSON line as a record —
+// it does NOT filter on `type === "genesis-anchor"` or verify signatures. The
+// F72 fresh-vs-enrolled discriminator (`records.length === 0` in the no-roster
+// branch) depends on this: over-counting is fail-CLOSED (a stray parseable line
+// trips the enrolled→block branch, never the fresh→advisory branch). Do NOT
+// narrow this to genesis-anchor-only — that would let a partially-written log
+// read as `length === 0` (fresh) on a roster-absent repo, weakening the
+// discriminator toward fail-OPEN. (security-reviewer LOW-1, journal/0176.)
 function loadLogRecords(logPath) {
   if (!fs.existsSync(logPath)) return [];
   const text = fs.readFileSync(logPath, "utf8");
@@ -355,34 +363,77 @@ try {
 
   const { logPath, rosterPath } = resolvePaths();
 
-  // The roster is REQUIRED context. Without a roster we cannot identify
-  // the owner-bound key, so we cannot verify any anchor. This is
-  // fail-CLOSED by definition: no roster → no possible trust root.
+  // Load the coordination-log records up-front: they are the substrate-native
+  // "has this repo ever enrolled?" signal. Enrollment (/whoami --enroll-genesis)
+  // ALWAYS writes a signed `genesis-anchor` record into this log (operators.
+  // roster.README.md § "Why the live file ships with PLACEHOLDER" step 3), so an
+  // empty/absent log ⟺ never-enrolled. `loadLogRecords` returns [] when the log
+  // file is absent.
+  const records = loadLogRecords(logPath);
+
+  // The roster is REQUIRED context for an ENROLLED repo: without it we cannot
+  // identify the owner-bound key, so we cannot verify any anchor.
   const roster = loadRoster(rosterPath);
   if (!roster) {
-    // HIGH-2 (M0 security review): without a roster we cannot resolve
-    // any candidate signer's pubkey, so the signed-marker bypass is
-    // unreachable. No bypass is possible here; fail-CLOSED.
+    // F72 (issue #379) — fresh-consumer vs enrolled-then-deleted discrimination.
+    // Mirrors trust-posture.md MUST-2 (fresh repo vs corrupt state) and the
+    // scaffold-roster advisory branch below: distinguish a USE-template consumer
+    // that received the substrate hooks but NEVER enrolled (no roster AND empty
+    // coordination log) from an enrolled repo whose roster was deleted (roster
+    // gone BUT the log still carries enrollment records).
+    if (records.length === 0) {
+      // Fresh-substrate adopter: no roster + no coordination-log records =
+      // never enrolled. Advisory pass-through so the consumer can land its
+      // first commits (this is exactly what the enrollment ceremony itself
+      // requires). Once enrollment writes the first genesis-anchor record into
+      // the log, the enrolled-then-deleted fail-CLOSED branch below takes over.
+      // The coordination LOG is the correct signal here — NOT `.initialized`,
+      // which the posture hook writes on a fresh consumer's FIRST session even
+      // when no enrollment has occurred (using `.initialized` would wrongly
+      // hard-block a never-enrolled consumer that merely ran one session).
+      emit({
+        hookEvent,
+        severity: "advisory",
+        what_happened:
+          "Sign/commit/push attempted on a fresh-substrate-adopter repo (no operators roster; coordination log empty/absent = never enrolled).",
+        why: "multi-operator-coc/genesis-anchor-guard — fresh-substrate-adopter branch (F72 / issue #379): no roster + empty coordination log = never-enrolled; advisory pass-through mirrors trust-posture.md MUST-2 fresh-repo semantics + the scaffold-roster branch. Once an enrollment record lands in the log, fail-CLOSED takes over.",
+        agent_must_report: [
+          "State that the repo is in fresh-substrate-adopter state (no roster, empty coordination log)",
+          "Schedule the enrollment ceremony (/whoami --enroll-genesis) as the M9.x follow-up before the next /release",
+        ],
+        agent_must_wait:
+          "Continue; enrollment is the M9.x follow-up. No block.",
+        user_summary:
+          "genesis-anchor-guard — fresh-substrate adopter advisory; enrollment outstanding",
+      });
+      // emit() exits 0 here (severity:advisory → continue:true); control does not return.
+    }
+
+    // Enrolled-then-deleted: the coordination log carries enrollment records but
+    // the roster is gone. This is the guard-escape-by-roster-deletion attack
+    // (HIGH-2, M0 security review): without a roster we cannot resolve any
+    // candidate signer's pubkey, so the signed-marker bypass is unreachable.
+    // Fail-CLOSED. (operators.roster.json is a tracked, committed file — the
+    // correct recovery is `git checkout` it, not re-enrollment.)
     emit({
       hookEvent,
       severity: "block",
       what_happened:
-        "Sign/commit/push/roster-edit attempted but operators roster is missing or unreadable.",
-      why: "multi-operator-coc/genesis-anchor-guard — fail-CLOSED: no roster, no verifiable trust root (architecture §2.3 + §4.3, journal/0117)",
+        "Sign/commit/push/roster-edit attempted but operators roster is missing or unreadable while the coordination log carries prior enrollment records — this repo WAS enrolled.",
+      why: "multi-operator-coc/genesis-anchor-guard — fail-CLOSED: roster missing while the coordination log carries enrollment records = enrolled-then-deleted; no verifiable trust root (architecture §2.3 + §4.3, journal/0117)",
       agent_must_report: [
         "Quote the exact tool call that was attempted",
-        "State that the operators.roster.json is missing or unreadable",
-        "Recommend running /whoami --enroll-genesis to establish the trust root",
+        "State that the operators.roster.json is missing or unreadable while the coordination log carries prior enrollment records",
+        "Recommend restoring operators.roster.json from version control (it is a tracked, committed file) rather than re-enrolling",
       ],
       agent_must_wait:
-        "Do not retry the sign/commit/push until the trust root is established.",
+        "Do not retry the sign/commit/push until the roster is restored.",
       user_summary:
-        "genesis-anchor-guard — operators roster missing; trust root not established",
+        "genesis-anchor-guard — roster missing on a previously-enrolled repo; restore from version control",
     });
     // emit() exits; we never return here
   }
 
-  const records = loadLogRecords(logPath);
   const { trustRoot, peerHighWater } = foldChain(records, roster);
 
   if (trustRoot === null) {
@@ -434,8 +485,7 @@ try {
         user_summary:
           "genesis-anchor-guard — fresh-substrate adopter advisory; enrollment outstanding",
       });
-      // emit() with severity:advisory does not exit non-zero; passthrough.
-      passthrough();
+      // emit() exits 0 here (severity:advisory → continue:true); control does not return.
     }
 
     // No verifying owner-bound anchor in the log.

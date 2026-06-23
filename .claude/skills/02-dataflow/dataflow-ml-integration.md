@@ -33,7 +33,7 @@ SQLite / PostgreSQL / MySQL
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.feature_store import FeatureStore  # legacy write surface — top-level FeatureStore is the canonical read surface (kailash-ml 2.0.0, #643)
+from kailash_ml import FeatureStore
 from kailash_ml.types import FeatureSchema, FeatureField
 
 # 1. Create ConnectionManager (caller owns lifecycle)
@@ -42,33 +42,31 @@ await conn.initialize()
 
 # 2. Initialize FeatureStore with shared connection
 store = FeatureStore(conn, table_prefix="kml_feat_")
-await store.initialize()
 
-# 3. Register a feature schema (creates the backing table)
+# 3. Register a feature group
 schema = FeatureSchema(
     name="user_features",
-    entity_id_column="user_id",
+    entity_key="user_id",
     features=[
         FeatureField(name="login_count", dtype="int"),
         FeatureField(name="avg_session_min", dtype="float"),
     ],
 )
-await store.register_features(schema)
+await store.register_group(schema)
 
-# 4. Materialise features (polars DataFrame): compute validates + projects, store persists
+# 4. Ingest features (polars DataFrame)
 import polars as pl
 df = pl.DataFrame({
     "user_id": ["u1", "u2"],
     "login_count": [42, 7],
     "avg_session_min": [12.5, 3.2],
 })
-await store.store(store.compute(df, schema), schema)
+await store.ingest(schema.name, df)
 
 # 5. Point-in-time query
 result = await store.get_features(
-    ["u1", "u2"],                        # entity_ids
-    ["login_count", "avg_session_min"],  # feature_names
-    schema=schema,
+    schema.name,
+    entity_ids=["u1", "u2"],
     as_of=datetime(2026, 3, 30, tzinfo=UTC),  # temporal correctness
 )
 # Returns polars DataFrame
@@ -102,7 +100,7 @@ feature_conn = ConnectionManager("postgresql://...")   # Wastes pool
 model_conn = ConnectionManager("postgresql://...")     # Wastes pool
 ```
 
-**Why**: Per `rules/dataflow-pool.md` and `rules/infrastructure-sql.md` Rule 2 (no separate ConnectionManagers per store), each ConnectionManager creates its own pool. Multiple pools to the same database waste connections.
+**Why:** Per `rules/dataflow-pool.md` and `rules/infrastructure-sql.md` Rule 2 (no separate ConnectionManagers per store), each ConnectionManager creates its own pool. Multiple pools to the same database waste connections.
 
 ## Interop Module
 
@@ -113,7 +111,7 @@ kailash-ml uses polars as its native data format. The `interop` module provides 
 | `to_sklearn_input()`       | polars -> numpy               | Training with sklearn      |
 | `from_sklearn_output()`    | numpy -> polars               | Predictions back to polars |
 | `to_lgb_dataset()`         | polars -> LightGBM Dataset    | LightGBM training          |
-| `to_hf_dataset()`          | polars -> HuggingFace Dataset | Tokenization, NLP          |
+| `to_hf_dataset()`         | polars -> HuggingFace Dataset | Tokenization, NLP          |
 | `polars_to_arrow()`        | polars -> Arrow               | Zero-copy Arrow interop    |
 | `to_pandas()`              | polars -> pandas              | Legacy library compat      |
 | `from_pandas()`            | pandas -> polars              | Ingest from pandas sources |
@@ -123,8 +121,8 @@ All converters handle categoricals, nulls, and dtype preservation.
 
 ## Cross-References
 
-- `kailash_ml.engines.feature_store` -- FeatureStore implementation
-- `kailash_ml.engines._feature_sql` -- All SQL in one module
-- `kailash_ml.interop` -- Polars conversion module
+- `packages/kailash-ml/src/kailash_ml/engines/feature_store.py` -- FeatureStore implementation
+- `packages/kailash-ml/src/kailash_ml/engines/_feature_sql.py` -- All SQL in one module
+- `packages/kailash-ml/src/kailash_ml/interop.py` -- Polars conversion module
 - `rules/infrastructure-sql.md` -- SQL safety patterns (identifier validation, transactions)
 - `rules/dataflow-pool.md` -- Connection pool rules (no separate ConnectionManagers)

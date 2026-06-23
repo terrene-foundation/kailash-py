@@ -49,6 +49,21 @@ function safeWriteFileSync(filePath, data) {
 import { parseSlotsV5, applyOverlay } from "./lib/slot-parser.mjs";
 import { resolveOverlay } from "./lib/variant-overlay.mjs";
 import { extractPolicies } from "../codex-mcp-guard/extract-policies.mjs";
+// Validator 18 (#408 AC#5-a) shares the EMITTER's canonical manifest parser +
+// glob matcher so the validator's cc-only certification provably matches what
+// emit-cli-artifacts actually excludes (no divergent hand-rolled second parser).
+import { loadExclusions, matchesAnyGlob } from "./emit-cli-artifacts.mjs";
+// cli_delivery resolution primitives (#408 AC#5-a contract) live in a SHARED
+// lib so BOTH Validator 18 here AND the AC#5-b rules-reference emitter in
+// emit-cli-artifacts.mjs resolve lanes through ONE parser. Re-exported below
+// for the cli-delivery-contract test + any standalone importer of emit.mjs.
+import {
+  CLI_DELIVERY_VALUES,
+  parseExcludeFrom,
+  deriveCliDelivery,
+  checkRuleCliDelivery,
+} from "./lib/cli-delivery.mjs";
+export { CLI_DELIVERY_VALUES, parseExcludeFrom, deriveCliDelivery, checkRuleCliDelivery };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, "..", "..");
@@ -236,8 +251,8 @@ export function stripRuleFrontmatter(raw) {
 //   4. variants/<lang>-<cli>/rules/<rule>.md  (ternary, both-axis)
 // 2–4 are all applied if present (union of slot replacements), in
 // that order. Language-axis overlays were added 2026-04-22 (Phase I2)
-// to close the semantic-licensing bug where, e.g., the proprietary
-// rs override of independence.md was invisible to emit because only
+// to close the semantic-override bug where, e.g., the language-specific
+// rs override of framework-first.md was invisible to emit because only
 // CLI-only and ternary paths composed into the baseline.
 export function composeRule(ruleName, cli, lang = null) {
   // Rule-name validation: must be a simple .md filename — no traversal.
@@ -462,6 +477,38 @@ export function getCritBaseline() {
   return crit.sort();
 }
 
+// #423 AC#4 — pure binding-token guard, exported so the violation shape is
+// testable in isolation (mirrors validateAggregateHeadroom). The always-on
+// baseline MUST carry ZERO Ruby binding-code fences: Ruby examples live ONLY
+// in the on-demand 28-ruby-bindings skill, never the abridged baseline.
+// abridgeV6 drops >200B non-DO code blocks, but a ```ruby DO-block ≤200B in a
+// rule body survives — this is the mechanical guard against re-introducing the
+// rb-in-baseline failure mode the rb→rs collapse eliminated. Python is the
+// baseline default example language, so only Ruby fences are asserted-absent.
+export function detectBindingTokenViolations(emission, cli, lang = null) {
+  const violations = [];
+  const lines = String(emission).split("\n");
+  // Match ```ruby / ~~~ruby / ```rb at column 0 OR indented, case-insensitive,
+  // any fence length (≥3) — covers every fence shape abridgeV6 can pass through
+  // (it strips column-0 fences; an indented one survives as a plain line). `\b`
+  // after the token excludes ```rbs / ```rbenv (RBS/rbenv are not Ruby code).
+  const FENCE_RX = /^[ \t]*(?:`{3,}|~{3,})(ruby|rb)\b/i;
+  const idx = lines.findIndex((l) => FENCE_RX.test(l));
+  if (idx !== -1) {
+    violations.push({
+      cli,
+      lang,
+      token: lines[idx].replace(/^[ \t]*(?:`{3,}|~{3,})/, "").trim(),
+      line: idx + 1,
+      message:
+        "Ruby binding-code fence in the abridged baseline — Ruby binding code " +
+        "MUST live in the on-demand 28-ruby-bindings skill, not the always-on " +
+        "baseline (#423 Phase 1 invariant). Move it out of the rule body.",
+    });
+  }
+  return violations;
+}
+
 // v6.2 Shard 1 — pure validator for aggregate headroom. Extracted from
 // emitBaseline so the violation shape is testable in isolation. Returns
 // an array (empty when no breach) so the call site can spread it directly
@@ -626,6 +673,10 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
   const emission = chunks.join("\n---\n\n").replace(/\n+$/, "") + "\n\n---\n";
   const emissionBytes = Buffer.byteLength(emission, "utf8");
 
+  // #423 AC#4 — binding-token regression guard (pure fn exported above for
+  // isolation testing). Ruby binding code MUST NOT reach the always-on baseline.
+  const bindingTokenViolations = detectBindingTokenViolations(emission, cli, lang);
+
   // v6 caps — load from sync-manifest.yaml (single source of truth). The
   // previous hardcoded WARN_CAP=32768 / BLOCK_CAP=61440 are now loaded per-CLI
   // from cli_variants.context/root.md.<cli>.{warn,block}_cap_bytes so a
@@ -714,6 +765,7 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
       headroom_pct: headroomPctForReport,
       headroom_floor_pct: HEADROOM_FLOOR_PCT,
       headroom_floor_violations: headroomFloorViolations,
+      binding_token_violations: bindingTokenViolations,
       proximity_band_advisory: proximityBandAdvisory,
       budget_warnings: budgetWarnings,
       budget_block_violations: budgetBlockViolations,
@@ -740,6 +792,7 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
         headroom_pct: headroomPctForReport,
         headroom_floor_pct: HEADROOM_FLOOR_PCT,
         headroom_floor_violations: headroomFloorViolations,
+        binding_token_violations: bindingTokenViolations,
         proximity_band_advisory: proximityBandAdvisory,
         rules_emitted: crit.length,
         per_rule: perRuleReport,
@@ -782,6 +835,7 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
     headroom_pct: Number(headroomPct.toFixed(2)),
     headroom_floor_pct: HEADROOM_FLOOR_PCT,
     headroom_floor_violations: headroomFloorViolations,
+    binding_token_violations: bindingTokenViolations,
     proximity_band_advisory: proximityBandAdvisory,
     budget_warnings: budgetWarnings,
     budget_block_violations: budgetBlockViolations,
@@ -910,6 +964,59 @@ export function validateRuleFrontmatter() {
   }
 
   return { pass: failures.length === 0, failures };
+}
+
+// ────────────────────────────────────────────────────────────────
+// Validator 18 — cli_delivery lane-declaration contract (#408 AC#5-a/b)
+// ────────────────────────────────────────────────────────────────
+// The per-rule resolution primitives (CLI_DELIVERY_VALUES, parseExcludeFrom,
+// deriveCliDelivery, checkRuleCliDelivery) live in the SHARED lib
+// `./lib/cli-delivery.mjs` (imported + re-exported at the top of this file).
+// They are shared because BOTH this validator AND the AC#5-b rules-reference
+// emitter (emit-cli-artifacts.mjs) must resolve lanes through ONE parser —
+// a divergent mirror was the exact R1 finding the AC#5-a redteam closed.
+//
+//   - baseline      → always-on in AGENTS.md / GEMINI.md (getCritBaseline).
+//   - skill-channel → on-demand index entry in the rules-reference skill,
+//                     emitted by emit-cli-artifacts.mjs::emitRulesReferenceSkill
+//                     (AC#5-b). The index points the non-CC LLM at the
+//                     canonical `.claude/rules/<name>.md` (shared path).
+//   - cc-only       → genuinely CC-specific; not delivered to Codex/Gemini.
+//
+// validateCliDelivery() is the fs-wiring: it reads every rule's frontmatter,
+// computes the per-lane manifest-exclusion booleans via the SHARED loadExclusions
+// + matchesAnyGlob (so the verdict provably tracks the real emit), and buckets
+// each rule into the report by its resolved lane.
+export function validateCliDelivery() {
+  const rulesDir = path.join(REPO, ".claude", "rules");
+  const files = fs.readdirSync(rulesDir).filter((f) => f.endsWith(".md")).sort();
+  // SHARED canonical parser + glob matcher from the emitter (no divergent mirror):
+  // the validator's cc-only verdict is computed from the SAME exclusion read the
+  // real emit uses, so a future manifest-parse change cannot drift the two apart.
+  const excl = loadExclusions();
+  const failures = [];
+  const report = {
+    baseline: [],
+    "skill-channel": [],
+    "cc-only": [],
+    "n/a-skill-embedded": [],
+  };
+
+  for (const f of files) {
+    const content = fs.readFileSync(path.join(rulesDir, f), "utf8");
+    const fm = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm) continue; // Validator 14 already fails on a missing frontmatter block.
+    const relPath = `rules/${f}`;
+    const manifest = {
+      codex: matchesAnyGlob(relPath, excl.codex || []),
+      gemini: matchesAnyGlob(relPath, excl.gemini || []),
+    };
+    const res = checkRuleCliDelivery(fm[1], manifest);
+    for (const msg of res.failures) failures.push(`${f}: ${msg}`);
+    if (res.lane) report[res.lane].push(f);
+  }
+
+  return { pass: failures.length === 0, failures, report };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -1159,7 +1266,16 @@ export function validateRosterSchemaCoupling() {
           "--out",
           syntheticOut,
         ],
-        { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] },
+        // maxBuffer: the --dry-run --json probe enumerates the full consumer
+        // tree; on a large consumer repo the output exceeds the 1 MiB
+        // execFileSync default → spurious ENOBUFS (measured ~2.8 MiB for rs).
+        // 64 MiB headroom keeps the V17 probe robust against tree growth.
+        {
+          encoding: "utf8",
+          timeout: 20000,
+          stdio: ["ignore", "pipe", "pipe"],
+          maxBuffer: 64 * 1024 * 1024,
+        },
       );
     } catch (err) {
       failures.push(
@@ -1410,6 +1526,33 @@ function main() {
     process.exit(1);
   }
 
+  // Validator 18 — cli_delivery lane-declaration contract (#408 AC#5-a/b).
+  // Runs AFTER V14 (frontmatter validated) AND V16 (manifest YAML validated):
+  // V18 reads BOTH rule frontmatter AND the cli_emit_exclusions manifest stanza
+  // (via the shared loadExclusions), so — like V15 — it must sit behind the
+  // strict-YAML gate (a malformed manifest must not silently flip a cc-only
+  // rule to skill-channel). Every rule's non-CC delivery lane MUST be declared
+  // or smart-defaulted; a path-scoped rule with no resolvable lane is the silent
+  // Codex/Gemini drop this contract closes. The skill-channel rules are now
+  // DELIVERED (AC#5-b) by emit-cli-artifacts.mjs::emitRulesReferenceSkill, which
+  // resolves the SAME lane set through the shared cli-delivery parser — the count
+  // below provably equals the rule count in the emitted rules-reference index.
+  const v18 = validateCliDelivery();
+  console.log(
+    `[validator-18] cli-delivery: ${v18.pass ? "PASS" : "FAIL"} ` +
+      `(baseline:${v18.report.baseline.length} ` +
+      `skill-channel:${v18.report["skill-channel"].length} → rules-reference skill ` +
+      `cc-only:${v18.report["cc-only"].length} ` +
+      `n/a-skill-embedded:${v18.report["n/a-skill-embedded"].length})`,
+  );
+  if (!v18.pass) {
+    overallPass = false;
+    process.stderr.write(
+      `VALIDATOR 18 FAIL (cli_delivery contract, #408 AC#5-a):\n${v18.failures.map((l) => "  " + l).join("\n")}\n`,
+    );
+    process.exit(1);
+  }
+
   // Validator 15 — manifest tier-completeness (journal 0078). Runs
   // alongside V14 (structural, pre-emission): a rule absent from every
   // tier is silently excluded from the subscription sync, so block
@@ -1532,6 +1675,20 @@ function main() {
       if (args.strictHeadroom) {
         overallPass = false;
       }
+    }
+    // #423 AC#4 — binding-token regression guard (hard BLOCK, NOT strict-gated;
+    // a Ruby code fence in the always-on baseline is always a defect — Ruby
+    // belongs in the on-demand 28-ruby-bindings skill per the rb→rs collapse).
+    if (
+      result.binding_token_violations &&
+      result.binding_token_violations.length > 0
+    ) {
+      const b = result.binding_token_violations[0];
+      process.stderr.write(
+        `[${b.cli}${b.lang ? " " + b.lang : ""}] binding-token BLOCK (#423): ` +
+          `${b.message} (line ${b.line}, fence \`\`\`${b.token})\n`,
+      );
+      overallPass = false;
     }
   }
 

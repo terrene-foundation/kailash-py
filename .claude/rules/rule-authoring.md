@@ -8,13 +8,12 @@ paths:
 
 # Rule Authoring Meta-Rule
 
-<!-- slot:neutral-body -->
 
 Rules are the agent's linguistic tripwires. This meta-rule defines how all other rules MUST be authored so that each new rule compounds the effect of the existing ones instead of diluting it.
 
 Origin: journal/0052-DISCOVERY-session-productivity-patterns.md §6. Validated by subprocess A/B test: rule quality improved from 2/6 to 6/6 when this meta-rule was loaded. Extended 2026-05-22 (F23a cycle): added MUST Rule 10 + Trust Posture Wiring per journal/0144 § Forest item F23 + analyst FM1. Extended 2026-05-23 (F23b cycle): added MUST Rule 11 (2nd-extraction escalation across (rule, CLI) pairs within 30 days) per journal/0146 § FM-C + journal/0147 + journal/0148 (mid-cycle amendment); Rule 10's "Named-rationale exception — MANDATORY sub-fields" template moved to .claude/skills/skill-authoring/proximity-band-named-rationale-template.md as structural-cleanup improvement (NOT Rule-10 compliance — this rule is path-scoped, so Rule 10's proximity-band gate does NOT fire on rule-authoring.md edits; see journal/0148 § "Lesson learned"). Multi-agent redteam R1 dispositions in journal/0149.
 
-**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body is ~248 lines, exceeding the 200-line guidance by ~48. Named rationale: Rule 10 (proximity-band admission gate) requires DO/DO NOT examples + BLOCKED rationalization corpus + Trust Posture Wiring per the meta-rule's own MUST 3 + MUST 4 + MUST 7 + trust-posture.md MUST 8 canonical 8-field shape; collapsing any of those would weaken the structural defense the rule provides. The rule is self-referential — exempting itself from its own length cap requires the same named-rationale-at-Origin shape every other rule uses (sibling precedent: `user-flow-validation.md` Origin + `multi-operator-coordination.md` Origin), which is exactly what this paragraph is.
+**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body is ~304 lines, exceeding the 200-line guidance by ~104. Named rationale: Rule 10 (proximity-band admission gate) requires DO/DO NOT examples + BLOCKED rationalization corpus + Trust Posture Wiring per the meta-rule's own MUST 3 + MUST 4 + MUST 7 + trust-posture.md MUST 8 canonical 8-field shape; collapsing any of those would weaken the structural defense the rule provides. The rule is self-referential — exempting itself from its own length cap requires the same named-rationale-at-Origin shape every other rule uses (sibling precedent: `user-flow-validation.md` Origin + `multi-operator-coordination.md` Origin), which is exactly what this paragraph is.
 
 See `guides/deterministic-quality/01-rule-authoring-principles.md` for full evidence, anti-patterns, and reproduction protocol.
 
@@ -84,6 +83,8 @@ Every new rule MUST include a one-line `Origin:` reference pointing to the journ
 
 Every rule MUST declare both `priority:` (0 CRIT baseline / 10 HIGH path-scoped / 20 MED/LOW skill-embedded-or-excluded) and `scope:` (`baseline` / `path-scoped` / `skill-embedded` / `excluded`) in YAML frontmatter. Pair must be consistent: priority:0 requires scope:baseline; priority:10 requires scope:path-scoped + `paths:`; priority:20 pairs with scope:skill-embedded or scope:excluded. `scope: excluded` rules additionally declare `exclude_from: [<cli>, ...]` listing the CLIs the rule is suppressed from (the rule still emits to the other CLIs; "excluded" scopes to specific CLI targets, not wholesale removal). Mismatches are BLOCKED at emission-time validation per v6 §A.1.
 
+**`priority:`/`scope:` describe CC's loading; `cli_delivery:` describes the NON-CC lanes (#408 AC#5-a).** Codex/Gemini have NO `paths:` glob loader, so a `scope: path-scoped` rule that CC loads per-session would be SILENTLY dropped from Codex/Gemini. The OPTIONAL third frontmatter field `cli_delivery: baseline | skill-channel | cc-only` declares how the non-CC lanes deliver the rule — and `.claude/bin/emit.mjs::validateCliDelivery` (Validator 18) enforces that every rule resolves to exactly one lane (no silent drops). The field is OPTIONAL because a **smart default** is derived from `scope:` when it is absent: `scope:baseline → baseline`, `scope:path-scoped → skill-channel` (delivered on-demand via the rules-reference skill, the AC#5-b emitter), `exclude_from:[codex,gemini]` or both-lane `cli_emit_exclusions` → `cc-only`. Declare `cli_delivery:` EXPLICITLY only to override the smart default (e.g. promoting a path-scoped Absolute-Directive rule to `baseline`). `cli_delivery:` is a GLOBAL/neutral field — it is identical across CLI emissions and is NEVER overridden by a per-CLI variant overlay. This follows the SAME parity principle `cross-cli-parity.md` MUST-3 fixes for `priority:`/`scope:` (a rule's classification cannot diverge per CLI); MUST-3 does not yet enumerate `cli_delivery:` by name, but the invariant is identical and Validator 18 reads only the global rule body (overlays carry no `cli_delivery:`).
+
 DO — baseline CRIT rule frontmatter:
 
     priority: 0
@@ -102,6 +103,22 @@ DO — excluded rule (CC-only):
     scope: excluded
     exclude_from: [codex, gemini]
 
+DO — path-scoped rule, explicit non-CC lane (optional; this IS the smart default):
+
+    priority: 10
+    scope: path-scoped
+    cli_delivery: skill-channel
+    paths:
+      - "**/*.py"
+
+DO NOT — explicit cli_delivery contradicting scope (Validator 18 BLOCKS):
+
+    priority: 10
+    scope: path-scoped
+    cli_delivery: baseline
+    # ← baseline is the always-on file; a path-scoped rule cannot claim it.
+    #   Promote scope:baseline (+ paired extraction per Rule 10) to go baseline.
+
 DO NOT — missing priority or mismatched pair:
 
     paths:
@@ -118,8 +135,11 @@ DO NOT — missing priority or mismatched pair:
 - "I'll add priority when the emitter needs it"
 - "The combo `priority: 0` + `scope: path-scoped` is harmless"
 - "scope is implied by priority, declaring both is redundant"
+- "Path-scoped rules don't need a non-CC lane — Codex/Gemini can do without them"
+- "I'll set `cli_delivery: baseline` to force it always-on without the paired extraction"
+- "The smart default might be wrong but the validator will sort it out at /sync"
 
-**Why:** Priority drives which CLI surface the rule emits to (baseline AGENTS.md/CLAUDE.md vs path-scoped vs skill-embedded); scope drives which emission mechanism applies. Without both, the emitter classifies by filename heuristic — which is exactly how the v2→v6 convergence rounds repeatedly surfaced "phantom rules" and "surplus rules" findings. Declaring both lets the v6 §A.1 validator catch mismatches at author time rather than at /sync time when the damage has already propagated to downstream USE templates.
+**Why:** Priority drives which CLI surface the rule emits to (baseline AGENTS.md/CLAUDE.md vs path-scoped vs skill-embedded); scope drives which emission mechanism applies. Without both, the emitter classifies by filename heuristic — which is exactly how the v2→v6 convergence rounds repeatedly surfaced "phantom rules" and "surplus rules" findings. Declaring both lets the v6 §A.1 validator catch mismatches at author time rather than at /sync time when the damage has already propagated to downstream USE templates. The `cli_delivery:` third field closes the same class one lane over: a path-scoped rule with no `paths:` loader on Codex/Gemini is silently absent there unless its non-CC lane is declared or smart-defaulted — Validator 18 enforces that every rule resolves to exactly one lane, and an explicit `cli_delivery:` that contradicts `scope:` (e.g. `baseline` on a path-scoped rule, which would bypass the Rule 10 paired-extraction budget gate) is BLOCKED.
 
 ### 8. Rule Uses Slot Markers For CLI-Divergent Content
 
@@ -276,7 +296,7 @@ particular addition is heavy.)
 
 - Rules longer than 200 lines
 
-**Why:** Rules longer than 200 lines are skimmed; the agent misses load-bearing clauses. Extract reference material into a guide or skill.
+**Why:** Rules longer than 200 lines are skimmed AND over-density degrades the output of the agent that loads the artifact — not just its token budget (journal/0193, directional: a dense rule-slice dropped a consuming agent's plan 93→82, and curated-minimal beat verbose more as the model weakened). Curation — minimal load-bearing clauses, depth extracted to a guide/skill — is therefore an OUTPUT-QUALITY requirement, not only budget hygiene; the injection-time complement is `rules/governed-throughput.md`.
 
 ## The "Loud, Linguistic, Layered" Test
 
@@ -300,5 +320,3 @@ Applies to MUST Rules 10 (added 2026-05-22, F23a cycle) and 11 (added 2026-05-23
 - **Detection mechanism:** Phase 1 — review-layer mechanical sweep at `/codify` proposal validation. **Rule 10 sweep**: cc-architect runs `node .claude/bin/emit.mjs --all --dry-run` against the proposal's working tree (note: a proposal that ALSO modifies `emit.mjs` triggers a separate self-referential-codify Rule 1 redteam round FIRST; the proximity-band sweep then runs against the post-redteam-approved emit.mjs to avoid trust-of-trust circularity). The sweep then (a) parses the emit-report output for `headroom_pct < 15%` rows; (b) checks whether the proposal's diff against any `priority: 0` baseline rule contains NEW MUST/MUST NOT/BLOCKED additions on a near-breach lane; (c) for path (b) named-rationale exceptions in the receipt journal, validates the 5 sub-fields at `.claude/skills/skill-authoring/proximity-band-named-rationale-template.md` AND greps the exception text against the Rule 10 BLOCKED-rationalization corpus — any phrase match HALTS the sweep (an exception text that quotes a BLOCKED rationalization IS a structural bypass attempt); (d) emits a durable receipt to the receipt journal under `§ F23a proximity-band sweep` recording: emit dry-run exit code, per-lane headroom_pct (codex + gemini × py + rs + base), advisory_fired booleans, presence/absence of paired extraction OR named-rationale, BLOCKED-corpus grep verdict. **Rule 11 sweep** (runs ONLY when Rule 10 fires): cc-architect greps `journal/*.md` for prior journal entries citing "Rule-10 disposition" (or equivalent path (a) / path (b) anchor language) AND naming the same (rule, CLI) lane as the current proposal; for each grep-match, the sweep MUST verify the touched rule's frontmatter `scope:` at the entry's date was `baseline` (entries on path-scoped rules are discarded as Rule-10-NOT-mandated false-positives — see "Recurrence-window scope" above). For each verified-mandated match, parses the entry's frontmatter `date:` field; counts matches with date within 30 calendar days of the current proposal's receipt-journal date. Count ≥1 → Rule 11 fires; cc-architect demands disposition (a') corpus-level forest item with ALL FOUR mandatory sub-elements ((i)-(iv) including the `value-prioritization.md` MUST-2 user-anchored value-anchor) OR disposition (b') named-rationale with sub-field (vi) per `.claude/skills/skill-authoring/proximity-band-named-rationale-template.md` § "Rule 11 Sub-Field (vi)" (three elements: (vi.a) verbatim-cite prior invocation, (vi.b) anti-tautology structural-necessity, (vi.c) named corpus-disposition rejection). Verdicts MUST cite the matching journal entry per `verify-resource-existence.md` MUST-4. Phase 2 automation (`.claude/bin/validate-extraction-history.mjs`) is deferred per `trust-posture.md` § Two-Phase Rollout (tracked as F23b-Phase-2 in the forest); structural Phase-1 → Phase-2 closure trigger fires after ≥3 real Rule-11 invocations exercise the manual sweep. Audit fixtures for both Rules 10 and 11 committed at `.claude/audit-fixtures/proximity-band-budget/` per `cc-artifacts.md` Rule 9.
 - **Violation scope:** Rule 10 — rule + lane (per-rule + per-CLI emission combo). Rule 11 — rule + lane + window (per-rule + per-CLI emission combo + the 30-day recurrence window). Every violation row in `violations.jsonl` records the touched rule, the breaching cli×lang combo, and (for Rule 11) the prior-invocation journal entry ID + days-since-prior delta.
 - **Origin:** Rule 10 — `journal/0144` § "Forest items" F23 (analyst FM1+FM6 paired in `journal/0144`; Rule 10 lifts FM1 — the proximity-band admission gate). Rule 11 — `journal/0144` § FM6 (original framing) + `journal/0146` § FM-C (analyst's ELEVATION receipt: _"necessary-but-not-sufficient: FM1 catches NEW additions; FM6 catches cumulative extract patterns the FM1-gate doesn't see"_) + `journal/0147` (this codify's receipt-first DECISION entry). F23b closes the FM6 forest deferral originally opened by F23a's shard-budget discipline.
-
-<!-- /slot:neutral-body -->

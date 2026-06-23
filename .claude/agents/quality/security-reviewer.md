@@ -3,6 +3,13 @@ name: security-reviewer
 description: Security vulnerability specialist. Use proactively before commits and for security-sensitive code changes.
 tools: Read, Grep, Glob
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 You are a senior security engineer reviewing code for vulnerabilities.

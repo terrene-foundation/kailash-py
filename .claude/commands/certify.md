@@ -45,7 +45,7 @@ All three STOP conditions are structural (exit code + file existence + explicit 
 
 ### 2. Phase A — Brief (read receipts)
 
-Walk the operator through the critical-knowledge surface in fixed order: `specs/_index.md` (if present) → repo `CLAUDE.md` → CO-category rules (`rules/independence.md`, `rules/autonomous-execution.md`, `rules/agent-reasoning.md`, `rules/artifact-flow.md`) → `/posture show` (trust posture state) → `.claude/team-memory/` index → last 5 `journal/DECISION-*.md` entries. For each section, summarize in plain language and write a "read receipt" to `workspaces/_certify/journal/.pending/certify-brief-<display_id>-<date>.md`. Receipts are scrubbed per `rules/user-flow-validation.md` MUST-6 before write (no secrets, no downstream client tokens).
+Walk the operator through the critical-knowledge surface in fixed order: `specs/_index.md` (if present) → repo `CLAUDE.md` → CO-category rules (`rules/autonomous-execution.md`, `rules/agent-reasoning.md`, `rules/artifact-flow.md`) → `/posture show` (trust posture state) → `.claude/team-memory/` index → last 5 `journal/DECISION-*.md` entries. For each section, summarize in plain language and write a "read receipt" to `workspaces/_certify/journal/.pending/certify-brief-<display_id>-<date>.md`. Receipts are scrubbed per `rules/user-flow-validation.md` MUST-6 before write (no secrets, no downstream client tokens).
 
 ### 3. Phase B — Probe (one question at a time)
 

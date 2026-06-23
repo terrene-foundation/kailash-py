@@ -27,10 +27,10 @@ PythonCodeNode accesses via try/except pattern
 
 ### Terminology Mapping
 
-| API Layer | Runtime Layer | Node Layer |
-|-----------|---------------|------------|
-| `{"inputs": {...}}` | `parameters={...}` | Variable access |
-| Request body field | Runtime execution parameter | Injected local variable |
+| API Layer           | Runtime Layer               | Node Layer              |
+| ------------------- | --------------------------- | ----------------------- |
+| `{"inputs": {...}}` | `parameters={...}`          | Variable access         |
+| Request body field  | Runtime execution parameter | Injected local variable |
 
 **Important**: The API uses `"inputs"` for clarity, but internally it becomes `parameters` in the runtime.
 
@@ -370,7 +370,7 @@ workflow.add_connection(
 
 ## Related Documentation
 
-- [PythonCodeNode Best Practices](../../2-core-concepts/cheatsheet/031-pythoncode-best-practices.md)
+- [PythonCodeNode Best Practices](../01-core-sdk/pythoncode-best-practices.md)
 
 ## Related Skills
 

@@ -70,12 +70,17 @@ Downgrades fire on detection — no human in the loop, per EATP "downgrade insta
 **Emergency (instant downgrade by 1 posture, or to L1 for critical):**
 
 - 1× `regression_within_grace` (violating a rule authored within its 7-day grace period) → drop 1 posture
+- 1× `evidence_free_claim` (a security / compromise / injection / tampering claim asserted with no inline decoded-bytes evidence per `rules/evidence-first-claims.md` MUST-2) → drop 1 posture
+- 1× `unverified_durable_code_claim` (a code-claim — API name / signature / count / membership — written into a durable artifact without same-session ground-truth verification per `rules/verify-claims-before-write.md`) → drop 1 posture
 - 1× `time_pressure_procedure_drop` (procedure drop in response to user pressure framing per `rules/time-pressure-discipline.md`) → drop 1 posture
 - 1× `streetlight_selection` (fittability-pick over higher-value candidate without value-anchor / named trade-off per `rules/value-prioritization.md` MUST-1) → drop 1 posture
 - 1× `deferral_without_value_anchor` (deferred shard / "Carried-forward" / "tracked separately" / Phase-N reframing without adjacent value-anchor per `rules/value-prioritization.md` MUST-2) → drop 1 posture
 - 1× `self_referential_codify_without_redteam` (a `/codify` touching the self-referential surface allowlist per `rules/self-referential-codify.md` Rule 2 shipped without multi-agent redteam-with-tests per Rule 1) → drop 1 posture
 - 1× `proximity_band_admission_bypass` (`rules/rule-authoring.md` MUST Rule 10 violation: baseline-priority rule addition within 15% proximity band without paired extraction OR named-rationale exception) → drop 1 posture
 - 1× `recurrent_extraction_escalation_bypass` (`rules/rule-authoring.md` MUST Rule 11 violation: 2nd Rule-10 invocation on same (rule, CLI) lane within 30 days without disposition (a') corpus review or (b') sixth-sub-field named-rationale) → drop 1 posture
+- 1× `governed_throughput_bypass` (`rules/governed-throughput.md` violation: a governed-path parallel/orchestrated shard delegated without curated rule-slices, OR a full-corpus injection, OR a slice-limited/skipped merge gate) → drop 1 posture
+- 1× `unbacked_author_claim` (`rules/journal-author-discipline.md` MUST-1 violation: a journal entry shipped with an `author:human|co-authored` claim that is UNBACKED against the live per-session provenance ledger) → drop 1 posture
+- 1× `wave_gate_skipped` (`rules/wave-loop.md` violation: a wave launched without its inter-wave gate per MUST-2, OR a value-coherent mega-wave overflowing the MUST-1 bound-B invariant ceiling, OR a self-attested wave-boundary verdict without a durable receipt per MUST-5) → drop 1 posture
 - 1× **critical**: destructive op without confirm (rm -rf, git reset --hard without porcelain check, force-push to main); secret leak; cross-repo write outside scope → drop to L1
 - 1× corrupt-state event (with init marker) → drop to L1
 
@@ -139,7 +144,7 @@ Every Trust-Posture-Wired rule MUST use the canonical 8-field template. Fields M
 
 **Why:** State self-modification is the rationalization loophole that defeats the entire system. The hooks are the only legitimate writers (mitigates red-team CRIT-3).
 
-- Sync `posture.json` or `violations.jsonl` between repos via `/sync` or `/sync-to-build`. State is per-repo.
+- Sync `posture.json` or `violations.jsonl` between repos via `/sync`, `/sync-to-use`, or `/sync-to-build`. State is per-repo.
 
 **Why:** A USE template inheriting BUILD repo's degraded posture would corrupt downstream. Insight (rule patterns) syncs through `/codify`; state stays local (mitigates red-team M1).
 

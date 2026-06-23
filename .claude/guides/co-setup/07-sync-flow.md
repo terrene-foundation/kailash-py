@@ -5,7 +5,7 @@ How artifacts actually move between repos. This is the operational companion to 
 ## The Distribution Chain
 
 ```
-BUILD repo ──/codify──> proposal ──> loom/ ──/sync──> USE template ──> downstream projects
+BUILD repo ──/codify──> proposal ──> loom/ ──/sync-to-use──> USE template ──> downstream projects
  (kailash-py)          (.proposals/)  (source)   (Gate 2)  (coc-claude-py)   (user projects)
  (kailash-rs)                         of truth              (coc-claude-rs)
 ```
@@ -22,9 +22,9 @@ BUILD repos (kailash-py, kailash-rs) are where features, bugs, and issues land f
 
 The proposal includes tier suggestions (cc/co/coc/coc-py/coc-rs) for each changed artifact. These are agent suggestions — the human decides during review.
 
-## Step 2: Review at loom/ (/sync Gate 1)
+## Step 2: Review at loom/ (/sync-from-build + /sync-from-use Gate 1)
 
-When the developer runs `/sync py` (or rs) at loom/, Gate 1 activates:
+When the developer runs `/sync-from-build` (the BUILD proposal stream) or `/sync-from-use` (the USE-template stream) at loom/, Gate 1 activates:
 
 ### What it computes
 
@@ -55,7 +55,7 @@ For each NEW or MODIFIED artifact, the human decides:
 
 For global changes, the agent asks: "Does the other SDK need an adaptation?" This catches cross-SDK alignment issues before they propagate.
 
-## Step 3: Distribute to USE Templates (/sync Gate 2)
+## Step 3: Distribute to USE Templates (/sync-to-use, Gate 2)
 
 Gate 2 rebuilds USE template repos from loom/ source. This is NOT a file copy — it is a computed merge:
 
@@ -102,16 +102,16 @@ Downstream projects (user applications built on the SDK) receive artifacts from 
 ### How downstream gets updates
 
 1. **Session-start hook** checks `.coc-sync-marker` timestamp
-2. If >7 days old, warns: "COC artifacts may be outdated. Run `/sync`."
-3. Developer runs `/sync` — the command detects `coc-project` type from `.claude/VERSION`
+2. If >7 days old, warns: "COC artifacts may be outdated. Run `/sync-from-template`."
+3. Developer runs `/sync-from-template` — the command detects `coc-project` type from `.claude/VERSION`
 4. **Template resolver** (`scripts/resolve-template.js`) locates the USE template:
    - Checks local sibling directory (e.g., `../kailash-coc-claude-py/`)
    - Checks cache at `~/.cache/kailash-coc/<template>/`
    - If not found: shallow clones (`git clone --depth 1`) from GitHub to cache
    - GitHub slug comes from `upstream.template_repo` in VERSION, or auto-resolved for known templates
-5. Downstream `/sync` diffs template against local, applies additive merge
+5. Downstream `/sync-from-template` diffs template against local, applies additive merge
 
-**No local clone required.** Users who don't have the USE template repo cloned locally get a shallow clone cached automatically. Subsequent `/sync` runs fetch the latest from origin.
+**No local clone required.** Users who don't have the USE template repo cloned locally get a shallow clone cached automatically. Subsequent `/sync-from-template` runs fetch the latest from origin.
 
 ### Downstream merge rules
 
@@ -135,7 +135,7 @@ Same additive semantics as template sync:
 
 The distinction matters:
 
-| rsync behavior            | /sync behavior                            |
+| rsync behavior            | COC sync behavior                         |
 | ------------------------- | ----------------------------------------- |
 | Copies files              | Computes expected state, then merges      |
 | Optionally deletes extras | Never deletes (additive only)             |
@@ -144,13 +144,13 @@ The distinction matters:
 | No human gate             | Gate 1 requires human classification      |
 | No adaptation             | Variant system adapts content per target  |
 
-The `/sync` command delegates to specialized agents (sync-reviewer for Gate 1, coc-sync for Gate 2) because the merge requires understanding file semantics — not just copying bytes.
+The sync commands delegate to specialized agents (sync-reviewer for Gate 1 — `/sync-from-build` + `/sync-from-use`; coc-sync for Gate 2 — `/sync-to-use`) because the merge requires understanding file semantics — not just copying bytes.
 
 ## When Conflicts Arise
 
 ### Same file changed in both py and rs BUILD repos
 
-Run `/sync py` and `/sync rs` separately. If both propose changes to the same global file, the second review sees the first's changes and the human resolves.
+Run `/sync-from-build` separately for each BUILD repo (py, rs). If both propose changes to the same global file, the second review sees the first's changes and the human resolves.
 
 ### Global change that needs variant adaptation
 
@@ -173,5 +173,5 @@ Template-only files are preserved. If a template file should be removed, it must
 - [06 - Artifact Lifecycle](06-artifact-lifecycle.md) — When each step happens
 - [08 - Versioning](08-versioning.md) — How version tracking triggers updates
 - `rules/artifact-flow.md` — Authority chain rules
-- `commands/sync.md` — The /sync command spec
+- `commands/sync-from-build.md` + `commands/sync-from-use.md` — The loom inbound-ingest command specs (Gate 1); `commands/sync-to-use.md` — the outbound distribution spec (Gate 2)
 - `commands/sync-to-build.md` — The /sync-to-build command spec

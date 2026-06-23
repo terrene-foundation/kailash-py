@@ -8,7 +8,6 @@ paths:
 
 # Variant Authoring Meta-Rule
 
-<!-- slot:neutral-body -->
 
 Loom's variant system has two axes: **language** (`py`/`rs`/`rb`/`prism`) and **CLI** (`cc`/`codex`/`gemini`). Variant files overlay global artifacts at sync time. This rule defines how overlays MUST be authored so the composed output stays correct across all target matrix cells.
 
@@ -25,14 +24,12 @@ A variant file MUST contain ONLY slot-keyed replacement bodies, never a full alt
 ````markdown
 # DO — variant file contains ONLY divergent slots
 
-<!-- slot:examples -->
 
 ```rust
 // Rust-specific example
 let db = DataFlow::new(...);
 ```
 
-<!-- /slot:examples -->
 
 # DO NOT — variant file is a full copy with 5% diff
 
@@ -50,7 +47,7 @@ Three-axis (language × CLI) overlay is reserved for rules whose examples refere
 
 - **CLI + language divergent (ternary — `variants/<lang>-<cli>/rules/`)**: `agents.md`, `worktree-isolation.md`. Both files contain `Agent(...)` delegation calls AND language-specific paths (`packages/<pkg>/src/*.py` vs `packages/<pkg>/src/*.rs`) or tooling (`pytest`/`pip` vs `cargo check`/`cargo tree`).
 - **CLI-only divergent (binary — `variants/<cli>/rules/`)**: `specs-authority.md`. Contains `Agent(...)` delegation syntax but no language-specific content; one overlay per CLI serves all languages.
-- **Language-only divergent (binary — `variants/<lang>/rules/`)**: `agent-reasoning.md`, `framework-first.md`. Examples use Kaizen framework classes (`BaseAgent`, `ReActAgent`) whose identifiers differ by language but not by CLI runtime.
+- **Language-only divergent (binary — `variants/<lang>/rules/`)**: `agent-reasoning.md` (Kaizen classes `BaseAgent`/`ReActAgent` whose identifiers differ by language but not CLI — a latent classification with no materialized variant file); materialized rs language overlays include `connection-pool.md`, `testing.md`, `patterns.md`. (`framework-first.md` was classified language-only until its 2026-06-08 baseline promotion — #408 AC#5-c — collapsed it to a language-agnostic compact body with the rs binding framing moved to the `framework-first` skill; its rs rule variant was removed.)
 
 Adding a new `variants/<lang>-<cli>/` tree for a rule not in the ternary classification above is BLOCKED without an updated spec + classification.
 
@@ -111,9 +108,9 @@ Composition precedence per `.claude/bin/emit.mjs::composeRule` — applied in th
 4. `variants/<lang>-<cli>/rules/<rule>.md` (ternary)
 
 ```markdown
-# DO — language-only (rs licensing semantics)
+# DO — language-only (rs language-specific overrides; a materialized example)
 
-variants/rs/rules/independence.md
+variants/rs/rules/connection-pool.md
 
 # DO — CLI-only (Codex syntax in examples slot)
 
@@ -139,7 +136,7 @@ variants/py-codex/rules/zero-tolerance.md # zero-tolerance's neutral body is CLI
 
 **Why:** Duplicate overlays become drift surface the moment one is touched without the other. The three-axis system lets `emit.mjs` compose each axis independently — a CLI-only wrapper inherits across languages, a language-only rule inherits across CLIs, and the ternary tree is reserved for truly dual-axis divergence. Collapsing all divergence into ternary (historical pre-F4 pattern) multiplies maintenance cost and silently desynchronises the N × M target matrix.
 
-**Reference implementation:** `.claude/bin/emit.mjs::composeRule` (v6.1, Phase I2 2026-04-22) — previous versions lacked the language-axis step, which shipped the global rule body into e.g. `kailash-coc-rs/AGENTS.md` instead of the rs-specific override (affected `independence.md`, `agents.md`). The language-axis step closes that semantic drift.
+**Reference implementation:** `.claude/bin/emit.mjs::composeRule` (v6.1, Phase I2 2026-04-22) — previous versions lacked the language-axis step, which shipped the global rule body into e.g. `kailash-coc-rs/AGENTS.md` instead of the rs-specific override (affected `agents.md`; also `framework-first.md` until its 2026-06-08 baseline promotion removed the rs variant — #408 AC#5-c). The language-axis step closes that semantic drift.
 
 ## MUST NOT
 
@@ -152,5 +149,3 @@ variants/py-codex/rules/zero-tolerance.md # zero-tolerance's neutral body is CLI
 **Why:** Unresolved variants accumulate; /sync distributes them unchanged; downstream repos inherit the mess.
 
 Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §3 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
-
-<!-- /slot:neutral-body -->

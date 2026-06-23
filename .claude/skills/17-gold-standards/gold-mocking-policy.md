@@ -303,8 +303,6 @@ def test_workflow():
 
 ## Related Patterns
 
-- **Testing best practices**: [`testing-best-practices`](../../07-development-guides/testing-best-practices.md)
-- **Test organization**: [`test-organization`](../../07-development-guides/test-organization.md)
 - **Gold testing standard**: [`gold-testing`](gold-testing.md)
 
 <!-- Trigger Keywords: mocking policy, NO mocking in Tiers 2-3, real infrastructure, test policy, mock guidelines, testing standards -->

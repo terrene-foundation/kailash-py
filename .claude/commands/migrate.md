@@ -55,7 +55,7 @@ Run downstream-sync semantics against the sister (skill § Downstream Sync). The
 
 ### Step 4a — Transition fallback for pre-structural-fix sister templates
 
-Post-#184 structural fix, sister templates ship the `.claude/codex-mcp-guard` symlink and `.claude/sync-manifest.yaml` natively. **Drop this section after 2026-06-15** once every sister template has been `/sync`'d post-#184. For pre-fix sisters, idempotent guards substitute the missing artifacts: `[ -e .claude/codex-mcp-guard ] || ln -sfn ../.codex-mcp-guard .claude/codex-mcp-guard` and `[ -f .claude/sync-manifest.yaml ] || cp "$LOOM_PATH/.claude/sync-manifest.yaml" .claude/sync-manifest.yaml`. `$LOOM_PATH` is superseded by the resolver — prefer `resolveRepo("loom").value` per `cross-repo.md` MUST-1. Surface a clear error if neither resolver nor `$LOOM_PATH` yields a path (no positional guessing).
+Post-#184 structural fix, sister templates ship the `.claude/codex-mcp-guard` symlink and `.claude/sync-manifest.yaml` natively. **Drop this section after 2026-06-15** once every sister template has been `/sync-to-use`'d post-#184. For pre-fix sisters, idempotent guards substitute the missing artifacts: `[ -e .claude/codex-mcp-guard ] || ln -sfn ../.codex-mcp-guard .claude/codex-mcp-guard` and `[ -f .claude/sync-manifest.yaml ] || cp "$LOOM_PATH/.claude/sync-manifest.yaml" .claude/sync-manifest.yaml`. `$LOOM_PATH` is superseded by the resolver — prefer `resolveRepo("loom").value` per `cross-repo.md` MUST-1. Surface a clear error if neither resolver nor `$LOOM_PATH` yields a path (no positional guessing).
 
 ## Step 5 — CLAUDE.md 3-way reconciliation
 
@@ -71,7 +71,9 @@ Closes the variant-overlay-drift gap (Loom-A). Sister-installed binaries at `.cl
 
 Order: `node .claude/bin/emit-cli-artifacts.mjs --target <variant> --out "$EMIT_TMP"`, copy `$EMIT_TMP/codex/*` and `$EMIT_TMP/gemini/*` into `.codex/` and `.gemini/` subtrees, then `node .claude/bin/emit.mjs --cli codex` (→ `AGENTS.md`) and `--cli gemini` (→ `GEMINI.md`). If `.codex-mcp-guard/policies.json` is missing or empty, `node .codex-mcp-guard/extract-policies.mjs` populates it from `.claude/hooks/`.
 
-**Post-Step-6 self-check:** `[ ! -d codex ] && [ ! -d gemini ] || { echo "stray non-dotted emit dirs"; exit 1; }`. If they exist, the agent invoked `emit-cli-artifacts.mjs --out .` instead of the tmp+move pattern.
+Then emit the unified `.coc/` derivative (#392): `node .claude/bin/emit-coc.mjs --target <variant> --out .`. Unlike `emit-cli-artifacts.mjs`, this writes the dotted target `.coc/` directly via an internal atomic tmp-dir swap — invoke with `--out .` (NOT a tmp dir + move). It produces `COC.md` + `COC.lock` + the `rules/`, `agents/`, `skills/`, `commands/` subtrees conforming to the csq consumer contract (`governance.csq:specs/09-unified-coc-artifact-standard.md`). A `WARN: … > 60 KiB` line is advisory (spec-09 has no consumer cap), not a failure.
+
+**Post-Step-6 self-check:** `[ ! -d codex ] && [ ! -d gemini ] || { echo "stray non-dotted emit dirs"; exit 1; }` (per-CLI emit went to `--out .` instead of tmp+move) AND `[ -f .coc/COC.lock ] || { echo ".coc/ emit missing"; exit 1; }`.
 
 ## Step 7 — Refresh `.github/`
 
@@ -95,9 +97,9 @@ Emit: "Trust posture is per-CLI. `posture show` works on Claude Code today; Code
 
 ## Step 12 — Commit + PR
 
-Stage explicit paths (per `coc-sync-landing.md` Rule 2 — `git add -A` BLOCKED). **Namespace tmp files per repo** via `mktemp -t coc-migrate-msg-XXXXXX` / `mktemp -t coc-migrate-prbody-XXXXXX` to prevent concurrent `/migrate` sessions overwriting each other's commit messages (verified failure mode 2026-05-13 — two consumer migrations running in parallel: one consumer's commit shipped with the other's message body). Stage: `.claude/`, `.codex/`, `.codex-mcp-guard/`, `.gemini/`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, three `.github/` files. Then `git commit -F "$MSGFILE"` + `gh pr create --title "chore(coc): migrate to multi-CLI" --body-file "$PRBODY"`. Shared `/tmp/migrate-msg.txt` paths are BLOCKED.
+Stage explicit paths (per `coc-sync-landing.md` Rule 2 — `git add -A` BLOCKED). **Namespace tmp files per repo** via `mktemp -t coc-migrate-msg-XXXXXX` / `mktemp -t coc-migrate-prbody-XXXXXX` to prevent concurrent `/migrate` sessions overwriting each other's commit messages (verified failure mode 2026-05-13 — two consumer migrations running in parallel: one consumer's commit shipped with the other's message body). Stage: `.claude/`, `.codex/`, `.codex-mcp-guard/`, `.gemini/`, `.coc/`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, three `.github/` files. Then `git commit -F "$MSGFILE"` + `gh pr create --title "chore(coc): migrate to multi-CLI" --body-file "$PRBODY"`. Shared `/tmp/migrate-msg.txt` paths are BLOCKED.
 
-Commit body MUST cite source template, target template, files added, files replaced, verification-table summary, link to skill. PR body MUST embed Step 10 verification table.
+Commit body MUST cite source template, target template, files added, files replaced, verification-table summary, link to skill. When the commit changes the `.coc/` shape (added/removed artifacts, frontmatter or lock-format change), the body MUST also carry a `coc-shape: <description>` marker per `loom-csq-boundary.md` Rule 5 so csq can grep upstream shape changes. PR body MUST embed Step 10 verification table.
 
 ## `--refresh` (multi-CLI consumer re-pull)
 

@@ -66,18 +66,6 @@ process.stdin.on("end", () => {
 //
 // If you add a project-specific dir, prefer putting it here upstream in loom/
 // and syncing out, rather than editing downstream copies.
-// Filenames excluded from the log scan by EXACT basename. These are
-// structured append-only AUDIT logs (machine-readable records of classifier
-// decisions / skipped events), NOT runtime stderr/stdout. They record commit
-// subjects / event reasons verbatim, so a commit like
-// `feat(trust): ... logging at WARN (#1316)` is a guaranteed WARN+ false
-// positive. Per observability.md Rule 5a, audit logs are excluded by filename
-// allowlist — never by per-finding regex suppression. Composes with
-// EXCLUDED_DIRS below.
-const EXCLUDED_FILES = [
-  ".journal-skipped.log", // journal-skip audit log (records commit subjects verbatim)
-];
-
 const EXCLUDED_DIRS = [
   ".playwright-mcp", // Playwright MCP browser console captures
   ".chrome-devtools", // Chrome DevTools MCP captures
@@ -192,17 +180,11 @@ function scanRecentLogs(cwd) {
     const prune = pathClauses
       ? `${nameClauses} -o ${pathClauses}`
       : nameClauses;
-    // Exclude structured audit-log files by exact basename (observability.md
-    // Rule 5a) — these record commit subjects / event reasons verbatim and are
-    // not runtime stderr/stdout. Composes with the dir-prune above.
-    const fileExcludeClauses = EXCLUDED_FILES.map(
-      (f) => `! -name '${f.replace(/'/g, "'\\''")}'`,
-    ).join(" ");
     // find: prune tool cache dirs + nested git checkouts, then match *.log
-    // (minus excluded audit-log basenames) modified in last 120 min.
+    // modified in last 120 min.
     const cmd =
       `find "${cwd}" \\( -type d \\( ${prune} \\) -prune \\) -o ` +
-      `-type f -name '*.log' ${fileExcludeClauses} -mmin -120 -print 2>/dev/null ` +
+      `-type f -name '*.log' -mmin -120 -print 2>/dev/null ` +
       `| head -20 | xargs -I{} grep -HnE 'WARN|ERROR|FAIL' {} 2>/dev/null ` +
       `| head -200`;
     const out = execSync(cmd, { encoding: "utf8", timeout: 3000 });

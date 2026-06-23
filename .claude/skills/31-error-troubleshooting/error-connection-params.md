@@ -11,7 +11,7 @@ Fix connection-related errors including wrong parameter order, missing parameter
 > Category: `cross-cutting` (error-resolution)
 > Priority: `CRITICAL` (Very common error #2)
 > SDK Version: `0.9.0+`
-> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`connection-patterns`](../../01-core-sdk/connection-patterns.md)
+> Related Skills: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md), [`connection-patterns`](../01-core-sdk/connection-patterns.md)
 > Related Subagents: `pattern-expert` (complex connection debugging)
 
 ## Common Error Messages
@@ -190,10 +190,10 @@ workflow.add_connection(
 
 ## Related Patterns
 
-- **Connection basics**: [`connection-patterns`](../../01-core-sdk/connection-patterns.md)
-- **Workflow creation**: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md)
+- **Connection basics**: [`connection-patterns`](../01-core-sdk/connection-patterns.md)
+- **Workflow creation**: [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md)
 - **Other errors**: [`error-missing-build`](error-missing-build.md), [`error-parameter-validation`](error-parameter-validation.md)
-- **Parameter passing**: [`param-passing-quick`](../../01-core-sdk/param-passing-quick.md)
+- **Parameter passing**: [`param-passing-quick`](../01-core-sdk/param-passing-quick.md)
 
 ## When to Escalate to Subagent
 
@@ -206,10 +206,10 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Pattern Expert**: [`.claude/agents/pattern-expert.md` (lines 294-338)](../../../../.claude/agents/pattern-expert.md#L294-L338)
+- **Pattern Expert**: [`.claude/agents/implementation/pattern-expert.md` (lines 294-338)](../../agents/implementation/pattern-expert.md#L294-L338)
 
 ### Related Documentation
-- **Critical Rules**: [`CLAUDE.md` (line 140)](../../../../CLAUDE.md#L140)
+- **Critical Rules**: [`CLAUDE.md` (line 140)](../../../CLAUDE.md#L140)
 
 ## Quick Tips
 

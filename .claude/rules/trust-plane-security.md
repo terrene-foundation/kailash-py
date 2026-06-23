@@ -7,7 +7,6 @@ paths:
 
 # Trust-Plane Security Rules
 
-<!-- slot:neutral-body -->
 
 ### 1. No Bare `open()` or `Path.read_text()` for Record Files
 
@@ -175,34 +174,32 @@ norm = os.path.normpath(user_path)  # Platform-dependent, Windows backslashes
 
 ### 8. Every Signing / Hash Pre-Image MUST Reject NaN/Inf (`allow_nan=False`)
 
-Every `json.dumps` that produces a SIGNING, HMAC, integrity-hash, or cross-SDK-conformance pre-image MUST pass `allow_nan=False` (and `ensure_ascii=True` to match the wire-format common config). A free-form `metadata` / `dict[str, Any]` field that reaches the pre-image is the un-guarded ingress; financial / constraint numerics are guarded by `math.isfinite()` (Rule 3 / MUST-NOT-5) but free-form metadata is NOT. This is distinct from Rule 3 / MUST-NOT-5, which guard the VALUE-COMPARISON axis (a `NaN` cost silently passing `> limit`); this clause guards the SERIALIZATION axis (a `NaN`/`Infinity` literal in the signed bytes).
+Every serialization that produces a SIGNING, HMAC, integrity-hash, or cross-SDK-conformance pre-image MUST reject non-finite floats (`NaN` / `Infinity` / `-Infinity`) at serialize time — in Python, `json.dumps(..., allow_nan=False, ensure_ascii=True)` to match the wire-format common config. A free-form `metadata` / open `dict[str, Any]` field that reaches the pre-image is the un-guarded ingress; financial / constraint numerics are guarded by a finiteness check (MUST-NOT-5) but free-form metadata is NOT. This is distinct from MUST-NOT-5, which guards the VALUE-COMPARISON axis (a `NaN` cost silently passing `> limit`); this clause guards the SERIALIZATION axis (a `NaN`/`Infinity` literal in the signed bytes).
 
 ```python
-# DO — every signing/hash pre-image rejects non-finite floats
+# DO (py-illustrative) — every signing/hash pre-image rejects non-finite floats
 def to_canonical_json(self) -> str:
     return json.dumps(self._hashable_dict(), sort_keys=True,
                       default=str, allow_nan=False, ensure_ascii=True)
-    # NaN/Inf in metadata → raises ValueError at sign time (fail-closed)
+    # NaN/Inf in metadata → raises at sign time (fail-closed)
 
-# DO NOT — permissive json.dumps over a signed pre-image
+# DO NOT — permissive serializer over a signed pre-image
 def to_canonical_json(self) -> str:
     return json.dumps(self._hashable_dict(), sort_keys=True, default=str)
-    # NaN/Inf → emits "NaN"/"Infinity" literals; Python signs them, but a
-    # strict cross-SDK parser (Rust serde_json) REJECTS them → the
-    # Python-signed artifact cannot be HMAC/signature-re-verified cross-SDK.
+    # NaN/Inf → emits "NaN"/"Infinity" literals; signs them, but a
+    # strict cross-SDK parser (e.g. Rust serde_json) REJECTS them → the
+    # signed artifact cannot be HMAC/signature-re-verified cross-SDK.
 ```
 
-**Why:** `NaN`/`Infinity` are RFC-8259-invalid JSON; Python's permissive `json.dumps` emits and signs them, but a strict cross-SDK verifier (Rust `serde_json`) rejects them on parse — so a Python-signed envelope/witness/audit-anchor carrying a non-finite float in free-form metadata can never be re-verified by the sibling SDK, the exact cross-SDK parity hazard the trust plane exists to close. The fix is byte-neutral on every finite input (the `allow_nan` kwarg changes zero currently-emitted bytes for valid data), so it ships without a cross-SDK lockstep — unlike a `default=str` → `canonical_scalars` migration (see `cross-sdk-inspection.md` Rule 4b). A module-granularity AST sweep over every signing/hash root is the durable guard; per-function spot-checks miss sibling pre-images (the 2026-06-21 sweep found 4 deliberately-excluded forensic/memoization sites and 0 missed signing sites only after the per-function pass was widened to module-granularity).
+**Why:** `NaN`/`Infinity` are RFC-8259-invalid JSON; a permissive serializer emits and signs them, but a strict cross-SDK verifier rejects them on parse — so an envelope/witness/audit-anchor carrying a non-finite float in free-form metadata can never be re-verified by the sibling SDK, the exact cross-SDK parity hazard the trust plane exists to close. The fix is byte-neutral on every finite input (it changes zero currently-emitted bytes for valid data), so it ships without a cross-SDK lockstep — unlike a byte-CHANGING canonical-encoder migration, which is cross-SDK lockstep (see `cross-sdk-inspection.md`). A module-granularity AST/source sweep over every signing/hash root is the durable guard; per-function spot-checks miss sibling pre-images (a 2026-06-21 sweep found 4 deliberately-excluded forensic/memoization sites and 0 missed signing sites only after the per-function pass was widened to module-granularity).
 
 **Trust Posture Wiring (NaN/Inf signing pre-image):**
 
-- **Severity:** `halt-and-report` at gate-review (security-reviewer at `/implement` + `/release` confirms every `json.dumps` over a signing/hash pre-image in the diff carries `allow_nan=False`); `advisory` at any hook layer (a lexical `json.dumps`-without-`allow_nan` scan cannot carry `block` per `hook-output-discipline.md` MUST-2).
+- **Severity:** `halt-and-report` at gate-review (security-reviewer at `/implement` + `/release` confirms every signing/hash pre-image serializer in the diff rejects non-finite floats); `advisory` at any hook layer (a lexical serializer-without-finiteness-guard scan cannot carry `block` per `hook-output-discipline.md` MUST-2).
 - **Grace period:** 7 days from rule landing.
-- **Cumulative posture impact:** same-class violations (a signing/hash pre-image shipped without `allow_nan=False`) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Cumulative posture impact:** same-class violations (a signing/hash pre-image shipped without a non-finite-float guard) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
 - **Regression-within-grace:** trigger key `nan_inf_signing_preimage` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
 - **Receipt requirement:** SessionStart `[ack: trust-plane-security]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate).
-- **Detection mechanism:** Phase 1 — the module-granularity AST invariant test `tests/regression/test_trust_signing_preimage_rejects_nan_inf.py::test_trust_plane_signing_preimages_all_carry_allow_nan` over roots `src/kailash/trust`, `packages/kailash-pact/src`, `src/kailash/delegate/conformance` (excludes documented forensic/memoization sites); plus security-reviewer gate-review at `/implement` + `/release`. Phase 2 (deferred): a `PostToolUse(Edit|Write)` lexical advisory on trust-plane paths.
-- **Violation scope:** this clause (signing/hash/conformance pre-image serialization). Every violation row names the file + the un-guarded `json.dumps` site.
-- **Origin:** kailash 2.43.1 (2026-06-21) trust-plane-wide NaN/Inf signing-pre-image sweep — PR #1411 (envelope/audit-chain start) + PR #1412 (full trust plane + PACT + delegate-conformance digest); workspace receipt `workspaces/cross-sdk-audit/journal/0015` + `0017`.
-
-<!-- /slot:neutral-body -->
+- **Detection mechanism:** Phase 1 — a module-granularity AST/source invariant test over every trust-plane / governance / conformance signing-or-hash root (py-illustrative: a regression test asserting every `json.dumps` over a signing/hash pre-image carries `allow_nan=False`; the sibling SDK's equivalent asserts its canonical encoder rejects non-finite floats), excluding documented forensic/memoization sites; plus security-reviewer gate-review at `/implement` + `/release`. Phase 2 (deferred): a `PostToolUse(Edit|Write)` lexical advisory on trust-plane paths.
+- **Violation scope:** this clause (signing/hash/conformance pre-image serialization). Every violation row names the file + the un-guarded serialization site.
+- **Origin:** trust-plane-wide NaN/Inf signing-pre-image sweep (2026-06-21) — envelope/audit-chain start + full trust plane + governance + delegate-conformance digest.

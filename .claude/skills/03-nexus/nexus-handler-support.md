@@ -1,236 +1,84 @@
 ---
 skill: nexus-handler-support
-description: Register Python functions as multi-channel workflows using @app.handler() decorator or register_handler() method
+description: Register functions as multi-channel workflows using handler() or decorator patterns
 priority: HIGH
-tags: [nexus, handler, workflow, decorator, function]
+tags: [nexus, handler, workflow, function]
 ---
 
 # Nexus Handler Support
 
-Register Python functions directly as multi-channel workflows, bypassing PythonCodeNode sandbox restrictions.
+Register functions directly as multi-channel workflows, bypassing workflow-builder complexity for simple operations.
 
-## When to Use
+## When to Use Handlers
 
 - Service orchestration (database, external APIs)
-- Async operations (requires `asyncio`)
+- Async operations
 - Application module imports
-- Full Python access without sandbox
+- Full language access without sandbox restrictions
+- Simple request/response patterns
 
-## Quick Reference
+## Shared API -- Imperative Registration
 
-### Decorator Pattern
+The imperative `handler(name, func)` form works identically across all SDKs:
 
-```python
-from nexus import Nexus
-
+```
 app = Nexus()
-
-@app.handler("greet")
-async def greet(name: str, greeting: str = "Hello") -> dict:
-    return {"message": f"{greeting}, {name}!"}
-
+app.handler("process_order", process_order_func)
 app.start()
 ```
 
-### Non-Decorator Pattern
+## Decorator Registration
 
-```python
-from my_app.handlers import process_order
+Decorator-style handler registration is available in most SDKs but the exact syntax and parameters vary by language.
 
-app = Nexus()
-app.register_handler("process_order", process_order)
-app.start()
-```
+See language-specific variant for decorator syntax and complete examples.
 
-## API
+## Parameter Handling
 
-### @app.handler() Decorator
+Handlers derive input parameters from the function signature:
 
-```python
-@app.handler(
-    name: str,                      # Required: workflow name
-    description: str = "",          # Optional: documentation
-    tags: Optional[List[str]] = None  # Optional: categorization
-)
-```
+| Concept             | Behavior                  |
+| ------------------- | ------------------------- |
+| Required parameters | No default value          |
+| Optional parameters | Have a default value      |
+| Type annotations    | Used for parameter typing |
+| Return type         | Typically dict/map        |
+| No annotation       | Defaults to string        |
 
-### app.register_handler() Method
-
-```python
-app.register_handler(
-    name: str,                      # Required: workflow name
-    handler_func: Callable,         # Required: function to register
-    description: str = "",          # Optional: documentation
-    tags: Optional[List[str]] = None,  # Optional: categorization
-    input_mapping: Optional[Dict[str, str]] = None  # Optional: param mapping
-)
-```
-
-## Parameter Type Mapping
-
-| Python Type            | Workflow Type | Required         |
-| ---------------------- | ------------- | ---------------- |
-| `str`                  | `str`         | Yes (no default) |
-| `int`                  | `int`         | Yes (no default) |
-| `float`                | `float`       | Yes (no default) |
-| `bool`                 | `bool`        | Yes (no default) |
-| `dict`                 | `dict`        | Yes (no default) |
-| `list`                 | `list`        | Yes (no default) |
-| `Optional[T]`          | `T`           | No               |
-| Parameter with default | Any           | No               |
-| No annotation          | `str`         | Varies           |
+Parameter type mapping details (how language types map to workflow parameter types) are language-specific. See variant.
 
 ## Core SDK: HandlerNode
 
-For direct Core SDK usage without Nexus:
+For direct Core SDK usage without Nexus, the HandlerNode wraps functions as workflow nodes:
 
-```python
-from kailash.nodes.handler import HandlerNode, make_handler_workflow
-from kailash.runtime import AsyncLocalRuntime
+- Automatic parameter derivation from function signatures
+- Type annotation mapping to NodeParameter entries
+- Seamless WorkflowBuilder integration
+- `make_handler_workflow()` utility builds single-node workflows from functions
 
-async def my_function(x: int) -> dict:
-    return {"doubled": x * 2}
+See language-specific variant for HandlerNode API and usage examples.
 
-# Option 1: Use HandlerNode directly
-node = HandlerNode(handler=my_function)
+## Handler vs WorkflowBuilder
 
-# Option 2: Build a complete workflow
-workflow = make_handler_workflow(my_function, "handler")
-runtime = AsyncLocalRuntime()
-results, run_id = await runtime.execute_workflow_async(
-    workflow, inputs={"x": 5}
-)
-```
-
-## Sandbox Mode Configuration
-
-For PythonCodeNode with blocked imports:
-
-```python
-from kailash.nodes.code.python import PythonCodeNode
-
-# Bypass sandbox restrictions
-node = PythonCodeNode(
-    name="trusted_node",
-    code="import subprocess\nresult = subprocess.run(['ls'])",
-    sandbox_mode="trusted"  # Default: "restricted"
-)
-```
-
-| Mode           | Behavior                            |
-| -------------- | ----------------------------------- |
-| `"restricted"` | Enforces module allowlist (default) |
-| `"trusted"`    | Bypasses import checks              |
-
-## Common Patterns
-
-### Database Operations
-
-```python
-@app.handler("get_user")
-async def get_user(user_id: int) -> dict:
-    from my_app.db import get_session
-    async with get_session() as session:
-        user = await session.get(User, user_id)
-        return {"user": user.to_dict() if user else None}
-```
-
-### External API Calls
-
-```python
-@app.handler("fetch_data")
-async def fetch_data(url: str) -> dict:
-    import httpx
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return {"data": response.json()}
-```
-
-### Sync Handlers (run in executor)
-
-```python
-@app.handler("sync_operation")
-def sync_operation(data: str) -> dict:
-    # Automatically runs in thread pool executor
-    return {"processed": data.upper()}
-```
-
-## Migration: PythonCodeNode to Handler
-
-### Before (fails at runtime)
-
-```python
-workflow.add_node("PythonCodeNode", "process", {
-    "code": "import asyncio\nfrom my_app import Service\n..."
-})
-app.register("process", workflow.build())
-```
-
-### After (works)
-
-```python
-@app.handler("process")
-async def process(data: dict) -> dict:
-    from my_app import Service
-    return await Service().process(data)
-```
-
-## Handler Registry
-
-Introspect registered handlers:
-
-```python
-# Access handler metadata
-print(app._handler_registry)
-# {
-#     "greet": {
-#         "handler": <function>,
-#         "description": "...",
-#         "tags": [...],
-#         "workflow": <Workflow>
-#     }
-# }
-```
-
-## Registration-Time Validation
-
-Nexus warns at registration time if PythonCodeNode uses blocked imports:
-
-```
-WARNING: Workflow 'my_workflow': PythonCodeNode node 'code_node' imports
-         'asyncio' which is not in the sandbox allowlist.
-         Consider using @app.handler() to bypass the sandbox.
-```
+| Aspect     | Handler                  | WorkflowBuilder         |
+| ---------- | ------------------------ | ----------------------- |
+| Complexity | Simple functions         | Multi-node pipelines    |
+| Sandbox    | No restrictions          | Sandbox rules may apply |
+| Parameters | Derived from signature   | Defined in node config  |
+| Best for   | Service calls, CRUD, I/O | Complex data pipelines  |
 
 ## Best Practices
 
-1. **Use handlers for service orchestration** - they provide full Python access
-2. **Add type annotations** - used for parameter derivation
-3. **Return dictionaries** - non-dict returns are wrapped as `{"result": value}`
-4. **Use async functions for I/O** - sync functions run in executor
-5. **Add descriptions** - appear in API docs and MCP tools
+1. **Use handlers for service orchestration** -- they provide full language access
+2. **Add type annotations** -- used for parameter derivation across all SDKs
+3. **Return dictionaries/maps** -- non-dict returns are wrapped as `{"result": value}`
+4. **Use async functions for I/O** -- sync functions run in executor/thread pool
+5. **Add descriptions** -- appear in API docs and MCP tool discovery
 
 ## Related Skills
 
-- [nexus-workflow-registration](#) - All registration patterns
-- [nexus-quickstart](#) - Basic Nexus setup
-- [nexus-dataflow-integration](#) - DataFlow integration
+- [nexus-workflow-registration](nexus-workflow-registration.md) - All registration patterns
+- [nexus-quickstart](nexus-quickstart.md) - Basic Nexus setup
+- [nexus-dataflow-integration](nexus-dataflow-integration.md) - DataFlow integration
 
-## Migration Documentation
-
-For comprehensive migration from legacy PythonCodeNode workflows to handlers:
-
-
-### Key Migration Insight
-
-HandlerNode's `_derive_params_from_signature()` maps complex generic types (e.g., `List[dict]`) to `str`. Use plain `list` annotation instead:
-
-```python
-# ❌ WRONG: List[dict] maps to str
-async def create_order(items: List[dict]) -> dict: ...
-
-# ✅ CORRECT: list maps to list
-async def create_order(items: list) -> dict: ...
-```
-
-## Full Documentation
+See language-specific variant for complete handler examples, decorator API, sandbox configuration, and migration patterns.
