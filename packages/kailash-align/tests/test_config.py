@@ -335,7 +335,8 @@ class TestTrl1xCompat:
         pytest.importorskip("trl")
         # Must construct without TypeError. trl 1.x has max_length (not
         # max_seq_length); the dataclass field stays max_seq_length.
-        trl_cfg = KASFTConfig(max_seq_length=512).to_trl_config("/tmp/x")
+        # bf16=False so trl's GPU-only bf16 validation does not fire on CPU CI.
+        trl_cfg = KASFTConfig(max_seq_length=512, bf16=False).to_trl_config("/tmp/x")
         assert trl_cfg.max_length == 512
 
     def test_dpo_to_trl_config_trl1x_compat(self):
@@ -343,7 +344,7 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x DPOConfig has max_length, NOT max_prompt_length.
-        trl_cfg = KADPOConfig(max_length=1024).to_trl_config("/tmp/x")
+        trl_cfg = KADPOConfig(max_length=1024, bf16=False).to_trl_config("/tmp/x")
         assert trl_cfg.max_length == 1024
 
     def test_kto_to_trl_config_trl1x_compat(self):
@@ -351,7 +352,7 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x KTOConfig has max_length, NOT max_prompt_length.
-        trl_cfg = KAKTOConfig(max_length=768).to_trl_config("/tmp/x")
+        trl_cfg = KAKTOConfig(max_length=768, bf16=False).to_trl_config("/tmp/x")
         assert trl_cfg.max_length == 768
 
     def test_grpo_to_trl_config_trl1x_compat(self):
@@ -359,9 +360,9 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x renamed kl_coef -> beta. Default path (use_vllm=False).
-        trl_cfg = KAGRPOConfig(max_completion_length=256, kl_coef=0.02).to_trl_config(
-            "/tmp/x"
-        )
+        trl_cfg = KAGRPOConfig(
+            max_completion_length=256, kl_coef=0.02, bf16=False
+        ).to_trl_config("/tmp/x")
         assert trl_cfg.max_completion_length == 256
         assert trl_cfg.beta == 0.02
 
@@ -370,9 +371,9 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
-        trl_cfg = KAGRPOConfig(use_vllm=True, vllm_gpu_utilization=0.4).to_trl_config(
-            "/tmp/x"
-        )
+        trl_cfg = KAGRPOConfig(
+            use_vllm=True, vllm_gpu_utilization=0.4, bf16=False
+        ).to_trl_config("/tmp/x")
         assert trl_cfg.use_vllm is True
         assert trl_cfg.vllm_gpu_memory_utilization == 0.4
 
@@ -381,9 +382,9 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x renamed kl_coef -> beta. Default path (use_vllm=False).
-        trl_cfg = KARLOOConfig(max_completion_length=256, kl_coef=0.02).to_trl_config(
-            "/tmp/x"
-        )
+        trl_cfg = KARLOOConfig(
+            max_completion_length=256, kl_coef=0.02, bf16=False
+        ).to_trl_config("/tmp/x")
         assert trl_cfg.max_completion_length == 256
         assert trl_cfg.beta == 0.02
 
@@ -392,9 +393,9 @@ class TestTrl1xCompat:
 
         pytest.importorskip("trl")
         # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
-        trl_cfg = KARLOOConfig(use_vllm=True, vllm_gpu_utilization=0.4).to_trl_config(
-            "/tmp/x"
-        )
+        trl_cfg = KARLOOConfig(
+            use_vllm=True, vllm_gpu_utilization=0.4, bf16=False
+        ).to_trl_config("/tmp/x")
         assert trl_cfg.use_vllm is True
         assert trl_cfg.vllm_gpu_memory_utilization == 0.4
 

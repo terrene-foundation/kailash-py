@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from kailash_align.config import AlignmentConfig
+from kailash_align.config import AlignmentConfig, SFTConfig
 from kailash_align.exceptions import TrainingError
 from kailash_align.pipeline import AlignmentPipeline, AlignmentResult
 
@@ -100,6 +100,9 @@ class TestTrlAbsentTrainerGuard:
             base_model_id="test/model",
             method="xpo",
             experiment_dir=str(tmp_path),
+            # xpo falls back to the sft sub-config; bf16=False so trl's GPU-only
+            # bf16 validation does not fire before the trainer-import guard on CPU CI.
+            sft=SFTConfig(bf16=False),
         )
         pipeline = AlignmentPipeline(config=cfg)
 
