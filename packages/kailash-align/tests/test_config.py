@@ -3,10 +3,7 @@
 """Tests for AlignmentConfig and sub-configs."""
 from __future__ import annotations
 
-import math
-
 import pytest
-
 from kailash_align.config import (
     AdapterSignature,
     AlignmentConfig,
@@ -16,7 +13,6 @@ from kailash_align.config import (
     _validate_finite,
     _validate_positive,
 )
-
 
 # --- Validation Utilities ---
 
@@ -319,3 +315,102 @@ class TestAlignmentConfig:
         except ImportError:
             with pytest.raises(ImportError, match="bitsandbytes"):
                 AlignmentConfig(base_model_id="test/model", use_qlora=True)
+
+
+# --- trl 1.x compatibility (issue #1426) ---
+#
+# Behavioral tests: call to_trl_config() against the INSTALLED trl and assert
+# the result constructs without TypeError. The old field names (max_seq_length,
+# max_prompt_length) and the removed classes (ORPOConfig, OnlineDPOConfig) broke
+# every one of these against trl >=1.0. Config construction only -- no GPU.
+
+
+@pytest.mark.unit
+class TestTrl1xCompat:
+    """Guards that to_trl_config() forwards trl 1.x kwarg names, not 0.x."""
+
+    def test_sft_to_trl_config_trl1x_compat(self):
+        from kailash_align.config import SFTConfig as KASFTConfig
+
+        pytest.importorskip("trl")
+        # Must construct without TypeError. trl 1.x has max_length (not
+        # max_seq_length); the dataclass field stays max_seq_length.
+        trl_cfg = KASFTConfig(max_seq_length=512).to_trl_config("/tmp/x")
+        assert trl_cfg.max_length == 512
+
+    def test_dpo_to_trl_config_trl1x_compat(self):
+        from kailash_align.config import DPOConfig as KADPOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x DPOConfig has max_length, NOT max_prompt_length.
+        trl_cfg = KADPOConfig(max_length=1024).to_trl_config("/tmp/x")
+        assert trl_cfg.max_length == 1024
+
+    def test_kto_to_trl_config_trl1x_compat(self):
+        from kailash_align.config import KTOConfig as KAKTOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x KTOConfig has max_length, NOT max_prompt_length.
+        trl_cfg = KAKTOConfig(max_length=768).to_trl_config("/tmp/x")
+        assert trl_cfg.max_length == 768
+
+    def test_grpo_to_trl_config_trl1x_compat(self):
+        from kailash_align.config import GRPOConfig as KAGRPOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x renamed kl_coef -> beta. Default path (use_vllm=False).
+        trl_cfg = KAGRPOConfig(max_completion_length=256, kl_coef=0.02).to_trl_config(
+            "/tmp/x"
+        )
+        assert trl_cfg.max_completion_length == 256
+        assert trl_cfg.beta == 0.02
+
+    def test_grpo_to_trl_config_trl1x_compat_vllm(self):
+        from kailash_align.config import GRPOConfig as KAGRPOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
+        trl_cfg = KAGRPOConfig(use_vllm=True, vllm_gpu_utilization=0.4).to_trl_config(
+            "/tmp/x"
+        )
+        assert trl_cfg.use_vllm is True
+        assert trl_cfg.vllm_gpu_memory_utilization == 0.4
+
+    def test_rloo_to_trl_config_trl1x_compat(self):
+        from kailash_align.config import RLOOConfig as KARLOOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x renamed kl_coef -> beta. Default path (use_vllm=False).
+        trl_cfg = KARLOOConfig(max_completion_length=256, kl_coef=0.02).to_trl_config(
+            "/tmp/x"
+        )
+        assert trl_cfg.max_completion_length == 256
+        assert trl_cfg.beta == 0.02
+
+    def test_rloo_to_trl_config_trl1x_compat_vllm(self):
+        from kailash_align.config import RLOOConfig as KARLOOConfig
+
+        pytest.importorskip("trl")
+        # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
+        trl_cfg = KARLOOConfig(use_vllm=True, vllm_gpu_utilization=0.4).to_trl_config(
+            "/tmp/x"
+        )
+        assert trl_cfg.use_vllm is True
+        assert trl_cfg.vllm_gpu_memory_utilization == 0.4
+
+    def test_orpo_to_trl_config_trl1x_compat_raises(self):
+        from kailash_align.config import ORPOConfig as KAORPOConfig
+        from kailash_align.exceptions import TrainingError
+
+        # ORPOConfig/ORPOTrainer were removed in trl >=1.0. Calling
+        # to_trl_config() must raise an informative error pointing at DPO/GRPO.
+        with pytest.raises(TrainingError, match="trl >=1.0 removed"):
+            KAORPOConfig().to_trl_config("/tmp/x")
+
+    def test_online_dpo_to_trl_config_trl1x_compat_raises(self):
+        from kailash_align.config import OnlineDPOConfig as KAOnlineDPOConfig
+        from kailash_align.exceptions import TrainingError
+
+        # OnlineDPOConfig/OnlineDPOTrainer were removed in trl >=1.0.
+        with pytest.raises(TrainingError, match="trl >=1.0 removed"):
+            KAOnlineDPOConfig().to_trl_config("/tmp/x")

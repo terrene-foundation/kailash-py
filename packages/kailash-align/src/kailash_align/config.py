@@ -80,7 +80,8 @@ class LoRAConfig:
 
     def to_peft_config(self):
         """Convert to peft.LoraConfig. Lazy import to avoid loading peft at config time."""
-        from peft import LoraConfig as PeftLoraConfig, TaskType
+        from peft import LoraConfig as PeftLoraConfig
+        from peft import TaskType
 
         return PeftLoraConfig(
             r=self.rank,
@@ -143,7 +144,10 @@ class SFTConfig:
             gradient_accumulation_steps=self.gradient_accumulation_steps,
             learning_rate=self.learning_rate,
             warmup_ratio=self.warmup_ratio,
-            max_seq_length=self.max_seq_length,
+            # trl 1.x renamed SFTConfig.max_seq_length -> max_length. The public
+            # dataclass field stays `max_seq_length` (stable user-facing API);
+            # only the forwarded trl kwarg changes.
+            max_length=self.max_seq_length,
             logging_steps=self.logging_steps,
             save_steps=self.save_steps,
             gradient_checkpointing=self.gradient_checkpointing,
@@ -208,7 +212,8 @@ class DPOConfig:
             learning_rate=self.learning_rate,
             warmup_ratio=self.warmup_ratio,
             max_length=self.max_length,
-            max_prompt_length=self.max_prompt_length,
+            # trl 1.x removed DPOConfig.max_prompt_length. The dataclass field is
+            # kept (stable API) but no longer forwarded to trl.
             beta=self.beta,
             logging_steps=self.logging_steps,
             save_steps=self.save_steps,
@@ -272,26 +277,44 @@ class KTOConfig:
 
     def to_trl_config(self, output_dir: str):
         """Convert to trl.KTOConfig."""
-        from trl import KTOConfig as TRLKTOConfig
+        import warnings
 
-        return TRLKTOConfig(
-            output_dir=output_dir,
-            num_train_epochs=self.num_train_epochs,
-            per_device_train_batch_size=self.per_device_train_batch_size,
-            gradient_accumulation_steps=self.gradient_accumulation_steps,
-            learning_rate=self.learning_rate,
-            warmup_ratio=self.warmup_ratio,
-            beta=self.beta,
-            desirable_weight=self.desirable_weight,
-            undesirable_weight=self.undesirable_weight,
-            max_length=self.max_length,
-            max_prompt_length=self.max_prompt_length,
-            logging_steps=self.logging_steps,
-            save_steps=self.save_steps,
-            gradient_checkpointing=self.gradient_checkpointing,
-            bf16=self.bf16,
-            fp16=self.fp16,
-        )
+        # trl 1.x emits a FutureWarning steering imports to
+        # `trl.experimental.kto`, but upstream explicitly keeps the stable
+        # `from trl import KTOConfig` path working ("this current path will
+        # remain") -- see https://github.com/huggingface/trl/issues/4223.
+        # We deliberately stay on the stable path (the experimental module's
+        # API may change between trl patch releases); the warning is a
+        # documented upstream deprecation, suppressed only at this call site.
+        # The warning fires at BOTH import and construction, so the whole call
+        # is inside the catch_warnings() block.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*KTOConfig.*trl\.experimental.*",
+                category=FutureWarning,
+            )
+            from trl import KTOConfig as TRLKTOConfig
+
+            return TRLKTOConfig(
+                output_dir=output_dir,
+                num_train_epochs=self.num_train_epochs,
+                per_device_train_batch_size=self.per_device_train_batch_size,
+                gradient_accumulation_steps=self.gradient_accumulation_steps,
+                learning_rate=self.learning_rate,
+                warmup_ratio=self.warmup_ratio,
+                beta=self.beta,
+                desirable_weight=self.desirable_weight,
+                undesirable_weight=self.undesirable_weight,
+                max_length=self.max_length,
+                # trl 1.x removed KTOConfig.max_prompt_length. The dataclass
+                # field is kept (stable API) but no longer forwarded to trl.
+                logging_steps=self.logging_steps,
+                save_steps=self.save_steps,
+                gradient_checkpointing=self.gradient_checkpointing,
+                bf16=self.bf16,
+                fp16=self.fp16,
+            )
 
 
 @dataclass(frozen=True)
@@ -341,24 +364,18 @@ class ORPOConfig:
             raise ValueError("Cannot enable both bf16 and fp16")
 
     def to_trl_config(self, output_dir: str):
-        """Convert to trl.ORPOConfig."""
-        from trl import ORPOConfig as TRLORPOConfig
+        """Convert to trl.ORPOConfig.
 
-        return TRLORPOConfig(
-            output_dir=output_dir,
-            num_train_epochs=self.num_train_epochs,
-            per_device_train_batch_size=self.per_device_train_batch_size,
-            gradient_accumulation_steps=self.gradient_accumulation_steps,
-            learning_rate=self.learning_rate,
-            warmup_ratio=self.warmup_ratio,
-            beta=self.beta,
-            max_length=self.max_length,
-            max_prompt_length=self.max_prompt_length,
-            logging_steps=self.logging_steps,
-            save_steps=self.save_steps,
-            gradient_checkpointing=self.gradient_checkpointing,
-            bf16=self.bf16,
-            fp16=self.fp16,
+        trl >=1.0 removed ORPOConfig (the ORPOTrainer/ORPOConfig pair was dropped
+        upstream). kailash-align's trl floor is >=1.0, so this method always raises.
+        """
+        from kailash_align.exceptions import TrainingError
+
+        raise TrainingError(
+            "ORPO is unavailable: trl >=1.0 removed ORPOConfig/ORPOTrainer upstream "
+            "(the class no longer exists in any trl 1.x release). "
+            "Use DPO (method='dpo', paired prompt/chosen/rejected data) or "
+            "GRPO (method='grpo', online RL with reward functions) instead."
         )
 
 
@@ -442,7 +459,9 @@ class GRPOConfig:
             num_generations=self.num_generations,
             temperature=self.temperature,
             max_completion_length=self.max_completion_length,
-            kl_coef=self.kl_coef,
+            # trl 1.x renamed the KL coefficient kwarg kl_coef -> beta on
+            # GRPOConfig. The dataclass field stays kl_coef (stable API).
+            beta=self.kl_coef,
             logging_steps=self.logging_steps,
             save_steps=self.save_steps,
             gradient_checkpointing=self.gradient_checkpointing,
@@ -451,7 +470,8 @@ class GRPOConfig:
         )
         if self.use_vllm:
             kwargs["use_vllm"] = True
-            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
+            # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
+            kwargs["vllm_gpu_memory_utilization"] = self.vllm_gpu_utilization
         return TRLGRPOConfig(**kwargs)
 
 
@@ -535,7 +555,9 @@ class RLOOConfig:
             num_generations=self.num_generations,
             temperature=self.temperature,
             max_completion_length=self.max_completion_length,
-            kl_coef=self.kl_coef,
+            # trl 1.x renamed the KL coefficient kwarg kl_coef -> beta on
+            # RLOOConfig. The dataclass field stays kl_coef (stable API).
+            beta=self.kl_coef,
             logging_steps=self.logging_steps,
             save_steps=self.save_steps,
             gradient_checkpointing=self.gradient_checkpointing,
@@ -544,7 +566,8 @@ class RLOOConfig:
         )
         if self.use_vllm:
             kwargs["use_vllm"] = True
-            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
+            # trl 1.x renamed vllm_gpu_utilization -> vllm_gpu_memory_utilization.
+            kwargs["vllm_gpu_memory_utilization"] = self.vllm_gpu_utilization
         return TRLRLOOConfig(**kwargs)
 
 
@@ -605,30 +628,20 @@ class OnlineDPOConfig:
             raise ValueError("Cannot enable both bf16 and fp16")
 
     def to_trl_config(self, output_dir: str):
-        """Convert to trl.OnlineDPOConfig."""
-        from trl import OnlineDPOConfig as TRLOnlineDPOConfig
+        """Convert to trl.OnlineDPOConfig.
 
-        kwargs = dict(
-            output_dir=output_dir,
-            num_train_epochs=self.num_train_epochs,
-            per_device_train_batch_size=self.per_device_train_batch_size,
-            gradient_accumulation_steps=self.gradient_accumulation_steps,
-            learning_rate=self.learning_rate,
-            warmup_ratio=self.warmup_ratio,
-            beta=self.beta,
-            max_length=self.max_length,
-            max_prompt_length=self.max_prompt_length,
-            max_completion_length=self.max_completion_length,
-            logging_steps=self.logging_steps,
-            save_steps=self.save_steps,
-            gradient_checkpointing=self.gradient_checkpointing,
-            bf16=self.bf16,
-            fp16=self.fp16,
+        trl >=1.0 removed OnlineDPOConfig (the OnlineDPOTrainer/OnlineDPOConfig pair
+        was dropped upstream). kailash-align's trl floor is >=1.0, so this method
+        always raises.
+        """
+        from kailash_align.exceptions import TrainingError
+
+        raise TrainingError(
+            "Online DPO is unavailable: trl >=1.0 removed OnlineDPOConfig/"
+            "OnlineDPOTrainer upstream (the class no longer exists in any trl 1.x "
+            "release). Use DPO (method='dpo', offline paired preference data) or "
+            "GRPO (method='grpo', online RL with reward functions) instead."
         )
-        if self.use_vllm:
-            kwargs["use_vllm"] = True
-            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
-        return TRLOnlineDPOConfig(**kwargs)
 
 
 @dataclass(frozen=True)

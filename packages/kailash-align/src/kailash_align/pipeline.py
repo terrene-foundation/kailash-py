@@ -244,10 +244,9 @@ class AlignmentPipeline:
             reward_funcs: Resolved reward functions for online methods.
         """
         import torch
+        from kailash_align.method_registry import _lazy_import, get_method
         from peft import PeftModel, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        from kailash_align.method_registry import _lazy_import, get_method
 
         method = get_method(method_name)
 
@@ -322,8 +321,13 @@ class AlignmentPipeline:
             "processing_class": tokenizer,
         }
 
-        # Add peft_config for offline/unpaired methods
-        if not method.requires_generation_backend:
+        # The model is ALREADY a PeftModel here (LoRA was applied above via
+        # get_peft_model in both branches). trl 1.x raises ValueError if BOTH a
+        # wrapped PeftModel AND peft_config are passed. We pass the pre-wrapped
+        # PeftModel and therefore MUST NOT also forward peft_config. LoRA behavior
+        # is fully preserved because the model carries the adapter already.
+        if not isinstance(model, PeftModel):
+            # Defensive: only reached if a future refactor stops pre-wrapping.
             trainer_kwargs["peft_config"] = peft_config
 
         # Add reward functions for online methods
