@@ -2,34 +2,23 @@
 
 ## Where we are
 
-Released **kailash-align 0.7.3** + **kailash-ml 2.2.2** to PyPI this session
-(both live + clean-venv-verified on Python 3.14). Closed #1426 (align trl 1.x)
-+ #1430 (ml numba floor). Landed the loom 2.45.0 COC sync (PR #1427). Repo at
-convergence — nothing in flight; only `.session-notes` + this close-out commit.
+Released **kailash-align 0.7.3** + **kailash-ml 2.2.2** to PyPI (both live +
+clean-venv-verified on Python 3.14). Closed #1426 (align trl 1.x) + #1430 (ml
+numba floor); landed the loom 2.45.0 COC sync (PR #1427). Repo at convergence —
+nothing in flight, clean tree at `f0865baba`.
 
 ## Read first
 
 1. `deploy/deployments/2026-06-23-ml-v2.2.2-align-v0.7.3-1426-trl-compat.md` —
    full release record (what shipped, tags, publish runs, verification).
-2. GH **#1429** (OPEN) — the only follow-up: `[rl-bridge]` `OnlineDPOAdapter.build()`
+2. GH **#1429** (OPEN) — only follow-up: `[rl-bridge]` `OnlineDPOAdapter.build()`
    references the de-registered `online_dpo` on a `kailash-ml[rl]`-gated path.
 3. `.claude/VERSION` — upstream now loom 2.45.0 (was 2.35.0); the 2.45.0 sync
    removed `rules/independence.md` + `rules/terrene-naming.md` (obsoletion-sanctioned).
 
 ## In-flight state
 
-- Only `.session-notes` + the deployment-record/deploy-config close-out commit
-  pending. No code changes pending. main == origin.
-
-## What shipped (this session)
-
-| PR | What | State |
-| -- | ---- | ----- |
-| #1427 | loom 2.45.0 `/sync-to-build` COC delivery (VERSION 2.35→2.45; 6 obsoletion-sanctioned deletions; CLAUDE.md pointers fixed) | MERGED |
-| #1428 | #1426 align trl 1.x fix (config/pipeline/registry + docs + spec) | MERGED |
-| #1431 | #1430 ml `numba>=0.61` floor (Python 3.12+ fresh-install) | MERGED |
-| #1432 | align 0.7.3 release-prep (version + CHANGELOG) | MERGED |
-| tags | `ml-v2.2.2` (run 28014614692) + `align-v0.7.3` (run 28014766241) | PUBLISHED |
+- Nothing uncommitted. main == origin. All session work merged.
 
 ## Outstanding ledger (forest)
 
@@ -37,29 +26,28 @@ convergence — nothing in flight; only `.session-notes` + this close-out commit
 | -- | ---- | ---------------------------- | ------ |
 | F-1429 | rl_bridge `OnlineDPOAdapter` references de-registered `online_dpo`; wrap get_method in the existing try/except OR retire the adapter | issue #1429 + reviewer HIGH (adversarial-verified real) | OPEN — kailash-ml[rl]-gated; needs the rl extra/GPU to verify |
 | F-LOCK-STALE | `uv lock --check` fails on clean main (loom 2.45.0 sync bumped sub-package versions without re-locking); `uv lock` reconciles anthropic/rfc3161ng/core-version | this session's #1430 investigation | QUEUED — separate chore; NO active workflow enforces the lock |
-| F-LOOM-INDEP | loom 2.45.0 obsoleted `rules/independence.md` + `rules/terrene-naming.md` from the universal synced set (re-purge every sync) — confirm intentional vs sync-manifest over-reach | PR #1427 flag | SURFACED — loom-side (next loom session) |
-| F-XSDK-1451 | canonical byte-determinism: #1403 witness remainder + #1402 — gated on rs#1451 | issues #1402/#1403 | BLOCKED — cross-SDK lockstep (carried from prior session) |
+| F-LOOM-INDEP | loom 2.45.0 obsoleted `rules/independence.md` + `rules/terrene-naming.md` from the universal synced set — confirm intentional vs sync-manifest over-reach | PR #1427 flag | SURFACED — loom-side (next loom session) |
+| F-XSDK-1451 | canonical byte-determinism: #1403 witness remainder + #1402 — gated on rs#1451 | issues #1402/#1403 | BLOCKED — cross-SDK lockstep (carried) |
 | F-XSDK-RS-FILED | rs parity FILED: streaming rs#1465 / vault rs#1442 / LlmClient rs#1420 | EATP D6 | FILED — awaiting rs (carried) |
 | F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC (cross-store cascade) | project_trustplane_day1 | DEFERRED (carried) |
 
-Closed this session: #1426 (align trl 1.x), #1430 (ml numba floor).
+Closed this session: `#1426` (align trl 1.x) → PR #1428; `#1430` (ml numba floor) → PR #1431.
 
 ## Traps
 
 - **CI installs the LATEST trl (1.6.x); local `.venv` had trl 1.0.0.** The bf16
   test failure (`Your setup doesn't support bf16/gpu`) only reproduces on trl
-  1.x's stricter `*Config` validation. The local `.venv` now has trl 1.6.0
-  installed — re-run align compat tests there, not against a stale trl.
+  1.x's stricter `*Config` validation. `.venv` now has trl 1.6.0 — re-run align
+  compat tests there, not against a stale trl.
 - **align CI (`test-kailash-align.yml`) uses lock-IGNORING `uv pip install -e`.**
-  A fresh resolve on Python 3.12+ backtracks transitive numba→llvmlite; the
-  `numba>=0.61` floor in kailash-ml/pyproject is what fixes it (NOT the lock).
-- **`align` tag prefix is `align-v*`, `ml` is `ml-v*`** (publish-pypi.yml). Publish
-  ml BEFORE align (align depends on `kailash-ml>=1.1`).
-- **#1426 fix details:** orpo/online_dpo are DE-REGISTERED from METHOD_REGISTRY
-  (raised on all trl 1.x); the `ORPOConfig`/`OnlineDPOConfig` dataclasses REMAIN
+  Fresh resolve on Python 3.12+ backtracks transitive numba→llvmlite; the
+  `numba>=0.61` floor in kailash-ml/pyproject fixes it (NOT the lock).
+- **`align` tag prefix is `align-v*`, `ml` is `ml-v*`** (publish-pypi.yml).
+  Publish ml BEFORE align (align depends on `kailash-ml>=1.1`).
+- **#1426 fix:** orpo/online_dpo are DE-REGISTERED from METHOD_REGISTRY (raise
+  on all trl 1.x); the `ORPOConfig`/`OnlineDPOConfig` dataclasses REMAIN
   (back-compat) but their `to_trl_config()` raises. Don't "restore" them.
 
 ## Unreleased packages
 
-None — kailash-align 0.7.3 == PyPI, kailash-ml 2.2.2 == PyPI, all siblings at
-parity (the post-publish aggregate-`info.version` lag is cosmetic).
+None — kailash-align 0.7.3 == PyPI, kailash-ml 2.2.2 == PyPI.
