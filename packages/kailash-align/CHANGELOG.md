@@ -1,5 +1,40 @@
 # kailash-align Changelog
 
+## [0.7.3] — 2026-06-23 — trl 1.x compatibility for to_trl_config + pipeline (#1426)
+
+Patch release. Bug fix — 0.7.2 could not run **any** SFT/DPO/KTO/ORPO/Online-DPO
+fine-tune against **any** `trl` in its declared `>=1.0,<2.0` range (the config
+adapters + trainer setup targeted the trl 0.x API). No public dataclass-signature
+break: the user-facing `*Config` fields are unchanged.
+
+### Fixed
+
+- **`*Config.to_trl_config()` now emits trl 1.x kwargs.** `SFTConfig` forwards
+  `max_length` (was the removed `max_seq_length`); `DPOConfig`/`KTOConfig` drop
+  the removed `max_prompt_length`; `GRPOConfig`/`RLOOConfig` forward `beta`
+  (was `kl_coef`) and `vllm_gpu_memory_utilization` (was `vllm_gpu_utilization`).
+- **`pipeline.py` no longer passes both a `PeftModel` and `peft_config`** to the
+  trainer (trl 1.x raises `ValueError`); the model is pre-wrapped, so `peft_config`
+  is omitted when the model is already a `PeftModel`.
+- **Trainer lazy-import guard:** a registered method whose trl trainer class was
+  removed in trl 1.x (`xpo`/`nash_md`/`ppo`/`cpo`/`bco`) now raises an informative
+  `TrainingError` (naming the method + absent class + supported alternatives)
+  instead of a raw `ImportError`.
+
+### Changed
+
+- **`orpo` and `online_dpo` de-registered from `METHOD_REGISTRY`.** `trl` >=1.0
+  removed `ORPOTrainer`/`ORPOConfig` and `OnlineDPOTrainer`/`OnlineDPOConfig`
+  upstream, so these methods raised on every supported `trl`. `validate_method_name`
+  / `get_method` now reject them with a redirect to `dpo`/`grpo`/`sft_then_dpo`.
+  The `ORPOConfig`/`OnlineDPOConfig` dataclasses are retained for back-compat;
+  their `to_trl_config()` raises an informative `TrainingError`.
+
+### Known limitations
+
+- The `[rl-bridge]` `OnlineDPOAdapter` still references the de-registered
+  `online_dpo` method on a `kailash-ml[rl]`-gated path (tracked: #1429).
+
 ## [0.7.2] — 2026-06-08 — drop defensive `kailash-ml` cap + de-stale floor (#1183)
 
 Patch release. **No source changes** — diff is strictly `pyproject.toml` dependency-floor edits + `__version__` anchor + this CHANGELOG entry.
