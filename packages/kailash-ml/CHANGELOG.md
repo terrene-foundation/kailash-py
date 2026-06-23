@@ -1,5 +1,20 @@
 # kailash-ml Changelog
 
+## [2.2.2] — 2026-06-23 — numba floor fixes Python 3.12+ fresh-install (#1430)
+
+Patch release. Dependency-constraint fix — no public API change.
+
+### Fixed
+
+- **`numba>=0.61` floor added** so a fresh `pip install kailash-ml` on Python
+  3.12/3.13/3.14 no longer backtracks to `numba 0.53.1` → `llvmlite 0.36.0`
+  (which has no wheel for those Pythons and fails to build from source with
+  `RuntimeError: Cannot install on Python version 3.x`). `numba` is pulled
+  transitively by `umap-learn`/`pynndescent` for `UMAPTrainable`; the floor
+  forces `llvmlite>=0.44` (wheels for all supported Pythons). Minimum version
+  floor per `rules/dependencies.md` (NOT a cap). Verified: 3.12/3.13/3.14
+  fresh-resolve → `llvmlite 0.47.0`, real install + import OK. (#1430)
+
 ## [2.2.1] — 2026-06-13 — URL credential masking consolidated onto core helper
 
 Patch release. Internal refactor — no public API change. Replaces three

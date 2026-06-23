@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "2.2.1"
+version = "2.2.2"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -58,6 +58,14 @@ dependencies = [
     # HDBSCAN (already in scikit-learn>=1.5). Phase 2 roadmap: torch-native
     # UMAP across MPS/ROCm/XPU.
     "umap-learn>=0.5",
+    # numba floor (#1430): umap-learn/pynndescent pull `numba` -> `llvmlite`.
+    # A fresh (lock-ignoring) resolve on Python 3.12+ backtracks to numba 0.53.1
+    # -> llvmlite 0.36.0, which has no cp312/313/314 wheel and fails to build
+    # from source ("Cannot install on Python version 3.x"). numba>=0.61 forces
+    # llvmlite>=0.44 (wheels for all supported Pythons). Minimum version floor
+    # per rules/dependencies.md (NOT a cap); numba is transitively load-bearing
+    # for UMAPTrainable. Verified: 3.12/3.13/3.14 fresh-resolve -> llvmlite 0.47.0.
+    "numba>=0.61",
     # Lightning is the training spine for every family per ml-engines.md
     # §3 MUST 2 — every training call routes through pytorch_lightning.Trainer.
     # We depend on the standalone `pytorch-lightning` distribution rather than
