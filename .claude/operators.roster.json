@@ -1,0 +1,24 @@
+{
+  "$schema": "https://terrene.foundation/schemas/operators.roster.schema.json",
+  "genesis": {
+    "repo_owner": "terrene-foundation",
+    "repo_owner_kind": "org",
+    "root_commit": "166c5eab84c39822b6e06ac47954cb3230de1d8c",
+    "genesis_generation": 0
+  },
+  "persons": {
+    "pid-esperie-2b8cb994": {
+      "display_id": "esperie",
+      "role": "owner",
+      "github_login": "esperie",
+      "host_role": "human",
+      "keys": [
+        {
+          "type": "ssh",
+          "fingerprint": "SHA256:ZJJ4BzXTDOS2WMGbNmesXb5K2VGzSvk3O30DmKacml0",
+          "pubkey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC8QXej8+gMWK04XapFrSV9fgzWlyssT+0aAIIwSXT27"
+        }
+      ]
+    }
+  }
+}
