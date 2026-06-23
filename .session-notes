@@ -1,65 +1,65 @@
-# Session Notes — 2026-06-20
+# Session Notes — 2026-06-23
 
 ## Where we are
 
-Canonical-encoder cross-SDK conformance, `fix/audit-chain-canonical-conformance` (PR #1411).
-This session (`/autonomize` + `/redteam` to convergence) found the prior "converged + ready"
-claim was CONTRADICTED by ground truth — fixed two real gaps, re-converged (2 clean rounds),
-CI now fully green. **PR #1411 merge-ready (review-gated); NOT merged/released yet.**
+Released **kailash-align 0.7.3** + **kailash-ml 2.2.2** to PyPI this session
+(both live + clean-venv-verified on Python 3.14). Closed #1426 (align trl 1.x)
++ #1430 (ml numba floor). Landed the loom 2.45.0 COC sync (PR #1427). Repo at
+convergence — nothing in flight; only `.session-notes` + this close-out commit.
 
 ## Read first
 
-1. `workspaces/cross-sdk-audit/journal/0015` — THIS session: the two gaps + fixes + convergence receipts
-2. PR #1411 — HEAD `9dfb1d968`; `gh pr checks 1411` → 23 pass / 0 fail; BLOCKED = REVIEW_REQUIRED only
-3. `workspaces/cross-sdk-audit/journal/0013`/`0014` — prior redteam + rs#1448/#1451 cross-repo verify
+1. `deploy/deployments/2026-06-23-ml-v2.2.2-align-v0.7.3-1426-trl-compat.md` —
+   full release record (what shipped, tags, publish runs, verification).
+2. GH **#1429** (OPEN) — the only follow-up: `[rl-bridge]` `OnlineDPOAdapter.build()`
+   references the de-registered `online_dpo` on a `kailash-ml[rl]`-gated path.
+3. `.claude/VERSION` — upstream now loom 2.45.0 (was 2.35.0); the 2.45.0 sync
+   removed `rules/independence.md` + `rules/terrene-naming.md` (obsoletion-sanctioned).
 
-## This session's fixes (committed + pushed to PR branch)
+## In-flight state
 
-- **`b4929d924`** — re-pin `PACT_VECTORS.sha256` `audit_anchor.json` `f7ba0381→3873da28` (the PR
-  changed the vector for #1400 six-digit-microsecond but never re-pinned the manifest → red
-  `Cross-SDK Conformance` CI) + register `specs/trust-canonical-encoders.md` in `specs/_index.md`.
-- **`9dfb1d968`** — add `allow_nan=False` (+ `ensure_ascii=True`) to `ConstraintEnvelope.to_canonical_json`
-  (NaN/Inf in metadata emitted RFC-invalid JSON that Python signs but Rust serde_json rejects = cross-SDK
-  verify-break; the PR's sibling fix did `envelope_hash` but missed this member). Byte-neutral on valid
-  envelopes; `default=str` PRESERVED (#1451 byte-changing migration stays deferred); + regression test.
+- Only `.session-notes` + the deployment-record/deploy-config close-out commit
+  pending. No code changes pending. main == origin.
 
-## Convergence (durable receipts)
+## What shipped (this session)
 
-- Round 1 clean: `wf_f746f707-f30` (5/5 lenses findings:[])
-- Round 2 clean (SERIAL): `wf_7775fe4c-ef2` (3/3 lenses findings:[]) → converged, rounds_clean: 2
-- 112 canonical-conformance regression tests pass; both byte-pins byte-neutral under the fix.
+| PR | What | State |
+| -- | ---- | ----- |
+| #1427 | loom 2.45.0 `/sync-to-build` COC delivery (VERSION 2.35→2.45; 6 obsoletion-sanctioned deletions; CLAUDE.md pointers fixed) | MERGED |
+| #1428 | #1426 align trl 1.x fix (config/pipeline/registry + docs + spec) | MERGED |
+| #1431 | #1430 ml `numba>=0.61` floor (Python 3.12+ fresh-install) | MERGED |
+| #1432 | align 0.7.3 release-prep (version + CHANGELOG) | MERGED |
+| tags | `ml-v2.2.2` (run 28014614692) + `align-v0.7.3` (run 28014766241) | PUBLISHED |
 
-## Next actions (human-gated — BUILD repo)
+## Outstanding ledger (forest)
 
-| Action | Status |
-| ------ | ------ |
-| MERGE PR #1411 | READY — `gh pr merge 1411 --admin --merge --delete-branch` (review-gated; owner bypass). Safe now (rs main has #1448). |
-| RELEASE | After merge, RELEASE must lockstep with rs#1448's RELEASE (not just merge) — else released py(6-digit) vs released rs diverge. |
+| ID | Item | Value-anchor (MUST-1 source) | Status |
+| -- | ---- | ---------------------------- | ------ |
+| F-1429 | rl_bridge `OnlineDPOAdapter` references de-registered `online_dpo`; wrap get_method in the existing try/except OR retire the adapter | issue #1429 + reviewer HIGH (adversarial-verified real) | OPEN — kailash-ml[rl]-gated; needs the rl extra/GPU to verify |
+| F-LOCK-STALE | `uv lock --check` fails on clean main (loom 2.45.0 sync bumped sub-package versions without re-locking); `uv lock` reconciles anthropic/rfc3161ng/core-version | this session's #1430 investigation | QUEUED — separate chore; NO active workflow enforces the lock |
+| F-LOOM-INDEP | loom 2.45.0 obsoleted `rules/independence.md` + `rules/terrene-naming.md` from the universal synced set (re-purge every sync) — confirm intentional vs sync-manifest over-reach | PR #1427 flag | SURFACED — loom-side (next loom session) |
+| F-XSDK-1451 | canonical byte-determinism: #1403 witness remainder + #1402 — gated on rs#1451 | issues #1402/#1403 | BLOCKED — cross-SDK lockstep (carried from prior session) |
+| F-XSDK-RS-FILED | rs parity FILED: streaming rs#1465 / vault rs#1442 / LlmClient rs#1420 | EATP D6 | FILED — awaiting rs (carried) |
+| F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC (cross-store cascade) | project_trustplane_day1 | DEFERRED (carried) |
 
-## Outstanding ledger (forest) — unchanged, human-gated cross-SDK
-
-| ID | Item | Status |
-| -- | ---- | ------ |
-| F-AUDIT-XSDK | audit-chain canonical lockstep (PR #1411) | CONVERGED + CI-green → MERGE then RELEASE in lockstep w/ rs#1448 |
-| F-XSDK-1451 | py witness-family + `to_canonical_json` → `canonical_scalars` (match rs `canonicalize`) | QUEUED — byte-CHANGING; this session's allow_nan fix is orthogonal/byte-neutral, does NOT pre-empt |
-| F-XSDK-4A | unify drifted audit-chain shared fixture across both repos | QUEUED — cross-SDK test-infra |
-| F-STUB-1406 | package-wide stub-marker audit vs Production/Stable | queued |
-| F-XSDK-TRUST-R2 / F-XSDK-PACT / F7 / F4 | rs parity (trust defects / #1393-4 / KSP.compartments / Nexus JWT revocation) | SURFACED/BLOCKED — human-gated |
-| F-VAULT-S34 / F-ATOMIC | KEK re-establishment (#630) / cross-store atomic cascade invalidation | DEFERRED |
-| F-XSDK-VAULT-630 (rs#1442) / F-XSDK (rs#1420) | rs vault N12-CL-02a / rs LlmClient lifecycle parity | FILED — awaiting rs |
-| F10 | loom Gate-1 Rule-10 + evidence-first sync into py | queued — loom-side |
+Closed this session: #1426 (align trl 1.x), #1430 (ml numba floor).
 
 ## Traps
 
-- Prior redteam (0013) declared convergence but its lenses never ran `shasum -c` (manifest) nor probed
-  NaN/Inf ingress — both gaps shipped through it. The redteam now has an integrity-manifest-sweep lens
-  + a NaN/Inf regression test; re-promote both for any future canonical-vector PR.
-- Redteam parallel fan-out on THIS machine hits the synchronized `(not your usage limit)` throttle →
-  dispatch confirmation rounds SERIAL. Account-quota exhaustion is a DIFFERENT signal (remedy: csq swap).
-- #1451 direction is py→`canonical_scalars` (byte-CHANGING, invalidates on-disk HMAC envelopes; HMAC has
-  no rs equivalent — rs uses Ed25519) — handle separately, in lockstep, never py-only.
+- **CI installs the LATEST trl (1.6.x); local `.venv` had trl 1.0.0.** The bf16
+  test failure (`Your setup doesn't support bf16/gpu`) only reproduces on trl
+  1.x's stricter `*Config` validation. The local `.venv` now has trl 1.6.0
+  installed — re-run align compat tests there, not against a stale trl.
+- **align CI (`test-kailash-align.yml`) uses lock-IGNORING `uv pip install -e`.**
+  A fresh resolve on Python 3.12+ backtracks transitive numba→llvmlite; the
+  `numba>=0.61` floor in kailash-ml/pyproject is what fixes it (NOT the lock).
+- **`align` tag prefix is `align-v*`, `ml` is `ml-v*`** (publish-pypi.yml). Publish
+  ml BEFORE align (align depends on `kailash-ml>=1.1`).
+- **#1426 fix details:** orpo/online_dpo are DE-REGISTERED from METHOD_REGISTRY
+  (raised on all trl 1.x); the `ORPOConfig`/`OnlineDPOConfig` dataclasses REMAIN
+  (back-compat) but their `to_trl_config()` raises. Don't "restore" them.
 
 ## Unreleased packages
 
-None on `main` (latest tag v2.43.0). PR #1411 converged + CI-green; merge + release stay with the user;
-release follows merge + rs#1448 release coordination.
+None — kailash-align 0.7.3 == PyPI, kailash-ml 2.2.2 == PyPI, all siblings at
+parity (the post-publish aggregate-`info.version` lag is cosmetic).
