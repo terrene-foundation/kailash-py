@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from kailash_align.exceptions import AlignmentError, TrainingError
 
@@ -245,20 +245,14 @@ register_method(
     )
 )
 
-register_method(
-    MethodConfig(
-        name="orpo",
-        trainer_module="trl",
-        trainer_class_name="ORPOTrainer",
-        config_module="trl",
-        config_class_name="ORPOConfig",
-        dataset_validator=_validate_preference_columns,
-        dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
-        metrics_extractor=_extract_standard_metrics,
-        requires_preference_data=True,
-        category="monolithic",
-    )
-)
+# NOTE: orpo / online_dpo are intentionally NOT registered.
+# trl >=1.0 removed ORPOTrainer/ORPOConfig and OnlineDPOTrainer/OnlineDPOConfig
+# upstream (the classes no longer exist in any trl 1.x release), and
+# kailash-align's trl floor is >=1.0. Registering them would advertise
+# selectable methods that cannot run. The ORPOConfig/OnlineDPOConfig dataclasses
+# remain in config.py with an informative raise in to_trl_config() so a user
+# constructing the config directly still gets the DPO/GRPO redirect. Use 'dpo'
+# (offline paired preference) or 'grpo' (online RL) instead. See issue #1426.
 
 register_method(
     MethodConfig(
@@ -287,21 +281,6 @@ register_method(
         dataset_required_columns=frozenset({"prompt"}),
         metrics_extractor=_extract_grpo_metrics,
         requires_reward_func=True,
-        requires_generation_backend=True,
-        category="online",
-    )
-)
-
-register_method(
-    MethodConfig(
-        name="online_dpo",
-        trainer_module="trl",
-        trainer_class_name="OnlineDPOTrainer",
-        config_module="trl",
-        config_class_name="OnlineDPOConfig",
-        dataset_validator=_validate_prompt_only,
-        dataset_required_columns=frozenset({"prompt"}),
-        metrics_extractor=_extract_dpo_metrics,
         requires_generation_backend=True,
         category="online",
     )

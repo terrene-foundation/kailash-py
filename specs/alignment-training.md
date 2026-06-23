@@ -216,6 +216,8 @@ class KTOConfig:
 
 ### 2.5 ORPOConfig
 
+> **Not available with `trl` >=1.0.** `trl` removed `ORPOTrainer`/`ORPOConfig` upstream, so `orpo` is NOT registered in `METHOD_REGISTRY` and `validate_method_name("orpo")` raises. The `ORPOConfig` dataclass below still exists for back-compat, but `ORPOConfig.to_trl_config()` raises `TrainingError` redirecting to `dpo`/`grpo`. Use `dpo` (or `sft_then_dpo` for the two-stage path) instead.
+
 Odds Ratio Preference Optimization -- combines SFT and preference alignment in a single training pass.
 
 ```python
@@ -302,6 +304,8 @@ class RLOOConfig:
 **Same constraints as GRPOConfig.** RLOO generates multiple completions per prompt and uses a leave-one-out baseline for variance reduction. Requires reward functions. Same dataset format (prompt-only).
 
 ### 2.8 OnlineDPOConfig
+
+> **Not available with `trl` >=1.0.** `trl` removed `OnlineDPOTrainer`/`OnlineDPOConfig` upstream, so `online_dpo` is NOT registered in `METHOD_REGISTRY` and `validate_method_name("online_dpo")` raises. The `OnlineDPOConfig` dataclass below still exists for back-compat, but `OnlineDPOConfig.to_trl_config()` raises `TrainingError`. Use `dpo` or `grpo` instead.
 
 Online DPO -- DPO with online generation. Generates completions online and uses a reward model to score pairs, then applies DPO loss.
 

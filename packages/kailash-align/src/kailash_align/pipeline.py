@@ -244,10 +244,9 @@ class AlignmentPipeline:
             reward_funcs: Resolved reward functions for online methods.
         """
         import torch
+        from kailash_align.method_registry import _lazy_import, get_method
         from peft import PeftModel, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        from kailash_align.method_registry import _lazy_import, get_method
 
         method = get_method(method_name)
 
@@ -313,7 +312,23 @@ class AlignmentPipeline:
             trl_config.loss_type = self._config.loss_type
 
         # 4. Create trainer
-        TrainerClass = _lazy_import(method.trainer_module, method.trainer_class_name)
+        # trl >=1.0 removed several trainer classes that older kailash-align
+        # registered (ORPOTrainer, OnlineDPOTrainer are de-registered; the
+        # experimental methods xpo/nash_md/ppo/cpo/bco may also be absent in a
+        # given trl release). _lazy_import raises a raw ImportError when the
+        # class is gone; convert it to an informative TrainingError naming the
+        # method, the absent trl class, and the supported alternatives.
+        try:
+            TrainerClass = _lazy_import(
+                method.trainer_module, method.trainer_class_name
+            )
+        except (ImportError, AttributeError) as exc:
+            raise TrainingError(
+                f"Training method '{method.name}' requires trl class "
+                f"'{method.trainer_class_name}', which is unavailable in the "
+                f"installed trl (>=1.0 removed it). "
+                f"Supported: sft, dpo, kto, grpo, rloo."
+            ) from exc
 
         trainer_kwargs: dict[str, Any] = {
             "model": model,
@@ -322,8 +337,13 @@ class AlignmentPipeline:
             "processing_class": tokenizer,
         }
 
-        # Add peft_config for offline/unpaired methods
-        if not method.requires_generation_backend:
+        # The model is ALREADY a PeftModel here (LoRA was applied above via
+        # get_peft_model in both branches). trl 1.x raises ValueError if BOTH a
+        # wrapped PeftModel AND peft_config are passed. We pass the pre-wrapped
+        # PeftModel and therefore MUST NOT also forward peft_config. LoRA behavior
+        # is fully preserved because the model carries the adapter already.
+        if not isinstance(model, PeftModel):
+            # Defensive: only reached if a future refactor stops pre-wrapping.
             trainer_kwargs["peft_config"] = peft_config
 
         # Add reward functions for online methods
