@@ -12,7 +12,13 @@ codify_session: "Session 2026-06-23 (light /codify) — issue #1426 (kailash-ali
   forbids) when a lock-IGNORING CI install path fresh-resolves that transitive to
   a no-wheel version. Prior proposal (2026-06-19 cycle, distributed 2026-06-23 at
   Gate-1) archived to .claude/.proposals/archive/2026-06-19-kailash-py.yaml per
-  artifact-flow.md Archive-Before-Fresh."
+  artifact-flow.md Archive-Before-Fresh. APPENDED this cycle (onboarding codify): three
+  NEW artifacts — skill 45-genesis-bootstrap, rule enrollment-operations, agent
+  coc-onboarding-specialist (see changes[] below; all suggested GLOBAL). REMINDER TO LOOM
+  (user directive): distribute the onboarding suite to ALL downstream USE templates via
+  /sync-to-use, NOT only the BUILD repos. The suite was multi-agent-redteam-converged
+  (reviewer + security-reviewer + cc-architect CLEAN on final state per
+  self-referential-codify MUST-1)."
 
 changes:
   - type: rule_update
@@ -80,3 +86,51 @@ changes:
       ships WITHOUT clause-scoped wiring — Gate-1 MAY decide on a wiring retrofit
       (consistent with how the 2026-06-22 trust-plane-security / cross-sdk-inspection
       cycles attached wiring to grandfathered path-scoped rules).'
+  - type: skill_created
+    artifact: 45-genesis-bootstrap
+    files:
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context: "NEW skill — the fresh-repo first-owner genesis-bootstrap runbook,
+      reconstructing the loom-only guides/co-setup/11-genesis-ceremony.md (absent from
+      BUILD/USE repos) + the five fail-closed guard traps surfaced during the 2026-06-23
+      kailash-py multi-operator enrollment. Covers pre-flight (signing-first), the bootstrap
+      sequence, org-vs-user + the #358 org-admin relaxation, the script-by-path trap
+      (validate-bash detectStateFileMutation), fold-clean verify, and a troubleshooting
+      matrix. GLOBAL: the ceremony (node + gh-api) and substrate are CLI/language-neutral.
+      REMINDER TO LOOM (user directive): /sync-to-use to ALL downstream USE templates, not
+      only BUILD. Multi-agent redteam (self-referential-codify MUST-1) converged — reviewer
+      + security-reviewer + cc-architect CLEAN on the final state; receipts in
+      workspaces/mops-onboarding/journal/0001."
+  - type: rule_created
+    artifact: enrollment-operations
+    files:
+      - .claude/rules/enrollment-operations.md
+    classification_suggestion: global
+    context:
+      "NEW rule, path-scoped (priority:10; paths = operators.roster.json +
+      enroll/whoami/ecosystem-init/onboard commands). 6 MUST clauses: signing-first
+      (degraded read-only), codify-branch+lease writes, script-by-path state-mutations,
+      fold-clean-before-enrolled, self-enroll-from-own-machine, org-admin-relaxation-org-only.
+      Canonical 8-field Trust Posture Wiring; severity advisory-at-hook (the fail-closed
+      guards carry the block teeth) + halt-and-report at gate-review for the non-hook clauses.
+      GLOBAL. Gate-1 NOTE: rule is 238 lines (>200 guidance) and carries a named Length
+      rationale (guard-trap scope; path-scoped so no baseline-emission cost + Rule-10
+      proximity-band gate does not fire) per rule-authoring MUST NOT exception. Allowlist
+      DECISION: NOT added to self-referential-codify Rule 2 (it governs ceremony ops, not
+      codify machinery — a consumer of the lease, not the lease contract); recorded in
+      journal/0001."
+  - type: agent_created
+    artifact: coc-onboarding-specialist
+    files:
+      - .claude/agents/onboarding/coc-onboarding-specialist.md
+    classification_suggestion: global
+    context:
+      "NEW agent (agents/onboarding/, alongside idiom-advisor + stack-detector) —
+      the operator-lifecycle expert tying /ecosystem-init -> /enroll -> genesis bootstrap ->
+      /onboard -> /claim, /posture, /release-claim + a guard-trap recovery table. Tools
+      Read/Bash/Grep/Glob/Edit; Step-0 worktree self-check; provenance-capture hook. References
+      skills 41/43/44/45 + the rule for depth (no duplication). GLOBAL. Cross-SDK: the same
+      suite is the Phase-2 rollout target for kailash-rs (esperie-enterprise) per the user
+      directive; loom may classify rs variant notes (ADO provider, org/owner differences).
+      Redteam converged (final round CLEAN across all three specialists)."
