@@ -13,13 +13,14 @@ These tests are paired:
    that the corrected ``to_dict()`` output ALWAYS contains six microsecond
    digits, regardless of the underlying ``datetime`` value.
 
-2. :class:`TestCrossSDKFixtureParity` — Tier-2 conformance test that loads
-   the canonical fixture file at ``test-vectors/trace-event-canonical.json``
-   and asserts that the corrected ``to_dict()`` produces byte-equal canonical
-   JSON AND a matching SHA-256 fingerprint for every pinned vector. The
-   fixture is the cross-SDK contract — kailash-rs is expected to emit
+2. :class:`TestCrossSDKFixtureParity` — conformance test that loads the
+   canonical fixture file at ``test-vectors/trace-event-canonical.json`` and
+   asserts that the corrected ``to_dict()`` produces byte-equal canonical JSON
+   AND a matching SHA-256 fingerprint for every pinned vector. The fixture is
+   python-self-consistent (issue #1402): kailash-rs is expected to emit
    identical bytes for identical inputs (per ``rules/cross-sdk-inspection.md``
-   MUST Rule 4 — byte-vector pin contract).
+   MUST Rule 4 — byte-vector pin contract), but the independent rust digest is
+   verified at the post-Wave-6 cross-SDK gate, NOT in this repo's CI.
 """
 
 from __future__ import annotations
@@ -127,13 +128,17 @@ class TestMicrosecondPaddingBehavior:
 
 @pytest.mark.regression
 class TestCrossSDKFixtureParity:
-    """Cross-SDK canonical-fixture conformance tests.
+    """Canonical-fixture conformance tests (Python side).
 
-    The fixture at ``test-vectors/trace-event-canonical.json`` pins three
-    vectors (V1: zero microsecond, V2: nonzero microsecond, V3: full event)
-    that BOTH kailash-py and kailash-rs MUST produce byte-for-byte. These
-    tests exercise the kailash-py side; the kailash-rs side has the
-    symmetric tests at ``crates/kailash-kaizen/tests/cross_sdk_trace_event.rs``.
+    The fixture at ``test-vectors/trace-event-canonical.json`` pins six vectors
+    (V1: zero microsecond, V2: nonzero microsecond, V3: full event, V4: BMP
+    non-ASCII agent_id, V5: above-BMP emoji tool_name, V6: typed-scalar payload)
+    — see ``_REQUIRED_VECTOR_NAMES``. The fixture is python-self-consistent
+    (issue #1402): these tests assert the kailash-py production path reproduces
+    its bytes. kailash-rs is expected to emit identical bytes and has symmetric
+    tests at ``crates/kailash-kaizen/tests/cross_sdk_trace_event.rs``, but that
+    cross-SDK equality is verified at the post-Wave-6 cross-SDK gate, NOT in
+    this repo's CI.
     """
 
     @pytest.fixture(scope="class")

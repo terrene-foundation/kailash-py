@@ -5,8 +5,12 @@
 
 These tests instantiate the canonical ``JsonRpcRequest`` / ``JsonRpcResponse``
 / ``JsonRpcError`` dataclasses from ``kailash_mcp.protocol`` and verify that
-their ``to_canonical_json()`` output exactly matches the fixture file that
-``kailash-rs`` consumes for cross-SDK parity validation (EATP D6).
+their ``to_canonical_json()`` output exactly matches the pinned fixture. The
+fixture's ``expected_canonical_json`` is Python-produced, so these tests prove
+**Python-side self-consistency** (issue #1402); the fixture is the byte-pin
+``kailash-rs`` is expected to reproduce, with cross-implementation parity
+verified at the external cross-SDK gate (EATP D6), NOT by ingesting an
+independently-produced rs digest here.
 
 Spec-compliance v2 CRITICAL #8 failure class this file guards against:
 the previous version serialized a plain ``dict`` via stdlib ``json.dumps``

@@ -1,5 +1,11 @@
 {
   "_comment": "EATP-12 v1.0 Appendix B golden fixture (normative) — the cross-SDK byte-identical contract for N12-CB-01 (commitment) + N12-CB-04(d) (KCV). kailash-py and kailash-rs MUST both reproduce each hash exactly for the fixed inputs. ASCII-only; the non-ASCII sentinel (ensure_ascii=False divergence) is reconciled at the post-Wave-6 cross-SDK gate. Source: workspaces/eatp-12-vault-binding-py/briefs/eatp-12-v1.0-spec.md §12.1-12.3.",
+  "provenance": {
+    "producer": "kailash-py:kailash.trust.vault.commitment.kek_identity_commitment / key_check_value (+ the EATP-12 audit-anchor signing path for anchor_vectors)",
+    "generation_method": "the kek_identity_commitment / kcv / signed_preimage_hex values are derived by running the Python implementation on fixed_inputs / anchor_fixed_inputs (EATP-12 v1.0 Appendix B §12.1-12.11); reproducible from those inputs via the Python vault path.",
+    "cross_impl_status": "python-self-consistent",
+    "cross_impl_note": "kailash-rs is expected to reproduce each hash byte-for-byte; cross-implementation byte equality is reconciled at the post-Wave-6 cross-SDK gate, NOT in this repo's CI. See specs/trust-canonical-encoders.md section 'Cross-implementation enforcement status'."
+  },
   "fixed_inputs": {
     "master_secret_hex": "00112233445566778899aabbccddeeff",
     "master_secret_bits": 128,
@@ -24,7 +30,7 @@
       "kcv": "00051364b85b0a43"
     }
   ],
-  "_anchor_comment": "EATP-12 §12.4-§12.11 audit-anchor byte-pins (W2-D2, N12-AU-01/03/04/04a). Each vector carries the canonical event_payload (JCS) AND the content_signing_bytes signed pre-image hex (event_type=external_side_effect, signer_delegate_id=delegate:vault-signer-00). Both SDKs MUST reproduce the signed_preimage_hex byte-for-byte. Source: spec §12.4-§12.11.",
+  "_anchor_comment": "EATP-12 §12.4-§12.11 audit-anchor byte-pins (W2-D2, N12-AU-01/03/04/04a). Each vector carries the canonical event_payload (JCS) AND the content_signing_bytes signed pre-image hex (event_type=external_side_effect, signer_delegate_id=delegate:vault-signer-00). kailash-rs is expected to reproduce the signed_preimage_hex byte-for-byte; that cross-SDK equality is reconciled at the post-Wave-6 cross-SDK gate, NOT in this repo's CI (see provenance). Source: spec §12.4-§12.11.",
   "anchor_fixed_inputs": {
     "event_type": "external_side_effect",
     "signer_delegate_id": "delegate:vault-signer-00",

@@ -29,8 +29,12 @@ side in lockstep; see § Cross-impl enforcement).
 
 The fixtures under `../tests/test-vectors/` (`trust-plane-canonical.json`,
 `eatp12-vault-canonical.json`, `eatp08-alg-id-canonical.json`,
-`delegate-canonical.json`) belong to the signing / vault / delegate families and
-are documented at their own call sites.
+`delegate-canonical.json`) belong to the signing / vault / delegate families;
+each carries its own provenance (a `provenance` block, or producer/vendor prose
+in its `description`). The cross-implementation enforcement status of every
+canonical contract (in-repo byte-pin vs deferred to an external gate) is indexed
+in `specs/trust-canonical-encoders.md` § "Cross-implementation enforcement
+status".
 
 ## Cross-impl enforcement — honest status
 

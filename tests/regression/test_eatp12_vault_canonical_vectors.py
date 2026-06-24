@@ -4,8 +4,11 @@
 """EATP-12 Wave-1 byte-pin + foundation regression suite.
 
 Pins the §12.2 (N12-CB-01) commitment and §12.3 (N12-CB-04(d)) KCV golden hashes
-from the normative Appendix B fixture, plus the canonical pre-image strings — the
-cross-SDK byte contract kailash-rs must reproduce. Tier-1 (offline, deterministic).
+from the normative Appendix B fixture, plus the canonical pre-image strings. The
+pinned hashes are python-self-consistent (issue #1402): these tests assert the
+Python implementation reproduces them. kailash-rs is expected to reproduce the
+same hashes, but that cross-SDK equality is reconciled at the post-Wave-6
+cross-SDK gate, NOT in this repo's CI. Tier-1 (offline, deterministic).
 
 Covers Wave-1 shards: F1 (KeyClass/kek_generation), FT (closed taxonomy + gate
 skeletons), F2 (DTO floors), C1 (commitment/KCV byte-pins + constant-time verify),

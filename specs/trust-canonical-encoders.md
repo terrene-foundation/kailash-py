@@ -141,3 +141,40 @@ counterpart must land identical changes in lockstep and the vendored fixtures
 (`test-vectors/*-canonical.json`) re-vendored, or the SDKs produce divergent
 bytes for the same logical input. See `rules/cross-sdk-inspection.md` Rule 4 +
 `test-vectors/README.md`.
+
+---
+
+## Cross-implementation enforcement status (in-repo vs deferred)
+
+This index answers a question distinct from § The two families (which asks
+"which encoder config applies on this input?"): **which canonical contracts
+have their cross-implementation byte equality ENFORCED by this repo's CI, vs
+DEFERRED to an external gate?** (issue #1402).
+
+Today **no in-repo test ingests an independently-produced kailash-rs digest** —
+every row below is either a Python-self-consistent byte-pin (the Python
+production path reproduces its own pinned fixture) or a fixture vendored from
+kailash-rs. The independent rust digest is checked at the named external gate,
+NOT here. A test docstring or fixture comment that reads as "BOTH SDKs MUST
+produce byte-for-byte" describes the byte-pin CONTRACT the rs side is expected
+to meet — it does NOT mean this repo's CI verifies the rs side.
+
+| Canonical contract / fixture                       | Encoder / site                                                             | In-repo enforcement                                                         | Independent cross-SDK check deferred to                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `test-vectors/audit-chain-canonical.json`          | `AuditAnchor._canonical_input` / `compute_hash`                            | Python-self-consistent byte-pin                                             | post-Wave-6 cross-SDK gate (kailash-rs#449)                                             |
+| `test-vectors/trace-event-canonical.json`          | `compute_trace_event_fingerprint` / `_canonical_json`                      | Python-self-consistent byte-pin                                             | post-Wave-6 cross-SDK gate (kailash-rs#449)                                             |
+| `tests/test-vectors/trust-plane-canonical.json`    | `serialize_for_signing`                                                    | Python-self-consistent byte-pin                                             | external cross-SDK gate (kailash-rs#449 / #1451)                                        |
+| `tests/test-vectors/delegate-canonical.json`       | `canonical_json_dumps`                                                     | Python-self-consistent byte-pin                                             | external cross-SDK gate (kailash-rs#449 / #1451)                                        |
+| `tests/test-vectors/eatp12-vault-canonical.json`   | vault `kek_identity_commitment` / `key_check_value` + EATP-12 audit-anchor | Python-self-consistent byte-pin                                             | post-Wave-6 cross-SDK gate                                                              |
+| `tests/test-vectors/eatp08-alg-id-canonical.json`  | `serialize_for_signing` (alg_id wire)                                      | Python-authored byte-pin                                                    | kailash-rs VENDORS the file byte-for-byte (esperie-enterprise/kailash-rs#1315, Rule 4a) |
+| `tests/trust/pact/conformance/vectors/*` (PACT N6) | audit-anchor / governance canonical                                        | Python-self-consistent byte-pin + `shasum -c PACT_VECTORS.sha256` integrity | external cross-SDK gate                                                                 |
+| `tests/fixtures/cross-sdk/{jsonrpc,envelope,...}`  | `JsonRpcRequest` / `ConstraintEnvelope.to_canonical_json` etc.             | Python-self-consistent byte-pin + `shasum -c VECTORS.sha256` integrity      | external cross-SDK gate (EATP D6)                                                       |
+
+To upgrade a row from "Python-self-consistent" to in-repo cross-impl
+enforcement, vendor the independently-produced golden from kailash-rs (per
+`rules/cross-sdk-inspection.md` Rule 4a) and add a conformance job so an rs-side
+divergence fails CI here — the open coordination item is `kailash-rs#1451`. The
+`test-vectors/README.md` § "Cross-impl enforcement — honest status" carries the
+same status for the two repo-root fixtures; each `tests/test-vectors/*.json`
+fixture carries its producer + `cross_impl_status` in its own `provenance` block
+(or, for `eatp08-alg-id-canonical.json`, in its `description`).

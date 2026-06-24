@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "spec_ref": "specs/trust-crypto.md §12.2",
   "issue": "https://github.com/terrene-foundation/kailash-py/issues/959",
-  "description": "Cross-SDK canonical-bytes byte-pin vectors for the trust-plane signing helper (kailash.trust.signing.crypto.serialize_for_signing). Both kailash-py and kailash-rs MUST produce byte-identical canonical_json and identical SHA-256 hex for every vector. Typed scalars are tagged ({\"$type\": ..., \"$value\": ...}) so the JSON file holds them losslessly. Each SDK's reifier turns tags back into the language's native object before feeding the serializer. Canonical bytes are ASCII-only (json ensure_ascii=True default) for byte-stable cross-SDK output. Vectors V8-V10 (NFC-composed, NFD-decomposed, astral-plane object key) added per issue #1258 to pin the non-ASCII escape contract; the serializer performs NO Unicode normalization, so V8 (NFC) and V9 (NFD) are distinct pre-images.",
+  "description": "Cross-SDK canonical-bytes byte-pin vectors for the trust-plane signing helper (kailash.trust.signing.crypto.serialize_for_signing). Both kailash-py and kailash-rs MUST produce byte-identical canonical_json and identical SHA-256 hex for every vector (the byte-pin CONTRACT the rs side is expected to meet — see provenance.cross_impl_status: these expected_* values are python-self-consistent, with cross-SDK equality verified at the external gate, NOT this repo's CI). Typed scalars are tagged ({\"$type\": ..., \"$value\": ...}) so the JSON file holds them losslessly. Each SDK's reifier turns tags back into the language's native object before feeding the serializer. Canonical bytes are ASCII-only (json ensure_ascii=True default) for byte-stable cross-SDK output. Vectors V8-V10 (NFC-composed, NFD-decomposed, astral-plane object key) added per issue #1258 to pin the non-ASCII escape contract; the serializer performs NO Unicode normalization, so V8 (NFC) and V9 (NFD) are distinct pre-images.",
+  "provenance": {
+    "producer": "kailash-py:kailash.trust.signing.crypto.serialize_for_signing",
+    "generation_method": "expected_canonical_json + expected_sha256 are derived by reifying each vector's tagged typed scalars then running serialize_for_signing; reproducible from input_repr via the Python signing path.",
+    "cross_impl_status": "python-self-consistent",
+    "cross_impl_note": "kailash-rs is expected to reproduce each value byte-for-byte; cross-implementation byte equality is verified at the external cross-SDK gate (kailash-rs#449 / #1451 lockstep), NOT in this repo's CI. See specs/trust-canonical-encoders.md section 'Cross-implementation enforcement status'."
+  },
   "tag_schema": {
     "datetime": "ISO-8601 string with explicit tz; e.g. 2026-01-01T00:00:00+00:00",
     "date": "YYYY-MM-DD",
