@@ -1,5 +1,20 @@
 # PACT Changelog
 
+## [0.14.2] — 2026-06-24 — fix: evict silent (agent, tool) pairs from the MCP rate-limiter (#1440)
+
+### Security
+
+- `pact.mcp.McpGovernanceEnforcer` now evicts "silent" `(agent_id, tool_name)`
+  pairs whose Layer-5 rate-limit sliding window has fully expired, instead of
+  retaining them until the 10k size cap forces LRU eviction. A caller rotating
+  `agent_id` per request previously accumulated rate-state toward the cap (a
+  memory-exhaustion DoS surface against any rate-limited MCP tool), and the LRU
+  backstop could evict a still-active pair and reset its counter (weakening
+  enforcement under memory pressure). Window-expiry GC is amortized (the hot
+  path stays O(1) between sweeps), never evicts an in-window pair, and the size
+  cap remains the within-burst hard backstop — so memory is bounded under every
+  timestamp pattern. Cross-SDK parity with kailash-rs#1491 (EATP D6).
+
 ## [0.14.1] — 2026-06-21 — fix: reject NaN/Inf in the conformance canonical encoder (#1412)
 
 ### Security
