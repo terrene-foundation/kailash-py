@@ -2,31 +2,28 @@
 
 ## Where we are
 
-Released **kailash-align 0.7.4** to PyPI this session — the #1429
-`OnlineDPOAdapter.build()` informative-error fix (de5863f3e, merged in #1439
-last session) is now live. Clean-venv install + behavioral verify PASSED. A full
-9-package sibling-drift enumeration confirmed ALL packages AT-PARITY with PyPI
-(0 unreleased src commits) — main == PyPI monorepo-wide. In-repo actionable
-queue CLEARED; remaining forest is entirely gated / cross-repo / deferred.
+Released **kailash-pact 0.14.2** to PyPI this session — the #1440 MCP
+rate-limiter silent-pair-GC DoS fix. Found by re-checking the live issue tracker
+(the prior session's "queue empty" reconstruction had missed #1440, filed 04:33
+the same day). Fix → PR #1443 (merge `e9fd3e936`); release → PR #1444 + tag
+`pact-v0.14.2` → publish-pypi run `28081548947` SUCCESS. Clean-venv verified
+(`pact.__version__ == "0.14.2"`, GC method present in the wheel). main == PyPI
+monorepo-wide again. The in-repo actionable queue is empty — every remaining
+forest item is gated, cross-repo, or deferred.
 
 ## Read first
 
-1. This file's Outstanding ledger — bearings; the actionable in-repo queue is empty.
-2. issues #1403 + #1402 — the only open in-repo-ish workstream (F-XSDK canonical-JSON
-   byte-determinism). Gated on rs#1451; start here only once rs#1451 has landed.
-3. `.claude/rules/cross-sdk-inspection.md` § Rule 4b — governs #1403: a byte-CHANGING
-   canonical-encoder switch MUST land as a cross-SDK lockstep, never unilaterally in py.
+1. This file's Outstanding ledger — bearings; the in-repo actionable queue is empty.
+2. issues #1403 + #1402 — the only open in-repo-ish work (F-XSDK byte-determinism);
+   gated on rs#1451 — start only once it lands.
+3. `.claude/rules/cross-sdk-inspection.md` § Rule 4b — governs #1403 (a byte-CHANGING
+   canonical-encoder switch is a cross-SDK lockstep, never unilateral in py).
 4. `CLAUDE.md` — project context (framework-first, BUILD-repo discipline).
 
-## Release this session (closed)
+## In-flight state
 
-- **kailash-align 0.7.3 → 0.7.4** (#1429). PR #1441 (`release/v0.7.4-align`, merge
-  `015a02ef0`) → tag `align-v0.7.4` → publish-pypi run `28076457723` SUCCESS.
-  TestPyPI skipped (patch exception, user "approved"). Gates: 40 rl_bridge tests +
-  security-reviewer APPROVE + reviewer APPROVE. Clean-venv verified
-  (`kailash_align.__version__ == "0.7.4"` + `build()`/`learn()` raise the
-  informative `TrainingError`). Deployment record:
-  `deploy/deployments/2026-06-24-align-v0.7.4-1429-online-dpo-error.md`.
+- None. Working tree carries only this file + the deploy record (pending the
+  post-release records PR). All release artifacts committed (PRs #1443 + #1444).
 
 ## Outstanding ledger (forest)
 
@@ -34,26 +31,28 @@ queue CLEARED; remaining forest is entirely gated / cross-repo / deferred.
 | -- | ---- | ---------------------------- | ------ |
 | F-MOPS | Enroll + roll out onboarding suite to kailash-rs | user 2026-06-23 "roll this out to kailash-rs" | HANDED-OFF — rs session executes (brief in workspaces/mops-onboarding) |
 | F-XSDK-1451 | canonical byte-determinism #1403/#1402 | issues #1402/#1403 | BLOCKED — gated on rs#1451; #1403 is cross-SDK-lockstep |
-| F-XSDK-RS-FILED | rs parity rs#1465 / #1442 / #1420 | EATP D6 | FILED — awaiting rs |
+| F-XSDK-RS-FILED | rs parity (rs issues #1465 / #1442 / #1420) | EATP D6 | FILED — awaiting rs |
 | F-LOOM-INDEP | loom 2.45.0 obsoleted independence.md + terrene-naming.md | PR #1427 flag | SURFACED — loom-side |
 | F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC cross-store cascade | project_trustplane_day1 | DEFERRED |
 
-Closed this session: align 0.7.4 release (#1429 fix shipped to PyPI). Prior:
-`F-LOCK-STALE` → #1438; `F-1429` source fix → #1439.
+Closed this session: **#1440** (MCP rate-limiter silent-pair GC DoS) → fix PR #1443
+→ release kailash-pact 0.14.1 → 0.14.2 (PR #1444, tag `pact-v0.14.2`, publish run
+28081548947) → clean-venv verified → deploy record. Issue auto-closed via Fixes #1440.
 
 ## Unreleased packages
 
-- NONE. All 9 packages enumerated AT-PARITY with PyPI (core 2.44.1 / dataflow
-  2.11.3 / nexus 2.9.0 / kaizen 2.28.0 / mcp 0.2.15 / ml 2.2.2 / align 0.7.4 /
-  pact 0.14.1 / kaizen-agents 0.9.11 per their last tags; 0 unreleased src commits).
+- NONE. All 9 packages AT-PARITY with PyPI (kailash-pact now 0.14.2 == PyPI).
 
 ## Traps
 
-- F-XSDK #1403: do NOT fix the `default=str` signing-path encoder unilaterally in py — it
-  is a byte-CHANGING cross-SDK contract; coordinate with kailash-rs or every signed
-  artifact silently diverges (cross-sdk-inspection Rule 4b).
-- The rl_bridge path imports kailash_ml at module scope; a fresh `.venv` cannot import any
-  rl_bridge adapter until `uv pip install -e packages/kailash-ml`.
-- PyPI publish verify: `uv pip install --refresh` hits a deeper-index-cache lag even when
-  `pypi.org/simple/<pkg>/` already lists the wheel; fall back to
-  `pip install --no-cache-dir` (build-repo-release-discipline Rule 2).
+- **pact formats with Black `--line-length=88`** (pre-commit hook), NOT `ruff format`.
+  `ruff format` discovers pact's `[tool.ruff] line-length = 100` and UN-wraps lines
+  Black-88 had wrapped → the pre-commit Black hook then re-wraps → "files modified by
+  hook" → commit aborts. For pact (and likely other packages) use
+  `.venv/bin/black --line-length=88 <file>` before staging; ruff is lint-only here.
+- F-XSDK #1403: do NOT switch the `default=str` signing-path encoder unilaterally in
+  py — byte-CHANGING cross-SDK contract; coordinate with rs (cross-sdk Rule 4b).
+- PyPI verify: `uv pip install --refresh` hits a deeper-index-cache lag even when
+  `pypi.org/simple/<pkg>/` already lists the wheel — fall back to `pip install --no-cache-dir`.
+- Re-check the live `gh issue list` at session start — the prior wrapup's "queue empty"
+  framing missed #1440 (filed mid-session); the issue tracker is ground truth, not the notes.
