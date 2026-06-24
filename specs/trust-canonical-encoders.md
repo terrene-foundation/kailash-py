@@ -62,11 +62,14 @@ dataclass that `_audit_record_to_dict` does not pre-normalize. Switching either
 to `canonical_scalars` py-only is an UNCOORDINATED cross-SDK byte change and is
 BLOCKED. Per `kailash-rs#1452` (2026-06-20), kailash-rs is on its `#449`-conformant
 `canonicalize` encoder for these surfaces — NOT a `default=str`-class encoder (the
-INVERSE of py here). Whether py's current `default=str` bytes equal rs's
-`canonicalize` bytes for every input type, and the direction of any alignment, is
-the open cross-SDK coordination item `kailash-rs#1451`; any change MUST land as a
-coordinated lockstep, never py-only — the same discipline as the audit-chain
-timestamp format (`kailash-rs#449`/`#1448`). The current bytes are pinned by
+INVERSE of py here). The cross-SDK alignment is now
+RESOLVED by `kailash-rs#1451` (PR #1504, 2026-06-20): the canonical direction is
+`+00:00`, and kailash-rs is the converging side — it re-signs its own artifacts to
+that direction (the witness-redaction partition is 3 cross-SDK-agreeing
+subject-keyed vectors + 4 timestamp-bearing divergent vectors). py's current
+`default=str` bytes stay pinned until that convergence re-sign executes; the
+re-sign is a coordinated cross-SDK lockstep, never py-only — the same discipline as
+the audit-chain timestamp format (`kailash-rs#449`/`#1448`). The current bytes are pinned by
 `tests/regression/test_canonical_encoder_family_conformance.py` so a silent
 py-only switch fails loudly. See § Cross-SDK note.
 
@@ -113,8 +116,10 @@ dispositions landed:
   cross-SDK byte contracts, so a py-only switch is an uncoordinated cross-SDK change
   and is BLOCKED. Per `kailash-rs#1452` (2026-06-20), kailash-rs is on its
   `#449`-conformant `canonicalize` encoder for these surfaces (the INVERSE of py's
-  `default=str`); whether the two are byte-equal for every input type, and the
-  alignment direction, is the open cross-SDK item `kailash-rs#1451`. They remain on
+  `default=str`); the cross-SDK alignment is now resolved by `kailash-rs#1451`
+  (PR #1504, 2026-06-20): the canonical direction is `+00:00` and kailash-rs is the
+  converging side (it re-signs its own artifacts; the convergence re-sign is the
+  remaining coordinated lockstep, never py-only). They remain on
   `default=str` and their CURRENT bytes are pinned by
   `tests/regression/test_canonical_encoder_family_conformance.py` (the first
   byte-conformance tests of `selective_disclosure.py`'s witness-encoder family —
@@ -173,7 +178,8 @@ to meet — it does NOT mean this repo's CI verifies the rs side.
 To upgrade a row from "Python-self-consistent" to in-repo cross-impl
 enforcement, vendor the independently-produced golden from kailash-rs (per
 `rules/cross-sdk-inspection.md` Rule 4a) and add a conformance job so an rs-side
-divergence fails CI here — the open coordination item is `kailash-rs#1451`. The
+divergence fails CI here — the broader cross-SDK byte gate is `kailash-rs#449`
+(the canonical-encoder alignment item `kailash-rs#1451` was resolved by PR #1504). The
 `test-vectors/README.md` § "Cross-impl enforcement — honest status" carries the
 same status for the two repo-root fixtures; each `tests/test-vectors/*.json`
 fixture carries its producer + `cross_impl_status` in its own `provenance` block
