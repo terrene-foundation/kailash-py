@@ -16,13 +16,9 @@ diverse completions; this adapter keeps that distinct from
 """
 from __future__ import annotations
 
-import logging
-import time
 from typing import Any, Callable, ClassVar, Literal, Optional
 
 from kailash_align.rl_bridge._base import _BridgeAdapterBase
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["OnlineDPOAdapter"]
 
@@ -96,52 +92,26 @@ class OnlineDPOAdapter(_BridgeAdapterBase):
         self._resume_from: Any = None
 
     def build(self) -> None:
-        from kailash_align.method_registry import get_method
+        """Online DPO is unavailable under trl >=1.0.
 
-        method = get_method("online_dpo")
-        if self._prompt_dataset is not None:
-            method.dataset_validator(self._prompt_dataset)
+        trl >=1.0 removed ``OnlineDPOTrainer``/``OnlineDPOConfig`` upstream (the
+        classes no longer exist in any trl 1.x release) and kailash-align's trl
+        floor is >=1.0, so the bridge can never instantiate a trainer — the
+        ``online_dpo`` method is intentionally NOT registered in
+        ``method_registry`` (see issue #1426). This raises the SAME informative
+        :class:`~kailash_align.exceptions.TrainingError` as
+        :meth:`OnlineDPOConfig.to_trl_config` (``config.py``), pointing users to
+        DPO or GRPO — rather than the opaque ``AlignmentError: Unknown training
+        method 'online_dpo'`` the un-registered registry lookup produced. See
+        issue #1429.
+        """
+        from kailash_align.exceptions import TrainingError
 
-        try:
-            trainer_cls = __import__(
-                method.trainer_module, fromlist=[method.trainer_class_name]
-            )
-            OnlineDPOTrainer = getattr(trainer_cls, method.trainer_class_name)
-            config_cls = __import__(
-                method.config_module, fromlist=[method.config_class_name]
-            )
-            OnlineDPOConfig = getattr(config_cls, method.config_class_name)
-        except (ImportError, AttributeError) as exc:
-            raise ImportError(
-                f"OnlineDPOAdapter.build requires TRL OnlineDPOTrainer. "
-                f"Install via 'pip install kailash-align[rl-bridge]' "
-                f"(pulls trl>=1.0). Underlying error: {exc}"
-            ) from exc
-
-        config_kwargs = {**self._hyperparameters}
-        config_kwargs.setdefault("temperature", self.sampling_temperature)
-        trl_config = OnlineDPOConfig(**config_kwargs)
-
-        trainer_kwargs = {
-            "model": self._policy,
-            "ref_model": self._reference_model,
-            "args": trl_config,
-            "train_dataset": self._prompt_dataset,
-        }
-        if self._reward_model is not None:
-            trainer_kwargs["reward_model"] = self._reward_model
-        self._trainer = OnlineDPOTrainer(**trainer_kwargs)
-        self._built = True
-        logger.info(
-            "rl_bridge.online_dpo.build.ok",
-            extra={
-                "rl_algo": self.name,
-                "rl_run_id": self.run_id,
-                "rl_ref_temperature": self.ref_temperature,
-                "rl_sampling_temperature": self.sampling_temperature,
-                "tenant_id": self.tenant_id,
-                "mode": "real",
-            },
+        raise TrainingError(
+            "Online DPO is unavailable: trl >=1.0 removed OnlineDPOConfig/"
+            "OnlineDPOTrainer upstream (the class no longer exists in any trl 1.x "
+            "release). Use DPO (method='dpo', offline paired preference data) or "
+            "GRPO (method='grpo', online RL with reward functions) instead."
         )
 
     def learn(
@@ -153,123 +123,12 @@ class OnlineDPOAdapter(_BridgeAdapterBase):
         eval_freq: int = 0,
         n_eval_episodes: int = 0,
     ) -> Any:
-        from datetime import datetime, timezone
+        """Online DPO is unavailable under trl >=1.0 — see :meth:`build`.
 
-        from kailash_ml.rl._lineage import RLLineage
-        from kailash_ml.rl.trainer import METRIC_KEYS, RLTrainingResult
-
-        if not self._built:
-            self.build()
-        self._require_trainer("learn")
-
-        start = time.perf_counter()
-        train_output = self._trainer.train(
-            resume_from_checkpoint=(
-                str(self._resume_from) if self._resume_from else None
-            ),
-        )
-        training_time = time.perf_counter() - start
-
-        log_history = (
-            getattr(getattr(self._trainer, "state", None), "log_history", []) or []
-        )
-        for step_idx, entry in enumerate(log_history):
-            if not isinstance(entry, dict):
-                continue
-            step = int(entry.get("step", step_idx))
-            for trl_key, rl_key in (
-                ("loss", "rl.train.update.loss"),
-                ("rewards/chosen", "rl.train.update.rewards_chosen"),
-                ("rewards/rejected", "rl.train.update.rewards_rejected"),
-                ("rewards/margins", "rl.train.update.rewards_margin"),
-                ("rewards/accuracies", "rl.train.update.accuracy"),
-                ("logps/chosen", "rl.train.update.logps_chosen"),
-                ("logps/rejected", "rl.train.update.logps_rejected"),
-                ("objective/kl", "rl.rollout.step.kl_from_reference"),
-            ):
-                if trl_key in entry and entry[trl_key] is not None:
-                    self.emit_metric(rl_key, float(entry[trl_key]), step=step)
-            # Spec §3.4b: temperature separation audit tags.
-            self.emit_metric(
-                "rl.train.update.ref_temperature", self.ref_temperature, step=step
-            )
-            self.emit_metric(
-                "rl.train.update.sampling_temperature",
-                self.sampling_temperature,
-                step=step,
-            )
-
-        metrics: dict[str, float | None] = {k: None for k in METRIC_KEYS}
-        if log_history and isinstance(log_history[-1], dict):
-            last = log_history[-1]
-            margin = last.get("rewards/margins")
-            if margin is not None:
-                metrics["reward_mean"] = float(margin)
-            if "objective/kl" in last:
-                metrics["kl"] = float(last["objective/kl"])
-        metrics["training_time_seconds"] = training_time
-        metrics["ref_temperature"] = self.ref_temperature
-        metrics["sampling_temperature"] = self.sampling_temperature
-
-        from kailash_align._version import __version__ as _align_version
-
-        lineage = RLLineage(
-            run_id=self.run_id,
-            experiment_name=None,
-            tenant_id=self.tenant_id,
-            base_model_ref=getattr(self._policy, "name_or_path", None),
-            reference_model_ref=getattr(self._reference_model, "name_or_path", None),
-            reward_model_ref=(
-                getattr(self._reward_model, "name_or_path", None)
-                if self._reward_model is not None
-                else None
-            ),
-            dataset_ref=f"prompts:rows={len(self._prompt_dataset) if self._prompt_dataset is not None else 0}",
-            env_spec="text:preferences",
-            algorithm=self.name,
-            paradigm=self.paradigm,
-            parent_run_id=None,
-            sdk_source="kailash-align",
-            sdk_version=_align_version,
-            created_at=datetime.now(timezone.utc),
-        )
-
-        # W6-015: populate spec §3.2 canonical fields. Online DPO is
-        # an RLHF preference-learning algo — no episode rollouts, no
-        # replay buffer, classical metrics stay None.
-        result = RLTrainingResult(
-            algorithm=self.name,
-            env_spec="text:preferences",
-            total_timesteps=int(total_timesteps),
-            episode_reward_mean=float(metrics.get("reward_mean") or 0.0),
-            episode_reward_std=0.0,
-            episode_length_mean=0.0,
-            total_env_steps=int(total_timesteps),
-            policy_entropy=None,
-            value_loss=None,
-            kl_divergence=metrics.get("kl"),
-            explained_variance=None,
-            replay_buffer_size=None,
-            metrics=metrics,
-            elapsed_seconds=float(training_time),
-            tenant_id=self.tenant_id,
-            artifact_uris={},
-            episodes=[],
-            eval_history=[],
-            policy_artifact=None,
-            lineage=lineage,
-            device=self.device,
-            # Back-compat kwargs (resolved by __post_init__):
-            policy_name=getattr(self._policy, "name_or_path", self.name),
-        )
-        logger.info(
-            "rl_bridge.online_dpo.learn.ok",
-            extra={
-                "rl_algo": self.name,
-                "rl_run_id": self.run_id,
-                "rl_training_time_s": training_time,
-                "tenant_id": self.tenant_id,
-                "mode": "real",
-            },
-        )
-        return result
+        ``learn`` must build the trainer before training; :meth:`build` raises an
+        informative :class:`~kailash_align.exceptions.TrainingError` (trl >=1.0
+        removed ``OnlineDPOTrainer``; use 'dpo' or 'grpo'), so calling ``learn``
+        surfaces the same actionable error rather than an opaque registry miss.
+        See issue #1429.
+        """
+        self.build()
