@@ -26,8 +26,9 @@ signing/hash/cross-SDK-byte sites into two dispositions (see
    ``kailash-rs#449`` cross-SDK byte contract, so switching py-only is an
    UNCOORDINATED cross-SDK change — BLOCKED. Per ``kailash-rs#1452`` (2026-06-20),
    kailash-rs is on its ``#449``-conformant ``canonicalize`` encoder for these
-   surfaces (the INVERSE of py's ``default=str``); the cross-SDK byte-equality and
-   the alignment direction are the open coordination item ``kailash-rs#1451``. Any
+   surfaces (the INVERSE of py's ``default=str``). ``kailash-rs#1451`` RESOLVED this
+   (PR #1504, 2026-06-20): the canonical direction is ``+00:00`` and kailash-rs is the
+   converging side (it re-signs its own artifacts). Any
    change MUST land as a coordinated lockstep, never py-only — the same discipline
    as the audit-chain #1400 timestamp change (``kailash-rs#1448``, now landed).
 
