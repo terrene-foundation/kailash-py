@@ -6,14 +6,18 @@ Released **kailash-pact 0.14.2** to PyPI this session — the #1440 MCP
 rate-limiter silent-pair-GC DoS fix. Found by re-checking the live issue tracker
 (the prior session's "queue empty" reconstruction had missed #1440, filed 04:33
 the same day). Fix → PR #1443 (merge `e9fd3e936`); release → PR #1444 + tag
-`pact-v0.14.2` → publish-pypi run `28081548947` SUCCESS. Clean-venv verified
-(`pact.__version__ == "0.14.2"`, GC method present in the wheel). main == PyPI
-monorepo-wide again. The in-repo actionable queue is empty — every remaining
-forest item is gated, cross-repo, or deferred.
+`pact-v0.14.2` → publish-pypi run `28081548947` SUCCESS; deploy record + notes →
+PR #1445. Clean-venv verified (`pact.__version__ == "0.14.2"`, GC method present
+in the wheel). main == PyPI monorepo-wide.
+
+A full `/sweep` ran at session end — **clean** (`SWEEP-2026-06-24.md`). No active
+todos, no open PRs, no orphan branches, working tree clean, all 9 packages at
+PyPI parity, core unchanged since `v2.44.1`. The in-repo actionable queue is
+empty — every remaining item is gated (cross-SDK), cross-repo, or housekeeping.
 
 ## Read first
 
-1. This file's Outstanding ledger — bearings; the in-repo actionable queue is empty.
+1. This file's Outstanding ledger + `SWEEP-2026-06-24.md` — bearings.
 2. issues #1403 + #1402 — the only open in-repo-ish work (F-XSDK byte-determinism);
    gated on rs#1451 — start only once it lands.
 3. `.claude/rules/cross-sdk-inspection.md` § Rule 4b — governs #1403 (a byte-CHANGING
@@ -22,8 +26,8 @@ forest item is gated, cross-repo, or deferred.
 
 ## In-flight state
 
-- None. Working tree carries only this file + the deploy record (pending the
-  post-release records PR). All release artifacts committed (PRs #1443 + #1444).
+- None. Working tree clean; in sync with origin/main. All this-session artifacts
+  landed (PRs #1443 + #1444 + #1445).
 
 ## Outstanding ledger (forest)
 
@@ -34,10 +38,12 @@ forest item is gated, cross-repo, or deferred.
 | F-XSDK-RS-FILED | rs parity (rs issues #1465 / #1442 / #1420) | EATP D6 | FILED — awaiting rs |
 | F-LOOM-INDEP | loom 2.45.0 obsoleted independence.md + terrene-naming.md | PR #1427 flag | SURFACED — loom-side |
 | F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC cross-store cascade | project_trustplane_day1 | DEFERRED |
+| F-HK-JOURNALS | Triage 10 `.pending` journal entries across 5 workspaces (cross-sdk-audit, issue-855/1337/1339/1356) | journal.md promote/discard | HOUSEKEEPING — all <14d, not yet stale |
+| F-HK-ARCHIVE | Archive `workspaces/kaizen-rag-node-coverage/` (.session-notes 34d) | worktree-isolation hygiene | HOUSEKEEPING — LOW |
 
 Closed this session: **#1440** (MCP rate-limiter silent-pair GC DoS) → fix PR #1443
 → release kailash-pact 0.14.1 → 0.14.2 (PR #1444, tag `pact-v0.14.2`, publish run
-28081548947) → clean-venv verified → deploy record. Issue auto-closed via Fixes #1440.
+28081548947) → clean-venv verified → deploy record (PR #1445). Issue auto-closed.
 
 ## Unreleased packages
 
@@ -47,8 +53,8 @@ Closed this session: **#1440** (MCP rate-limiter silent-pair GC DoS) → fix PR 
 
 - **pact formats with Black `--line-length=88`** (pre-commit hook), NOT `ruff format`.
   `ruff format` discovers pact's `[tool.ruff] line-length = 100` and UN-wraps lines
-  Black-88 had wrapped → the pre-commit Black hook then re-wraps → "files modified by
-  hook" → commit aborts. For pact (and likely other packages) use
+  Black-88 had wrapped → the pre-commit Black hook re-wraps → "files modified by hook"
+  → commit aborts. For pact (and likely other packages) run
   `.venv/bin/black --line-length=88 <file>` before staging; ruff is lint-only here.
 - F-XSDK #1403: do NOT switch the `default=str` signing-path encoder unilaterally in
   py — byte-CHANGING cross-SDK contract; coordinate with rs (cross-sdk Rule 4b).
