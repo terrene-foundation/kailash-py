@@ -10,13 +10,20 @@ canonical output matches Rust's ``serde_json::to_string(&BTreeMap)``
 byte-for-byte. The timestamp is ALWAYS rendered
 ``isoformat(timespec="microseconds")`` (six fractional digits + ``+00:00``).
 
-These tests pin the cross-SDK byte vectors and assert both:
+These tests pin the Python canonical-input bytes for the audit chain and
+assert both:
 
 1. The exact canonical-input string ``AuditAnchor.compute_hash`` feeds to
    SHA-256 — asserted against the PRODUCTION builder ``_canonical_input()``,
    NOT a test-side mirror (issue #1404). A production format drift fails these
    tests instead of being silently mirrored.
-2. The SHA-256 hex digest matches the pinned cross-SDK contract.
+2. The SHA-256 hex digest matches the pinned value.
+
+Scope (issue #1402): these assertions prove **Python self-consistency** — the
+production path reproduces the pinned fixture bytes. They do NOT ingest an
+independently-produced kailash-rs digest; the cross-SDK byte equality is
+verified at the post-Wave-6 cross-SDK gate, NOT in this repo's CI (see the
+fixture's ``provenance.cross_impl_note``).
 
 Drift failure modes guarded:
 
@@ -32,8 +39,10 @@ D. ``default=str`` typed-scalar drift (issue #1405) — a ``Decimal`` / ``UUID``
    ``datetime`` / ``set`` in metadata routed through implementation-defined
    ``str()`` instead of the canonical ``canonical_scalars`` whitelist.
 
-Vectors live in ``test-vectors/audit-chain-canonical.json`` (cross-SDK
-contract — kailash-rs reads the same file; regenerate via
+Vectors live in ``test-vectors/audit-chain-canonical.json`` (a
+python-self-consistent golden — kailash-rs is expected to reproduce the same
+bytes, but the independent rust digest is verified at the post-Wave-6 cross-SDK
+gate, not here; regenerate via
 ``test-vectors/regenerate_canonical_vectors.py``). Cross-SDK alignment per
 ``rules/cross-sdk-inspection.md`` MUST Rule 4. Siblings: #756 (TraceEvent
 fingerprint Unicode pins), #731 (TraceEvent timestamp microsecond padding).
@@ -266,11 +275,14 @@ class TestU5TypedScalarMetadata:
 
 @pytest.mark.regression
 class TestCrossSDKFixtureParity:
-    """Cross-SDK canonical-fixture conformance tests for the audit chain.
+    """Canonical-fixture conformance tests for the audit chain (Python side).
 
-    The fixture at ``test-vectors/audit-chain-canonical.json`` pins vectors
-    that BOTH kailash-py and kailash-rs MUST produce byte-for-byte. These tests
-    exercise the kailash-py side against the PRODUCTION ``_canonical_input()``.
+    The fixture at ``test-vectors/audit-chain-canonical.json`` is
+    python-self-consistent: its ``expected_*`` bytes are reproduced by the
+    PRODUCTION ``_canonical_input()``, which is what these tests assert.
+    kailash-rs is expected to reproduce the same bytes, but its independent
+    digest is verified at the post-Wave-6 cross-SDK gate, NOT in this repo's CI
+    (see the fixture's ``provenance.cross_impl_note``).
     """
 
     @pytest.fixture(scope="class")

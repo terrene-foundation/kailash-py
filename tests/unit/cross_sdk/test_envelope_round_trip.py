@@ -5,9 +5,12 @@
 
 These tests instantiate the canonical ``ConstraintEnvelope`` frozen
 dataclass from ``kailash.trust.envelope`` and verify that its
-``to_canonical_json()`` output exactly matches the fixture file that
-``kailash-rs``'s ``eatp::constraints::ConstraintEnvelope`` consumes for
-cross-SDK parity validation (EATP D6).
+``to_canonical_json()`` output exactly matches the pinned fixture. The
+fixture's ``expected_canonical_json`` is Python-produced, so these tests prove
+**Python-side self-consistency** (issue #1402); the fixture is the byte-pin
+``kailash-rs``'s ``eatp::constraints::ConstraintEnvelope`` is expected to
+reproduce, with cross-implementation parity verified at the external cross-SDK
+gate (EATP D6), NOT by ingesting an independently-produced rs digest here.
 
 Spec-compliance v2 CRITICAL #8 failure class this file guards against:
 
@@ -109,11 +112,13 @@ def test_envelope_hash_is_stable_across_instances(load_vector):
 
 
 def test_envelope_intersection_matches_fixture(load_vector):
-    """``intersect`` produces the exact cross-SDK canonical intersection.
+    """``intersect`` produces the pinned canonical intersection (Python side).
 
-    The Rust ``eatp::constraints::ConstraintEnvelope::intersect`` MUST
-    produce the same canonical JSON from the same two inputs. This test
-    is the contract.
+    This test pins the Python ``intersect`` canonical output against the
+    fixture. The Rust ``eatp::constraints::ConstraintEnvelope::intersect`` is
+    expected to produce the same canonical JSON from the same two inputs; that
+    cross-implementation equality is verified at the external cross-SDK gate,
+    NOT by this test (issue #1402).
     """
     vector = load_vector("envelope", "envelope_with_intersection.json")
     left = ConstraintEnvelope.from_dict(vector["left"])
