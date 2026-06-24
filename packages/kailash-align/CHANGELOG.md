@@ -1,5 +1,28 @@
 # kailash-align Changelog
 
+## [0.7.4] — 2026-06-24 — OnlineDPOAdapter.build raises an informative TrainingError (#1429)
+
+Patch release. Bug fix — no public dataclass-signature break; the `online_dpo`
+method remains de-registered (as of 0.7.3 / #1426, since trl >=1.0 removed
+`OnlineDPOTrainer`/`OnlineDPOConfig` upstream).
+
+### Fixed
+
+- **`OnlineDPOAdapter.build()` now raises an informative `TrainingError`**
+  instead of the opaque `AlignmentError: Unknown training method 'online_dpo'`.
+  0.7.3 (#1426) de-registered `online_dpo` from the method registry, but
+  `OnlineDPOAdapter.build()` still called `get_method("online_dpo")` outside its
+  guard, surfacing a registry-miss error that told the user nothing about WHY
+  Online-DPO is unavailable or what to use instead. `build()` now raises the
+  SAME message `OnlineDPOConfig.to_trl_config()` already raises in `config.py`
+  ("Online DPO is unavailable: trl >=1.0 removed … use `dpo` or `grpo`"). A
+  parity regression test pins the two messages byte-identical so a future edit
+  to one without the other fails loudly.
+- **`OnlineDPOAdapter.learn()` surfaces the same informative error.** `learn()`
+  builds the trainer first, so it now hits the same `TrainingError`; the
+  unreachable post-build trainer-construction body (which constructed a trl
+  trainer that can never exist) was dead code and is removed.
+
 ## [0.7.3] — 2026-06-23 — trl 1.x compatibility for to_trl_config + pipeline (#1426)
 
 Patch release. Bug fix — 0.7.2 could not run **any** SFT/DPO/KTO/ORPO/Online-DPO
