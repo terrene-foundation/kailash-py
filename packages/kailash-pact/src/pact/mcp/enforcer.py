@@ -120,6 +120,10 @@ class McpGovernanceEnforcer:
         self._policy_overlay: dict[str, McpToolPolicy] = {}
         # Rate tracking: "agent_id:tool_name" -> deque of timestamps
         self._rate_tracker: dict[str, deque[datetime]] = {}
+        # Observed-time high-water of the last window-expiry GC sweep. None until
+        # the first rate-limited check. Amortizes the O(n) silent-pair sweep so
+        # the hot path stays O(1) between sweeps (see _gc_expired_rate_entries).
+        self._last_rate_gc_ts: float | None = None
 
     @property
     def config(self) -> McpGovernanceConfig:
@@ -182,6 +186,16 @@ class McpGovernanceEnforcer:
 
         return decision
 
+    # Sliding-window width for rate limiting (seconds). Single source of truth
+    # for both the per-key prune cutoff and the silent-pair GC cutoff.
+    _RATE_LIMIT_WINDOW_SECONDS = 60.0
+    # Amortization cadence for the window-expiry GC sweep (seconds of observed
+    # time). The map is reclaimed at most once per interval so the hot path
+    # stays O(1) between sweeps; the size cap is the within-burst backstop.
+    _RATE_GC_INTERVAL_SECONDS = 60.0
+    # Hard backstop: max distinct (agent, tool) pairs retained. Only reached
+    # when more than this many pairs are simultaneously ACTIVE within one
+    # window (GC cannot reclaim active pairs); bounds memory under that extreme.
     _MAX_RATE_TRACKER_ENTRIES = 10_000
 
     def register_tool(self, policy: McpToolPolicy) -> None:
@@ -458,18 +472,24 @@ class McpGovernanceEnforcer:
             A BLOCKED GovernanceDecision if rate limit exceeded, None otherwise.
         """
         key = f"{agent_id}:{tool_name}"
+        cutoff = now.timestamp() - self._RATE_LIMIT_WINDOW_SECONDS
         with self._lock:
+            # Window-expiry GC: reclaim "silent" pairs whose sliding window has
+            # fully expired so the map tracks CURRENTLY-ACTIVE pairs, not every
+            # pair ever seen. Amortized; never evicts an in-window (active) pair.
+            self._gc_expired_rate_entries(cutoff, now)
+
             if key not in self._rate_tracker:
-                # Evict oldest entries if dict exceeds max size
+                # Hard backstop: if STILL at the cap after GC (more than the cap
+                # of simultaneously-active pairs), evict to bound memory.
                 if len(self._rate_tracker) >= self._MAX_RATE_TRACKER_ENTRIES:
-                    self._evict_oldest_rate_entries()
+                    self._evict_oldest_rate_entries(cutoff)
                 # Bounded deque for rate tracking
                 self._rate_tracker[key] = deque(maxlen=rate_limit + 1)
 
             tracker = self._rate_tracker[key]
 
-            # Prune entries older than 60 seconds
-            cutoff = now.timestamp() - 60.0
+            # Prune entries older than the rate-limit window
             while tracker and tracker[0].timestamp() < cutoff:
                 tracker.popleft()
 
@@ -479,7 +499,8 @@ class McpGovernanceEnforcer:
                     tool_name=tool_name,
                     agent_id=agent_id,
                     reason=(
-                        f"Rate limit exceeded: {len(tracker)} calls in last 60s "
+                        f"Rate limit exceeded: {len(tracker)} calls in last "
+                        f"{int(self._RATE_LIMIT_WINDOW_SECONDS)}s "
                         f"(limit: {rate_limit}/min) for tool '{tool_name}'"
                     ),
                     timestamp=now,
@@ -490,15 +511,83 @@ class McpGovernanceEnforcer:
 
         return None
 
-    def _evict_oldest_rate_entries(self) -> None:
-        """Evict the oldest 10% of rate tracker entries by last-access timestamp.
+    def _gc_expired_rate_entries(self, cutoff: float, now: datetime) -> None:
+        """Evict rate-tracker entries whose sliding window has fully expired.
+
+        A "silent" pair is one whose most-recent invocation is older than the
+        rate-limit window: pruning its deque would empty it, so it contributes
+        nothing to enforcement (re-creating the deque on the next call yields
+        identical behavior) yet retains memory until the size cap forces
+        eviction. This proactive sweep keeps the map sized to CURRENTLY-ACTIVE
+        pairs -- bounded by active load, not by the total number of distinct
+        pairs ever seen -- closing the silent-pair accumulation surface
+        (issue #1440 / cross-SDK parity with kailash-rs#1491).
+
+        Window-expiry eviction NEVER removes an active pair (one whose last
+        invocation is within the window), so enforcement fidelity is preserved.
+
+        Amortized: runs at most once per ``_RATE_GC_INTERVAL_SECONDS`` of
+        observed time so the hot path stays O(1) between sweeps. Out-of-order
+        (earlier) timestamps simply skip the sweep; the size cap remains the
+        within-burst backstop.
+
+        Must be called while holding self._lock.
+        """
+        now_ts = now.timestamp()
+        last = self._last_rate_gc_ts
+        if last is not None and (now_ts - last) < self._RATE_GC_INTERVAL_SECONDS:
+            return
+        self._last_rate_gc_ts = now_ts
+
+        expired = [
+            k
+            for k, dq in self._rate_tracker.items()
+            if not dq or dq[-1].timestamp() < cutoff
+        ]
+        for k in expired:
+            del self._rate_tracker[k]
+
+        if expired:
+            # Schema-safe: log the COUNT only -- never the (agent_id, tool) keys
+            # (PII-adjacent per observability.md Rule 8). DEBUG so an amortized
+            # sweep cannot flood aggregators.
+            logger.debug(
+                "McpGovernanceEnforcer: rate-tracker GC evicted %d silent "
+                "pair(s); %d active pair(s) remain",
+                len(expired),
+                len(self._rate_tracker),
+            )
+
+    def _evict_oldest_rate_entries(self, cutoff: float) -> None:
+        """Hard-cap backstop: bound the rate tracker at the size cap.
+
+        Frees ~10% of entries. Evicts expired-window entries FIRST (safe -- they
+        hold no active rate state); only if that does not free enough does it
+        fall back to evicting the least-recently-active entries. Reaching the
+        LRU fallback means more than ``_MAX_RATE_TRACKER_ENTRIES`` pairs are
+        simultaneously ACTIVE within one window -- an overload in which memory
+        protection takes precedence over per-pair enforcement fidelity (a
+        deliberate DoS bound).
 
         Must be called while holding self._lock.
         """
         if not self._rate_tracker:
             return
 
-        # Sort keys by the most recent (last) timestamp in their deque.
+        target = max(1, len(self._rate_tracker) // 10)
+
+        # 1) Expired-window entries first -- safe, they hold no active state.
+        expired = [
+            k
+            for k, dq in self._rate_tracker.items()
+            if not dq or dq[-1].timestamp() < cutoff
+        ]
+        for k in expired:
+            del self._rate_tracker[k]
+        if len(expired) >= target:
+            return
+
+        # 2) Still over budget -> evict least-recently-active as a last resort.
         # Empty deques sort to epoch so they are evicted first.
         epoch = datetime.min.replace(tzinfo=UTC)
 
@@ -506,7 +595,7 @@ class McpGovernanceEnforcer:
             dq = self._rate_tracker[k]
             return dq[-1] if dq else epoch
 
+        remaining = target - len(expired)
         sorted_keys = sorted(self._rate_tracker.keys(), key=_last_ts)
-        evict_count = max(1, len(sorted_keys) // 10)
-        for k in sorted_keys[:evict_count]:
+        for k in sorted_keys[:remaining]:
             del self._rate_tracker[k]
