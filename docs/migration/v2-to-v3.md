@@ -13,7 +13,7 @@ parity with `kailash-rs`, and full PACT governance conformance.
 
 | Area             | What Changed                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MCP**          | Extracted as standalone `kailash-mcp` package; old `kailash.mcp_server` emits deprecation warnings                                                                                        |
+| **MCP**          | Extracted as standalone `kailash-mcp` package; the old `kailash.mcp_server` compat shim was **removed** — those imports now raise `ImportError`                                           |
 | **Providers**    | 5,001-line monolith split into per-provider modules under `kaizen.providers`                                                                                                              |
 | **Trust / PACT** | N4/N5/N6 conformance types added; both `kailash-trust-shim` (v3.0) and `kailash-trust` (2026-04-20) packages removed — use `kailash.trust` directly; audit/observation/suspension modules |
 | **Envelopes**    | Canonical `ConstraintEnvelope` unified at `kailash.trust.envelope`                                                                                                                        |
@@ -44,7 +44,7 @@ Use `set_reference_data()` instead. See the ML section below.
 ### MCP
 
 ```python
-# v2.x (emits DeprecationWarning in v3.0)
+# v2.x — kailash.mcp_server was a brief compat shim, since removed; these now raise ImportError
 from kailash.mcp_server import MCPClient, MCPServer
 from kailash.mcp_server.auth import APIKeyAuth
 
@@ -382,7 +382,7 @@ agent = StreamingAgent(
 
 | Deprecated Path                                  | Replacement                                        | v3.0         | v4.0        |
 | ------------------------------------------------ | -------------------------------------------------- | ------------ | ----------- |
-| `from kailash.mcp_server import ...`             | `from kailash_mcp import ...`                      | Warn + works | ImportError |
+| `from kailash.mcp_server import ...`             | `from kailash_mcp import ...`                      | **Removed**  | --          |
 | `from kaizen.nodes.ai.ai_providers import ...`   | `from kaizen.providers.* import ...`               | Warn + works | ImportError |
 | `BaseAgent._pre_execution_hook()` (and 6 others) | `MonitoredAgent` / composition wrappers            | Warn + works | Removed     |
 | `from kailash import AgentUIMiddleware`          | `from kailash.middleware import AgentUIMiddleware` | Warn + works | ImportError |
