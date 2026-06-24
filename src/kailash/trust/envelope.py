@@ -1044,7 +1044,19 @@ class ConstraintEnvelope:
     def to_canonical_json(self) -> str:
         """Deterministic JSON string (sorted keys, no extra whitespace).
 
-        Suitable for cross-SDK comparison and HMAC signing payloads.
+        Serde config: ``sort_keys=True``, compact separators ``(",", ":")``,
+        ``ensure_ascii=True``, ``allow_nan=False``, ``default=str``. For
+        JSON-native payloads this is byte-stable across SDKs and serves as the
+        HMAC signing pre-image. The ``default=str`` fallback, however,
+        stringifies any non-JSON-native value in the free-form ``metadata`` dict
+        via Python's implementation-defined ``str()`` — bytes a sibling SDK has
+        no reason to reproduce. This is a byte-CHANGING site: its current
+        ``default=str`` bytes are pinned and a switch to the ``canonical_scalars``
+        whitelist is a coordinated cross-SDK lockstep, NOT a single-SDK change
+        (kailash-rs#449 / #1451; see ``specs/trust-canonical-encoders.md``
+        § "Encoder-family map" and ``rules/cross-sdk-inspection.md`` Rule 4b).
+        ``ConstraintEnvelope.envelope_hash`` is the byte-NEUTRAL sibling that
+        already routes through ``canonical_scalars`` (no ``default=str``).
         """
         return json.dumps(
             self.to_dict(),

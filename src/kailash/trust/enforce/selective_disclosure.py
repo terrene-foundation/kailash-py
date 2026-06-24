@@ -43,7 +43,16 @@ NON_REDACTABLE_FIELDS: FrozenSet[str] = frozenset(
 
 
 def _hash_value(value: Any) -> str:
-    """Create SHA-256 hash of a value for redaction."""
+    """Create SHA-256 hash of a value for redaction.
+
+    Serde config: ``sort_keys=True``, ``allow_nan=False``, ``default=str``
+    (NOT ``ensure_ascii``-pinned — this is a redaction digest, not a
+    cross-SDK signing pre-image). The ``default=str`` fallback stringifies
+    non-JSON-native values via Python's implementation-defined ``str()``;
+    this is the byte-CHANGING witness-family member whose current bytes are
+    pinned by ``tests/regression/test_canonical_encoder_family_conformance.py``
+    pending the cross-SDK ``canonical_scalars`` lockstep (kailash-rs#449 / #1451).
+    """
     data = json.dumps(value, sort_keys=True, allow_nan=False, default=str)
     return f"REDACTED:sha256:{hashlib.sha256(data.encode()).hexdigest()}"
 
@@ -260,12 +269,20 @@ def _compute_chain_hash(records: List[Dict[str, Any]]) -> List[str]:
     Each hash includes the previous hash, creating a tamper-evident chain.
     Uses the redacted data so witnesses can verify chain integrity.
 
-    Canonicalization (cross-SDK contract — see ``trust/pact/audit.py``
-    and kailash-rs#449): compact separators ``(",", ":")`` and
-    ``ensure_ascii=True`` so Python's ``json.dumps`` output matches
-    Rust's ``serde_json::to_string(&BTreeMap)`` byte-for-byte. Any
-    downstream verifier (same SDK or sibling) recomputes the same
-    hash from the same logical input.
+    Canonicalization config: compact separators ``(",", ":")``,
+    ``ensure_ascii=True`` (``\\uXXXX``-escaped, ASCII-only), ``allow_nan=False``,
+    ``default=str``. For JSON-native inputs this matches Rust's
+    ``serde_json::to_string(&BTreeMap)`` byte-for-byte, so a same-SDK or sibling
+    verifier recomputes the same hash. The ``default=str`` fallback, however,
+    stringifies any non-JSON-native value (Decimal / UUID / datetime / set /
+    nested dataclass) via Python's implementation-defined ``str()`` — bytes a
+    sibling SDK has no reason to reproduce. This is the byte-CHANGING member of
+    the selective-disclosure witness family: its current ``default=str`` bytes
+    are deliberately pinned (``tests/regression/test_canonical_encoder_family_conformance.py``)
+    and a switch to the ``canonical_scalars`` whitelist is a coordinated cross-SDK
+    lockstep, NOT a single-SDK change (kailash-rs#449 / #1451; see
+    ``specs/trust-canonical-encoders.md`` § "Encoder-family map" and
+    ``rules/cross-sdk-inspection.md`` Rule 4b).
     """
     hashes: List[str] = []
     prev_hash = GENESIS_HASH
@@ -327,9 +344,12 @@ def export_for_witness(
     if witness_id:
         metadata["witness_id"] = witness_id
 
-    # Sign the package — compact JSON matches the _compute_chain_hash
-    # canonicalization contract so a cross-SDK verifier can round-trip
-    # the signed payload byte-for-byte (kailash-rs#449).
+    # Sign the package — compact JSON, same config as _compute_chain_hash
+    # (ensure_ascii=True, allow_nan=False, default=str). Byte-stable cross-SDK
+    # for JSON-native payloads; the default=str fallback on typed-scalar inputs
+    # is the byte-CHANGING witness-family divergence pinned pending the
+    # cross-SDK canonical_scalars lockstep (kailash-rs#449 / #1451; see
+    # specs/trust-canonical-encoders.md § "Encoder-family map").
     sign_payload = json.dumps(
         {
             "chain_hashes": chain_hashes,
