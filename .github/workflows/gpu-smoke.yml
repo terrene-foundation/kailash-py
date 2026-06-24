@@ -86,7 +86,7 @@ jobs:
           # content-addressed so stale entries cannot poison installs.
           echo "Pre-run cleanup complete."
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ inputs.python_version || '3.12' }}
         uses: actions/setup-python@v6
