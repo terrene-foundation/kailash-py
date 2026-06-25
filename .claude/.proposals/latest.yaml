@@ -18,7 +18,19 @@ codify_session: "Session 2026-06-23 (light /codify) — issue #1426 (kailash-ali
   (user directive): distribute the onboarding suite to ALL downstream USE templates via
   /sync-to-use, NOT only the BUILD repos. The suite was multi-agent-redteam-converged
   (reviewer + security-reviewer + cc-architect CLEAN on final state per
-  self-referential-codify MUST-1)."
+  self-referential-codify MUST-1). APPEND 2026-06-25 (pact-0.14.3 redteam
+  follow-on codify): ONE rule_update — a security.md Enforcement-Surface-Parity
+  sub-section + a pact-governance.md Rule 2 cross-ref (see changes[] tail).
+  Proposal-only with full proposed text; NO local baseline-rule edit (security.md
+  is priority:0 baseline, so the rule-authoring Rule-10 proximity-band check +
+  Trust-Posture-Wiring grandfather decision + global-vs-variant placement are loom
+  Gate-1 calls that need loom's aggregate-emission tooling). NOT self-referential
+  (security.md/pact-governance.md are not on self-referential-codify Rule 2's
+  allowlist) -> a recommended /codify gate review ran (reviewer + security-reviewer),
+  verdict APPROVE-WITH-FIXES, all CRIT/HIGH/MED/LOW fixes applied to the proposed
+  text below. Gate-1 SCRUB NOTE: the coc-onboarding-specialist entry above carries a
+  PRIVATE org slug in its context prose — scrub per artifact-flow Intake Disclosure
+  Scrub before placement."
 
 changes:
   - type: rule_update
@@ -134,3 +146,163 @@ changes:
       suite is the Phase-2 rollout target for kailash-rs (esperie-enterprise) per the user
       directive; loom may classify rs variant notes (ADO provider, org/owner differences).
       Redteam converged (final round CLEAN across all three specialists)."
+  - type: rule_update
+    artifact: security
+    files:
+      - .claude/rules/security.md
+      - .claude/rules/pact-governance.md
+    classification_suggestion: global
+    context: |
+      APPEND 2026-06-25 (pact-0.14.3 redteam follow-on codify). ADDS one new
+      sub-section to security.md (under / adjacent to "Multi-Site Kwarg Plumbing"):
+      "Enforcement-Surface Parity" — generalizing the existing one-helper-N-call-sites
+      rule to the INDEPENDENT-enforcement-surfaces case. PLUS a precise cross-ref in
+      pact-governance.md Rule 2 (Monotonic Tightening).
+
+      LESSON (the gap): security.md "Multi-Site Kwarg Plumbing" covers a security
+      kwarg plumbed through ONE helper called at N sites; its mechanical fix is
+      `grep -rn 'helper_name(' .`. It does NOT cover the case where ONE authorization
+      control is enforced at TWO INDEPENDENT surfaces that share NO callee — an
+      EVALUATION-time gate and a REGISTRATION/monotonic-tightening validator. The
+      helper-grep structurally cannot reach the second surface (different function,
+      no shared helper), so a new fail-closed dimension added at the eval gate can
+      leave the tightening validator blind. pact-governance Rule 2 covers ENVELOPE
+      INTERSECTION monotonicity (a DIFFERENT mechanism), not MCP re-registration —
+      so neither existing rule names this class.
+
+      PROPOSED security.md sub-section text (Gate-1 may refine placement/wording):
+      ---8<--- BEGIN PROPOSED TEXT
+      ## Enforcement-Surface Parity — A New Fail-Closed Dimension Lands At Every Enforcement Surface, Same PR
+
+      When a fix PROMOTES a field to an enforced fail-closed authorization control at
+      the EVALUATION surface (the check at decision/eval time), EVERY INDEPENDENT
+      validation surface for the same control — especially a monotonic-tightening /
+      re-registration / admission validator — MUST learn the new dimension in the
+      SAME PR, even when the surfaces share NO helper. Grepping the eval helper's call
+      sites is INSUFFICIENT: the registration/tightening validator is a separate
+      function with no shared callee, so the Multi-Site Kwarg Plumbing grep above (one
+      helper, N call sites) structurally CANNOT reach it. Prefer a SINGLE shared
+      restrictiveness/ordering function consumed by BOTH surfaces (they cannot drift);
+      a hand-synced second copy MUST match the eval gate's parse/ordering EXACTLY.
+      An unrecognized value MUST rank as TIGHTEST (fail-closed): an
+      unrecognized->recognized transition is a WIDENING and MUST raise, never be
+      accepted as "tightening".
+
+      ```python
+      # DO — one shared rank function; the registration validator consumes it, same PR
+      def _restrictiveness(v):              # the SINGLE ordering: None=widest, unrecognized=tightest
+          if v is None: return -1
+          try: return LEVELS.index(parse(v))
+          except ValueError: return len(LEVELS)          # unrecognized -> tightest (fail-closed)
+      def _check_clearance(caller, required): ...                    # eval gate (parse -> fail-closed)
+      def _validate_monotonic_tightening(old, new):                  # registration gate — SAME PR
+          if _restrictiveness(new) < _restrictiveness(old):
+              raise GovernanceError(...)                             # may only KEEP or RAISE the bar
+
+      # DO NOT — promote the gate at eval, leave the tightening validator blind
+      def _check_clearance(caller, required): ...                    # new fail-closed gate
+      def _validate_monotonic_tightening(old, new):
+          ...   # never learned the new dimension -> a re-registration that DROPS (secret->None)
+                # or LOWERS (secret->public) the bar is accepted as "tightening" -> gate silently stripped
+      ```
+
+      **BLOCKED rationalizations:** "The eval gate is the enforcement point; the
+      validator is secondary" / "grep of the eval helper's call sites found nothing"
+      / "the validator has a safe default" / "the new dimension is rare;
+      re-registration won't hit it" / "the eval check already fails closed, so the
+      bypass is theoretical".
+
+      **Why:** The two surfaces enforce ONE control through INDEPENDENT code with no
+      shared callee, so the helper-following grep cannot reach the second surface — a
+      new fail-closed gate the tightening validator never learned lets a
+      re-registration lower the bar and be accepted as "tightening", a privilege
+      escalation the FIX ITSELF introduced.
+
+      **Detection:** for any field promoted to a fail-closed authorization control at
+      an eval surface, grep the re-registration / monotonic-tightening validator for
+      that field name — absence is a finding.
+
+      Origin: kailash-py #1456 -> kailash-pact 0.14.3 (PR #1459). #1456 promoted
+      `McpToolPolicy.clearance_required` to a fail-closed gate at `_check_clearance`
+      (eval, Step 3.5) but left `_validate_monotonic_tightening` (re-registration)
+      blind to it; a `secret`->None / `secret`->`public` re-registration was accepted
+      as "tightening", silently stripping the gate (caught by an adversarial /redteam,
+      NOT by the existing multi-site grep). Cross-SDK sibling: the kailash-rs Rust
+      binding (same shape).
+      ---8<--- END PROPOSED TEXT
+
+      PROPOSED pact-governance.md Rule 2 cross-ref (one paragraph appended to Rule 2):
+      "Beyond envelope intersection (above), monotonic tightening ALSO governs MCP
+      tool-policy RE-REGISTRATION (`_validate_monotonic_tightening`): a NEW fail-closed
+      dimension added to a control at its eval surface (e.g. `clearance_required` at
+      `_check_clearance`) MUST be learned by the re-registration validator in the SAME
+      PR, with the SAME restrictiveness model (None=widest, unrecognized=tightest).
+      This is a DISTINCT mechanism from envelope intersection — see security.md
+      Enforcement-Surface Parity. Origin: #1456 -> pact 0.14.3 (#1459)."
+
+      EVIDENCE (ground-truth verified this session by two independent gate reviewers):
+      - packages/kailash-pact/src/pact/mcp/enforcer.py — the SHIPPED 0.14.3 fix adds a
+        module-level `_clearance_restrictiveness` rank (enforcer.py:74-80: None -> -1
+        widest; unrecognized -> len(_CLEARANCE_LEVELS_ASCENDING)=5 tightest; recognized
+        -> 0..4) consumed by `_validate_monotonic_tightening` (:269/:349-356) + 6
+        behavioral regression tests in
+        tests/regression/test_issue_1456_mcp_clearance_before_cost_flag.py:360-428
+        (DROP/LOWER raise; RAISE/ADD/KEEP accepted; unrecognized-is-tightest).
+        Fix commit 146b754e1 (the bug + fix are described verbatim in the body).
+      - The two enforcement surfaces share NO callee (reviewer-verified): `_check_clearance`
+        defined :376, called ONLY at :538 (Step 3.5); `_validate_monotonic_tightening`
+        defined :269, called ONLY at :265 (register_tool). A grep of `_check_clearance(`
+        call sites returns only :538 — the validator is invisible to it. This is the
+        helper-grep blind spot the rule names.
+
+      CLASSIFICATION rationale: GLOBAL. The principle (a fail-closed control enforced
+      at eval + at a registration/tightening validator must learn a new dimension at
+      BOTH surfaces, same PR) is CLI-neutral and cross-SDK — the kailash-rs Rust
+      binding is the same shape. The DO/DO-NOT example is illustrative Python (no CLI
+      delegation primitive), so the clause emits globally with NO cross-cli slot
+      partitioning needed.
+
+      RECOMMENDED PLACEMENT (Gate-1 decides — Human Classifies Every Change): PRIMARY
+      in security.md (the principle is cross-domain, not pact-specific) with the
+      compact cross-ref in pact-governance.md Rule 2. ALTERNATIVE Gate-1 may prefer:
+      land the PRIMARY clause in pact-governance.md (path-scoped: **/pact/**,
+      **/governance/** — NO baseline-emission cost, NO Rule-10 proximity-band gate)
+      with a COMPACT one-line generalization pointer in security.md, IF the
+      baseline-budget tension below makes the security.md placement costly. Recommend
+      security.md-primary on principle-generality grounds; the alternative is the
+      budget-safe fallback.
+
+      rule-authoring Rule 10 (proximity-band) — LOOM-SIDE GATE-1 ACTION REQUIRED:
+      security.md is priority:0 / scope:baseline; adding this ~30-line MUST clause MAY
+      fall within the 15% proximity-band on a near-breach lane (codex-rs / gemini-rs).
+      This BUILD repo cannot faithfully run loom's aggregate-emission
+      `emit.mjs --all --dry-run` headroom check; Gate-1 MUST run it and EITHER (a) pair
+      the addition with an extraction recovering the bytes on the near-breach lane, OR
+      (b) carry a named-rationale exception (CVE-class privilege-escalation fix,
+      structurally non-decomposable), OR adopt the pact-governance-primary placement
+      alternative (path-scoped -> Rule 10 does NOT fire). NOT performed in this BUILD
+      proposal by design.
+
+      Trust Posture Wiring — LOOM-SIDE GATE-1 ACTION: security.md is grandfathered (NO
+      existing Trust Posture Wiring section; none of its sections carry one — confirmed
+      this session). The proposed clause follows that file-local convention and ships
+      WITHOUT clause-scoped wiring. Gate-1 MUST decide per trust-posture.md MUST-8
+      grandfather-cutoff whether the /codify-touch now requires authoring the canonical
+      8-field wiring (consistent with how the 2026-06-22 cycles attached wiring to
+      grandfathered path-scoped rules). If wired: detection = cc-architect mechanical
+      sweep (the eval-vs-registration surface-parity grep) at /implement + gate-review,
+      advisory at hook layer; emergency via the cumulative path, NOT a new key.
+
+      Self-referential /codify gate: security.md and pact-governance.md are NOT on
+      self-referential-codify.md Rule 2's allowlist (they govern SDK code behavior, NOT
+      codify machinery) -> the mandatory posture-independent multi-agent
+      redteam-with-tests round does NOT fire. The recommended /codify gate review
+      (reviewer + security-reviewer, parallel) ran on the proposed clause text;
+      APPROVE-WITH-FIXES; all applied: (HIGH) scrubbed the private esperie-enterprise/
+      kailash-rs#1513 ref to a generic cross-SDK-sibling reference; (C1) reworded the
+      pact-governance Rule 2 cross-ref to state it is a DISTINCT mechanism from envelope
+      intersection; (MED/LOW) prescribed a single shared ordering function over
+      match-by-convention, stated unrecognized->recognized is a widening that must
+      raise, added a mechanical detection sweep, and formatted as a rule-authoring.md
+      MUST clause (numbered-style heading, fenced DO/DO-NOT, **BLOCKED**, **Why:**,
+      Origin)."
