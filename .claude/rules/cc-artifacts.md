@@ -11,6 +11,7 @@ paths:
 
 # CC Artifact Quality Rules
 
+<!-- slot:neutral-body -->
 
 CC-specific residue. Runtime-neutral artifact quality (DO/DO NOT examples, Why: rationale, Loud/Linguistic/Layered test, dangling cross-references) lives in `rules/rule-authoring.md`; cross-CLI artifact rules live in `rules/variant-authoring.md`. See those for the general principles.
 
@@ -208,3 +209,5 @@ Origin: atelier `cc-audit-lint-generalize` 2026-05-03 (allowlist vs denylist tra
 - **No semantic analysis in hooks**: Hooks check structure; agents check semantics.
 
 **Why:** Hooks run synchronously with hard timeouts; semantic analysis is slow and non-deterministic, causing spurious hook failures that block the session.
+
+<!-- /slot:neutral-body -->

@@ -7,6 +7,7 @@ scope: baseline
 
 See `.claude/guides/rule-extracts/git.md` for extended bash examples, full BLOCKED rationalization lists, repository protection table, and Origin evidence.
 
+<!-- slot:neutral-body -->
 
 ## Conventional Commits
 
@@ -90,3 +91,5 @@ CC system prompt provides the template. Always include a `## Related issues` sec
 **Why:** Issues closed without code refs break traceability; undocumented workarounds force every session to re-discover the same fix; over-claiming commit bodies poison `git log --grep` (the cheapest institutional-knowledge search). See extract for full DO/DO NOT examples.
 
 Origin: 2026-04-28 (`git reset --hard` discarded uncommitted `.session-notes` in a kailash-py session, PR #691) + cumulative CI-billing evidence on release-prep branch convention. See `.claude/guides/rule-extracts/git.md` for full post-mortems.
+
+<!-- /slot:neutral-body -->

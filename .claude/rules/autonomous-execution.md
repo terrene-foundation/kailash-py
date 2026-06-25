@@ -7,6 +7,7 @@ scope: baseline
 
 See `.claude/guides/rule-extracts/autonomous-execution.md` for extended examples + Rule-4 Origin evidence.
 
+<!-- slot:neutral-body -->
 
 COC executes through **autonomous AI agent systems**, not human teams. All deliberation, analysis, recommendations, and effort estimates MUST assume autonomous execution unless the user explicitly states otherwise.
 
@@ -150,3 +151,5 @@ Concurrent-operator capacity guidance (per-`verified_id` budgets, NON-SAME-adjac
 **Why:** Context window is not attention. Model capability claims are not evidence for a specific task. "One conceptual change" is exactly how Phase 5.11 shipped 2,407 LOC of orphaned code.
 
 Origin: Session 2026-04-13 — capacity bands discussion (~500 LOC load-bearing, ~5–10 invariants, ~3–4 call-graph hops, "describe in 3 sentences" heuristic), grounded in the Phase 5.11 orphan failure mode documented in `rules/orphan-detection.md`.
+
+<!-- /slot:neutral-body -->

@@ -9,6 +9,7 @@ ALL code changes in the repository.
 
 See `.claude/guides/rule-extracts/security.md` for extended examples, exhaustive sanitizer contract examples, and multi-site kwarg plumbing full post-mortem.
 
+<!-- slot:neutral-body -->
 
 ## No Hardcoded Secrets
 
@@ -197,3 +198,8 @@ Subject-keyed redactors (primitives scrubbing every string containing a `subject
 ## Exceptions
 
 Security exceptions require: written justification, security-reviewer approval, documentation, and time-limited remediation plan.
+
+<!-- /slot:neutral-body -->
+
+<!-- slot:lang-security-extensions -->
+<!-- /slot:lang-security-extensions -->

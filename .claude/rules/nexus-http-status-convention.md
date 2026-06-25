@@ -9,6 +9,7 @@ paths:
 
 # Nexus HTTP Status Convention
 
+<!-- slot:neutral-body -->
 
 Every response a Nexus handler emits carries an HTTP status code that operators read as a triage signal at 03:00. The status taxonomy below is a contract: a handler returning the wrong code sends the operator to the wrong on-call page. This rule freezes the mapping from `NexusError` variants and handler-side errors to HTTP status codes, plus the JSON error body shape that rides on every 4xx/5xx response.
 
@@ -186,3 +187,5 @@ def legacy_auth(inputs: dict) -> dict:
 - `rules/nexus-webhook-hmac.md` — HMAC verification patterns for webhook handlers.
 
 Origin: 2026-04-19 — Nexus extractor architecture rework codified the status taxonomy as a frozen contract.
+
+<!-- /slot:neutral-body -->

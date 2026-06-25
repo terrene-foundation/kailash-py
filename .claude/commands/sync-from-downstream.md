@@ -10,7 +10,7 @@ Detailed protocol: `skills/30-claude-code-patterns/sync-flow.md` § Template Inb
 
 ## Step 0: Verify Repo Class (this verb is for USE templates)
 
-Read `.claude/VERSION` → `type`. `/sync-from-downstream` is valid ONLY at a USE template (`type: coc-use-template`). **MUST verify** the repo is the actual template before routing: check `basename $(pwd)` + `git remote get-url origin` (normalize SSH `git@host:owner/repo.git` → `owner/repo`) against the known templates (`kailash-coc-claude-{py,rs,rb}`, `kailash-coc-{py,rs}`).
+Read `.claude/VERSION` → `type`. `/sync-from-downstream` is valid ONLY at a USE template (`type: coc-use-template`). **MUST verify** the repo is the actual template before routing: check `basename $(pwd)` + `git remote get-url origin` (normalize SSH `git@host:owner/repo.git` → `owner/repo`) against the canonical USE-template set (`sync-manifest.yaml::repos.*.templates`): `kailash-coc-claude-{py,rs,rb}`, `kailash-coc-{py,rs}`, and the non-Kailash base axis `coc-base` / `coc-claude-base` (a base template is a USE template too — F10 cascade-tiering 2026-06-25 made this verb reachable by the base axis, so its template-match set MUST include the base templates or a legitimate base template self-mis-classifies as a downstream `coc-project`).
 
 - `coc-use-template` (verified) → proceed below.
 - `coc-source` (loom) → STOP: "this is loom — ingest the upstream streams with `/sync-from-build` + `/sync-from-use`."

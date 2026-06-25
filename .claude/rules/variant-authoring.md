@@ -8,6 +8,7 @@ paths:
 
 # Variant Authoring Meta-Rule
 
+<!-- slot:neutral-body -->
 
 Loom's variant system has two axes: **language** (`py`/`rs`/`rb`/`prism`) and **CLI** (`cc`/`codex`/`gemini`). Variant files overlay global artifacts at sync time. This rule defines how overlays MUST be authored so the composed output stays correct across all target matrix cells.
 
@@ -24,12 +25,14 @@ A variant file MUST contain ONLY slot-keyed replacement bodies, never a full alt
 ````markdown
 # DO — variant file contains ONLY divergent slots
 
+<!-- slot:examples -->
 
 ```rust
 // Rust-specific example
 let db = DataFlow::new(...);
 ```
 
+<!-- /slot:examples -->
 
 # DO NOT — variant file is a full copy with 5% diff
 
@@ -149,3 +152,5 @@ variants/py-codex/rules/zero-tolerance.md # zero-tolerance's neutral body is CLI
 **Why:** Unresolved variants accumulate; /sync distributes them unchanged; downstream repos inherit the mess.
 
 Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §3 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
+
+<!-- /slot:neutral-body -->

@@ -11,6 +11,7 @@ paths:
 # Nexus Webhook HMAC Rules
 
 
+<!-- slot:neutral-body -->
 
 HMAC webhook signatures verify that the bytes a third-party provider sent (Stripe, GitHub, Slack, Twilio, etc.) are the exact bytes the handler is about to process. The provider computes `HMAC(secret, raw_body)` and sends it in a header; the handler recomputes `HMAC(secret, received_raw_body)` and compares. Any mutation of the body between the provider and the handler — even whitespace-equivalent re-serialization — breaks the signature.
 
@@ -157,3 +158,5 @@ async def stripe_webhook(payload: dict):
 - `rules/agent-reasoning.md` — the workaround is the explicit intent: verification is externalized, not hidden.
 
 Origin: 2026-04-17 — when the underlying framework's Nexus handlers receive pre-parsed JSON (the framework consumes the raw body before the handler runs, and the handler signature accepts no raw-body extractor), HMAC verification cannot run in-handler and MUST be externalized. Until the extractor-trait architecture rework lands, every HMAC webhook consumer MUST externalize verification per this rule.
+
+<!-- /slot:neutral-body -->

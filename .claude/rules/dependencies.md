@@ -49,28 +49,6 @@ dependencies = ["trl>=0.12"]
 
 **Test:** `grep -r "import datasets" src/` returns zero? Then `datasets` is not your dependency — remove it from `pyproject.toml`.
 
-## Floors On Transitive Deps Are Legitimate When A Lock-Ignoring Install Backtracks Them
-
-"No Caps on Transitive Dependencies" forbids UPPER bounds (`<N`) on un-imported packages — speculative, blocks upgrades. It does NOT forbid a minimum FLOOR (`>=X`) on a transitive package when a **lock-ignoring install path** — CI running `uv pip install -e .` / `pip install -e .` WITHOUT `uv sync --locked` / `--frozen` — fresh-resolves that transitive to a version with no wheel for a supported interpreter. The floor is a concrete install-failure fix, not speculation. The floor MUST carry an inline comment naming the lock-ignoring path + the no-wheel version it prevents.
-
-```toml
-# DO — floor a transitive a lock-ignoring CI install backtracks to a no-wheel version
-# (umap-learn → pynndescent → numba → llvmlite; a fresh resolve on Python 3.12+
-#  backtracks numba to 0.53.1, whose llvmlite fails to build from source)
-dependencies = ["umap-learn>=0.5", "numba>=0.61"]   # FLOOR, not a cap — comment WHY
-
-# DO NOT — cap the same transitive (still BLOCKED: speculative, blocks upgrades)
-dependencies = ["umap-learn>=0.5", "numba>=0.61,<0.62"]
-# DO NOT — leave it unfloored "because the lock pins it" when CI ignores the lock
-dependencies = ["umap-learn>=0.5"]   # green under uv.lock; red in lock-ignoring CI
-```
-
-**BLOCKED rationalizations:** "A floor on a transitive is a cap — the rule forbids it" / "The lock pins it, the floor is redundant" (the lock-IGNORING path never reads the lock) / "Let upstream's range handle it" (its range is what backtracked to the no-wheel version) / "Drop the transitive instead" (it is load-bearing via the direct dep, not a phantom — § Phantom Transitive Deps does NOT apply).
-
-**Why:** A cap blocks upgrades; a floor unblocks an install — opposite operations. Two install paths must BOTH succeed: the locked path (`uv sync`, reads `uv.lock`) and the lock-ignoring path (`uv pip install -e`, fresh-resolves), and only the manifest floor covers the second. Without the inline comment a future reader mistakes the floor for the speculative cap the rule forbids.
-
-Origin: #1430 (2026-06-23) — kailash-ml `numba>=0.61` floor. The align CI (`test-kailash-align.yml`) installs via lock-ignoring `uv pip install -e`; a fresh resolve on Python 3.12+ backtracked `numba` (transitive via `umap-learn`→`pynndescent`) to 0.53.1, whose `llvmlite` failed to build from source. Locked installs were green (the lock pinned numba); only the lock-ignoring CI path broke.
-
 ## Own the Stack — Replace or Re-Implement
 
 If a dependency is unmaintained (no release in 12+ months, unresolved critical issues, archived repo) or constrains your architecture, re-implement it with full API parity. Do not work around a broken or stale package — own the code.

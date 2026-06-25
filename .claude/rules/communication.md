@@ -5,6 +5,7 @@ scope: baseline
 
 # Communication Style
 
+<!-- slot:neutral-body -->
 
 Many COC users are non-technical. Default to plain language; match the user's level if they speak technically.
 
@@ -69,3 +70,5 @@ At gates (end of `/todos`, before `/deploy`), ask:
 - Repeat the same jargon if user says "I don't understand" — find new analogy
 
 **Why:** Repeating failed explanations erodes user trust in the entire session.
+
+<!-- /slot:neutral-body -->

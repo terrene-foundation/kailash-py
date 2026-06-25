@@ -8,6 +8,7 @@ paths:
 
 # Journal Rules
 
+<!-- slot:neutral-body -->
 
 ## Naming & Format
 
@@ -129,3 +130,5 @@ Entries created BEFORE a frontmatter-or-section contract change are **grandfathe
 ## Origin
 
 Frontmatter-shape + format MUST clauses predate the `rules/trust-posture.md` MUST-8 SHA (grandfathered). The 2026-06-07 reconciliation (GH #382): retired `created_at`/`session_id`/`session_turn` in favor of the multi-operator triple + per-session provenance ledger, scoped `## For Discussion` to analytical/substantive entries (coordination-receipt DECISIONs exempt), stated the grandfather/backfill policy, and added this canonical-template Trust Posture Wiring. Receipt-first DECISION: `journal/0230-esperie-DECISION-382-journal-contract-reconciliation.md`. Self-referential-codify surface (this rule + `commands/journal.md` are codify-class output governors — added to the `self-referential-codify.md` allowlist in the same codify) → multi-agent redteam to convergence.
+
+<!-- /slot:neutral-body -->

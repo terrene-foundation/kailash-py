@@ -8,6 +8,7 @@ paths:
 
 # EATP SDK Rules
 
+<!-- slot:neutral-body -->
 
 ## Scope
 
@@ -93,3 +94,5 @@ self._audit_engine.append(event)   # next dispatch observes half-state
 - **Detection mechanism:** gate-level reviewer + security-reviewer mechanical sweep at /implement + /redteam — AST walk for a state-slot write followed by `<audit>.append(` in the SAME function; advance-before-emit ordering = HIGH finding. Phase 2 (deferred): hook detector `.claude/hooks/lib/violation-patterns.js::detectStateAdvanceBeforeAuditEmit`; audit fixtures land with the detector under the violation-patterns detectStateAdvanceBeforeAuditEmit subdir per `cc-artifacts.md` Rule 9.
 - **Violation scope:** MUST 1 (emit-before-advance ordering) — structural AST sweep; MUST 2 (no-recurse FAILED helper) — structural AST sweep asserting any `*_to_failed*` function has zero calls to the module's parent audit-emit helper.
 - **Origin:** PR #1139 commit e9626a223 (2026-05-22) — pre-fix code advanced the lifecycle `phase` slot before `_audit_engine.append`; an emit failure left (phase=ACTING, no audit row) and the next dispatch raised an opaque error. Post-fix: emit-first, advance-second, plus `_advance_to_failed_no_audit` for the FAILED-path recursion guard.
+
+<!-- /slot:neutral-body -->
