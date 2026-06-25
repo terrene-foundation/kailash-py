@@ -20,6 +20,7 @@ Validation Codes:
 - VAL-008: camelCase field names (should be snake_case)
 - VAL-009: SQL reserved words as field names
 - VAL-010: Missing delete cascade on relationships
+- VAL-011: Field name collides with a core NodeMetadata attribute
 """
 
 import re
@@ -188,6 +189,44 @@ AUTO_MANAGED_FIELDS = {
     "created_by": "user who created the record",
     "updated_by": "user who last updated the record",
 }
+
+
+def _node_metadata_reserved_fields() -> set:
+    """
+    Derive the VAL-011 reserved field set from ``NodeMetadata`` at runtime.
+
+    The generated CRUD/bulk node passes its construction config straight into
+    ``Node.__init__`` as ``**kwargs``; that constructor reads
+    ``kwargs.get("name")`` / ``("description")`` / ``("version")`` / ``("author")``
+    / ``("tags")`` directly into ``NodeMetadata(...)`` (see
+    ``src/kailash/nodes/base.py``). A user ``@db.model`` field whose name collides
+    with one of those attributes therefore either (a) hard-crashes node
+    construction (``tags`` is a ``set[str]`` on NodeMetadata but a ``str`` on the
+    user field -> pydantic validation error) or (b) is SILENTLY hijacked into node
+    metadata (``name`` / ``description`` / ``version`` / ``author`` are all
+    ``str`` -> the user's value overrides the node's own metadata with no error).
+
+    The set is derived from ``NodeMetadata.model_fields`` keys (NOT hardcoded) so
+    it can never drift from ``base.py``. Two keys are excluded:
+
+    - ``id``: the REQUIRED DataFlow primary-key name (VAL-003 mandates a PK named
+      ``id``). A user ``id`` field is correct usage, not a footgun, and
+      ``Node.__init__`` already namespaces it via ``_node_id`` to avoid the
+      collision. Warning on ``id`` would contradict VAL-003.
+    - any key in ``AUTO_MANAGED_FIELDS`` (e.g. ``created_at``): already owned by
+      VAL-005, which warns about auto-managed-field conflicts. Excluding it here
+      prevents a double-warning for the same field.
+
+    Returns:
+        The net VAL-011 reserved set, typically ``{name, description, version,
+        author, tags}``.
+    """
+    from kailash.nodes.base import NodeMetadata
+
+    reserved = set(NodeMetadata.model_fields.keys())
+    reserved.discard("id")  # required PK name (VAL-003) -- correct usage
+    reserved -= set(AUTO_MANAGED_FIELDS)  # owned by VAL-005 -- no double-warn
+    return reserved
 
 
 def _validate_primary_key(cls: Type, result: ValidationResult) -> None:
@@ -529,6 +568,82 @@ def _validate_naming_conventions(cls: Type, result: ValidationResult) -> None:
             pass
 
 
+def _validate_node_metadata_collisions(cls: Type, result: ValidationResult) -> None:
+    """
+    Validate NodeMetadata-attribute collisions (VAL-011).
+
+    Checks for user-defined fields whose names collide with a core
+    ``NodeMetadata`` attribute. The generated CRUD/bulk node forwards its config
+    into ``Node.__init__`` as ``**kwargs``; that constructor reads ``name`` /
+    ``description`` / ``version`` / ``author`` / ``tags`` straight into
+    ``NodeMetadata(...)``. A colliding field either crashes node construction
+    (``tags`` -> ``set[str]`` type mismatch) or is silently hijacked into node
+    metadata (``name`` / ``description`` / ``version`` / ``author``).
+
+    The reserved set is derived from ``NodeMetadata.model_fields`` at runtime via
+    ``_node_metadata_reserved_fields()`` and excludes ``id`` (the required PK,
+    VAL-003) and the auto-managed fields (VAL-005).
+
+    Args:
+        cls: SQLAlchemy model class to validate
+        result: ValidationResult to accumulate errors/warnings
+    """
+    if not HAS_SQLALCHEMY:
+        return
+
+    reserved = _node_metadata_reserved_fields()
+
+    def _suggest_rename(field: str) -> str:
+        # tags -> tag_list (matches the per-project mitigation already shipped);
+        # everything else -> <field>_value (matches the VAL-009 suggestion form).
+        return "tag_list" if field.lower() == "tags" else f"{field}_value"
+
+    def _warn(field_name: str) -> None:
+        result.add_warning(
+            "VAL-011",
+            f"Field '{field_name}' in model '{cls.__name__}' collides with a "
+            f"core NodeMetadata attribute. DataFlow forwards this field's value "
+            f"into the generated node's metadata, which either crashes node "
+            f"construction (for 'tags', a set-typed attribute) or silently "
+            f"overrides the node's own metadata (for 'name', 'description', "
+            f"'version', 'author'). Rename the field (e.g. "
+            f"'{_suggest_rename(field_name)}').",
+            field=field_name,
+        )
+
+    # First try raw class attributes
+    columns_checked = set()
+    for attr_name in dir(cls):
+        if attr_name.startswith("_"):
+            continue
+        try:
+            attr = getattr(cls, attr_name)
+            if isinstance(attr, Column):
+                columns_checked.add(attr_name)
+                if attr_name.lower() in reserved:
+                    _warn(attr_name)
+        except Exception:
+            # Non-inspectable attribute (descriptor raising, unmapped property,
+            # etc.). Skip it -- same per-attribute guard the sibling VAL-005/008/
+            # 009 validators use; a single bad attribute MUST NOT abort the whole
+            # collision scan. The mapper fallback below covers mapped columns.
+            continue
+
+    # If no raw columns found, try mapper
+    if not columns_checked:
+        try:
+            mapper = sa_inspect(cls)
+            for column in mapper.columns:
+                if column.name.lower() in reserved:
+                    _warn(column.name)
+        except Exception:
+            # Mapper not ready (decorator ran before SQLAlchemy finished mapping)
+            # -- consistent with the sibling validators, which also no-op here.
+            # The outer _run_all_validations wrapper handles the not-ready case;
+            # this guard keeps a single-model failure from aborting the scan.
+            pass
+
+
 def _validate_relationships(cls: Type, result: ValidationResult) -> None:
     """
     Validate relationship configurations (VAL-010).
@@ -616,6 +731,7 @@ def _run_all_validations(
         _validate_auto_managed_fields(cls, result)
         _validate_field_types(cls, result)
         _validate_naming_conventions(cls, result)
+        _validate_node_metadata_collisions(cls, result)
         _validate_relationships(cls, result)
     except Exception:
         # Mapper not ready yet - this can happen if decorator runs before
@@ -702,9 +818,24 @@ def model(
         # Run validation
         validation_result = _run_all_validations(model_cls, effective_mode)
 
-        # Handle validation errors in STRICT mode
-        if effective_mode == ValidationMode.STRICT and validation_result.has_errors():
-            raise ModelValidationError(validation_result.errors)
+        # VAL-011 escalates to a hard error in STRICT mode. It is catalogued as
+        # a Warning (severity-consistent with its sibling field-name checks
+        # VAL-005/008/009, which surface as warnings in WARN mode) but, unlike a
+        # camelCase or SQL-reserved-word hint, a NodeMetadata-attribute collision
+        # is a GUARANTEED failure at node construction time: 'tags' crashes with
+        # a pydantic set-type error, and 'name'/'description'/'version'/'author'
+        # silently hijack the node's metadata. STRICT mode therefore promotes any
+        # VAL-011 warning into a ModelValidationError so the collision is caught
+        # at decoration time rather than at workflow-build time. WARN mode keeps
+        # the warning (handled in the warnings-emission block below).
+        if effective_mode == ValidationMode.STRICT:
+            val011_errors = [
+                ValidationError(w.code, w.message, w.field)
+                for w in validation_result.warnings
+                if w.code == "VAL-011"
+            ]
+            if validation_result.has_errors() or val011_errors:
+                raise ModelValidationError(validation_result.errors + val011_errors)
 
         # Emit warnings in both WARN and STRICT modes
         if effective_mode in (ValidationMode.WARN, ValidationMode.STRICT):

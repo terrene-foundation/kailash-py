@@ -184,7 +184,10 @@ class TestPrimaryKeyValidation:
             class UserValid(Base):
                 __tablename__ = "users_valid"
                 id = Column(Integer, primary_key=True)
-                name = Column(String(100))  # Fixed: add length
+                # 'full_name', not 'name': 'name' collides with a NodeMetadata
+                # attribute (VAL-011) and would add a warning, defeating the
+                # "no warnings" happy-path assertion below.
+                full_name = Column(String(100))  # Fixed: add length
 
             # Should have no warnings
             assert len(w) == 0
@@ -666,7 +669,9 @@ class TestValidationEdgeCases:
         class PerformanceTest(Base):
             __tablename__ = "performance_test"
             id = Column(Integer, primary_key=True)
-            name = Column(String(100))
+            # 'full_name', not 'name' (VAL-011 reserved) — 'name' would escalate
+            # to a STRICT-mode error and abort this perf timing.
+            full_name = Column(String(100))
             email = Column(String(255))
             age = Column(Integer)
 
