@@ -87,6 +87,8 @@ DataFlow automatically manages these fields when present:
 
 **VAL-005**: User-defined columns with these names emit a warning about potential conflicts.
 
+**VAL-011**: User-defined columns named after a core `NodeMetadata` attribute (`name`, `description`, `version`, `author`, `tags`) emit a warning because the generated node forwards field config into `Node.__init__`, where those names are read into the node's own metadata -- a `tags` collision crashes node construction and a `name`/`description`/`version`/`author` collision silently overrides node metadata. `id` (the required primary-key name) and the auto-managed fields above (owned by VAL-005) are excluded. See §2.7 for the full catalog and the STRICT-mode escalation.
+
 ### 2.5 Table Name Mapping
 
 By default, class names are converted to snake_case table names:
@@ -140,19 +142,22 @@ from dataflow.decorators import ValidationMode
 
 **Validation codes:**
 
-| Code    | Severity | Description                                 |
-| ------- | -------- | ------------------------------------------- |
-| VAL-002 | Error    | Missing primary key                         |
-| VAL-003 | Warning  | Primary key not named `id`                  |
-| VAL-004 | Warning  | Composite primary key                       |
-| VAL-005 | Warning  | Auto-managed field conflict                 |
-| VAL-006 | Warning  | DateTime without timezone                   |
-| VAL-007 | Warning  | String without length                       |
-| VAL-008 | Warning  | camelCase field name (should be snake_case) |
-| VAL-009 | Warning  | SQL reserved word as field name             |
-| VAL-010 | Warning  | Missing cascade on foreign key              |
+| Code    | Severity | Description                                         |
+| ------- | -------- | --------------------------------------------------- |
+| VAL-002 | Error    | Missing primary key                                 |
+| VAL-003 | Warning  | Primary key not named `id`                          |
+| VAL-004 | Warning  | Composite primary key                               |
+| VAL-005 | Warning  | Auto-managed field conflict                         |
+| VAL-006 | Warning  | DateTime without timezone                           |
+| VAL-007 | Warning  | String without length                               |
+| VAL-008 | Warning  | camelCase field name (should be snake_case)         |
+| VAL-009 | Warning  | SQL reserved word as field name                     |
+| VAL-010 | Warning  | Missing cascade on foreign key                      |
+| VAL-011 | Warning  | Field name collides with a `NodeMetadata` attribute |
 
 In WARN mode (default), errors become `DataFlowValidationWarning`. In STRICT mode, errors raise `ModelValidationError`.
+
+**VAL-011** (`_validate_node_metadata_collisions`, `packages/kailash-dataflow/src/dataflow/decorators.py:571`) warns when a user field name collides with a core `NodeMetadata` attribute. A DataFlow-generated CRUD node forwards its construction config to `Node.__init__` as `**kwargs`, and that constructor reads `name` / `description` / `version` / `author` / `tags` straight into `NodeMetadata(...)`. A colliding field therefore either crashes node construction (`tags` is a `set[str]` attribute, so a `str` user field raises a pydantic set-type error) or silently overrides the node's own metadata (`name` / `description` / `version` / `author` are all `str`). The reserved set is derived from `NodeMetadata.model_fields` at runtime (`_node_metadata_reserved_fields`, `decorators.py:194`) so it cannot drift from `src/kailash/nodes/base.py`, and excludes `id` (the required primary-key name per VAL-003) and the auto-managed fields owned by VAL-005 — net reserved set `{name, description, version, author, tags}`. VAL-011 is a Warning in WARN mode (consistent with its sibling field-name checks VAL-005/008/009) but escalates to a `ModelValidationError` in STRICT mode, because a `NodeMetadata` collision is a guaranteed crash-or-silent-corruption rather than a best-practice hint.
 
 ---
 

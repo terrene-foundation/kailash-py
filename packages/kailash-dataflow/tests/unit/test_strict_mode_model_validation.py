@@ -89,7 +89,10 @@ def test_strict_mode_warns_about_non_id_primary_key(base):
         class User(base):
             __tablename__ = "users_pk_warn_1"
             user_id = Column(Integer, primary_key=True)
-            name = Column(String)
+            # 'full_name', not 'name': 'name' collides with a NodeMetadata
+            # attribute (VAL-011) and would escalate to an error in STRICT mode,
+            # which is not what this VAL-003 test exercises.
+            full_name = Column(String)
 
         # Should succeed (no error raised) but have warning
         assert User is not None
@@ -106,7 +109,8 @@ def test_strict_mode_allows_id_primary_key(base):
         class User(base):
             __tablename__ = "users_pk_ok_1"
             id = Column(Integer, primary_key=True)
-            name = Column(String)
+            # 'full_name', not 'name' (VAL-011 reserved) — see VAL-003 test above.
+            full_name = Column(String)
 
         assert User is not None
         # Should have no VAL-003 warnings
@@ -146,7 +150,7 @@ def test_strict_mode_warns_about_created_at_conflict(base):
         class User(base):
             __tablename__ = "users_auto_warn_1"
             id = Column(Integer, primary_key=True)
-            name = Column(String)
+            full_name = Column(String)  # 'full_name', not 'name' (VAL-011 reserved)
             created_at = Column(DateTime)
 
         assert User is not None
@@ -163,7 +167,7 @@ def test_strict_mode_warns_about_updated_at_conflict(base):
         class User(base):
             __tablename__ = "users_auto_warn_2"
             id = Column(Integer, primary_key=True)
-            name = Column(String)
+            full_name = Column(String)  # 'full_name', not 'name' (VAL-011 reserved)
             updated_at = Column(DateTime)
 
         assert User is not None
@@ -180,7 +184,7 @@ def test_strict_mode_warns_about_created_by_conflict(base):
         class User(base):
             __tablename__ = "users_auto_warn_3"
             id = Column(Integer, primary_key=True)
-            name = Column(String)
+            full_name = Column(String)  # 'full_name', not 'name' (VAL-011 reserved)
             created_by = Column(String)
 
         assert User is not None
@@ -197,7 +201,7 @@ def test_strict_mode_warns_about_updated_by_conflict(base):
         class User(base):
             __tablename__ = "users_auto_warn_4"
             id = Column(Integer, primary_key=True)
-            name = Column(String)
+            full_name = Column(String)  # 'full_name', not 'name' (VAL-011 reserved)
             updated_by = Column(String)
 
         assert User is not None
@@ -401,9 +405,9 @@ def test_warning_message_includes_code(base):
             user_id = Column(Integer, primary_key=True)
 
         warning_msgs = [str(warning.message) for warning in w]
-        assert any("VAL-003" in msg for msg in warning_msgs), (
-            "Warning should include VAL code"
-        )
+        assert any(
+            "VAL-003" in msg for msg in warning_msgs
+        ), "Warning should include VAL code"
 
 
 def test_warning_message_is_actionable(base):
@@ -512,7 +516,9 @@ def test_strict_mode_with_valid_model(base):
             __tablename__ = "users_valid_strict"
             id = Column(Integer, primary_key=True)
             email = Column(String(255))  # With length to avoid VAL-007
-            name = Column(String(100))
+            # 'full_name', not 'name': a valid model must have NO validation
+            # warnings, and 'name' would now trip VAL-011 (NodeMetadata collision).
+            full_name = Column(String(100))
 
         assert User is not None
         # Valid model should have no validation warnings
