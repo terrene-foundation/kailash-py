@@ -11,7 +11,7 @@ providing non-repudiation for audit purposes.
 Key Features:
 - TimestampAuthority abstraction for pluggable timestamp sources
 - LocalTimestampAuthority for development and fallback
-- RFC3161TimestampAuthority stub for production TSA integration
+- RFC3161TimestampAuthority: real RFC 3161 TSA client + fail-closed verifier
 - TimestampAnchorManager with fallback chain
 - Integration with MerkleTree for root hash anchoring
 
@@ -632,21 +632,28 @@ class LocalTimestampAuthority(TimestampAuthority):
 
 class RFC3161TimestampAuthority(TimestampAuthority):
     """
-    RFC 3161 timestamp authority stub.
+    RFC 3161 Time-Stamp Protocol authority — real TSA client + verifier.
 
-    Placeholder for production TSA integration. This class defines
-    the interface for RFC 3161 compliance but does not implement
-    actual TSA communication.
+    Implements RFC 3161 timestamping against an external TSA (the
+    implementation landed in PR #1332):
+    - :meth:`get_timestamp` builds a DER ``TimeStampReq`` over the data hash and
+      sends it to the configured TSA URL — via ``rfc3161ng.RemoteTimestamper``
+      when the optional ``rfc3161ng`` dependency is installed, otherwise via a
+      raw ``application/timestamp-query`` HTTP POST — then parses the
+      ``TimeStampResp``.
+    - :meth:`verify_timestamp` verifies a token fail-closed via
+      ``rfc3161ng.check_timestamp(raw_token, certificate=self._certificate,
+      digest=..., hashname="sha256")``, returning True only on cryptographic
+      success and False on every missing-material or error path.
 
     RFC 3161 Time-Stamp Protocol:
     - Client sends TimeStampReq with hash of data
     - TSA returns TimeStampResp with signed timestamp
     - Response contains TSA certificate for verification
 
-    To implement production RFC 3161:
-    1. Install rfc3161ng or similar library
-    2. Implement get_timestamp to send HTTP POST to TSA
-    3. Implement verify_timestamp using TSA certificate
+    The optional ``rfc3161ng`` dependency provides full ASN.1 encoding; without
+    it the raw-HTTP fallback uses a simplified DER request (documented inline at
+    the fallback site) and signature verification requires ``rfc3161ng``.
 
     Attributes:
         _url: TSA URL
