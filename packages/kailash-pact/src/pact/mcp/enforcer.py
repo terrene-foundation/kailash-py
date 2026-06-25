@@ -44,6 +44,42 @@ __all__ = [
 ]
 
 
+# Confidentiality levels in ascending restrictiveness order, mirroring
+# ConfidentialityLevel's PUBLIC < RESTRICTED < CONFIDENTIAL < SECRET < TOP_SECRET.
+_CLEARANCE_LEVELS_ASCENDING = (
+    ConfidentialityLevel.PUBLIC,
+    ConfidentialityLevel.RESTRICTED,
+    ConfidentialityLevel.CONFIDENTIAL,
+    ConfidentialityLevel.SECRET,
+    ConfidentialityLevel.TOP_SECRET,
+)
+
+
+def _clearance_restrictiveness(value: str | None) -> int:
+    """Rank a policy ``clearance_required`` value by eval-time restrictiveness.
+
+    Used by monotonic-tightening validation so a re-registration can only KEEP
+    or RAISE a tool's clearance bar -- never lower or drop it (a privilege
+    escalation that would silently strip the Layer-2 authorization gate).
+
+    Ordering, widest (lowest) to tightest (highest):
+
+    - ``None`` -- no clearance requirement; any caller passes the gate -> -1.
+    - a recognized ``ConfidentialityLevel`` token -- its index in the ascending
+      order above (0..4); a higher level admits fewer callers.
+    - an unrecognized value -- fail-closed to BLOCKED-for-all at eval time (see
+      :meth:`McpGovernanceEnforcer._check_clearance`), i.e. the TIGHTEST setting
+      (no caller passes) -> ranked above every recognized level.
+    """
+    if value is None:
+        return -1
+    try:
+        level = ConfidentialityLevel(str(value).strip().lower())
+    except ValueError:
+        return len(_CLEARANCE_LEVELS_ASCENDING)
+    return _CLEARANCE_LEVELS_ASCENDING.index(level)
+
+
 @dataclass(frozen=True)
 class GovernanceDecision:
     """Result of an MCP governance check.
@@ -240,6 +276,9 @@ class McpGovernanceEnforcer:
         - rate_limit: new must be <= existing (None means "no limit" = wider)
         - allowed_args: new must be subset of existing (empty means "any" = wider)
         - denied_args: new must be superset of existing (wider deny = tighter)
+        - clearance_required: new must be equal-or-tighter than existing (None
+          means "no requirement" = widest; an unrecognized value fail-closes to
+          BLOCKED-for-all = tightest). Lowering or dropping it is widening.
 
         Raises:
             ValueError: On any widening.
@@ -300,6 +339,21 @@ class McpGovernanceEnforcer:
                     f"Monotonic tightening violation: denied_args narrowed, "
                     f"missing {missing} for tool '{new.tool_name}'"
                 )
+
+        # clearance_required: None = no requirement (widest); a recognized level
+        # is tighter as it rises; an unrecognized value fail-closes to
+        # BLOCKED-for-all (tightest). A re-registration may only KEEP or RAISE
+        # the bar -- dropping it (e.g. secret -> None) or lowering it
+        # (secret -> public) silently strips the Layer-2 clearance gate, a
+        # privilege escalation (pact-governance.md Rule 2: monotonic tightening).
+        if _clearance_restrictiveness(
+            new.clearance_required
+        ) < _clearance_restrictiveness(existing.clearance_required):
+            raise ValueError(
+                f"Monotonic tightening violation: clearance_required widened "
+                f"from {existing.clearance_required!r} to "
+                f"{new.clearance_required!r} for tool '{new.tool_name}'"
+            )
 
     def _get_policy(self, tool_name: str) -> McpToolPolicy | None:
         """Resolve the effective policy for a tool.

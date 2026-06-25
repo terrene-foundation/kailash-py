@@ -334,3 +334,95 @@ async def test_middleware_forwards_sufficient_clearance_and_executes() -> None:
     assert result.decision.allowed is True
     assert result.executed is True
     assert handler_calls == ["search"]
+
+
+# ---------------------------------------------------------------------------
+# Redteam follow-up (same bug class as #1456): register_tool monotonic
+# tightening MUST cover clearance_required. #1456 promoted clearance_required
+# from unread metadata to an enforced Layer-2 gate at the EVALUATION surface,
+# but _validate_monotonic_tightening (the RE-REGISTRATION guard) was left blind
+# to it -- so register_tool could silently drop/lower the clearance bar (a
+# privilege escalation, pact-governance.md Rule 2). These tests pin the guard.
+# ---------------------------------------------------------------------------
+
+
+def _reregister(enf: McpGovernanceEnforcer, clearance_required: str | None) -> None:
+    """Re-register tool 'search' with a new clearance_required (max_cost held)."""
+    enf.register_tool(
+        McpToolPolicy(
+            tool_name="search", max_cost=10.0, clearance_required=clearance_required
+        )
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_cannot_drop_clearance_requirement() -> None:
+    """secret -> None is a widening (drops the gate) and MUST raise; the gate
+    MUST remain enforced after the rejected attempt (no silent strip)."""
+    enf = _enforcer()  # clearance_required="secret"
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="public").level == "blocked"
+    with pytest.raises(ValueError, match="clearance_required widened"):
+        _reregister(enf, None)
+    # The gate still blocks a sub-clearance caller -- the strip did not land.
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="public").level == "blocked"
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_cannot_lower_clearance_requirement() -> None:
+    """secret -> public lowers the bar (a widening) and MUST raise."""
+    enf = _enforcer()
+    with pytest.raises(ValueError, match="clearance_required widened"):
+        _reregister(enf, "public")
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="public").level == "blocked"
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_can_raise_clearance_requirement() -> None:
+    """secret -> top_secret is a tightening and MUST be accepted; a secret
+    caller that previously passed is now blocked."""
+    enf = _enforcer()
+    _reregister(enf, "top_secret")
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="secret").level == "blocked"
+    assert (
+        _decide(enf, cost_estimate=1.0, caller_clearance="top_secret").allowed is True
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_can_add_clearance_requirement_where_none() -> None:
+    """None -> secret adds a gate where there was none (a tightening): accepted,
+    and the new gate immediately blocks an unmet caller."""
+    enf = _enforcer(clearance_required=None)
+    assert _decide(enf, cost_estimate=1.0, caller_clearance=None).allowed is True
+    _reregister(enf, "secret")
+    assert _decide(enf, cost_estimate=1.0, caller_clearance=None).level == "blocked"
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_equal_clearance_accepted() -> None:
+    """secret -> secret is equal (not a widening): accepted."""
+    enf = _enforcer()
+    _reregister(enf, "secret")  # must not raise
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="secret").allowed is True
+
+
+@pytest.mark.regression
+@pytest.mark.security
+def test_register_tool_unrecognized_clearance_is_tightest_not_widest() -> None:
+    """An unrecognized clearance fail-closes to BLOCKED-for-all (tightest), so
+    secret -> garbage is a tightening (accepted) but garbage -> secret is a
+    widening (raises). This prevents an unparseable token being treated as
+    'no requirement' and silently dropping the gate."""
+    enf = _enforcer()  # secret
+    _reregister(enf, "garbage")  # secret -> blocks-all: tightening, accepted
+    assert _decide(enf, cost_estimate=1.0, caller_clearance="top_secret").level == (
+        "blocked"
+    )  # even top_secret is now blocked -- fail-closed
+    enf2 = _enforcer(clearance_required="garbage")  # blocks-all base
+    with pytest.raises(ValueError, match="clearance_required widened"):
+        _reregister(enf2, "secret")  # blocks-all -> secret: widening
