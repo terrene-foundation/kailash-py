@@ -56,6 +56,28 @@ async def test_unsupported_scheme_raises_when_error_enhancer_none(monkeypatch):
 
 @pytest.mark.regression
 @pytest.mark.timeout(30)
+async def test_unsupported_scheme_error_masks_credentials(monkeypatch):
+    # Security regression: the fallback raise (ErrorEnhancer=None branch) routes
+    # db_url through mask_url() so a credentialed connection string never leaks
+    # its password into the exception message (logs/traces). The unmasked-db_url
+    # form would have shipped 'admin:secretpass@' verbatim.
+    monkeypatch.setattr(engine_mod, "ErrorEnhancer", None)
+    monkeypatch.delenv("DATAFLOW_TDD_MODE", raising=False)
+
+    # mysql:// is unsupported by this method -> hits the masked fallback raise.
+    stub = _stub_with_url("mysql://admin:secretpass@db.internal:3306/app")
+
+    with pytest.raises(ValueError) as excinfo:
+        await DataFlow._get_async_database_connection(stub)
+
+    message = str(excinfo.value)
+    assert "secretpass" not in message, f"password leaked into error: {message!r}"
+    assert "admin:secretpass" not in message
+    assert "***" in message  # mask_url canonical redaction marker
+
+
+@pytest.mark.regression
+@pytest.mark.timeout(30)
 async def test_unsupported_scheme_raises_when_error_enhancer_present(monkeypatch):
     # When ErrorEnhancer IS present it raises via enhance_invalid_database_url;
     # assert the path still raises (does NOT return None) regardless of which

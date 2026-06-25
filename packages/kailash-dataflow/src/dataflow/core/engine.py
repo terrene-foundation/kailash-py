@@ -9314,8 +9314,13 @@ class DataFlow(DataFlowEventMixin):
             # loudly. Falling through here returned None silently, deferring
             # the failure to a downstream `assert conn is not None` at one
             # call site and leaving every other caller with a None connection.
+            # Mask credentials in the message — db_url may embed user:password
+            # (the ErrorEnhancer path above masks via mask_url; mirror it here so
+            # this fallback never leaks a credential into logs/traces).
+            from kailash.utils.url_credentials import mask_url
+
             raise ValueError(
-                f"Unsupported database URL '{db_url}' "
+                f"Unsupported database URL '{mask_url(db_url)}' "
                 "(only PostgreSQL, MySQL, SQLite are supported)"
             )
 
