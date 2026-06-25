@@ -277,3 +277,82 @@ jobs:
           ../../.venv/bin/python -m pytest tests/regression/ \
             -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
             --maxfail=10 -q --timeout=120
+
+  # F-REGRESSION-INFRA-CI: the dataflow tests/regression/ Postgres+Redis tests
+  # (#1249 / #1252 tenant-isolation-leak SECURITY regressions + #979 S1
+  # preconditions) were run by NO CI job — the test-dataflow job above excludes
+  # every requires_* marker, and test-with-infrastructure.yml runs no pytest
+  # (it is a config validator). This job provides Postgres + Redis via service
+  # containers and runs exactly the requires_postgres/requires_redis-marked
+  # regression tests. The explicit `-m` intentionally overrides pytest.ini's
+  # addopts marker filter (same convention as the infra-free step above).
+  test-dataflow-infra:
+    name: Test DataFlow Infra Regression (Postgres/Redis)
+    needs: check-duplicate
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: kailash_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d kailash_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # The dataflow test_suite fixture (tests/conftest.py) reads
+      # TEST_DATABASE_URL; its default points at :5434, so set it explicitly to
+      # the service-mapped :5432. DATAFLOW_TEST_MODE matches the conftest default.
+      TEST_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+      DATAFLOW_TEST_MODE: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-py3.11-dataflow-infra-${{ hashFiles('pyproject.toml', 'packages/kailash-dataflow/pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py3.11-dataflow-infra-
+
+      - name: Install dependencies
+        # Root kailash editable BEFORE the sub-package (deployment.md sibling-CI
+        # rule). db-postgres + redis extras provide the real drivers the marked
+        # tests need.
+        run: |
+          uv venv .venv
+          uv pip install -e ".[db-postgres,redis]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
+
+      - name: Run Postgres/Redis-marked regression tests
+        timeout-minutes: 10
+        run: |
+          cd packages/kailash-dataflow
+          ../../.venv/bin/python -m pytest tests/regression/ \
+            -m "requires_postgres or requires_redis" \
+            --maxfail=10 -q --timeout=120
