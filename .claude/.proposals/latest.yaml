@@ -306,3 +306,51 @@ changes:
       raise, added a mechanical detection sweep, and formatted as a rule-authoring.md
       MUST clause (numbered-style heading, fenced DO/DO-NOT, **BLOCKED**, **Why:**,
       Origin)."
+
+  - type: command_update
+    artifact: sweep
+    files:
+      - .claude/commands/sweep.md
+      - .claude/commands/wrapup.md
+      - .claude/hooks/lib/validate-forest-ledger.mjs
+    classification_suggestion: global
+    context: |
+      APPEND 2026-06-25 (mops-onboarding session, post-#1460). Cross-filed as a
+      tracked issue at esperie-enterprise/loom#669 (user-authorized cross-repo
+      filing; journal workspaces/mops-onboarding/journal/0004). Gate-1: DEDUPE
+      against #669 — same fix (issue = tracker, this = the BUILD->loom proposal).
+
+      LESSON (the gap, two coupled pieces): /sweep + /wrapup are BLIND to the
+      "## Outstanding ledger (forest)" section of workspace .session-notes.
+      `grep -n "ledger|forest" .claude/commands/sweep.md` = 0 hits. Surfaced when
+      4 dormant kailash-py workspaces (underlying GH issues all CLOSED) each held
+      OPEN forest-ledger follow-on items; /sweep reported "0 todos/active" and the
+      session declared no outstanding work while those items sat unread.
+
+      (i) SWEEP side — Sweep 1 reads todos/active/ only; Sweep 6 only stat()s
+      .session-notes MTIME (>30d) and never opens the file. A workspace that is
+      issue-closed + 0-todos + <30d + no-open-PR + delivered is invisible on all
+      8 axes, its open work recorded only on the one axis no sweep reads.
+
+      (ii) RECONCILIATION side — /wrapup reconciles the ROOT ledger vs the prior
+      ROOT notes only; per-workspace ledgers never aggregate up.
+      validate-forest-ledger.mjs --git-prior enforces no-vanish WITHIN one file,
+      not ACROSS workspace->root. Both gaps held at once -> items stranded
+      (e.g. a DataFlow reserved-name root-cause fix, a pyright static-debt item).
+
+      PROPOSED FIX (both pieces; loom decides exact wiring at Gate-1):
+      1. A tool-backed /sweep step (extend tools/ + commands/sweep.md) that, for
+         every workspaces/*/.session-notes, parses the "## Outstanding ledger
+         (forest)" section, extracts every row NOT under "Closed this session",
+         and rolls open rows into the repo-wide report deduped by ID — regardless
+         of MTIME or issue state.
+      2. Extend validate-forest-ledger.mjs from within-file --git-prior to a
+         workspace->root aggregation: any open workspace-ledger ID absent from
+         the ROOT ledger is a finding.
+
+      Per sweep-completeness.md Rule 3 (recurring sweep gaps -> tighten command
+      text into a tool invocation). Proposal-only: NO local edit to
+      commands/sweep.md or validate-forest-ledger.mjs in THIS BUILD repo
+      (loom-owned + synced; a local edit is clobbered by /sync-to-build) — loom
+      implements + distributes. NOT self-referential in this repo (a proposal
+      description; no self-referential-codify Rule-2 allowlist file edited here).

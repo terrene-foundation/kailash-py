@@ -1,133 +1,51 @@
-# Session Notes — 2026-06-25 (cont. 2)
-
-## /sweep 2026-06-25 — repo CONVERGED, zero actionable in-repo
-
-Ran the 8-sweep BUILD-repo audit. **All clean, N/A, or verified false-positive** —
-every finding ground-truth-verified (per-package `git log`, actual diffs, actual
-grep lines), NOT trusted from prior-session claims.
-- Sweeps 1–4: 0 active todos / 0 pending journal / 0 open GH issues / 0 open PRs /
-  0 unmerged remote branches.
-- Sweep 5 (redteam gaps): N/A — `spec_count=0` (no `workspaces/*/specs/`); sentinel
-  `<!-- sweep-redteam:v1:N/A reason=orchestration-mode no_specs=true no_tool=false -->`.
-- Sweep 6: single clean worktree; no `.session-notes` >30d (oldest `from-brief-1125`
-  29d). **4 dormant workspaces (24–29d, 0 active todos)** → user gate (archive/resume;
-  auto-close BLOCKED per value-prioritization MUST-4).
-- Sweep 7: only `.session-notes` modified; stub-marker scan = 0 FIXME / 0 HACK /
-  43 NotImplementedError (ABC abstract-method contract) / 15 XXX (SSN-mask + ADR/KS/DF
-  placeholders + `\uXXXX`) / 11 TODO (pre-existing in shipped 2.44.1). FALSE-POSITIVE.
-- Sweep 8: ALL packages `main == PyPI` — pact 0.14.3 / align 0.7.4 / ml 2.2.2 /
-  dataflow 2.12.0 / nexus 2.11.0 / kaizen 2.28.0 / mcp 0.2.15, each 0 unreleased src
-  commits. Core (2.44.1) has 2 commits since v2.44.1 but BOTH verified docstring-only
-  (`docs(trust)` #1455 + #1403; `json.dumps` code lines unchanged) → **no release**.
-- Full report: scratchpad `SWEEP-2026-06-25.md` (session-isolated; not PR'd — no
-  actionable content + protected BUILD repo).
-
-## /codify 2026-06-25 — Enforcement-Surface Parity (BUILD→loom proposal, branch `codify/esperie-2026-06-25`)
-
-User approved codifying ONE insight from the pact-0.14.3 redteam work. Done as a
-BUILD→loom **proposal append** — proposal-only, NO local baseline-rule edit.
-- **Insight:** "Enforcement-Surface Parity" — when a fix promotes a field to a fail-closed
-  authorization control at the EVAL surface, every INDEPENDENT validation surface (esp.
-  monotonic-tightening / re-registration) MUST learn the new dimension SAME PR, even with no
-  shared callee (so security.md's Multi-Site-Kwarg helper-grep structurally can't find the
-  2nd surface). Generalizes security.md § Multi-Site Kwarg Plumbing + a pact-governance Rule 2
-  cross-ref (distinct mechanism from envelope intersection).
-- **Receipts:** codify lease seq 3; proposal = 5th `changes[]` entry in `latest.yaml` (status
-  pending_review, appended per Append-Never-Overwrite); `learning-codified.json` proposal_append
-  + gate_review actions; journal `0003-esperie-DECISION-enforcement-surface-parity-codify.md`
-  (slot reservation seq 4, body-anchor seq 5).
-- **Gate review** (reviewer `ae664655d99ca2236` + security-reviewer `a7057bb749cad9d12`,
-  parallel): APPROVE-WITH-FIXES; both verified Origin vs enforcer.py@146b754e1. Fixes applied:
-  HIGH disclosure scrub of the PRIVATE `esperie-enterprise/kailash-rs#1513` ref → generic
-  "kailash-rs Rust binding"; C1 cross-ref reworded as distinct-mechanism; MED/LOW
-  shared-ordering-function + unrecognized-widening + detection-sweep + MUST-clause formatting.
-- **NOT self-referential** (security.md/pact-governance.md off the self-referential-codify
-  allowlist → mandatory multi-agent round did not fire).
-- **Loom Gate-1 owns:** Rule-10 proximity-band headroom check (security.md baseline),
-  Trust-Posture-Wiring grandfather retrofit, global-vs-variant + final placement.
-
-## Traps (this session)
-
-- Do NOT carry the private `esperie-enterprise/kailash-rs#1513` ref into any SYNCED rule text
-  — scrubbed to generic "kailash-rs Rust binding". The prior cycle's coc-onboarding-specialist
-  proposal entry ALSO carries a private org slug in its context prose — flagged for loom
-  Gate-1 Intake Disclosure Scrub.
+# Session Notes — 2026-06-25
 
 ## Where we are
 
-main `2a007fd04`, working tree clean (only `.session-notes`). Continued from the
-prior session under `/autonomize` + ultracode. Ran `/redteam` to convergence over
-the UNRELEASED #1456 MCP clearance fix — the redteam **found a real
-privilege-escalation the #1456 fix itself introduced**, I root-caused + fixed it,
-and **RELEASED kailash-pact 0.14.3** (now live on PyPI, clean-venv verified). Also
-merged the 2 Dependabot PRs and drafted (NOT filed) a cross-SDK rs parity issue.
-
-## What shipped this session
-
-- **kailash-pact 0.14.3 RELEASED** (tag `pact-v0.14.3`, PyPI publish-run `28155692165`
-  success, clean-venv install + shipped-fix exercised). PR **#1459** (`fix(pact): cover
-  clearance_required in MCP monotonic-tightening`), merge commit `2a007fd04`.
-  - The redteam finding: #1456 promoted `McpToolPolicy.clearance_required` to an enforced
-    fail-closed gate at the EVAL surface (`_check_clearance`/Step 3.5) but left
-    `register_tool`'s `_validate_monotonic_tightening` blind to it → a re-registration
-    could DROP (`secret`→None) / LOWER (`secret`→`public`) the clearance bar and be
-    accepted as "tightening", silently stripping the gate (pact-governance Rule 2).
-  - Fix: module-level `_clearance_restrictiveness` rank (None=widest, unrecognized=tightest,
-    mirroring `_check_clearance`'s parse) + a validator check + 6 behavioral regression tests.
-  - Redteam receipts: round 1 task `w07yjcpgz` (security lens + verifier → found the HIGH);
-    round 2 task `we20mheie` (correctness + pact-domain, SERIAL → zero residual, incl. an
-    800-iteration concurrent-register race).
-- **Dependabot #1453 (checkout 6→7) + #1454 (cache 5→6) MERGED** (admin, CI green).
-
-## Cross-repo authorization (repo-scope-discipline.md User-Authorized Exception)
-
-cross-repo-authorized: esperie-enterprise/kailash-rs
-- requester: Jack Hong (jack.hong@esperie.com), genuine user turn
-- verbatim instruction: "please file and update session notes"
-- target: esperie-enterprise/kailash-rs (PRIVATE; verified exists + issues enabled. NOTE:
-  the draft's original `terrene-foundation/kailash-rs` does NOT exist — corrected per
-  reference memory + live existence check)
-- action: file ONE cross-SDK issue (MCP monotonic-tightening must cover the clearance
-  dimension; sibling of the kailash-py #1456 redteam fix / kailash-rs#1492)
-- timestamp: 2026-06-25T08:11:06Z
-- scope: that single issue against that single repo only; no other cross-repo reads/writes
-- RESULT: filed esperie-enterprise/kailash-rs#1513 (labels: cross-sdk, security)
-
-## Unreleased packages (/release gate)
-
-- NONE. kailash-pact 0.14.3 published; all other packages `main == PyPI` (verified this session).
+main `b1751e1b0`, clean tree (uncommitted: this file + `SWEEP-2026-06-25.md`).
+Closed GH **#1460** (PactBridge pairwise docs, PR #1462), then ran a user-approved
+corrective `/sweep` that recovered dormant-workspace forest items the prior ledger
+had dropped. **Next session: execute the approved sweep follow-ups — `F-SWEEP-LEDGER`
+first.**
 
 ## Read first
 
-1. `packages/kailash-pact/src/pact/mcp/enforcer.py` — `_check_clearance` (#1456) + the new
-   `_clearance_restrictiveness` + monotonic-tightening clearance check (this session).
-2. `gh issue list` (live) — #1456/#1455 CLOSED prior session; no new issues filed this session.
-3. `CLAUDE.md` — BUILD-repo discipline.
+1. `SWEEP-2026-06-25.md` — sweep findings + per-item dispositions (START HERE).
+2. `.claude/commands/sweep.md` — `F-SWEEP-LEDGER` target: add a step reading every
+   `workspaces/*/.session-notes` Outstanding ledger (the gap that hid F11/F22/F30).
+   COC-tooling change → `/codify` → loom Gate-1, NOT a direct edit.
+3. `gh issue list -R terrene-foundation/kailash-py --state open` — 0 open now.
 
 ## Outstanding ledger (forest)
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
-| F-PACT-RELEASE | release kailash-pact w/ #1456 + monotonic-tightening fix | #1456 + feedback_build_repo_release | **DONE — 0.14.3 published + verified** |
-| F-DEPABOT | merge Dependabot #1453 + #1454 | dependency hygiene | **DONE — both merged** |
-| F-XSDK-RS-MONOTONIC | rs MCP enforcer: does monotonic-tightening cover the clearance dimension? (NEW — sibling of the py fix) | cross-SDK / EATP D6; kailash-rs#1492 sibling | **FILED — esperie-enterprise/kailash-rs#1513** (user-authorized cross-repo file; receipt above) |
-| F-XSDK-CONVERGE | witness/envelope `default=str`→canonical byte re-sign | cross-SDK byte contract / EATP D6 | DEFERRED — rs-led; do NOT switch py unilaterally |
-| F-MOPS | file ONE scrubbed loom issue + `/sync-to-use` onboarding suite | user 2026-06-23 (mops-onboarding/0002) | HANDED-OFF — loom-side (cross-repo) |
-| F-XSDK-RS-FILED | rs parity (rs #1465 / #1442 / #1420) | EATP D6 | FILED — awaiting rs (cross-repo) |
-| F-LOOM-INDEP | loom 2.45.0 obsoleted independence.md + terrene-naming.md | PR #1427 flag | SURFACED — loom-side (cross-repo) |
-| F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC cross-store cascade | project_trustplane_day1 | DEFERRED — user-owned |
+| F-SWEEP-LEDGER | /sweep reads workspace forest ledgers (sweep-read step) + cross-file no-vanish aggregation (workspace→root, extend validate-forest-ledger) | user 2026-06-25 "flag ALL outstanding" | QUEUED — loom#669 filed; /codify proposal authored (both pieces) |
+| F-DATAFLOW-RESERVED-NAME | DataFlow `@db.model` reserved-name guard (`NodeMetadata.tags` collision) | #855 root cause; cross-sdk-inspection | QUEUED — UNFILED; user-gate to file |
+| F-PYRIGHT-CONNECTOR | Connector concrete-defaults → clear 42 test-pyright errors | issue-1035 F11; zero-tolerance static debt | RE-VALIDATE (stale 2026-05-25) |
+| F-TIER3-BACKLOG | TIER-3 testing backlog | issue-855/nexus F22; sweep-2026-05-26 | RE-VALIDATE (stale) |
+| F-SLIMCORE-CODIFY | slim-core eager-import discipline proposal → loom | issue-1035 journal/0008 | EXTERNAL — loom ingest |
+| F-XSDK-RS-MONOTONIC | rs MCP enforcer clearance-dim tightening | EATP D6; rs#1513 | EXTERNAL — awaiting rs |
+| F-XSDK-CONVERGE | witness/envelope canonical byte re-sign | cross-SDK byte contract / EATP D6 | DEFERRED — rs-led lockstep |
+| F-XSDK-RS-FILED | rs parity (rs#1465/#1442/#1420) | EATP D6 | EXTERNAL — awaiting rs |
+| F-MOPS | mops-onboarding suite → USE templates | user 2026-06-23 | EXTERNAL — loom-side |
+| F-LOOM-INDEP | loom 2.45.0 obsoleted independence/terrene-naming | PR #1427 | EXTERNAL — loom-side |
+| F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC cascade | project_trustplane_day1 | DEFERRED — user-owned |
+
+Closed this session: `F-1460` → PR #1462 (merge `b1751e1b0`, commit `d93a2a5f5`); `F-PENDING-JOURNAL` (mops DISCOVERY, already codified in journal/0003) → discarded per `journal.md`.
 
 ## Traps
 
-- The clearance authorization control now lives at TWO surfaces — `_check_clearance`
-  (eval, Step 3.5) AND `_validate_monotonic_tightening` (re-registration). Any future
-  edit to either MUST keep the two restrictiveness models identical (None=widest,
-  unrecognized=tightest) or a validator-vs-eval inconsistency re-opens the bypass.
-- #1456: `caller_clearance`/`clearance_required` are free strings parsed via
-  `ConfidentialityLevel(str(x).strip().lower())` — fail-closed; ordering `caller < required`.
-- F-XSDK-CONVERGE: do NOT switch `to_canonical_json`/witness-family `default=str`→
-  `canonical_scalars` unilaterally in py — coordinated cross-SDK lockstep only.
-- Two residual `pact/audit.py` `default=str` sites (`:315`,`:362`) are FORENSIC reproducers — leave alone.
-- pact formats with Black `--line-length=88` + isort `--profile=black` (pre-commit), NOT ruff format.
-- Redteam throttle CONFIRMED AGAIN: parallel 3-lens fan-out throttled 2/3 lenses
-  (`not your usage limit`); SERIAL re-dispatch ran all clean. Default to SERIAL redteam here.
+- Sweep gap (F-SWEEP-LEDGER): `todos/active/` was 0, but forest work lives in
+  workspace `.session-notes` ledgers — read those, not just todos.
+- Core `kailash` resolves from site-packages unless `uv pip install -e . --no-deps`
+  (a stale install silently hides `src/` edits — hit this session).
+- Unreleased: NONE — `release-drift.js` exit 0 (verified, not eyeballed). NEVER
+  `git add -A`/`reset --hard` (F3 working-tree drift held per user "LEAVE ALONE").
+
+## Open questions for the human
+
+- Dormant workspaces (issues #1035/#855/#1125/#1174 all CLOSED): archive after
+  F-PYRIGHT-CONNECTOR + F-TIER3-BACKLOG re-validation, or resume? (auto-close
+  BLOCKED per value-prioritization MUST-4.)
+- F-DATAFLOW-RESERVED-NAME: file the DataFlow issue, or ratify "workaround suffices"?
