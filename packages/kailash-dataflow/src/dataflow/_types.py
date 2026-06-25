@@ -30,7 +30,7 @@ runtime-surface export the leaf module owns.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 __all__ = ["DataFlowProtocol"]
 
@@ -40,19 +40,19 @@ class DataFlowProtocol(Protocol):
     """Structural shape of :class:`dataflow.core.engine.DataFlow` used by
     :mod:`dataflow.core.tenant_context`.
 
-    The context switch only observes the facade surfaces a tenant-aware
-    operation needs — the connection manager, the optional cache backend,
-    and the ``multi_tenant`` configuration flag. The concrete
-    :class:`DataFlow` class exposes a much wider API; this Protocol
-    captures only what the context switch actually reads.
+    The context switch binds (stores + re-exposes) a DataFlow instance and
+    reads tenant configuration off ``config.security``. This Protocol captures
+    exactly that surface — ``config`` — which the concrete
+    :class:`dataflow.core.engine.DataFlow` exposes as a public instance
+    attribute, so the concrete class satisfies the Protocol structurally.
+
+    The earlier draft required ``multi_tenant`` / ``connection_manager`` /
+    ``cache_backend`` as top-level attributes; the concrete class exposes
+    those only privately (``_connection_manager``) or via ``config`` (the
+    ``multi_tenant`` flag lives at ``config.security.multi_tenant``), so the
+    over-specified Protocol made the concrete instance fail assignability.
     """
 
-    multi_tenant: bool
-    """Whether the bound instance runs in multi-tenant mode."""
-
-    connection_manager: Any
-    """The SQL connection pool facade (:class:`ConnectionManager` or
-    equivalent)."""
-
-    cache_backend: Optional[Any]
-    """Optional cache adapter (None when cache is disabled)."""
+    config: Any
+    """The :class:`DataFlowConfig` facade (carries ``security``, ``database``,
+    cache settings, etc.)."""

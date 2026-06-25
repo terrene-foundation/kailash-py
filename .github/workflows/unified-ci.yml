@@ -256,3 +256,24 @@ jobs:
           cd packages/kailash-dataflow
           ../../.venv/bin/python -m pytest tests/unit/ \
             --maxfail=10 -q --timeout=120
+
+      - name: Test DataFlow infra-free regression gates
+        timeout-minutes: 10
+        # tests/regression/ is a MIXED dir: infra-free gates (the engine.py
+        # pyright invariant, codeql/security/import-discipline checks) PLUS
+        # Postgres/Redis-requiring tests. This [dev]-only runner has no infra,
+        # so the marker filter below excludes every infra-requiring test and
+        # runs only the infra-free gates (the engine pyright gate among them).
+        # The infra-requiring regression tests are exercised by the
+        # infrastructure workflow, not here.
+        #
+        # Explicit `-m` is REQUIRED and intentionally overrides pytest.ini's
+        # addopts marker filter: addopts excludes requires_* but NOT
+        # integration/e2e, which this directory DOES contain. (The unit step
+        # above keeps zero `-m` per the addopts-is-sole-filter convention; that
+        # convention holds for tests/unit/, which has no integration tests.)
+        run: |
+          cd packages/kailash-dataflow
+          ../../.venv/bin/python -m pytest tests/regression/ \
+            -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
+            --maxfail=10 -q --timeout=120

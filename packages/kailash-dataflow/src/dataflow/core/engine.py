@@ -20,6 +20,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     Optional,
     Tuple,
     Type,
@@ -358,7 +359,7 @@ class DataFlow(DataFlowEventMixin):
                 # SecurityConfig (default "row" — the only strategy DataFlow
                 # implements on every backend). None means "use the
                 # SecurityConfig default".
-                _security_kwargs = dict(
+                _security_kwargs: Dict[str, Any] = dict(
                     multi_tenant=multi_tenant,
                     encrypt_at_rest=encryption_key is not None,
                     audit_enabled=audit_logging,
@@ -653,8 +654,12 @@ class DataFlow(DataFlowEventMixin):
 
         # TSG-104: Wire cache configuration into Express
         _express_cache_ttl = getattr(self.config, "cache_ttl", 300)
-        _express_cache_enabled = getattr(
-            self.config, "enable_query_cache", cache_enabled
+        # bool() coerces the Any-typed config attr / Optional[bool] fallback to
+        # the bool ExpressDataFlow.__init__ declares. Behaviour-equivalent: the
+        # Express ctor immediately reduces this via `cache_enabled and ttl > 0`
+        # (a truthiness test), so coercion changes no runtime semantics.
+        _express_cache_enabled = bool(
+            getattr(self.config, "enable_query_cache", cache_enabled)
         )
         # TSG-107: Explicit redis_url parameter takes precedence over config
         _express_redis_url = redis_url or getattr(self.config, "cache_redis_url", None)
@@ -716,6 +721,11 @@ class DataFlow(DataFlowEventMixin):
         self._pool_manager = None
         self._pool_monitor = None
         self._lightweight_pool = None
+        # Shared persistent :memory: connection (assigned lazily by the SQLite
+        # in-memory path; closed in the teardown paths). Typed Optional[Any]
+        # because it may hold an aiosqlite connection — the close() calls in
+        # teardown are guarded by truthiness and only fire when it is set.
+        self._memory_connection: Optional[Any] = None
 
         # Multi-tenant manager (lightweight — no DB connection)
         if self.config.security.multi_tenant:
@@ -3725,7 +3735,7 @@ class DataFlow(DataFlowEventMixin):
     def derived_model(
         self,
         sources: List[str],
-        refresh: str = "manual",
+        refresh: Literal["scheduled", "manual", "on_source_change"] = "manual",
         schedule: Optional[str] = None,
         debounce_ms: float = 100.0,
     ):
@@ -4863,6 +4873,8 @@ class DataFlow(DataFlowEventMixin):
             # Add fields
             for column in table_info.get("columns", []):
                 field_name = column["name"]
+                # _sql_type_to_python_type returns the type *name* as a str
+                # (e.g. "int", "datetime", "Decimal") — already the annotation.
                 field_type = self._sql_type_to_python_type(column["type"])
 
                 # Skip auto-generated fields
@@ -4871,11 +4883,7 @@ class DataFlow(DataFlowEventMixin):
                 ):
                     continue
 
-                type_annotation = (
-                    field_type.__name__
-                    if hasattr(field_type, "__name__")
-                    else str(field_type)
-                )
+                type_annotation = field_type
 
                 if column.get("nullable", True) and not column.get("primary_key"):
                     type_annotation = f"Optional[{type_annotation}]"
@@ -5346,8 +5354,14 @@ class DataFlow(DataFlowEventMixin):
             class_name = class_name[:-1]
         return class_name
 
-    def _sql_type_to_python_type(self, sql_type: str):
-        """Map SQL types to Python types."""
+    def _sql_type_to_python_type(self, sql_type: str) -> str:
+        """Map a SQL type to the *name* of its Python type.
+
+        Returns the type's ``__name__`` string (e.g. ``"int"``, ``"str"``,
+        ``"datetime"``) — or the literal ``"Decimal"`` for ``decimal`` columns.
+        The return value is always a ``str`` (a type *name*), never a type
+        object, so callers must not treat it as a class.
+        """
         # Remove parameters from SQL type (e.g., VARCHAR(255) -> VARCHAR)
         base_type = sql_type.split("(")[0].lower()
 
@@ -5795,9 +5809,14 @@ class DataFlow(DataFlowEventMixin):
     def _get_database_connection(self):
         """Get a real PostgreSQL database connection for DDL operations."""
         try:
-            # Use the connection manager to get a real PostgreSQL connection
+            # Use the connection manager to get a real PostgreSQL connection.
+            # NOTE: the live ConnectionManager (utils/connection.py) has no
+            # get_connection(); the hasattr guard is the runtime gate, so this
+            # branch only runs against a connection-manager variant that DOES
+            # expose it. type: ignore narrows the false positive on the base
+            # ConnectionManager type (see report — latent dead-branch note).
             if hasattr(self._connection_manager, "get_connection"):
-                connection = self._connection_manager.get_connection()
+                connection = self._connection_manager.get_connection()  # type: ignore[attr-defined]
                 if connection:
                     return connection
 
@@ -9030,9 +9049,15 @@ class DataFlow(DataFlowEventMixin):
             return False
 
         try:
-            # Use the schema state manager to get current database schema via WorkflowBuilder
+            # Use the schema state manager to get current database schema via
+            # WorkflowBuilder. NOTE: AutoMigrationSystem does not expose
+            # _schema_state_manager (only MigrationTestFramework does), so the
+            # hasattr guard is the runtime gate — this branch only runs against
+            # a migration-system variant that DOES carry it. type: ignore
+            # narrows the false positives on AutoMigrationSystem (see report —
+            # latent dead-branch note).
             if hasattr(self._migration_system, "_schema_state_manager"):
-                schema_manager = self._migration_system._schema_state_manager
+                schema_manager = self._migration_system._schema_state_manager  # type: ignore[attr-defined]
                 current_schema_obj = schema_manager._fetch_fresh_schema()
                 current_schema = current_schema_obj.tables
             else:
@@ -9224,8 +9249,15 @@ class DataFlow(DataFlowEventMixin):
 
         return connection_context()
 
-    async def _get_async_database_connection(self):
-        """Get async database connection for validation or testing."""
+    async def _get_async_database_connection(self) -> Any:
+        """Get async database connection for validation or testing.
+
+        Returns a backend-specific connection object — ``asyncpg.Connection``,
+        ``aiosqlite.Connection``, or a TDD test connection. These share no
+        common base class, so the return type is ``Any`` (callers dispatch on
+        the configured backend, e.g. asyncpg ``conn.fetch`` vs aiosqlite
+        ``conn.execute``).
+        """
         # Check if we're in TDD mode and have a test context
         from ..testing.tdd_support import (
             get_database_manager,
@@ -9278,6 +9310,14 @@ class DataFlow(DataFlowEventMixin):
                     database_url=db_url,
                     error_message="Database type not supported (only PostgreSQL, MySQL, SQLite)",
                 )
+            # ErrorEnhancer unavailable (platform import failed): still fail
+            # loudly. Falling through here returned None silently, deferring
+            # the failure to a downstream `assert conn is not None` at one
+            # call site and leaving every other caller with a None connection.
+            raise ValueError(
+                f"Unsupported database URL '{db_url}' "
+                "(only PostgreSQL, MySQL, SQLite are supported)"
+            )
 
     def _get_table_name(self, model_name: str) -> str:
         """Get the table name for a model, respecting __tablename__ override.
