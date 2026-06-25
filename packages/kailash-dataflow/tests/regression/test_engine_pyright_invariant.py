@@ -26,8 +26,13 @@ import pytest
 PINNED_PYRIGHT_VERSION = "1.1.371"
 
 # Post-cleanup baseline ceilings. Errors MUST be 0; warnings ≤ ceiling.
+# Ceiling TIGHTENED 10 → 0 (2026-06-25): engine.py was driven to 0 pinned-pyright
+# warnings (the prior 12-vs-10 drift was fixed at root — annotation corrections +
+# two justified targeted ignores + one real silent-None-return bug fix). With the
+# gate now CI-enforced (unified-ci test-dataflow job runs tests/regression/), 0 is
+# the strict floor: any new warning fails loudly. Tightening, not relaxation.
 ERROR_CEILING = 0
-WARNING_CEILING = 10  # brief-mandated hard ceiling per zero-tolerance.md Rule 1b
+WARNING_CEILING = 0
 
 ENGINE_PATH = (
     Path(__file__).resolve().parents[2] / "src" / "dataflow" / "core" / "engine.py"
