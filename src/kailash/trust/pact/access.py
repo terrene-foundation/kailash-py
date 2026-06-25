@@ -246,15 +246,26 @@ class PactBridge:
     a Scoped bridge is limited to specific operations, and an Ad-Hoc bridge
     is temporary.
 
+    Strictly pairwise -- NOT N-party. Every bridge, regardless of
+    ``bridge_type``, connects EXACTLY TWO roles (``role_a_address`` +
+    ``role_b_address``). ``bridge_type`` classifies the bridge's nature, NOT
+    the number of participants; in particular a "scoped" bridge is still a
+    two-role bridge, not a participant group of N roles. To model a
+    multi-party collaboration among N roles, create the C(N, 2) pairwise
+    bridges between every pair of roles (3 roles -> 3 bridges; 4 roles -> 6).
+
     When bilateral=True, both roles can access each other's unit data.
     When bilateral=False, only role_a can access role_b's unit data
     (unilateral: A reads B, but B cannot read A).
 
     Attributes:
         id: Unique bridge identifier.
-        role_a_address: First role in the bridge.
-        role_b_address: Second role in the bridge.
-        bridge_type: One of "standing", "scoped", "ad_hoc".
+        role_a_address: First of the bridge's exactly two endpoint roles.
+        role_b_address: Second of the bridge's exactly two endpoint roles.
+        bridge_type: Descriptive nature classification -- one of "standing",
+            "scoped", "ad_hoc". Does NOT affect participant count (every
+            bridge is pairwise); "scoped" labels the bridge's nature, it is
+            not an N-party participant set.
         max_classification: Maximum classification accessible via this bridge.
         operational_scope: Limit bridge to specific operations (empty = all).
         bilateral: Whether both roles have mutual access.

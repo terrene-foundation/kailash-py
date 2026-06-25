@@ -284,6 +284,8 @@ class PactBridge:
 
 Bridges grant role-level access paths. Bridges are NOT inherited by descendant roles -- if VP Admin has a bridge, Finance Director does NOT inherit that access (descendant access is governed by KSPs).
 
+**Strictly pairwise, not N-party.** Every bridge connects EXACTLY TWO roles (`role_a_address` + `role_b_address`), regardless of `bridge_type`. `bridge_type` (`"standing"` / `"scoped"` / `"ad_hoc"`) classifies the bridge's nature, NOT the number of participants -- a `"scoped"` bridge is still a two-role bridge, not a participant group of N roles. `bridge_type` is descriptive metadata only (surfaced in the access-decision audit trail); it drives no enforcement branching. Model a multi-party scoped collaboration among N roles as the C(N,2) pairwise bridges between every pair of roles.
+
 **Bridge approval (Section 4.4):** Before creating a cross-functional bridge, the Lowest Common Ancestor (LCA) of the two roles in the D/T/R tree must approve. Approvals have 24h TTL. Optional bilateral consent when `require_bilateral_consent=True`.
 
 ### 6.7 Pre-Retrieval Filtering
