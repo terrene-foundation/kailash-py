@@ -1,5 +1,28 @@
 # PACT Changelog
 
+## [0.14.3] — 2026-06-25 — fix: enforce MCP tool clearance fail-closed before the cost flag and at re-registration (#1456)
+
+### Security
+
+- `pact.mcp.McpGovernanceEnforcer` now enforces a tool policy's
+  `clearance_required` as a fail-closed Layer-2 authorization gate, evaluated
+  BEFORE the cost ladder. A caller with absent, unrecognized, or insufficient
+  `caller_clearance` is BLOCKED regardless of cost band — in particular it can
+  no longer slip through the `(0.8·max_cost, max_cost]` soft-flag short-circuit.
+  `clearance_required` was previously an advertised-but-unread field (any caller
+  could invoke a `clearance_required="secret"` tool). The new
+  `McpActionContext.caller_clearance` field carries the caller's
+  `ConfidentialityLevel`; `clearance_required=None` remains a no-op (backward
+  compatible). Cross-SDK parity with kailash-rs#1492 (EATP D6).
+- `McpGovernanceEnforcer.register_tool` monotonic-tightening validation now
+  covers `clearance_required`, closing a privilege-escalation in the gate above:
+  a re-registration could previously DROP (`secret`→`None`) or LOWER
+  (`secret`→`public`) a tool's clearance bar and be accepted as "tightening",
+  silently stripping the new authorization gate. Re-registration may now only
+  KEEP or RAISE the bar; `None` is treated as the widest setting and an
+  unrecognized value as the tightest (fail-closed), exactly matching the
+  enforcement path (pact-governance Rule 2: monotonic tightening).
+
 ## [0.14.2] — 2026-06-24 — fix: evict silent (agent, tool) pairs from the MCP rate-limiter (#1440)
 
 ### Security
