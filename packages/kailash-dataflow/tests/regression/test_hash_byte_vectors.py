@@ -58,11 +58,17 @@ from __future__ import annotations
 import inspect
 import re
 
-import polars as pl
 import pytest
 
-from dataflow.ml import hash as df_hash
+# polars is an optional dependency (declared only in kailash-ml, not in
+# kailash-dataflow). These byte-vector pins exercise polars's Arrow IPC layout,
+# so skip the whole module cleanly when polars is absent — otherwise an
+# unconditional `import polars` aborts collection of the entire tests/regression/
+# directory in any dataflow-only venv (per testing.md xfail/skip discipline +
+# dependencies.md "Declared = Imported").
+pl = pytest.importorskip("polars")
 
+from dataflow.ml import hash as df_hash
 
 # Tracking issue for the kailash-rs side of the parity contract — no
 # Rust-side ``dataflow::hash()`` implementation exists at the time of
