@@ -353,6 +353,12 @@ jobs:
         timeout-minutes: 10
         run: |
           cd packages/kailash-dataflow
+          # test_hash_byte_vectors.py does an unconditional `import polars`
+          # (polars is declared ONLY in kailash-ml, NOT in py/dataflow — a
+          # dependencies.md "Declared = Imported" gap). It carries NO requires_*
+          # marker so it is out of scope for this infra-marked run; --ignore it
+          # so its import does not abort collection of the dir.
           ../../.venv/bin/python -m pytest tests/regression/ \
+            --ignore=tests/regression/test_hash_byte_vectors.py \
             -m "requires_postgres or requires_redis" \
             --maxfail=10 -q --timeout=120
