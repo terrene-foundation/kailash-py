@@ -30,7 +30,14 @@ codify_session: "Session 2026-06-23 (light /codify) — issue #1426 (kailash-ali
   verdict APPROVE-WITH-FIXES, all CRIT/HIGH/MED/LOW fixes applied to the proposed
   text below. Gate-1 SCRUB NOTE: the coc-onboarding-specialist entry above carries a
   PRIVATE org slug in its context prose — scrub per artifact-flow Intake Disclosure
-  Scrub before placement."
+  Scrub before placement. APPEND 2026-06-25 (session-continuation codify): ONE
+  rule_update — a git.md § Discipline clause on CI-check/merge-race separation
+  (see changes[] tail). Proposal-only with full proposed text; NO local
+  baseline-rule edit (git.md is priority:0 baseline, so the rule-authoring Rule-10
+  proximity-band check + Trust-Posture-Wiring grandfather decision + placement are
+  loom Gate-1 calls needing loom's aggregate-emission tooling). NOT self-referential
+  (git.md is not on self-referential-codify Rule 2's allowlist) -> a recommended
+  single reviewer pass ran on the proposed text."
 
 changes:
   - type: rule_update
@@ -354,3 +361,91 @@ changes:
       (loom-owned + synced; a local edit is clobbered by /sync-to-build) — loom
       implements + distributes. NOT self-referential in this repo (a proposal
       description; no self-referential-codify Rule-2 allowlist file edited here).
+  - type: rule_update
+    artifact: git
+    files:
+      - .claude/rules/git.md
+    classification_suggestion: global
+    context: |
+      APPEND 2026-06-25 (session-continuation codify). ADDS one bullet to git.md
+      § Discipline: "CI-check and merge are separate steps under duplicate-run races".
+
+      LESSON (the gap): git.md § Discipline + § "Pre-FIRST-Push CI Parity Discipline"
+      govern push-time CI parity, but NO clause governs the WATCH-then-MERGE window.
+      When a PR has been pushed and CI is running, `gh pr checks --watch` can resolve
+      GREEN on the PRIOR head commit while a NEW duplicate `pull_request` run (the
+      `concurrency: cancel-in-progress` / re-trigger pattern) flakes RED on the SAME
+      PR. An agent that bundles the check and the merge into one command
+      (`gh pr checks <N> && gh pr merge <N>`, or `--watch` immediately followed by
+      `gh pr merge`) can land the merge over a stale-green or red duplicate run —
+      bypassing the gate it believed it had cleared.
+
+      PROPOSED git.md § Discipline bullet (Gate-1 may refine wording/placement):
+      ---8<--- BEGIN PROPOSED TEXT
+      - **CI-check and merge are SEPARATE steps under duplicate-run races**:
+        `gh pr checks --watch` can resolve green on the PRIOR head commit while a NEW
+        duplicate `pull_request` run flakes red on the SAME PR (the
+        `concurrency: cancel-in-progress` re-trigger pattern). Checking CI and merging
+        MUST be separate commands: (1) READ — pin the exact head SHA
+        (`gh pr view <N> --json headRefOid`) and confirm every REQUIRED check is
+        `conclusion=SUCCESS` on THAT SHA; (2) MERGE — only then `gh pr merge <N>`.
+        Bundling them in one command (`gh pr checks <N> && gh pr merge <N>`, or
+        `--watch` immediately followed by the merge) is BLOCKED — the watch can return
+        green on a stale commit and the merge then lands over an unverified or red
+        duplicate run.
+
+        ```bash
+        # DO — check as a READ step on the exact head, THEN merge
+        head=$(gh pr view <N> --json headRefOid -q .headRefOid)
+        gh pr checks <N>                       # confirm required checks SUCCESS on $head
+        gh pr merge <N> --admin --merge        # separate command, after the read
+
+        # DO NOT — bundle watch + merge (watch may be green on the prior commit)
+        gh pr checks <N> --watch && gh pr merge <N> --admin --merge
+        ```
+
+      **Why:** With duplicate `pull_request` runs, a `--watch` that returns green may
+      have resolved against the prior commit's run while a newer duplicate run on the
+      current head is still pending or flaked red; bundling the merge to that exit
+      code lands over an ungated state. Separating the read (pinned to the head SHA)
+      from the merge makes the gate verifiable.
+      ---8<--- END PROPOSED TEXT
+
+      EVIDENCE (this repo, prior session): kailash-py PR #1465 (engine pyright + CI
+      regression wiring) was admin-merged while a flaky-red duplicate `pull_request`
+      run showed on `gh pr checks`; main was independently healthy (3574 unit pass +
+      the push-event run on the same commit passed), so no harm landed — but the gate
+      was bypassed, not verified. Recorded as Trap-1 in the prior session's
+      `.session-notes`. The CI-watch-races-the-duplicate-run pattern is the recurrence
+      this clause prevents.
+
+      CLASSIFICATION rationale: GLOBAL. The duplicate-`pull_request`-run race + the
+      check-then-merge-separately discipline are CLI-neutral (gh CLI, language-neutral)
+      and apply to every repo using GitHub PR CI with concurrency re-triggers. The
+      DO/DO-NOT example is illustrative `gh` shell (no per-CLI delegation primitive),
+      so the bullet emits globally with NO cross-cli slot partitioning needed.
+
+      rule-authoring Rule 10 (proximity-band) — LOOM-SIDE GATE-1 ACTION REQUIRED:
+      git.md is priority:0 / scope:baseline; adding this ~25-line bullet MAY fall
+      within the 15% proximity-band on a near-breach lane. This BUILD repo cannot
+      faithfully run loom's aggregate-emission `emit.mjs --all --dry-run` headroom
+      check; Gate-1 MUST run it and EITHER (a) pair the addition with an extraction
+      recovering the bytes on the near-breach lane (e.g. to the git.md rule-extract
+      guide, which already holds the extended bash examples), OR (b) carry a
+      named-rationale exception. NOT performed in this BUILD proposal by design.
+
+      Trust Posture Wiring — LOOM-SIDE GATE-1 ACTION: git.md is grandfathered (NO
+      existing Trust Posture Wiring section). The proposed bullet follows that
+      file-local convention and ships WITHOUT clause-scoped wiring. Gate-1 MUST decide
+      per trust-posture.md MUST-8 grandfather-cutoff whether the /codify-touch now
+      requires authoring the canonical 8-field wiring. If wired: detection =
+      gate-level reviewer confirming check-then-merge separation in session
+      transcripts that admin-merge a PR; advisory at hook layer; emergency via the
+      cumulative path, NOT a new key.
+
+      Self-referential /codify gate: git.md is NOT on self-referential-codify.md Rule
+      2's allowlist (it governs git/CI workflow, NOT codify machinery) -> the mandatory
+      multi-agent redteam-with-tests round does NOT fire. A recommended single reviewer
+      pass ran on the proposed text. Cross-SDK sibling: kailash-rs uses the same gh-CLI
+      PR flow; the clause applies identically (the existing git.md § "Pre-FIRST-Push
+      CI Parity Discipline" already carries the rs cargo-command set).
