@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
-from pact.mcp.audit import McpAuditTrail
 from pact.mcp.enforcer import GovernanceDecision, McpGovernanceEnforcer
 from pact.mcp.types import McpActionContext
 
@@ -67,6 +66,7 @@ class McpGovernanceMiddleware:
         agent_id: str = "",
         *,
         cost_estimate: float | None = None,
+        caller_clearance: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> McpInvocationResult:
         """Invoke an MCP tool with governance enforcement.
@@ -85,6 +85,10 @@ class McpGovernanceMiddleware:
             args: Arguments to pass to the tool.
             agent_id: Identifier of the agent making the call.
             cost_estimate: Estimated cost for this invocation.
+            caller_clearance: The caller's confidentiality clearance level
+                (ConfidentialityLevel value). Forwarded to the enforcer so a
+                tool whose policy sets clearance_required is gated fail-closed.
+                None means no clearance supplied (such tools are BLOCKED).
             metadata: Additional context for governance evaluation.
 
         Returns:
@@ -97,6 +101,7 @@ class McpGovernanceMiddleware:
             agent_id=agent_id,
             timestamp=now,
             cost_estimate=cost_estimate,
+            caller_clearance=caller_clearance,
             metadata=metadata or {},
         )
 

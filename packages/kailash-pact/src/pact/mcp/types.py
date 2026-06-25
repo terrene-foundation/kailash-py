@@ -191,6 +191,12 @@ class McpActionContext:
         timestamp: When the invocation was initiated.
         cost_estimate: Estimated cost (USD) for this invocation.
             None means no cost estimate available.
+        caller_clearance: The confidentiality clearance level held by the
+            CALLER making this invocation (one of the ConfidentialityLevel
+            values: "public", "restricted", "confidential", "secret",
+            "top_secret"). None means the caller provided no clearance; a tool
+            whose policy sets ``clearance_required`` is then BLOCKED (fail-closed).
+            Mirrors how ``cost_estimate`` carries the caller-supplied cost.
         metadata: Additional context for governance evaluation.
 
     Raises:
@@ -202,6 +208,7 @@ class McpActionContext:
     agent_id: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     cost_estimate: float | None = None
+    caller_clearance: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -237,6 +244,7 @@ class McpActionContext:
             "agent_id": self.agent_id,
             "timestamp": self.timestamp.isoformat(),
             "cost_estimate": self.cost_estimate,
+            "caller_clearance": self.caller_clearance,
             "metadata": self.metadata,
         }
 
@@ -252,5 +260,6 @@ class McpActionContext:
             agent_id=data.get("agent_id", ""),
             timestamp=ts or datetime.now(UTC),
             cost_estimate=data.get("cost_estimate"),
+            caller_clearance=data.get("caller_clearance"),
             metadata=data.get("metadata", {}),
         )

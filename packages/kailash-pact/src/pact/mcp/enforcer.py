@@ -12,6 +12,9 @@ Security invariants (per pact-governance.md):
 3. Thread-safe: all shared state access acquires self._lock (Rule 8)
 4. Fail-closed: all error paths return BLOCKED (Rule 4)
 5. Bounded collections: audit trail uses deque(maxlen=N) (Rule 7)
+6. Clearance authorization: a tool whose policy sets clearance_required is
+   evaluated for caller clearance BEFORE the cost ladder; absent, unrecognized,
+   or insufficient caller clearance fails closed to BLOCKED (Rule 4).
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash.trust import ConfidentialityLevel
 from pact.mcp.audit import McpAuditTrail
 from pact.mcp.types import (
     DefaultPolicy,
@@ -142,9 +146,12 @@ class McpGovernanceEnforcer:
         1. Check if tool is registered (default-deny for unregistered)
         2. Validate numeric fields (NaN/Inf defense)
         3. Check argument constraints (denied_args, allowed_args)
-        4. Check cost constraints (max_cost)
-        5. Check rate limits
-        6. Return appropriate gradient level
+        4. Check clearance requirement (Layer-2 authorization, fail-closed) --
+           evaluated BEFORE cost so an unmet-clearance caller is BLOCKED
+           regardless of cost band
+        5. Check cost constraints (max_cost)
+        6. Check rate limits
+        7. Return appropriate gradient level
 
         Fail-closed: any exception during evaluation returns BLOCKED.
 
@@ -312,6 +319,71 @@ class McpGovernanceEnforcer:
                 return overlay
         return self._config.tool_policies.get(tool_name)
 
+    def _check_clearance(
+        self, policy: McpToolPolicy, context: McpActionContext
+    ) -> GovernanceDecision | None:
+        """Fail-closed clearance gate for a tool whose policy requires one.
+
+        Returns a BLOCKED GovernanceDecision when the caller's clearance is
+        absent, unrecognized, or below the tool's ``clearance_required`` level;
+        returns None when the requirement is satisfied (the caller continues to
+        the remaining checks).
+
+        Clearance levels are ConfidentialityLevel values ordered
+        PUBLIC < RESTRICTED < CONFIDENTIAL < SECRET < TOP_SECRET. Any value that
+        does not parse to a known level fails closed to BLOCKED -- both an
+        unrecognized policy requirement and an unrecognized caller clearance.
+        """
+        tool_name = context.tool_name
+        agent_id = context.agent_id
+        required_raw = policy.clearance_required
+
+        def _blocked(reason: str) -> GovernanceDecision:
+            return GovernanceDecision(
+                level="blocked",
+                tool_name=tool_name,
+                agent_id=agent_id,
+                reason=reason,
+                timestamp=context.timestamp,
+                policy_snapshot=policy.to_dict(),
+            )
+
+        # Parse the REQUIRED level (fail-closed on an unrecognized requirement).
+        try:
+            required = ConfidentialityLevel(str(required_raw).strip().lower())
+        except ValueError:
+            return _blocked(
+                f"tool '{tool_name}' policy clearance_required={required_raw!r} is "
+                f"not a recognized confidentiality level -- fail-closed to BLOCKED"
+            )
+
+        # Absent caller clearance against a required level -> BLOCKED.
+        caller_raw = context.caller_clearance
+        if caller_raw is None:
+            return _blocked(
+                f"tool '{tool_name}' requires clearance '{required.value}' but the "
+                f"caller provided none -- BLOCKED"
+            )
+
+        # Parse the CALLER level (fail-closed on an unrecognized caller value).
+        try:
+            caller = ConfidentialityLevel(str(caller_raw).strip().lower())
+        except ValueError:
+            return _blocked(
+                f"caller clearance {caller_raw!r} is not a recognized "
+                f"confidentiality level -- fail-closed to BLOCKED"
+            )
+
+        # Insufficient caller clearance -> BLOCKED.
+        if caller < required:
+            return _blocked(
+                f"caller clearance '{caller.value}' is below the required "
+                f"'{required.value}' for tool '{tool_name}' -- BLOCKED"
+            )
+
+        # Clearance satisfied; continue evaluation.
+        return None
+
     def _evaluate(self, context: McpActionContext) -> GovernanceDecision:
         """Internal evaluation logic. Caller handles exceptions.
 
@@ -400,6 +472,18 @@ class McpGovernanceEnforcer:
                         timestamp=context.timestamp,
                         policy_snapshot=policy.to_dict(),
                     )
+
+        # Step 3.5: Check clearance requirement (Layer-2 authorization).
+        # Evaluated BEFORE cost constraints (Step 4) so a caller with
+        # absent/insufficient clearance is BLOCKED regardless of where its
+        # cost_estimate falls -- in particular, a caller landing in the
+        # (0.8*max_cost, max_cost] soft-flag band MUST NOT receive the
+        # allowed-but-flagged decision before its clearance is checked.
+        # Fail-closed: an unmet, absent, or unrecognized clearance BLOCKS.
+        if policy.clearance_required is not None:
+            clearance_decision = self._check_clearance(policy, context)
+            if clearance_decision is not None:
+                return clearance_decision
 
         # Step 4: Check cost constraints
         if cost is not None and policy.max_cost is not None:
