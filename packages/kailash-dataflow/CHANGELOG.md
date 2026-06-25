@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [2.13.0] — 2026-06-25 — Reserved-name guard + engine pyright cleanup + CI regression gates
+
+### Added
+
+- **VAL-011 `@db.model` reserved-name guard (#1464).** `@db.model` now warns at decoration time when a user field name collides with a core `NodeMetadata` attribute (`name` / `description` / `version` / `author` / `tags`). Previously such a field either crashed at node construction (`tags`, a `set[str]` field, vs a `str` value) or **silently overwrote** node metadata (`name` / `version` / `description` / `author`) with no error. The reserved set is derived from `NodeMetadata.model_fields` at runtime (so it cannot drift from the core model) and excludes `id` (the required primary-key name, VAL-003) and the auto-managed fields (owned by VAL-005). WARN mode emits a warning with a rename suggestion; STRICT mode raises `ModelValidationError` at decoration.
+
+### Fixed
+
+- **Unsupported-database-URL connection no longer returns `None` silently (#1465).** `DataFlow._get_async_database_connection` previously raised only when the platform `ErrorEnhancer` was importable; when it was not (its import is `try/except ImportError -> None`), an unsupported URL fell through and returned `None`, deferring the failure to a downstream dereference. It now raises `ValueError` unconditionally, with credentials masked via `mask_url` so a connection string's password never leaks into the error message.
+
+### Changed
+
+- **`core/engine.py` pyright cleanup to zero (#1465).** Driven from 12 to 0 pinned-pyright (1.1.371) warnings via root annotation corrections plus a `DataFlowProtocol` relaxation (type-only, no runtime change); the engine pyright regression-gate ceiling was tightened from 10 to 0.
+
+### Internal
+
+- **DataFlow `tests/regression/` infra-free gates now run in CI (#1465).** The `test-dataflow` CI job now exercises the infra-free regression gates (including the engine pyright invariant) in addition to `tests/unit/`; the Postgres / Redis / integration-marked regression tests continue to run in the infrastructure workflow.
+
 ## [2.12.0] — 2026-06-16 — Standalone callable masking + record-agnostic redaction (#1337)
 
 ### Added
