@@ -342,12 +342,14 @@ jobs:
 
       - name: Install dependencies
         # Root kailash editable BEFORE the sub-package (deployment.md sibling-CI
-        # rule). db-postgres + redis extras provide the real drivers the marked
-        # tests need.
+        # rule). db-postgres (asyncpg) + redis provide the async drivers; the
+        # dataflow [postgres-sync] extra provides psycopg2-binary, REQUIRED by the
+        # auto_migrate synchronous DDL path the tenant-isolation tests exercise
+        # (DataFlow is async-first but creates tables via the sync DDL executor).
         run: |
           uv venv .venv
           uv pip install -e ".[db-postgres,redis]" --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow[dev,postgres-sync]" --python .venv/bin/python
 
       - name: Run Postgres/Redis-marked regression tests
         timeout-minutes: 10
