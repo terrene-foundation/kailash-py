@@ -13,6 +13,7 @@ paths:
 # UI-Backend Defense Rules
 
 
+<!-- slot:neutral-body -->
 
 Backend handlers MUST treat the UI as hostile input. The UI's value restrictions — dropdown allowlists, radio-button groups, required-field markers, client-side validation — are ergonomics, not security boundaries. A backend handler that relies on "the UI only sends these values" is one UI bug (or one curl-wielding attacker) away from accepting inputs it was never designed for.
 
@@ -171,3 +172,5 @@ rg -B 2 'not in ALLOWED_|not in ALLOWLIST_' \
 ```
 
 Origin: gh-coc-claude-rs#51 item 2 (2026-04-17). Admin endpoints that accept `policy_type` / `auth_method` / `classification_mode` were found to rely on the admin UI's dropdown as the only validation, with no server-side allowlist and no shape check. A UI bug that sent `None` (instead of the currently-selected value) reached the model's `Enum` field and the attack was caught by Pydantic — but only because the model happened to use a strict enum. The next refactor to replace Pydantic with a lighter validator would have silently re-opened the bypass. This rule codifies the three-layer defense so no future refactor collapses the contract.
+
+<!-- /slot:neutral-body -->

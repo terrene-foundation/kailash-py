@@ -40,6 +40,16 @@
           "type": "integer",
           "minimum": 0,
           "description": "Monotonic counter incremented on each `genesis-migration` (rule 9c). Architecture §2.2 fold rule 9c + §2.3. Initialized to 0 at original genesis."
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["github", "azure-devops"],
+          "description": "VCS host the ceremony verifies trust-root facts against (Azure DevOps port). ABSENT ⇒ \"github\" (backward-compatible default; the .claude/hooks/lib/vcs-provider.js registry resolves absent→github). For \"azure-devops\": genesis.repo_owner is the ADO organization name, genesis.ado_project is REQUIRED (enforced in code at .claude/hooks/lib/roster-schema-validate.js::_validateProviderIdentity, NOT as a JSON-Schema if/then which the vendored validator does not support), and every enrolled owner person binds via `principal` (Entra UPN) instead of `github_login`. ADO has no commit-signature-verification API, so an ADO genesis anchors via the org-admin (Project Collection Administrators) attestation — repo_owner_kind is \"org\" and verified is always false; see multi-operator-coordination.md MUST-5 ADO clause."
+        },
+        "ado_project": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Azure DevOps project ref (GUID or URL-safe slug) the coordination repo lives under. REQUIRED when genesis.provider == \"azure-devops\" (conditional-in-code per _validateProviderIdentity); ignored for github. Interpolated into ADO REST endpoint paths after validation by .claude/hooks/lib/ado-login.js::validateAdoProject (endpoint-injection safety)."
         }
       }
     },
@@ -54,7 +64,7 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["display_id", "role", "github_login", "host_role", "keys"],
+        "required": ["display_id", "role", "host_role", "keys"],
         "properties": {
           "display_id": {
             "type": "string",
@@ -69,12 +79,29 @@
           "github_login": {
             "type": "string",
             "minLength": 1,
-            "description": "The GitHub collaborator login this person_id binds to. For owners, distinct-bound-collaborator-login is enforced at owner-add ceremony via `collaborator-distinctness-attestation` (shard A0b-2b)."
+            "description": "The GitHub collaborator login this person_id binds to. REQUIRED when genesis.provider is github/absent (conditional-in-code at roster-schema-validate.js::_validateProviderIdentity — relaxed from JSON-Schema `required` so an azure-devops roster binds via `principal` instead; the vendored validator does not support if/then). For owners, distinct-bound-collaborator-login is enforced at owner-add ceremony via `collaborator-distinctness-attestation` (shard A0b-2b)."
+          },
+          "principal": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The Entra (AAD) userPrincipalName (`<local>@<domain>`) this person_id binds to under the azure-devops provider — the ADO analogue of `github_login`. REQUIRED when genesis.provider == \"azure-devops\" (conditional-in-code at roster-schema-validate.js::_validateProviderIdentity); ignored for github. \"admin\" for an ADO owner is Project Collection Administrators group membership, resolved via the ADO Graph API and bound to this UPN. Compared case-insensitively via .claude/hooks/lib/ado-login.js::principalsEqual (sock-puppet-via-case-mismatch defense, mirroring github_login/loginsEqual)."
           },
           "host_role": {
             "type": "string",
             "enum": ["human", "ci"],
             "description": "Whether the signing host is a human or a CI deploy-key. Architecture §2.3 R5-S-04: host_role:ci is AUDIT-ONLY — NEVER eligible to co-sign owner-quorum, distinctness, gate-approval, or genesis/migration records. This schema RECORDS the value; ineligibility is enforced in shard A0b-2c (NOT here)."
+          },
+          "business_roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "platform-engineer",
+                "capability-engineer",
+                "business-consultant"
+              ]
+            },
+            "description": "OPTIONAL advisory operating-model classification (role-first model; specs/06 §2; ratified journal/0282, INFRA fold journal/0284). Cut by PURPOSE: capability-engineer (≡ agentic-AI-engineer, one role) builds reusable capabilities consumed by a product's RUNTIME (home build); platform-engineer owns loom in full — the ecosystem machine + method/methodology pool + the INFRA team/function — all DEV-PROCESS-consumed (home loom); business-consultant builds specific products on capabilities + use-templates (home use). ADVISORY + capability-scoping ONLY: NEVER quorum-eligible, NEVER consulted by any distinctness/gate predicate, and ORTHOGONAL to both the authority `role` (owner/senior/contributor) and the trust-posture (L1–L5). Optional + additive — absent on pre-model rosters (NOT in `required`). product-owner is NOT a value (the requirements/brief author sits outside the delivery substrate, no signing identity)."
           },
           "keys": {
             "type": "array",

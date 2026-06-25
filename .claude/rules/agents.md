@@ -7,6 +7,7 @@ scope: baseline
 
 See `.claude/guides/rule-extracts/agents.md` for full evidence, extended examples, post-mortems, recovery-protocol commands, the gate-review table, and CLI-syntax variants.
 
+<!-- slot:neutral-body -->
 
 ## Specialist Delegation (MUST)
 
@@ -124,7 +125,9 @@ Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/
 
 Origin: sessions 2026-04-19/20/27 (worktree drift, parallel-release PRs #552/#553, W6 closure-parity); slot-partitioned 2026-05-14 (#200); F20 extraction 2026-05-22 (journal/0143); prose trim 2026-06-11 (Gate-1 paired extraction); worktree-cluster extraction to skill Rules 1–10 + Examples 6–10 retired 2026-06-12 (#491, journal/0271). Full evidence in guide.
 
+<!-- /slot:neutral-body -->
 
+<!-- slot:examples -->
 
 ## Examples (CLI-specific delegation syntax)
 
@@ -202,3 +205,5 @@ draft_prompt = "Verify W5→W6 closure parity. Run gh pr view, ast.parse() for _
 Agent(subagent_type="analyst", prompt=draft_prompt)
 # (analyst lacks Bash; will FORWARD the gh-pr-view rows; round burned)
 ```
+
+<!-- /slot:examples -->

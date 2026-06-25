@@ -16,7 +16,9 @@ import {
   resolveOne,
   stripFencedBlocks,
   isPlaceholder,
+  isCrossCliDispatcher,
   findRepoRoot,
+  DEFAULT_SCOPE_DIRS,
 } from "../../bin/validate-xref-integrity.mjs";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -359,6 +361,41 @@ function check(name, condition, details) {
       !isPlaceholder("rules/foo.md") &&
       !isPlaceholder("skills/percent-100.md"),
     `placeholder extension broken`,
+  );
+}
+
+// ------------------------------------------------------------------
+// fixture-16-cross-cli-dispatcher (FC, journal/0186)
+// ------------------------------------------------------------------
+// isCrossCliDispatcher skips the Codex dispatcher token family bin/coc /
+// bin/coc-<phase> (anchored ^bin/coc(-[a-z0-9-]+)?$) and NOTHING ELSE.
+{
+  check(
+    "fixture-16-cross-cli-dispatcher",
+    isCrossCliDispatcher("bin/coc") === true &&
+      isCrossCliDispatcher("bin/coc-analyze") === true &&
+      isCrossCliDispatcher("bin/cocktail.mjs") === false &&
+      isCrossCliDispatcher("bin/codex.mjs") === false &&
+      isCrossCliDispatcher("bin/coc.mjs") === false &&
+      isCrossCliDispatcher("bin/emit.mjs") === false,
+    `cross-cli dispatcher token classification broken`,
+  );
+}
+
+// ------------------------------------------------------------------
+// fixture-17-default-scope-excludes-audit-fixtures (FC, journal/0186)
+// ------------------------------------------------------------------
+// audit-fixtures/ is NOT a default SCAN SOURCE (synthetic test corpora);
+// still reachable via explicit --scope. The other four trees stay in default.
+{
+  check(
+    "fixture-17-default-scope-excludes-audit-fixtures",
+    !DEFAULT_SCOPE_DIRS.some((d) => d.includes("audit-fixtures")) &&
+      DEFAULT_SCOPE_DIRS.includes(".claude/rules") &&
+      DEFAULT_SCOPE_DIRS.includes(".claude/skills") &&
+      DEFAULT_SCOPE_DIRS.includes(".claude/commands") &&
+      DEFAULT_SCOPE_DIRS.includes(".claude/agents"),
+    `DEFAULT_SCOPE_DIRS scope set incorrect`,
   );
 }
 

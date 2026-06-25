@@ -34,33 +34,25 @@ The acquire result carries `record_emit` — the signed `codify-lease` coordinat
 
 On `{ ok: true, lease, branch }`: create/switch to `codify/<display_id>-<date>`; all edits this session lands there; end-of-session opens a PR + admin-merge per `coc-sync-landing.md` MUST-3; then `releaseCodifyLease({ repoDir, displayId })` (the helper derives the leasePath from `repoDir` internally per Sec-MED-3 — callers cannot misroute the release write). For MUST-clause rule changes the orchestrator additionally requires a signed `[ack: <rule-id>]` from the user before merge (consumed by `multi-operator-sessionstart.js`).
 
-### 1. Consume learning digest
+### 1. Enumerate the delta since the last codification (MANDATORY anchor)
 
-Before extracting new knowledge, integrate what the learning system has captured:
+`/codify` MUST process EVERYTHING since the last codification — not the last session, not what this session remembers. The durable checkpoint is `.claude/learning/learning-codified.json::last_codified`.
 
-1. Read `.claude/learning/learning-digest.json` — the structured summary of recent observations
-2. Read `.claude/learning/learning-codified.json` — what was previously codified (avoid re-processing)
-3. Read recent journal entries referenced in the digest (`decisions` array) — DECISION and DISCOVERY entries contain semantic context
-4. Read `.session-notes` — latest session accomplishments and outstanding items
+1. Run the enumerator — its output IS the authoritative backlog:
 
-Analyze the digest for actionable findings:
+   ```
+   node .claude/bin/codify-backlog.mjs
+   ```
 
-- **Corrections** → Do any rules or skills need updating to match user preferences? Each correction is a real signal where the user pushed back on an approach.
-- **Error patterns** → Should any recurring rule violations become new rule sections (DO/DO NOT with examples)?
-- **Decisions** → Should any architectural decisions from journals become agent or skill knowledge?
-- **Accomplishments** → Do any completed features need documentation in skills?
+   It lists the COMPLETE delta since `last_codified` from append-only + git-committed sources (`observations.jsonl`, unaddressed `violations.jsonl`, `journal/` entries, artifact-change commits, workspace `.pending`/`todos/done`). Absent/invalid `last_codified` → it flags **FIRST CODIFY** (full history in scope); never assume "nothing to do". On that first cycle the backlog is large: triage by `rules/value-prioritization.md` MUST-1 value-rank, process what fits the per-session capacity budget (`rules/autonomous-execution.md`), and write `last_codified` regardless — a partial first sweep that ADVANCES the anchor is correct (it bounds the next cycle's delta); pretending the whole backlog is addressable in one cycle is not.
 
-For each finding, either:
+2. `.claude/learning/learning-digest.json` + `.session-notes` are SUPPLEMENTARY recency hints ONLY — use them to enrich an item's semantic context, never to define the work-list. The backlog output is UNSCRUBBED (it echoes `violations.jsonl` evidence + workspace paths); before embedding any of it in a PR / journal / commit, apply the `rules/user-flow-validation.md` MUST-6 scrub.
 
-- Update an existing rule (add DO/DO NOT with example and Why)
-- Update a skill's SKILL.md or sub-files
-- Update an agent's knowledge section
-- Skip (not worth codifying — explain why)
-- **Re-validate deferred items** (per `rules/value-prioritization.md` MUST-3): inherited items lacking a value-anchor MUST surface "lacks value-anchor — current value?" rather than re-list on faith. Items ≥2 sessions stale → "still wanted?" gate. Silent inheritance across `/clear` is BLOCKED.
+**BLOCKED:** deriving the work-list from `.session-notes`, the digest, or model memory alone — all are overwritten/regenerated every session, so knowledge from an un-codified session or across a `/clear`/compaction boundary is invisible to them (same epistemic shape as `rules/verify-claims-before-write.md` MUST-2 / `rules/zero-tolerance.md` Rule 1c — what you "remember" is unfalsifiable after a context boundary). The anchored backlog is the only source that cannot miss.
 
-After processing, write `.claude/learning/learning-codified.json` recording `last_codified` (ISO ts), `digest_hash` (sha256 of digest), and `actions_taken[]` (each entry: `{type, file, reason}` — types include `rule_update`, `skill_update`, `agent_update`, `team_memory_promote`).
+For each backlog item, either: update a rule (DO/DO NOT + Why), a skill's SKILL.md/sub-files, or an agent's knowledge; **re-validate a deferred item** (per `rules/value-prioritization.md` MUST-3 — items lacking a value-anchor surface "current value?"; items ≥2 sessions stale → "still wanted?"; silent `/clear` inheritance is BLOCKED); set `addressed_by` on each unaddressed violation (Step 6b); or skip with a stated reason.
 
-This closes the feedback loop: observe → digest → **codify into real artifacts**.
+After processing, write `.claude/learning/learning-codified.json` with `last_codified` (ISO ts = now), `digest_hash` (sha256 of digest), and `actions_taken[]` (`{type, file, reason}`; types: `rule_update`, `skill_update`, `agent_update`, `team_memory_promote`). **This advances the anchor** so the next `/codify` computes its delta from here — skipping the write re-opens the gap this step closes (observe → anchored backlog → **codify into real artifacts**).
 
 ### 2. Deep knowledge extraction
 

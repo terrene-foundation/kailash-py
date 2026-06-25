@@ -11,6 +11,7 @@ paths:
 # DataFlow Classification Redaction Rules
 
 
+<!-- slot:neutral-body -->
 
 Classification-aware fields (PII, CONFIDENTIAL, SECRET) are redacted by a single helper — `apply_read_classification(model.fields, record)` — that the read path calls before returning rows to the caller. The failure mode this rule targets is silent and systemic: a framework that applies redaction on `read()` / `list()` but NOT on mutation return-paths (`create()`, `upsert()`, `bulk_create()`, any future `INSERT ... RETURNING` primitive) leaks every classified field on every write, regardless of caller clearance.
 
@@ -148,3 +149,5 @@ async def count(self, model: ModelInfo, filter: dict) -> int:
 - `rules/zero-tolerance.md` Rule 2 — a redaction helper that exists but isn't called from the mutation path is the exact "fake classification" failure mode Rule 2 enumerates.
 
 Origin: 2026-04-17 — pre-fix, `create()` and `upsert()` leaked classified fields in every return dict regardless of caller clearance.
+
+<!-- /slot:neutral-body -->

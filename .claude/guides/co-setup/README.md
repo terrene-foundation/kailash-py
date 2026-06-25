@@ -18,6 +18,16 @@ How to apply, adapt, and maintain the Cognitive Orchestration (CO) setup across 
 | [10 - Repo Linkages](10-user-defined-repo-linkages.md)  | The shared linkage resolver — the NAME→on-disk-location binding for cross-repo tooling                          |
 | [11 - Genesis Ceremony](11-genesis-ceremony.md)         | Establishing a repo's COC trust root — the genesis-anchor enrollment ceremony                                   |
 
+## Prerequisites
+
+Before cloning loom and the BUILD/USE templates into a new environment, the host needs:
+
+- **Node.js ≥ 18** — the loom tooling (artifact emission, the `.claude/hooks/`, the `.claude/bin/*.mjs` scripts, the codex-mcp-guard) runs on Node.
+- **git** — every artifact, journal entry, and coordination-log record is git-backed.
+- **A VCS-host CLI matching your provider** — `gh` (GitHub) **or** `az` (Azure DevOps), installed and authenticated (`gh auth status` / `az login`). The genesis ceremony, coordination substrate, and cross-repo tooling dispatch on `roster.genesis.provider` (absent ⇒ GitHub), so the CLI must match the provider the repo was enrolled under.
+
+On Windows, run the tooling under a POSIX shell (Git Bash or WSL): loom's bash hooks and sync scripts assume a POSIX environment, and the repo `.gitattributes` normalizes line endings to LF.
+
 ## Quick Start
 
 Setting up CO for a new repo? Start with [02 - Project Types](02-project-types.md) to determine which archetype fits, then follow the component creation guide.

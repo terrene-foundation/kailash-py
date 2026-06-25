@@ -9,6 +9,7 @@ paths:
 
 # Hook Output Discipline — No Raw exit(2)
 
+<!-- slot:neutral-body -->
 
 Hooks are the structural enforcement layer of the trust-posture system. A hook that returns `continue: false` (or exits with code `2` at PreToolUse) halts the agent's flow — and the agent receives ONLY what the hook emits. A raw `process.exit(2)` with no payload tells the user "Execution stopped by PostToolUse hook" with no actionable content, and tells the agent nothing — institutional knowledge of WHY the block fired is lost the moment continuation halts.
 
@@ -208,3 +209,5 @@ Every detector function in `.claude/hooks/lib/violation-patterns.js` MUST ship w
   3. AST sweep on detector functions: any function returning `severity: "block"` whose `evidence` field is a `match()` group is flagged.
 
 Origin: 2026-05-06 — `detectRepoScopeDriftBash` blocked an in-scope `gh issue list --repo "$REPO"` sweep in kailash-rs because the regex captured the literal string `"$REPO"` pre-expansion. User-identified codification gap: the `instruct-and-wait.js` library shipped 2026-05-05 but no rule mandated its use, leaving every future detector free to regress to raw exit. Same false-positive class as the heredoc/segment-anchor and `git commit -m`/`-F` skip clauses already addressed in `validate-bash-command.js` (commit `0366a68`); applies the lesson at the design-time rule layer rather than per-detector patches.
+
+<!-- /slot:neutral-body -->

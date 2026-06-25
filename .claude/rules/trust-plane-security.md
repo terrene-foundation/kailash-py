@@ -7,6 +7,7 @@ paths:
 
 # Trust-Plane Security Rules
 
+<!-- slot:neutral-body -->
 
 ### 1. No Bare `open()` or `Path.read_text()` for Record Files
 
@@ -203,3 +204,5 @@ def to_canonical_json(self) -> str:
 - **Detection mechanism:** Phase 1 — a module-granularity AST/source invariant test over every trust-plane / governance / conformance signing-or-hash root (py-illustrative: a regression test asserting every `json.dumps` over a signing/hash pre-image carries `allow_nan=False`; the sibling SDK's equivalent asserts its canonical encoder rejects non-finite floats), excluding documented forensic/memoization sites; plus security-reviewer gate-review at `/implement` + `/release`. Phase 2 (deferred): a `PostToolUse(Edit|Write)` lexical advisory on trust-plane paths.
 - **Violation scope:** this clause (signing/hash/conformance pre-image serialization). Every violation row names the file + the un-guarded serialization site.
 - **Origin:** trust-plane-wide NaN/Inf signing-pre-image sweep (2026-06-21) — envelope/audit-chain start + full trust plane + governance + delegate-conformance digest.
+
+<!-- /slot:neutral-body -->

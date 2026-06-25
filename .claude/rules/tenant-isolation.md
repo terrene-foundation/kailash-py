@@ -11,6 +11,7 @@ paths:
 
 # Tenant Isolation Rules
 
+<!-- slot:neutral-body -->
 
 In a multi-tenant SaaS, tenant isolation is the difference between an API that scales to a thousand customers and a P0 incident that destroys the company's reputation. Cross-tenant data leaks happen because some piece of state — a cache key, a query filter, a metric label, an audit row — was constructed without a tenant dimension. The leak doesn't surface until two tenants happen to share a primary key, at which point one of them sees the other's data.
 
@@ -216,3 +217,5 @@ rg '_tenant_context\[|_tenant_context\.get' .   # any hit on a write path = HIGH
 ```
 
 Any match that fails the contract above is a HIGH finding.
+
+<!-- /slot:neutral-body -->

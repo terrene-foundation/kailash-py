@@ -8,6 +8,7 @@ paths:
 # DataFlow Pool Configuration Rules
 
 
+<!-- slot:neutral-body -->
 
 > **Scope**: Application code MUST go through DataFlow's high-level API (`@db.model`, `db.express`) — see `framework-first.md` § Work-Domain Binding. The patterns here are for tuning the DataFlow connection pool itself, not for bypassing it.
 
@@ -115,3 +116,5 @@ class SubsystemClass:
 - No new pool size defaults — consolidate with existing parameters before adding
 
 **Why:** Every additional default becomes another competing source of truth, recreating the exact pool exhaustion crisis these rules prevent.
+
+<!-- /slot:neutral-body -->
