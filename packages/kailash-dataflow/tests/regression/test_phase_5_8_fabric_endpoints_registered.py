@@ -36,14 +36,18 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.responses import JSONResponse, StreamingResponse
 
-# dataflow.fabric.* requires the [fabric] extra (janus et al.), absent in a
-# [dev]-only venv. Skip the whole module when janus is missing — otherwise the
-# unconditional dataflow.fabric import below raises ModuleNotFoundError in a
-# fabric-less environment (per testing.md skip-discipline + dependencies.md
-# "Declared = Imported"; see tests/CLAUDE.md § fabric tier note).
-pytest.importorskip("janus")
+# The fabric HTTP adapter (dataflow.fabric.nexus_adapter / .runtime) requires
+# only fastapi — NOT janus. janus is a thread-safe sync/async queue pulled in by
+# kailash-nexus, and is NOT imported anywhere under dataflow.fabric. The prior
+# `importorskip("janus")` guard therefore SKIPPED this gate in the [dev]-only CI
+# job (janus absent) even though fastapi — its real dependency — is present, so
+# the fabric endpoint-registration invariant enforced nothing in CI. Guard the
+# actual dependency, before importing it (testing.md skip-discipline +
+# dependencies.md "Declared = Imported"; see tests/CLAUDE.md § fabric tier note).
+pytest.importorskip("fastapi")
+
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from dataflow.fabric.nexus_adapter import (
     fabric_handler_to_fastapi,
@@ -84,7 +88,10 @@ class _StubNexus:
 
 def test_nexus_register_endpoint_exists_pre_start():
     """``Nexus.register_endpoint`` is callable before the gateway starts."""
-    from nexus import Nexus
+    # These two tests construct a REAL Nexus, which transitively imports janus
+    # (nexus.events). Skip them individually when kailash-nexus is unavailable —
+    # the other 12 tests use a MagicMock stub Nexus and need only fastapi.
+    Nexus = pytest.importorskip("nexus").Nexus
 
     n = Nexus(api_port=18081)
 
@@ -96,7 +103,10 @@ def test_nexus_register_endpoint_exists_pre_start():
 
 
 def test_nexus_register_endpoint_rejects_empty_methods():
-    from nexus import Nexus
+    # These two tests construct a REAL Nexus, which transitively imports janus
+    # (nexus.events). Skip them individually when kailash-nexus is unavailable —
+    # the other 12 tests use a MagicMock stub Nexus and need only fastapi.
+    Nexus = pytest.importorskip("nexus").Nexus
 
     n = Nexus(api_port=18082)
 
