@@ -90,6 +90,18 @@ def _drive_persistent_loop(runtime: ProtectedDataFlowRuntime) -> None:
         pass
 
 
+# ``_drive_persistent_loop`` runs a CreateNode workflow through the protected
+# runtime, allocating an AsyncSQLDatabaseNode on the runtime's persistent event
+# loop. These tests then DELIBERATELY close that loop (the #1045 fix under test).
+# After the loop is gone the orphaned node cannot be disconnected (no loop to
+# await on), so its ``_connected`` flag stays True and ``__del__`` emits a
+# benign "GC'd while still connected" ResourceWarning — the underlying
+# connection is already dead with the closed loop. Scoped-ignore that one
+# message so the deliberate-loop-closure scenario stays warning-clean
+# (F-TEST-HYGIENE); every other ResourceWarning still surfaces.
+@pytest.mark.filterwarnings(
+    "ignore:AsyncSQLDatabaseNode GC.d while still connected:ResourceWarning"
+)
 @pytest.mark.regression
 class TestIssue1045ProtectedRuntimeClose:
     """ProtectedDataFlow.close()/close_async() drain protected runtimes."""

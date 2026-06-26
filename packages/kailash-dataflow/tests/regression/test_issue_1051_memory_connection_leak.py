@@ -38,6 +38,11 @@ import pytest
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
+# dataflow_lifecycle: asserts no ResourceWarning via in-body del+gc.collect under
+# simplefilter("error", ResourceWarning); opts out of the autouse close-fixture
+# (conftest.py F-TEST-HYGIENE) whose strong reference would prevent the in-body GC.
+pytestmark = pytest.mark.dataflow_lifecycle
+
 
 def _live_aiosqlite_connections():
     """Structural probe: live aiosqlite Connection objects."""
