@@ -38,6 +38,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.responses import JSONResponse, StreamingResponse
 
+# dataflow.fabric.* requires the [fabric] extra (janus et al.), absent in a
+# [dev]-only venv. Skip the whole module when janus is missing — otherwise the
+# unconditional dataflow.fabric import below raises ModuleNotFoundError in a
+# fabric-less environment (per testing.md skip-discipline + dependencies.md
+# "Declared = Imported"; see tests/CLAUDE.md § fabric tier note).
+pytest.importorskip("janus")
+
 from dataflow.fabric.nexus_adapter import (
     fabric_handler_to_fastapi,
     register_route_dict,
