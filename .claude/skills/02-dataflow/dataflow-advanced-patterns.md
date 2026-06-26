@@ -51,7 +51,7 @@ Each workflow execution gets its own transaction context. Concurrent workflows a
 
 ---
 
-## DataFlow + Nexus Integration
+## DataFlow + Nexus Integration 
 
 `auto_migrate=True` (default) works correctly everywhere including Docker and Nexus. No startup tradeoffs.
 
@@ -86,7 +86,7 @@ workflow.add_node("UserCreateNode", "create", {"email": "{{email}}", "full_name"
 app.register("create_user", workflow.build())
 ```
 
-### Startup Times
+### Startup Times 
 
 | Models | Time | Notes                       |
 | ------ | ---- | --------------------------- |

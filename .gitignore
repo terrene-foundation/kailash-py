@@ -221,3 +221,6 @@ dist/
 
 # Secrets baseline (local security scanning)
 .secrets.baseline
+
+# Operator-local repo-linkage resolver config (gitignored at loom; never synced — disclosure class).
+.claude/bin/loom-links.local.json

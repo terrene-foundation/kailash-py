@@ -6,7 +6,7 @@ description: "Load phase 01 (analyze) for the current workspace"
 ## Workspace Resolution
 
 1. If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
-2. Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
+2. Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/` and leading-underscore meta-dirs like `_archive`/`_template`, per `cc-artifacts.md` Rule 8 — this matches the `analyze-completeness-guard.js` resolver so the gate and the command select the same workspace)
 3. If no workspace exists, ask the user to create one first
 4. Read all files in `workspaces/<project>/briefs/` for user context (this is the user's input surface)
 
@@ -121,3 +121,24 @@ Before reporting `/analyze` complete, create journal entries for journal-worthy 
 - **CONNECTION** — non-obvious relationships between requirements, components, or findings
 
 Use `/journal new <TYPE> <slug>` (or write directly to `workspaces/<project>/journal/NNNN-TYPE-slug.md`). Skip only when the phase genuinely produced nothing journal-worthy — use judgment, not formulas. Do not batch: create each entry as you recognize it, not at the end.
+
+### Output-Completeness Gate (MUST — phase-complete + advance gate)
+
+`/analyze` MUST NOT be declared complete, and `/todos`/`/implement` MUST NOT advance, while any compulsory output tree is empty. Prose naming the outputs is insufficient — they were named above and still got skipped; the gate is mechanical. Run the `find` battery; ANY `INCOMPLETE` line BLOCKS completion AND blocks advancing to `/todos`:
+
+```bash
+W="workspaces/<project>"   # the resolved workspace
+for tree in 01-analysis 02-plans 03-user-flows; do
+  find "$W/$tree" -type f -name '*.md' ! -name '.gitkeep' 2>/dev/null | grep -q . \
+    || echo "INCOMPLETE: $W/$tree has no non-.gitkeep .md output"
+done
+# specs/ is satisfied by EITHER location (the corpus is ambiguous —
+# specs-authority.md Rule 1 says project root, Rule 9 says workspaces/<project>/specs/):
+{ find "$W/specs" -type f -name '*.md' ! -name '.gitkeep' 2>/dev/null
+  find specs -type f -name '*.md' ! -name '.gitkeep' 2>/dev/null; } | grep -q . \
+  || echo "INCOMPLETE: specs/ empty at BOTH $W/specs and repo-root specs/"
+```
+
+The `03-user-flows/` tree is compulsory. A change with genuinely no user-facing surface (a pure back-end refactor) does NOT skip it silently — write `03-user-flows/00-no-user-flows.md` stating WHY no flows apply. That documented-rationale file is a real `.md` and satisfies the gate; a silent-empty tree does not.
+
+This gate is also enforced structurally by `hooks/analyze-completeness-guard.js` (a `PreToolUse(Skill)` gate that DENIES `/todos`/`/implement` when analysis has started but a compulsory tree is empty) per `rules/analyze-output-completeness.md`.

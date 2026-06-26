@@ -131,7 +131,7 @@ This is the field-shape contract a USE-template `/codify` session emits to `.cla
 **Mechanical wrong-lane defense (MUST, before writing the manifest):** glob-check every candidate change-path against the disallowed set `src/**`, `packages/**`, `pyproject.toml`, `Cargo.toml`. All disallowed → HALT ("wrong-lane — refile against BUILD repo issue queue"); mixed → skip-with-warning (in-scope proceed, disallowed excluded + warned); all in-scope → proceed.
 
 ```yaml
-source_repo: kailash-coc-claude-py # or -claude-rs / -claude-rb / kailash-coc-py / -rs
+source_repo: kailash-coc-claude-py # or -claude-rs / kailash-coc-py / -rs
 origin: use-template # explicit class discriminator
 codify_date: YYYY-MM-DD
 codify_session: "type(scope): description of work"
@@ -328,3 +328,39 @@ Dependencies: uv sync ✓ | Hooks: 11/11 | VERSION: 1.0.0→1.1.0
 ## Exclusions (never synced anywhere)
 
 `learning/`, `.proposals/`, `sync-manifest.yaml`, `variants/`, `settings.local.json`, `sync-preserve.local.yaml`, `CLAUDE.md`, `.env`, `.git/`. See `guides/co-setup/06-artifact-lifecycle.md` § "What downstream NEVER gets" for full list. (`sync-preserve.yaml` — the template-carried preserve carrier — IS synced template→consumer; only the `.local.yaml` companion is consumer-owned and never-synced, the same split as `settings.json` vs `settings.local.json`.)
+
+## Sync-to-build merge-plan layout
+
+The full annotated example for `commands/sync-to-build.md` Step 5 ("Present merge plan"). Group by decision type; for MODIFIED files show source-vs-BUILD line counts; end with the proceed/review gate:
+
+```
+## Merge Plan: loom/ → kailash-rs/
+
+### Safe updates (shared artifacts, no BUILD-specific content)
+- rules/agents.md (+3 -1)
+- rules/security.md (unchanged — verify, was already current)
+- guides/claude-code/07-the-hook-system.md (+28 -1)
+... (N files)
+
+### Flagged for review (BUILD may have diverged)
+- skills/02-dataflow/dataflow-express.md
+  Source: 48 lines (py variant condensed)
+  BUILD:  366 lines (rs-specific expanded content)
+  → [K]eep BUILD  [U]pdate from source  [D]iff?
+
+### BUILD-only (preserved, no action)
+- agents/rust-architect.md
+- agents/bindings/python-binding.md
+... (N files)
+
+### Numbering conflicts (requires human decision)
+- skills/09-: source=workflow-patterns, BUILD=coc-reference
+  → [R]ename BUILD  [S]kip source  [D]iff?
+
+### Hooks (`.claude/hooks/`, always updated — these are CC infrastructure)
+- session-start.js (+15 -8)
+- user-prompt-rules-reminder.js (+3 -1)
+
+→ Proceed with safe updates? [Y/N]
+→ Review flagged files individually? [Y/N]
+```

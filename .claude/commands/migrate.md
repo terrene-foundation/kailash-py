@@ -23,7 +23,7 @@ Detailed protocol (bash blocks, additive-merge semantics, 3-way reconciliation, 
    - `multi-cli` → only `--refresh` is valid; `/migrate` exits "already migrated".
    - Non-COC lineage → ONLY `--emit-only` is valid. Full protocol in skill § `--emit-only` mode.
    - Missing/unrecognized AND no `.claude/` directory → exit "not a recognized USE-template lineage".
-2. Resolve sister template (full migration only): py → `kailash-coc-py`, rs → `kailash-coc-rs`, rb → no multi-CLI sister exists. **rb path**: do NOT migrate; `gh issue create --title "Multi-CLI sister template for kailash-coc-claude-rb" ...` and exit.
+2. Resolve sister template (full migration only): py → `kailash-coc-py`, rs → `kailash-coc-rs`. (rb RETIRED in #423 Phase 1 — Ruby ships as bindings via the rs all-bindings template; no rb USE template exists.) **rb path**: do NOT migrate; exit with "kailash-coc-claude-rb is retired — use kailash-coc-rs for Ruby bindings."
 3. Verify clean working tree inline: `[ -z "$(git status --porcelain)" ] || { echo "stash or commit first; recommend: git stash push -u -m pre-migrate"; exit 1; }`. Recommendation per `recommendation-quality.md` MUST-1 — stash beats commit because the migration commit will be atomic and stash restores cleanly post-merge.
 4. Resolve sister template path via `node .claude/bin/resolve-template.js --template kailash-coc-<variant>` (else env `KAILASH_COC_TEMPLATE_PATH` → `~/.cache/kailash-coc/<sister>/` → offline-fallback).
 5. Branch-name collision: if `chore/coc-multi-cli-migrate-<YYYYMMDD>` exists locally, append `-<HHMMSS>` for same-day idempotency.

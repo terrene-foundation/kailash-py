@@ -8,8 +8,8 @@
     "source": "loom",
     "version": "2.45.0",
     "build_version": "2.45.0",
-    "synced_at": "2026-06-23T02:04:26Z",
-    "loom_sha": "f7c236d",
+    "synced_at": "2026-06-26T14:28:05Z",
+    "loom_sha": "9755c2d",
     "sdk_packages": {
       "kailash": "2.28.0",
       "kailash-align": "0.7.1",
@@ -22,7 +22,7 @@
       "kaizen-agents": "0.9.7"
     },
     "template_version": "2.45.0",
-    "source_commit": "f7c236d"
+    "source_commit": "9755c2d"
   },
   "changelog": [
     {

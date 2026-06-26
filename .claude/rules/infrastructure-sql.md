@@ -155,7 +155,7 @@ def test_dataflow_importable_without_motor(monkeypatch):
 
 **Why:** Without a behavioral test the pattern is only human-enforced. The MongoDB adapter regression that motivated this rule had passed code review — the lazy pattern only surfaced when a downstream Docker build died on missing motor.
 
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-11) — `packages/kailash-dataflow/src/dataflow/adapters/mongodb.py` imported `motor.motor_asyncio` at module top, breaking `from dataflow import DataFlow` for every non-MongoDB project.
+Origin: a BUILD-repo upstream-fixes session (2026-04-11) — `packages/kailash-dataflow/src/dataflow/adapters/mongodb.py` imported `motor.motor_asyncio` at module top, breaking `from dataflow import DataFlow` for every non-MongoDB project.
 
 ## MUST NOT
 
