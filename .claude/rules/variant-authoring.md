@@ -3,7 +3,6 @@ priority: 10
 scope: path-scoped
 paths:
   - "**/.claude/variants/**"
-  - "**/.claude/rules/**"
 ---
 
 # Variant Authoring Meta-Rule

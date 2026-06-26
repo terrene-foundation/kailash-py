@@ -251,4 +251,4 @@ logger.warning("classification.default_applied", extra={"model": "users", "field
 
 **Why:** Downgrading to silence noise is Zero-Tolerance Rule 1 violation in disguise — failure still happens, operator just stops seeing it.
 
-Origin: PR #430 red team (2026-04-12) — Rule 8 field-name WARN downgrade to DEBUG (commit 62d64ac7). Rule 6 mask helpers + Rule 7 bulk-op WARN from `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12). See guide for full post-mortems.
+Origin: PR #430 red team (2026-04-12) — Rule 8 field-name WARN downgrade to DEBUG (commit 62d64ac7). Rule 6 mask helpers + Rule 7 bulk-op WARN from a BUILD-repo upstream-fixes session (2026-04-12). See guide for full post-mortems.

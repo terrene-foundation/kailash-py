@@ -70,7 +70,7 @@ grep -RInE 'CREATE\s+(UNIQUE\s+)?(TABLE|INDEX|SCHEMA)|ALTER\s+(TABLE|INDEX)|DROP
 
 **Why:** A rule that says "X is BLOCKED" with no mechanical sweep ships violations indefinitely. The grep is O(seconds) and catches the failure mode the rule was written to prevent. Three-way schema drift (spec ↔ migration ↔ inline DDL in application code) is invisible at code-review level because the reviewer cannot hold all three artifacts in attention at once; the grep surfaces every inline-DDL site in one pass and the migration cross-check follows from there. Evidence: a registry's `_create_registry_tables()` shipped `CREATE TABLE IF NOT EXISTS _kml_model_versions` for ~3 months while migration 0002 owned the same table with a different column-set; the IF NOT EXISTS no-op masked the divergence until a user hit a missing-column query path.
 
-Origin: kailash-ml 1.5.x followup #699 (2026-04-29) — `workspaces/kailash-ml-1.5.x-followup/journal/0004-DISCOVERY-three-way-schema-drift-mandates-migration-0005.md`.
+Origin: kailash-ml 1.5.x followup #699 (2026-04-29) — three-way schema-drift discovery (spec ↔ migration ↔ inline DDL) mandating a migration.
 
 ### 2. Data Fixes Are Migrations, Not One-Off SQL
 

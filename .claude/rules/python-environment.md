@@ -103,7 +103,7 @@ dependencies = [
 
 **Why:** A PyPI version pin on a sub-package the developer is editing forces `uv sync` to download a stale tarball, masking the editable changes. Recurring monorepo bootstrap pain.
 
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+Origin: a BUILD-repo upstream-fixes session (2026-04-12).
 
 ### 4. MUST NOT Duplicate Sub-Package Test Deps In Root Dev Deps
 
@@ -161,4 +161,4 @@ Origin: kailash-pact 0.10.0 release cycle (2026-04-23) — `pact/ml/__init__.py:
 - No global/system/Homebrew/pyenv-global Python — **Why:** System packages leak into project imports, masking missing deps.
 - No bare `python` / `python3` / `pytest` — always `.venv/bin/python` or `uv run` — **Why:** See MUST Rule 1.
 
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` § "Traps / gotchas" (2026-04-11). See guide for extended rationale.
+Origin: a BUILD-repo upstream-fixes session § "Traps / gotchas" (2026-04-11). See guide for extended rationale.

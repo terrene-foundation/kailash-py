@@ -198,7 +198,7 @@ db_prod = DataFlow(
 ## Quick Tips
 
 - `auto_migrate=True` is safe for ALL environments (current version)
-- Works correctly in Docker/async
+- Works correctly in Docker/async 
 - Always provide defaults for NOT NULL columns
 - Enterprise migration system for complex operations (type changes, renames)
 - Test migrations on staging before production
