@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.13.1] — 2026-06-26 — Migration adapter runtime leak fix
+
+### Fixed
+
+- **Migration `ConnectionManagerAdapter` runtime now closed on `DataFlow.close()` (#1474).** `AutoMigrationSystem` builds a `ConnectionManagerAdapter` for its migration lock manager without passing a shared runtime, so in an async context the adapter owns a fresh `AsyncLocalRuntime` (`_owns_runtime=True`). `DataFlow.close()` cascades into `_migration_system.close()`, but `AutoMigrationSystem.close()` released only the inspector and `_explicit_runtime` — never `_connection_adapter` — so the adapter's owned runtime was never released and surfaced at GC as an intermittent `Unclosed AsyncLocalRuntime (ref_count=1)` `ResourceWarning`. The fix closes the adapter in `AutoMigrationSystem.close()` (idempotent; releases the owned runtime), consistent with the "own + close" pattern and `dataflow-pool.md` Rule 5 (No Orphan Runtimes). A regression test asserts the adapter's runtime is released by `close()` (structurally + `ref_count==0`).
+
 ## [2.13.0] — 2026-06-25 — Reserved-name guard + engine pyright cleanup + CI regression gates
 
 ### Added
