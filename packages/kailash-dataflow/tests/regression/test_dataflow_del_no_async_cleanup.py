@@ -46,7 +46,10 @@ import pytest
 
 from dataflow import DataFlow
 
-pytestmark = [pytest.mark.regression]
+# dataflow_lifecycle: asserts __del__/ResourceWarning via in-body del+gc.collect;
+# opts out of the autouse close-fixture (conftest.py F-TEST-HYGIENE) whose strong
+# reference would prevent the GC these tests depend on.
+pytestmark = [pytest.mark.regression, pytest.mark.dataflow_lifecycle]
 
 
 @pytest.mark.asyncio

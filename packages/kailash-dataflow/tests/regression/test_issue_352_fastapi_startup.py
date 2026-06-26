@@ -46,6 +46,38 @@ from dataflow.core.model_registry import ModelRegistry, _normalize_runtime_resul
 pytestmark = pytest.mark.regression
 
 
+# ``_build_registry`` constructs ModelRegistry via ``__new__`` (bypassing
+# __init__), so the conftest autouse close-fixture — which tracks via an
+# __init__ wrapper — cannot reach these instances. Setting ``registry.runtime``
+# routes through the ``runtime`` setter (`_explicit_runtime = value`), so each
+# leaks ``ResourceWarning: Unclosed ModelRegistry`` at GC unless closed. This
+# module-local list + autouse fixture closes them at teardown (the append holds
+# the instance alive past frame-pop so the close lands before __del__). See
+# F-TEST-HYGIENE in tests/regression/conftest.py.
+_built_registries: list = []
+
+
+@pytest.fixture(autouse=True)
+def _close_built_registries():
+    yield
+    while _built_registries:
+        registry = _built_registries.pop()
+        try:
+            registry.close()
+        except Exception:
+            # A fake runtime's release() can raise (the fakes skip the real
+            # __init__), so close() may abort before clearing the override.
+            pass
+        # Guarantee __del__ stays quiet: it warns only when _explicit_runtime
+        # is not None (model_registry.py:1849). Clear it directly — the same
+        # final state close() reaches on its happy path (model_registry.py:1832)
+        # — since the test owns this __new__-built registry entirely.
+        try:
+            registry._explicit_runtime = None
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # _normalize_runtime_result
 # ---------------------------------------------------------------------------
@@ -169,6 +201,7 @@ def _build_registry(runtime: Any, is_async: bool) -> ModelRegistry:
     registry = ModelRegistry.__new__(ModelRegistry)
     registry.runtime = runtime
     registry._is_async = is_async
+    _built_registries.append(registry)  # closed at teardown (F-TEST-HYGIENE)
     return registry
 
 

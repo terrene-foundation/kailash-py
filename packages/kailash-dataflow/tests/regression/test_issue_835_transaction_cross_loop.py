@@ -37,7 +37,14 @@ from dataflow import DataFlow
 from dataflow.features.transactions import TransactionScope
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
-pytestmark = [pytest.mark.regression, pytest.mark.integration]
+# dataflow_lifecycle: asserts GC reaping of pool-registry entries across closed
+# loops; opts out of the autouse close-fixture (conftest.py F-TEST-HYGIENE) whose
+# strong reference would keep pools alive and break the registry-cap assertions.
+pytestmark = [
+    pytest.mark.regression,
+    pytest.mark.integration,
+    pytest.mark.dataflow_lifecycle,
+]
 
 
 # ---------------------------------------------------------------------------
