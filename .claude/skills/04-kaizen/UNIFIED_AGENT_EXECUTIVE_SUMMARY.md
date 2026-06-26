@@ -1,3 +1,7 @@
+---
+agent_class_is_kaizen_sdk: true
+---
+
 # Unified Agent API - Executive Summary
 
 **One-Page Overview for Decision Makers**
@@ -53,26 +57,29 @@ Result: 2 minutes to first working agent
 
 ## Key Metrics
 
-| Metric | Current | Unified | Improvement |
-|--------|---------|---------|-------------|
-| **Classes to Choose From** | 16 | 1 | 94% reduction |
-| **Lines of Code (Simple Q&A)** | 18 | 4 | 78% reduction |
-| **Lines of Code (ReAct)** | 30 | 4 | 87% reduction |
-| **Lines of Code (Multi-Agent)** | 47 | 11 | 77% reduction |
-| **Time to First Agent** | 30 min | 2 min | 93% faster |
-| **Imports Required** | 5-10 | 1 | 90% reduction |
-| **Features Enabled by Default** | 0 | 9 | Infinite improvement |
+| Metric                          | Current | Unified | Improvement          |
+| ------------------------------- | ------- | ------- | -------------------- |
+| **Classes to Choose From**      | 16      | 1       | 94% reduction        |
+| **Lines of Code (Simple Q&A)**  | 18      | 4       | 78% reduction        |
+| **Lines of Code (ReAct)**       | 30      | 4       | 87% reduction        |
+| **Lines of Code (Multi-Agent)** | 47      | 11      | 77% reduction        |
+| **Time to First Agent**         | 30 min  | 2 min   | 93% faster           |
+| **Imports Required**            | 5-10    | 1       | 90% reduction        |
+| **Features Enabled by Default** | 0       | 9       | Infinite improvement |
 
 ---
 
 ## Architecture: 3-Layer API
 
 ### Layer 1: Zero-Config (99% of users)
+
 ```python
 agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("Explain quantum computing")
 ```
+
 **What you get automatically**:
+
 - ✅ Memory (10 turns)
 - ✅ Tools (12 builtin)
 - ✅ Observability (tracing, metrics, logging)
@@ -81,6 +88,7 @@ result = agent.run("Explain quantum computing")
 - ✅ Rich output (progress, metrics)
 
 ### Layer 2: Configuration (Power users)
+
 ```python
 agent = Agent(
     model=os.environ["LLM_MODEL"],
@@ -92,6 +100,7 @@ agent = Agent(
 ```
 
 ### Layer 3: Expert Override (1% of users)
+
 ```python
 agent = Agent(
     model=os.environ["LLM_MODEL"],
@@ -107,20 +116,21 @@ agent = Agent(
 
 ### 16 Agent Classes → 1 Unified Class
 
-| Old Approach | New Approach | Benefit |
-|-------------|--------------|---------|
-| `SimpleQAAgent()` | `Agent(agent_type="simple")` | Consistent API |
-| `ChainOfThoughtAgent()` | `Agent(agent_type="cot")` | Easier to switch |
-| `ReActAgent()` | `Agent(agent_type="react")` | No class hunting |
-| `RAGResearchAgent()` | `Agent(agent_type="rag")` | Clear mental model |
-| `VisionAgent()` | `Agent(multimodal=["vision"])` | Composable |
-| `MultiModalAgent()` | `Agent(multimodal=["vision", "audio"])` | Flexible |
-| `BatchProcessingAgent()` | `Agent(batch_mode=True)` | Just a flag |
-| `StreamingChatAgent()` | `Agent(streaming=True)` | Simple toggle |
+| Old Approach             | New Approach                            | Benefit            |
+| ------------------------ | --------------------------------------- | ------------------ |
+| `SimpleQAAgent()`        | `Agent(agent_type="simple")`            | Consistent API     |
+| `ChainOfThoughtAgent()`  | `Agent(agent_type="cot")`               | Easier to switch   |
+| `ReActAgent()`           | `Agent(agent_type="react")`             | No class hunting   |
+| `RAGResearchAgent()`     | `Agent(agent_type="rag")`               | Clear mental model |
+| `VisionAgent()`          | `Agent(multimodal=["vision"])`          | Composable         |
+| `MultiModalAgent()`      | `Agent(multimodal=["vision", "audio"])` | Flexible           |
+| `BatchProcessingAgent()` | `Agent(batch_mode=True)`                | Just a flag        |
+| `StreamingChatAgent()`   | `Agent(streaming=True)`                 | Simple toggle      |
 
 ### 30+ Features → Smart Defaults
 
 **Infrastructure (enabled by default)**:
+
 - Memory system (6 types)
 - Tool calling (12+ tools)
 - Observability (hooks, tracing, metrics, logging, audit)
@@ -132,6 +142,7 @@ agent = Agent(
 - Google A2A (capability cards)
 
 **User controls** what they want:
+
 - Enable/disable features: `memory=False`, `tools=False`
 - Configure behavior: `memory_turns=20`, `checkpoint_frequency=10`
 - Override components: `memory=CustomMemory()`
@@ -143,10 +154,11 @@ agent = Agent(
 ### 100% Backward Compatible
 
 **Existing code continues to work**:
+
 ```python
 # OLD (still works)
 from kaizen_agents.agents import SimpleQAAgent
-agent = SimpleQAAgent(llm_provider=os.environ.get("LLM_PROVIDER", "openai"), model=os.environ["LLM_MODEL"])
+agent = SimpleQAAgent(llm_provider="openai", model=os.environ["LLM_MODEL"])
 result = agent.ask("What is AI?")  # ✅ Still works
 
 # NEW (recommended)
@@ -172,13 +184,14 @@ result = agent.run("What is AI?")  # ✅ New way
 ### Simple Q&A
 
 **BEFORE (18 lines)**:
+
 ```python
 from kaizen_agents.agents import SimpleQAAgent
 from dataclasses import dataclass
 
 @dataclass
 class QAConfig:
-    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    llm_provider: str = "openai"
     model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
 
@@ -195,6 +208,7 @@ print(answer)
 ```
 
 **AFTER (4 lines, 78% reduction)**:
+
 ```python
 from kaizen import Agent
 
@@ -206,6 +220,7 @@ print(result['answer'])
 ### ReAct with Tools
 
 **BEFORE (30 lines)**:
+
 ```python
 from kaizen_agents.agents import ReActAgent
 # Tools auto-configured via MCP
@@ -214,7 +229,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ReActConfig:
-    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    llm_provider: str = "openai"
     model: str = os.environ.get("LLM_MODEL", "")
     max_cycles: int = 10
     temperature: float = 0.7
@@ -237,6 +252,7 @@ print(answer)
 ```
 
 **AFTER (4 lines, 87% reduction)**:
+
 ```python
 from kaizen import Agent
 
@@ -250,6 +266,7 @@ print(result['answer'])
 ## User Mental Model
 
 ### Decision Flow (OLD)
+
 ```
 User needs an agent
     ↓
@@ -271,6 +288,7 @@ Time elapsed: 30+ minutes
 ```
 
 ### Decision Flow (NEW)
+
 ```
 User needs an agent
     ↓
@@ -289,21 +307,21 @@ Time elapsed: 2 minutes
 
 ### Development Effort
 
-| Phase | Duration | Effort | Risk |
-|-------|----------|--------|------|
-| Core Implementation | Week 1-2 | 2 weeks | Low |
-| Documentation | Week 3 | 1 week | Low |
-| Integration | Week 4 | 1 week | Low |
-| **TOTAL** | **4 weeks** | **1 month** | **Low** |
+| Phase               | Duration    | Effort      | Risk    |
+| ------------------- | ----------- | ----------- | ------- |
+| Core Implementation | Week 1-2    | 2 weeks     | Low     |
+| Documentation       | Week 3      | 1 week      | Low     |
+| Integration         | Week 4      | 1 week      | Low     |
+| **TOTAL**           | **4 weeks** | **1 month** | **Low** |
 
 ### Maintenance Impact
 
-| Metric | Current | After Unified | Change |
-|--------|---------|---------------|--------|
-| Agent classes to maintain | 16 | 1 core + 16 thin wrappers | Simpler |
-| Documentation pages | 20+ (one per class) | 5 (3-layer guide) | 75% reduction |
-| Example complexity | High (different patterns) | Low (consistent API) | Much simpler |
-| New feature integration | Update 16 classes | Update 1 class | 94% less work |
+| Metric                    | Current                   | After Unified             | Change        |
+| ------------------------- | ------------------------- | ------------------------- | ------------- |
+| Agent classes to maintain | 16                        | 1 core + 16 thin wrappers | Simpler       |
+| Documentation pages       | 20+ (one per class)       | 5 (3-layer guide)         | 75% reduction |
+| Example complexity        | High (different patterns) | Low (consistent API)      | Much simpler  |
+| New feature integration   | Update 16 classes         | Update 1 class            | 94% less work |
 
 ---
 
@@ -311,20 +329,20 @@ Time elapsed: 2 minutes
 
 ### Technical Risks
 
-| Risk | Probability | Impact | Mitigation |
-|------|------------|--------|------------|
-| Breaking existing code | Low | High | 100% backward compatibility |
-| Performance regression | Low | Medium | Performance testing, optimization |
-| User confusion during transition | Medium | Low | Clear docs, migration guide |
-| Feature parity gaps | Low | Medium | Comprehensive testing |
+| Risk                             | Probability | Impact | Mitigation                        |
+| -------------------------------- | ----------- | ------ | --------------------------------- |
+| Breaking existing code           | Low         | High   | 100% backward compatibility       |
+| Performance regression           | Low         | Medium | Performance testing, optimization |
+| User confusion during transition | Medium      | Low    | Clear docs, migration guide       |
+| Feature parity gaps              | Low         | Medium | Comprehensive testing             |
 
 ### Adoption Risks
 
-| Risk | Probability | Impact | Mitigation |
-|------|------------|--------|------------|
-| Users stick with old API | Medium | Low | Deprecation warnings, better docs |
-| Learning curve for new API | Low | Low | Simpler than current |
-| Community pushback | Low | Low | Community feedback early |
+| Risk                       | Probability | Impact | Mitigation                        |
+| -------------------------- | ----------- | ------ | --------------------------------- |
+| Users stick with old API   | Medium      | Low    | Deprecation warnings, better docs |
+| Learning curve for new API | Low         | Low    | Simpler than current              |
+| Community pushback         | Low         | Low    | Community feedback early          |
 
 **Overall Risk**: **LOW** (High reward, low risk)
 

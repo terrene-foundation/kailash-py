@@ -1,20 +1,22 @@
 # ML Model Registry
 
-`ModelRegistry` provides model versioning, stage lifecycle management, artifact
-storage with SHA256 integrity, ONNX export, and MLflow `MLmodel` format
-interoperability. Models are keyed by `(name, version)` and scoped per `tenant_id`.
+ModelRegistry provides model versioning, lifecycle management, artifact storage with SHA256 integrity, and MLflow MLmodel format compatibility.
 
 ## Setup
 
 ```python
-from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
+from kailash_ml import ModelRegistry
+from kailash_ml.engines import LocalFileArtifactStore
 from kailash.db.connection import ConnectionManager
 
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
 
-# No initialize() — the registry is ready on construction (auto_migrate=True default).
-registry = ModelRegistry(conn, LocalFileArtifactStore("./artifacts"))
+registry = ModelRegistry(
+    conn,
+    artifact_store=LocalFileArtifactStore("./artifacts"),
+)
+await registry.initialize()
 ```
 
 ## Model Lifecycle
@@ -36,144 +38,157 @@ staging --> shadow --> production --> archived
 
 ## Register a Model
 
-`register_model` takes the serialized model as `bytes` plus a list of `MetricSpec`.
-Each registration creates a new version, starting in `staging`.
-
 ```python
-from kailash_ml.types import MetricSpec
-import pickle
-
-artifact = pickle.dumps(trained_model)
-mv = await registry.register_model(
-    "churn_predictor",
-    artifact,
-    metrics=[
-        MetricSpec(name="accuracy", value=0.92),
-        MetricSpec(name="f1", value=0.87),
-    ],
+model_id = await registry.register(
+    name="churn_predictor",
+    model_class="sklearn.ensemble.RandomForestClassifier",
+    artifact_path="./artifacts/rf_model.pkl",
+    metrics={"accuracy": 0.92, "f1": 0.87},
+    schema_name="user_churn",
+    tags={"team": "data-science", "experiment": "exp_042"},
 )
-print(f"Registered {mv.name} v{mv.version} (stage={mv.stage})")  # stage == "staging"
+# Model starts in 'staging' stage
 ```
 
 ## Lifecycle Transitions
 
-`promote_model(name, version, target_stage)` moves a version between stages.
-
 ```python
 # Promote to shadow (parallel run alongside production)
-await registry.promote_model("churn_predictor", version=mv.version, target_stage="shadow")
+await registry.transition(model_id, stage="shadow")
 
-# Promote to production (gate this behind human approval in agent-augmented mode)
-await registry.promote_model("churn_predictor", version=mv.version, target_stage="production")
+# Promote to production (requires human approval in agent-augmented mode)
+await registry.transition(model_id, stage="production")
 
 # Archive when superseded
-await registry.promote_model("churn_predictor", version=mv.version, target_stage="archived")
+await registry.transition(model_id, stage="archived")
 
-# Rollback: move a production model back to shadow
-await registry.promote_model("churn_predictor", version=mv.version, target_stage="shadow")
+# Rollback: move production model back to shadow
+await registry.transition(model_id, stage="shadow")
 ```
 
 ## Query Models
 
 ```python
-# Latest production version
-prod = await registry.get_model("churn_predictor", stage="production")
+# Get latest production model
+model = await registry.get_latest(name="churn_predictor", stage="production")
 
-# Specific version's metadata
-model_v2 = await registry.get_model("churn_predictor", version=2)
+# Get specific version
+model = await registry.get(model_id="model_abc123")
 
-# All versions of a name
-versions = await registry.get_model_versions("churn_predictor")
-for v in versions:
-    print(f"v{v.version}: {v.stage}")
+# List all versions
+models = await registry.list_versions(name="churn_predictor")
 
-# All registered model names
-names = await registry.list_models()
+# Filter by stage
+staging_models = await registry.list_versions(
+    name="churn_predictor",
+    stage="staging",
+)
 
-# Compare two versions' metrics
-diff = await registry.compare("churn_predictor", version_a=1, version_b=2)
+# Filter by metrics threshold
+good_models = await registry.list_versions(
+    name="churn_predictor",
+    min_metrics={"accuracy": 0.90},
+)
 ```
 
 ## SHA256 Integrity
 
-Every registered artifact is SHA256-hashed at registration and verified on load,
-preventing silent model corruption. `load_artifact` returns the raw bytes; a hash
-mismatch raises.
+Every registered artifact has a SHA256 hash computed at registration time and verified on load. This prevents silent model corruption.
 
 ```python
-# Hash is computed automatically at register_model time.
-artifact_bytes = await registry.load_artifact("churn_predictor", version=2)
-model = pickle.loads(artifact_bytes)  # integrity already verified by load_artifact
+# Hash computed automatically at registration
+model_id = await registry.register(
+    name="churn_predictor",
+    artifact_path="./artifacts/rf_model.pkl",
+    ...
+)
+
+# Integrity verified automatically on load
+model = await registry.load(model_id)
+# Raises IntegrityError if hash mismatch
+
+# Manual verification
+is_valid = await registry.verify_integrity(model_id)
 ```
 
 ## Versioning
 
-Versions are assigned automatically within a name — each `register_model` call
-creates the next version.
+Models are versioned automatically within a name. Each registration creates a new version.
 
 ```python
-await registry.register_model("churn_predictor", pickle.dumps(model_a), metrics=[...])  # v1
-await registry.register_model("churn_predictor", pickle.dumps(model_b), metrics=[...])  # v2
+# Version 1
+await registry.register(name="churn_predictor", ...)  # v1
 
-model_v1 = await registry.get_model("churn_predictor", version=1)
-model_v2 = await registry.get_model("churn_predictor", version=2)
-latest = await registry.get_model("churn_predictor")  # highest version
+# Version 2 (same name, new registration)
+await registry.register(name="churn_predictor", ...)  # v2
+
+# Get specific version
+model_v1 = await registry.get(name="churn_predictor", version=1)
+model_v2 = await registry.get(name="churn_predictor", version=2)
+
+# Get latest regardless of version
+latest = await registry.get_latest(name="churn_predictor")
 ```
 
 ## MLflow MLmodel Format Compatibility
 
-The registry reads and writes the MLflow `MLmodel` layout natively for
-interoperability with existing ML tooling.
+ModelRegistry reads and writes the MLflow MLmodel format for interoperability with existing ML tooling.
 
 ```python
-# Import a model from an MLflow artifact directory
-imported = await registry.import_mlflow("./mlruns/0/abc123/artifacts/model")
-print(f"Imported {imported.name} v{imported.version}")
+from kailash_ml.compat import MlflowFormatReader, MlflowFormatWriter
 
-# Export a registered version to the MLflow MLmodel layout
-mlflow_dir = await registry.export_mlflow("churn_predictor", version=2, output_dir="./mlflow_export")
-# mlflow_dir is loadable via mlflow.pyfunc.load_model()
-```
-
-## Lineage
-
-```python
-# Record training lineage for a version (links to the tracker run + inputs)
-await registry.record_lineage(
-    name="churn_predictor",
-    version=mv.version,
-    tenant_id="_single",
-    tracker_run_id="run-abc123",
-    training_data_uri="feature_store://user_churn@v2",
+# Import from MLflow artifact
+reader = MlflowFormatReader()
+model_info = reader.read("./mlruns/0/abc123/artifacts/model/MLmodel")
+model_id = await registry.register(
+    name=model_info.name,
+    model_class=model_info.model_class,
+    artifact_path=model_info.artifact_path,
+    metrics=model_info.metrics,
 )
 
-# Walk the lineage graph for a model reference
-graph = await registry.build_lineage_graph(ref="churn_predictor", tenant_id="_single")
+# Export to MLflow format
+writer = MlflowFormatWriter()
+model = await registry.get(model_id)
+writer.write(model, output_path="./mlflow_export/")
+# Produces MLmodel file + artifact compatible with mlflow.pyfunc.load_model()
+```
+
+## Metadata and Tags
+
+```python
+# Add metadata at registration
+model_id = await registry.register(
+    name="churn_predictor",
+    tags={"experiment": "exp_042", "dataset": "2025-Q1"},
+    description="Random forest trained on Q1 2025 data",
+    ...
+)
+
+# Update tags later
+await registry.update_tags(model_id, {"deployed_by": "ci-pipeline"})
+
+# Search by tags
+models = await registry.search(tags={"experiment": "exp_042"})
 ```
 
 ## Integration with TrainingPipeline
 
-`TrainingPipeline(feature_store, registry)` registers trained models in `staging`
-as part of `train(...)`.
+TrainingPipeline automatically registers trained models in staging:
 
 ```python
 from kailash_ml import TrainingPipeline
 
-pipeline = TrainingPipeline(feature_store=fs, registry=registry)
-result = await pipeline.train(
-    data=df,
-    schema=schema,
-    model_spec=spec,
-    eval_spec=eval_spec,
-    experiment_name="churn-2025q1",
-)
-# The trained model is registered in 'staging'; eval metrics are attached.
+pipeline = TrainingPipeline(feature_store=fs, model_registry=registry)
+result = await pipeline.train(schema=schema, model_spec=spec, eval_spec=eval_spec)
+# result.model_id is already registered in 'staging'
+# Metrics from eval_spec are attached to the registry entry
 ```
 
 ## Critical Rules
 
 - Models always start in `staging` — no direct-to-production registration
-- `register_model` takes `bytes`, not a live model object — serialize first
-- SHA256 integrity is verified on every `load_artifact` — no silent corruption
-- Human approval gates `shadow → production` in agent-augmented mode
+- SHA256 integrity check on every load — no silent corruption
+- Human approval required for `shadow → production` in agent-augmented mode
 - Archived models are never deleted — kept for audit and reproducibility
+- Model class strings validated against allowlist before any dynamic import

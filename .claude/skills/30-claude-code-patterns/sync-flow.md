@@ -213,8 +213,8 @@ The Step-7c (Route A) and Route-B chains are correct but SILENT where the BUILD 
 1. Read `sync-manifest.yaml` for tier membership and variant mappings.
 2. Resolve the BUILD repo path: `sync-manifest.yaml` → `repos.{target}.build` gives the logical NAME; the on-disk path comes from `bin/lib/loom-links.mjs::resolveRepo("build.{target}")` (canonical NAME→location binding per `cross-repo.md` MUST-1) — never a positional `../{build}` guess. An undeclared `build.{target}` linkage is a typed `LinkError`, not a positional fallback.
 3. **Read SDK version** from BUILD repo's `pyproject.toml` (py) or `Cargo.toml` (rs). Report it in the review header.
-4. Compute **expected state**: for each file in `loom/.claude/`, apply the variant overlay for this target. This is what the BUILD repo SHOULD have if it were freshly synced.
-5. Diff BUILD repo's `.claude/` against expected state.
+4. Compute **expected state** via the deterministic engine (F11): `node .claude/bin/sync-tier-aware.mjs --build {target} --verify` reports every path where the BUILD repo is MISSING / DIFFERS / OBSOLETED-PRESENT vs what a fresh `/sync-to-build` would land (per-target `build_variant_overlay`, `build_exclude`, obsoleted-only purge, verbatim/no-strip). Do NOT hand-improvise the per-file variant-overlay decision — it is per-target (`repos.{target}.build_variant_overlay`), NOT "apply the variant if one exists" (`journal/0339`).
+5. The engine's `--verify` output IS the diff of BUILD repo's `.claude/` against expected state.
 6. Check `.claude/.proposals/latest.yaml` (created by /codify):
    - `pending_review` — new unprocessed proposal. Proceed with review.
    - `reviewed` — already classified in a prior Gate-1 ingest (`/sync-from-build` / `/sync-from-use`); check whether new changes were appended after the review (look for entries below `reviewed_date`). If new entries exist, re-review only those.
