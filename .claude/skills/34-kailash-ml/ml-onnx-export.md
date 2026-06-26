@@ -1,18 +1,13 @@
 # ML ONNX Export
 
-Export models to ONNX for cross-language serving. Train in Python, export to ONNX,
-serve in Rust or any ONNX Runtime environment.
+Export models from PyTorch and sklearn to ONNX format for cross-language serving. Train in Python, export to ONNX, serve in Rust or any ONNX Runtime environment.
 
 ## OnnxBridge
 
-`OnnxBridge` (top-level `from kailash_ml import OnnxBridge`) handles conversion and
-validation for all supported model families. The bridge has three methods:
-`export(model, framework, ...)`, `validate(model, onnx_path, sample_input, ...)`,
-and `check_compatibility(model, framework)` — there are no per-framework
-`export_sklearn` / `export_pytorch` variants; `framework` is a parameter.
+`OnnxBridge` in `kailash_ml.bridge` handles conversion, verification, and metadata embedding for all supported model types.
 
 ```python
-from kailash_ml import OnnxBridge
+from kailash_ml.bridge import OnnxBridge
 
 bridge = OnnxBridge()
 ```
@@ -21,21 +16,21 @@ bridge = OnnxBridge()
 
 ```python
 from sklearn.ensemble import RandomForestClassifier
-from kailash_ml import OnnxBridge
+from kailash_ml.bridge import OnnxBridge
 
 # Train sklearn model
 model = RandomForestClassifier(n_estimators=100)
 model.fit(X_train, y_train)
 
-# Export to ONNX — framework selects the converter; n_features sizes the input.
+# Export to ONNX
 bridge = OnnxBridge()
-result = bridge.export(
-    model,
-    framework="sklearn",
-    n_features=X_train.shape[1],
+onnx_path = bridge.export_sklearn(
+    model=model,
     output_path="./models/rf_churn.onnx",
+    input_name="features",
+    input_shape=(None, X_train.shape[1]),  # Dynamic batch size
+    input_dtype="float32",
 )
-print(f"exported={result.success} path={result.onnx_path} status={result.onnx_status}")
 ```
 
 ### Supported sklearn Models
@@ -50,7 +45,7 @@ All scikit-learn estimators supported by skl2onnx, including:
 - Pipeline: sklearn.pipeline.Pipeline (full pipeline export)
 
 ```python
-# Export a full sklearn pipeline (preprocessing + model) — same export() call.
+# Export full sklearn pipeline (preprocessing + model)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -60,30 +55,31 @@ pipe = Pipeline([
 ])
 pipe.fit(X_train, y_train)
 
-result = bridge.export(
-    pipe,
-    framework="sklearn",
-    n_features=X_train.shape[1],
+onnx_path = bridge.export_sklearn(
+    model=pipe,
     output_path="./models/pipeline_churn.onnx",
+    input_name="features",
+    input_shape=(None, X_train.shape[1]),
+    input_dtype="float32",
 )
 ```
 
 ## LightGBM / XGBoost to ONNX
 
-LightGBM/XGBoost expose the sklearn estimator API, so they export via the
-`"sklearn"` framework converter.
-
 ```python
 import lightgbm as lgb
 
+# Train LightGBM model
 lgb_model = lgb.LGBMClassifier(n_estimators=200)
 lgb_model.fit(X_train, y_train)
 
-result = bridge.export(
-    lgb_model,
-    framework="sklearn",
-    n_features=X_train.shape[1],
+# Export via skl2onnx (LightGBM sklearn API)
+onnx_path = bridge.export_sklearn(
+    model=lgb_model,
     output_path="./models/lgb_churn.onnx",
+    input_name="features",
+    input_shape=(None, X_train.shape[1]),
+    input_dtype="float32",
 )
 ```
 
@@ -92,13 +88,16 @@ result = bridge.export(
 ```python
 import torch
 
+# Train PyTorch model
 class ChurnNet(torch.nn.Module):
     def __init__(self, input_dim):
         super().__init__()
         self.layers = torch.nn.Sequential(
             torch.nn.Linear(input_dim, 64),
             torch.nn.ReLU(),
-            torch.nn.Linear(64, 1),
+            torch.nn.Linear(64, 32),
+            torch.nn.ReLU(),
+            torch.nn.Linear(32, 1),
             torch.nn.Sigmoid(),
         )
 
@@ -108,72 +107,104 @@ class ChurnNet(torch.nn.Module):
 model = ChurnNet(input_dim=10)
 # ... train model ...
 
-# A sample input tensor sizes the exported graph (dynamic batch axis).
-result = bridge.export(
-    model,
-    framework="pytorch",
-    sample_input=torch.randn(1, 10),
+# Export to ONNX
+onnx_path = bridge.export_pytorch(
+    model=model,
     output_path="./models/churn_net.onnx",
+    input_shape=(1, 10),          # Example input shape
+    input_names=["features"],
+    output_names=["prediction"],
+    dynamic_axes={
+        "features": {0: "batch_size"},
+        "prediction": {0: "batch_size"},
+    },
+    opset_version=17,
 )
 ```
 
-## Validation
+## Verification
 
-Always validate an exported ONNX model against the original — `validate` compares
-outputs within `tolerance` and returns a structured result.
+Always verify exported ONNX models against the original. OnnxBridge provides automated verification that compares outputs within tolerance.
 
 ```python
-validation = bridge.validate(
-    model,                       # the original model
-    result.onnx_path,            # path from the export result
-    sample_input=X_test[:100],   # representative input
+# Verify sklearn export
+verification = bridge.verify_sklearn(
+    original_model=model,
+    onnx_path="./models/rf_churn.onnx",
+    test_data=X_test[:100],       # Sample test data
+    tolerance=1e-5,               # Max absolute difference
+)
+# verification.passed          — True/False
+# verification.max_difference  — largest output difference
+# verification.mean_difference — average output difference
+
+# Verify PyTorch export
+verification = bridge.verify_pytorch(
+    original_model=pytorch_model,
+    onnx_path="./models/churn_net.onnx",
+    test_input=torch.randn(10, 10),
     tolerance=1e-5,
 )
-print(f"valid={validation.valid} max_diff={validation.max_diff} mean_diff={validation.mean_diff}")
-assert validation.valid, f"ONNX validation failed: max diff {validation.max_diff}"
-```
 
-## Compatibility Pre-Check
-
-Before exporting, confirm a model family is convertible:
-
-```python
-compat = bridge.check_compatibility(model, framework="sklearn")
-# Inspect compat before committing to an export path.
+assert verification.passed, f"ONNX export verification failed: max diff {verification.max_difference}"
 ```
 
 ## Cross-Language Serving Path
 
-The primary use case: train in Python, serve in Rust (or any ONNX Runtime).
+The primary use case for ONNX export: train in Python, serve in Rust (or any language with ONNX Runtime bindings).
 
 ```
 Python (training)                    Rust (serving)
 ─────────────────                    ──────────────
 sklearn/PyTorch model                onnxruntime-rs
         │                                   │
-    bridge.export(framework=...)     load("model.onnx")
+    OnnxBridge.export_*()            load("model.onnx")
         │                                   │
     model.onnx ──── transfer ────→   InferenceSession
         │                                   │
-    bridge.validate(...)             session.run(inputs)
+    bridge.verify_*()                session.run(inputs)
+```
+
+### Metadata Embedding
+
+OnnxBridge embeds training metadata in the ONNX model for traceability:
+
+```python
+onnx_path = bridge.export_sklearn(
+    model=model,
+    output_path="./models/rf_churn.onnx",
+    metadata={
+        "model_name": "churn_predictor",
+        "model_version": "3",
+        "schema_name": "user_churn",
+        "training_date": "2025-07-01",
+        "metrics": {"accuracy": 0.92, "f1": 0.87},
+    },
+    input_name="features",
+    input_shape=(None, X_train.shape[1]),
+    input_dtype="float32",
+)
+
+# Read metadata back
+meta = bridge.read_metadata("./models/rf_churn.onnx")
+# meta["model_name"], meta["model_version"], etc.
 ```
 
 ## ModelRegistry Integration
 
-Export + register ONNX in one step via `ModelSpec` — ONNX is the default
-`km.register` / registry format (`format="onnx"`).
+Export and register ONNX models in a single step via TrainingPipeline.
 
 ```python
-from kailash_ml.engines.training_pipeline import ModelSpec, EvalSpec
-
 result = await pipeline.train(
-    data=df,
     schema=schema,
-    model_spec=ModelSpec(model_class="sklearn.ensemble.RandomForestClassifier"),
+    model_spec=ModelSpec(
+        model_class="sklearn.ensemble.RandomForestClassifier",
+        export_onnx=True,  # Automatically exports to ONNX after training
+    ),
     eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
-    experiment_name="churn-onnx",
 )
-# The registered version carries onnx_status; load the artifact via the registry.
+# result.onnx_path — path to ONNX artifact
+# Both .pkl and .onnx registered in ModelRegistry
 ```
 
 ## ONNX Runtime Providers
@@ -184,17 +215,25 @@ import onnxruntime as ort
 # CPU (default)
 session = ort.InferenceSession("model.onnx", providers=["CPUExecutionProvider"])
 
-# GPU (requires the kailash-ml deep-learning GPU extra)
+# GPU (requires kailash-ml[dl-gpu])
 session = ort.InferenceSession("model.onnx", providers=[
     "CUDAExecutionProvider",
-    "CPUExecutionProvider",  # fallback
+    "CPUExecutionProvider",  # Fallback
+])
+
+# TensorRT (maximum GPU performance)
+session = ort.InferenceSession("model.onnx", providers=[
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider",
 ])
 ```
 
 ## Critical Rules
 
-- Always `validate()` an export against the original before deploying
-- `export(model, framework=...)` — one method, `framework` selects the converter
-- LightGBM / XGBoost export through the `"sklearn"` framework (sklearn estimator API)
-- PyTorch export: pass a representative `sample_input` to size the graph
+- Always verify ONNX export against original model before deploying
+- Use dynamic batch axes for production serving (batch_size dimension)
+- Embed training metadata in ONNX model for traceability
+- sklearn pipeline export preserves preprocessing — no separate preprocessing needed at serving time
+- PyTorch export: specify `opset_version=17` (or latest stable) for widest compatibility
 - Cross-language path: Python trains, ONNX transfers, any runtime serves
