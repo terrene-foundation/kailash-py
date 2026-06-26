@@ -3211,6 +3211,17 @@ class AutoMigrationSystem:
         """
         if hasattr(self, "inspector") and self.inspector is not None:
             self.inspector.close()
+        # Issue #1474 — the ConnectionManagerAdapter built for the migration
+        # lock manager (see __init__) is constructed WITHOUT a shared runtime,
+        # so it OWNS a fresh AsyncLocalRuntime (connection_adapter.py, async
+        # branch). DataFlow.close() cascades here via self._migration_system,
+        # but without this call the adapter's owned runtime was never released
+        # and surfaced as an intermittent "Unclosed AsyncLocalRuntime
+        # (ref_count=1)" ResourceWarning at GC. The adapter's close() is
+        # idempotent and releases its runtime.
+        adapter = getattr(self, "_connection_adapter", None)
+        if adapter is not None and hasattr(adapter, "close"):
+            adapter.close()
         explicit = getattr(self, "_explicit_runtime", None)
         if explicit is not None and hasattr(explicit, "release"):
             explicit.release()
