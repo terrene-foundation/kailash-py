@@ -17,6 +17,7 @@ Silent threshold relaxation is BLOCKED.
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,27 +40,59 @@ ENGINE_PATH = (
 )
 
 
+def _resolve_pyright() -> list[str] | None:
+    """Resolve an invocable pyright command, or None if none is installed.
+
+    Issue #1472: the gate previously invoked ``uv run pyright``, which resolves
+    uv's *project* environment — NOT the ``.venv`` the CI job installs into. In
+    the ``test-dataflow`` job that env has no pyright, so ``uv run pyright``
+    failed to spawn and the gate silently skipped (enforcing nothing).
+
+    Resolution order:
+      1. pyright installed alongside the running interpreter. CI runs pytest
+         under ``.venv/bin/python`` and ``kailash-dataflow[dev]`` installs
+         pyright==1.1.371 into that same ``.venv/bin`` — so the gate ENFORCES
+         there.
+      2. pyright on PATH (local dev outside a venv-adjacent install).
+      3. ``uv run pyright`` (resolves a synced uv project env, e.g. plain
+         ``uv run pytest`` locally where pyright is a project dep).
+    """
+    venv_pyright = Path(sys.executable).parent / "pyright"
+    if venv_pyright.exists():
+        return [str(venv_pyright)]
+    on_path = shutil.which("pyright")
+    if on_path is not None:
+        return [on_path]
+    if shutil.which("uv") is not None:
+        return ["uv", "run", "pyright"]
+    return None
+
+
 def _run_pyright() -> tuple[int, int, str]:
     """Invoke pyright on engine.py; return (errors, warnings, raw_output)."""
-    if shutil.which("uv") is None:
-        pytest.skip("uv not available — gate cannot resolve pyright")
+    cmd = _resolve_pyright()
+    if cmd is None:
+        # GENUINELY cannot execute (no pyright installed anywhere) — an
+        # acceptable "cannot execute" skip per test-skip-discipline. CI installs
+        # pyright via kailash-dataflow[dev], so this branch is local-only.
+        pytest.skip(
+            "pyright is not installed in this environment — the engine pyright "
+            "gate cannot execute here. CI installs it via kailash-dataflow[dev]."
+        )
     result = subprocess.run(
-        ["uv", "run", "pyright", str(ENGINE_PATH)],
+        [*cmd, str(ENGINE_PATH)],
         capture_output=True,
         text=True,
     )
     output = result.stdout + result.stderr
-    # When pyright cannot actually be spawned in this environment (e.g. the
-    # node-based launcher is not invocable via `uv run` in CI), the gate cannot
-    # enforce. Skip-when-unavailable rather than fail — the gap is tracked at
-    # issue #1472 (engine pyright CI gate does not enforce). See test-skip
-    # discipline: an acceptable skip is "cannot execute", not "system broken".
+    # A resolved pyright that still fails to spawn (or emits nothing) is a BROKEN
+    # gate, not an absent one — fail loudly rather than skip. Silent-skip here
+    # was the exact #1472 failure mode (the gate enforced nothing while green).
     if "Failed to spawn" in output or not output.strip():
-        pytest.skip(
-            "pyright is not invocable in this environment "
-            "(`uv run pyright` failed to spawn) — the engine pyright gate does "
-            "not enforce here; see issue #1472. "
-            f"Captured output: {output[:300]!r}"
+        pytest.fail(
+            f"pyright resolved to {cmd!r} but failed to spawn or emitted no "
+            f"output — the engine pyright gate could not execute. "
+            f"Captured output: {output[:500]!r}"
         )
     # Summary line shape: "N errors, M warnings, K informations"
     match = re.search(
@@ -74,18 +107,23 @@ def _run_pyright() -> tuple[int, int, str]:
 @pytest.mark.regression
 def test_engine_pyright_version_pinned() -> None:
     """Running pyright must match the pinned version (calibration baseline)."""
-    if shutil.which("uv") is None:
-        pytest.skip("uv not available — version pin cannot be verified")
+    cmd = _resolve_pyright()
+    if cmd is None:
+        pytest.skip(
+            "pyright is not installed in this environment — the version pin "
+            "cannot be verified here. CI installs it via kailash-dataflow[dev]."
+        )
     result = subprocess.run(
-        ["uv", "run", "pyright", "--version"],
+        [*cmd, "--version"],
         capture_output=True,
         text=True,
     )
     running = result.stdout.strip()
     if not running or "Failed to spawn" in (result.stdout + result.stderr):
-        pytest.skip(
-            "pyright is not invocable in this environment — the engine pyright "
-            "version pin cannot be verified here; see issue #1472."
+        pytest.fail(
+            f"pyright resolved to {cmd!r} but failed to report a version — the "
+            f"engine pyright version pin could not be verified. "
+            f"Captured: {(result.stdout + result.stderr)[:500]!r}"
         )
     assert PINNED_PYRIGHT_VERSION in running, (
         f"pyright version mismatch: running {running!r}, "
