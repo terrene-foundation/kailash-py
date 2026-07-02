@@ -174,4 +174,4 @@ Loom CI MUST NOT add a quarterly job that diffs `loom/.claude/test-harness/fixtu
 - `csq/coc-eval/scripts/check-loom-drift.sh` — drift detection script (Rule 4 in csq's mirror)
 - `csq/.github/workflows/loom-csq-drift.yml` — quarterly CI cadence (Rule 4 in csq's mirror)
 - `loom/.claude/test-harness/README.md` — points at csq/coc-eval/ per Rule 3 above
-- Tracking issue: `esperie-enterprise/loom#21` (loom-side mirror; closed by this rule's landing)
+- Tracking issue: the loom repo (logical key `loom`; resolve via `loom-links.local.json` per `cross-repo.md` MUST-1) #21 (loom-side mirror; closed by this rule's landing)

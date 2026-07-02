@@ -35,7 +35,7 @@
                        ▼
               ┌─────────────────────────────────┐
               │   loom/ DISTRIBUTE (Gate-2)      │
-              │  /sync-to-build ──► kailash-py / kailash-rs
+              │  /sync-to-build ──► kailash-py / rust-sdk
               │                     (BUILD; canonical pushed back)
               │  /sync-to-use py|rs|rb ──► kailash-coc-claude-{py,rs,rb}/
               │                     ──► downstream USE/project repos
@@ -51,7 +51,7 @@
 Issues are routed by the TYPE of change they request:
 
 - **COC-artifact improvement** (method, rules, skills, agents, COC-tooling) → filed on the **USE-template repo** (`kailash-coc-*`), which originates a proposal via `/codify` per `09-proposal-protocol.md` Step 7b. This is the authoritative target flow.
-- **Bug / code / feature / code-improvement** (SDK code) → filed on the **BUILD repo** (kailash-py or kailash-rs). The developer opens the BUILD repo, works through the 5-phase COC cycle, and the BUILD repo considers **cross-SDK FIRST** before originating a proposal via `/codify`.
+- **Bug / code / feature / code-improvement** (SDK code) → filed on the **BUILD repo** (kailash-py or the Rust SDK). The developer opens the BUILD repo, works through the 5-phase COC cycle, and the BUILD repo considers **cross-SDK FIRST** before originating a proposal via `/codify`.
 
 Routing by repo convenience (a COC-method fix on the BUILD code lane, or an SDK bug on the artifact lane) bypasses the Gate-1 split and is BLOCKED per `rules/artifact-flow.md` § Issue Routing By Change Type. loom is the central splitter and never originates a change itself.
 

@@ -30,15 +30,15 @@ These are the higher-leverage findings. They apply to every project, every langu
 
 ### Part II — Code Primitive Patterns (how to make the SDK deterministic)
 
-These are the implementation patterns. They apply to kailash-py and kailash-rs specifically.
+These are the implementation patterns. They apply to kailash-py and the Rust SDK specifically.
 
-| File                                                                   | Category                                                                                                                       | Applies to             |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
-| [04-type-system-enforcement.md](04-type-system-enforcement.md)         | Compile-time / definition-time safety: `#[non_exhaustive]`, typestate builders, newtypes, `__init_subclass__`, frozen configs  | kailash-rs, kailash-py |
-| [05-runtime-safety-defaults.md](05-runtime-safety-defaults.md)         | Pit-of-success API design: input validation, `unsafe_raw()`, pool circuit breaker, UNSET sentinels, mandatory context managers | Both SDKs              |
-| [06-observability-primitives.md](06-observability-primitives.md)       | Impossible to be silent: auto-telemetry, BulkResult auto-WARN, silent exception detection, correlation ID propagation          | Both SDKs              |
-| [07-destructive-operation-gates.md](07-destructive-operation-gates.md) | Explicit confirmation: `force_drop`, mandatory delete filter, migration dry-run, idempotency keys                              | Both SDKs              |
-| [08-cross-sdk-parity.md](08-cross-sdk-parity.md)                       | Keeping py/rs in sync: API surface extraction, parity diff, CI integration, behavioral parity tests                            | Platform               |
+| File                                                                   | Category                                                                                                                       | Applies to           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| [04-type-system-enforcement.md](04-type-system-enforcement.md)         | Compile-time / definition-time safety: `#[non_exhaustive]`, typestate builders, newtypes, `__init_subclass__`, frozen configs  | Rust SDK, kailash-py |
+| [05-runtime-safety-defaults.md](05-runtime-safety-defaults.md)         | Pit-of-success API design: input validation, `unsafe_raw()`, pool circuit breaker, UNSET sentinels, mandatory context managers | Both SDKs            |
+| [06-observability-primitives.md](06-observability-primitives.md)       | Impossible to be silent: auto-telemetry, BulkResult auto-WARN, silent exception detection, correlation ID propagation          | Both SDKs            |
+| [07-destructive-operation-gates.md](07-destructive-operation-gates.md) | Explicit confirmation: `force_drop`, mandatory delete filter, migration dry-run, idempotency keys                              | Both SDKs            |
+| [08-cross-sdk-parity.md](08-cross-sdk-parity.md)                       | Keeping py/rs in sync: API surface extraction, parity diff, CI integration, behavioral parity tests                            | Platform             |
 
 ## The Rule ↔ Primitive Lifecycle
 
@@ -65,7 +65,7 @@ Documentation → Rules (MUST) → Linter checks → Runtime validation → Type
 
 ## Current State (2026-04-09)
 
-### kailash-rs
+### Rust SDK
 
 - **Strong**: `#[must_use]` (200+ uses), per-crate error enums, RAII on connections/transactions
 - **Gaps**: `#[non_exhaustive]` on public enums, typestate builders, newtype enforcement in bindings, sealed traits for audit types
@@ -88,4 +88,4 @@ Documentation → Rules (MUST) → Linter checks → Runtime validation → Type
 - `rules/zero-tolerance.md` — the canonical Rung 2 rule; primitives make it fire less, not disappear
 - `rules/observability.md` — log triage gate; §06 primitives make triage automatic
 - `rules/dataflow-identifier-safety.md` — `quote_identifier()` is the canonical Rung 4 primitive
-- `rules/cross-sdk-inspection.md` — the rule that caught kailash-rs Parameterized stub; §08 automates it
+- `rules/cross-sdk-inspection.md` — the rule that caught the Rust SDK Parameterized stub; §08 automates it

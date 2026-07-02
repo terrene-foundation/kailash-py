@@ -14,7 +14,7 @@ APIs where the default behavior is safe and the developer has to opt-in to dange
 
 **Status in kailash-py**: ABSENT at express.\* level. Calls accept `Any` and propagate junk 5 layers deep before failing.
 
-**Status in kailash-rs**: PARTIAL. Core types validate; bindings do not.
+**Status in the Rust SDK**: PARTIAL. Core types validate; bindings do not.
 
 **The problem**: `db.express.create("User", {"nme": "Alice"})` — typo in field name — succeeds silently. The misspelled field is discarded by DataFlow, the row is created with `name=NULL`, and the caller sees a 200 response. The bug surfaces days later when a report shows blank names.
 

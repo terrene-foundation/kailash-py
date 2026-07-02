@@ -65,7 +65,7 @@ But Rung 2 (rules) is NOT disposable once Rung 4+ exists. The rule carries the W
 
 ### Case 4: Cross-SDK Semantic Divergence
 
-**Problem**: kailash-rs `ProductMode::Parameterized` is a stub; kailash-py has full implementation.
+**Problem**: the Rust SDK `ProductMode::Parameterized` is a stub; kailash-py has full implementation.
 
 | Rung | What exists                                                                  | Status                |
 | ---- | ---------------------------------------------------------------------------- | --------------------- |

@@ -86,7 +86,7 @@ This product independently implements the same standards in Rust.
 
 # DO NOT — paired-product framing
 
-kailash-rs is the proprietary counterpart of kailash-py.
+The Rust SDK is the proprietary counterpart of kailash-py.
 (This implies a structural relationship that does not exist.)
 
 # DO NOT — endorsement framing

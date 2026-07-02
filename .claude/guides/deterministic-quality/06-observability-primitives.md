@@ -131,7 +131,7 @@ impl BulkResult {
 
 ### 3. Silent Exception Handler Detection
 
-**Status**: kailash-py has ~1367 `except` clauses across 250 files. ~30% are silent (no log call after the catch). kailash-rs error handling is strong (per-crate error enums with `thiserror`).
+**Status**: kailash-py has ~1367 `except` clauses across 250 files. ~30% are silent (no log call after the catch). The Rust SDK error handling is strong (per-crate error enums with `thiserror`).
 
 **The problem**: `except Exception: continue` is the #1 cause of "it looked fine but data was corrupted" incidents. The exception fires, the handler swallows it, the operation appears to succeed.
 
@@ -160,7 +160,7 @@ except OSError:
 
 **Industry precedent**: Java's SpotBugs flags empty catch blocks. Go's `errcheck` linter flags ignored error returns. Rust's compiler warns on unused `Result` (no linter needed — it's built into the language).
 
-**Scope**: Custom ruff rule or pre-commit check for kailash-py. Rust's `#[must_use]` on `Result` covers kailash-rs.
+**Scope**: Custom ruff rule or pre-commit check for kailash-py. Rust's `#[must_use]` on `Result` covers the Rust SDK.
 
 ### 4. Metric Cardinality Limits
 

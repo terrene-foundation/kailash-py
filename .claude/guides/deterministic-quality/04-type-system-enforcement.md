@@ -6,9 +6,9 @@ Patterns that catch bugs at compile time (Rust) or class-definition time (Python
 
 ### 1. `#[non_exhaustive]` on Public Enums
 
-**Status in kailash-rs**: ABSENT. All public enums use default exhaustive matching.
+**Status in the Rust SDK**: ABSENT. All public enums use default exhaustive matching.
 
-**The problem**: When a new variant is added to an enum (e.g., `ProductMode::Streaming`), every `match` with a `_ =>` catchall silently swallows the new variant. The developer who added the variant has no way to find all the match sites that need updating. Found 11+ `_ =>` catchalls in kailash-rs bindings that would silently swallow new variants.
+**The problem**: When a new variant is added to an enum (e.g., `ProductMode::Streaming`), every `match` with a `_ =>` catchall silently swallows the new variant. The developer who added the variant has no way to find all the match sites that need updating. Found 11+ `_ =>` catchalls in the Rust SDK bindings that would silently swallow new variants.
 
 **The fix**: `#[non_exhaustive]` forces downstream crates to include a `_ =>` arm, but more importantly, it signals "this enum will grow" and makes catchall handling intentional rather than accidental.
 
@@ -44,7 +44,7 @@ pub enum ProductMode {
 
 ### 2. Typestate Builders for Mission-Critical Paths
 
-**Status in kailash-rs**: ABSENT. All builders use `Option<T>` + runtime validation at `.build()`.
+**Status in the Rust SDK**: ABSENT. All builders use `Option<T>` + runtime validation at `.build()`.
 
 **The problem**: A developer can call `.build()` on a half-configured builder. The error surfaces at runtime, not compile time. Example: `DataFlowEngine::builder().build()` — no database URL set — panics at runtime.
 
@@ -99,7 +99,7 @@ impl DataFlowBuilder {
 
 ### 3. Newtype Wrappers in FFI Bindings
 
-**Status in kailash-rs**: PARTIAL. Core SDK has `TenantId(String)`, `SecretString`. Bindings (PyO3, napi-rs, Magnus) use raw `String` — undoing the safety at the boundary.
+**Status in the Rust SDK**: PARTIAL. Core SDK has `TenantId(String)`, `SecretString`. Bindings (PyO3, napi-rs, Magnus) use raw `String` — undoing the safety at the boundary.
 
 **The problem**: A user calling from Python can pass `user_id` where `tenant_id` is expected. The Rust type system catches this in pure Rust, but the FFI boundary accepts raw strings.
 
@@ -138,7 +138,7 @@ impl TenantIdPy {
 
 ### 4. Sealed Traits for Security-Sensitive Types
 
-**Status in kailash-rs**: PARTIAL. Trust envelope construction uses sealed patterns. Audit types do not.
+**Status in the Rust SDK**: PARTIAL. Trust envelope construction uses sealed patterns. Audit types do not.
 
 **The problem**: A downstream consumer can construct a fake `AuditEntry` and insert it into the audit store, bypassing the governance layer.
 
