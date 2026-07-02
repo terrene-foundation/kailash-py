@@ -123,3 +123,100 @@ class TestHoldManager:
         retrieved = manager2.get(hold.hold_id)
         assert retrieved.status == "approved"
         assert retrieved.resolved_by == "Carol"
+
+
+class TestHoldResolutionSignature:
+    """Resolution signatures bind the reviewed hold's disclosure.
+
+    Cross-SDK parity with kailash-rs#1562: the signer and verifier both fold
+    the reviewed hold's decision-relevant disclosure into the signed payload,
+    recomputed from the queued hold at verification time. A resolution signed
+    over a disclosure differing from the queued hold fails verification.
+    """
+
+    def test_approve_populates_signature_fields(self, manager):
+        hold = manager.create_hold(
+            action="publish",
+            resource="paper.md",
+            reason="review",
+            context={"submitted_by": "agent-7", "capability": "publish_docs"},
+        )
+        resolved = manager.resolve(hold.hold_id, True, "Alice", "ok")
+        assert resolved.resolution_signature is not None
+        assert resolved.signing_pubkey is not None
+
+    def test_approve_resolution_verifies(self, manager):
+        hold = manager.create_hold(
+            action="publish",
+            resource="paper.md",
+            reason="review",
+            context={"submitted_by": "agent-7", "capability": "publish_docs"},
+        )
+        manager.resolve(hold.hold_id, True, "Alice", "reviewed and approved")
+        assert manager.verify_resolution(hold.hold_id) is True
+
+    def test_deny_resolution_verifies(self, manager):
+        hold = manager.create_hold(
+            action="delete",
+            resource="keys/",
+            reason="dangerous",
+            context={"submitted_by": "agent-9", "capability": "delete_keys"},
+        )
+        manager.resolve(hold.hold_id, False, "Bob", "not appropriate")
+        assert manager.verify_resolution(hold.hold_id) is True
+
+    def test_pending_hold_not_verified(self, manager):
+        hold = manager.create_hold(action="a", resource="r", reason="r")
+        # Unresolved hold has no signature — fail-closed.
+        assert manager.verify_resolution(hold.hold_id) is False
+
+    def test_tampered_disclosure_approve_fails_verification(self, manager):
+        hold = manager.create_hold(
+            action="publish",
+            resource="paper.md",
+            reason="review",
+            context={"submitted_by": "agent-7", "capability": "publish_docs"},
+        )
+        manager.resolve(hold.hold_id, True, "Alice", "approved")
+        assert manager.verify_resolution(hold.hold_id) is True
+
+        # Tamper the reviewed disclosure AFTER signing: the stored hold now
+        # presents a capability the approver never reviewed. Keep the original
+        # signature (as an attacker would). The signature was computed over the
+        # original disclosure; verification recomputes from the tampered hold.
+        stored = manager.get(hold.hold_id)
+        stored.context = {"submitted_by": "agent-7", "capability": "delete_keys"}
+        manager._store.update_hold(stored)
+
+        assert manager.verify_resolution(hold.hold_id) is False
+        # Hold survives — not consumed/destroyed — so a correct decision remains
+        # possible; the tampered approval is simply not trusted.
+        survivor = manager.get(hold.hold_id)
+        assert survivor.status == "approved"
+
+    def test_tampered_disclosure_deny_fails_verification(self, manager):
+        hold = manager.create_hold(
+            action="wire_transfer",
+            resource="account/123",
+            reason="fraud check",
+            context={"submitted_by": "agent-3", "amount": 500},
+        )
+        manager.resolve(hold.hold_id, False, "Bob", "rejected")
+        assert manager.verify_resolution(hold.hold_id) is True
+
+        # Tamper the reviewed action after the rejection was signed.
+        stored = manager.get(hold.hold_id)
+        stored.action = "read_balance"
+        manager._store.update_hold(stored)
+
+        assert manager.verify_resolution(hold.hold_id) is False
+        survivor = manager.get(hold.hold_id)
+        assert survivor.status == "denied"
+
+    def test_signature_verifies_across_reload(self, manager, holds_dir):
+        hold = manager.create_hold(action="publish", resource="p.md", reason="r")
+        manager.resolve(hold.hold_id, True, "Carol", "approved")
+
+        # A fresh manager loads keys + record from disk and still verifies.
+        manager2 = HoldManager(holds_dir)
+        assert manager2.verify_resolution(hold.hold_id) is True
