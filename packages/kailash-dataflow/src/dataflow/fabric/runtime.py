@@ -97,6 +97,7 @@ class FabricRuntime:
         tenant_extractor: Optional[Callable] = None,
         nexus: Optional[Any] = None,
         instance_name: Optional[str] = None,
+        max_concurrent: int = 3,
     ) -> None:
         self._dataflow = dataflow
         self._sources = sources
@@ -110,6 +111,7 @@ class FabricRuntime:
         self._tenant_extractor = tenant_extractor
         self._nexus = nexus
         self._instance_name = _resolve_instance_name(instance_name)
+        self._max_concurrent = max_concurrent
 
         # Consumer adapter registry
         self._consumer_registry = ConsumerRegistry()
@@ -147,6 +149,13 @@ class FabricRuntime:
                     f"tenant_extractor was provided to db.start(). "
                     f"Pass tenant_extractor=lambda req: req.headers['X-Tenant-Id']"
                 )
+
+        # max_concurrent must be a positive integer
+        if not isinstance(self._max_concurrent, int) or self._max_concurrent < 1:
+            raise ValueError(
+                f"max_concurrent must be a positive integer, "
+                f"got {self._max_concurrent!r}"
+            )
 
         # enable_writes without auth → warning
         if self._enable_writes and self._nexus is None:
@@ -220,6 +229,7 @@ class FabricRuntime:
             cache_backend=self._cache_backend,
             dev_mode=self._dev_mode,
             instance_name=self._instance_name,
+            max_concurrent=self._max_concurrent,
         )
 
         # 5. Elect leader. When we have a shared Redis client, hand it

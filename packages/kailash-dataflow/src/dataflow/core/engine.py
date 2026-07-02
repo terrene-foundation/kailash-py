@@ -2767,6 +2767,7 @@ class DataFlow(DataFlowEventMixin):
         port: int = 8000,
         enable_writes: bool = False,
         tenant_extractor: Optional[Callable] = None,
+        max_concurrent: int = 3,
     ) -> Any:
         """Start the fabric runtime — the main entry point for data products.
 
@@ -2783,6 +2784,9 @@ class DataFlow(DataFlowEventMixin):
             port: Port for internal server.
             enable_writes: Enable write pass-through endpoints.
             tenant_extractor: Lambda to extract tenant_id from request.
+            max_concurrent: Maximum concurrent pipeline executions (semaphore
+                bound, default 3). Lower this to reduce startup materialization
+                concurrency on large datasets.
 
         Returns:
             The FabricRuntime instance.
@@ -2807,6 +2811,7 @@ class DataFlow(DataFlowEventMixin):
             enable_writes=enable_writes,
             tenant_extractor=tenant_extractor,
             nexus=nexus,
+            max_concurrent=max_concurrent,
         )
         assert self._fabric is not None, "fabric must be initialized above"
         await self._fabric.start(prewarm=prewarm)

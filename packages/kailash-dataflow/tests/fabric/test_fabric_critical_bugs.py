@@ -419,6 +419,12 @@ async def test_change_detection_fires_on_source_change():
     try:
         await detector.start()
 
+        # Let the fingerprint seed complete before triggering a change.
+        # The seed calls safe_detect_change() once to prime internal
+        # change-tracking state; triggering too early races with it. (#1492)
+        # Poll until at least one poll cycle has elapsed, then trigger.
+        await asyncio.sleep(0.1)
+
         # Trigger a source change
         source.trigger_change()
 
@@ -492,3 +498,123 @@ async def test_runtime_start_stop_with_change_detection():
 
     await runtime.stop()
     assert runtime.status()["started"] is False
+
+
+# ===========================================================================
+# #1492 — Fingerprint seed prevents startup poll storm
+# ===========================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.timeout(10)
+async def test_change_detector_no_startup_storm_with_fresh_adapter():
+    """First poll seeds fingerprint; no product dispatch before poll_interval.
+
+    Regression: #1492 — a fresh adapter whose ``detect_change`` returns
+    ``True`` on the first call (because it has no prior fingerprint state)
+    would storm-materialize every dependent product at t=0, concurrent
+    with the startup pre-warm pass. The fix seeds the adapter's fingerprint
+    state before entering the main poll loop so the first real poll after
+    ``poll_interval`` only reports changes that occurred AFTER startup.
+    """
+    # Simulate a fresh adapter that reports "changed" on its first poll
+    # (a real adapter with empty change-state would do this).
+    source = MockSource("db", data={"": {"rows": 100}}, change_detected=True)
+    await source.connect()
+
+    async def report(ctx: FabricContext) -> Dict[str, Any]:
+        return {"count": 1}
+
+    product_reg = _make_product_registration("report", report, depends_on=["db"])
+
+    db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+    pipeline = PipelineExecutor(dataflow=db, dev_mode=True)
+
+    adapter_sources = {"db": source}
+    triggered: List[str] = []
+
+    async def on_change(product_name: str, triggered_by: str) -> None:
+        triggered.append(f"{product_name}:{triggered_by}")
+
+    detector = ChangeDetector(
+        sources=adapter_sources,
+        products={"report": product_reg},
+        pipeline_executor=pipeline,
+        dev_mode=True,
+    )
+    detector.set_on_change(on_change)
+
+    # Override poll interval to 0.05s for fast test.
+    original_descriptor = ChangeDetector.__dict__["_get_poll_interval"]
+    ChangeDetector._get_poll_interval = staticmethod(lambda adapter: 0.05)
+
+    try:
+        await detector.start()
+
+        # Wait for 3+ poll cycles — if the seed didn't work, the first
+        # real poll would have dispatched the product by now.
+        await asyncio.sleep(0.2)
+
+        assert len(triggered) == 0, (
+            f"Startup poll storm: {len(triggered)} product(s) dispatched "
+            f"before poll_interval elapsed — fingerprint seed did not "
+            f"prevent the storm: {triggered}"
+        )
+        assert detector.running is True
+        assert detector.task_count == 1
+    finally:
+        ChangeDetector._get_poll_interval = original_descriptor
+        await detector.stop()
+
+
+# ===========================================================================
+# #1492 — max_concurrent threaded through FabricRuntime.start()
+# ===========================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.timeout(10)
+async def test_fabric_runtime_respects_max_concurrent():
+    """FabricRuntime.start() threads max_concurrent to PipelineExecutor.
+
+    Regression: #1492 — ``PipelineExecutor(max_concurrent=…)`` existed but
+    ``FabricRuntime`` constructed it without passing ``max_concurrent``,
+    and ``FabricRuntime.start()`` / ``DataFlow.start()`` did not expose it.
+    Callers could not bound startup materialization concurrency.
+    """
+    source = MockSource("csv", data={"": {"rows": 42}})
+
+    async def summary(ctx: FabricContext) -> Dict[str, Any]:
+        data = await ctx.source("csv").fetch()
+        return {"total": data["rows"]}
+
+    product_reg = _make_product_registration(
+        "summary", summary, mode="materialized", depends_on=["csv"]
+    )
+
+    db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+
+    sources = {"csv": {"name": "csv", "config": None, "adapter": source}}
+    products = {"summary": product_reg}
+
+    runtime = FabricRuntime(
+        dataflow=db,
+        sources=sources,
+        products=products,
+        fail_fast=True,
+        dev_mode=True,
+        max_concurrent=7,
+    )
+    await runtime.start()
+
+    assert runtime.pipeline is not None
+    # The semaphore bound reflects the passed max_concurrent.
+    assert (
+        runtime.pipeline._max_concurrent == 7
+    ), f"Expected max_concurrent=7, got {runtime.pipeline._max_concurrent}"
+
+    await runtime.stop()

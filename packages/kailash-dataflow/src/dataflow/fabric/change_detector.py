@@ -198,6 +198,32 @@ class ChangeDetector:
         """
         logger.debug("ChangeDetector: poll loop '%s' entering main loop", source_name)
 
+        # Seed the adapter's fingerprint state before the first real poll.
+        # A fresh adapter with empty change-state returns True on its first
+        # detect_change() call, which would dispatch every dependent product
+        # for full re-materialization at t=0 concurrent with the pre-warm
+        # pass. Calling safe_detect_change() once here primes the internal
+        # change-tracking state (last-seen timestamp / hash) and discarding
+        # the result prevents the startup poll storm.
+        #
+        # Snapshot and restore the circuit breaker around the seed so a
+        # transient failure during seeding does not open the breaker and
+        # silently disable change detection in the main poll loop. (#1492)
+        cb = adapter._circuit_breaker
+        cb_snapshot = (cb.state, cb.failure_count, cb.last_error)
+        try:
+            await adapter.safe_detect_change()
+        except Exception:
+            logger.warning(
+                "ChangeDetector: fingerprint seed failed for '%s' — "
+                "poll loop will seed on first real poll; startup storm "
+                "may occur if the adapter reports 'changed' on first poll",
+                source_name,
+                exc_info=True,
+            )
+        finally:
+            cb.state, cb.failure_count, cb.last_error = cb_snapshot
+
         while not self._shutting_down:
             try:
                 changed = await adapter.safe_detect_change()
