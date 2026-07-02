@@ -24,6 +24,7 @@ __all__ = [
     "NodeType",
     "AddressError",
     "GrammarError",
+    "parse_structural_address",
 ]
 
 
@@ -57,6 +58,26 @@ class AddressSegment:
 
     node_type: NodeType
     sequence: int  # 1-based within parent scope
+
+    def __post_init__(self) -> None:
+        """Validate on EVERY construction path, not just AddressSegment.parse.
+
+        The dataclass ``__init__`` (used by deserializers and any direct
+        construction) bypasses ``parse``'s string-level checks; this enforces
+        the same semantic invariants (valid node type, positive 1-based
+        sequence) so a malformed segment can never be constructed.
+        """
+        if not isinstance(self.node_type, NodeType):
+            raise AddressError(
+                f"node_type must be a NodeType, got {type(self.node_type).__name__}"
+            )
+        # bool is a subclass of int -- reject it explicitly.
+        if isinstance(self.sequence, bool) or not isinstance(self.sequence, int):
+            raise AddressError(
+                f"sequence must be an int, got {type(self.sequence).__name__}"
+            )
+        if self.sequence < 1:
+            raise AddressError(f"Sequence must be >= 1, got {self.sequence}")
 
     def __str__(self) -> str:
         return f"{self.node_type.value}{self.sequence}"
@@ -101,6 +122,25 @@ class Address:
     """
 
     segments: tuple[AddressSegment, ...]
+
+    def __post_init__(self) -> None:
+        """Validate the D/T/R adjacency grammar on EVERY construction path.
+
+        ``Address.parse`` and ``Address.from_segments`` validated grammar only
+        in their classmethods; the dataclass ``__init__`` (used by
+        deserializers and the structural ``parent``/``ancestors`` helpers)
+        bypassed it. This closes that gap so a malformed ``Address(...)``
+        raises.
+
+        The terminal-Role requirement is RELAXED here: structural prefixes
+        such as ``D1`` or ``D1-R1-T1`` name Departments and Teams and are
+        valid containment references (they cannot stand alone as complete
+        addresses, which is what ``Address.parse`` additionally enforces).
+        The adjacency grammar (every D or T immediately followed by exactly
+        one R) IS enforced, which is the invariant that both structural
+        prefixes and complete addresses share.
+        """
+        _validate_grammar(self.segments, require_terminal_role=False)
 
     def __str__(self) -> str:
         return "-".join(str(s) for s in self.segments)
@@ -250,6 +290,8 @@ class Address:
 
 def _validate_grammar(
     segments: tuple[AddressSegment, ...] | list[AddressSegment],
+    *,
+    require_terminal_role: bool = True,
 ) -> None:
     """Validate D/T/R grammar: every D or T must be immediately followed by R.
 
@@ -259,11 +301,19 @@ def _validate_grammar(
 
     Args:
         segments: The ordered sequence of address segments to validate.
+        require_terminal_role: When True (the default, used by
+            ``Address.parse`` / ``from_segments`` for complete addresses),
+            an address ending in an unmatched D or T is a violation. When
+            False (used by ``Address.__post_init__`` and
+            ``parse_structural_address`` for structural unit prefixes like
+            ``D1``), the adjacency grammar is still enforced but a trailing
+            D or T is permitted.
 
     Raises:
         AddressError: If segments is empty.
         GrammarError: If any D or T is not immediately followed by R,
-            or if the address ends with an unmatched D or T.
+            or (when ``require_terminal_role``) if the address ends with an
+            unmatched D or T.
     """
     if not segments:
         raise AddressError("Address must have at least one segment")
@@ -288,11 +338,44 @@ def _validate_grammar(
                 state = 1  # next must be R
             # R keeps us in state 0
 
-    # If we end in state 1, the last D/T has no R
-    if state == 1:
+    # If we end in state 1, the last D/T has no R. This is a violation only
+    # for complete addresses; structural unit prefixes (D1, D1-R1-T1) legally
+    # end in a D or T.
+    if require_terminal_role and state == 1:
         last = segments[-1]
         raise GrammarError(
             f"Grammar violation: address ends with {last.node_type.name} "
             f"without a head Role. Every Department or Team must be "
             f"immediately followed by a Role."
         )
+
+
+def parse_structural_address(s: str) -> Address:
+    """Parse an address that may be a structural unit prefix.
+
+    Unlike :meth:`Address.parse`, this does NOT require the address to end in
+    a Role, so it accepts unit addresses like ``D1`` or ``D1-R1-T1`` that name
+    Departments and Teams (the exact forms ``compile_org`` assigns to
+    Department and Team nodes). The D/T-must-be-immediately-followed-by-R
+    adjacency grammar IS still enforced, so a tampered address such as
+    ``D1-D2-R1`` (D followed by D) is rejected.
+
+    Args:
+        s: Hyphen-separated address string (e.g., ``D1`` or ``D1-R1-T1``).
+
+    Returns:
+        A validated Address.
+
+    Raises:
+        AddressError: If the string is empty or a segment is malformed.
+        GrammarError: If the D/T/R adjacency grammar is violated.
+    """
+    if not s or not s.strip():
+        raise AddressError("Address string is empty")
+
+    parts = s.strip().split("-")
+    segments = tuple(AddressSegment.parse(p) for p in parts)
+
+    _validate_grammar(segments, require_terminal_role=False)
+
+    return Address(segments=segments)

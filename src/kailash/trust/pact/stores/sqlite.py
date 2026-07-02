@@ -289,16 +289,106 @@ class SqliteOrgStore(_SqliteBase):
 
     @staticmethod
     def _deserialize_org(data: dict[str, Any]) -> CompiledOrg:
-        """Reconstruct a CompiledOrg from serialized JSON data."""
-        from kailash.trust.pact.addressing import NodeType
+        """Reconstruct a CompiledOrg from serialized JSON data.
 
-        org = CompiledOrg(org_id=data["org_id"])
-        for addr, node_data in data.get("nodes", {}).items():
+        Security: a CompiledOrg rebuilt from persisted JSON is the
+        authorization root consumed by ``pact.access.can_access``. The stored
+        bytes are re-validated here so a tampered persisted org fails closed
+        rather than yielding an unvalidated authorization root. Every
+        reconstructed node is checked for:
+
+        1. D/T/R grammar validity of its address (``parse_structural_address``,
+           which enforces the adjacency grammar the compiler enforced at build
+           time).
+        2. Structural consistency -- the node must be keyed in the dict by its
+           own address, and the terminal segment's type must match the node's
+           declared ``node_type`` (Department node ends in D, Team in T, Role
+           in R).
+        """
+        from kailash.trust.pact.addressing import (
+            AddressError,
+            NodeType,
+            parse_structural_address,
+        )
+        from kailash.trust.pact.exceptions import DeserializationError
+
+        def _require(mapping: Any, key: str, ctx: str) -> Any:
+            # A tampered blob may drop a required key or replace a node object
+            # with a non-mapping; both must fail closed with a typed error
+            # rather than a bare KeyError/TypeError (consistent taxonomy +
+            # .details for incident triage).
+            if not isinstance(mapping, dict):
+                raise DeserializationError(
+                    f"Persisted org {ctx} is not an object",
+                    details={"context": ctx, "type": type(mapping).__name__},
+                )
+            try:
+                return mapping[key]
+            except KeyError as exc:
+                raise DeserializationError(
+                    f"Persisted org {ctx} missing required key {key!r}",
+                    details={"context": ctx, "missing_key": key},
+                ) from exc
+
+        org = CompiledOrg(org_id=_require(data, "org_id", "root"))
+
+        # "nodes" is optional (an empty org is valid), but when present it MUST
+        # be an object — a tampered non-dict fails closed rather than crashing
+        # on .items().
+        raw_nodes = data.get("nodes", {})
+        if not isinstance(raw_nodes, dict):
+            raise DeserializationError(
+                "Persisted org 'nodes' is not an object",
+                details={"context": "root", "type": type(raw_nodes).__name__},
+            )
+        for addr, node_data in raw_nodes.items():
+            node_address = _require(node_data, "address", f"node {addr!r}")
+
+            # (2) Node must be keyed by its own address.
+            if addr != node_address:
+                raise DeserializationError(
+                    f"Persisted org node key {addr!r} does not match "
+                    f"node.address {node_address!r}",
+                    details={"key": addr, "node_address": node_address},
+                )
+
+            try:
+                node_type = NodeType(_require(node_data, "node_type", f"node {addr!r}"))
+            except ValueError as exc:
+                raise DeserializationError(
+                    f"Persisted org node {node_address!r} has invalid "
+                    f"node_type {node_data.get('node_type')!r}",
+                    details={"node_address": node_address},
+                ) from exc
+
+            # (1) Address must satisfy the D/T/R grammar (fail closed).
+            try:
+                segments = parse_structural_address(node_address).segments
+            except AddressError as exc:
+                raise DeserializationError(
+                    f"Persisted org node has grammar-invalid address "
+                    f"{node_address!r}: {exc}",
+                    details={"node_address": node_address},
+                ) from exc
+
+            # (2) Terminal segment type must match the declared node type.
+            if segments[-1].node_type != node_type:
+                raise DeserializationError(
+                    f"Persisted org node {node_address!r} declares node_type "
+                    f"{node_type.value!r} but its address terminates in "
+                    f"{segments[-1].node_type.value!r}",
+                    details={
+                        "node_address": node_address,
+                        "declared_type": node_type.value,
+                        "terminal_type": segments[-1].node_type.value,
+                    },
+                )
+
             node = OrgNode(
-                address=node_data["address"],
-                node_type=NodeType(node_data["node_type"]),
-                name=node_data["name"],
-                node_id=node_data["node_id"],
+                address=node_address,
+                node_type=node_type,
+                name=_require(node_data, "name", f"node {addr!r}"),
+                node_id=_require(node_data, "node_id", f"node {addr!r}"),
                 parent_address=node_data.get("parent_address"),
                 children_addresses=tuple(node_data.get("children_addresses", [])),
                 is_vacant=node_data.get("is_vacant", False),
