@@ -23,7 +23,7 @@ try:
     from kailash.nodes.data.sql import SQLDatabaseNode
 except ImportError:
     SQLDatabaseNode = None  # type: ignore[assignment,misc]
-from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -233,9 +233,20 @@ class ModelRegistry:
         """
         built = workflow.build() if hasattr(workflow, "build") else workflow
 
-        if not self._is_async:
+        # Resolve the runtime ONCE here, in the caller's context. `self.runtime`
+        # is the parent DataFlow's per-event-loop lazy property: it returns the
+        # cached AsyncLocalRuntime only while a loop is running, and the sync
+        # LocalRuntime singleton otherwise. Re-reading it inside the worker
+        # thread below evaluates `self.runtime.execute_workflow_async(...)`
+        # BEFORE run_until_complete starts the worker loop — a loop-less context
+        # that resolves to the sync LocalRuntime singleton, which has no
+        # execute_workflow_async (issue #1498). Bind the resolved runtime once
+        # and use that same object everywhere.
+        runtime = self.runtime
+
+        if not isinstance(runtime, AsyncLocalRuntime):
             # Sync runtime — direct path, nothing to bridge.
-            return self.runtime.execute(built)
+            return runtime.execute(built)
 
         # Async runtime. Check if there's a running event loop.
         try:
@@ -246,17 +257,19 @@ class ModelRegistry:
 
         if not in_event_loop:
             # Safe to run the async variant directly.
-            result = asyncio.run(self.runtime.execute_workflow_async(built, inputs={}))
+            result = asyncio.run(runtime.execute_workflow_async(built, inputs={}))
             return _normalize_runtime_result(result)
 
         # We're inside an event loop; can't call asyncio.run.
-        # Offload to a worker thread that owns a fresh event loop.
+        # Offload to a worker thread that owns a fresh event loop. Use the
+        # runtime captured above — NOT self.runtime, which would re-resolve to
+        # the sync singleton in the worker thread's loop-less context (#1498).
         def _run_in_thread() -> Any:
             new_loop = asyncio.new_event_loop()
             try:
                 asyncio.set_event_loop(new_loop)
                 return new_loop.run_until_complete(
-                    self.runtime.execute_workflow_async(built, inputs={})
+                    runtime.execute_workflow_async(built, inputs={})
                 )
             finally:
                 try:
@@ -1054,6 +1067,14 @@ class ModelRegistry:
     def get_model_version(self, model_name: str) -> int:
         """Get latest version number for a model from registry."""
         workflow = WorkflowBuilder()
+
+        # Get connection URL and detect database type
+        from ..adapters.connection_parser import ConnectionParser
+
+        connection_url = self.dataflow.config.database.get_connection_url(
+            self.dataflow.config.environment
+        )
+        database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
             "SQLDatabaseNode",
