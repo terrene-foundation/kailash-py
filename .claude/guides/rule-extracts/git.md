@@ -89,7 +89,7 @@ Origin: 2026-04-25 kailash-rs session — PR #598 cycle of 5 sequential pushes (
 | `terrene-foundation/kailash-coc-claude-rs`    | `main` | Full (admin bypass) — legacy (archival 2026-10-22) |
 | `terrene-foundation/kailash-coc-py`           | `main` | Full (admin bypass)                                |
 | `terrene-foundation/kailash-coc-rs`           | `main` | Full (admin bypass)                                |
-| `terrene-foundation/kailash-rs`               | `main` | Full (admin bypass)                                |
+| `esperie-enterprise/kailash-rs`               | `main` | Full (admin bypass) — private Rust SDK BUILD repo  |
 | `terrene-foundation/kailash-prism`            | `main` | Full (admin bypass)                                |
 | `terrene-foundation/kailash-coc-claude-prism` | `main` | Full (admin bypass)                                |
 
