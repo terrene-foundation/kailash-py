@@ -449,3 +449,43 @@ changes:
       pass ran on the proposed text. Cross-SDK sibling: kailash-rs uses the same gh-CLI
       PR flow; the clause applies identically (the existing git.md § "Pre-FIRST-Push
       CI Parity Discipline" already carries the rs cargo-command set).
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+      - .claude/guides/rule-extracts/git.md
+      - .claude/guides/deterministic-quality/08-cross-sdk-parity.md
+    classification_suggestion: global
+    context: |
+      APPEND 2026-07-02 (session-continuation codify). TWO changes, BOTH global.
+
+      (1) REPO-PATH CORRECTION (landed BUILD-side, PR #1487): cross-sdk-inspection.md
+      pointed cross-SDK issue filing at `terrene-foundation/kailash-rs`, which DOES NOT
+      EXIST (`gh repo view` → "Could not resolve to a Repository"). Corrected to the real
+      private `esperie-enterprise/kailash-rs` (Rule 1 filing target + the Example body).
+      Sibling artifacts fixed same PR: the git.md protection-table row + the
+      08-cross-sdk-parity workflow checkout.
+      LOOM GATE-1 ACTION: this defect exists UPSTREAM at loom + every consumer repo (these
+      are synced artifacts); distribute the correction fleet-wide, else a /sync-to-build
+      re-overwrites the local fix with the still-wrong path.
+
+      (2) NEW MUST Rule 6 — "Cross-SDK References In Public-Published Artifacts Are
+      BLOCKED": public/published artifacts (CHANGELOG, README, docs, package metadata)
+      MUST NOT name the private Rust SDK repo/org/versions/issues/crate-paths/architecture
+      (disclosure + Foundation Independence, Directive 0). Ships WITH a canonical 8-field
+      Trust Posture Wiring block (trigger key `public_artifact_private_repo_disclosure`).
+
+      SAME-SESSION SAME-CLASS FIXES (autonomous-execution Rule 4), landed BUILD-side:
+      CHANGELOG.md — 27 rs references removed/genericized (PR #1488); README.md (the PyPI
+      long_description) — 3 bare kailash-rs refs genericized (the codify PR).
+
+      REDTEAM: reviewer + security-reviewer + cc-architect (parallel) → MERGE-WITH-FIXES;
+      all fixes applied (README scrub + removed a leaked private seed-org token `rrps-mtu`
+      from the clause's own detection grep). NOT a self-referential-codify Rule-1 round —
+      cross-sdk-inspection.md is NOT on that allowlist; clause deliberately NOT added to it
+      (public-artifact hygiene is code-behavior governance, like security.md).
+
+      CLASSIFICATION: GLOBAL. Disclosure + Foundation-Independence discipline is CLI-neutral
+      and applies to every public-published repo; the repo-path correction is a factual fix
+      every consumer needs. The DO/DO-NOT examples are illustrative markdown (no per-CLI
+      delegation primitive), so the clause emits globally with no cross-cli slot partitioning.
