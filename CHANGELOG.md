@@ -95,7 +95,7 @@ async-SQL fetch dispatch (PR #1416, #1417). Resolves the top public-reachable ga
 
 Cross-SDK canonical-encoder conformance plus a trust-plane-wide NaN/Inf signing
 pre-image sweep. Brings Python's audit-chain canonical hash into lockstep with the
-Rust SDK (kailash-rs v4.12.0, rs#1448) and closes an RFC-8259 cross-SDK
+cross-SDK canonical form and closes an RFC-8259 cross-SDK
 re-verification hazard at every trust-plane signing/hash pre-image (PR #1411, #1412).
 
 ### Changed
@@ -103,8 +103,8 @@ re-verification hazard at every trust-plane signing/hash pre-image (PR #1411, #1
 - **BREAKING (audit-chain byte-shape) — audit-chain canonical hash now uses fixed
   6-digit microseconds for cross-SDK conformance** (`kailash.trust` audit-chain
   canonical encoder; issue #1400 via PR #1411). The Python audit-chain canonical
-  pre-image now matches the Rust SDK (kailash-rs v4.12.0) so a Python-anchored audit
-  chain re-verifies under Rust `serde_json` and vice-versa. **Migration:** audit
+  pre-image now matches the cross-SDK canonical form so a Python-anchored audit
+  chain re-verifies across implementations and vice-versa. **Migration:** audit
   anchors created under ≤2.43.0 whose timestamps differ in microsecond representation
   (e.g. whole-second timestamps, previously emitted without a trailing `.000000`)
   recompute to a different integrity hash under 2.43.1 — re-anchor persisted chains
@@ -521,7 +521,7 @@ revoked_agents=[])` even when the best-effort rollback could NOT restore an
 
 ### Added
 
-- **Tenant-scoped event bus (#1338, cross-SDK parity with kailash-rs #1352)**:
+- **Tenant-scoped event bus (#1338, cross-SDK parity)**:
   new `kailash.events.TenantScopedEventBus` (also re-exported as
   `kailash.TenantScopedEventBus`) gives multi-tenant pub/sub isolation over a
   shared `EventBus`. It prefixes every topic with the tenant id
@@ -865,7 +865,7 @@ revoked_agents=[])` even when the best-effort rollback could NOT restore an
 ### Notes
 
 - **Backwards-compatible (minor).** No existing public import or connector breaks. `DispatchSurface(verifier=...)` defaults to `None` (verification skipped) to preserve existing callers — strict-security deployments MUST bind `NullVerifier` or `Ed25519Verifier` explicitly. A future major may flip the default to fail-closed once callers migrate.
-- **Cross-implementation byte-match receipts vs kailash-rs are DEFERRED** per `cross-sdk-inspection.md` Rule 4 — the rs-side Ed25519 library is unconfirmed in-tree; ≥3 byte-vector test cases will be pinned when rs publishes its canonical. The comparator-behavior contract (`receipts_agree`) is exercised end-to-end today; only the rs-vendored byte canonical is pending.
+- **Cross-implementation byte-match receipts are DEFERRED** per `cross-sdk-inspection.md` Rule 4 — the cross-SDK Ed25519 library is unconfirmed in-tree; ≥3 byte-vector test cases will be pinned when the cross-SDK canonical is published. The comparator-behavior contract (`receipts_agree`) is exercised end-to-end today; only the cross-SDK byte canonical is pending.
 - **Known follow-ups (non-blocking, tracked):** `DelegateRuntime.advance_lifecycle` runtime wrapper is defined but unwired pending the `Delegate.compose()` composer (the production hot path uses the separate, fully-wired TAOD `state` axis); `_tenant_id_hash` is unsalted SHA-256; `DispatchSurface._consumed` has a narrow concurrent-execute TOCTOU window.
 - Delivered via PR #1164 (3-shard parallel `/redteam`-to-convergence cycle — Round 1: 6 CRITICAL + 5 HIGH; two consecutive clean verification rounds) plus PR #1165 (R1 reconciliation — docstring accuracy, signer-contract tightening, `verifier.py` import-safety). 487 delegate tests pass (+69 over the v2.25.2 baseline).
 
@@ -936,7 +936,7 @@ This release closes 6 of the holistic-/redteam follow-up issues filed at v2.24.0
   - **S4 audit chain** — `AuditChainEngine`, `WitnessedCrossAnchor`, signed audit row emission (#1137).
   - **S5 dispatch + Connector ABC** — `Connector` abstract base, `DispatchSurface`, `DispatchResult`, capability snapshot at construction, strict-type guard, 32-depth + 1MiB payload limits (#1138).
   - **S6 runtime spine** — `DelegateRuntime`, `TAODState`/`TAODTransition` (Think-Act-Observe-Decide lifecycle), `Posture` enum (L1-L5 + HALT) with rank ladder, `R2Composition` validator with `is`-identity checks, `RuntimeExecutionResult` with lossy `to_dict`/`from_dict` (commits `bdc89a9b4`, `5fcf935db`, `e9626a223` for S6 R1 audit-emit-before-state-advance + no-recurse `_advance_to_failed_no_audit` helper).
-  - **S7 conformance schema** — `ConformanceVector`, `ConformanceVectorLoader.load_canonical()` with SHA-256 integrity check, `ConformanceVectorIntegrityError` tamper detection, `ConformanceReceipt` with `to_dict`/`from_dict`, `receipts_agree(rs, py)` cross-impl comparator with timestamp-exclusion, `assert_receipts_agree()`. 5 canonical vectors at `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001). DV-5-001 + DV-10-001 vendored byte-for-byte from `terrene-foundation/kailash-rs` per cross-SDK fixture-vendoring discipline. §7 TAOD phase monotonicity enforced at runtime via `self._consumed` guard + try/finally (commit `d4ad6a9b3`).
+  - **S7 conformance schema** — `ConformanceVector`, `ConformanceVectorLoader.load_canonical()` with SHA-256 integrity check, `ConformanceVectorIntegrityError` tamper detection, `ConformanceReceipt` with `to_dict`/`from_dict`, `receipts_agree(rs, py)` cross-impl comparator with timestamp-exclusion, `assert_receipts_agree()`. 5 canonical vectors at `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001). DV-5-001 + DV-10-001 vendored byte-for-byte per cross-SDK fixture-vendoring discipline. §7 TAOD phase monotonicity enforced at runtime via `self._consumed` guard + try/finally (commit `d4ad6a9b3`).
   - **S8 E2E + cross-impl receipts + pre-pledge README** — 8 end-to-end flows (Flow A happy path, B posture HALT, C tenant violation, C2 surface invariant, D signer failure no-recurse, E §7 single-shot, F ConformanceVectorLoader, G receipts_agree_dict identity); 3 Tier-2 cross-impl tests; README § "Delegate composition primitive — Pre-Pledge v0" disclosure enumerating 8 enforced invariants + 3 deferred items + 3 non-promises + how-to-verify + status.
 - **Holistic post-multi-wave /redteam** across all 8 shards on main caught 1 L1 (workspace-path-leakage scrub in module docstrings, PR #1145) + 5 cross-shard follow-ups filed as #1146-#1150 — none blocking v2.24.0.
 
@@ -1064,7 +1064,7 @@ sdist alongside the runtime fixes above):
 canonical bytes for SHA-256 hashing. The prior `json.dumps(..., default=str)`
 canon serialized datetimes, Decimals, and UUIDs via Python's `str()` form,
 which is implementation-defined and not byte-stable across Python versions
-or cross-SDK boundaries (kailash-py ↔ kailash-rs). The replacement is an
+or cross-SDK boundaries. The replacement is an
 explicit-type whitelist: `datetime`/`date`/`time` → `.isoformat()`,
 `Decimal` → `str()` with full precision preserved (e.g. `Decimal("1.50")`
 serializes as `"1.50"` not `"1.5"`), `UUID` → 8-4-4-4-12 hex,
@@ -1106,12 +1106,12 @@ previously relied on `default=str` to coerce them now raise `TypeError`
 at signing time — declare a `to_dict()` method or serializer on those
 dataclasses.
 
-### Added — cross-SDK fixture for kailash-rs
+### Added — cross-SDK fixture
 
 A new cross-SDK byte-pin fixture lives at
-`tests/test-vectors/trust-plane-canonical.json`. kailash-rs SHOULD vendor
-this file per `cross-sdk-inspection.md` Rule 4a so the Python and Rust
-implementations both reproduce the same canonical bytes and SHA-256 hex
+`tests/test-vectors/trust-plane-canonical.json` per `cross-sdk-inspection.md`
+Rule 4a so cross-SDK implementations both reproduce the same canonical bytes
+and SHA-256 hex
 for the eight pinned vectors (ASCII payload, UTC datetime, non-UTC
 datetime, Decimal precision, UUID, Unicode BMP, above-BMP emoji,
 empty-dict sentinel).
@@ -1789,7 +1789,7 @@ Closes #890.
 
 ### Added
 
-- **`DurableExecutionEngine.workflow_blob` JSON serialization contract (#881)** — `DurableExecutionEngine._enqueue_for_run` previously enqueued `Task(workflow_blob=b"", ...)` because the engine had no built-in serializer for arbitrary workflow objects, leaving cross-process workers (subscribers to the underlying `SQLTaskQueue` running on a separate host) unable to reconstruct the workflow without out-of-band registry access. The engine now routes through the new `kailash.runtime._workflow_blob.serialize_workflow_to_blob` helper — the same helper `WorkflowScheduler` uses — so both producer surfaces emit byte-identical JSON-encoded UTF-8 bytes for the same workflow. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`. Producer-boundary `MAX_WORKFLOW_BLOB_BYTES` cap (default 8 MiB) prevents oversized payloads from reaching the queue and OOMing dequeueing workers. The contract is additive for plain dispatch: workers using the prior local-registry convention keep working (they ignore `workflow_blob`); workers needing reconstruction-from-blob now have a documented JSON shape to parse. As a side benefit, the W6 redaction consumer (`SQLTaskQueueDispatcher(classification_policy=…)`) now actually sees per-node config dicts to redact — pre-fix the `b""` payload made `json.loads("")` raise inside `_redact_workflow_blob` (caught non-fatally, but redaction never ran for engine-dispatched tasks). 6 Tier-1 unit tests in `tests/unit/runtime/test_workflow_blob_helper.py` (round-trip, discriminator dispatch, size cap, determinism); 3 regression tests in `tests/regression/test_issue_881_workflow_blob_serializer.py` (blob-populated invariant, byte-parity with the canonical helper, worker-visible topology). Cross-SDK note: kailash-rs's durable-execution surface SHOULD inherit the same contract; cross-SDK inspection deferred per `rules/repo-scope-discipline.md` (cross-repo writes blocked from this session) — to be filed as a follow-up issue from outside this repo. Closes #881.
+- **`DurableExecutionEngine.workflow_blob` JSON serialization contract (#881)** — `DurableExecutionEngine._enqueue_for_run` previously enqueued `Task(workflow_blob=b"", ...)` because the engine had no built-in serializer for arbitrary workflow objects, leaving cross-process workers (subscribers to the underlying `SQLTaskQueue` running on a separate host) unable to reconstruct the workflow without out-of-band registry access. The engine now routes through the new `kailash.runtime._workflow_blob.serialize_workflow_to_blob` helper — the same helper `WorkflowScheduler` uses — so both producer surfaces emit byte-identical JSON-encoded UTF-8 bytes for the same workflow. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`. Producer-boundary `MAX_WORKFLOW_BLOB_BYTES` cap (default 8 MiB) prevents oversized payloads from reaching the queue and OOMing dequeueing workers. The contract is additive for plain dispatch: workers using the prior local-registry convention keep working (they ignore `workflow_blob`); workers needing reconstruction-from-blob now have a documented JSON shape to parse. As a side benefit, the W6 redaction consumer (`SQLTaskQueueDispatcher(classification_policy=…)`) now actually sees per-node config dicts to redact — pre-fix the `b""` payload made `json.loads("")` raise inside `_redact_workflow_blob` (caught non-fatally, but redaction never ran for engine-dispatched tasks). 6 Tier-1 unit tests in `tests/unit/runtime/test_workflow_blob_helper.py` (round-trip, discriminator dispatch, size cap, determinism); 3 regression tests in `tests/regression/test_issue_881_workflow_blob_serializer.py` (blob-populated invariant, byte-parity with the canonical helper, worker-visible topology). Closes #881.
 
 ## [2.16.1] - 2026-05-08
 
@@ -1912,10 +1912,6 @@ Patch release closing issue #767. `DurableWorkflowServer._add_durability_middlew
 
 - `tests/regression/test_issue_767_durability_sse_passthrough.py` — 4 tests: (1) first SSE request keeps `text/event-stream` content-type and full SSE body; (2) bare `Response` with `content-type: text/event-stream` also passes through; (3) cache-hit replay keeps streaming semantics — pre-fix the second identical SSE GET returned `JSONResponse(content={"content": ..., "status_code": 200, ...})` at `application/json`, breaking every SSE client; (4) JSON / non-streaming responses retain the original drain + dedup-cache behaviour. Pre-fix verification: cache-replay test asserts `application/json` on second GET (failure mode); post-fix all 4 pass.
 
-### Cross-SDK
-
-- kailash-rs may carry the same architectural pattern in its durable-server middleware. Cross-SDK loop closure pending explicit human approval per `rules/upstream-issue-hygiene.md` MUST Rule 1.
-
 ## [2.13.1] — 2026-04-30 — TraceEvent timestamp microsecond padding (#731)
 
 Patch — pins the `TraceEvent` timestamp string to a fixed-width microsecond field so cross-tool log correlation no longer drifts when sub-millisecond events are emitted.
@@ -1940,10 +1936,6 @@ Minor bump — ships the cross-FastAPI-site lifespan helper module that drives `
 
 - `tests/regression/test_issue_712_sibling_fastapi_sites.py` — Tier 2 regression suite verifying every sibling site drives its router hooks through the shared helper.
 - `tests/regression/test_issue_712_consumer_startup_patterns.py` — Tier 2 regression for the canonical consumer patterns (`Nexus.add_startup_handler` + DataFlow async DDL); cross-references kailash-nexus 2.5.0.
-
-### Cross-SDK
-
-- kailash-rs uses axum + tokio; no equivalent custom-lifespan footgun. No companion issue.
 
 ## [2.12.0] — 2026-04-28 — Pool lifecycle hardening (DPI-B: closes #697, #698)
 
@@ -2010,16 +2002,15 @@ Patch bump — closes two security findings surfaced by Wave 5 portfolio spec au
 ### Security
 
 - **CRIT (closes #636)** — Remove hardcoded default JWT secret `"api-gateway-secret"` (18 chars) from `src/kailash/middleware/communication/api_gateway.py`. `APIGateway(enable_auth=True)` without an explicit `auth_manager=` now requires `KAILASH_API_GATEWAY_SECRET` environment variable (≥32 bytes per RFC 7518 §3.2). Missing env var raises typed `RuntimeError`; under-length raises typed `ValueError`. Aligns with `rules/env-models.md` (.env source-of-truth) and `rules/security.md` (no hardcoded secrets). Regression tests at `tests/regression/test_issue_636_api_gateway_default_secret.py` cover all paths including a structural invariant that greps the source for the hardcoded literal.
-- **HIGH (closes #635)** — Require `iss` claim presence when issuer is configured at `src/kailash/trust/auth/jwt.py::JWTValidator.verify_token`. PyJWT's `verify_iss` only enforces value equality WHEN the claim is present; tokens forged WITHOUT `iss` were silently accepted. Layered `options={"require": ["iss"]}` (and `aud` when audience is configured) closes the bypass. Cross-SDK companion to #625 (kailash-mcp 0.2.10) and kailash-rs#599 (v3.23.0). Regression tests at `tests/regression/test_issue_635_trust_jwt_iss_required.py` cover missing-iss-rejected, missing-iss-allowed-when-no-issuer, present-iss-validated, present-iss-matched, and missing-aud-rejected paths.
+- **HIGH (closes #635)** — Require `iss` claim presence when issuer is configured at `src/kailash/trust/auth/jwt.py::JWTValidator.verify_token`. PyJWT's `verify_iss` only enforces value equality WHEN the claim is present; tokens forged WITHOUT `iss` were silently accepted. Layered `options={"require": ["iss"]}` (and `aud` when audience is configured) closes the bypass. Cross-SDK companion to #625 (kailash-mcp 0.2.10). Regression tests at `tests/regression/test_issue_635_trust_jwt_iss_required.py` cover missing-iss-rejected, missing-iss-allowed-when-no-issuer, present-iss-validated, present-iss-matched, and missing-aud-rejected paths.
 
 ### Cross-SDK alignment
 
-- kailash-rs#599 (v3.23.0) — Rust JWT iss-claim presence enforcement
 - #625 (kailash-mcp 0.2.10) — MCP layer iss-claim fix; this PR completes the same fix at the underlying trust JWT validator the MCP layer delegates to
 
 ## [2.11.1] — 2026-04-26 — Complete alg_id Layer-1 threading (#604 Wave 4)
 
-Patch bump — closes Wave 3 `/redteam` HIGH findings H1 + H2 on the `AlgorithmIdentifier` scaffold. Threads `alg_id` through the four remaining Layer-1 sites that PR #627 (kailash 2.11.0) deferred, and re-exports the canonical scaffold symbols from `kailash.trust` and `kailash.trust.signing`. Wire format remains gated on mint ISS-31 + cross-SDK align with `esperie/kailash-rs#33`; until then, all Layer-1 sites enforce `ed25519+sha256` only and raise `NotImplementedError` on any non-default value.
+Patch bump — closes Wave 3 `/redteam` HIGH findings H1 + H2 on the `AlgorithmIdentifier` scaffold. Threads `alg_id` through the four remaining Layer-1 sites that PR #627 (kailash 2.11.0) deferred, and re-exports the canonical scaffold symbols from `kailash.trust` and `kailash.trust.signing`. Wire format remains gated on mint ISS-31 + cross-SDK align; until then, all Layer-1 sites enforce `ed25519+sha256` only and raise `NotImplementedError` on any non-default value.
 
 ### Security
 
@@ -2035,7 +2026,7 @@ Patch bump — closes Wave 3 `/redteam` HIGH findings H1 + H2 on the `AlgorithmI
 
 ### Cross-SDK
 
-- Wire format remains gated on mint ISS-31 + cross-SDK align with `esperie/kailash-rs#33`. All Layer-1 sites enforce `"ed25519+sha256"` only.
+- Wire format remains gated on mint ISS-31 + cross-SDK align. All Layer-1 sites enforce `"ed25519+sha256"` only.
 
 ### Origin
 
@@ -2048,7 +2039,7 @@ Minor bump — two new public modules in `kailash.trust`. Ships alongside `kaila
 
 ### Added
 
-- **`kailash.trust.signing.algorithm_id`** (#604) — new module exposing the `AlgorithmIdentifier` frozen dataclass + `ALGORITHM_DEFAULT = "ed25519+sha256"` constant + `coerce_algorithm_id(alg_id)` canonical helper. Threaded through `SignedEnvelope` (storage record + `to_dict`/`from_dict`/`verify` triplet) so the algorithm metadata survives JSON round-trip on the wire. Legacy records (pre-#604, no `algorithm` key) are accepted with a one-time `DeprecationWarning` per process containing the literal substring `"scaffold for #604; wire format pending mint ISS-31"`. Non-default values raise `NotImplementedError` until mint ISS-31 stabilises the canonical wire format. Other Layer-1 sites (timestamping, CRL, message envelopes) tracked in inventory at `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`. Cross-SDK: `esperie/kailash-rs#33`.
+- **`kailash.trust.signing.algorithm_id`** (#604) — new module exposing the `AlgorithmIdentifier` frozen dataclass + `ALGORITHM_DEFAULT = "ed25519+sha256"` constant + `coerce_algorithm_id(alg_id)` canonical helper. Threaded through `SignedEnvelope` (storage record + `to_dict`/`from_dict`/`verify` triplet) so the algorithm metadata survives JSON round-trip on the wire. Legacy records (pre-#604, no `algorithm` key) are accepted with a one-time `DeprecationWarning` per process containing the literal substring `"scaffold for #604; wire format pending mint ISS-31"`. Non-default values raise `NotImplementedError` until mint ISS-31 stabilises the canonical wire format. Other Layer-1 sites (timestamping, CRL, message envelopes) tracked in inventory at `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`.
 - **`kailash.trust.vault`** (#606) — new package with the SLIP-0039 Shamir secret-sharing wrapper for Trust Vault key backup. Public surface: `ShamirRitual` frozen dataclass + `generate` / `reconstruct` / `serialize_shard` / `deserialize_shard` / `rotate_holders` lazy-import helpers + `back_up_vault_key` stub raising `NotImplementedError("Trust Vault Shamir binding awaits mint ISS-37")`. Lazy-import contract: module imports cleanly without the optional dep; call site raises `RuntimeError` with `pip install kailash[shamir]` install hint when absent.
 - **New optional extra `[shamir]`** in root `pyproject.toml` pinning `shamir-mnemonic>=0.3` (latest published: 0.3.0). Install via `pip install kailash[shamir]`.
 - **Tier 1 + Tier 2 regression tests** — `tests/regression/test_issue_604_alg_id_threading.py` (13 cases) + `tests/regression/test_issue_606_shamir_wrapper.py` (12 cases) + `tests/integration/trust/test_shamir_round_trip.py` (7 cases against real `shamir-mnemonic`).
@@ -2056,7 +2047,6 @@ Minor bump — two new public modules in `kailash.trust`. Ships alongside `kaila
 
 ### Related
 
-- Cross-SDK: `esperie/kailash-rs#33` (alg_id), follow-up needed on Rust side for #606 Shamir scaffold.
 - Spec gates: `terrene-foundation/mint` ISS-31 (alg_id wire format), ISS-37 (Trust Vault binding).
 - Issues: closes part of #604 (SignedEnvelope only — Layer-1 follow-up shards pending), closes #606 (scaffold; binding gated on ISS-37).
 
@@ -2066,14 +2056,12 @@ Minor bump — two new public API surfaces in kailash core. Ships with `kailash-
 
 ### Added
 
-- **`BudgetTracker.set_threshold_callback(threshold_pct, callback)`** at `src/kailash/trust/constraints/budget_tracker.py` — public API for registering a one-shot callback that fires when budget utilization first reaches a caller-supplied fraction of allocated budget. Distinct from the existing `on_threshold()` (which fires only at hardcoded 80/95/100% marks). Callback fires when `(committed + reserved) / allocated >= threshold_pct` after a successful `reserve()` or `record()` call. Multiple callbacks may be registered at the same threshold (registration order preserved); each (threshold, handle) fires AT MOST ONCE per BudgetTracker instance. Returns an integer handle for symmetric removal via `unregister_threshold_callback(handle)`. Thread-safe under existing `self._lock`; predicate evaluated under lock, callbacks dispatched outside the lock to prevent re-entrancy deadlock. Callback exceptions are logged at WARNING via `logger.exception` and never propagate to `record()`/`reserve()` callers. Motivation: Envoy Phase 01 Grant Moment trigger — operator wires "you've used 80% of your budget" notification to drive escalation. Cross-SDK alignment with `kailash-rs#30`.
+- **`BudgetTracker.set_threshold_callback(threshold_pct, callback)`** at `src/kailash/trust/constraints/budget_tracker.py` — public API for registering a one-shot callback that fires when budget utilization first reaches a caller-supplied fraction of allocated budget. Distinct from the existing `on_threshold()` (which fires only at hardcoded 80/95/100% marks). Callback fires when `(committed + reserved) / allocated >= threshold_pct` after a successful `reserve()` or `record()` call. Multiple callbacks may be registered at the same threshold (registration order preserved); each (threshold, handle) fires AT MOST ONCE per BudgetTracker instance. Returns an integer handle for symmetric removal via `unregister_threshold_callback(handle)`. Thread-safe under existing `self._lock`; predicate evaluated under lock, callbacks dispatched outside the lock to prevent re-entrancy deadlock. Callback exceptions are logged at WARNING via `logger.exception` and never propagate to `record()`/`reserve()` callers. Motivation: Envoy Phase 01 Grant Moment trigger — operator wires "you've used 80% of your budget" notification to drive escalation. Cross-SDK alignment.
 - **`BudgetEvent` payload extended** with optional `threshold_pct: Optional[float]`, `committed_microdollars: Optional[int]`, `reserved_microdollars: Optional[int]` fields. Custom-threshold events carry the registered fraction; legacy `threshold_80` / `threshold_95` / `exhausted` events now also carry their corresponding fraction (0.80 / 0.95 / 1.00) for cross-callback uniformity. `to_dict()` / `from_dict()` are backward-compatible — older payloads without these keys deserialize cleanly with the new fields set to `None`.
 - **Tier 1 unit tests** at `tests/trust/unit/test_budget_tracker_callbacks.py` (27 tests) covering happy path, registration order, multi-threshold ordering, exception isolation, once-only firing, threshold-pct validation (NaN/Inf/0/1/boundary), claimed-amount predicate, unregister semantics, allocated-zero edge case, and `_max_callbacks` limit.
 - **Tier 2 integration tests** at `tests/trust/integration/test_budget_tracker_callbacks.py` (5 tests) exercising callback dispatch under concurrent `reserve()`/`record()` workers (16-thread + 50-thread scenarios), callback-exception isolation under load, multi-threshold independence under load, and end-to-end Grant Moment scenario. NO mocking — all tests use real `threading` primitives.
 
 ### Related
-
-- Cross-SDK: `esperie/kailash-rs#30` (Rust `BudgetTracker::set_threshold_callback`).
 
 ## Note: Changelog Reorganized
 
@@ -2101,7 +2089,7 @@ The changelog has been reorganized into individual files for better management. 
 - 35 unit tests at `tests/unit/channels/test_mcp_transports.py` cover URL validation, exception hierarchy, transport construction guards, and per-transport contract.
 - 4 integration tests at `tests/integration/channels/test_mcp_transports_real.py` execute against real infrastructure (subprocess echo for stdio, `aiohttp` test server for sse + http) — NO mocking per `rules/testing.md` § 3-Tier Testing.
 
-**Cross-SDK parity:** mirrors `kailash-rs/crates/kailash-mcp/src/transport/{stdio,sse}.rs` semantic shape for parity (kailash-rs ISS-20 / EATP D6).
+**Cross-SDK parity:** mirrors the cross-SDK MCP transport semantic shape for parity (EATP D6).
 
 ### kailash 2.9.2 — 2026-04-25 — 1.1.2 patch wave (docstring + cross-SDK)
 
@@ -2160,7 +2148,7 @@ No breaking changes.
 
 ### kailash 2.8.12 — 2026-04-21 (closes #573) — `immutable_audit_log` orphan removed
 
-**Cross-SDK orphan-check mirroring kailash-rs#461 / PR #466.** `src/kailash/trust/immutable_audit_log.py` defined `ImmutableAuditLog` (541 LOC) as a deque-based append-only log with SHA-256 hash chaining. Grep across `src/` + `packages/*/src/` + `tests/` + `packages/*/tests/` returned zero production or test consumers — the module was a pure facade per `rules/orphan-detection.md` §1, never wired into any call site. The canonical audit-storage surface is `kailash.trust.audit_store` (`InMemoryAuditStore` + `AuditStoreProtocol`), which has real production consumers.
+**Cross-SDK orphan-check.** `src/kailash/trust/immutable_audit_log.py` defined `ImmutableAuditLog` (541 LOC) as a deque-based append-only log with SHA-256 hash chaining. Grep across `src/` + `packages/*/src/` + `tests/` + `packages/*/tests/` returned zero production or test consumers — the module was a pure facade per `rules/orphan-detection.md` §1, never wired into any call site. The canonical audit-storage surface is `kailash.trust.audit_store` (`InMemoryAuditStore` + `AuditStoreProtocol`), which has real production consumers.
 
 **What changed:**
 
@@ -2263,7 +2251,7 @@ Bundle release: BP-049 classified-data leak security patch (DataFlow) + ML Phase
 
 ## kailash-kaizen — #498 LLM Deployment Abstraction (Sessions 1-8 complete)
 
-Four-axis LLM deployment abstraction: 24 preset factories spanning direct providers (OpenAI, Anthropic, Google, 13 others), AWS Bedrock (5 families), GCP Vertex (Claude + Gemini), and Azure OpenAI — all with cross-SDK byte-parity to `kailash-rs#406`. Additive API: existing `kaizen.providers.registry` continues to work unchanged (39 consumer files verified via regression test).
+Four-axis LLM deployment abstraction: 24 preset factories spanning direct providers (OpenAI, Anthropic, Google, 13 others), AWS Bedrock (5 families), GCP Vertex (Claude + Gemini), and Azure OpenAI — all with cross-SDK byte-parity. Additive API: existing `kaizen.providers.registry` continues to work unchanged (39 consumer files verified via regression test).
 
 #### Added
 
@@ -2294,7 +2282,6 @@ Four-axis LLM deployment abstraction: 24 preset factories spanning direct provid
 
 #### Related
 
-- Cross-SDK: `kailash-rs#406` (parallel implementation), `kailash-rs#409` (brief-template verification).
 - Workspace: `workspaces/issue-498-llm-deployment/` (ADR-0001, 8 session todos, redteam amendments).
 
 ---
@@ -2310,7 +2297,7 @@ Four-axis LLM deployment abstraction: 24 preset factories spanning direct provid
 
 #### Added
 
-- **`kailash.utils.annotations` shared helper** (`kailash 2.8.7`): single source of truth for annotation introspection across the SDK — `get_namespace_annotations(namespace)` for metaclass `__new__`, `get_class_annotations(cls)` for raw introspection, and `get_resolved_type_hints(cls)` for callers that need fully resolved types (e.g. DataFlow `@db.model` SQL generation). The `get_resolved_type_hints` path mirrors the kailash-rs handler — on Python 3.14 it falls back to `annotationlib.get_annotations(cls, format=FORWARDREF)` and raises a clear per-field error naming the class, the field, and the unresolvable forward reference, instead of the bare `NameError` that raw `cls.__annotations__` access produces.
+- **`kailash.utils.annotations` shared helper** (`kailash 2.8.7`): single source of truth for annotation introspection across the SDK — `get_namespace_annotations(namespace)` for metaclass `__new__`, `get_class_annotations(cls)` for raw introspection, and `get_resolved_type_hints(cls)` for callers that need fully resolved types (e.g. DataFlow `@db.model` SQL generation). The `get_resolved_type_hints` path mirrors the cross-SDK handler — on Python 3.14 it falls back to `annotationlib.get_annotations(cls, format=FORWARDREF)` and raises a clear per-field error naming the class, the field, and the unresolvable forward reference, instead of the bare `NameError` that raw `cls.__annotations__` access produces.
 - **`LocalRuntime.mark_externally_managed()` public opt-out** (`kailash 2.8.7`): frameworks that hold a long-lived `LocalRuntime` across many `execute()` calls (e.g. DataFlow's `ModelRegistry`, `DataFlow` instance, migration inspectors, gateway, adapter) now have a documented public API to declare that lifecycle is externally managed. The runtime responds by suppressing the "use context manager" deprecation warning and skipping atexit cleanup registration — the owning framework MUST call `runtime.close()` at its own shutdown. This replaces the earlier private-attribute workaround (`runtime._cleanup_registered = True`) that was flagged at `/redteam` as a Rule-4 violation.
 - **Regression test** `tests/regression/test_python_314_annotations.py` (12 tests): covers eager and lazy namespace forms, raw and resolved class annotations, forward-reference handling, the original Kaizen Signature symptom, the Core SDK Port descriptor extraction path, and an import-wiring check across every patched module so a typo in any helper import surfaces structurally rather than at first agent use.
 
@@ -2358,7 +2345,7 @@ Four-axis LLM deployment abstraction: 24 preset factories spanning direct provid
 
 #### Fixed
 
-- **Integer record ID coercion for PostgreSQL** (`kailash-dataflow 2.0.7`): `express_sync.update/read/delete` rejected string IDs for integer primary key models on PostgreSQL because type coercion compared raw annotations (`Optional[int]`) against `int` directly. Additionally, the `conditions["id"]` path (used by update's filter dict) had zero type coercion. Extracted `_coerce_record_id()` helper that normalizes type annotations and applied at all 9 record ID paths. Express API type hints updated to accept `Union[str, int]`. Fixes #439. Cross-SDK: esperie-enterprise/kailash-rs#377.
+- **Integer record ID coercion for PostgreSQL** (`kailash-dataflow 2.0.7`): `express_sync.update/read/delete` rejected string IDs for integer primary key models on PostgreSQL because type coercion compared raw annotations (`Optional[int]`) against `int` directly. Additionally, the `conditions["id"]` path (used by update's filter dict) had zero type coercion. Extracted `_coerce_record_id()` helper that normalizes type annotations and applied at all 9 record ID paths. Express API type hints updated to accept `Union[str, int]`. Fixes #439.
 
 ### kailash 2.8.5 + kailash-mcp 0.2.2 — 2026-04-13
 
@@ -2380,7 +2367,7 @@ kailash 2.8.4 + kailash-dataflow 2.0.6 + kailash-kaizen 2.7.3
 - **`schema_manager` defense-in-depth** (`kailash 2.8.4`): `SchemaManager.drop_table()` and `drop_column()` require `force_drop=True` per `rules/dataflow-identifier-safety.md` Rule 4; previously a missing flag would silently drop.
 - **EATP human-origin identifier validation** (`kailash 2.8.4`): `eatp_human_origin.py` migration now routes all dynamic identifiers through `dialect.quote_identifier()` — the earlier version interpolated tenant-supplied model names directly into DDL.
 - **Audit forwarding with `exc_info`** (`kailash-kaizen 2.7.3`): audit `logger.error()` calls in `core/autonomy/observability/audit.py` and `security/audit.py` now pass `exc_info=True` so stack traces appear in the log pipeline instead of just the message string.
-- **Classification fail-closed** (`kailash-dataflow 2.0.6`): `ClassificationPolicy.classify()` changed default from `PUBLIC` (fail-open) to `HIGHLY_CONFIDENTIAL` (fail-closed) for unclassified fields, matching kailash-rs semantics per EATP D6 (cross-SDK alignment #418). A WARN log is emitted when the default is applied.
+- **Classification fail-closed** (`kailash-dataflow 2.0.6`): `ClassificationPolicy.classify()` changed default from `PUBLIC` (fail-open) to `HIGHLY_CONFIDENTIAL` (fail-closed) for unclassified fields, matching cross-SDK semantics per EATP D6 (cross-SDK alignment #418). A WARN log is emitted when the default is applied.
 - **Connection parser consolidated credential decode** (`kailash-dataflow 2.0.6`): `connection_parser.py` now routes credential decode through the shared `decode_userinfo_or_raise` helper, eliminating a hand-rolled `unquote()` site that lacked null-byte rejection.
 
 #### Fixed
@@ -2441,7 +2428,7 @@ kailash 2.8.2 + kailash-dataflow 2.0.4 + kailash-nexus 2.0.1 + kailash-mcp 0.2.1
 
 #### Fixed
 
-- **Arbor #3 — Nexus workflow metadata** (kailash-nexus 2.0.1): `Nexus.register()` now accepts a `metadata=` kwarg. Metadata is JSON-validated (64 KiB cap) before mutating the workflow and stored as a shallow copy so caller post-register mutations don't leak through. `@handler` decorator and `register_handler()` also accept metadata. Cross-SDK: `esperie-enterprise/kailash-rs#323`.
+- **Arbor #3 — Nexus workflow metadata** (kailash-nexus 2.0.1): `Nexus.register()` now accepts a `metadata=` kwarg. Metadata is JSON-validated (64 KiB cap) before mutating the workflow and stored as a shallow copy so caller post-register mutations don't leak through. `@handler` decorator and `register_handler()` also accept metadata.
 - **Arbor #4 — Dependency hygiene** (kailash 2.8.2, kailash-dataflow 2.0.4, kailash-kaizen 2.7.2): removed undeclared `numpy`, `aiohttp` from kailash-dataflow main deps (not imported in src/); added `requests>=2.32` to kailash-kaizen (3 lazy import sites in providers/embedding, config, signatures); kept `websockets>=12.0` in kailash-nexus (directly imported by transports); root kailash moved `websockets` to dev extras. `uv pip check` clean (142 packages).
 - **Arbor #5 — DATABASE_URL special characters** (kailash 2.8.2, kailash-dataflow 2.0.4, kaizen-agents 0.9.1): four builder methods (`DatabaseConfigBuilder.{postgresql,mysql}` + `AsyncDatabaseConfigBuilder.{postgresql,mysql}`) now URL-encode credentials via `quote_plus`. Nine downstream parse sites now `unquote` credentials after `urlparse`. The hand-rolled regex MySQL parser in `trust/esa/database.py` (which rejected valid percent-encoded passwords) is removed. The pre-encoder helper `_encode_password_special_chars` is promoted to `kailash.utils.url_credentials.preencode_password_special_chars` and applied at all 6 dialect parse sites uniformly.
 - **DataFlow MongoDB lazy import** (kailash-dataflow 2.0.4): `motor` was imported unconditionally at module top, breaking `from dataflow import DataFlow` for projects without motor installed. Moved import inside `MongoDBAdapter.connect()` with a descriptive `ImportError` pointing at `pip install motor pymongo`.
