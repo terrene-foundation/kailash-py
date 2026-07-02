@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "PactError",
+    "DeserializationError",
 ]
 
 
@@ -31,3 +32,16 @@ class PactError(Exception):
     def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.details = details or {}
+
+
+class DeserializationError(PactError):
+    """Raised when a persisted governance object fails re-validation on load.
+
+    A ``CompiledOrg`` reconstructed from stored JSON is an authorization root
+    consumed by ``pact.access.can_access``. If the persisted bytes were
+    tampered with (grammar-invalid address, node keyed by a foreign address,
+    or a node whose declared type disagrees with its address), the load MUST
+    fail closed rather than hand back an unvalidated authorization root.
+    """
+
+    pass

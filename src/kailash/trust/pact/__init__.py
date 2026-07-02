@@ -15,6 +15,7 @@ from kailash.trust.pact.addressing import (
     AddressSegment,
     GrammarError,
     NodeType,
+    parse_structural_address,
 )
 from kailash.trust.pact.agent import (
     GovernanceBlockedError,
@@ -63,7 +64,7 @@ from kailash.trust.pact.envelopes import (
     default_envelope_for_posture,
     intersect_envelopes,
 )
-from kailash.trust.pact.exceptions import PactError
+from kailash.trust.pact.exceptions import DeserializationError, PactError
 from kailash.trust.pact.explain import (
     describe_address,
     explain_access,
@@ -101,12 +102,14 @@ from kailash.trust.pact.yaml_loader import (
 __all__ = [
     # Error hierarchy (Ref-18, M5 convention compliance)
     "PactError",
+    "DeserializationError",
     # Addressing (Ref-1001)
     "Address",
     "AddressError",
     "AddressSegment",
     "GrammarError",
     "NodeType",
+    "parse_structural_address",
     # Compilation (Ref-1003, 1004, 1005)
     "CompilationError",
     "CompiledOrg",
