@@ -28,7 +28,7 @@
 - **Scale-out ready** -- Distributed circuit breaker (Redis-backed with Lua atomic transitions), multi-worker task queue architecture, resource quotas with semaphore-based concurrency control, coordinated graceful shutdown, Kubernetes deployment manifests.
 - **Progressive infrastructure** -- Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by changing environment variables. Dialect-portable SQL via QueryDialect strategy pattern. SQL task queue with `SKIP LOCKED`, worker heartbeat registry, exactly-once idempotent execution. No code changes between Level 0 (dev) and Level 2 (production).
 - **Infrastructure-agnostic** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Deploy anywhere: any cloud, any region, on-prem, edge, air-gapped. Zero vendor lock-in.
-- **Unified engine APIs** -- `DataFlowEngine.builder("sqlite:///app.db").build()` and `NexusEngine.builder().preset(Preset.SAAS).build()` provide fluent builder patterns with validation layers, data classification, query monitoring, and enterprise middleware. Cross-SDK parity with kailash-rs.
+- **Unified engine APIs** -- `DataFlowEngine.builder("sqlite:///app.db").build()` and `NexusEngine.builder().preset(Preset.SAAS).build()` provide fluent builder patterns with validation layers, data classification, query monitoring, and enterprise middleware. Cross-SDK parity.
 - **Field-level validation and data classification** -- Declarative `@field_validator` and `@classify` decorators on DataFlow models. Built-in validators for email, URL, UUID, phone, length, range, pattern. Classification levels (PII, internal, public) with retention policies and masking strategies.
 - **Organizational governance (PACT)** -- D/T/R accountability grammar, operating envelopes with monotonic tightening, knowledge clearance levels, verification gradient, and MCP tool governance. Governs AI agent organizations with fail-closed decisions and anti-self-modification defense.
 - **Foundation for four application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database), and [PACT](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-pact) (organizational governance) are all built on this Core SDK.
@@ -157,13 +157,13 @@ schema, model_spec, eval_spec = kailash_ml.from_brief(
 
 The five `from_brief()` surfaces are NOT named inconsistently by accident. The verb form reflects what each call returns:
 
-| Surface       | Entry point                          | Returns                                | Verb form         | Why                                                                |
-| ------------- | ------------------------------------ | -------------------------------------- | ----------------- | ------------------------------------------------------------------ |
-| Workflow      | `Workflow.from_brief(brief)`         | `Workflow` instance                    | classmethod       | result IS a Workflow — `cls(...)` is the natural constructor       |
-| DataFlow      | `DataFlow.from_brief(brief, conn)`   | `DataFlow` instance                    | classmethod       | result IS a DataFlow — same naming convention                      |
-| Kaizen        | `Kaizen.signature_from_brief(brief)` | `Signature` SUBCLASS (not a Kaizen)    | classmethod (suffix verb) | result is a Signature, NOT a Kaizen — the `signature_` suffix tells you what you got back |
-| Bootstrap     | `kailash.bootstrap(brief, profile)`  | `Config` dataclass                     | module-level      | result is a Config, NOT a kailash module — module-level is the honest verb         |
-| ML            | `kailash_ml.from_brief(brief, df)`   | `(FeatureSchema, ModelSpec, EvalSpec)` | module-level      | result is a triple of three independent dataclasses — module-level for the same reason |
+| Surface   | Entry point                          | Returns                                | Verb form                 | Why                                                                                       |
+| --------- | ------------------------------------ | -------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
+| Workflow  | `Workflow.from_brief(brief)`         | `Workflow` instance                    | classmethod               | result IS a Workflow — `cls(...)` is the natural constructor                              |
+| DataFlow  | `DataFlow.from_brief(brief, conn)`   | `DataFlow` instance                    | classmethod               | result IS a DataFlow — same naming convention                                             |
+| Kaizen    | `Kaizen.signature_from_brief(brief)` | `Signature` SUBCLASS (not a Kaizen)    | classmethod (suffix verb) | result is a Signature, NOT a Kaizen — the `signature_` suffix tells you what you got back |
+| Bootstrap | `kailash.bootstrap(brief, profile)`  | `Config` dataclass                     | module-level              | result is a Config, NOT a kailash module — module-level is the honest verb                |
+| ML        | `kailash_ml.from_brief(brief, df)`   | `(FeatureSchema, ModelSpec, EvalSpec)` | module-level              | result is a triple of three independent dataclasses — module-level for the same reason    |
 
 Rule of thumb: if the call returns an instance of the host class, it's a classmethod. If the call returns something else, the verb lives at module level so callers don't import-then-call something whose name lies about its return type.
 
@@ -467,7 +467,7 @@ Structural invariants — re-validated on every dispatch + execute path:
 Cross-implementation receipt evidence:
 
 - 5 conformance vectors pinned in `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001).
-- 2 vectors (DV-5-001, DV-10-001) vendored byte-for-byte from kailash-rs canonical per `cross-sdk-inspection.md` Rule 4a.
+- 2 vectors (DV-5-001, DV-10-001) vendored byte-for-byte from the cross-SDK canonical per `cross-sdk-inspection.md` Rule 4a.
 - `receipts_agree(rs, py)` cross-impl comparator with default timestamp-exclusion (`terminated_at`, `executed_at`, `started_at`, `signed_at`) and ordered comparison for chained data (`audit_chain_entries`, TAOD `transitions`).
 - Vector tamper-detection on load — `ConformanceVectorIntegrityError` raises on hash-drift between the fixture's stored `digest` and a re-computed digest.
 
@@ -506,7 +506,7 @@ print(f"{len(vectors)} vectors: {[v.vector_id for v in vectors]}")
 
 ### Status: pre-pledge
 
-The primitive is **pre-pledge**: structurally complete, byte-shape-pinned against kailash-rs, deferral set disclosed. Not yet attested to PACT D/T/R compliance or third-party security audit. The post-pledge state requires:
+The primitive is **pre-pledge**: structurally complete, byte-shape-pinned against the cross-SDK canonical, deferral set disclosed. Not yet attested to PACT D/T/R compliance or third-party security audit. The post-pledge state requires:
 
 - §10 G1 closure ([issue #1143](https://github.com/terrene-foundation/kailash-py/issues/1143))
 - Independent PACT-class audit

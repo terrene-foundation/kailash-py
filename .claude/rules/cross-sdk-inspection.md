@@ -254,6 +254,38 @@ When closing any issue, verify:
 
 **Why:** Closing without cross-SDK verification is the primary cause of feature drift — the checklist is the last gate before an issue is forgotten.
 
+### 6. Cross-SDK References In Public-Published Artifacts Are BLOCKED
+
+The Rust SDK BUILD repo (`esperie-enterprise/kailash-rs`) is **PRIVATE**. Cross-SDK references — the sibling repo/org name, its version numbers, its issue numbers, its crate paths, its internal architecture — MUST NOT appear in any PUBLIC-PUBLISHED artifact of this (public, PyPI-published) repo: `CHANGELOG.md`, `README.md`, rendered docs, published package metadata, or public source/comments. Cross-SDK parity tracking lives in INTERNAL issues (filed on `esperie-enterprise/kailash-rs` itself) and journals — never in the public changelog. Genericize to "cross-SDK" / "cross-implementation" without naming the private repo.
+
+```markdown
+# DO — public CHANGELOG genericizes; the parity link lives in an internal issue
+
+- **Tenant-scoped event bus (#1338, cross-SDK parity)**: ...
+
+# DO NOT — public CHANGELOG names the private repo/org/version/issue
+
+- **Tenant-scoped event bus (#1338, cross-SDK parity with esperie-enterprise/kailash-rs #1352)**: ...
+- ... "mirrors kailash-rs v4.12.0 (rs#1448)" / "kailash-rs uses axum + tokio" ...
+```
+
+**BLOCKED rationalizations:** "it's just a cross-reference" / "the parity note is useful context for users" / "the repo name is already known internally" / "it's only the version number, not the code" / "the CHANGELOG is developer-facing, not really public".
+
+**Why:** A public artifact naming the private repo leaks its existence, its org, and its internals to every PyPI consumer — and couples the Foundation-independent Python SDK to a private sibling in violation of `CLAUDE.md` Directive 0 (Foundation Independence — "Kailash Python IS the product, not a derivative of anything"). Cross-SDK visibility belongs in internal tracking, where it informs parity without disclosing the private repo to the world.
+
+**Note (broader surface, flagged not closed):** synced COC governance artifacts (`.claude/rules/`, `.claude/skills/`) that reference `kailash-rs` for cross-SDK PROCEDURE are internal governance, distinct from public-published artifacts — but if a downstream USE template is public, those references become public too. That exposure is a separate, larger audit (out of this clause's scope); this clause governs the PyPI-published artifact surface (CHANGELOG/README/docs/package-metadata/public-source).
+
+**Trust Posture Wiring:**
+
+- **Severity:** `halt-and-report` at gate-review (reviewer at `/implement` + release-specialist at `/release` confirm no public-published artifact in the diff names the private Rust SDK repo/org/version/issue); `advisory` at any hook layer (a lexical `kailash-rs|esperie` scan of public artifacts cannot carry `block` per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing.
+- **Cumulative posture impact:** same-class violations (a private-repo reference shipped in a public-published artifact) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** trigger key `public_artifact_private_repo_disclosure` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate; shared with Rules 4b/4c).
+- **Detection mechanism:** Phase 1 — gate-level reviewer at `/implement` + `/release`: for any diff touching `CHANGELOG.md` / `README.md` / `docs/` / package metadata, grep `kailash-rs|esperie` and halt on a hit. Phase 2 (deferred): a `PostToolUse(Edit|Write)` advisory scanning public-artifact paths.
+- **Violation scope:** this clause (private-repo references in public-published artifacts). Every violation row names the artifact + the leaked reference.
+- **Origin:** 2026-07-02 — a `/codify` session found 27 references to the private `esperie-enterprise/kailash-rs` (incl. the private org names + rs versions/issues/crate-paths/architecture) in the public, PyPI-published `CHANGELOG.md`; scrubbed in kailash-py PR #1488. User directive: "why will CHANGELOG record kailash-rs? There is NO REASON TO!" This clause generalizes the fix to all public-published artifacts.
+
 ## Examples
 
 ```
