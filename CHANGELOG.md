@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.0] - 2026-07-02
+
+Trust-plane hardening plus two new trust primitives.
+
+### Added
+
+- **`ConsentAttestation`** (`kailash.trust`) — first-class affirmative-human-acceptance
+  record: `human_origin_id`, `document_hash` (SHA-256 of the exact rendered bytes),
+  `document_version`, `typed_name`, `assent_signals`, Ed25519 signature (+ optional HMAC
+  overlay), head-anchored `ConsentLedger` chain (analog of `CapabilityAttestation`). The
+  engine ships the signed/chained primitive only; domain/legal wording stays app-side.
+  (#1481)
+- **Per-recipient disclosure-trace tokens** (`kailash.trust`) — a `disclosure` audit event
+  deriving a deterministic per-`(recipient, resource, session)` trace token via keyed
+  HMAC-SHA256 from an injected server key (fail-closed on an absent key), bound to the audit
+  record, with keyed reverse-lookup (`trace_token -> recipient`, not HMAC inversion).
+  Watermark rendering stays app-side. (#1482)
+
+### Fixed
+
+- **Hold resolution now cryptographically binds the reviewed disclosure**
+  (`kailash.trust.plane.holds`). `HoldManager.resolve()` signs an Ed25519 payload over the
+  reviewed hold's decision-relevant disclosure (submitter/caller, reason, capability)
+  _before_ the durable write; `verify_resolution()` recomputes the payload from the stored
+  hold, so an approval/rejection signed over a disclosure differing from the queued hold
+  fails verification and the hold survives for a correct decision. Fail-closed on
+  unsigned/pending. (#1483)
+- **Persisted PACT authorization root is re-validated on load**
+  (`kailash.trust.pact.stores.SqliteOrgStore`). `_deserialize_org` now re-runs the D/T/R
+  grammar + structural-consistency checks on every reconstructed org node and fails closed
+  with a typed `DeserializationError` on a tampered / grammar-invalid / dropped-key persisted
+  org, rather than yielding an unvalidated authorization root. `Address` / `AddressSegment`
+  gain `__post_init__` validators so every construction path validates. (#1480)
+
 ## [2.44.1] - 2026-06-22
 
 Closes the three implementable public-reachable gaps from the Production/Stable
