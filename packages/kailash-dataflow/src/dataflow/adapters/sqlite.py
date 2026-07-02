@@ -863,13 +863,17 @@ class SQLiteAdapter(DatabaseAdapter):
             if self.enable_connection_pooling:
                 # Legacy list-based pool (fallback)
                 for _ in range(min(5, self.max_connections)):
+                    conn = None
                     try:
                         conn = await aiosqlite.connect(
                             self.database_path, **self._connect_kwargs
                         )
                         conn.row_factory = aiosqlite.Row
 
-                        # Apply SQLite pragmas for enterprise features
+                        # Apply SQLite pragmas for enterprise features.
+                        # The execute MUST stay inside the loop — a dedent here
+                        # applies only the LAST pragma (foreign_keys silently OFF
+                        # on pooled connections) and NameErrors on empty pragmas.
                         for pragma, value in self.pragmas.items():
                             if self.is_memory_database and pragma in (
                                 "journal_mode",
@@ -878,7 +882,10 @@ class SQLiteAdapter(DatabaseAdapter):
                             ):
                                 continue
                             safe_name, safe_value = _validate_pragma(pragma, value)
-                        await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                            cursor = await conn.execute(
+                                f"PRAGMA {safe_name} = {safe_value}"
+                            )
+                            await cursor.close()
 
                         self._connection_pool.append(conn)
                         self._pool_stats.total_connections += 1
@@ -889,6 +896,19 @@ class SQLiteAdapter(DatabaseAdapter):
                             "sqlite.failed_to_create_connection_in_pool",
                             extra={"error": str(e)},
                         )
+                        # The append above transfers ownership to the pool; a
+                        # failure before it (e.g. a pragma raising) leaves this
+                        # frame owning an open connection that _close_connection_pool
+                        # will never see. Close it here so it is not orphaned to GC
+                        # as a leaked aiosqlite Connection.
+                        if conn is not None:
+                            try:
+                                await conn.close()
+                            except Exception as close_err:  # best-effort cleanup
+                                logger.debug(
+                                    "sqlite.pool_init_cleanup_close_failed",
+                                    extra={"error": str(close_err)},
+                                )
                         break
 
                 logger.info(
