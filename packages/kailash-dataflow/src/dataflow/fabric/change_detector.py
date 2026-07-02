@@ -20,8 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Dict, List, Mapping, Optional
+from typing import Any, Callable, Coroutine, List, Mapping, Optional
 
 from dataflow.adapters.source_adapter import BaseSourceAdapter
 
@@ -236,7 +235,6 @@ class ChangeDetector:
                 logger.warning(
                     "ChangeDetector: change detection failed for '%s'",
                     source_name,
-                    exc_info=True,
                 )
                 await asyncio.sleep(poll_interval)
                 continue
