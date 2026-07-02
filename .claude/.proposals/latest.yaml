@@ -489,3 +489,48 @@ changes:
       and applies to every public-published repo; the repo-path correction is a factual fix
       every consumer needs. The DO/DO-NOT examples are illustrative markdown (no per-CLI
       delegation primitive), so the clause emits globally with no cross-cli slot partitioning.
+  - type: rule_update
+    artifact: cross-sdk-genericization
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+      - .claude/rules/cross-repo.md
+      - .claude/rules/repo-scope-discipline.md
+      - .claude/guides/rule-extracts/independence-rs.md
+      - .claude/skills/30-claude-code-patterns/sdk-upstream-donation.md
+    classification_suggestion: global
+    context: |
+      APPEND 2026-07-02 (same session). Genericize EVERY reference to the private
+      Rust SDK repo across the synced COC corpus (45 files under .claude/{rules,skills,
+      guides}). This CORRECTS a hazard the prior entry (cross-sdk-inspection repo-path
+      fix) introduced: replacing the nonexistent `terrene-foundation/kailash-rs` with the
+      real private `esperie-enterprise/kailash-rs` put the private ORG name into synced
+      artifacts that reach public USE templates — AND this BUILD repo is itself public,
+      so the org name was live-public.
+
+      GATE-1 MUST DO THIS AT SOURCE, TEMPLATIZED — do NOT hardcode `esperie-enterprise/
+      kailash-rs`. Two existing patterns compose:
+      - `cross-repo.md` MUST-1: reference repos by loom-links RESOLVER logical key
+        (`build.rs`), never a hardcoded org/repo. Real org/repo lives in the gitignored
+        `loom-links.local.json` (operator-local, never synced — same #255/#260 fence as
+        `ci-runners.operator.local.md`).
+      - Org-revealing `esperie-enterprise/kailash-rs` → `build.rs` (+ resolve-via-local
+        note); command EXAMPLES use `<rust-sdk-repo>` placeholder. Bare `kailash-rs` in
+        prose/Origin → "the Rust SDK" (keep issue/PR numbers + technical content). KEEP
+        `terrene-foundation/kailash-py` + `terrene-foundation/mint` verbatim.
+
+      BUILD-SIDE (this codify): the 45 files genericized locally (verified 0 `esperie`,
+      0 `kailash-rs`) — reduces the LIVE public exposure in this public repo now. Several
+      touched files are on the self-referential-codify allowlist (cc-artifacts,
+      autonomous-execution, recommendation-quality, repo-scope-discipline,
+      value-prioritization, hook-output-discipline, coc-sync-landing, 30-claude-code-patterns/**),
+      so the mandatory multi-agent redteam (reviewer + security-reviewer + cc-architect)
+      ran before merge.
+
+      REMAINING loom-side follow-up (flagged, not closed here): a resolver logical key for
+      the Rust BUILD repo (`build.rs`) must exist in the loom-links schema + operator-local
+      example so the templatized references resolve. If `build.rs` is not yet a declared
+      key, add it in the same Gate-1 landing.
+
+      CLASSIFICATION: GLOBAL. Foundation Independence (Directive 0) + the #255/#260
+      no-private-identifiers-in-synced-artifacts fence apply to every consumer + every
+      public USE template. CLI-neutral prose; no slot partitioning.

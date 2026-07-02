@@ -7,14 +7,14 @@ How artifacts actually move between repos. This is the operational companion to 
 ```
 BUILD repo ──/codify──> proposal ──> loom/ ──/sync-to-use──> USE template ──> downstream projects
  (kailash-py)          (.proposals/)  (source)   (Gate 2)  (coc-claude-py)   (user projects)
- (kailash-rs)                         of truth              (coc-claude-rs)
+ (rust-sdk)                           of truth              (coc-claude-rs)
 ```
 
 Every arrow is a **merge**, not a copy. Each step reads, compares, adapts, and writes.
 
 ## Step 1: BUILD Repo Creates Artifacts (/codify)
 
-BUILD repos (kailash-py, kailash-rs) are where features, bugs, and issues land first. When `/codify` runs:
+BUILD repos (kailash-py, the Rust SDK) are where features, bugs, and issues land first. When `/codify` runs:
 
 1. Artifacts are written to BUILD repo's `.claude/` for immediate local use
 2. A proposal manifest is created at `.claude/.proposals/latest.yaml`

@@ -6,7 +6,7 @@ The protocol covers three originating directions, each with its own Step below. 
 
 ## Step 7a: BUILD Repo → loom/ Proposal
 
-**Applies to BUILD repos only** (kailash-py, kailash-rs, kailash-prism). Detect by: git remote contains `kailash-py`, `kailash-rs`, or `kailash-prism`, OR `pyproject.toml`/`Cargo.toml::name` is exactly `kailash` OR matches `^kailash-(dataflow|nexus|kaizen|mcp|pact|ml|align)$` (the canonical kailash sub-package set).
+**Applies to BUILD repos only** (kailash-py, the Rust SDK BUILD repo, kailash-prism). Detect by: git remote contains `kailash-py`, the Rust SDK BUILD repo's remote (logical key `build.rs`; resolve via your gitignored `loom-links.local.json` per `cross-repo.md` MUST-1 — never hardcode), or `kailash-prism`, OR `pyproject.toml`/`Cargo.toml::name` is exactly `kailash` OR matches `^kailash-(dataflow|nexus|kaizen|mcp|pact|ml|align)$` (the canonical kailash sub-package set).
 
 **Scope**: SDK-code-originated proposals. The BUILD repo considers **cross-SDK FIRST** (per `rules/artifact-flow.md` § "Issue Routing By Change Type") before originating; Gate-1 sync-reviewer records/flags the cross-SDK alignment as an advisory note.
 
@@ -27,7 +27,7 @@ The protocol covers three originating directions, each with its own Step below. 
 ### Fresh proposal format
 
 ```yaml
-source_repo: kailash-py # or kailash-rs / kailash-prism
+source_repo: kailash-py # or the Rust SDK BUILD repo (logical key build.rs) / kailash-prism
 origin: build # explicit class discriminator
 codify_date: YYYY-MM-DD
 codify_session: "type(scope): description of work"
@@ -87,7 +87,7 @@ Identical three-state lifecycle as Step 7a (`pending_review` → `reviewed` → 
 
 Before writing the manifest, `/codify` MUST glob-check every candidate change-file path against the disallowed-glob set: `src/**`, `packages/**`, `pyproject.toml`, `Cargo.toml`. Disposition:
 
-- **All change-paths disallowed** → HALT. Print: "wrong-lane — refile against BUILD repo issue queue (kailash-py / kailash-rs / kailash-prism)." Do NOT write the manifest.
+- **All change-paths disallowed** → HALT. Print: "wrong-lane — refile against BUILD repo issue queue (kailash-py / the Rust SDK BUILD repo / kailash-prism)." Do NOT write the manifest.
 - **Mixed (some in-scope, some disallowed)** → skip-with-warning. In-scope entries proceed into the manifest; disallowed entries excluded; warning printed listing the excluded paths.
 - **All in-scope** → proceed.
 
@@ -217,7 +217,7 @@ Report: "{N} CC/CO artifacts proposed for upstream to atelier/. When ready, the 
 When a manifest predates this protocol revision and lacks the `origin:` field, sync-reviewer at loom Gate-1 infers from `source_repo:`:
 
 - `source_repo == "loom"` → infer `origin: loom`
-- `source_repo == "kailash-py"` / `"kailash-rs"` / `"kailash-prism"` → infer `origin: build`
+- `source_repo == "kailash-py"` / the Rust SDK BUILD repo's `source_repo` value (logical key `build.rs`) / `"kailash-prism"` → infer `origin: build`
 - `source_repo` matches `kailash-coc-*` → infer `origin: use-template`
 - otherwise → BLOCK with "unparseable proposal origin"
 

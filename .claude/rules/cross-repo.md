@@ -69,7 +69,7 @@ for (const [key, r] of resolveAll()) {
 }
 
 // DO NOT — orchestration root treated as license to hardcode the layout
-const repos = ["kailash-py", "kailash-rs"].map((n) =>
+const repos = ["kailash-py", "<rust-sdk-repo>"].map((n) =>
   path.join(process.env.HOME, "repos", n),
 ); // positional guess even at the root is still BLOCKED
 ```
@@ -124,7 +124,7 @@ etc.) so the disclosure-scrub fence is unaffected.
 ```text
 # DO — fresh operator workstation uses the canonical sublayout
 ~/repos/kailash/build/py         (BUILD: kailash-py)
-~/repos/kailash/build/rs         (BUILD: kailash-rs)
+~/repos/kailash/build/rs         (BUILD: the Rust SDK)
 ~/repos/kailash/use/py           (USE-template: kailash-coc-py)
 ~/repos/kailash/use/rs           (USE-template: kailash-coc-rs)
 ~/repos/loom                     (loom self-checkout)

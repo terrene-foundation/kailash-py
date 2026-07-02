@@ -6,7 +6,7 @@ How to create each component type for any domain.
 
 **Location** depends on repo type:
 
-- **BUILD repos** (kailash-py, kailash-rs, kailash-prism): `.claude/agents/frameworks/`, `.claude/agents/analysis/`, `.claude/agents/quality/`, etc. (canonical locations). `/codify` in a BUILD repo writes to these canonical locations and creates an upstream proposal for loom/.
+- **BUILD repos** (kailash-py, the Rust SDK, kailash-prism): `.claude/agents/frameworks/`, `.claude/agents/analysis/`, `.claude/agents/quality/`, etc. (canonical locations). `/codify` in a BUILD repo writes to these canonical locations and creates an upstream proposal for loom/.
 - **Downstream USE repos** (consumer project repos that `pip install kailash`): `.claude/agents/project/` for project-specific agents. `/codify` stays local — no upstream proposal.
 - **loom/**: `.claude/agents/` with subdirectories (`analysis/`, `frameworks/`, `implementation/`, `quality/`, `release/`, `testing/`, `frontend/`). No `project/` subdirectory — loom/ is the authority, not a project.
 

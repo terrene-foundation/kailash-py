@@ -162,7 +162,7 @@ COC-artifact improvement (method/rules/skills/agents/COC-tooling)
   │   (authoritative target flow; see 09-proposal-protocol.md Step 7b)
   │
 bug / code / feature / code-improvement (SDK code)
-  ↓ issue filed on the BUILD repo (kailash-py or kailash-rs)
+  ↓ issue filed on the BUILD repo (kailash-py or the Rust SDK)
   ↓ BUILD repo considers CROSS-SDK FIRST
   ↓ /codify originates .claude/.proposals/latest.yaml
   │
@@ -185,7 +185,7 @@ bug / code / feature / code-improvement (SDK code)
 
 ```
 loom/ SPLITTER
-  ├─ /sync-to-build ──→ kailash-py / kailash-rs (BUILD; canonical pushed back)
+  ├─ /sync-to-build ──→ kailash-py / rust-sdk (BUILD; canonical pushed back)
   └─ /sync-to-use py|rs|rb → kailash-coc-claude-{py,rs,rb}/ (USE templates)
                               ↓ downstream USE/project repos pull via own /sync-from-template
                               └──→ cycle repeats

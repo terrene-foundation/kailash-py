@@ -32,13 +32,13 @@ git checkout -b feat/v3.23.0-release-prep
 
 ### Why (extended)
 
-Every PR-gate workflow that adopts the `ci-runners.md` § "MUST: Release-prep skip" pattern checks `if: !startsWith(github.head_ref, 'release/')`. Branching from `release/v*` triggers the auto-skip and saves ~45 min × matrix-size of CI minutes per release-prep PR. Branching from anything else burns the full PR-gate matrix on a diff that has no code surface to verify. Evidence: kailash-rs PR #602 (2026-04-25) used `feat/v3.23.0-release-prep` and consumed ~73 min of GitHub-billable runner time on a metadata-only diff that should have skipped to ~0 min. The cross-reference exists in `ci-runners.md` but is path-scoped to `.github/workflows/**`, so it does not load when an agent is choosing a branch name. The clause cross-references the rule from `git.md` (always-loaded baseline) so branch-naming decisions surface the cost lever.
+Every PR-gate workflow that adopts the `ci-runners.md` § "MUST: Release-prep skip" pattern checks `if: !startsWith(github.head_ref, 'release/')`. Branching from `release/v*` triggers the auto-skip and saves ~45 min × matrix-size of CI minutes per release-prep PR. Branching from anything else burns the full PR-gate matrix on a diff that has no code surface to verify. Evidence: the Rust SDK PR #602 (2026-04-25) used `feat/v3.23.0-release-prep` and consumed ~73 min of GitHub-billable runner time on a metadata-only diff that should have skipped to ~0 min. The cross-reference exists in `ci-runners.md` but is path-scoped to `.github/workflows/**`, so it does not load when an agent is choosing a branch name. The clause cross-references the rule from `git.md` (always-loaded baseline) so branch-naming decisions surface the cost lever.
 
 ### Split discipline
 
 If the release-prep work IS NOT metadata-only (e.g., folds in a code fix as part of the same PR), split: keep the code fix on a `feat/` or `fix/` branch with its own PR; cut the release-prep on a separate `release/v*` branch that only updates anchors + CHANGELOG. Two PRs, one with full CI, one near-zero.
 
-Origin: 2026-04-25 kailash-rs session — PR #602 (release-prep for v3.23.0) was opened from `feat/v3.23.0-release-prep`, burning ~120 min of avoidable PR-gate CI on a metadata-heavy diff that bundled #599 + #600 fixes with version bumps. The cost was foreseeable from `ci-runners.md` MUST Rule 8 but the rule's path-scoping prevented it from loading at branch-name-decision time.
+Origin: 2026-04-25 Rust SDK session — PR #602 (release-prep for v3.23.0) was opened from `feat/v3.23.0-release-prep`, burning ~120 min of avoidable PR-gate CI on a metadata-heavy diff that bundled #599 + #600 fixes with version bumps. The cost was foreseeable from `ci-runners.md` MUST Rule 8 but the rule's path-scoping prevented it from loading at branch-name-decision time.
 
 ## Pre-FIRST-Push CI Parity Discipline
 
@@ -76,9 +76,9 @@ git push                                      # CI run #3 starts (#2 still billi
 
 ### Why (extended)
 
-Each push to an open PR retriggers the full PR-gate matrix. With `concurrency: cancel-in-progress: true` on the workflow, prior in-flight runs are cancelled — but **the cancelled runs are still billed for the wall-clock minutes already consumed before cancellation**. kailash-rs PR #598 (2026-04-25) had a 71-minute Workspace Tests run cancelled mid-flight by a fix-up push; those 71 min were charged. Pre-flighting the local commands takes ~5-10 minutes once + amortized seconds on incremental re-runs; the alternative is N × 45 min of billed CI per fix-up cycle. Local discipline is strictly cheaper. The rule extends to the FIRST push because by the time admin-merge is invoked, every previous fix-up cycle has already burned billable minutes.
+Each push to an open PR retriggers the full PR-gate matrix. With `concurrency: cancel-in-progress: true` on the workflow, prior in-flight runs are cancelled — but **the cancelled runs are still billed for the wall-clock minutes already consumed before cancellation**. The Rust SDK PR #598 (2026-04-25) had a 71-minute Workspace Tests run cancelled mid-flight by a fix-up push; those 71 min were charged. Pre-flighting the local commands takes ~5-10 minutes once + amortized seconds on incremental re-runs; the alternative is N × 45 min of billed CI per fix-up cycle. Local discipline is strictly cheaper. The rule extends to the FIRST push because by the time admin-merge is invoked, every previous fix-up cycle has already burned billable minutes.
 
-Origin: 2026-04-25 kailash-rs session — PR #598 cycle of 5 sequential pushes (08:43Z → 10:14Z) caused 71 min of cancelled-but-billed Workspace Tests. The mid-flight cancellation was triggered by `concurrency: cancel-in-progress: true` (correctly enforced) but the billing meter does not refund cancelled-mid-run minutes.
+Origin: 2026-04-25 Rust SDK session — PR #598 cycle of 5 sequential pushes (08:43Z → 10:14Z) caused 71 min of cancelled-but-billed Workspace Tests. The mid-flight cancellation was triggered by `concurrency: cancel-in-progress: true` (correctly enforced) but the billing meter does not refund cancelled-mid-run minutes.
 
 ## Branch Protection — Repository Table
 
@@ -89,7 +89,7 @@ Origin: 2026-04-25 kailash-rs session — PR #598 cycle of 5 sequential pushes (
 | `terrene-foundation/kailash-coc-claude-rs`    | `main` | Full (admin bypass) — legacy (archival 2026-10-22) |
 | `terrene-foundation/kailash-coc-py`           | `main` | Full (admin bypass)                                |
 | `terrene-foundation/kailash-coc-rs`           | `main` | Full (admin bypass)                                |
-| `esperie-enterprise/kailash-rs`               | `main` | Full (admin bypass) — private Rust SDK BUILD repo  |
+| the Rust SDK BUILD repo (key `build.rs`)      | `main` | Full (admin bypass) — private Rust SDK BUILD repo  |
 | `terrene-foundation/kailash-prism`            | `main` | Full (admin bypass)                                |
 | `terrene-foundation/kailash-coc-claude-prism` | `main` | Full (admin bypass)                                |
 
@@ -252,4 +252,4 @@ fix(dataflow): clamp MAX_PARAMS and drop unused `second_start` binding
 
 `git log --grep` is the cheapest institutional-knowledge search across a repo — a body that claims something the diff doesn't contain poisons every future search that lands on it. The next session reads "dropped the warning-suppression" in the log, assumes it happened, and bases later decisions on a diff that never existed. Amending is BLOCKED because it loses the audit trail of the over-claim; a follow-up commit preserves both the original claim AND the correction so anyone tracing the history sees the full sequence.
 
-Origin: 2026-04-20 kailash-rs self-correction — a commit body claimed "also dropped the `let _ = second_start;` warning-suppression" but the actual diff only contained the MAX_PARAMS clamp. Caught during self-verification; follow-up commit truly dropped the binding. Cross-language principle — applies to every SDK and every language; `git log --grep` accuracy is universal.
+Origin: 2026-04-20 Rust SDK self-correction — a commit body claimed "also dropped the `let _ = second_start;` warning-suppression" but the actual diff only contained the MAX_PARAMS clamp. Caught during self-verification; follow-up commit truly dropped the binding. Cross-language principle — applies to every SDK and every language; `git log --grep` accuracy is universal.

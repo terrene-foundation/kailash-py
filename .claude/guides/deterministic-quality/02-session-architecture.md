@@ -193,7 +193,7 @@ The 0052 session achieved ~5-8x throughput vs the agent's own "no-artifacts" bas
 | 1 (session-start) | Zero-tolerance blocked deferral                 | 2 workstreams saved from "come back later"      |
 | 1 (session-start) | Auto-memory eliminated re-stating preferences   | ~10 turns of friction saved                     |
 | 1 (session-start) | Session notes eliminated re-discovery           | ~20 minutes saved at session start              |
-| 2 (path-scoped)   | Cross-SDK inspection caught kailash-rs finding  | 1 cross-SDK finding that would have been missed |
+| 2 (path-scoped)   | Cross-SDK inspection caught Rust SDK finding    | 1 cross-SDK finding that would have been missed |
 | 2 (path-scoped)   | Observability rule upgraded DEBUG→WARN twice    | 2 silent-failure patterns fixed                 |
 | 3 (tool-scoped)   | Background agents ran 3 workstreams in parallel | 3-5x throughput from parallelism                |
 | 3 (tool-scoped)   | Context isolation kept parent thread clean      | Enabled sustained decision-making               |
@@ -205,16 +205,16 @@ The 0052 session achieved ~5-8x throughput vs the agent's own "no-artifacts" bas
 
 What breaks if each layer mechanism is removed:
 
-| Removed                        | What breaks                                                        | Cost                       |
-| ------------------------------ | ------------------------------------------------------------------ | -------------------------- |
-| Zero-tolerance (Layer 1)       | `cells_failed: 10663` shipped silently, TypeError deferred forever | 2-3 future sessions        |
-| Cross-SDK inspection (Layer 2) | kailash-rs#273 update never happens, stub remains undocumented     | Silent semantic divergence |
-| Autonomous execution (Layer 1) | 3 background workstreams run serially over 3 sessions              | ~6-8 hours wall-clock slip |
-| CLAUDE.md directives (Layer 1) | Model hardcoding, framework misuse, stubs slip in                  | Steady quality drift       |
-| Path-scoped loading (Layer 2)  | Either all 25 rules in baseline (crowding) or none (drift)         | Unusable rule system       |
-| Auto-memory (Layer 1)          | User restates preferences every session                            | +10 turns friction/session |
-| Session notes (Layer 1)        | First 20 minutes wasted re-discovering state                       | 20-minute slip/session     |
-| Background agents (Layer 3)    | Serial execution, 1 workstream per session                         | 3-5x throughput loss       |
+| Removed                        | What breaks                                                         | Cost                       |
+| ------------------------------ | ------------------------------------------------------------------- | -------------------------- |
+| Zero-tolerance (Layer 1)       | `cells_failed: 10663` shipped silently, TypeError deferred forever  | 2-3 future sessions        |
+| Cross-SDK inspection (Layer 2) | the Rust SDK (#273) update never happens, stub remains undocumented | Silent semantic divergence |
+| Autonomous execution (Layer 1) | 3 background workstreams run serially over 3 sessions               | ~6-8 hours wall-clock slip |
+| CLAUDE.md directives (Layer 1) | Model hardcoding, framework misuse, stubs slip in                   | Steady quality drift       |
+| Path-scoped loading (Layer 2)  | Either all 25 rules in baseline (crowding) or none (drift)          | Unusable rule system       |
+| Auto-memory (Layer 1)          | User restates preferences every session                             | +10 turns friction/session |
+| Session notes (Layer 1)        | First 20 minutes wasted re-discovering state                        | 20-minute slip/session     |
+| Background agents (Layer 3)    | Serial execution, 1 workstream per session                          | 3-5x throughput loss       |
 
 ## Replication Protocol
 

@@ -1,6 +1,6 @@
 # Cross-SDK Parity
 
-Patterns that keep kailash-py and kailash-rs in semantic sync, catching divergence before it ships.
+Patterns that keep kailash-py and the Rust SDK in semantic sync, catching divergence before it ships.
 
 ## Principles
 
@@ -10,7 +10,7 @@ Patterns that keep kailash-py and kailash-rs in semantic sync, catching divergen
 
 ## The Problem
 
-kailash-py implements `ProductMode.Parameterized` with full parameter threading (cache key includes params, product function receives params). kailash-rs has the `ProductMode::Parameterized` enum variant but zero implementation behind it — `execute_product()` doesn't accept params, `refresh_cascade()` doesn't thread them, and the cache key ignores them. A Parameterized product in Rust silently degrades to Materialized behavior (cache-never-hits for different param sets).
+kailash-py implements `ProductMode.Parameterized` with full parameter threading (cache key includes params, product function receives params). The Rust SDK has the `ProductMode::Parameterized` enum variant but zero implementation behind it — `execute_product()` doesn't accept params, `refresh_cascade()` doesn't thread them, and the cache key ignores them. A Parameterized product in Rust silently degrades to Materialized behavior (cache-never-hits for different param sets).
 
 This was caught by a COC rule (`rules/cross-sdk-inspection.md`) firing manually. It should have been caught by tooling.
 
@@ -53,18 +53,18 @@ This was caught by a COC rule (`rules/cross-sdk-inspection.md`) firing manually.
 Given two API surface files, a diff tool reports:
 
 ```
-MISSING IN kailash-rs (present in kailash-py):
+MISSING IN the Rust SDK (present in kailash-py):
   dataflow.DataFlow.express.create: param 'idempotency_key' missing
   dataflow.DataFlow.fabric.execute_product: param 'params' missing
   dataflow.DataFlow.fabric.refresh_cascade: param 'params' missing
-  dataflow.BulkResult class: absent (kailash-rs uses raw dict)
+  dataflow.BulkResult class: absent (the Rust SDK uses raw dict)
 
-MISSING IN kailash-py (present in kailash-rs):
+MISSING IN kailash-py (present in the Rust SDK):
   dataflow.PoolMonitor.metrics: absent
 
 ENUM VARIANT MISMATCH:
   dataflow.ProductMode: variants match [Materialized, Parameterized, Virtual]
-  BUT: kailash-rs ProductMode::Parameterized has no implementation (stub)
+  BUT: the Rust SDK ProductMode::Parameterized has no implementation (stub)
 ```
 
 **Key distinction**: The tool checks presence of symbols AND (where possible) behavioral equivalence. A variant that exists but has no match arm in any executor is flagged as "stub variant."
@@ -90,9 +90,9 @@ jobs:
           path: kailash-py
       - uses: actions/checkout@v4
         with:
-          repository: esperie-enterprise/kailash-rs
-          path: kailash-rs
-      - run: python scripts/check-api-parity.py kailash-py/ kailash-rs/
+          repository: <rust-sdk-repo> # logical key build.rs; resolve via loom-links.local.json
+          path: rust-sdk
+      - run: python scripts/check-api-parity.py kailash-py/ rust-sdk/
       - run: |
           if [ -s parity-report.txt ]; then
             echo "::warning::Cross-SDK parity gaps found"
@@ -131,7 +131,7 @@ Beyond API surface matching, behavioral parity requires cross-SDK test suites:
 # tests/parity/test_product_mode.py
 """
 Cross-SDK behavioral parity test.
-Equivalent test exists in kailash-rs: crates/kailash-dataflow/tests/parity/test_product_mode.rs
+Equivalent test exists in the Rust SDK's dataflow parity suite: tests/parity/test_product_mode.rs
 """
 
 @pytest.mark.parity
@@ -147,11 +147,11 @@ async def test_parameterized_product_caches_independently():
     result_eur = await db.fabric.execute_product("price_lookup", params={"currency": "EUR"})
 
     assert result_usd != result_eur  # different params → different results
-    # If this fails in kailash-rs, ProductMode::Parameterized is a stub
+    # If this fails in the Rust SDK, ProductMode::Parameterized is a stub
 ```
 
 ```rust
-// crates/kailash-dataflow/tests/parity/test_product_mode.rs
+// the Rust SDK: tests/parity/test_product_mode.rs
 #[tokio::test]
 async fn test_parameterized_product_caches_independently() {
     // Equivalent to Python parity test
@@ -165,13 +165,13 @@ async fn test_parameterized_product_caches_independently() {
 
 ## Where It Would Live
 
-| Artifact                       | Location                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| API surface extractor (Python) | `kailash-py/scripts/extract-api-surface.py`                              |
-| API surface extractor (Rust)   | `kailash-rs/scripts/extract-api-surface.rs` or `cargo doc --json` parser |
-| Parity diff tool               | `loom/scripts/check-api-parity.py` (lives in loom, reads both SDKs)      |
-| CI workflow                    | `.github/workflows/parity-check.yml` in both repos                       |
-| Parity tests                   | `tests/parity/` in both repos                                            |
+| Artifact                       | Location                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| API surface extractor (Python) | `kailash-py/scripts/extract-api-surface.py`                                  |
+| API surface extractor (Rust)   | the Rust SDK's `scripts/extract-api-surface.rs` or `cargo doc --json` parser |
+| Parity diff tool               | `loom/scripts/check-api-parity.py` (lives in loom, reads both SDKs)          |
+| CI workflow                    | `.github/workflows/parity-check.yml` in both repos                           |
+| Parity tests                   | `tests/parity/` in both repos                                                |
 
 ## Priority Ranking
 

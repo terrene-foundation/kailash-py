@@ -50,12 +50,12 @@ gh issue create --title "Release v1.1.0" --label release \
 
 ## Autonomy Tiers
 
-| Issue Label | What Claude Does | Auto-merge? | Admin Required? |
-|-------------|-----------------|-------------|-----------------|
-| `auto-fix` | Full COC lifecycle, creates PR | No (open-source, admin reviews all) | Yes |
-| `needs-review` | Full COC lifecycle, creates PR | No | Yes |
-| `release` | Runs /release pipeline, creates PR | No | Always |
-| _(no label)_ | Assign to `claude` or @mention | Claude decides label | Depends |
+| Issue Label    | What Claude Does                   | Auto-merge?                         | Admin Required? |
+| -------------- | ---------------------------------- | ----------------------------------- | --------------- |
+| `auto-fix`     | Full COC lifecycle, creates PR     | No (open-source, admin reviews all) | Yes             |
+| `needs-review` | Full COC lifecycle, creates PR     | No                                  | Yes             |
+| `release`      | Runs /release pipeline, creates PR | No                                  | Always          |
+| _(no label)_   | Assign to `claude` or @mention     | Claude decides label                | Depends         |
 
 ## Full COC Lifecycle
 
@@ -93,10 +93,10 @@ BUILD repo (kailash-py)
 
 ## Required Secrets
 
-| Secret | Purpose | Set? |
-|--------|---------|------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code Max authentication | Yes |
-| `DISCORD_WEBHOOK_URL` | Notifications on completion/failure | Yes |
+| Secret                    | Purpose                             | Set? |
+| ------------------------- | ----------------------------------- | ---- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code Max authentication      | Yes  |
+| `DISCORD_WEBHOOK_URL`     | Notifications on completion/failure | Yes  |
 
 ## Required Repo Settings
 
@@ -104,17 +104,17 @@ BUILD repo (kailash-py)
 - Delete branch on merge: `true` (enabled)
 - Allow squash merge: `true`
 
-**Note**: Unlike kailash-rs (private, auto-merge enabled), kailash-py requires admin approval for ALL PRs because it's an open-source repo. The `auto-fix` label signals "high confidence, ready for review" but does NOT auto-merge.
+**Note**: Unlike the Rust SDK (private, auto-merge enabled), kailash-py requires admin approval for ALL PRs because it's an open-source repo. The `auto-fix` label signals "high confidence, ready for review" but does NOT auto-merge.
 
 ## Hooks That Run in CI
 
-| Hook | Fires? | Purpose |
-|------|--------|---------|
-| `validate-workflow.js` (PostToolUse) | Yes | BLOCKS stubs, validates patterns |
-| `validate-bash-command.js` (PreToolUse) | Yes | BLOCKS dangerous commands |
-| `validate-deployment.js` (PostToolUse) | Yes | BLOCKS credential leaks |
-| `auto-format.js` (PostToolUse) | Yes | Auto-formats code |
-| `session-start.js` (SessionStart) | Yes | Package freshness + version check |
+| Hook                                    | Fires? | Purpose                           |
+| --------------------------------------- | ------ | --------------------------------- |
+| `validate-workflow.js` (PostToolUse)    | Yes    | BLOCKS stubs, validates patterns  |
+| `validate-bash-command.js` (PreToolUse) | Yes    | BLOCKS dangerous commands         |
+| `validate-deployment.js` (PostToolUse)  | Yes    | BLOCKS credential leaks           |
+| `auto-format.js` (PostToolUse)          | Yes    | Auto-formats code                 |
+| `session-start.js` (SessionStart)       | Yes    | Package freshness + version check |
 
 ## Testing
 

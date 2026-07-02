@@ -54,7 +54,7 @@ The source version is bumped by the human after `/sync-to-use` distributes chang
 
 `upstream.build_version` tracks which loom/ version this template was last synced from.
 
-### BUILD Repo (kailash-py, kailash-rs)
+### BUILD Repo (kailash-py, the Rust SDK)
 
 ```json
 {
