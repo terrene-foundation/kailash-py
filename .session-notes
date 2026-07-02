@@ -1,51 +1,47 @@
-# Session Notes — 2026-06-25
+# Session Notes — 2026-07-02
 
 ## Where we are
 
-main `b1751e1b0`, clean tree (uncommitted: this file + `SWEEP-2026-06-25.md`).
-Closed GH **#1460** (PactBridge pairwise docs, PR #1462), then ran a user-approved
-corrective `/sweep` that recovered dormant-workspace forest items the prior ledger
-had dropped. **Next session: execute the approved sweep follow-ups — `F-SWEEP-LEDGER`
-first.**
+Clean checkpoint on `main` @ `8276d1a15`. **`kailash 2.45.0` published to PyPI
+and verified.** Started from the 4 open trust/PACT issues; ended with all 4 shipped +
+released + codified, plus a full private-Rust-SDK disclosure sweep across the public
+repo. Nothing in flight; working tree clean except the deliberately-local `.session-notes`
++ root `SWEEP-*.md`.
 
-## Read first
+**Follow-up session**: Sweep → Issue #1492 (ChangeDetector startup poll storm) fixed
++ redteamed to convergence (2-reviewer round 1, self-verified round 2). Pre-existing
+hygiene: removed `exc_info=True` from poll-loop WARNING log, cleaned unused imports,
+committed `uv.lock` version bumps from v2.45.0 release.
 
-1. `SWEEP-2026-06-25.md` — sweep findings + per-item dispositions (START HERE).
-2. `.claude/commands/sweep.md` — `F-SWEEP-LEDGER` target: add a step reading every
-   `workspaces/*/.session-notes` Outstanding ledger (the gap that hid F11/F22/F30).
-   COC-tooling change → `/codify` → loom Gate-1, NOT a direct edit.
-3. `gh issue list -R terrene-foundation/kailash-py --state open` — 0 open now.
+## What landed this session (PRs, all merged)
 
-## Outstanding ledger (forest)
+**Features (issues closed):** #1480 authz-root re-validation (PR #1484); #1483 hold
+resolution disclosure-binding (#1485); #1481/#1482 ConsentAttestation + disclosure-trace
+primitives (#1486).
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F-SWEEP-LEDGER | /sweep reads workspace forest ledgers (sweep-read step) + cross-file no-vanish aggregation (workspace→root, extend validate-forest-ledger) | user 2026-06-25 "flag ALL outstanding" | QUEUED — loom#669 filed; /codify proposal authored (both pieces) |
-| F-DATAFLOW-RESERVED-NAME | DataFlow `@db.model` reserved-name guard (`NodeMetadata.tags` collision) | #855 root cause; cross-sdk-inspection | QUEUED — UNFILED; user-gate to file |
-| F-PYRIGHT-CONNECTOR | Connector concrete-defaults → clear 42 test-pyright errors | issue-1035 F11; zero-tolerance static debt | RE-VALIDATE (stale 2026-05-25) |
-| F-TIER3-BACKLOG | TIER-3 testing backlog | issue-855/nexus F22; sweep-2026-05-26 | RE-VALIDATE (stale) |
-| F-SLIMCORE-CODIFY | slim-core eager-import discipline proposal → loom | issue-1035 journal/0008 | EXTERNAL — loom ingest |
-| F-XSDK-RS-MONOTONIC | rs MCP enforcer clearance-dim tightening | EATP D6; rs#1513 | EXTERNAL — awaiting rs |
-| F-XSDK-CONVERGE | witness/envelope canonical byte re-sign | cross-SDK byte contract / EATP D6 | DEFERRED — rs-led lockstep |
-| F-XSDK-RS-FILED | rs parity (rs#1465/#1442/#1420) | EATP D6 | EXTERNAL — awaiting rs |
-| F-MOPS | mops-onboarding suite → USE templates | user 2026-06-23 | EXTERNAL — loom-side |
-| F-LOOM-INDEP | loom 2.45.0 obsoleted independence/terrene-naming | PR #1427 | EXTERNAL — loom-side |
-| F-TRUST-DEFER | F-VAULT-S34 (#630 KEK) + F-ATOMIC cascade | project_trustplane_day1 | DEFERRED — user-owned |
+**Release:** `kailash 2.45.0` — PR #1490 + tag `v2.45.0` → PyPI (OIDC), TestPyPI-validated,
+GitHub Release. Clean-venv install verified.
 
-Closed this session: `F-1460` → PR #1462 (merge `b1751e1b0`, commit `d93a2a5f5`); `F-PENDING-JOURNAL` (mops DISCOVERY, already codified in journal/0003) → discarded per `journal.md`.
+**Cross-SDK transparency** (journaled auth, receipt 0006; target `esperie-enterprise/kailash-rs`):
+comment on rs #1551 (ConsentAttestation) + filed rs #1592 (disclosure-trace).
 
-## Traps
+**Disclosure hygiene (public repo):**
+- PR #1487 — repo-path fix terrene-foundation→esperie-enterprise (later superseded — see below).
+- PR #1488 — CHANGELOG: 27 private-Rust-SDK refs removed.
+- PR #1489 (/codify) — new cross-sdk-inspection Rule 6 (public artifacts must not name the private Rust SDK), README scrub, proposal, journals 0006-0008.
+- PR #1491 (/codify) — genericized EVERY private-Rust-SDK-repo reference across 47 synced `.claude/{rules,skills,guides}` files → `build.rs` logical key / `<rust-sdk-repo>` placeholder / "the Rust SDK". Also fixed 2 `esperie-enterprise/loom` + hosted-runner org leaks. Mandatory self-referential redteam (security SECURE; reviewer+cc-arch MERGE-WITH-FIXES, `~`-corruption fixed via `≈`). Journal 0009.
+  - NOTE: this SUPERSEDES #1487's approach — #1487 hardcoded the private org into synced artifacts (a leak, since kailash-py is public); #1491 templatizes it via the resolver. Proposal instructs Gate-1 to templatize, not hardcode.
 
-- Sweep gap (F-SWEEP-LEDGER): `todos/active/` was 0, but forest work lives in
-  workspace `.session-notes` ledgers — read those, not just todos.
-- Core `kailash` resolves from site-packages unless `uv pip install -e . --no-deps`
-  (a stale install silently hides `src/` edits — hit this session).
-- Unreleased: NONE — `release-drift.js` exit 0 (verified, not eyeballed). NEVER
-  `git add -A`/`reset --hard` (F3 working-tree drift held per user "LEAVE ALONE").
+## Outstanding (next session)
 
-## Open questions for the human
+1. **Loom Gate-1 propagation** — the repo-path fix + Rule 6 + the 47-file genericization are in `.claude/.proposals/latest.yaml` (GLOBAL). The wrong path + un-genericized refs still exist UPSTREAM at loom + consumer repos; a `/sync-to-build` would re-overwrite the local fixes. Needs a loom session. Gate-1 MUST templatize via `build.rs`, NOT hardcode. **Also add `build.rs` to the loom-links schema/operator-local example** so the templatized refs resolve.
+2. **Scoped-out residuals (lower severity, deferred with rationale):**
+   - Rust crate/binding internal paths (`crates/kailash-*`, `bindings/kailash-ruby`) in ~5 governance files — reviewer confirmed not-a-blocker (Rule 6's "separate larger audit").
+   - Operator-identity example tokens (`pid-esperie-*`, `journal/NNNN-esperie-*`, branch `codify/esperie-*`) in synced skills — security-reviewer rated LOW (`esperie` is already the maintainer's PUBLIC self-coordinate, in the docker-scrub allowlist). Cosmetic consistency, not a real leak.
 
-- Dormant workspaces (issues #1035/#855/#1125/#1174 all CLOSED): archive after
-  F-PYRIGHT-CONNECTOR + F-TIER3-BACKLOG re-validation, or resume? (auto-close
-  BLOCKED per value-prioritization MUST-4.)
-- F-DATAFLOW-RESERVED-NAME: file the DataFlow issue, or ratify "workaround suffices"?
+## Process notes (inherit)
+- Cross-repo targets: resolve from `reference-kailash-rs-repo-location` memory + `.claude/settings.local.json` + the `build.rs` loom-links key — NEVER rule-doc examples or issue bodies (both carried the wrong `terrene-foundation/kailash-rs`).
+- kailash-py is PUBLIC — its `.claude/` governance docs are live-public; keep private org/repo names out of them.
+- `grep pat file | head -1 && echo X` fires echo unconditionally (head exits 0) — false-positive detector; use `grep -q`.
+- `pip install ... | tail` masks pip's exit code — check `$?`.
+- A markdown formatter hook re-doubles lone `~` → `~~` (GFM strikethrough) on save; use `≈` for approximations in `.claude/rules/`.
