@@ -69,6 +69,26 @@ from kailash.trust.authority import (
     OrganizationalAuthority,
 )
 
+# Consent attestation (issue #1481 — affirmative human-acceptance record)
+from kailash.trust.consent import (
+    ConsentAttestation,
+    ConsentChainError,
+    ConsentError,
+    ConsentLedger,
+    hash_document,
+    verify_consent_attestation,
+)
+
+# Disclosure tracing (issue #1482 — per-recipient leak-attribution tokens)
+from kailash.trust.disclosure import (
+    DisclosureError,
+    DisclosureRecord,
+    DisclosureStoreProtocol,
+    DisclosureTracer,
+    InMemoryDisclosureStore,
+)
+from kailash.trust.signing.derivation import derive_trace_token
+
 # Chain data structures
 from kailash.trust.chain import (
     ALL_DIMENSIONS,
@@ -339,6 +359,20 @@ __all__ = [
     "TrustLineageChain",
     "LinkedHashEntry",
     "LinkedHashChain",
+    # --- Consent attestation (issue #1481) ---
+    "ConsentAttestation",
+    "ConsentLedger",
+    "ConsentError",
+    "ConsentChainError",
+    "hash_document",
+    "verify_consent_attestation",
+    # --- Disclosure tracing (issue #1482) ---
+    "DisclosureTracer",
+    "DisclosureRecord",
+    "DisclosureStoreProtocol",
+    "InMemoryDisclosureStore",
+    "DisclosureError",
+    "derive_trace_token",
     # --- Exceptions ---
     "TrustError",
     "AuthorityNotFoundError",
