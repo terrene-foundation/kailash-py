@@ -20,7 +20,56 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import aiosqlite
+
+class _AiosqliteNotInstalled:
+    """Lazy stub bound when the optional ``aiosqlite`` driver is absent.
+
+    ``aiosqlite`` is an opt-in driver (``kailash-dataflow[sqlite]``), NOT a core
+    dependency. Mirroring the deferred-driver pattern the MongoDB / pgvector
+    adapters use (see ``adapters/__init__.py``), the ``SQLiteAdapter`` class
+    object MUST import cleanly so ``dataflow.adapters`` and its ``__all__``
+    resolve without the extra installed. Any runtime attribute access
+    (``aiosqlite.connect`` / ``aiosqlite.Row``) raises a descriptive
+    ``ImportError`` at connect time — the "loud failure at call site" the
+    optional-extras carve-out in ``rules/dependencies.md`` permits.
+    """
+
+    def __getattr__(self, _name: str) -> Any:
+        raise ImportError(
+            "SQLite support requires the 'aiosqlite' driver. "
+            "Install it with: pip install 'kailash-dataflow[sqlite]'"
+        )
+
+
+try:
+    import aiosqlite
+
+    _HAS_AIOSQLITE = True
+except (
+    ModuleNotFoundError
+):  # pragma: no cover - exercised only without the [sqlite] extra
+    # Narrow to ModuleNotFoundError so a genuinely-absent driver binds the stub
+    # (clean-install path) while a present-but-BROKEN aiosqlite (whose own
+    # internal import raises a plain ImportError) propagates its real diagnostic
+    # instead of the misleading "install the [sqlite] extra" hint.
+    aiosqlite = _AiosqliteNotInstalled()  # type: ignore[assignment]
+    _HAS_AIOSQLITE = False
+
+
+def _require_aiosqlite() -> None:
+    """Fail fast with a descriptive error when the SQLite driver is absent.
+
+    Called at every connect boundary so a missing optional driver surfaces
+    ONE clear ImportError up front, rather than being swallowed by the
+    connection pool's per-connection ``except`` (which is meant for transient
+    failures, not a hard missing-driver condition) and deferred to first query.
+    """
+    if not _HAS_AIOSQLITE:
+        raise ImportError(
+            "SQLite support requires the 'aiosqlite' driver. "
+            "Install it with: pip install 'kailash-dataflow[sqlite]'"
+        )
+
 
 from .base import DatabaseAdapter
 from .dialect import DialectManager
@@ -250,7 +299,10 @@ class SQLiteAdapter(DatabaseAdapter):
         )
 
         # Connection pool management
-        self._connection_pool: List[aiosqlite.Connection] = []
+        # Runtime type: aiosqlite.Connection. Typed Any (matching the MongoDB
+        # sibling adapter) because the module-level ``aiosqlite`` name is a live
+        # runtime variable (module | stub), so it cannot double as a type here.
+        self._connection_pool: List[Any] = []
         self._pool_lock = asyncio.Lock()
         self._sqlite_pool: Any = None  # AsyncSQLitePool instance (when available)
         self._active_transactions: weakref.WeakSet = weakref.WeakSet()
@@ -299,6 +351,7 @@ class SQLiteAdapter(DatabaseAdapter):
 
     async def connect(self) -> None:
         """Establish SQLite connection with enterprise features."""
+        _require_aiosqlite()
         try:
             # Initialize connection pool if enabled
             if self.enable_connection_pooling:
@@ -1061,7 +1114,9 @@ class SQLiteTransaction:
 
     def __init__(self, adapter: "SQLiteAdapter"):
         self.adapter = adapter
-        self.connection: Optional[aiosqlite.Connection] = None
+        # Runtime type: Optional[aiosqlite.Connection] (typed Any so the
+        # annotation does not require the optional aiosqlite module at import).
+        self.connection: Any = None
         self._committed = False
         self._rolled_back = False
         self._pool_cm: Any = None
@@ -1091,6 +1146,7 @@ class SQLiteTransaction:
 
     async def __aenter__(self):
         """Enter transaction context."""
+        _require_aiosqlite()
         # Prefer AsyncSQLitePool when available
         if self.adapter._sqlite_pool is not None:
             self._pool_cm = self.adapter._sqlite_pool.acquire_write()
