@@ -1800,7 +1800,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.44.1"
+version = "2.45.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2085,7 +2085,7 @@ provides-extras = ["server", "http-client", "db-postgres", "db-mysql", "db-sqlit
 
 [[package]]
 name = "kailash-align"
-version = "0.7.3"
+version = "0.7.4"
 source = { editable = "packages/kailash-align" }
 dependencies = [
     { name = "accelerate" },
@@ -2130,7 +2130,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.12.0"
+version = "2.13.1"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2496,7 +2496,7 @@ provides-extras = ["metrics", "dev"]
 
 [[package]]
 name = "kailash-pact"
-version = "0.14.1"
+version = "0.14.3"
 source = { editable = "packages/kailash-pact" }
 dependencies = [
     { name = "click" },
