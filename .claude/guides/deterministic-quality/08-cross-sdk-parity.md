@@ -90,7 +90,7 @@ jobs:
           path: kailash-py
       - uses: actions/checkout@v4
         with:
-          repository: terrene-foundation/kailash-rs
+          repository: esperie-enterprise/kailash-rs
           path: kailash-rs
       - run: python scripts/check-api-parity.py kailash-py/ kailash-rs/
       - run: |
