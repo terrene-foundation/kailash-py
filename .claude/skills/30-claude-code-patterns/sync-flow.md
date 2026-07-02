@@ -120,7 +120,7 @@ At a `coc-use-template` repo, `/sync-from-downstream` runs **inbox ingest** (the
 
 ## Gate 1: Review + Scrub (inbound — TWO proposal streams; loom does not originate)
 
-loom is the central splitter/distributor — it never authors an artifact change itself. Gate 1 ingests proposals from TWO upstream streams: the **BUILD stream** (the Python and Rust SDK BUILD repos — SDK-code proposals; cross-SDK considered first by the BUILD repo, Gate 1 records/flags it as an advisory alignment note per step 8, NOT a hard block) and the **USE-template stream** (`kailash-coc-*` — COC-artifact-improvement proposals from USE-template `/codify` origination; the originator schema is the **USE-Template Proposal Schema (Step 7b)** subsection below — self-contained here so it travels to USE templates; `guides/co-setup/09-proposal-protocol.md` Step 7b carries the same schema plus full rationale but is loom-only and MUST NOT be cited as the schema authority in USE-template context). Delegated to **sync-reviewer** agent. Runs automatically when `/sync-from-build` / `/sync-from-use` detects unreviewed changes; also runs on explicit `/sync-from-build review`.
+loom is the central splitter/distributor — it never authors an artifact change itself. Gate 1 ingests proposals from TWO upstream streams: the **BUILD stream** (kailash-py / kailash-rs — SDK-code proposals; cross-SDK considered first by the BUILD repo, Gate 1 records/flags it as an advisory alignment note per step 8, NOT a hard block) and the **USE-template stream** (`kailash-coc-*` — COC-artifact-improvement proposals from USE-template `/codify` origination; the originator schema is the **USE-Template Proposal Schema (Step 7b)** subsection below — self-contained here so it travels to USE templates; `guides/co-setup/09-proposal-protocol.md` Step 7b carries the same schema plus full rationale but is loom-only and MUST NOT be cited as the schema authority in USE-template context). Delegated to **sync-reviewer** agent. Runs automatically when `/sync-from-build` / `/sync-from-use` detects unreviewed changes; also runs on explicit `/sync-from-build review`.
 
 ### USE-Template Proposal Schema (Step 7b — originator contract, self-contained)
 
@@ -334,7 +334,7 @@ Dependencies: uv sync ✓ | Hooks: 11/11 | VERSION: 1.0.0→1.1.0
 The full annotated example for `commands/sync-to-build.md` Step 5 ("Present merge plan"). Group by decision type; for MODIFIED files show source-vs-BUILD line counts; end with the proceed/review gate:
 
 ```
-## Merge Plan: loom/ → <rust-sdk-repo>/
+## Merge Plan: loom/ → kailash-rs/
 
 ### Safe updates (shared artifacts, no BUILD-specific content)
 - rules/agents.md (+3 -1)

@@ -14,7 +14,7 @@ Loom emits the same underlying artifact (rule / agent / skill / command) to thre
 
 Parity violations don't fail at emit time — they fail at user time, when a rule shipped to Codex is quietly weaker than the same rule shipped to CC.
 
-Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §4.5 + §6.2 `cli-orchestrator.sees` verb, authored after round-2 portability reviewer flagged missing contract.
+Origin: (loom-internal reference) §4.5 + §6.2 `cli-orchestrator.sees` verb, authored after round-2 portability reviewer flagged missing contract.
 
 ## MUST Rules
 
@@ -122,6 +122,6 @@ scrub_tokens: ["MUST", "never", "always", "WARN"]  # hides real drift
 
 **Why:** A disabled audit produces no findings; the drift ships silently and is unrecoverable once downstream repos pull it.
 
-Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §4.5 + §6.2 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
+Origin: (loom-internal reference) §4.5 + §6.2 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
 
 <!-- /slot:neutral-body -->

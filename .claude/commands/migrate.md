@@ -2,7 +2,7 @@
 description: "Upgrade Claude-Code-only USE-template project to multi-CLI (Claude+Codex+Gemini). Modes: detect, --dry-run, --refresh, --rollback. Preserves project artifacts."
 ---
 
-Migrate a project from `kailash-coc-claude-{py,rs,rb}` (CC-only) to `kailash-coc-{py,rs}` (multi-CLI), or refresh multi-CLI overlays on a project already migrated. Project source, workspaces, journals, briefs, todos, `.session-notes`, `.env`, and SDK pins are preserved.
+Migrate a project from CC-only to multi-CLI (Claude+Codex+Gemini), or refresh multi-CLI overlays on a project already migrated. Covers BOTH axes: the Kailash axis (`kailash-coc-claude-{py,rs,rb}` → `kailash-coc-{py,rs}`) AND the non-Kailash, stack-agnostic `base` axis (`coc-claude-base` → `coc-base` — NOTE: NO `kailash-` prefix; the base template serves non-Kailash coding projects, which are first-class COC consumers). Project source, workspaces, journals, briefs, todos, `.session-notes`, `.env`, and SDK pins are preserved.
 
 Detailed protocol (bash blocks, additive-merge semantics, 3-way reconciliation, verification table, marker schema, hook env-var portability, `--emit-only` non-COC lane): `skills/30-claude-code-patterns/multi-cli-migration.md`. Manifest source-of-truth: `.claude/sync-manifest.yaml::multi_cli_overlays:`.
 
@@ -19,13 +19,13 @@ Detailed protocol (bash blocks, additive-merge semantics, 3-way reconciliation, 
 ## Step 0 — Pre-flight
 
 1. Read `.claude/.coc-sync-marker` AND `.claude/VERSION.type`. Branch by `template_type` / `VERSION.type`:
-   - `cc-only-legacy` → full migration. Variant from `variant:` (`py`/`rs`/`rb`).
+   - `cc-only-legacy` → full migration. Variant from `variant:` (`py`/`rs`/`rb`/`base`).
    - `multi-cli` → only `--refresh` is valid; `/migrate` exits "already migrated".
    - Non-COC lineage → ONLY `--emit-only` is valid. Full protocol in skill § `--emit-only` mode.
    - Missing/unrecognized AND no `.claude/` directory → exit "not a recognized USE-template lineage".
-2. Resolve sister template (full migration only): py → `kailash-coc-py`, rs → `kailash-coc-rs`. (rb RETIRED in #423 Phase 1 — Ruby ships as bindings via the rs all-bindings template; no rb USE template exists.) **rb path**: do NOT migrate; exit with "kailash-coc-claude-rb is retired — use kailash-coc-rs for Ruby bindings."
+2. Resolve sister template `<sister>` (full migration only): py → `kailash-coc-py`, rs → `kailash-coc-rs`, **base → `coc-base`** (the non-Kailash, stack-agnostic axis — note the sister name has NO `kailash-` prefix and the CC-only source is `coc-claude-base`, not `kailash-coc-claude-base`; both ship under the Foundation `coc-{claude-,}base` naming). (rb RETIRED in #423 Phase 1 — Ruby ships as bindings via the rs all-bindings template; no rb USE template exists.) **rb path**: do NOT migrate; exit with "kailash-coc-claude-rb is retired — use kailash-coc-rs for Ruby bindings." Every downstream step references the resolved `<sister>` name (e.g. `kailash-coc-py` for py, `coc-base` for base), NOT a `kailash-coc-<variant>` pattern (which is wrong for base).
 3. Verify clean working tree inline: `[ -z "$(git status --porcelain)" ] || { echo "stash or commit first; recommend: git stash push -u -m pre-migrate"; exit 1; }`. Recommendation per `recommendation-quality.md` MUST-1 — stash beats commit because the migration commit will be atomic and stash restores cleanly post-merge.
-4. Resolve sister template path via `node .claude/bin/resolve-template.js --template kailash-coc-<variant>` (else env `KAILASH_COC_TEMPLATE_PATH` → `~/.cache/kailash-coc/<sister>/` → offline-fallback).
+4. Resolve sister template path via `node .claude/bin/resolve-template.js --template <sister>` (the Step-0.2 resolved name — `kailash-coc-py`/`kailash-coc-rs`/`coc-base`; else env `KAILASH_COC_TEMPLATE_PATH` → `~/.cache/kailash-coc/<sister>/` → offline-fallback).
 5. Branch-name collision: if `chore/coc-multi-cli-migrate-<YYYYMMDD>` exists locally, append `-<HHMMSS>` for same-day idempotency.
 
 ## Step 1 — Branch + snapshot
@@ -34,7 +34,7 @@ Detailed protocol (bash blocks, additive-merge semantics, 3-way reconciliation, 
 
 ## Step 2 — VERSION update FIRST
 
-Update `.claude/VERSION` `upstream.template` → `kailash-coc-<variant>`, `upstream.template_repo` → `terrene-foundation/kailash-coc-<variant>`. MUST precede Step 4 so the resolver targets the new template on subsequent calls.
+Update `.claude/VERSION` `upstream.template` → `<sister>`, `upstream.template_repo` → `terrene-foundation/<sister>` (the Step-0.2 resolved name — `coc-base` for the base axis, NOT `kailash-coc-base`). MUST precede Step 4 so the resolver targets the new template on subsequent calls.
 
 ## Step 3 — Top-level multi-CLI overlay copy
 
@@ -85,7 +85,7 @@ Write `.claude/.coc-sync-marker` per the canonical multi-CLI shape (`template`, 
 
 ## Step 9 — Project-artifact lint
 
-`node tools/lint-workspaces.js workspaces/ .session-notes 2>/dev/null || true` (advisory). Surfaces CC-native syntax leaks per `rules/cross-cli-artifact-hygiene.md`. Tool ships in the sister template; if absent, fall back to inline regex from `workspaces/multi-cli-coc/fixtures/slot-markers/emitter.mjs:279-301`.
+`node tools/lint-workspaces.js workspaces/ .session-notes 2>/dev/null || true` (advisory). Surfaces CC-native syntax leaks per `rules/cross-cli-artifact-hygiene.md`. Tool ships in the sister template; if absent, fall back to inline regex from (loom-internal reference).
 
 ## Step 10 — Verify cross-CLI surfaces
 

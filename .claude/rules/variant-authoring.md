@@ -13,7 +13,7 @@ Loom's variant system has two axes: **language** (`py`/`rs`/`rb`/`prism`) and **
 
 Authoring a variant wrong doesn't fail at author time — it fails at emit time across every downstream USE template. One bad overlay desynchronises N × M targets.
 
-Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §3, authored after round-2 convergence flagged a missing contract.
+Origin: (loom-internal reference) §3, authored after round-2 convergence flagged a missing contract.
 
 ## MUST Rules
 
@@ -150,6 +150,6 @@ variants/py-codex/rules/zero-tolerance.md # zero-tolerance's neutral body is CLI
 
 **Why:** Unresolved variants accumulate; /sync distributes them unchanged; downstream repos inherit the mess.
 
-Origin: `workspaces/multi-cli-coc/02-plans/04-loom-multi-cli-spec-v3.md` §3 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
+Origin: (loom-internal reference) §3 + round-2 aggregate `04-validate/10-round-2-aggregate.md`.
 
 <!-- /slot:neutral-body -->

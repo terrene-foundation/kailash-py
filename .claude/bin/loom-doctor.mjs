@@ -19,6 +19,7 @@
  *    gh            GitHub CLI presence + auth (needed for a GitHub host)
  *    az            Azure CLI presence + auth (needed for an ADO host)
  *    vcs-host      derived: at least one VCS host authenticated
+ *    ado-readiness ADO org/project config-presence (skip on a non-ADO clone)
  *    resolver      resolveAll() error cells / resolver-absent consumer
  *
  *  The engine (runDoctor / runFix) takes injectable seams (exec / fs /
@@ -170,7 +171,22 @@ function checkMergeDriver(exec, readFile) {
   }
   const drv = exec("git", ["config", "--get", "merge.coc-ledger.driver"]);
   if (drv.ok && drv.stdout) {
-    return mk("merge-driver", STATUS.ok, "coc-ledger merge driver registered");
+    // Registered — but a value that differs from the canonical command is a
+    // STALE registration (e.g. a pre-loom#741 clone that registered the bare
+    // non-executable path). git config persists, so such a clone stays on the
+    // clobbering fallback forever unless we flag it for re-fix. A bare path
+    // (no `node ` prefix) fails `Permission denied` under git's shell exec.
+    if (drv.stdout.trim() === COC_LEDGER_DRIVER) {
+      return mk("merge-driver", STATUS.ok, "coc-ledger merge driver registered (canonical)");
+    }
+    return mk(
+      "merge-driver",
+      STATUS.warn,
+      `coc-ledger merge driver registered but non-canonical: \`${drv.stdout.trim()}\``,
+      "run `loom doctor --fix` to re-register the canonical `node`-prefixed command; a bare " +
+        "(non-`node`) path fails `Permission denied` under git's shell exec and silently falls " +
+        "back to the default line-merge, clobbering .session-notes.shared.md rows (loom#741)",
+    );
   }
   return mk(
     "merge-driver",
@@ -203,6 +219,104 @@ function checkHostCli(exec, cmd, label, versionArgs, authArgs, authHint) {
     `${cmd} present but not authenticated`,
     `run the ${cmd} login flow if this clone targets a ${authHint} host`,
     { authed: false },
+  );
+}
+
+// ADO org/project readiness — config-presence ONLY, never a live Graph probe
+// (the live-API existence-check is the ceremony's job per
+// verify-resource-existence.md MUST-2). Detect ADO targeting via the same signal
+// the ceremony uses (roster.genesis.provider === "azure-devops"), else infer it
+// when `az` is the ONLY authenticated host. On a non-ADO clone this returns
+// `info`/skip so a GitHub-only clone never sees ADO noise.
+function checkAdoReadiness(exec, readFile, ghCheck, azCheck) {
+  // ── Is this clone ADO-targeted? ──────────────────────────────────────────
+  // Signal 1 (authoritative): the roster genesis provider, when a roster exists.
+  // A parseable roster is authoritative in BOTH directions — `provider` absent or
+  // "github" means GitHub genesis (the schema's backward-compatible default), which
+  // MUST suppress the Signal-2 inference so a GitHub clone never sees ADO noise even
+  // when `gh` auth has lapsed while `az` happens to be authed.
+  let adoTargeted = false;
+  let rosterSaysNonAzure = false;
+  let rosterProject = null;
+  let rosterOwner = null;
+  const rosterRaw = readFile(path.join(REPO_ROOT, ".claude", "operators.roster.json"));
+  if (rosterRaw) {
+    try {
+      const g = JSON.parse(rosterRaw)?.genesis || {};
+      if (g.provider === "azure-devops") {
+        adoTargeted = true;
+        rosterProject = g.ado_project || null;
+        rosterOwner = g.repo_owner || null;
+      } else {
+        // present + parseable + provider github/absent ⇒ authoritatively non-Azure
+        rosterSaysNonAzure = true;
+      }
+    } catch {
+      // malformed roster: no authoritative signal → inference still allowed
+    }
+  }
+  // Signal 2 (inference): ONLY when no usable roster signal exists AND `az` is the
+  // ONLY authed host. A roster that authoritatively names a non-Azure provider
+  // suppresses it (the asymmetry the HIGH finding closed).
+  if (!adoTargeted && !rosterSaysNonAzure && azCheck.authed && !ghCheck.authed) {
+    adoTargeted = true;
+  }
+
+  if (!adoTargeted) {
+    return mk(
+      "ado-readiness",
+      STATUS.info,
+      "clone does not target Azure DevOps — skipping ADO org/project readiness",
+      null,
+    );
+  }
+
+  // ── ADO-targeted: is org+project resolvable? ─────────────────────────────
+  // The roster's repo_owner + ado_project satisfy readiness without shelling out.
+  if (rosterProject && rosterOwner) {
+    return mk(
+      "ado-readiness",
+      STATUS.ok,
+      `ADO org/project from roster genesis: ${rosterOwner}/${rosterProject}`,
+    );
+  }
+
+  // No roster org+project → fall back to the `az devops` CLI defaults.
+  const ext = exec("az", ["extension", "show", "--name", "azure-devops"]);
+  if (ext.missing || !ext.ok) {
+    return mk(
+      "ado-readiness",
+      STATUS.warn,
+      "the `az devops` extension is not installed",
+      "run `az extension add --name azure-devops`, then " +
+        "`az devops configure --defaults organization=https://dev.azure.com/<org> project=<project>`",
+    );
+  }
+  const cfg = exec("az", ["devops", "configure", "--list"]);
+  if (!cfg.ok && !cfg.missing) {
+    // The command errored (e.g. a broken extension state) — do NOT conflate that
+    // with "unconfigured". Name the real cause so the remediation targets it.
+    return mk(
+      "ado-readiness",
+      STATUS.warn,
+      "could not read `az devops configure --list` (the command errored)",
+      "check the `az devops` extension state (`az extension show --name azure-devops`); " +
+        "reinstall with `az extension add --upgrade --name azure-devops` if it is broken",
+    );
+  }
+  const cfgOut = cfg.ok ? cfg.stdout : "";
+  const hasOrg = /(^|\n)\s*organization\s*=\s*\S/.test(cfgOut);
+  const hasProject = /(^|\n)\s*project\s*=\s*\S/.test(cfgOut);
+  if (hasOrg && hasProject) {
+    return mk("ado-readiness", STATUS.ok, "az devops default organization + project configured");
+  }
+  const missing = [!hasOrg && "organization", !hasProject && "project"].filter(Boolean).join(" + ");
+  return mk(
+    "ado-readiness",
+    STATUS.warn,
+    `az devops default ${missing} not configured`,
+    "run `az devops configure --defaults organization=https://dev.azure.com/<org> project=<project>` " +
+      "so a genesis ceremony resolves the org/project before it fails on a cryptic ado_api_* capture",
   );
 }
 
@@ -283,6 +397,7 @@ export function runDoctor(opts = {}) {
     gh,
     az,
     checkVcsHost(gh, az),
+    checkAdoReadiness(exec, readFile, gh, az),
     checkResolver(isConfigured, resolveAll),
   ];
 
@@ -327,7 +442,16 @@ export function formatReport(result) {
 // EXPLICIT --role (NO silent guess — the D2 precedence design).
 
 const COC_LEDGER_NAME = "COC forest-ledger 3-way merge";
-const COC_LEDGER_DRIVER = ".claude/hooks/lib/coc-ledger.js %O %A %B %P";
+// The `node ` prefix is load-bearing: git execs a merge driver directly through
+// the shell, and coc-ledger.js is committed mode 100644 (non-executable), so a
+// bare path fails `Permission denied` and git silently falls back to the
+// clobbering default line-merge (loom#741). The explicit interpreter is also
+// cross-platform (does not depend on the +x bit / core.fileMode).
+// `%P` is DELIBERATELY OMITTED: it expands to the merged file's repo-relative
+// path and, via the `workspaces/*` .gitattributes binding, is a shell-injection
+// surface (a maliciously-named dir); the driver reads only `%O %A %B`, so `%P`
+// is unused. Do NOT re-add it. (loom#741 R1 security)
+const COC_LEDGER_DRIVER = "node .claude/hooks/lib/coc-ledger.js %O %A %B";
 
 // Default seam: invoke the existing loom-links-init seeder (refuses-on-exists).
 function defaultInvokeInit() {

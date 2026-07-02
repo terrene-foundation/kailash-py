@@ -67,7 +67,7 @@ After distribution, `/sync-to-use` MUST emit a verification table to the user wi
 | kailash-coc-claude-py   | 2.19 | 2.20 | b4d2933  | 2026-05-06T14:22:00Z | 16.93 / 16.87      | ✓ |
 | kailash-coc-claude-rb   | 2.18 | 2.18 | b4d2933  | (skipped)            | n/a                | ✗ |
 | kailash-coc-rs          | 2.21 | 2.21 | def4567  | (emit-blocked)       | 9.81 / 9.85        | ✗ |
-ERROR: ✗ rows halt sync — version-stale (rb) OR headroom-floor breach (rs, v6.2 Shard 2 — see workspaces/multi-cli-coc/02-plans/08-loom-v6.2-headroom-validator.md).
+ERROR: ✗ rows halt sync — version-stale (rb) OR headroom-floor breach (rs, v6.2 Shard 2 — see (loom-internal reference)).
 
 # DO NOT — single-line completion claim, OR table missing landed/hr% column
 ✓ /sync-to-use py complete (kailash-coc-claude-py at 2.20.0)
@@ -132,6 +132,52 @@ $ for t in $(yq -r '.sync_targets[].templates[].repo' .claude/sync-manifest.yaml
 
 **Why:** Session notes propagate across `/clear` boundaries and are inherited by the next session as ground truth. A wrong count there reproduces as the next session's framing — exactly the failure mode `zero-tolerance.md` Rule 1c blocks for "pre-existing" claims after context boundaries. Per `testing.md`'s "Verified Numerical Claims" rule (originally for test counts), a 2-second `yq | jq` pipeline converts memory-bug into script. The 2026-05-06 session-notes claim "all 4 USE templates at 2.19.0" propagated through SessionStart into the follow-up session's framing and was only caught when the user asked a probing question. The verifying command would have caught it in the original session.
 
+### 5. Syncs That Copy `.claude/` MUST Also Sync External Symlink Targets
+
+A `.claude/` entry MAY be a symlink to a repo-root EXTERNAL target — the codex-mcp-guard pattern: `.claude/codex-mcp-guard` → `../.codex-mcp-guard`, whose real tree is distributed to repo-root `.codex-mcp-guard/` (manifest `paths: .codex-mcp-guard/**` + the `multi_cli_overlays.<overlay-type>.symlinks` declaration). ANY sync that copies `.claude/` — outbound (`/sync-to-use`, `/sync-to-build`) OR inbound (`/sync-from-template`) — MUST ALSO sync every declared external target tree AND recreate the symlink. Enumerate the symlink set from `sync-manifest.yaml::multi_cli_overlays.<overlay-type>.symlinks` (path + target), never from memory (same discipline as Rule 1). A `.claude/`-only copy carries the symlink but leaves the external target stale — the consuming tool then runs against stale content with NO error (for codex-mcp-guard, `extract-policies.mjs` silently no-ops, dropping Codex policy enforcement).
+
+```bash
+# DO — sync .claude/ AND every declared external symlink target, then recreate the link
+rsync -a <src>/.claude/ <dst>/.claude/
+for tgt in $(yq -r '.multi_cli_overlays[].symlinks[].target' sync-manifest.yaml | sed 's#^\.\./##' | sort -u); do
+  case "$tgt" in ../*|/*) echo "refusing out-of-root symlink target: $tgt" >&2; exit 1;; esac  # fail-closed bound
+  rsync -a "<src>/$tgt/" "<dst>/$tgt/"        # external tree, e.g. .codex-mcp-guard/
+done
+# recreate .claude/codex-mcp-guard → ../.codex-mcp-guard per the symlinks: declaration
+
+# DO NOT — copy .claude/ only; the external target is left stale → dead guard
+rsync -a <src>/.claude/ <dst>/.claude/        # extract-policies.mjs now a no-op
+```
+
+**BLOCKED rationalizations:**
+
+- "I synced `.claude/`, the symlink came with it"
+- "The symlink resolves, so its target must be current"
+- "rsync follows symlinks" (it copies the link OR the pointed-at content per flags — neither refreshes a stale external tree at the destination)
+- "codex-mcp-guard is Codex-only; this consumer is CC" (the symlink + external tree ship to every multi-CLI consumer; a stale guard is a silent enforcement gap)
+- "The next sync will fix it"
+
+**Why:** A symlink to an external (`../`) target splits the artifact across two trees; a sync scoped to `.claude/` updates one and silently strands the other — the symlink resolves, the tool starts, but reads stale bytes and no-ops. Enumerating external targets from the manifest (not memory) and syncing both halves is the only structural defense; loom's outbound path (`coc-sync.md` Step 4.5/4.6 copies the external tree, snapshot-guarded by `sync-tier-aware.mjs`, which does NOT follow symlinks) already does this via the dual manifest declaration, and inbound `/sync-from-template` (Step 4) MUST match it. Origin: 2026-06-27 — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left `../.codex-mcp-guard` stale (journal/0352).
+
+### 6. COC Artifacts Under `.claude/` MUST NEVER Be Untracked By A Consumer Root Ignore
+
+A synced `.claude/**` artifact MUST stay git-TRACKED at every target. NEVER coc-artifact into a path a consumer's own `.gitignore` swallows — a delivered file that lands on disk but a fresh clone never tracks is an invisible-delivery failure identical in spirit to `coc-sync-landing.md`'s "uncommitted deliveries vanish". The structural defense is two-part and BOTH halves are MANDATORY: (a) for any `.claude/**` subtree whose basename collides with a common consumer root ignore (`lib/`, `build/`, `dist/`, `var/`, `parts/`), a `!`-re-include MUST be declared in `sync-manifest.yaml::gitignore_reincludes` (applied to USE templates AND BUILD repos — role-blind, unlike `gitignore_additions` which is consumer-only); (b) `/sync-to-use` AND `/sync-to-build` MUST run the post-sync `git check-ignore` gate (`sync-tier-aware.mjs::findSwallowedArtifacts` over every emitted `.claude/**` path) and HARD-FAIL on any swallowed artifact. Shipping a sync without the re-include for a colliding subtree, OR with the swallowed-gate disabled, is BLOCKED.
+
+```bash
+# DO — declare the re-include; the post-sync gate confirms tracked-ness
+# sync-manifest.yaml::gitignore_reincludes:  - "!.claude/bin/lib/"
+# → consumer .gitignore managed block carries `!.claude/bin/lib/` AFTER its broad `lib/`
+# → findSwallowedArtifacts returns [] → sync completes
+node .claude/bin/sync-tier-aware.mjs --build py --verify   # swallowed rows = OUT OF SYNC
+
+# DO NOT — let a consumer's broad `lib/` swallow `.claude/bin/lib/`
+# consumer .gitignore: `lib/` (Python build-artifact block, no re-include)
+# → .claude/bin/lib/loom-links.mjs untracked → fresh clone: tracked
+#   sync-tier-aware.mjs throws `Cannot find module './lib/loom-links.mjs'` on import
+```
+
+**Why:** loom#676 — a consumer carrying the conventional Python build-artifact block (`lib/`) silently untracked the entire `.claude/bin/lib/` directory, including `loom-links.mjs` (the canonical NAME→location resolver per `cross-repo.md` MUST-1) + `slot-parser.mjs` + `strip-build-internal.mjs` that the tracked `sync-tier-aware.mjs` imports. It "worked" only because the files were present from the local sync; a fresh clone throws on import. The negation closes the known instance; the post-sync `git check-ignore` gate closes the CLASS for any future `.claude/**` subtree whose basename collides with a root ignore.
+
 ## MUST NOT
 
 - **Run `/sync-to-*` without first parsing `sync-manifest.yaml::sync_targets[].templates[].repo` into a variable.**
@@ -149,6 +195,10 @@ $ for t in $(yq -r '.sync_targets[].templates[].repo' .claude/sync-manifest.yaml
 - **Write session-notes counts that exceed the verifying command's output.**
 
 **Why:** "Round number" cognition rounds 5 templates down to 4; rounding 4 to 5 is rare. Either way, the verifying command is the truth.
+
+- **Ship a sync that emits a `.claude/**` artifact into a path the target's `.gitignore` swallows, OR disable the post-sync `git check-ignore` gate.**
+
+**Why:** A swallowed artifact lands on disk now but a fresh clone never tracks it — the tracked importer throws at runtime (loom#676). The re-include + the swallowed-gate are the only structural defense.
 
 ## Trust Posture Wiring
 
@@ -171,7 +221,7 @@ The four MUST Rules above carry three independent Trust Posture Wiring profiles,
 
 ### Rule 2 (headroom-floor ✗ row) — v6.2 BLOCK condition
 
-The v6.2 plan (`workspaces/multi-cli-coc/02-plans/08-loom-v6.2-headroom-validator.md`) Shards 1+2 (merged PR #218, commit `75352dd`, 2026-05-15) added a `headroom_pct` column to Rule 2's verification table AND wired the per-CLI `headroom_floor_pct` as a BLOCK condition. F5 binds that structural defense to the Trust Posture system.
+The v6.2 plan ((loom-internal reference)) Shards 1+2 (merged PR #218, commit `75352dd`, 2026-05-15) added a `headroom_pct` column to Rule 2's verification table AND wired the per-CLI `headroom_floor_pct` as a BLOCK condition. F5 binds that structural defense to the Trust Posture system.
 
 - **Severity:** `block` — structural signal (`emit.mjs` in default strict mode returns non-zero on breach; the exit code IS the signal, not a regex match). Per `hook-output-discipline.md` MUST-2, the structural exit is the correct carrier of `block` severity.
 - **Grace period:** 7 days from PR #218 merge (2026-05-15 → 2026-05-22). During grace, the validator emits structured `headroom_floor_violations[]`; `coc-sync.md`'s `node …/emit.mjs --all --lang <py|rs>` invocations (Shard 2 wiring; cycle-2 dropped the explicit `--strict-headroom` opt-in; cycle-3 removed the legacy no-op accepting) propagate non-zero exit unconditionally for py/rs. Grace applies to operators running `emit.mjs` directly OUTSIDE `/sync-to-use`. The opt-in→opt-out flip (cycle-2) shipped 2026-05-15 (PR #230); cycle-3 (a) removed the legacy `--strict-headroom` accepting after a callsite sweep confirmed zero references.
@@ -179,6 +229,28 @@ The v6.2 plan (`workspaces/multi-cli-coc/02-plans/08-loom-v6.2-headroom-validato
 - **Receipt:** SessionStart MUST require `[ack: sync-completeness]` in the agent's first response IF the most recent journal entry references `/sync-to-*` invocation AND any cli×lang headroom falls under the two-tier near-breach band: `headroom_pct < 13%` (3% above floor — covers ~2 cycles of routine emission drift, advisory band) emits the receipt as a soft signal; `headroom_pct < 11%` (1% above floor — hard near-breach) MUST emit the receipt as halt-and-report. The wider 13% band matches the routine-CRIT-rule emission swing (~500–800 B ≈ ~1% of 61,440 B cap) so the receipt fires BEFORE the breach is reached, not after. From current measured state (`journal/0074` § For Discussion #2: gemini rs 15.64% as the closest combo), 3 typical landings reach the 13% advisory; 4-5 reach the 11% halt-and-report — giving ~2-cycle / ~4-cycle lead time at present.
 - **Detection:** (1) Structural — `emit.mjs` non-zero exit on any `headroom_floor_violations[]` entry (Shard 1 wired the validator at `.claude/bin/emit.mjs::validateAggregateHeadroom`; cycle-2 flipped strict mode to opt-out default — `--no-strict-headroom` is the test-harness escape, BLOCKED in production `/sync-to-use`); (2) Wiring — `coc-sync.md`'s baseline-emission step invokes emit.mjs for every py/rs distribution (Shard 2 wired; cycle-2 dropped the explicit `--strict-headroom` flag since strict is now the default); (3) `/codify` mechanical sweep — any session transcript citing `/sync-to-*` MUST show no `--no-strict-headroom` flag in the recorded invocation AND record `headroom_pct` for every cli×lang combo emitted; presence of the opt-out flag OR a missing headroom record is a HIGH finding for the `/codify` reviewer; (4) advisory hook detection of prose rationalizations is intentionally NOT added — would re-introduce the false-positive class `hook-output-discipline.md` MUST-2 blocks, and the structural exit is already authoritative. **Consequence:** prose-level rationalizations do NOT contribute to `trust-posture.md` MUST Rule 4 cumulative-window math; the structural exit code (mechanism 1) is the authoritative defense and fires BEFORE the prose rationalization can take effect. Adding an advisory hook here is BLOCKED. (5) Manifest-axis sweep at `/codify` — `yq '.cli_variants."context/root.md".codex.headroom_floor_pct, .cli_variants."context/root.md".gemini.headroom_floor_pct' .claude/sync-manifest.yaml` returns `>= 10` for both CLIs; any value below the Risk-0004 baseline is a CRIT finding. (5b) Exit-code-swallow sweep at `/codify` — `grep -nE 'emit\.mjs[^|;]*(\|\||&& :|2>/dev/null$|set \+e)' .claude/agents/management/coc-sync.md` returns 0 hits (cycle-2 regex no longer anchors on `--strict-headroom` since strict is the default; any exit-discard wrapper around the emit.mjs invocation is a HIGH finding).
 
-Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates.
+### Rule 5 — external symlink target completeness
+
+- **Severity:** `halt-and-report` at gate-review (cc-architect at `/codify` confirms every `.claude/`-copying sync command — `sync-to-*` + `sync-from-template` — carries the external-symlink-target step + this rule's clause). `advisory` at the structural layer (a post-sync external-target-freshness check is downstream-run; no loom-side block carrier per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing (2026-06-27 → 2026-07-04).
+- **Cumulative posture impact:** same-class violations (a sync copying `.claude/` without syncing declared external symlink targets) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** any same-class violation within 7 days routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — no dedicated trigger key, so no self-referential `trust-posture.md` edit is required.
+- **Receipt requirement:** SessionStart `[ack: sync-completeness]` IFF `posture.json::pending_verification` includes this rule_id (shared with the rule's existing ack; soft-gate).
+- **Detection mechanism:** `cc-architect` mechanical sweep at `/codify` — `grep -nE 'multi_cli_overlays|symlinks|external.*target|codex-mcp-guard' .claude/commands/sync-from-template.md .claude/commands/sync-to-use.md` confirms each `.claude/`-copying sync command carries the external-symlink-target step; the downstream-run structural companion is a post-sync check that each declared external target's content == source.
+- **Violation scope:** MUST Rule 5 (external symlink target completeness) fires the Wiring.
+- **Origin:** journal/0352 (2026-06-27) — see Rule 5's own Origin line.
+
+### Rule 6 — swallowed-artifact tracked-ness guarantee
+
+- **Severity:** `block` at the structural CI/sync layer (`sync-tier-aware.mjs::findSwallowedArtifacts` is a `git check-ignore` exit-code signal — structural, so it MAY carry block per `hook-output-discipline.md` MUST-2; the post-sync gate hard-fails the run); `halt-and-report` at gate-review (cc-architect at `/codify` confirms any new `.claude/**` subtree whose basename collides with a common root ignore carries a `gitignore_reincludes` entry).
+- **Grace period:** 7 days from rule landing (2026-06-28 → 2026-07-05).
+- **Cumulative posture impact:** same-class violations (a sync shipping a swallowed `.claude/**` artifact, OR a colliding subtree added without a re-include) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** any same-class violation within 7 days routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — no dedicated trigger key, so no self-referential `trust-posture.md` edit is required.
+- **Receipt requirement:** SessionStart `[ack: sync-completeness]` IFF `posture.json::pending_verification` includes this rule_id (shared with the rule's existing ack; soft-gate).
+- **Detection mechanism:** structural — `sync-tier-aware.mjs::findSwallowedArtifacts` runs in BOTH the write path (`executePlan`, hard-fails the sync) AND the read-only `--verify` path (`verifyConsistency`, counts as OUT OF SYNC); regression-locked by `.claude/test-harness/tests/sync-tier-aware.test.mjs` § L676. Gate-review — `cc-architect` mechanical sweep at `/codify`: `grep -n 'gitignore_reincludes' .claude/sync-manifest.yaml` confirms a re-include exists for every `.claude/**` subtree whose basename matches a common root ignore.
+- **Violation scope:** MUST Rule 6 (swallowed-artifact tracked-ness guarantee) fires the Wiring.
+- **Origin:** loom#676 (2026-06-28) — a consumer's broad `lib/` ignore silently untracked `.claude/bin/lib/`; the negation + post-sync gate close the instance + the class.
+
+Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates. Rule 5 added 2026-06-27 (journal/0352, co-owner-directed origination) — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left the external `../.codex-mcp-guard` target stale.
 
 <!-- /slot:neutral-body -->

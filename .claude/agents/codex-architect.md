@@ -182,7 +182,7 @@ When emitting `AGENTS.md` / `.codex/skills/**` OR participating in a `/cli-audit
 ## Full Documentation
 
 - `.claude/sync-manifest.yaml` → `cli_variants` + `parity_enforcement` — emission configuration
-- `workspaces/multi-cli-coc/02-plans/07-loom-multi-cli-spec-v6.md` — authoritative spec
+- (loom-internal reference) — authoritative spec
 - `.claude/rules/variant-authoring.md` — overlay authoring rules
 - `.claude/rules/cross-cli-parity.md` — parity contract
 - `.claude/codex-mcp-guard/README.md` — MCP-guard operational notes

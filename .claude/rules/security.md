@@ -187,7 +187,7 @@ Origin: PR #522 / PR #529 (2026-04-19) — BP-049 validation sanitiser plumbing 
 
 Subject-keyed redactors (primitives scrubbing every string containing a `subject_id` substring) MUST enforce a minimum subject-id length floor (≥8 chars), failing closed with a typed error naming the floor and the received length. When a matching object KEY is scrubbed, BOTH key and value MUST be scrubbed — the key replaced with a numbered sentinel (`[REDACTED_KEY_N]`) preserving audit shape; the byte-level audit trail survives via the original-hash return.
 
-**Why:** 1–7-char ids substring-match benign strings ("alice" → "malice"); a preserved matching key under a `[REDACTED]` value leaks the subject's identity as audit metadata. See guide for the Rust SDK PR #1123 evidence + cross-SDK landing requirement.
+**Why:** 1–7-char ids substring-match benign strings ("alice" → "malice"); a preserved matching key under a `[REDACTED]` value leaks the subject's identity as audit metadata. See guide for kailash-rs PR #1123 evidence + cross-SDK landing requirement.
 
 ## Kailash-Specific Security
 

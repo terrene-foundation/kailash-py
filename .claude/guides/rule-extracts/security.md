@@ -183,7 +183,7 @@ The matching-key counter prevents map collapse across multiple matching keys; an
 
 **Cross-SDK landing requirement:** when an equivalent subject-keyed redactor lands in a sibling SDK (Python, Ruby, Node), the min-length floor AND the numbered-sentinel key scrub MUST be part of the ORIGINAL landing — not a follow-up.
 
-**Evidence:** the Rust SDK's `eatp::redact_subject_keyed` shipped with only an empty-id check (PR #1123 commit `f2cd020e`); /redteam Round 1 flagged HIGH (1–7-char ids over-redact role knowledge) + MEDIUM (preserved matching key leaks predecessor identity). Same-shard fix (commit `6a332ef5`) added the `MIN_SUBJECT_ID_CHARS = 8` floor + regression test `redact_subject_keyed_short_subject_id_is_rejected` + the `[REDACTED_KEY_N]` sentinel + symmetric residue predicate.
+**Evidence:** kailash-rs `eatp::redact_subject_keyed` shipped with only an empty-id check (PR #1123 commit `f2cd020e`); /redteam Round 1 flagged HIGH (1–7-char ids over-redact role knowledge) + MEDIUM (preserved matching key leaks predecessor identity). Same-shard fix (commit `6a332ef5`) added the `MIN_SUBJECT_ID_CHARS = 8` floor + regression test `redact_subject_keyed_short_subject_id_is_rejected` + the `[REDACTED_KEY_N]` sentinel + symmetric residue predicate.
 
 ## Kailash-Specific Security — Extended
 
