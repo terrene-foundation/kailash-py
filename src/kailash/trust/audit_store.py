@@ -168,6 +168,9 @@ class AuditEventType(str, Enum):
     RESOURCE_ACCESS = "resource_access"
     DELEGATION_USED = "delegation_used"
 
+    # Disclosure tracing (leak attribution, issue #1482)
+    DISCLOSURE = "disclosure"
+
 
 class AuditOutcome(str, Enum):
     """Outcome of an audited action.

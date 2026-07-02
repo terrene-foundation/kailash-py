@@ -45,6 +45,7 @@ from kailash.trust.signing.algorithm_id import (
     is_registered,
     resolve_dispatch,
 )
+from kailash.trust.signing.derivation import derive_trace_token
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     SALT_LENGTH,
@@ -93,6 +94,8 @@ __all__ = [
     "hmac_verify",
     "dual_sign",
     "dual_verify",
+    # Disclosure-trace token derivation (issue #1482)
+    "derive_trace_token",
     # EATP-08 v1.1 algorithm-identifier surface (canonical namespace)
     "ADOPTION_DATE",
     "ADOPTION_DATE_PARSED",
