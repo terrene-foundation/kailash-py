@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.13.3] — 2026-07-03 — SQLite adapter imports without the optional aiosqlite driver
+
+### Fixed
+
+- **`import dataflow.adapters` no longer requires the optional `aiosqlite` driver (F-AIOSQLITE).** `aiosqlite` is an opt-in driver under the `kailash-dataflow[sqlite]` extra, but `adapters/sqlite.py` imported it at module scope. Because `adapters/__init__.py` eagerly runs `from .sqlite import SQLiteAdapter`, a clean `pip install kailash-dataflow` without the extra raised `ModuleNotFoundError: No module named 'aiosqlite'` on `import dataflow.adapters` and on importing the public `SQLiteAdapter` (advertised in `__all__`). The adapter now mirrors the deferred-driver pattern the MongoDB / pgvector sibling adapters use: a lazy stub is bound when the driver is absent so the class object imports cleanly, and a descriptive `ImportError` (naming the `[sqlite]` extra) is raised up front at the connect boundary (`connect()` / `SQLiteTransaction.__aenter__`) rather than being swallowed by the pool's per-connection error handler and deferred to first query. `except ModuleNotFoundError` (not bare `ImportError`) lets a present-but-broken `aiosqlite` surface its real diagnostic. Regression tests reproduce a clean install via a `meta_path` finder.
+
 ## [2.13.1] — 2026-06-26 — Migration adapter runtime leak fix
 
 ### Fixed
