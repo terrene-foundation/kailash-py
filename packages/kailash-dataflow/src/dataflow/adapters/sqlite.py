@@ -454,7 +454,10 @@ class SQLiteAdapter(DatabaseAdapter):
                         ):
                             continue
                         safe_name, safe_value = _validate_pragma(pragma, value)
-                        await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                        cursor = await conn.execute(
+                            f"PRAGMA {safe_name} = {safe_value}"
+                        )
+                        await cursor.close()
                     self._pool_stats.total_connections += 1
                     self._pool_stats.active_connections += 1
 
@@ -492,7 +495,8 @@ class SQLiteAdapter(DatabaseAdapter):
                     ):
                         continue
                     safe_name, safe_value = _validate_pragma(pragma, value)
-                    await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                    cursor = await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                    await cursor.close()
                 yield conn
 
     async def execute_query(
@@ -936,7 +940,8 @@ class SQLiteAdapter(DatabaseAdapter):
                     ):
                         continue
                     safe_name, safe_value = _validate_pragma(pragma, value)
-                    await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                    cursor = await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
+                    await cursor.close()
 
                 # Test query
                 cursor = await conn.execute("SELECT 1 as test")
@@ -1192,9 +1197,10 @@ class SQLiteTransaction:
                         ):
                             continue
                         safe_name, safe_value = _validate_pragma(pragma, value)
-                        await self.connection.execute(
+                        cursor = await self.connection.execute(
                             f"PRAGMA {safe_name} = {safe_value}"
                         )
+                        await cursor.close()
                     self.adapter._pool_stats.total_connections += 1
                     self.adapter._pool_stats.active_connections += 1
 
