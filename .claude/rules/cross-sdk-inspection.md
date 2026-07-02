@@ -10,7 +10,7 @@ paths:
 
 ## Scope
 
-These rules apply to ALL bug fixes, feature implementations, and issue resolutions in BOTH BUILD repos (the Rust SDK and kailash-py).
+These rules apply to ALL bug fixes, feature implementations, and issue resolutions in BOTH BUILD repos (kailash-rs and kailash-py).
 
 ## MUST Rules
 
@@ -20,17 +20,17 @@ When an issue is found or fixed in ONE BUILD repo, you MUST inspect the OTHER BU
 
 **Why:** Bugs in shared architecture (trust plane, DataFlow, Nexus) almost always exist in both SDKs — fixing only one leaves users of the other SDK hitting the same issue.
 
-**Rust SDK issue found → inspect kailash-py**:
+**kailash-rs issue found → inspect kailash-py**:
 
 - Does the Python SDK have the same bug?
 - Does the Python SDK need the equivalent feature?
 - File a GitHub issue on `terrene-foundation/kailash-py` if relevant.
 
-**kailash-py issue found → inspect the Rust SDK**:
+**kailash-py issue found → inspect kailash-rs**:
 
 - Does the Rust SDK have the same bug?
 - Does the Rust SDK need the equivalent feature?
-- File a GitHub issue on the Rust SDK BUILD repo (logical key `build.rs`; resolve the actual repo via your gitignored `loom-links.local.json` per `cross-repo.md` MUST-1 — never hardcode) if relevant.
+- File a GitHub issue on `terrene-foundation/kailash-rs` if relevant.
 
 ### 2. Cross-Reference in Issues
 
@@ -94,9 +94,9 @@ gh issue close XXX --comment "N/A — Python execute_raw has no params arg"
 - "Cross-SDK is belt-and-suspenders; one test is enough"
 - "We'll add the invariant test when the signature changes"
 
-**Why:** "Our signature doesn't have the arg" is true today and false the day someone ports a convenience method from the sibling SDK. The structural invariant test is the only mechanism that makes the signature _itself_ part of the contract — the moment the signature grows toward the sibling shape, the test fails and the agent reading the failure has a direct pointer back to the cross-SDK bug class. The sibling-path Tier 2 test proves the bug class does not manifest through the surface it COULD manifest through; without it, "different API" conceals a parallel bug the other SDK's API shape hid. Evidence: issue #525 (cross-SDK of the Rust SDK #424) — Python `execute_raw(sql)` structurally cannot hit the Rust binding-layer UTF-8 corruption; disposition landed both an Express `bulk_create` sibling-path test AND a signature invariant test locking `LightweightPool.execute_raw(sql)` at PR #528.
+**Why:** "Our signature doesn't have the arg" is true today and false the day someone ports a convenience method from the sibling SDK. The structural invariant test is the only mechanism that makes the signature _itself_ part of the contract — the moment the signature grows toward the sibling shape, the test fails and the agent reading the failure has a direct pointer back to the cross-SDK bug class. The sibling-path Tier 2 test proves the bug class does not manifest through the surface it COULD manifest through; without it, "different API" conceals a parallel bug the other SDK's API shape hid. Evidence: issue #525 (cross-SDK of kailash-rs#424) — Python `execute_raw(sql)` structurally cannot hit the Rust binding-layer UTF-8 corruption; disposition landed both an Express `bulk_create` sibling-path test AND a signature invariant test locking `LightweightPool.execute_raw(sql)` at PR #528.
 
-Origin: Issue #525 / PR #528 (2026-04-19) — the Rust SDK #424 parity check.
+Origin: Issue #525 / PR #528 (2026-04-19) — kailash-rs#424 parity check.
 
 ### 4. Cross-SDK Hash / Fingerprint Helpers MUST Pin Byte Vectors From Sibling SDK
 
@@ -106,7 +106,7 @@ Any helper that claims byte-shape parity with a sibling SDK (cross-SDK fingerpri
 # DO — pin actual byte vectors from sibling SDK
 @pytest.mark.regression
 def test_fingerprint_secret_matches_kailash_rs_byte_for_byte():
-    # Vectors derived from the Rust SDK Blake2bVar(4) digest output at v3.23.0
+    # Vectors derived from kailash-rs Blake2bVar(4) digest output at v3.23.0
     cases = [
         (b"",                             "00000000"),  # empty-input sentinel
         (b"hello",                        "8ed5b1d4"),
@@ -131,9 +131,9 @@ def test_fingerprint_secret_has_4_hex_chars():
 - "The sibling SDK's vectors will drift; pinning them creates maintenance"
 - "Cross-SDK log correlation is a nice-to-have, not a contract"
 
-**Why:** Cross-SDK forensic correlation depends on identical byte output for identical input across every helper that claims parity. A "same length, same prefix" assertion passes when the underlying algorithm is `Blake2bMac<U4>` (empty-key MAC) on one side and `Blake2bVar(4)` (digest) on the other — the lengths agree, the bytes don't. The empty-input sentinel is the canonical sibling-SDK divergence point: a digest mode emits a stable hash; a MAC mode emits a length-prefixed empty MAC. Pinning ≥3 vectors + sentinels converts "we both call SHA-256" hand-waving into a structural contract that breaks loudly when implementations drift. Evidence: the Rust SDK PR #598 first cut shipped `Blake2bMac<U4>` empty-key MAC mode while kailash-py uses `Blake2bVar(4)` digest mode + empty-input sentinel "00000000"; 4 hex chars vs 16 hex chars; empty-input divergence; cross-SDK log correlation silently broken until 2 reviewers caught it. Applies to every future hash helper claiming cross-SDK parity (`fingerprint_secret`, `mask_url`, `audit_chain_hash`, etc.).
+**Why:** Cross-SDK forensic correlation depends on identical byte output for identical input across every helper that claims parity. A "same length, same prefix" assertion passes when the underlying algorithm is `Blake2bMac<U4>` (empty-key MAC) on one side and `Blake2bVar(4)` (digest) on the other — the lengths agree, the bytes don't. The empty-input sentinel is the canonical sibling-SDK divergence point: a digest mode emits a stable hash; a MAC mode emits a length-prefixed empty MAC. Pinning ≥3 vectors + sentinels converts "we both call SHA-256" hand-waving into a structural contract that breaks loudly when implementations drift. Evidence: kailash-rs PR #598 first cut shipped `Blake2bMac<U4>` empty-key MAC mode while kailash-py uses `Blake2bVar(4)` digest mode + empty-input sentinel "00000000"; 4 hex chars vs 16 hex chars; empty-input divergence; cross-SDK log correlation silently broken until 2 reviewers caught it. Applies to every future hash helper claiming kailash-py / kailash-rs parity (`fingerprint_secret`, `mask_url`, `audit_chain_hash`, etc.).
 
-Origin: the Rust SDK PR #598 (2026-04-25) cross-SDK fingerprint helper — first cut had empty-input + algorithm-mode divergence with kailash-py; caught by reviewers but only because abstract parity assertions were absent. Codified to make the absence loud.
+Origin: kailash-rs PR #598 (2026-04-25) cross-SDK fingerprint helper — first cut had empty-input + algorithm-mode divergence with kailash-py; caught by reviewers but only because abstract parity assertions were absent. Codified to make the absence loud.
 
 ### Rule 4a: Sibling-Canonical Fixtures MUST Be Vendored, Not Re-Authored
 
@@ -142,8 +142,8 @@ When the sibling SDK is the canonical author of a cross-SDK fixture file (test v
 ```
 # DO — vendor the canonical file from the sibling repo
 $ cp ../kailash-py/tests/fixtures/trace-event-canonical.json \
-     <rust-sdk-repo>/test-vectors/trace-event-canonical.json
-$ git add <rust-sdk-repo>/test-vectors/trace-event-canonical.json
+     bindings/kailash-rs/test-vectors/trace-event-canonical.json
+$ git add bindings/kailash-rs/test-vectors/trace-event-canonical.json
 # Update Rust loader + Python binding test + pin-gen script to read canonical shape — same PR.
 
 # DO NOT — maintain a parallel hand-authored copy
@@ -162,7 +162,7 @@ $ git add <rust-sdk-repo>/test-vectors/trace-event-canonical.json
 
 **Why:** Parallel copies drift in shape (`id`/`input` vs `name`/`input_repr`) AND content (different cosmetic input data); vendoring guarantees byte-for-byte file-level parity. The cross-SDK fingerprint contract (Rule 4 above pins ≥3 byte-vectors) is met when the local implementation produces byte-identical output for every vector in the vendored fixture. Orphaned consumers reading the old shape fail at first CI run with KeyError / `cannot find field` / "missing field `id`" — the structural defense against silent drift is `same file, same bytes`. The "sync burden" argument inverts the actual cost: parallel copies create N × M sync work on every fixture edit; vendoring creates 1 sync work per edit (a file copy from sibling repo).
 
-Origin: the Rust SDK PR #761 (merged 8286775f, 2026-05-02) — vendored `test-vectors/trace-event-canonical.json` from `terrene-foundation/kailash-py:main`. Pre-vendor: rs-side fixture had `id`/`input` shape with V1-V3 inputs cosmetically different from py-side; V4-V5 fingerprints already matched (Unicode coverage tests aligned, V1-V3 weren't). Post-vendor: all 5 V1-V5 fingerprints reproduce byte-for-byte through both Rust `compute_trace_event_fingerprint` AND Python binding `serialize_canonical_json`. Same-shard sibling consumer fix per `autonomous-execution.md` Rule 4 (Python binding test orphaned at first push, CI surfaced it, fix-immediately landed in same PR commit `10274a5d`). Codified GLOBAL via /sync (Rust SDK) Gate 1 (2026-05-02 second cycle).
+Origin: kailash-rs PR #761 (merged 8286775f, 2026-05-02) — vendored `test-vectors/trace-event-canonical.json` from `terrene-foundation/kailash-py:main`. Pre-vendor: rs-side fixture had `id`/`input` shape with V1-V3 inputs cosmetically different from py-side; V4-V5 fingerprints already matched (Unicode coverage tests aligned, V1-V3 weren't). Post-vendor: all 5 V1-V5 fingerprints reproduce byte-for-byte through both Rust `compute_trace_event_fingerprint` AND Python binding `serialize_canonical_json`. Same-shard sibling consumer fix per `autonomous-execution.md` Rule 4 (Python binding test orphaned at first push, CI surfaced it, fix-immediately landed in same PR commit `10274a5d`). Codified GLOBAL via /sync rs Gate 1 (2026-05-02 second cycle).
 
 ### 4b. Byte-CHANGING Canonical-Encoder Switches Are Cross-SDK Lockstep, Not Single-SDK
 
@@ -254,47 +254,15 @@ When closing any issue, verify:
 
 **Why:** Closing without cross-SDK verification is the primary cause of feature drift — the checklist is the last gate before an issue is forgotten.
 
-### 6. Cross-SDK References In Public-Published Artifacts Are BLOCKED
-
-The Rust SDK BUILD repo (logical key `build.rs`; resolve the actual repo via your gitignored `loom-links.local.json` per `cross-repo.md` MUST-1 — never hardcode) is **PRIVATE**. Cross-SDK references — the sibling repo/org name, its version numbers, its issue numbers, its crate paths, its internal architecture — MUST NOT appear in any PUBLIC-PUBLISHED artifact of this (public, PyPI-published) repo: `CHANGELOG.md`, `README.md`, rendered docs, published package metadata, or public source/comments. Cross-SDK parity tracking lives in INTERNAL issues (filed on the Rust SDK BUILD repo itself) and journals — never in the public changelog. Genericize to "cross-SDK" / "cross-implementation" without naming the private repo.
-
-```markdown
-# DO — public CHANGELOG genericizes; the parity link lives in an internal issue
-
-- **Tenant-scoped event bus (#1338, cross-SDK parity)**: ...
-
-# DO NOT — public CHANGELOG names the private repo/org/version/issue
-
-- **Tenant-scoped event bus (#1338, cross-SDK parity with <private-org>/<rust-sdk-repo> #1352)**: ...
-- ... "mirrors the Rust SDK v4.12.0 (rs#1448)" / "the Rust SDK uses <internal-runtime-stack>" ...
-```
-
-**BLOCKED rationalizations:** "it's just a cross-reference" / "the parity note is useful context for users" / "the repo name is already known internally" / "it's only the version number, not the code" / "the CHANGELOG is developer-facing, not really public".
-
-**Why:** A public artifact naming the private repo leaks its existence, its org, and its internals to every PyPI consumer — and couples the Foundation-independent Python SDK to a private sibling in violation of `CLAUDE.md` Directive 0 (Foundation Independence — "Kailash Python IS the product, not a derivative of anything"). Cross-SDK visibility belongs in internal tracking, where it informs parity without disclosing the private repo to the world.
-
-**Note (broader surface, flagged not closed):** synced COC governance artifacts (`.claude/rules/`, `.claude/skills/`) that reference the Rust SDK for cross-SDK PROCEDURE are internal governance, distinct from public-published artifacts — but if a downstream USE template is public, those references become public too. That exposure is a separate, larger audit (out of this clause's scope); this clause governs the PyPI-published artifact surface (CHANGELOG/README/docs/package-metadata/public-source).
-
-**Trust Posture Wiring:**
-
-- **Severity:** `halt-and-report` at gate-review (reviewer at `/implement` + release-specialist at `/release` confirm no public-published artifact in the diff names the private Rust SDK repo/org/version/issue); `advisory` at any hook layer (a lexical private-repo/org-name scan of public artifacts cannot carry `block` per `hook-output-discipline.md` MUST-2).
-- **Grace period:** 7 days from rule landing.
-- **Cumulative posture impact:** same-class violations (a private-repo reference shipped in a public-published artifact) contribute per `trust-posture.md` MUST-4 (3× same-rule / 5× total in 30d → drop 1 posture).
-- **Regression-within-grace:** trigger key `public_artifact_private_repo_disclosure` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
-- **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate; shared with Rules 4b/4c).
-- **Detection mechanism:** Phase 1 — gate-level reviewer at `/implement` + `/release`: for any diff touching `CHANGELOG.md` / `README.md` / `docs/` / package metadata, grep for the private Rust SDK repo/org name and halt on a hit. Phase 2 (deferred): a `PostToolUse(Edit|Write)` advisory scanning public-artifact paths.
-- **Violation scope:** this clause (private-repo references in public-published artifacts). Every violation row names the artifact + the leaked reference.
-- **Origin:** 2026-07-02 — a `/codify` session found 27 references to the private Rust SDK BUILD repo (incl. the private org names + rs versions/issues/crate-paths/architecture) in the public, PyPI-published `CHANGELOG.md`; scrubbed in kailash-py PR #1488. User directive: "why will CHANGELOG record the private Rust SDK? There is NO REASON TO!" This clause generalizes the fix to all public-published artifacts.
-
 ## Examples
 
 ```
-# Issue #52 in the Rust SDK: per-request API key override
+# Issue #52 in kailash-rs: per-request API key override
 # → Filed kailash-py#12 as cross-SDK alignment
 gh issue create --repo terrene-foundation/kailash-py \
   --title "feat(kaizen): per-request API key override" \
   --label "cross-sdk" \
-  --body "Cross-SDK alignment with <rust-sdk-repo>#52"
+  --body "Cross-SDK alignment with terrene-foundation/kailash-rs#52"
 ```
 
 ## Automation

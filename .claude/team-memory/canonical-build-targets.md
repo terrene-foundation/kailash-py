@@ -4,7 +4,7 @@ promoted_by:
   display_id: example-operator
   verified_id: pending # populated by coc-append.js on signed promotion
 signed: false # set to true by coc-append.js when the attribution signature lands
-proposal_ref: workspaces/multi-operator-coc/02-plans/01-architecture.md#section-7-3
+proposal_ref: (loom-internal reference)#section-7-3
 promoted_at: 2026-05-22
 superseded_by: null
 body_anchor: pending # SHA-256 of the body (between `---\n` blocks) — set by coc-append.js

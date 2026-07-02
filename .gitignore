@@ -224,3 +224,8 @@ dist/
 
 # Operator-local repo-linkage resolver config (gitignored at loom; never synced — disclosure class).
 .claude/bin/loom-links.local.json
+
+# >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
+!.claude/bin/lib/
+!.claude/hooks/lib/
+# <<< coc:gitignore_additions <<<

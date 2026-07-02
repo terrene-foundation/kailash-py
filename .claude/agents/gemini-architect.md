@@ -154,7 +154,7 @@ When emitting `GEMINI.md` / `.gemini/skills/**` OR participating in a `/cli-audi
 ## Full Documentation
 
 - `.claude/sync-manifest.yaml` → `cli_variants.context/root.md.gemini` + `parity_enforcement` — emission configuration
-- `workspaces/multi-cli-coc/02-plans/07-loom-multi-cli-spec-v6.md` — authoritative spec
+- (loom-internal reference) — authoritative spec
 - `.claude/rules/variant-authoring.md` — overlay authoring rules
 - `.claude/rules/cross-cli-parity.md` — parity contract
 - Gemini docs: [geminicli.com/docs](https://geminicli.com/docs/) (gemini-md, hooks/reference, core/subagents, cli/skills, cli/custom-commands, tools/mcp-server, reference/configuration, extensions/reference)
