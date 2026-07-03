@@ -721,11 +721,42 @@ class DataFlow(DataFlowEventMixin):
         self._pool_manager = None
         self._pool_monitor = None
         self._lightweight_pool = None
-        # Shared persistent :memory: connection (assigned lazily by the SQLite
-        # in-memory path; closed in the teardown paths). Typed Optional[Any]
-        # because it may hold an aiosqlite connection — the close() calls in
+        # Shared persistent :memory: connection (the lifetime ANCHOR for bare
+        # ``:memory:`` shared-cache databases — see below). Typed Optional[Any]
+        # because it holds a sync ``sqlite3`` connection — the close() calls in
         # teardown are guarded by truthiness and only fire when it is set.
         self._memory_connection: Optional[Any] = None
+
+        # Issue #1502: bare ``:memory:`` multi-connection isolation fix.
+        #
+        # Each consumer that independently turns a bare ``:memory:`` URL into a
+        # SQLite connection lands in a DIFFERENT in-memory database — every
+        # anonymous ``:memory:`` connection gets its own private DB — so
+        # migrations create tables in one DB while CRUD reads another
+        # ("no such table"). The core AsyncSQLDatabaseNode already rewrites bare
+        # ``:memory:`` to a shared-cache URI, but it derives a per-adapter name
+        # (``file:kailash_<id(self)>``), so two adapters still miss each other.
+        #
+        # Fix: compute ONE shared-cache URI per DataFlow instance and inject it
+        # at every connection-construction site. ``config.database.url`` is left
+        # UNCHANGED so the many dialect-detection branches that key off the
+        # literal ``:memory:`` / ``sqlite://`` string keep working. A lifetime
+        # ANCHOR connection keeps the shared-cache DB alive for the life of the
+        # instance — a shared-cache memory DB is destroyed the moment its last
+        # connection closes, so without the anchor the schema would vanish
+        # between operations. The anchor never runs queries.
+        self._memory_db_uri: Optional[str] = None
+        if self.config.database.url in (
+            ":memory:",
+            "sqlite:///:memory:",
+            "sqlite://:memory:",
+        ):
+            import sqlite3
+
+            self._memory_db_uri = f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
+            self._memory_connection = sqlite3.connect(
+                self._memory_db_uri, uri=True, check_same_thread=False
+            )
 
         # Multi-tenant manager (lightweight — no DB connection)
         if self.config.security.multi_tenant:
@@ -1588,9 +1619,10 @@ class DataFlow(DataFlowEventMixin):
             # @property returning self._dataflow.runtime when no explicit
             # override is set.
             self._migration_system = AutoMigrationSystem(
-                connection_string=self.config.database.get_connection_url(
-                    self.config.environment
-                ),
+                # Issue #1502: bare ``:memory:`` uses the per-instance shared-cache
+                # URI so migrations land in the SAME DB as CRUD; None otherwise.
+                connection_string=self._memory_db_uri
+                or self.config.database.get_connection_url(self.config.environment),
                 dialect=dialect,
                 migrations_dir=migrations_dir,
                 dataflow_instance=self,
@@ -5855,6 +5887,17 @@ class DataFlow(DataFlowEventMixin):
 
             return sqlite3.connect(":memory:", check_same_thread=False)
 
+    def _sqlite_connection_url(self) -> Optional[str]:
+        """Return the shared-cache URI for a bare ``:memory:`` instance.
+
+        Issue #1502: ``None`` for every non-``:memory:`` configuration (file
+        SQLite, PostgreSQL, MySQL), so ``self._memory_db_uri or <url>`` guards
+        at connection-construction sites are no-ops off the in-memory path. When
+        set it is the single ``file:df_mem_<id>?mode=memory&cache=shared`` URI
+        every consumer of this instance MUST use to reach the same in-memory DB.
+        """
+        return self._memory_db_uri
+
     def _get_async_sql_connection(self):
         """Get connection wrapper using AsyncSQLDatabaseNode.
 
@@ -5891,17 +5934,25 @@ class DataFlow(DataFlowEventMixin):
 
                 return sqlite3.connect(":memory:", check_same_thread=False)
 
-            # Create a safe connection string for SQL databases
-            components = ConnectionParser.parse_connection_string(database_url)
-            safe_connection_string = ConnectionParser.build_connection_string(
-                scheme=components.get("scheme"),
-                host=components.get("host"),
-                database=components.get("database"),
-                username=components.get("username"),
-                password=components.get("password"),
-                port=components.get("port"),
-                **components.get("query_params", {}),
-            )
+            # Issue #1502: a bare ``:memory:`` instance MUST route this secondary
+            # DDL/query path through the shared-cache URI so it reaches the SAME
+            # in-memory DB as the CRUD/registry paths (AsyncSQLDatabaseNode handles
+            # the ``file:...`` URI + ``uri=True``). Bypass ConnectionParser here —
+            # it is built for ``scheme://host/db`` and would mangle a ``file:`` URI.
+            if self._memory_db_uri is not None:
+                safe_connection_string = self._memory_db_uri
+            else:
+                # Create a safe connection string for SQL databases
+                components = ConnectionParser.parse_connection_string(database_url)
+                safe_connection_string = ConnectionParser.build_connection_string(
+                    scheme=components.get("scheme"),
+                    host=components.get("host"),
+                    database=components.get("database"),
+                    username=components.get("username"),
+                    password=components.get("password"),
+                    port=components.get("port"),
+                    **components.get("query_params", {}),
+                )
 
             # Create a connection wrapper that supports the needed interface
             class AsyncSQLConnectionWrapper:
@@ -8068,7 +8119,12 @@ class DataFlow(DataFlowEventMixin):
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-        connection_string = self.config.database.url or ":memory:"
+        # Issue #1502: for a bare ``:memory:`` instance route through the
+        # per-instance shared-cache URI so this node reaches the SAME in-memory
+        # DB as DDL/migration; ``_memory_db_uri`` is None for every other config.
+        connection_string = (
+            self._memory_db_uri or self.config.database.url or ":memory:"
+        )
 
         # Create new node
         node = AsyncSQLDatabaseNode(
@@ -8120,7 +8176,9 @@ class DataFlow(DataFlowEventMixin):
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
         database_url = self.config.database.get_connection_url(self.config.environment)
-        executor = SyncDDLExecutor(database_url)
+        # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
+        # shared-cache URI so tables land in the SAME DB CRUD reads from.
+        executor = SyncDDLExecutor(self._memory_db_uri or database_url)
         results = executor.execute_ddl_batch_per_statement(non_empty)
 
         for stmt_result in results:
@@ -8207,7 +8265,9 @@ class DataFlow(DataFlowEventMixin):
         from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
         database_url = self.config.database.get_connection_url(self.config.environment)
-        executor = SyncDDLExecutor(database_url)
+        # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
+        # shared-cache URI so tables land in the SAME DB CRUD reads from.
+        executor = SyncDDLExecutor(self._memory_db_uri or database_url)
         # Off-loop the synchronous DDL batch so the running event loop
         # (FastAPI lifespan / Nexus startup / pytest-asyncio) keeps servicing
         # other tasks while the migration runs.
@@ -8411,12 +8471,16 @@ class DataFlow(DataFlowEventMixin):
                 )
                 return False
 
-            # CRITICAL: Skip sync DDL for in-memory SQLite databases
-            # SyncDDLExecutor creates a separate connection, which for :memory: databases
-            # means tables are created in a DIFFERENT in-memory database than CRUD operations.
-            # In-memory databases must use lazy creation (ensure_table_exists) which uses
-            # the shared _memory_connection that CRUD operations also use.
-            if database_url == ":memory:" or database_url == "sqlite:///:memory:":
+            # Issue #1502: the historical skip existed because bare ``:memory:``
+            # SyncDDLExecutor connections landed in a DIFFERENT in-memory DB than
+            # CRUD. Now that ``_memory_db_uri`` is a shared-cache URI every
+            # consumer uses, we WANT sync DDL to run against it. Only skip when
+            # there is no shared URI (i.e. this is not a bare-``:memory:``
+            # instance handled by the fix — belt-and-suspenders, unreachable in
+            # practice because this branch only fires for the ``:memory:`` URLs).
+            if (
+                database_url == ":memory:" or database_url == "sqlite:///:memory:"
+            ) and self._memory_db_uri is None:
                 logger.debug(
                     f"Skipping sync DDL for in-memory database '{model_name}'. "
                     f"Tables will be created lazily on first access using shared connection."
@@ -8440,7 +8504,9 @@ class DataFlow(DataFlowEventMixin):
             table_sql = self._generate_create_table_sql(model_name, db_type)
 
             # Create SyncDDLExecutor
-            executor = SyncDDLExecutor(database_url)
+            # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
+            # shared-cache URI so tables land in the SAME DB CRUD reads from.
+            executor = SyncDDLExecutor(self._memory_db_uri or database_url)
 
             # Execute CREATE TABLE
             result = executor.execute_ddl(table_sql)
@@ -8569,7 +8635,9 @@ class DataFlow(DataFlowEventMixin):
                 return
 
             # Execute all DDL in one connection
-            executor = SyncDDLExecutor(database_url)
+            # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
+            # shared-cache URI so tables land in the SAME DB CRUD reads from.
+            executor = SyncDDLExecutor(self._memory_db_uri or database_url)
             result = executor.execute_ddl_batch(all_sql)
 
             if result.get("success"):
@@ -8687,7 +8755,9 @@ class DataFlow(DataFlowEventMixin):
             )
 
             # Create SyncDDLExecutor
-            executor = SyncDDLExecutor(database_url)
+            # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
+            # shared-cache URI so tables land in the SAME DB CRUD reads from.
+            executor = SyncDDLExecutor(self._memory_db_uri or database_url)
 
             # Collect all DDL statements
             all_statements = []
@@ -9298,12 +9368,16 @@ class DataFlow(DataFlowEventMixin):
             if db_url == ":memory:":
                 # Use URI shared-cache so multiple connections see the same
                 # in-memory database (each aiosqlite.connect(":memory:") would
-                # create a SEPARATE database otherwise).
-                if not hasattr(self, "_memory_db_uri"):
+                # create a SEPARATE database otherwise). Issue #1502: __init__
+                # sets self._memory_db_uri for every bare-:memory: instance, so
+                # this reuses that canonical name; the `is None` fallback only
+                # fires on the degraded path where __init__ did not resolve one.
+                if self._memory_db_uri is None:
                     self._memory_db_uri = (
-                        f"file:engine_{id(self)}?mode=memory&cache=shared"
+                        f"file:df_mem_{id(self):x}?mode=memory&cache=shared"
                     )
-                return await aiosqlite.connect(self._memory_db_uri, uri=True)
+                memory_uri = self._memory_db_uri
+                return await aiosqlite.connect(memory_uri, uri=True)
             else:
                 # Extract file path from sqlite:///path/to/file.db
                 file_path = db_url.replace("sqlite:///", "/")
@@ -10230,17 +10304,37 @@ class DataFlow(DataFlowEventMixin):
                     "engine.error_closing_connection_manager", extra={"error": str(e)}
                 )
 
-        # Clean up persistent :memory: connection
-        # Phase 6: Use async_safe_run for proper cleanup in both sync and async contexts
+        # Clean up the :memory: shared-cache lifetime anchor.
+        # Issue #1502: the anchor is a plain SYNC ``sqlite3`` connection, so close
+        # it synchronously — routing it through ``async_safe_run`` would spin an
+        # event loop for a sync object. Truthiness-guarded + finally-nulled, so
+        # it is safe to call twice across the two teardown paths.
         if hasattr(self, "_memory_connection") and self._memory_connection:
             try:
-                async_safe_run(self._memory_connection.close())
+                self._memory_connection.close()
             except Exception as e:
                 logger.debug(
                     "engine.failed_to_close_memory_connection", extra={"error": str(e)}
                 )
             finally:
                 self._memory_connection = None
+
+        # Issue #1502: dispose the registry/state StaticPool bound to this
+        # instance's shared-cache URI. Its single connection would otherwise
+        # outlive close() — leaking the in-memory DB AND (because id(self) is
+        # reused by CPython) letting a later DataFlow(":memory:") at the same
+        # address alias this instance's data. Targeted per-URI dispose, so
+        # sibling instances' pools are untouched.
+        _memory_uri = getattr(self, "_memory_db_uri", None)
+        if _memory_uri:
+            try:
+                from kailash.nodes.data.sql import SQLDatabaseNode
+
+                SQLDatabaseNode.dispose_pools_for(_memory_uri)
+            except Exception as e:
+                logger.debug(
+                    "engine.failed_to_dispose_memory_pools", extra={"error": str(e)}
+                )
 
         # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
         #
@@ -10377,16 +10471,34 @@ class DataFlow(DataFlowEventMixin):
                     "engine.error_closing_connection_manager", extra={"error": str(e)}
                 )
 
-        # Clean up persistent :memory: connection
+        # Clean up the :memory: shared-cache lifetime anchor.
+        # Issue #1502: the anchor is a plain SYNC ``sqlite3`` connection — its
+        # ``close()`` is NOT awaitable, so call it synchronously here too.
+        # Truthiness-guarded + finally-nulled, so double-close across the two
+        # teardown paths is safe.
         if hasattr(self, "_memory_connection") and self._memory_connection:
             try:
-                await self._memory_connection.close()
+                self._memory_connection.close()
             except Exception as e:
                 logger.debug(
                     "engine.failed_to_close_memory_connection", extra={"error": str(e)}
                 )
             finally:
                 self._memory_connection = None
+
+        # Issue #1502: dispose the registry/state StaticPool bound to this
+        # instance's shared-cache URI (see close() for the leak + id()-reuse
+        # aliasing rationale). Targeted per-URI dispose.
+        _memory_uri = getattr(self, "_memory_db_uri", None)
+        if _memory_uri:
+            try:
+                from kailash.nodes.data.sql import SQLDatabaseNode
+
+                SQLDatabaseNode.dispose_pools_for(_memory_uri)
+            except Exception as e:
+                logger.debug(
+                    "engine.failed_to_dispose_memory_pools", extra={"error": str(e)}
+                )
 
         # Close audit persistence backend
         if hasattr(self, "_audit_backend") and self._audit_backend is not None:

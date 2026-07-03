@@ -16,26 +16,7 @@ from tests.utils.real_infrastructure import real_infra
 
 @pytest.mark.e2e
 @pytest.mark.timeout(10)
-@pytest.mark.parametrize(
-    "db_config",
-    [
-        (
-            pytest.param(
-                c,
-                id=c["id"],
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="bare sqlite :memory: multi-connection unsupported — "
-                    "shared-cache URI rewrite is orphaned (not wired to the CRUD "
-                    "hot path); see #1502. Remove when #1502 lands.",
-                ),
-            )
-            if c.get("url") == ":memory:"
-            else pytest.param(c, id=c["id"])
-        )
-        for c in DATABASE_CONFIGS
-    ],
-)
+@pytest.mark.parametrize("db_config", DATABASE_CONFIGS, ids=lambda x: x["id"])
 async def test_basic_dataflow_operations(db_config):
     """Test basic CRUD operations with DataFlow in <10s."""
     # Create DataFlow instance with cache disabled for testing

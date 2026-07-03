@@ -28,15 +28,80 @@ import yaml
 try:
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import SQLAlchemyError
-    from sqlalchemy.pool import QueuePool
+    from sqlalchemy.pool import QueuePool, StaticPool
 except ImportError:
     create_engine = None  # type: ignore[assignment,misc]
     text = None  # type: ignore[assignment]
     SQLAlchemyError = Exception  # type: ignore[assignment,misc]
     QueuePool = None  # type: ignore[assignment]
+    StaticPool = None  # type: ignore[assignment]
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
+
+
+def _configure_sqlite_memory_pool(connection_string: str, pool_config: dict) -> str:
+    """Make a SQLite MEMORY / shared-cache connection thread-safe (issue #1502).
+
+    A SQLite in-memory (or ``mode=memory`` shared-cache) connection CANNOT use
+    ``QueuePool``: QueuePool hands a pooled connection to whatever thread checks
+    it out, and SQLite rejects cross-thread use of a connection created with the
+    default ``check_same_thread=True`` — ``sqlite3.ProgrammingError: SQLite
+    objects created in a thread can only be used in that same thread``. The sync
+    ``SQLDatabaseNode`` path runs inside a thread-pool offload (the DataFlow
+    model-registry sync path), so this fires on every registry operation against
+    a bare ``:memory:`` DataFlow instance.
+
+    Fix: swap ``QueuePool`` for ``StaticPool`` (one shared connection reused
+    across threads) with ``check_same_thread=False``. For a
+    ``file:...mode=memory`` shared-cache URI also set ``uri=True`` and prepend
+    the ``sqlite:///`` dialect scheme SQLAlchemy needs in front of the raw
+    ``file:`` URI.
+
+    Returns the (possibly rewritten) connection string; mutates ``pool_config``
+    in place ONLY on the memory path. File-backed SQLite (``sqlite:///x.db``),
+    PostgreSQL and MySQL are returned BYTE-UNCHANGED with their pool config
+    untouched.
+    """
+    cs = connection_string
+    is_file_memory = cs.startswith("file:") and "mode=memory" in cs
+    is_sqlite_memory = cs.startswith("sqlite") and (
+        ":memory:" in cs or "mode=memory" in cs
+    )
+    if not (is_file_memory or is_sqlite_memory):
+        # Non-memory path: file SQLite / PostgreSQL / MySQL untouched.
+        return cs
+
+    connect_args = dict(pool_config.get("connect_args", {}))
+    if is_file_memory:
+        # SQLAlchemy needs a dialect scheme in front of the raw file: URI AND
+        # the ``uri=true`` flag MUST live in the URL QUERY STRING — not in
+        # connect_args. If ``uri`` is passed only via connect_args, SQLAlchemy's
+        # pysqlite dialect parses ``?mode=memory&cache=shared`` as its OWN URL
+        # query args and strips them, so sqlite3 opens a PRIVATE unnamed memory
+        # DB and cross-connection ``cache=shared`` is silently lost (issue #1502
+        # — the registry sync path then can't see the anchor/Express DB). With
+        # ``uri=true`` in the query string the dialect forwards the whole
+        # ``file:...`` URI verbatim to ``sqlite3.connect(uri=True)``, preserving
+        # the shared cache across every connection to this instance's DB.
+        cs = f"sqlite:///{connection_string}&uri=true"
+        connect_args["check_same_thread"] = False
+    else:
+        connect_args["check_same_thread"] = False
+
+    # StaticPool: one shared connection, safe to reuse across threads. It does
+    # NOT accept pool_size / max_overflow / pool_timeout (QueuePool-only) — pop
+    # them or create_engine raises TypeError. pool_recycle / echo are fine.
+    pool_config["poolclass"] = StaticPool
+    pool_config.pop("pool_size", None)
+    pool_config.pop("max_overflow", None)
+    pool_config.pop("pool_timeout", None)
+    pool_config["connect_args"] = {
+        **pool_config.get("connect_args", {}),
+        **connect_args,
+    }
+    return cs
+
 
 # Import optimistic locking for enterprise concurrency control
 OptimisticLockingNode = None  # type: ignore[assignment]
@@ -394,7 +459,12 @@ class SQLDatabaseNode(Node):
                     **self.db_config,  # Use the stored db_config
                 }
 
-                engine = create_engine(self.connection_string, **pool_config)  # type: ignore[reportOptionalCall]
+                # Issue #1502: SQLite MEMORY / shared-cache connections need
+                # StaticPool + check_same_thread=False (QueuePool hands the conn
+                # across threads → sqlite3.ProgrammingError). No-op for
+                # file-backed SQLite, PostgreSQL, MySQL.
+                cs = _configure_sqlite_memory_pool(self.connection_string, pool_config)
+                engine = create_engine(cs, **pool_config)  # type: ignore[reportOptionalCall]
 
                 self._shared_pools[cache_key] = engine
                 self._pool_metrics[cache_key] = {
@@ -618,6 +688,36 @@ class SQLDatabaseNode(Node):
             cls._shared_pools.clear()
             cls._pool_metrics.clear()
 
+    @classmethod
+    def dispose_pools_for(cls, connection_string: str) -> int:
+        """Dispose only the shared pools for a specific connection string.
+
+        Issue #1502: a bare-``:memory:`` DataFlow owns a shared-cache SQLite DB
+        keyed by a per-instance ``file:df_mem_<id>?mode=memory&cache=shared`` URI.
+        The registry/state sync path acquires a ``StaticPool`` from
+        ``_shared_pools`` (class-level) whose single connection keeps that
+        shared-cache DB alive. ``DataFlow.close()`` MUST dispose that pool at
+        teardown — otherwise the in-memory DB leaks for the process lifetime AND,
+        because CPython reuses freed ``id()`` addresses, a later
+        ``DataFlow(":memory:")`` at the same address computes the identical URI,
+        hits the surviving pool, and aliases the prior instance's data.
+
+        Targeted (matches ``cache_key[0] == connection_string``) so it never
+        touches other live instances' pools — unlike the global
+        :meth:`cleanup_pools`. Returns the number of pools disposed.
+        """
+        disposed = 0
+        with cls._pool_lock:
+            for key in [k for k in cls._shared_pools if k[0] == connection_string]:
+                engine = cls._shared_pools.pop(key)
+                try:
+                    engine.dispose()
+                except Exception:  # noqa: BLE001 — teardown best-effort
+                    pass
+                cls._pool_metrics.pop(key, None)
+                disposed += 1
+        return disposed
+
     @staticmethod
     def _mask_connection_password(connection_string: str) -> str:
         """Mask password in connection string for secure logging."""
@@ -802,7 +902,12 @@ class SQLDatabaseNode(Node):
                     ]:
                         engine_config[key] = value
 
-                engine = create_engine(connection_string, **engine_config)  # type: ignore[reportOptionalCall]
+                # Issue #1502: SQLite MEMORY / shared-cache connections need
+                # StaticPool + check_same_thread=False (QueuePool hands the conn
+                # across threads → sqlite3.ProgrammingError). No-op for
+                # file-backed SQLite, PostgreSQL, MySQL.
+                cs = _configure_sqlite_memory_pool(connection_string, engine_config)
+                engine = create_engine(cs, **engine_config)  # type: ignore[reportOptionalCall]
 
                 # Test the connection
                 with engine.connect() as conn:

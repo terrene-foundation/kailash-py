@@ -182,7 +182,17 @@ class MigrationTestFramework:
         """Setup SQLite test database."""
         # For unit tests, we can use synchronous SQLite
         # check_same_thread=False allows use with async_safe_run thread pool
-        connection = sqlite3.connect(self.connection_string, check_same_thread=False)
+        # Issue #1502: a ``file:...?mode=memory&cache=shared`` connection string
+        # MUST be opened with uri=True to reach the shared in-memory DB;
+        # otherwise sqlite3 treats the literal text as an on-disk path.
+        if self.connection_string.startswith("file:"):
+            connection = sqlite3.connect(
+                self.connection_string, check_same_thread=False, uri=True
+            )
+        else:
+            connection = sqlite3.connect(
+                self.connection_string, check_same_thread=False
+            )
         connection.execute("PRAGMA foreign_keys = ON")
 
         # Wrap in async-compatible interface if needed

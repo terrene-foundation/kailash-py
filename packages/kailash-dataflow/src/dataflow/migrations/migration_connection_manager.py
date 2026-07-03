@@ -354,15 +354,33 @@ class MigrationConnectionManager:
 
     def _create_new_connection(self):
         """Create a new database connection."""
-        database_url = self.dataflow.config.database.url or ":memory:"
+        # Issue #1502: for a bare ``:memory:`` instance, use the per-instance
+        # shared-cache URI so this connection reaches the SAME in-memory DB as
+        # CRUD/DDL; ``_memory_db_uri`` is None for every other configuration.
+        database_url = (
+            getattr(self.dataflow, "_memory_db_uri", None)
+            or self.dataflow.config.database.url
+            or ":memory:"
+        )
 
         try:
-            if database_url == ":memory:" or database_url.startswith("sqlite"):
+            if (
+                database_url == ":memory:"
+                or database_url.startswith("sqlite")
+                or database_url.startswith("file:")
+            ):
                 # SQLite connection
                 # check_same_thread=False allows use with async_safe_run thread pool
                 import sqlite3
 
-                connection = sqlite3.connect(database_url, check_same_thread=False)
+                # Issue #1502: a ``file:...?mode=memory&cache=shared`` URI MUST be
+                # opened with uri=True to reach the shared in-memory DB.
+                if database_url.startswith("file:"):
+                    connection = sqlite3.connect(
+                        database_url, check_same_thread=False, uri=True
+                    )
+                else:
+                    connection = sqlite3.connect(database_url, check_same_thread=False)
                 logger.debug("Created new SQLite connection")
                 return connection
 

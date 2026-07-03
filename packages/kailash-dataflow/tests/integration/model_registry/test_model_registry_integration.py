@@ -157,22 +157,16 @@ class TestModelRegistryWithRealDatabase:
             print("PostgreSQL model registry initialized successfully")
 
     @pytest.mark.asyncio
-    async def test_register_model_real_database(
-        self, db_config, unique_test_id, request
-    ):
-        """Test model registration with real database operations using proper DataFlow API."""
-        # This test discovers the registry across pooled connections, which bare
-        # sqlite :memory: cannot share (the shared-cache URI rewrite is orphaned;
-        # see #1502). Applied dynamically (not a param mark) so it self-clears via
-        # XPASS(strict) when #1502 lands. The [sqlite_file] variant passes.
-        if db_config["url"] == ":memory:":
-            request.node.add_marker(
-                pytest.mark.xfail(
-                    strict=True,
-                    reason="bare sqlite :memory: multi-connection unsupported — "
-                    "shared-cache URI rewrite orphaned; see #1502.",
-                )
-            )
+    async def test_register_model_real_database(self, db_config, unique_test_id):
+        """Test model registration with real database operations using proper DataFlow API.
+
+        #1502: Shard 2 routes ModelRegistry (and SchemaStateManager) through the
+        per-instance shared-cache URI (``_memory_db_uri``) and gives the core
+        ``SQLDatabaseNode`` a StaticPool + ``check_same_thread=False`` for SQLite
+        MEMORY connections, so the bare ``:memory:`` variant now shares the ONE
+        in-memory DB across the thread-pool-offloaded sync path. Both
+        ``[sqlite_memory]`` and ``[sqlite_file]`` variants pass.
+        """
         # Use the parameterized database configuration
         dataflow = DataFlow(
             db_config["url"], auto_migrate=True, existing_schema_mode=False
