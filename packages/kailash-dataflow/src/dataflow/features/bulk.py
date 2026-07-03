@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from kailash.utils.url_credentials import mask_url
 
+from ..core.exceptions import BulkUpsertConflictTargetError
+from ..core.exceptions import is_conflict_target_error as _is_conflict_target_error
+from ..core.exceptions import sanitize_db_error as _sanitize_db_error
 from ..core.tenant_context import get_current_tenant_id
 from ..nodes.bulk_result_processor import BulkCreateResultProcessor
 
@@ -520,13 +523,21 @@ class BulkOperations:
             return success_result
 
         except Exception as e:
+            # Redteam MEDIUM (scanner-surface symmetry): scrub driver-error
+            # column VALUES (potential PII) before log/return — same shared
+            # redactor as bulk_upsert / the workflow node.
+            safe_error = _sanitize_db_error(str(e))
             error_result = {
                 "success": False,
-                "error": f"Bulk create operation failed: {str(e)}",
+                "error": f"Bulk create operation failed: {safe_error}",
                 "records_processed": 0,
             }
             logger.error(
-                "bulk.bulk_create_exception", extra={"error": str(e)}, exc_info=True
+                # exc_info dropped: the traceback's terminal frame re-emits the
+                # raw driver message (potential PII) the sanitizer just scrubbed
+                # (redteam LOW). Match the P2 node's no-exc_info bulk-error log.
+                "bulk.bulk_create_exception",
+                extra={"error": safe_error},
             )
             logger.error(
                 "bulk.bulk_create_error_result", extra={"error_result": error_result}
@@ -727,13 +738,19 @@ class BulkOperations:
                 )
                 return success_result
             except Exception as e:
+                # Redteam MEDIUM (scanner-surface symmetry): scrub driver-error
+                # column VALUES (potential PII) before log/return.
+                safe_error = _sanitize_db_error(str(e))
                 error_result = {
                     "success": False,
-                    "error": f"Bulk update operation failed: {str(e)}",
+                    "error": f"Bulk update operation failed: {safe_error}",
                     "records_processed": 0,
                 }
                 logger.error(
-                    "bulk.bulk_update_exception", extra={"error": str(e)}, exc_info=True
+                    # exc_info dropped: traceback re-leaks raw driver PII the
+                    # sanitizer scrubbed (redteam LOW).
+                    "bulk.bulk_update_exception",
+                    extra={"error": safe_error},
                 )
                 logger.error(
                     "bulk.bulk_update_error_result",
@@ -915,13 +932,19 @@ class BulkOperations:
                 )
                 return success_result
             except Exception as e:
+                # Redteam MEDIUM (scanner-surface symmetry): scrub driver-error
+                # column VALUES (potential PII) before log/return.
+                safe_error = _sanitize_db_error(str(e))
                 error_result = {
                     "success": False,
-                    "error": f"Bulk update operation failed: {str(e)}",
+                    "error": f"Bulk update operation failed: {safe_error}",
                     "records_processed": 0,
                 }
                 logger.error(
-                    "bulk.bulk_update_exception", extra={"error": str(e)}, exc_info=True
+                    # exc_info dropped: traceback re-leaks raw driver PII the
+                    # sanitizer scrubbed (redteam LOW).
+                    "bulk.bulk_update_exception",
+                    extra={"error": safe_error},
                 )
                 logger.error(
                     "bulk.bulk_update_error_result",
@@ -1093,13 +1116,19 @@ class BulkOperations:
                 )
                 return success_result
             except Exception as e:
+                # Redteam MEDIUM (scanner-surface symmetry): scrub driver-error
+                # column VALUES (potential PII) before log/return.
+                safe_error = _sanitize_db_error(str(e))
                 error_result = {
                     "success": False,
-                    "error": f"Bulk delete operation failed: {str(e)}",
+                    "error": f"Bulk delete operation failed: {safe_error}",
                     "records_processed": 0,
                 }
                 logger.error(
-                    "bulk.bulk_delete_exception", extra={"error": str(e)}, exc_info=True
+                    # exc_info dropped: traceback re-leaks raw driver PII the
+                    # sanitizer scrubbed (redteam LOW).
+                    "bulk.bulk_delete_exception",
+                    extra={"error": safe_error},
                 )
                 logger.error(
                     "bulk.bulk_delete_error_result",
@@ -1124,6 +1153,7 @@ class BulkOperations:
         data: List[Dict[str, Any]],
         conflict_resolution: str = "update",
         batch_size: int = 1000,
+        conflict_on: Optional[List[str]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Perform bulk upsert (insert or update) operation.
@@ -1133,10 +1163,31 @@ class BulkOperations:
             data: List of dictionaries with record data (must include 'id' field)
             conflict_resolution: Strategy for conflicts - "update" or "skip"/"ignore"
             batch_size: Number of records per batch
+            conflict_on: Columns that define the conflict target (issue #1519).
+                Defaults to ``["id"]``. MUST reference a PRIMARY KEY or UNIQUE
+                constraint — a non-unique target raises
+                ``BulkUpsertConflictTargetError`` (native ON CONFLICT cannot
+                target a non-unique column). Backward-compatible aliases
+                ``conflict_columns`` / ``conflict_fields`` are accepted via
+                ``kwargs``.
 
         Returns:
             Dict with records_processed, inserted, updated, skipped, success
+
+        Raises:
+            BulkUpsertConflictTargetError: when ``conflict_on`` does not match a
+                PK or UNIQUE constraint.
         """
+        # Issue #1519: resolve conflict target. Accept legacy aliases that
+        # callers / the generated node forward through kwargs.
+        if conflict_on is None:
+            conflict_on = kwargs.pop("conflict_columns", None) or kwargs.pop(
+                "conflict_fields", None
+            )
+        else:
+            kwargs.pop("conflict_columns", None)
+            kwargs.pop("conflict_fields", None)
+        conflict_columns = list(conflict_on) if conflict_on else ["id"]
         import logging
 
         logger = logging.getLogger(__name__)
@@ -1171,25 +1222,38 @@ class BulkOperations:
                 "Must be 'update', 'skip', or 'ignore'.",
             }
 
-        # Validate all records have 'id' field
-        for i, record in enumerate(data):
-            if "id" not in record:
-                return {
-                    "success": False,
-                    "error": f"Record at index {i} missing required 'id' field. "
-                    "All records must have an 'id' for upsert operations.",
-                }
-
         # Issue #1252 — stamp tenant_id from the contextvar source (the one
         # tenant_context.switch() actually sets), NOT the stale legacy
         # self.dataflow._tenant_context dict. Fails closed under multi_tenant
         # with no bound tenant. tenant_id rides in the column list, so the
-        # ON CONFLICT (id) target stays valid (id is the PK; tenant_id is just
-        # another INSERT/EXCLUDED column). See _resolve_bulk_tenant.
+        # ON CONFLICT target stays valid (tenant_id is just another
+        # INSERT/EXCLUDED column). See _resolve_bulk_tenant.
         bound_tenant = self._resolve_bulk_tenant(model_name)
         if bound_tenant is not None:
             for record in data:
                 record["tenant_id"] = bound_tenant
+
+        # Issue #1519: validate every record carries the conflict-target
+        # columns, NOT a hardcoded 'id'. With ``conflict_on=["email"]`` and an
+        # auto-generated SERIAL id, records legitimately omit 'id' — the old
+        # hardcoded 'id' check rejected them, the same conflict_on-ignoring bug.
+        # Runs AFTER tenant stamping so a tenant_id conflict target (e.g.
+        # conflict_on=["email", "tenant_id"]) is present when checked.
+        for i, record in enumerate(data):
+            missing = [col for col in conflict_columns if col not in record]
+            if missing:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Record at index {i} is missing conflict-target "
+                        f"column(s) {missing}. Every record MUST supply the "
+                        f"conflict_on columns {conflict_columns} for upsert."
+                    ),
+                    "records_processed": 0,
+                    "inserted": 0,
+                    "updated": 0,
+                    "skipped": 0,
+                }
 
         # Auto-convert ISO datetime strings to datetime objects for each record
         from ..core.nodes import convert_datetime_fields
@@ -1216,7 +1280,27 @@ class BulkOperations:
         except TypeError as e:
             return {"success": False, "error": str(e)}
 
+        # Issue #1519 (redteam H1): collapse duplicate conflict-target keys
+        # WITHIN the input to the LAST occurrence BEFORE building the single
+        # INSERT ... ON CONFLICT statement. A batch carrying two rows with the
+        # same conflict key (e.g. two records id="x") is ambiguous: SQLite
+        # applies last-wins in-statement but OVER-COUNTS (RETURNING yields one
+        # row per VALUES tuple, not per physical row → created was reported as 2
+        # when 1 row landed), while PostgreSQL fails loud ("ON CONFLICT DO
+        # UPDATE command cannot affect row a second time"). De-duping last-wins
+        # makes the reported counts match rows actually written AND makes both
+        # dialects behave identically. Order is preserved by the last index.
+        if len(data) > 1:
+            _seen: Dict[tuple, int] = {}
+            for _i, _rec in enumerate(data):
+                _seen[tuple(_rec.get(_c) for _c in conflict_columns)] = _i
+            if len(_seen) != len(data):
+                data = [data[_i] for _i in sorted(_seen.values())]
+
         # Perform actual database upsert
+        import time
+
+        _upsert_start = time.perf_counter()
         try:
             connection_string = self.dataflow.config.database.get_connection_url(
                 self.dataflow.config.environment
@@ -1239,6 +1323,33 @@ class BulkOperations:
             columns = list(data[0].keys())
             column_names = ", ".join(columns)
 
+            # Issue #1519 + rules/dataflow-identifier-safety.md MUST-1: the
+            # conflict-target columns are interpolated into ``ON CONFLICT (...)``
+            # (drivers cannot bind identifiers), so every one MUST pass the
+            # strict allowlist validator before interpolation. A conflict-target
+            # column absent from the record set is a caller error.
+            from kailash.db.dialect import _validate_identifier
+
+            # rules/dataflow-identifier-safety.md MUST-1 (redteam CRITICAL):
+            # table_name AND every column name are interpolated as bare
+            # identifiers into INSERT INTO {table} ({columns}) ... ON CONFLICT
+            # (...) DO UPDATE SET {col} = excluded.{col} — drivers cannot bind
+            # identifiers. TypeAwareFieldProcessor does NOT constrain record
+            # keys to declared model fields, so a crafted record key would
+            # otherwise reach the SET/INSERT clause as raw SQL. Validate ALL of
+            # them against the strict allowlist BEFORE interpolation, mirroring
+            # the workflow node (nodes/bulk_upsert.py).
+            _validate_identifier(table_name)
+            for col in columns:
+                _validate_identifier(col)
+
+            for col in conflict_columns:
+                if col not in columns:
+                    raise ValueError(
+                        f"bulk_upsert: conflict_on column '{col}' is not present "
+                        f"in the record data (columns: {columns})."
+                    )
+
             # Build upsert query based on database type
             total_inserted = 0
             total_updated = 0
@@ -1251,22 +1362,37 @@ class BulkOperations:
 
                 # Build database-specific upsert query
                 if database_type.lower() == "postgresql":
-                    # PostgreSQL: INSERT ... ON CONFLICT (id) DO UPDATE SET ...
+                    # PostgreSQL: INSERT ... ON CONFLICT (<conflict_on>) DO UPDATE
                     query, params = self._build_postgresql_upsert(
-                        table_name, columns, batch, conflict_resolution, model_name
+                        table_name,
+                        columns,
+                        batch,
+                        conflict_resolution,
+                        model_name,
+                        conflict_columns,
                     )
                 elif database_type.lower() == "mysql":
                     # MySQL: INSERT ... ON DUPLICATE KEY UPDATE ...
                     query, params = self._build_mysql_upsert(
-                        table_name, columns, batch, conflict_resolution, model_name
+                        table_name,
+                        columns,
+                        batch,
+                        conflict_resolution,
+                        model_name,
+                        conflict_columns,
                     )
                 else:  # sqlite
-                    # SQLite: INSERT ... ON CONFLICT (id) DO UPDATE SET ...
+                    # SQLite: INSERT ... ON CONFLICT (<conflict_on>) DO UPDATE
                     query, params = self._build_sqlite_upsert(
-                        table_name, columns, batch, conflict_resolution, model_name
+                        table_name,
+                        columns,
+                        batch,
+                        conflict_resolution,
+                        model_name,
+                        conflict_columns,
                     )
 
-                logger.warning(
+                logger.debug(
                     f"BULK_UPSERT: Executing batch {batches_processed + 1}, "
                     f"query='{query[:200]}...', param_count={len(params)}"
                 )
@@ -1276,22 +1402,51 @@ class BulkOperations:
                 # This ensures connection pooling and data visibility across operations
                 sql_node = self.dataflow._get_or_create_async_sql_node(database_type)
 
-                result = await sql_node.async_run(
-                    query=query,
-                    params=params,
-                    fetch_mode="all",
-                    validate_queries=False,
-                    transaction_mode="auto",
-                )
+                # Issue #1519: SQLite RETURNING cannot flag insert-vs-update per
+                # row (no xmax), so derive real ``updated`` from a pre-count of
+                # existing conflict-target keys. PG uses ``(xmax = 0)`` inline.
+                preexisting = None
+                if database_type.lower() == "sqlite" and conflict_resolution not in (
+                    "skip",
+                    "ignore",
+                ):
+                    preexisting = await self._count_existing_conflicts(
+                        sql_node, table_name, conflict_columns, batch
+                    )
 
-                logger.warning("bulk.bulk_upsert_sql_result", extra={"result": result})
+                try:
+                    result = await sql_node.async_run(
+                        query=query,
+                        params=params,
+                        fetch_mode="all",
+                        validate_queries=False,
+                        transaction_mode="auto",
+                    )
+                except Exception as exec_err:
+                    # Issue #1519: a conflict target that is not a PK/UNIQUE key
+                    # is a caller error, not a transient DB failure. Convert the
+                    # opaque driver message into the actionable typed error
+                    # instead of silently falling back to ON CONFLICT (id).
+                    if _is_conflict_target_error(str(exec_err)):
+                        raise BulkUpsertConflictTargetError(
+                            conflict_on=conflict_columns,
+                            model_name=model_name,
+                            original_error=exec_err,
+                        ) from exec_err
+                    raise
+
+                logger.debug("bulk.bulk_upsert_sql_result", extra={"result": result})
 
                 # Extract operation counts from result
                 # For UPSERT operations, we need to parse the result to determine
                 # inserted vs updated vs skipped counts
                 batch_inserted, batch_updated, batch_skipped = (
                     self._parse_upsert_result(
-                        result, database_type, len(batch), conflict_resolution
+                        result,
+                        database_type,
+                        len(batch),
+                        conflict_resolution,
+                        preexisting_count=preexisting,
                     )
                 )
 
@@ -1301,6 +1456,7 @@ class BulkOperations:
                 batches_processed += 1
 
             records_processed = total_inserted + total_updated + total_skipped
+            elapsed = time.perf_counter() - _upsert_start
             success_result = {
                 "records_processed": records_processed,
                 "inserted": total_inserted,
@@ -1310,28 +1466,63 @@ class BulkOperations:
                 "batch_size": batch_size,
                 "conflict_resolution": conflict_resolution,
                 "success": True,
+                "performance_metrics": {
+                    "elapsed_seconds": elapsed,
+                    "execution_time_seconds": elapsed,
+                    "records_per_second": (
+                        records_processed / elapsed if elapsed > 0 else 0
+                    ),
+                    "batches_processed": batches_processed,
+                },
             }
             logger.warning(
                 "bulk.bulk_upsert_success", extra={"success_result": success_result}
             )
             return success_result
 
+        except BulkUpsertConflictTargetError:
+            # Issue #1519: caller-actionable conflict-target error MUST propagate
+            # as a typed raise, not be flattened into a {"success": False} dict.
+            raise
         except Exception as e:
+            # Redteam MEDIUM: a driver error from a DIFFERENT unique constraint
+            # (e.g. "DETAIL: Key (username)=(alice) already exists") embeds
+            # column VALUES that may be PII. Scrub them before the message is
+            # logged (log aggregators have broader access than the DB) or
+            # returned to the caller — same shared redactor as the workflow node
+            # (rules/observability.md Rule 8; rules/security.md § No secrets in
+            # logs).
+            safe_error = _sanitize_db_error(str(e))
             error_result = {
                 "success": False,
-                "error": f"Bulk upsert operation failed: {str(e)}",
+                "error": f"Bulk upsert operation failed: {safe_error}",
                 "records_processed": 0,
                 "inserted": 0,
                 "updated": 0,
                 "skipped": 0,
             }
             logger.error(
-                "bulk.bulk_upsert_exception", extra={"error": str(e)}, exc_info=True
+                # exc_info dropped: see bulk_create — the traceback re-leaks the
+                # raw driver message the sanitizer scrubbed (redteam LOW).
+                "bulk.bulk_upsert_exception",
+                extra={"error": safe_error},
             )
             logger.error(
                 "bulk.bulk_upsert_error_result", extra={"error_result": error_result}
             )
             return error_result
+
+    @staticmethod
+    def _upsert_update_columns(
+        columns: List[str], conflict_columns: List[str]
+    ) -> List[str]:
+        """Columns eligible for the DO UPDATE SET clause (issue #1519).
+
+        Excludes every conflict-target column (updating the conflict key is a
+        no-op / error) plus the immutable ``id`` and ``created_at`` columns.
+        """
+        excluded = set(conflict_columns) | {"id", "created_at"}
+        return [col for col in columns if col not in excluded]
 
     def _build_postgresql_upsert(
         self,
@@ -1340,6 +1531,7 @@ class BulkOperations:
         batch: List[Dict[str, Any]],
         conflict_resolution: str,
         model_name: str,
+        conflict_columns: List[str],
     ) -> tuple:
         """Build PostgreSQL upsert query with ON CONFLICT clause."""
         column_names = ", ".join(columns)
@@ -1358,28 +1550,28 @@ class BulkOperations:
             params.extend(record_params)
 
         values_clause = ", ".join(values_placeholders)
+        conflict_target = ", ".join(conflict_columns)
 
-        # Build ON CONFLICT clause with RETURNING to distinguish INSERT vs UPDATE
+        # Build ON CONFLICT clause with RETURNING to distinguish INSERT vs UPDATE.
+        # xmax = 0 → INSERT, xmax > 0 → UPDATE (exact per-row flag).
         if conflict_resolution in ["skip", "ignore"]:
-            # Skip conflicts - do nothing
-            # Use xmax to detect if row was updated: xmax = 0 means INSERT, xmax > 0 means UPDATE (skipped)
             conflict_clause = (
-                "ON CONFLICT (id) DO NOTHING RETURNING id, (xmax = 0) AS inserted"
+                f"ON CONFLICT ({conflict_target}) DO NOTHING "
+                f"RETURNING id, (xmax = 0) AS inserted"
             )
         else:  # update
-            # Update all columns except 'id' on conflict
-            update_columns = [col for col in columns if col != "id"]
+            update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
                 set_parts = [f"{col} = EXCLUDED.{col}" for col in update_columns]
-                # Use xmax to detect if row was updated: xmax = 0 means INSERT, xmax > 0 means UPDATE
                 conflict_clause = (
-                    f"ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)} "
-                    f"RETURNING id, (xmax = 0) AS inserted"
+                    f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
+                    f"{', '.join(set_parts)} RETURNING id, (xmax = 0) AS inserted"
                 )
             else:
-                # Only 'id' column - skip on conflict
+                # Nothing to update (all non-conflict columns are immutable).
                 conflict_clause = (
-                    "ON CONFLICT (id) DO NOTHING RETURNING id, (xmax = 0) AS inserted"
+                    f"ON CONFLICT ({conflict_target}) DO NOTHING "
+                    f"RETURNING id, (xmax = 0) AS inserted"
                 )
 
         query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
@@ -1392,8 +1584,14 @@ class BulkOperations:
         batch: List[Dict[str, Any]],
         conflict_resolution: str,
         model_name: str,
+        conflict_columns: List[str],
     ) -> tuple:
-        """Build MySQL upsert query with ON DUPLICATE KEY UPDATE clause."""
+        """Build MySQL upsert query with ON DUPLICATE KEY UPDATE clause.
+
+        MySQL auto-detects the violated UNIQUE/PRIMARY key, so ``conflict_on``
+        does not appear in the clause itself — it only governs which columns are
+        excluded from the update set.
+        """
         column_names = ", ".join(columns)
         values_placeholders = []
         params = []
@@ -1411,18 +1609,18 @@ class BulkOperations:
 
         # Build ON DUPLICATE KEY UPDATE clause
         if conflict_resolution in ["skip", "ignore"]:
-            # MySQL doesn't support DO NOTHING in ON DUPLICATE KEY
-            # Workaround: update id to itself (no actual change)
-            duplicate_clause = "ON DUPLICATE KEY UPDATE id = id"
+            # MySQL has no DO NOTHING; a no-op self-assignment of the first
+            # conflict column keeps existing rows unchanged.
+            noop_col = conflict_columns[0] if conflict_columns else "id"
+            duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
         else:  # update
-            # Update all columns except 'id' on duplicate
-            update_columns = [col for col in columns if col != "id"]
+            update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
                 set_parts = [f"{col} = VALUES({col})" for col in update_columns]
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
             else:
-                # Only 'id' column - no update needed
-                duplicate_clause = "ON DUPLICATE KEY UPDATE id = id"
+                noop_col = conflict_columns[0] if conflict_columns else "id"
+                duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
 
         query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {duplicate_clause}"
         return query, params
@@ -1434,8 +1632,15 @@ class BulkOperations:
         batch: List[Dict[str, Any]],
         conflict_resolution: str,
         model_name: str,
+        conflict_columns: List[str],
     ) -> tuple:
-        """Build SQLite upsert query with ON CONFLICT clause."""
+        """Build SQLite upsert query with ON CONFLICT clause.
+
+        SQLite RETURNING cannot flag insert-vs-update per row (no xmax); the
+        caller derives real counts via a pre-count of existing conflict keys
+        (see ``_count_existing_conflicts``). RETURNING id lets the caller count
+        how many rows the statement actually affected.
+        """
         column_names = ", ".join(columns)
         values_placeholders = []
         params = []
@@ -1450,32 +1655,86 @@ class BulkOperations:
             params.extend(record_params)
 
         values_clause = ", ".join(values_placeholders)
+        conflict_target = ", ".join(conflict_columns)
 
-        # Build ON CONFLICT clause with RETURNING to distinguish INSERT vs UPDATE
-        # SQLite 3.35+ supports RETURNING
+        # SQLite 3.35+ supports RETURNING.
         if conflict_resolution in ["skip", "ignore"]:
-            # Skip conflicts - do nothing
-            # For SQLite, we can't use xmax but we can check if columns changed
-            conflict_clause = "ON CONFLICT (id) DO NOTHING RETURNING id, 1 AS inserted"
+            # DO NOTHING returns only the inserted rows.
+            conflict_clause = f"ON CONFLICT ({conflict_target}) DO NOTHING RETURNING id"
         else:  # update
-            # Update all columns except 'id' on conflict
-            update_columns = [col for col in columns if col != "id"]
+            update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
                 set_parts = [f"{col} = excluded.{col}" for col in update_columns]
-                # For SQLite, mark as inserted=0 when it's an update (simplified approach)
-                # We use a CASE to detect: if old value != new value, it's an update
                 conflict_clause = (
-                    f"ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)} "
-                    f"RETURNING id, 0 AS inserted"
+                    f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
+                    f"{', '.join(set_parts)} RETURNING id"
                 )
             else:
-                # Only 'id' column - skip on conflict
                 conflict_clause = (
-                    "ON CONFLICT (id) DO NOTHING RETURNING id, 1 AS inserted"
+                    f"ON CONFLICT ({conflict_target}) DO NOTHING RETURNING id"
                 )
 
         query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
         return query, params
+
+    async def _count_existing_conflicts(
+        self,
+        sql_node,
+        table_name: str,
+        conflict_columns: List[str],
+        batch: List[Dict[str, Any]],
+    ) -> int:
+        """Count rows already present matching the batch's conflict-target keys.
+
+        Issue #1519: SQLite's RETURNING gives no insert-vs-update signal, so the
+        number of pre-existing conflict keys IS the number of UPDATEs the upsert
+        will perform. Uses OR-of-AND equality (dialect-agnostic, avoids
+        row-value IN quirks) with ``?`` placeholders bound positionally. NULL
+        conflict values never match a UNIQUE target and are skipped.
+
+        Concurrency contract (redteam M1): this COUNT and the subsequent upsert
+        run as two ``transaction_mode="auto"`` statements, so under a CONCURRENT
+        writer inserting a conflicting key between them the insert-vs-update
+        split can be off by the number of racing rows. The persisted DATA stays
+        correct (the upsert is atomic); only the reported ``inserted``/``updated``
+        breakdown is best-effort under concurrency. Within a single call the
+        input is de-duplicated on the conflict target upstream, so a batch can
+        no longer self-conflict.
+        """
+        clauses: List[str] = []
+        params: List[Any] = []
+        for record in batch:
+            vals = [record.get(col) for col in conflict_columns]
+            if any(v is None for v in vals):
+                continue
+            conds = " AND ".join(f"{col} = ?" for col in conflict_columns)
+            clauses.append(f"({conds})")
+            params.extend(vals)
+
+        if not clauses:
+            return 0
+
+        where = " OR ".join(clauses)
+        query = f"SELECT COUNT(*) AS match_count FROM {table_name} WHERE {where}"
+        result = await sql_node.async_run(
+            query=query,
+            params=params,
+            fetch_mode="all",
+            validate_queries=False,
+            transaction_mode="auto",
+        )
+        rows = []
+        if result and "result" in result:
+            rows = result["result"].get("data", []) or []
+        if rows and isinstance(rows[0], dict):
+            value = (
+                rows[0].get("match_count")
+                or rows[0].get("COUNT(*)")
+                or rows[0].get("count")
+                or 0
+            )
+            return int(value)
+        return 0
 
     def _parse_upsert_result(
         self,
@@ -1483,37 +1742,53 @@ class BulkOperations:
         database_type: str,
         batch_size: int,
         conflict_resolution: str,
+        preexisting_count: Optional[int] = None,
     ) -> tuple:
         """Parse upsert result to extract inserted, updated, and skipped counts.
+
+        Issue #1519: counts are derived from real signals — PostgreSQL uses the
+        per-row ``(xmax = 0)`` RETURNING flag; SQLite uses ``preexisting_count``
+        (rows whose conflict key already existed = UPDATEs); MySQL derives from
+        the ``row_count`` (1 per insert, 2 per update). No fabricated ``// 2``.
 
         Returns:
             tuple: (inserted, updated, skipped)
         """
-        # For PostgreSQL and SQLite with RETURNING clause:
-        # - The 'data' field contains rows with 'inserted' boolean column
-        # - inserted=true means INSERT, inserted=false means UPDATE
-
+        returned_rows: List[Any] = []
         if result and "result" in result:
             result_data = result["result"]
-
-            # Check if we have RETURNING data (PostgreSQL/SQLite with RETURNING)
-            if "data" in result_data and len(result_data["data"]) > 0:
+            if isinstance(result_data.get("data"), list):
                 returned_rows = result_data["data"]
 
-                # For PostgreSQL/SQLite with RETURNING clause
-                # Each row has 'inserted' field: True for INSERT, False for UPDATE
-                if isinstance(returned_rows, list) and len(returned_rows) > 0:
-                    first_row = returned_rows[0]
-                    if isinstance(first_row, dict) and "inserted" in first_row:
-                        # Count inserts and updates from RETURNING data
-                        inserted = sum(
-                            1 for row in returned_rows if row.get("inserted") is True
-                        )
-                        updated = sum(
-                            1 for row in returned_rows if row.get("inserted") is False
-                        )
-                        skipped = batch_size - len(returned_rows)
-                        return (inserted, updated, skipped)
+        dbt = database_type.lower()
+
+        # PostgreSQL: exact per-row flag from RETURNING id, (xmax = 0) AS inserted.
+        if (
+            dbt == "postgresql"
+            and returned_rows
+            and isinstance(returned_rows[0], dict)
+            and "inserted" in returned_rows[0]
+        ):
+            inserted = sum(1 for row in returned_rows if row.get("inserted") is True)
+            updated = sum(1 for row in returned_rows if row.get("inserted") is False)
+            skipped = batch_size - len(returned_rows)
+            return (inserted, updated, skipped)
+
+        # SQLite: RETURNING id gives the affected-row count; the pre-count of
+        # existing conflict keys gives the UPDATE count.
+        if dbt == "sqlite":
+            affected = len(returned_rows)
+            if conflict_resolution in ["skip", "ignore"]:
+                # DO NOTHING returns only inserted rows.
+                inserted = affected
+                updated = 0
+                skipped = batch_size - affected
+            else:
+                pre = preexisting_count or 0
+                updated = min(pre, affected)
+                inserted = affected - updated
+                skipped = batch_size - affected
+            return (inserted, updated, skipped)
 
         # Fallback: Extract row_count from result (for MySQL or when RETURNING not available)
         rows_affected = 0

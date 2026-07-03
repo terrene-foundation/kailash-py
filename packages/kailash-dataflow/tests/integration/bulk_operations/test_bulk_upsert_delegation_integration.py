@@ -358,22 +358,33 @@ class TestBulkUpsertDelegationIntegration:
         """Test multi-tenant support in bulk_upsert delegation."""
         connection_string = setup_test_table
 
-        # Add tenant_id column and update constraint
-        alter_node = AsyncSQLDatabaseNode(
+        # Add tenant_id column and update constraint. asyncpg cannot execute
+        # multiple commands in one prepared statement, so run each ALTER
+        # separately.
+        drop_constraint_node = AsyncSQLDatabaseNode(
             connection_string=connection_string,
             database_type="postgresql",
-            query="""
-            ALTER TABLE test_upsert_delegations
-            DROP CONSTRAINT IF EXISTS test_upsert_delegations_email_key;
-
-            ALTER TABLE test_upsert_delegations
-            ADD CONSTRAINT test_upsert_delegations_email_tenant_key
-            UNIQUE (email, tenant_id);
-            """,
+            query=(
+                "ALTER TABLE test_upsert_delegations "
+                "DROP CONSTRAINT IF EXISTS test_upsert_delegations_email_key"
+            ),
             validate_queries=False,
         )
-        await alter_node.async_run()
-        await alter_node.cleanup()
+        await drop_constraint_node.async_run()
+        await drop_constraint_node.cleanup()
+
+        add_constraint_node = AsyncSQLDatabaseNode(
+            connection_string=connection_string,
+            database_type="postgresql",
+            query=(
+                "ALTER TABLE test_upsert_delegations "
+                "ADD CONSTRAINT test_upsert_delegations_email_tenant_key "
+                "UNIQUE (email, tenant_id)"
+            ),
+            validate_queries=False,
+        )
+        await add_constraint_node.async_run()
+        await add_constraint_node.cleanup()
 
         # Create DataFlow with multi-tenant enabled
         db = DataFlow(connection_string, auto_migrate=False)
@@ -407,6 +418,7 @@ class TestBulkUpsertDelegationIntegration:
                     },
                 ],
                 conflict_resolution="update",
+                conflict_columns=["email", "tenant_id"],
             )
 
         assert result1["success"] is True
@@ -424,6 +436,7 @@ class TestBulkUpsertDelegationIntegration:
                     },
                 ],
                 conflict_resolution="update",
+                conflict_columns=["email", "tenant_id"],
             )
 
         assert result2["success"] is True
@@ -506,7 +519,7 @@ class TestBulkUpsertDelegationIntegration:
         count_before_node = AsyncSQLDatabaseNode(
             connection_string=connection_string,
             database_type="postgresql",
-            query="SELECT COUNT(*) as count FROM test_upsert_delegation",
+            query="SELECT COUNT(*) as count FROM test_upsert_delegations",
             validate_queries=False,
         )
         before_result = await count_before_node.async_run()
@@ -529,7 +542,7 @@ class TestBulkUpsertDelegationIntegration:
         count_after_node = AsyncSQLDatabaseNode(
             connection_string=connection_string,
             database_type="postgresql",
-            query="SELECT COUNT(*) as count FROM test_upsert_delegation",
+            query="SELECT COUNT(*) as count FROM test_upsert_delegations",
             validate_queries=False,
         )
         after_result = await count_after_node.async_run()

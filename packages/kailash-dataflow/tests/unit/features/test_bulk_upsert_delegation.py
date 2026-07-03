@@ -322,7 +322,10 @@ class TestBulkUpsertDelegation:
 
         bulk_ops = BulkOperations(mock_dataflow)
 
-        # Test 1: Missing 'id' field returns error (validation before SQL execution)
+        # Test 1: Missing conflict-target column returns error before SQL exec.
+        # Issue #1519: with the default conflict_on=["id"], a record without an
+        # 'id' is missing the conflict target — the validation now names the
+        # conflict-target column(s) rather than a hardcoded 'id'.
         result = await bulk_ops.bulk_upsert(
             model_name="User",
             data=[{"email": "test@example.com", "name": "Test"}],  # Missing 'id'
@@ -331,7 +334,8 @@ class TestBulkUpsertDelegation:
 
         assert result["success"] is False
         assert "error" in result
-        assert "missing required 'id' field" in result["error"]
+        assert "missing conflict-target column(s) ['id']" in result["error"]
+        assert result["records_processed"] == 0
 
         # Test 2: SQL node raises exception
         mock_sql_node = AsyncMock()
