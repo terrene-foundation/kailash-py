@@ -138,6 +138,16 @@ class SQLDialect(ABC):
         # Row exists → UPDATE ... WHERE <where>. Exclude the primary key and the
         # where/identity columns from the SET clause (updating the identity would
         # move the row out from under the WHERE match).
+        if not where:
+            # Defensive: the UPDATE branch needs a non-empty WHERE to identify the
+            # row (an empty WHERE would emit invalid SQL and, worse, an unscoped
+            # UPDATE). Unreachable via the upsert node — the pre-check SELECT and
+            # upsert semantics both require a key — but guarded because this is a
+            # public base-class method.
+            raise ValueError(
+                "build_precheck_upsert_query: UPDATE branch requires a non-empty "
+                "'where' to identify the row"
+            )
         set_clauses: List[str] = []
         params: Dict[str, Any] = {}
         idx = 0

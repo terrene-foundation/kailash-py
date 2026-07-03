@@ -161,6 +161,57 @@ async def test_conflict_on_composite_non_unique_fields(tmp_path):
 
 
 @pytest.mark.regression
+def test_precheck_update_shape_is_tenant_scoped():
+    """R4: the NEW bare ``UPDATE ... WHERE ... RETURNING`` shape this fix
+    introduces on the single-record SQLite upsert path MUST flow through the
+    tenant interceptor and get ``tenant_id`` injected into its WHERE (the
+    cross-tenant leak class per ``tenant-isolation.md``).
+
+    Deterministic query-transformation test (mirrors the tenancy-wiring suite's
+    ``test_tenant_context_injects_conditions``): build the exact UPDATE query
+    ``build_precheck_upsert_query`` emits, run it through the node's
+    ``_apply_tenant_isolation`` under a tenant switch, and assert the tenant
+    predicate is injected while ``RETURNING *`` is preserved. This locks the
+    integration point the fix newly exercises without depending on the
+    (separately-tracked) multi-tenant INSERT-injection machinery.
+    """
+    db = DataFlow("sqlite:///:memory:", multi_tenant=True)
+
+    @db.model
+    class TenantDoc:
+        id: str
+        tenant_id: str
+        email: str  # NOT unique — the #1508 precondition
+        title: str
+
+    ctx = db.tenant_context
+    ctx.register_tenant("tenant-x", "Tenant X")
+
+    # The exact UPDATE query the fix emits for a row-exists upsert.
+    uq = SQLDialectFactory.get_dialect("sqlite").build_precheck_upsert_query(
+        table_name="tenant_docs",
+        insert_data={"id": "d1", "email": "a@e.co", "title": "T"},
+        update_data={"title": "T2"},
+        where={"email": "a@e.co"},
+        row_exists=True,
+    )
+    assert uq.query.upper().startswith("UPDATE ")
+
+    node_class = db._nodes.get("TenantDocUpsertNode")
+    assert node_class is not None
+    node = node_class(node_id="t")
+
+    with ctx.switch("tenant-x"):
+        scoped_query, scoped_params = node._apply_tenant_isolation(
+            uq.query, list(uq.params.values())
+        )
+
+    assert "tenant_id" in scoped_query, "tenant predicate not injected into UPDATE"
+    assert "tenant-x" in scoped_params, "tenant value not bound"
+    assert "RETURNING" in scoped_query.upper(), "RETURNING clause dropped by injection"
+
+
+@pytest.mark.regression
 def test_precheck_upsert_query_emits_no_on_conflict():
     """R3: unit-level structural pin — the SQLite pre-check builder emits a plain
     INSERT / UPDATE and never ``ON CONFLICT`` (the clause that required a UNIQUE
