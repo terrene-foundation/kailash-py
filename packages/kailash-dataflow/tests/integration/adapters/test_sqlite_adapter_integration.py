@@ -11,6 +11,7 @@ import tempfile
 import time
 
 import pytest
+
 from dataflow.adapters.exceptions import ConnectionError, QueryError
 from dataflow.adapters.sqlite import SQLiteAdapter
 
@@ -35,7 +36,7 @@ class TestSQLiteAdapterIntegration:
         # Cleanup
         try:
             os.unlink(path)
-        except:
+        except OSError:
             pass
 
     @pytest.fixture
@@ -77,8 +78,15 @@ class TestSQLiteAdapterIntegration:
         """Test SQLite adapter initializes correctly with memory database."""
         adapter = SQLiteAdapter(":memory:", pool_size=5)
 
-        assert adapter.database_path == ":memory:"
+        # ":memory:" is intentionally rewritten to a shared-cache URI so that
+        # pooled connections all see ONE database (bare ":memory:" gives each
+        # aiosqlite connection a separate DB). See SQLiteAdapter.__init__ and
+        # rules/patterns.md § SQLite Connection Management. is_memory_database
+        # (computed pre-rewrite) is the stable user-facing contract.
         assert adapter.is_memory_database is True
+        assert adapter.database_path.startswith("file:")
+        assert "mode=memory" in adapter.database_path
+        assert "cache=shared" in adapter.database_path
         assert adapter.pool_size == 5
         assert adapter.enable_connection_pooling is True
         assert not adapter.is_connected
@@ -365,9 +373,9 @@ class TestSQLiteAdapterIntegration:
         import re
 
         version_pattern = r"\d+\.\d+\.\d+"
-        assert re.search(version_pattern, version), (
-            f"No version number found in: {version}"
-        )
+        assert re.search(
+            version_pattern, version
+        ), f"No version number found in: {version}"
 
     @pytest.mark.timeout(5)
     async def test_get_database_size(self, connected_adapter_file):

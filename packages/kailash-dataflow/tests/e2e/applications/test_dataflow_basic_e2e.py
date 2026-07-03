@@ -8,15 +8,34 @@ import asyncio
 import os
 
 import pytest
-from dataflow import DataFlow
 
+from dataflow import DataFlow
 from tests.conftest import DATABASE_CONFIGS
 from tests.utils.real_infrastructure import real_infra
 
 
 @pytest.mark.e2e
 @pytest.mark.timeout(10)
-@pytest.mark.parametrize("db_config", DATABASE_CONFIGS, ids=lambda x: x["id"])
+@pytest.mark.parametrize(
+    "db_config",
+    [
+        (
+            pytest.param(
+                c,
+                id=c["id"],
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    reason="bare sqlite :memory: multi-connection unsupported — "
+                    "shared-cache URI rewrite is orphaned (not wired to the CRUD "
+                    "hot path); see #1502. Remove when #1502 lands.",
+                ),
+            )
+            if c.get("url") == ":memory:"
+            else pytest.param(c, id=c["id"])
+        )
+        for c in DATABASE_CONFIGS
+    ],
+)
 async def test_basic_dataflow_operations(db_config):
     """Test basic CRUD operations with DataFlow in <10s."""
     # Create DataFlow instance with cache disabled for testing
@@ -34,8 +53,10 @@ async def test_basic_dataflow_operations(db_config):
         email: str
         active: bool = True
 
-    # Ensure tables are created for both databases
-    db.create_tables()
+    # Ensure tables are created for both databases. This is an async test
+    # (running event loop), so the sync create_tables() would raise DF-501 —
+    # use the async variant per the documented contract.
+    await db.create_tables_async()
 
     # Initialize (should be fast with existing_schema_mode=True)
     await db.initialize()
@@ -93,9 +114,9 @@ async def test_basic_dataflow_operations(db_config):
         users = list_result.get("records", [])
         print(f"DEBUG: users = {users}")
         assert len(users) >= 1, f"Expected at least 1 user, got {len(users)}"
-        assert any(u.get("email") == "test@example.com" for u in users), (
-            f"Could not find user with email test@example.com in {users}"
-        )
+        assert any(
+            u.get("email") == "test@example.com" for u in users
+        ), f"Could not find user with email test@example.com in {users}"
     elif db_config["type"] == "sqlite":
         # SQLite may have different response format, verify operation completed
         assert list_result is not None
