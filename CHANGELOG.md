@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.2] - 2026-07-03
+
+### Fixed
+
+- **SQLite adapter no longer discards `RETURNING` rows (#1498).** `AsyncSQLDatabaseNode`'s SQLite path short-circuited every `INSERT`/`UPDATE`/`DELETE` to `[{"rows_affected": N}]` on a leading-keyword check, never fetching the `RETURNING` result set — so a `... RETURNING *` insert/update came back as a row-count summary with the returned columns silently dropped (surfaced as DataFlow SQLite upsert returning `{"record": {"rows_affected": 0}}`). Added a `"RETURNING" not in query` guard to both SQLite DML short-circuits so RETURNING queries fall through to the fetch, matching the guard the PostgreSQL adapter already had. Non-RETURNING DML is unchanged.
+
 ## [2.45.0] - 2026-07-02
 
 Trust-plane hardening plus two new trust primitives.

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.13.5] — 2026-07-03 — SQLite/PostgreSQL upsert returns the upserted row and applies update values
+
+### Fixed
+
+- **Single-record upsert now returns the upserted row instead of a DML summary (#1498).** The generated `<Model>UpsertNode` emits `... ON CONFLICT ... RETURNING *`, but the core SQLite adapter discarded the returned rows (fixed in `kailash` 2.45.2 — hence the `kailash>=2.45.2` floor bump), so an upsert came back as `{"created": true, "record": {"rows_affected": 0}, "action": "created"}` and callers reading `record["<field>"]` raised `KeyError`. With the core fix, `record` now carries the upserted row.
+- **Upsert applies the `update` payload's values on conflict (#1498).** `build_upsert_query` (SQLite **and** PostgreSQL) built the `DO UPDATE SET` clause as `col = EXCLUDED.col`, but `EXCLUDED` references the value proposed for INSERT (the `create` payload), not the caller's separate `update` payload. On a conflict the row was therefore set to the `create` values, silently ignoring `update`. The clause now binds the `update` values as parameters (continuing the `:p<i>` sequence so the node's positional→named param rebuild stays aligned). This also fixes two pre-existing PostgreSQL upsert failures, verified against real Postgres.
+
+### Requires
+
+- `kailash>=2.45.2` (the SQLite `RETURNING` fix the upsert row-return depends on).
+
 ## [2.13.4] — 2026-07-03 — SQLite pooled-connection PRAGMA fix + model-registry runtime resolution
 
 ### Fixed
