@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.13.10] — 2026-07-04 — PostgreSQL single-record upsert conflict_on gives an actionable error
+
+### Fixed
+
+- **PostgreSQL single-record upsert with `conflict_on` on a non-unique field now raises an actionable typed error instead of the raw driver message (#1520).** `db.express.upsert` / `upsert_advanced` / the generated `{Model}UpsertNode` on PostgreSQL, with `conflict_on=[field]` where the field has no backing PRIMARY KEY / UNIQUE constraint, surfaced the opaque driver text _"there is no unique or exclusion constraint matching the ON CONFLICT specification"_ — naming neither `conflict_on`, the offending field, nor the remedy. DataFlow now converts that into the typed `UpsertConflictTargetError` (single-record sibling of #1519's `BulkUpsertConflictTargetError`), naming the field(s) and the two remedies (declare the field `unique=True`, or add a UNIQUE index via a migration). The guard sits at the single-record native-`ON CONFLICT` execute — the one chokepoint every single-record upsert surface (async/sync `upsert`/`upsert_advanced`, fabric, workflow node) funnels through — and reuses the shared `is_conflict_target_error` classifier from #1519; non-matching driver errors re-raise unchanged. PostgreSQL correctly keeps its atomic `ON CONFLICT` (a WHERE-precheck would introduce a TOCTOU race under concurrency, unlike SQLite's #1508 precheck path which never reaches this error), so this is a better error, not a behavior change — no runtime DDL (blocked per `schema-migration.md`). SQLite (#1508 WHERE-precheck) and MySQL (`ON DUPLICATE KEY UPDATE`) never trip the matcher. Also corrected the now-PostgreSQL-misleading recovery note in `BulkUpsertConflictTargetError` (its "use single-record `db.express.upsert`" fallback is SQLite-only; on PostgreSQL single-record upsert also requires the unique constraint). Sibling of the single-record #1508 and the bulk #1519; the MySQL silent-upsert-on-PK variant is tracked in #1537, and a separate pre-existing `express.list` read-after-upsert-update staleness in #1538.
+
 ## [2.13.9] — 2026-07-03 — bulk_upsert honors conflict_on (SQLite/PG); 3 divergent builders reconciled
 
 ### Fixed
