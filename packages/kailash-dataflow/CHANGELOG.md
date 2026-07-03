@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.13.8] — 2026-07-03 — multi_tenant upsert binds tenant_id to the active tenant
+
+### Fixed
+
+- **`multi_tenant=True` upsert now persists the active tenant in `tenant_id` (#1518, cross-tenant leak class).** A single-record upsert on a multi-tenant DataFlow persisted the **wrong** value in `tenant_id` — it received the row's `id` value instead of the active tenant, so write-path tenant scoping was silently built against a bogus `tenant_id` (`rules/tenant-isolation.md`). Root cause: the SQLite precheck-upsert builder (`build_precheck_upsert_query`, #1508) emits named `:pN` placeholders; the tenant `QueryInterceptor` appends `tenant_id` when the INSERT column list omits it (the upsert `insert_data = {**where, **create}` never carries `tenant_id`), but `_detect_placeholder_style` did not recognise the `:pN` style and defaulted to `qmark`, appending a lone `?` into a `:pN` query. Downstream `_convert_to_named_parameters` renumbered that `?` to `:p0` (its counter restarts at 0), colliding with the existing `:p0`, so `tenant_id` bound to the first value. The same `:pN`-blindness also corrupted the existing-row `UPDATE` branch. The interceptor now recognises the `:pN` (`colon`) style across the INSERT, UPDATE/DELETE, and SELECT injection paths, so the injected query is pure `:pN` — structurally identical to the already-correct non-tenant upsert. `:pN` is emitted by every upsert/bulk dialect builder, so the machinery-level fix covers all of them. A caller-supplied `tenant_id` in `create` is overwritten to the active tenant (no spoofing). Pre-existing on `main`; surfaced while red-teaming #1508. The separate "two tenants sharing one natural key" case (single-column `id` PK) is tracked in #1526.
+
 ## [2.13.7] — 2026-07-03 — SQLite upsert conflict_on works without a UNIQUE constraint
 
 ### Fixed
