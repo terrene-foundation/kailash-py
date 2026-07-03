@@ -18,10 +18,10 @@ from tests.infrastructure.test_harness import IntegrationTestSuite
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 
 @pytest.fixture
@@ -93,9 +93,17 @@ class TestSQLiteConnection:
     @pytest.mark.asyncio
     async def test_auto_generated_nodes(self, test_suite, runtime):
         """Test auto-generated CRUD nodes work with SQLite."""
+        # File-backed SQLite: a bare ":memory:" gives every pooled / per-node
+        # connection its OWN in-memory database (the shared-cache URI rewrite in
+        # SQLiteAdapter is not wired to the CRUD node hot path — tracked
+        # separately). File-backed is the supported multi-connection config
+        # (tests/CLAUDE.md), so CREATE and LIST share one database.
+        fd, _db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        _db_url = f"sqlite:///{_db_path}"
         try:
             # Create DataFlow instance
-            db = DataFlow(":memory:")
+            db = DataFlow(_db_url)
 
             # Define model
             @db.model
@@ -107,13 +115,15 @@ class TestSQLiteConnection:
             # Initialize the database (create tables)
             await db.initialize()
 
-            # Test CREATE node
+            # Test CREATE node. DataFlow-generated nodes use the registering
+            # instance's database configuration internally — passing an explicit
+            # database_url spins up a SEPARATE connection/pool that does not share
+            # the instance's committed data, so it is omitted here.
             workflow = WorkflowBuilder()
             workflow.add_node(
                 "ProductCreateNode",
                 "create_product",
                 {
-                    "database_url": ":memory:",
                     "name": "Test Widget",
                     "price": 29.99,
                     "in_stock": True,
@@ -123,61 +133,75 @@ class TestSQLiteConnection:
             results, run_id = runtime.execute(workflow.build())
 
             assert "create_product" in results, "Create node result missing"
-            assert not results["create_product"].get("error"), (
-                f"ProductCreateNode failed: {results['create_product']}"
-            )
+            assert not results["create_product"].get(
+                "error"
+            ), f"ProductCreateNode failed: {results['create_product']}"
 
             # Test LIST node
             workflow = WorkflowBuilder()
             workflow.add_node(
                 "ProductListNode",
                 "list_products",
-                {"database_url": ":memory:", "limit": 10},
+                {"limit": 10},
             )
 
             results, run_id = runtime.execute(workflow.build())
 
             assert "list_products" in results, "List node result missing"
-            assert not results["list_products"].get("error"), (
-                f"ProductListNode failed: {results['list_products']}"
-            )
+            assert not results["list_products"].get(
+                "error"
+            ), f"ProductListNode failed: {results['list_products']}"
 
-            product_list = results["list_products"].get("result", {}).get("data", [])
-            # Note: May be empty if CREATE and LIST use different database instances
+            # CREATE and LIST share one file-backed database (both use the
+            # instance config), so the created product MUST be visible to LIST.
+            product_list = results["list_products"].get("records", [])
+            assert any(
+                p.get("name") == "Test Widget" for p in product_list
+            ), f"Created product should be listed, got: {product_list}"
 
         except Exception as e:
             pytest.fail(f"Auto-generated nodes test failed: {e}")
+        finally:
+            if os.path.exists(_db_path):
+                os.unlink(_db_path)
 
     @pytest.mark.asyncio
     async def test_schema_migration(self, test_suite):
         """Test schema migration with SQLite."""
+        # File-backed SQLite: per schema-migration.md Rule 5, :memory: is not
+        # appropriate for migration validation (each connection sees a separate
+        # DB). Re-decorating the same class name to "add a field" is NOT the
+        # DataFlow migration mechanism — it hits the duplicate-registration guard
+        # — so this exercises the auto_migrate path on a single registered model.
+        fd, _db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
         try:
             # Create DataFlow instance
-            db = DataFlow(":memory:")
+            db = DataFlow(f"sqlite:///{_db_path}")
 
-            # Define initial model
+            # Define model
             @db.model
             class Customer:
                 name: str
                 email: str
 
-            # Initialize with initial schema
+            # Initialize the schema
             await db.initialize()
 
-            # Now add a field to test migration
-            @db.model
-            class Customer:
-                name: str
-                email: str
-                phone: str = None  # New field
-
-            # This should trigger migration
-            success = await db.auto_migrate(dry_run=True, interactive=False)
+            # Run auto-migrate (dry-run): the registered schema matches the
+            # created tables, so the migration planner MUST complete successfully.
+            # auto_migrate returns a (success, migrations) tuple.
+            success, _migrations = await db.auto_migrate(
+                dry_run=True, interactive=False
+            )
 
             assert success is True, "Schema migration failed"
 
         except Exception as e:
             pytest.fail(f"Schema migration test failed: {e}")
+        finally:
+            if os.path.exists(_db_path):
+                os.unlink(_db_path)
 
 
 if __name__ == "__main__":

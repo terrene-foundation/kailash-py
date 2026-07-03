@@ -1942,8 +1942,15 @@ class SQLiteAdapter(DatabaseAdapter):
                 # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
                 query_type = query.strip().upper().split()[0] if query.strip() else ""
 
-                if query_type in ("DELETE", "UPDATE", "INSERT"):
-                    # Capture rowcount for DML operations
+                if (
+                    query_type in ("DELETE", "UPDATE", "INSERT")
+                    and "RETURNING" not in query.upper()
+                ):
+                    # Capture rowcount for DML operations.
+                    # RETURNING queries fall through so the returned rows are
+                    # fetched (parity with the PostgreSQL adapter guard above);
+                    # without this, SQLite upsert/INSERT ... RETURNING silently
+                    # discarded the row and returned {"rows_affected": 0}.
                     rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
                     # Use list format to match PostgreSQL/MySQL adapters
                     return [{"rows_affected": rowcount}]
@@ -2015,7 +2022,12 @@ class SQLiteAdapter(DatabaseAdapter):
         cursor = await db.execute(query, params or [])
         query_type = query.strip().upper().split()[0] if query.strip() else ""
 
-        if query_type in ("DELETE", "UPDATE", "INSERT"):
+        if (
+            query_type in ("DELETE", "UPDATE", "INSERT")
+            and "RETURNING" not in query.upper()
+        ):
+            # RETURNING queries fall through to the fetch below so the returned
+            # rows survive (parity with the PostgreSQL adapter guard).
             rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
             await db.commit()
             return [{"rows_affected": rowcount}]

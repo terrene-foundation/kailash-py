@@ -44,6 +44,11 @@ class TestSyncDDLAutoMigrate:
                 name: str
                 email: str
 
+            # Issue #171: @db.model registration is metadata-only; table creation
+            # is deferred to the first DB op. Trigger the sync-DDL path explicitly
+            # (the scenario this module exists to verify).
+            db.create_tables_sync()
+
             # Verify table was created by checking the cache
             assert db._schema_cache.is_table_ensured("User", f"sqlite:///{db_path}")
 
@@ -78,6 +83,11 @@ class TestSyncDDLAutoMigrate:
                         id: str
                         name: str
                         price: float
+
+                    # Issue #171: trigger the deferred sync-DDL creation. Runs
+                    # under a running event loop — SyncDDLExecutor uses a sync
+                    # sqlite3 driver, so no DF-501 loop-boundary error.
+                    db.create_tables_sync()
 
                     # Verify table was created in cache
                     is_ensured = db._schema_cache.is_table_ensured(
@@ -190,6 +200,9 @@ class TestSyncDDLAutoMigrate:
                         title: str
                         completed: bool
 
+                    # Issue #171: trigger deferred sync-DDL creation (thread ctx).
+                    db.create_tables_sync()
+
                     results["table_ensured"] = db._schema_cache.is_table_ensured(
                         "Task", f"sqlite:///{db_path}"
                     )
@@ -242,9 +255,9 @@ class TestSyncDDLAutoMigrate:
             )
             tables = cursor.fetchall()
             conn.close()
-            assert len(tables) == 0, (
-                "Table should NOT be created in existing_schema_mode"
-            )
+            assert (
+                len(tables) == 0
+            ), "Table should NOT be created in existing_schema_mode"
 
 
 @pytest.mark.asyncio
@@ -264,6 +277,9 @@ class TestSyncDDLAutoMigrateAsync:
                 id: str
                 user_id: str
                 token: str
+
+            # Issue #171: trigger the deferred sync-DDL creation.
+            db.create_tables_sync()
 
             # Verify table was created via sync DDL
             assert db._schema_cache.is_table_ensured("Session", f"sqlite:///{db_path}")
@@ -302,6 +318,9 @@ class TestSyncDDLAutoMigrateAsync:
                 book_id: str
                 rating: int
 
+            # Issue #171: trigger the deferred sync-DDL creation for all models.
+            db.create_tables_sync()
+
             # All tables should be created in cache
             for model_name in ["Author", "Book", "Review"]:
                 assert db._schema_cache.is_table_ensured(
@@ -333,6 +352,9 @@ class TestSyncDDLAutoMigrateAsync:
                 id: str
                 name: str
                 price: float
+
+            # Issue #171: trigger the deferred sync-DDL creation.
+            db.create_tables_sync()
 
             # Verify table was created
             assert db._schema_cache.is_table_ensured("Item", f"sqlite:///{db_path}")
@@ -396,9 +418,9 @@ class TestSyncDDLInMemoryLimitation:
 
         # create_tables_sync should return False for in-memory databases
         success = db.create_tables_sync()
-        assert not success, (
-            "create_tables_sync should return False for :memory: databases"
-        )
+        assert (
+            not success
+        ), "create_tables_sync should return False for :memory: databases"
 
 
 class TestSyncDDLEdgeCases:
@@ -440,6 +462,9 @@ class TestSyncDDLEdgeCases:
                 active: bool
                 description: Optional[str] = None
 
+            # Issue #171: trigger the deferred sync-DDL creation.
+            db.create_tables_sync()
+
             # Verify table was created
             assert db._schema_cache.is_table_ensured(
                 "ComplexModel", f"sqlite:///{db_path}"
@@ -462,9 +487,9 @@ class TestSyncDDLEdgeCases:
                 "created_at",
                 "updated_at",
             }
-            assert expected.issubset(columns), (
-                f"Expected columns {expected}, got {columns}"
-            )
+            assert expected.issubset(
+                columns
+            ), f"Expected columns {expected}, got {columns}"
 
 
 if __name__ == "__main__":

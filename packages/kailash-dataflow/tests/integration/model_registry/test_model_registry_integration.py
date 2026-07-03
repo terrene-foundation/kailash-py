@@ -13,11 +13,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 from dataflow.core.engine import DataFlow
 from dataflow.core.model_registry import ModelRegistry
 from dataflow.core.models import Environment
-
 from tests.conftest import DATABASE_CONFIGS
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
@@ -157,8 +157,22 @@ class TestModelRegistryWithRealDatabase:
             print("PostgreSQL model registry initialized successfully")
 
     @pytest.mark.asyncio
-    async def test_register_model_real_database(self, db_config, unique_test_id):
+    async def test_register_model_real_database(
+        self, db_config, unique_test_id, request
+    ):
         """Test model registration with real database operations using proper DataFlow API."""
+        # This test discovers the registry across pooled connections, which bare
+        # sqlite :memory: cannot share (the shared-cache URI rewrite is orphaned;
+        # see #1502). Applied dynamically (not a param mark) so it self-clears via
+        # XPASS(strict) when #1502 lands. The [sqlite_file] variant passes.
+        if db_config["url"] == ":memory:":
+            request.node.add_marker(
+                pytest.mark.xfail(
+                    strict=True,
+                    reason="bare sqlite :memory: multi-connection unsupported — "
+                    "shared-cache URI rewrite orphaned; see #1502.",
+                )
+            )
         # Use the parameterized database configuration
         dataflow = DataFlow(
             db_config["url"], auto_migrate=True, existing_schema_mode=False

@@ -78,6 +78,13 @@ class TestProductionDataFlowRealDatabase:
         """Test complete CRUD cycle with MySQL."""
         self._test_database_crud_operations(mysql_config, "MySQL")
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="this file uses a MOCK engine (DataFlowProductionEngine, line 23) "
+        "whose @db.model does not register nodes with the SDK NodeRegistry — a "
+        "Tier-2 NO-MOCKING violation; see #1503. Real-engine SQLite CRUD is covered "
+        "by test_sqlite_integration::test_auto_generated_nodes. Remove when #1503 lands.",
+    )
     def test_sqlite_crud_operations(self, test_suite, sqlite_config):
         """Test complete CRUD cycle with SQLite."""
         self._test_database_crud_operations(sqlite_config, "SQLite")

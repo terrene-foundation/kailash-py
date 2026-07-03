@@ -37,10 +37,10 @@ async def test_dataflow_postgresql_workflow_complete():
     - Executes workflow with AsyncLocalRuntime
     - Verifies no TypeError about timeout parameter
     """
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     pg_url = os.getenv("POSTGRES_TEST_URL")
     if not pg_url:
@@ -106,16 +106,16 @@ async def test_dataflow_postgresql_workflow_complete():
         assert any(c["id"] == "conv-test-123" for c in results["list"])
 
     finally:
-        await db.close()
+        await db.close_async()
 
 
 @pytest.mark.asyncio
 async def test_dataflow_mysql_workflow_complete():
     """Test complete DataFlow workflow with MySQL."""
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     mysql_url = os.getenv("MYSQL_TEST_URL")
     if not mysql_url:
@@ -156,16 +156,16 @@ async def test_dataflow_mysql_workflow_complete():
         assert len(results["list"]) >= 1
 
     finally:
-        await db.close()
+        await db.close_async()
 
 
 @pytest.mark.asyncio
 async def test_dataflow_sqlite_workflow_complete():
     """Test complete DataFlow workflow with SQLite."""
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     # Use temporary file for SQLite
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
@@ -206,7 +206,7 @@ async def test_dataflow_sqlite_workflow_complete():
         assert "read" in results
         assert results["read"]["id"] == "msg-001"
 
-        await db.close()
+        await db.close_async()
 
     finally:
         # Cleanup
@@ -217,10 +217,10 @@ async def test_dataflow_sqlite_workflow_complete():
 @pytest.mark.asyncio
 async def test_dataflow_bulk_operations_with_health_check():
     """Test DataFlow bulk operations work correctly with health checks."""
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     pg_url = os.getenv("POSTGRES_TEST_URL")
     if not pg_url:
@@ -275,16 +275,16 @@ async def test_dataflow_bulk_operations_with_health_check():
         assert results["count"]["count"] >= 100
 
     finally:
-        await db.close()
+        await db.close_async()
 
 
 @pytest.mark.asyncio
 async def test_dataflow_concurrent_workflows():
     """Test multiple concurrent DataFlow workflows execute without errors."""
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     pg_url = os.getenv("POSTGRES_TEST_URL")
     if not pg_url:
@@ -337,7 +337,7 @@ async def test_dataflow_concurrent_workflows():
             assert results["read"]["id"] == f"session-{i:03d}"
 
     finally:
-        await db.close()
+        await db.close_async()
 
 
 @pytest.mark.asyncio
@@ -351,10 +351,10 @@ async def test_production_scenario_ai_hub_workflow():
     - Workflow executes until database node execution
     - Health check fails with timeout parameter error
     """
-    from dataflow import DataFlow
-
     from kailash.runtime import AsyncLocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
+
+    from dataflow import DataFlow
 
     pg_url = os.getenv("POSTGRES_TEST_URL")
     if not pg_url:
@@ -417,4 +417,4 @@ async def test_production_scenario_ai_hub_workflow():
         assert results2["read"]["id"] == "conv_12b0e30cc818"
 
     finally:
-        await db.close()
+        await db.close_async()
