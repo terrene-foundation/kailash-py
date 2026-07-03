@@ -5,7 +5,7 @@
 
 ---
 
-last_reconciled_sha: 5d9128924
+last_reconciled_sha: 9d765c435
 migrated_from: .session-notes
 ---
 
@@ -13,60 +13,65 @@ migrated_from: .session-notes
 
 ## Where we are
 
-Clean on `main` @ `5d9128924` (post #1502 release-prep merge). This session shipped
-**two full releases** under `/autonomize`:
+Clean on `main`. This session shipped **kailash-dataflow 2.13.7** under `/autonomize`,
+closing **#1508** (the F8 item the prior session approved as next work).
 
-1. **#1498** (SQLite `-k sqlite` failures) → `kailash 2.45.2` + `kailash-dataflow 2.13.5`
-   (upsert RETURNING + update-value; -k sqlite 14→0 failed).
-2. **#1502** (bare `:memory:` multi-connection) → `kailash 2.45.3` + `kailash-dataflow 2.13.6`
-   (one shared-cache URI per instance + lifetime anchor threaded through every SQLite
-   connection site; cross-thread registry StaticPool). Clean-venv verified live.
-
-All committed, merged, released, clean-venv verified. Post-release docs commit
-(deployment record + config log + these notes) landing now. Nothing else in-flight.
+- **#1508** — SQLite single-record upsert `conflict_on` on a non-UNIQUE field failed
+  (`ON CONFLICT ... does not match any UNIQUE constraint`). The SQLite path already ran a
+  WHERE pre-check but discarded it and still emitted `INSERT ... ON CONFLICT`. Fix: use the
+  pre-check `row_exists` to emit a plain INSERT / `UPDATE ... WHERE` via new
+  `SQLDialect.build_precheck_upsert_query`. PG path unchanged. PR #1521 (fix) + #1522
+  (release-prep) → tag `dataflow-v2.13.7` (publish `28651414046` SUCCESS). Clean-venv verified
+  live (repro `created: True`). Red-team CONVERGED (3 parallel reviewers, all live-evidence).
 
 ## Read first (next session)
 
-1. `deploy/deployments/2026-07-03-v2.45.3-dataflow-2.13.6-1502-sqlite-memory.md` — the #1502 record.
-2. `gh issue view 1508` — the highest-value queued follow-up (see F8).
+1. `gh issue view 1518` — **the recommended next work** (see F-TENANT below).
+2. `deploy/deployments/2026-07-03-dataflow-v2.13.7-1508-upsert-conflict-on.md` — the #1508 record.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                                                         | Value-anchor (MUST-1 source)                                      | Status                                                                                                                                                                                                                                                                                                                                                       |
-| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F8  | upsert `conflict_on=[field]` fails when field has no UNIQUE constraint       | #1508; surfaced by #1502; user "approved" 2026-07-03 as next work | **APPROVED — start here next session.** Recommended direction: AUTO-CREATE a UNIQUE index for each `conflict_on` field (zero-config ethos: declaring `conflict_on=["email"]` implies email is a conflict key); confirm with dataflow-specialist, fall back to validate-and-raise if auto-migrate can't safely add it. Repro test xfail-strict (self-clears). |
-| F6  | Convert `test_production_dataflow` off the mock engine (Tier-2 NO-MOCKING)   | #1503; rules/testing.md §Tier 2                                   | queued (#1503) — xfail-strict self-clears                                                                                                                                                                                                                                                                                                                    |
-| F7  | `test_concurrent_order_processing` PG two-manual-txn isolation fails on main | #1504 (pre-existing, proven at HEAD)                              | queued (#1504) — separate PG-isolation shard                                                                                                                                                                                                                                                                                                                 |
-| F2  | mops-onboarding cross-repo: loom issue + kailash-rs rollout                  | user 2026-06-23 "roll out to kailash-rs…file 2 into loom"         | GATED (see Traps)                                                                                                                                                                                                                                                                                                                                            |
-| F3  | ~29 prod TODO markers                                                        | user 2026-06-26 "leave as baseline"                               | DEFERRED (user)                                                                                                                                                                                                                                                                                                                                              |
-| F4  | Loom Gate-1: templatize Rust SDK refs                                        | mops journal/0009 DECISION; proposal latest.yaml                  | EXTERNAL (loom)                                                                                                                                                                                                                                                                                                                                              |
+| ID       | Item                                                                            | Value-anchor (MUST-1 source)                               | Status                                                                                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-TENANT | multi-tenant upsert mis-maps `tenant_id` (INSERT injection writes wrong value)  | #1518; surfaced by #1508 red-team; user flagged 2026-07-03 | **HIGH / security (cross-tenant leak class). RECOMMENDED NEXT.** Proven pre-existing on `main` via file-swap. Orthogonal subsystem (tenant interceptor). Needs its own implement+redteam+release. |
+| F-BULK   | bulk_upsert silently ignores `conflict_on` on SQLite (hardcodes ON CONFLICT id) | #1519; surfaced by #1508 red-team                          | HIGH — dup rows + 0 counts; 3 divergent bulk builders + orphaned dialect methods. Design shard.                                                                                                   |
+| F-PG     | PG upsert conflict_on on non-unique field → cryptic driver error                | #1520; sibling of #1508                                    | MED — add actionable up-front error (no auto-DDL). Small follow-up.                                                                                                                               |
+| F6       | Convert `test_production_dataflow` off the mock engine (Tier-2 NO-MOCKING)      | #1503; rules/testing.md §Tier 2                            | queued (#1503) — xfail-strict self-clears                                                                                                                                                         |
+| F7       | `test_concurrent_order_processing` PG two-manual-txn isolation fails on main    | #1504 (pre-existing, proven at HEAD)                       | queued (#1504) — separate PG-isolation shard                                                                                                                                                      |
+| F2       | mops-onboarding cross-repo: loom issue + kailash-rs rollout                     | user 2026-06-23 "roll out to kailash-rs…file 2 into loom"  | GATED (receipt-gated; dedicated session)                                                                                                                                                          |
+| F3       | ~29 prod TODO markers                                                           | user 2026-06-26 "leave as baseline"                        | DEFERRED (user)                                                                                                                                                                                   |
 
-Closed this session: **#1498** (PR #1505/#1506), **#1502** (PR #1509/#1511). Filed:
-#1502, #1503, #1504 (during #1498); #1508 (during #1502). Two pre-existing PG upsert
-failures remain (test_postgresql_auto_timestamp_management + composite_conflict "order_items
-does not exist") — PG-specific, likely local-postgres-env artifacts (main CI green), out of scope.
+Closed this session: **#1508** (PR #1521 fix, #1522 release → `dataflow-v2.13.7`).
+Filed this session: **#1518**, **#1519**, **#1520** (all pre-existing, surfaced by #1508 red-team).
+
+## Bug-origin context (user asked "why so many issues suddenly?")
+
+NOT new regressions — pre-existing test-coverage debt in the DataFlow upsert/SQLite/multi-tenant
+subsystem, surfacing now because it's under active repair. `conflict_on` feature landed
+`a96c942d1` 2025-11-02; ON CONFLICT + tenant-injection machinery predates the 2026-03-11 monorepo
+move. Mechanism: layered-masking cascade — #1498 (RETURNING/EXCLUDED) → #1502 (`:memory:` private
+DB, "no such table") → #1508 (ON CONFLICT constraint); each fix made the next bug reachable
+(#1508's test was red the whole time behind an earlier error). Red-teaming #1508 then surfaced the
+adjacent untested paths (#1518 tenant, #1519 bulk). The neighborhood + era + missing-tests explain
+the batch.
 
 ## Traps
 
-- **Prove pre-existing via file-swap, NOT git stash** (stash@{0} = preserved PRIOR-session
-  release-prep stash; clobber hazard): `cp <f> $SCRATCH; git checkout HEAD -- <f>; test; cp back`.
-  And `for f in $FILES` does NOT word-split in zsh — use a `FILES=(...)` array.
-- **F2 receipt-gated**: per `repo-scope-discipline.md`, land a fresh journaled
-  `cross-repo-authorized:` receipt + a genuine user re-confirm turn BEFORE any command touches
-  loom or esperie-enterprise/kailash-rs. Do NOT self-authorize on the 2026-06-23 grant.
-- **Test env**: root `.venv/bin/python -m pytest` (NOT `uv run`); `kailash-mcp` must be
-  editable-installed (`uv pip install -e packages/kailash-mcp`) or pre-commit Tier-1 collection
-  breaks; `.venv/bin/pre-commit` has a broken shebang → use `.venv/bin/python -m pre_commit`.
-- **SQLite behavior tests need `aiosqlite`** (optional extra) in the clean venv.
-- **Release**: core-first when a dataflow fix depends on a core fix; PyPI/uv/pip index lags —
-  `uv pip install --refresh` OR pip `--no-cache-dir` with a 60s-retry loop (the `pypi.org/pypi/
-<pkg>/<ver>/json` endpoint reflects the upload before pip's simple-index view does).
-- **`:memory:` shared-cache primitive** (from #1502): `DataFlow._memory_db_uri` +
-  `_memory_connection` anchor + `SQLDatabaseNode.dispose_pools_for()`. Any new SQLite
-  connection-construction site MUST route bare `:memory:` through `_memory_db_uri` + pass uri=True.
+- **Prove pre-existing via file-swap, NOT git stash**, AND restore CLEANLY: `git checkout main -- <f>`
+  STAGES the reverted file into the index — a later `git commit` (even one adding OTHER files) sweeps
+  the staged reversion in. THIS SESSION: that exact hazard silently reverted the #1508 nodes.py fix
+  in commit 2bc5c457c; caught via the PR's "1 uncommitted change" warning, restored in 558bb3d07.
+  After a file-swap, `git status` and `git diff HEAD` BEFORE any commit; `git add` only intended paths.
+- **Release is a structural human gate** — even under /autonomize, get explicit per-release approval
+  before the immutable PyPI tag-push (every deployment record shows an explicit "approved").
+- **Test env**: root `.venv/bin/python -m pytest` (NOT `uv run`); `.venv/bin/python -m pre_commit`
+  (broken shebang on `.venv/bin/pre-commit`). SQLite behavior tests need `aiosqlite`.
+- **Broad `-k` test sweeps hang** on infra-dependent tests without Docker — scope to SQLite/unit
+  with `--timeout`. Real PG available on 5434 (`aegis-test-pg`).
+- **PyPI/uv index lag**: `uv pip install --refresh`, retry 3× / 60s; pip `--no-cache-dir` fallback.
 
 ## Open questions for the human
 
-- **F8 (#1508)** APPROVED by user 2026-07-03 as next-session work; confirm the recommended
-  direction (auto-index conflict_on fields) with the dataflow-specialist before implementing.
-- **F2**: ready to re-confirm the cross-repo loom + kailash-rs rollout in a dedicated session?
+- **F-TENANT (#1518)** — authorize starting the multi-tenant `tenant_id` mis-map fix next? (HIGH
+  security; recommended.)
+- Batch F-BULK (#1519) + F-PG (#1520) with it, or separate cycles?
