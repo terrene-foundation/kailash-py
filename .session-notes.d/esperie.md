@@ -5,7 +5,7 @@
 
 ---
 
-last_reconciled_sha: 9d765c435
+last_reconciled_sha: 7811d2062
 migrated_from: .session-notes
 ---
 
@@ -13,36 +13,44 @@ migrated_from: .session-notes
 
 ## Where we are
 
-Clean on `main`. This session shipped **kailash-dataflow 2.13.7** under `/autonomize`,
-closing **#1508** (the F8 item the prior session approved as next work).
+Clean on `main`. This session shipped **kailash-dataflow 2.13.8** under `/autonomize` +
+`/redteam`, closing **#1518** (F-TENANT, the prior session's recommended-next work).
 
-- **#1508** — SQLite single-record upsert `conflict_on` on a non-UNIQUE field failed
-  (`ON CONFLICT ... does not match any UNIQUE constraint`). The SQLite path already ran a
-  WHERE pre-check but discarded it and still emitted `INSERT ... ON CONFLICT`. Fix: use the
-  pre-check `row_exists` to emit a plain INSERT / `UPDATE ... WHERE` via new
-  `SQLDialect.build_precheck_upsert_query`. PG path unchanged. PR #1521 (fix) + #1522
-  (release-prep) → tag `dataflow-v2.13.7` (publish `28651414046` SUCCESS). Clean-venv verified
-  live (repro `created: True`). Red-team CONVERGED (3 parallel reviewers, all live-evidence).
+- **#1518** — `multi_tenant=True` single-record upsert persisted the row's `id` value in
+  `tenant_id` instead of the active tenant (cross-tenant leak class). Root cause: the SQLite
+  precheck-upsert builder (`build_precheck_upsert_query`, #1508) emits named `:pN` placeholders;
+  the tenant `QueryInterceptor` appends `tenant_id` when the INSERT omits it, but
+  `_detect_placeholder_style` didn't recognise `:pN` → defaulted to `qmark` → appended a `?` into
+  a `:pN` query → downstream `_convert_to_named_parameters` renumbered that `?` to `:p0`,
+  colliding with the existing `:p0` so `tenant_id` bound to the first value. Fix: interceptor now
+  recognises the `:pN` (`colon`) style across INSERT + UPDATE/DELETE + SELECT paths → pure `:pN`.
+  PR #1525 (fix) + #1527 (release-prep) → tag `dataflow-v2.13.8` (publish `28657016873` SUCCESS).
+  Clean-venv verified live (repro raw `tenant_id == "tenant-a"`, was the `id` value pre-fix).
+  Red-team CONVERGED (Round 1 reviewer + security-reviewer both MERGE-WITH-FIXES; the SELECT-path
+  `:pN` sibling gap fixed in-session; Round 2 adversarial verifier CONVERGED). 11 regression tests.
+- **#1508** (prior) — SQLite upsert `conflict_on` on a non-UNIQUE field → `dataflow-v2.13.7`.
 
 ## Read first (next session)
 
-1. `gh issue view 1518` — **the recommended next work** (see F-TENANT below).
-2. `deploy/deployments/2026-07-03-dataflow-v2.13.7-1508-upsert-conflict-on.md` — the #1508 record.
+1. `gh issue view 1518` (CLOSED) + `1526` (composite-key follow-up) + `1519`/`1520` (siblings).
+2. `deploy/deployments/2026-07-03-dataflow-v2.13.8-1518-multi-tenant-upsert-tenant-id.md`.
 
 ## Outstanding ledger (forest)
 
-| ID       | Item                                                                            | Value-anchor (MUST-1 source)                               | Status                                                                                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F-TENANT | multi-tenant upsert mis-maps `tenant_id` (INSERT injection writes wrong value)  | #1518; surfaced by #1508 red-team; user flagged 2026-07-03 | **HIGH / security (cross-tenant leak class). RECOMMENDED NEXT.** Proven pre-existing on `main` via file-swap. Orthogonal subsystem (tenant interceptor). Needs its own implement+redteam+release. |
-| F-BULK   | bulk_upsert silently ignores `conflict_on` on SQLite (hardcodes ON CONFLICT id) | #1519; surfaced by #1508 red-team                          | HIGH — dup rows + 0 counts; 3 divergent bulk builders + orphaned dialect methods. Design shard.                                                                                                   |
-| F-PG     | PG upsert conflict_on on non-unique field → cryptic driver error                | #1520; sibling of #1508                                    | MED — add actionable up-front error (no auto-DDL). Small follow-up.                                                                                                                               |
-| F6       | Convert `test_production_dataflow` off the mock engine (Tier-2 NO-MOCKING)      | #1503; rules/testing.md §Tier 2                            | queued (#1503) — xfail-strict self-clears                                                                                                                                                         |
-| F7       | `test_concurrent_order_processing` PG two-manual-txn isolation fails on main    | #1504 (pre-existing, proven at HEAD)                       | queued (#1504) — separate PG-isolation shard                                                                                                                                                      |
-| F2       | mops-onboarding cross-repo: loom issue + kailash-rs rollout                     | user 2026-06-23 "roll out to kailash-rs…file 2 into loom"  | GATED (receipt-gated; dedicated session)                                                                                                                                                          |
-| F3       | ~29 prod TODO markers                                                           | user 2026-06-26 "leave as baseline"                        | DEFERRED (user)                                                                                                                                                                                   |
+| ID        | Item                                                                            | Value-anchor (MUST-1 source)                               | Status                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-TENANT  | multi-tenant upsert mis-maps `tenant_id` (INSERT injection writes wrong value)  | #1518; surfaced by #1508 red-team; user flagged 2026-07-03 | **CLOSED 2026-07-03 → `dataflow-v2.13.8`** (PR #1525 fix, #1527 release). Interceptor `:pN` colon-style fix. Composite-key AC split to #1526.                                 |
+| F-COMPKEY | multi_tenant single-column `id` PK → two tenants can't share a natural key      | #1526; surfaced fixing #1518                               | OPEN (design) — needs composite `(tenant_id, id)` uniqueness (migrations, PG+SQLite, cross-SDK). Fails closed today (UNIQUE constraint — safe, no leak). Maintainer decision. |
+| F-BULK    | bulk_upsert silently ignores `conflict_on` on SQLite (hardcodes ON CONFLICT id) | #1519; surfaced by #1508 red-team                          | HIGH — dup rows + 0 counts; 3 divergent bulk builders + orphaned dialect methods. Design shard.                                                                               |
+| F-PG      | PG upsert conflict_on on non-unique field → cryptic driver error                | #1520; sibling of #1508                                    | MED — add actionable up-front error (no auto-DDL). Small follow-up.                                                                                                           |
+| F6        | Convert `test_production_dataflow` off the mock engine (Tier-2 NO-MOCKING)      | #1503; rules/testing.md §Tier 2                            | queued (#1503) — xfail-strict self-clears                                                                                                                                     |
+| F7        | `test_concurrent_order_processing` PG two-manual-txn isolation fails on main    | #1504 (pre-existing, proven at HEAD)                       | queued (#1504) — separate PG-isolation shard                                                                                                                                  |
+| F2        | mops-onboarding cross-repo: loom issue + kailash-rs rollout                     | user 2026-06-23 "roll out to kailash-rs…file 2 into loom"  | GATED (receipt-gated; dedicated session)                                                                                                                                      |
+| F3        | ~29 prod TODO markers                                                           | user 2026-06-26 "leave as baseline"                        | DEFERRED (user)                                                                                                                                                               |
 
-Closed this session: **#1508** (PR #1521 fix, #1522 release → `dataflow-v2.13.7`).
-Filed this session: **#1518**, **#1519**, **#1520** (all pre-existing, surfaced by #1508 red-team).
+Closed this session: **#1518** (PR #1525 fix, #1527 release → `dataflow-v2.13.8`).
+Filed this session: **#1526** (composite-key design follow-up, split from #1518's AC).
+Prior session: closed #1508 → `dataflow-v2.13.7`; filed #1518/#1519/#1520.
 
 ## Cross-SDK (kailash-rs) — #1508 NOT applicable
 
