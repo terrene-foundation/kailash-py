@@ -976,6 +976,14 @@ class QueryInterceptor:
         Returns one of:
             ``"dollar"``  — PostgreSQL / asyncpg ``$1, $2, ...`` (ordinal).
             ``"percent"`` — psycopg / MySQL ``%s`` (positional).
+            ``"colon"``   — named ``:p0, :p1, ...`` emitted by the SQLite
+                            precheck-upsert builder (issue #1508's
+                            ``build_precheck_upsert_query``). Bound by NAME
+                            downstream (``_convert_to_named_parameters`` maps the
+                            positional params list to ``{p0, p1, ...}`` by index),
+                            so a colon placeholder is position-independent in the
+                            query text but its ``:pN`` index MUST equal the value's
+                            index in the params list.
             ``"qmark"``   — SQLite / generic ``?`` (positional). Also the default
                             when the query carries no placeholders at all.
         """
@@ -983,6 +991,13 @@ class QueryInterceptor:
             return "dollar"
         if "%s" in query:
             return "percent"
+        # Issue #1518: the ``:pN`` named style must be detected BEFORE falling
+        # back to qmark. Appending a ``?`` into a ``:pN`` query produced a mixed
+        # statement whose lone ``?`` was renumbered to ``:p0`` downstream
+        # (counter restarts at 0), colliding with the existing ``:p0`` — the
+        # tenant column then bound to the first value instead of the tenant id.
+        if re.search(r":p\d+", query):
+            return "colon"
         return "qmark"
 
     @classmethod
@@ -1099,6 +1114,16 @@ class QueryInterceptor:
                     value_ph = f"${existing + 1}"
                 elif style == "percent":
                     value_ph = "%s"
+                elif style == "colon":
+                    # Issue #1518: the SQLite precheck-upsert INSERT (issue #1508)
+                    # emits named ``:pN`` placeholders bound positionally by list
+                    # index in ``_convert_to_named_parameters`` (``{p{i}: params[i]}``).
+                    # The tenant value is appended to the END of the params list
+                    # below, so its placeholder MUST be ``:p{len(params)}`` (its
+                    # future index) — NOT a ``?``. A ``?`` here would be renumbered
+                    # to ``:p0`` downstream (counter restarts at 0) and collide with
+                    # the existing ``:p0``, binding tenant_id to the first value.
+                    value_ph = f":p{len(modified_params)}"
                 else:
                     value_ph = "?"
                 new_columns = f"{columns}, {self.tenant_column}"
@@ -1171,6 +1196,28 @@ class QueryInterceptor:
         # mixed dialects on PostgreSQL (``$N``) and left existing ``$N``
         # unrenumbered after the insertion shifted positions.
         style = self._detect_placeholder_style(modified_query)
+
+        # Issue #1518: named ``:pN`` (SQLite precheck-upsert UPDATE, issue #1508)
+        # binds by NAME downstream, not by textual position, so the tenant value
+        # is APPENDED to the params list and referenced as ``:p{len(params)}``
+        # (its future index) regardless of where the predicate text lands. The
+        # positional path below (insert-at-index + $N renumber) is WRONG for
+        # ``:pN`` — inserting mid-list would shift every existing ``:pN`` binding.
+        if style == "colon":
+            tenant_ph = f":p{len(modified_params)}"
+            predicate = f"{self.tenant_column} = {tenant_ph}"
+            if "WHERE" in modified_query.upper():
+                where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
+                modified_query = (
+                    modified_query[: where_match.end()]
+                    + f"{predicate} AND "
+                    + modified_query[where_match.end() :]
+                )
+            else:
+                modified_query += f" WHERE {predicate}"
+            modified_params.append(self.tenant_id)
+            return modified_query, modified_params
+
         tenant_ph = self._tenant_placeholder_for_style(style)
         predicate = f"{self.tenant_column} = {tenant_ph}"
 
