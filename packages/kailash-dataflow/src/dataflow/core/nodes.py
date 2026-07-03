@@ -49,6 +49,9 @@ except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
+from .exceptions import (  # Issue #1519: typed conflict-target error propagation
+    BulkUpsertConflictTargetError,
+)
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -3389,6 +3392,27 @@ class NodeGenerator:
                         where.keys()
                     )
 
+                    # rules/dataflow-identifier-safety.md MUST-1 (redteam, #1519
+                    # sibling class on the single-record path): the dialect
+                    # builders interpolate table_name + column names (conflict
+                    # target, INSERT/UPDATE columns, WHERE-precheck keys) as bare
+                    # identifiers — drivers cannot bind identifiers. Record keys
+                    # come from user-supplied create/update payloads and are NOT
+                    # constrained to declared model fields upstream, so validate
+                    # every interpolated identifier against the strict allowlist
+                    # BEFORE the dialect builds SQL (same defense as the bulk
+                    # path in features/bulk.py::bulk_upsert).
+                    from kailash.db.dialect import _validate_identifier as _vid
+
+                    _vid(table_name)
+                    for _col in (
+                        set(conflict_columns)
+                        | set(where.keys())
+                        | set(insert_data.keys())
+                        | set(update_data.keys())
+                    ):
+                        _vid(_col)
+
                     # Get SQL dialect for database-specific query generation
                     from ..sql.dialects import SQLDialectFactory
 
@@ -4064,12 +4088,28 @@ class NodeGenerator:
                     ):
                         # Use DataFlow's bulk upsert operations
                         try:
+                            # Issue #1519: the express layer sets
+                            # ``node.conflict_columns`` as an instance attribute
+                            # (features/express.py); the workflow layer passes
+                            # ``conflict_on`` in kwargs. Resolve from either.
+                            conflict_on = kwargs_fixed.get("conflict_on") or getattr(
+                                self, "conflict_columns", None
+                            )
+                            # Issue #1519: the express/generated bulk_upsert
+                            # contract is insert-or-UPDATE. Default to "update"
+                            # (DO UPDATE), NOT "skip" (DO NOTHING) — a PK conflict
+                            # under the old "skip" default silently dropped the
+                            # row instead of updating it.
+                            conflict_resolution = (
+                                kwargs_fixed.get("conflict_resolution")
+                                or getattr(self, "conflict_resolution", None)
+                                or "update"
+                            )
                             bulk_result = await self.dataflow_instance.bulk.bulk_upsert(
                                 model_name=self.model_name,
                                 data=data,
-                                conflict_resolution=kwargs_fixed.get(
-                                    "conflict_resolution", "skip"
-                                ),
+                                conflict_resolution=conflict_resolution,
+                                conflict_on=conflict_on,
                                 batch_size=batch_size,
                                 **{
                                     k: v
@@ -4079,6 +4119,8 @@ class NodeGenerator:
                                         "data",
                                         "batch_size",
                                         "conflict_resolution",
+                                        "conflict_on",
+                                        "conflict_columns",
                                         "model_name",
                                         "db_instance",
                                     ]
@@ -4100,18 +4142,22 @@ class NodeGenerator:
                                     },
                                 )
 
+                            records_processed = bulk_result.get("records_processed", 0)
                             result = {
-                                "processed": bulk_result.get("records_processed", 0),
-                                "upserted": bulk_result.get(
-                                    "records_processed", 0
-                                ),  # Alias for compatibility
+                                "processed": records_processed,
+                                "upserted": records_processed,  # Alias for compatibility
+                                # Issue #1519: express reads ``total`` for the
+                                # user-facing count; expose it from the real
+                                # records_processed.
+                                "total": records_processed,
                                 "batch_size": batch_size,
                                 "operation": operation,
                                 "success": bulk_result.get("success", True),
                             }
 
-                            # Expose detailed upsert stats if available from underlying operation
-                            # Note: bulk_upsert is currently a STUB - these values are simulated
+                            # Issue #1519: expose the real per-row counts derived
+                            # by the bulk engine (PG xmax / SQLite pre-count /
+                            # MySQL row_count). No longer a stub.
                             if "inserted" in bulk_result:
                                 result["inserted"] = bulk_result["inserted"]
                             if "updated" in bulk_result:
@@ -4126,6 +4172,11 @@ class NodeGenerator:
                             ):
                                 result["error"] = bulk_result["error"]
                             return result
+                        except BulkUpsertConflictTargetError:
+                            # Issue #1519: caller-actionable conflict-target error
+                            # MUST propagate as a typed raise, not flatten into a
+                            # {"success": False} dict the express layer ignores.
+                            raise
                         except Exception as e:
                             logger.error(
                                 "nodes.bulk_upsert_operation_failed",

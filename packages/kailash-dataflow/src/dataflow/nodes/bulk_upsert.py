@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -12,23 +11,17 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
-# #499 finding 5 — PG/MySQL drivers embed raw column values in DETAIL /
+# #499 finding 5 / #1519 — PG/MySQL drivers embed raw column values in DETAIL /
 # Key(...)=(…) clauses. Strip them before any log or return-value echo so
 # PII / SECRET column values cannot leak through the observability layer.
-# The surrounding error text (class of failure, table, constraint name)
-# stays so operators retain triage signal.
-_DETAIL_RE = re.compile(r"DETAIL:[^\n]*", re.IGNORECASE)
-_KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
-
-
-def _sanitize_db_error(msg: str) -> str:
-    """Redact column values from DB driver error messages."""
-    if not isinstance(msg, str):
-        return "<non-string error>"
-    msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
-    msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
-    return msg
-
+# The redactor is a single shared helper in ``core.exceptions`` so this node
+# and the express bulk engine (``features/bulk.py``) scrub identically — one
+# implementation, no drift (rules/security.md § Multi-Site Kwarg Plumbing).
+from ..core.exceptions import (  # Issue #1519: typed conflict-target error
+    BulkUpsertConflictTargetError,
+    is_conflict_target_error,
+)
+from ..core.exceptions import sanitize_db_error as _sanitize_db_error
 
 # Allowlist of supported dialects. Unknown values (typos like "postgres",
 # "pg") MUST raise loudly rather than fall through to SQLite REPLACE
@@ -218,10 +211,12 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     **kwargs_copy,
                 )
             else:
-                # Dry run or fallback mock
+                # Dry run: nothing is written, so no honest insert/update split
+                # exists (issue #1519 — no fabricated `// 2`). ``would_upsert``
+                # below reports the row count that WOULD be affected.
                 rows_affected = len(data)
-                inserted_count = len(data) // 2  # Mock estimation
-                updated_count = len(data) - inserted_count
+                inserted_count = 0
+                updated_count = 0
                 upserted_records = []
                 duplicates_removed = 0  # No deduplication in dry run
 
@@ -289,8 +284,11 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
             return result
 
-        except (ValueError, NodeValidationError):
-            # Let validation errors propagate for proper test handling
+        except (ValueError, NodeValidationError, BulkUpsertConflictTargetError):
+            # Issue #1519: a conflict-target error is a caller error, not a
+            # transient DB failure — surface it as a typed raise (like ValueError
+            # / NodeValidationError) instead of flattening it into a
+            # {"success": False} dict a caller might treat as a soft outcome.
             raise
         except Exception as e:
             return {"success": False, "error": str(e), "rows_affected": 0}
@@ -365,11 +363,24 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
                 # Execute batch using connection pool if available, otherwise fallback
                 try:
+                    # Issue #1519: derive REAL insert/update counts from a
+                    # pre-count of existing conflict-target keys (no fabricated
+                    # `// 2`). The batch is already deduped on conflict_on, so
+                    # each matching pre-existing key is exactly one UPDATE.
+                    preexisting = await self._count_existing_conflicts(
+                        batch, conflict_on, **kwargs
+                    )
                     result = await self._execute_query(query, params=params, **kwargs)
 
                     # Process result to count upserts and get records
                     batch_rows, batch_inserted, batch_updated, batch_records = (
-                        self._process_upsert_result(result, len(batch), return_records)
+                        self._process_upsert_result(
+                            result,
+                            len(batch),
+                            return_records,
+                            merge_strategy,
+                            preexisting,
+                        )
                     )
                     total_rows_affected += batch_rows
                     total_inserted += batch_inserted
@@ -378,7 +389,18 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     if return_records and batch_records:
                         all_upserted_records.extend(batch_records)
 
+                except BulkUpsertConflictTargetError:
+                    # Issue #1519: an unmatched ON CONFLICT target is a caller
+                    # error affecting EVERY batch — fail fast, don't accumulate
+                    # it as a per-batch partial failure.
+                    raise
                 except Exception as batch_error:
+                    if is_conflict_target_error(str(batch_error)):
+                        raise BulkUpsertConflictTargetError(
+                            conflict_on=conflict_on,
+                            model_name=self.table_name,
+                            original_error=batch_error,
+                        ) from batch_error
                     # rules/observability.md Rule 7 — bulk partial-failure WARN
                     # MUST include the error message so operators can triage.
                     # rules/security.md + #499 finding 5: DB drivers often
@@ -414,6 +436,10 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                 duplicates_removed,
             )
 
+        except BulkUpsertConflictTargetError:
+            # Issue #1519: caller-actionable typed error MUST propagate as-is,
+            # not be re-wrapped in a generic NodeExecutionError.
+            raise
         except Exception as e:
             raise NodeExecutionError(f"Database upsert error: {str(e)}")
 
@@ -535,94 +561,195 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             f"VALUES {', '.join(value_rows)}"
         )
 
-        if dialect == "postgresql":
-            conflict_columns_str = ", ".join(conflict_on)
+        conflict_columns_str = ", ".join(conflict_on)
 
+        if dialect == "postgresql":
             if merge_strategy == "ignore":
                 query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
             else:  # update strategy
-                update_clauses = []
-                for col in columns:
-                    if col not in conflict_on and col not in [
-                        "id",
-                        "created_at",
-                    ]:
-                        if col == self.version_field and self.version_control:
-                            update_clauses.append(
-                                f"{col} = {self.table_name}.{col} + 1"
-                            )
-                        elif col == "updated_at" and self.auto_timestamps:
-                            update_clauses.append(f"{col} = CURRENT_TIMESTAMP")
-                        else:
-                            update_clauses.append(f"{col} = EXCLUDED.{col}")
-
+                update_clauses = self._build_update_clauses(columns, conflict_on)
                 if update_clauses:
-                    update_clause = ", ".join(update_clauses)
                     query = (
                         f"{base_query} ON CONFLICT ({conflict_columns_str}) "
-                        f"DO UPDATE SET {update_clause}"
+                        f"DO UPDATE SET {', '.join(update_clauses)}"
                     )
                 else:
                     query = (
                         f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
                     )
-        else:
-            # SQLite/MySQL fallback uses INSERT OR REPLACE semantics.
-            query = base_query.replace("INSERT INTO", "INSERT OR REPLACE INTO")
-
-        if dialect == "postgresql" and return_records:
-            query += " RETURNING *"
+            if return_records:
+                query += " RETURNING *"
+        elif dialect == "sqlite":
+            # Issue #1519: SQLite honors conflict_on via native ON CONFLICT
+            # (NOT INSERT OR REPLACE, which ignores conflict_on and replaces the
+            # whole row, discarding un-supplied columns + firing FK cascades).
+            if merge_strategy == "ignore":
+                query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
+            else:
+                update_clauses = self._build_update_clauses(
+                    columns, conflict_on, sqlite=True
+                )
+                if update_clauses:
+                    query = (
+                        f"{base_query} ON CONFLICT ({conflict_columns_str}) "
+                        f"DO UPDATE SET {', '.join(update_clauses)}"
+                    )
+                else:
+                    query = (
+                        f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
+                    )
+            if return_records:
+                query += " RETURNING *"
+        else:  # mysql
+            # Issue #1519: MySQL uses ON DUPLICATE KEY UPDATE (INSERT OR REPLACE
+            # is not valid MySQL syntax). MySQL auto-detects the violated unique
+            # key, so conflict_on governs only which columns are excluded.
+            if merge_strategy == "ignore":
+                noop = conflict_on[0] if conflict_on else "id"
+                query = f"{base_query} ON DUPLICATE KEY UPDATE {noop} = {noop}"
+            else:
+                update_clauses = self._build_update_clauses(
+                    columns, conflict_on, mysql=True
+                )
+                if update_clauses:
+                    query = (
+                        f"{base_query} ON DUPLICATE KEY UPDATE "
+                        f"{', '.join(update_clauses)}"
+                    )
+                else:
+                    noop = conflict_on[0] if conflict_on else "id"
+                    query = f"{base_query} ON DUPLICATE KEY UPDATE {noop} = {noop}"
 
         return query, params
 
+    def _build_update_clauses(
+        self,
+        columns: List[str],
+        conflict_on: List[str],
+        *,
+        sqlite: bool = False,
+        mysql: bool = False,
+    ) -> List[str]:
+        """Build the SET clauses for a DO UPDATE / ON DUPLICATE KEY UPDATE.
+
+        Excludes conflict-target columns and the immutable ``id`` / ``created_at``
+        columns. ``version_field`` increments; ``updated_at`` uses
+        ``CURRENT_TIMESTAMP``; everything else copies the incoming value with the
+        dialect-appropriate reference (``EXCLUDED.col`` on PG/SQLite,
+        ``VALUES(col)`` on MySQL).
+        """
+        clauses: List[str] = []
+        for col in columns:
+            if col in conflict_on or col in ("id", "created_at"):
+                continue
+            if col == self.version_field and self.version_control:
+                clauses.append(f"{col} = {self.table_name}.{col} + 1")
+            elif col == "updated_at" and self.auto_timestamps:
+                clauses.append(f"{col} = CURRENT_TIMESTAMP")
+            elif mysql:
+                clauses.append(f"{col} = VALUES({col})")
+            else:  # postgresql / sqlite both use excluded/EXCLUDED
+                ref = "excluded" if sqlite else "EXCLUDED"
+                clauses.append(f"{col} = {ref}.{col}")
+        return clauses
+
     def _process_upsert_result(
-        self, result: Dict[str, Any], batch_size: int, return_records: bool = False
+        self,
+        result: Dict[str, Any],
+        batch_size: int,
+        return_records: bool,
+        merge_strategy: str,
+        preexisting_count: int,
     ) -> tuple[int, int, int, List[Dict[str, Any]]]:
-        """Process AsyncSQLDatabaseNode result to extract counts and records."""
-        rows_affected = 0
-        inserted_count = 0
-        updated_count = 0
-        upserted_records = []
+        """Process AsyncSQLDatabaseNode result to extract counts and records.
 
-        if "result" in result and result["result"]:
+        Issue #1519: counts are DERIVED, not fabricated. The batch is deduped on
+        conflict_on, so ``preexisting_count`` (rows whose conflict key already
+        exists) IS the number of UPDATEs. There is no ``// 2`` heuristic.
+
+        - ``update`` strategy: every batch row is inserted OR updated →
+          updated = preexisting, inserted = batch_size - preexisting,
+          rows_affected = batch_size.
+        - ``ignore`` strategy: only new rows land →
+          inserted = batch_size - preexisting, updated = 0,
+          rows_affected = inserted.
+        """
+        upserted_records: List[Dict[str, Any]] = []
+        if return_records and "result" in result and result["result"]:
             result_data = result["result"]
+            data = result_data.get("data")
+            if (
+                isinstance(data, list)
+                and data
+                and isinstance(data[0], dict)
+                and ("id" in data[0] or len(data[0]) > 1)
+            ):
+                upserted_records = data
 
-            if "data" in result_data and isinstance(result_data["data"], list):
-                data = result_data["data"]
-
-                if data and isinstance(data[0], dict):
-                    if "id" in data[0]:
-                        # RETURNING clause results
-                        upserted_records = data
-                        rows_affected = len(upserted_records)
-                        # For now, assume half are inserts and half are updates (could be improved)
-                        inserted_count = rows_affected // 2
-                        updated_count = rows_affected - inserted_count
-                    elif "rows_affected" in data[0] and len(data[0]) == 1:
-                        # Metadata response - use batch_size
-                        rows_affected = batch_size
-                        inserted_count = batch_size // 2
-                        updated_count = batch_size - inserted_count
-                    else:
-                        # Other data - count the records
-                        rows_affected = len(data)
-                        inserted_count = rows_affected // 2
-                        updated_count = rows_affected - inserted_count
-            elif "row_count" in result_data:
-                # For UPSERT operations without RETURNING
-                rows_affected = batch_size
-                inserted_count = batch_size // 2
-                updated_count = batch_size - inserted_count
-            else:
-                rows_affected = batch_size  # Assume success for UPSERT
-                inserted_count = batch_size // 2
-                updated_count = batch_size - inserted_count
-        else:
-            rows_affected = batch_size  # Assume success if no specific result
-            inserted_count = batch_size // 2
-            updated_count = batch_size - inserted_count
+        preexisting = max(0, min(preexisting_count, batch_size))
+        if merge_strategy == "ignore":
+            inserted_count = batch_size - preexisting
+            updated_count = 0
+            rows_affected = inserted_count
+        else:  # update
+            updated_count = preexisting
+            inserted_count = batch_size - preexisting
+            rows_affected = batch_size
 
         return rows_affected, inserted_count, updated_count, upserted_records
+
+    async def _count_existing_conflicts(
+        self, batch: List[Dict[str, Any]], conflict_on: List[str], **kwargs
+    ) -> int:
+        """Count rows already present matching the batch's conflict-target keys.
+
+        Issue #1519: gives the real UPDATE count without relying on a per-row
+        insert/update flag (which SQLite's RETURNING cannot provide). Uses
+        OR-of-AND equality with dialect-appropriate placeholders. NULL conflict
+        values never match a UNIQUE target and are skipped. Every conflict
+        column is validated (``_validate_identifier``) before interpolation.
+        """
+        dialect = (self.database_type or "postgresql").lower()
+        for col in conflict_on:
+            _validate_identifier(col)
+
+        clauses: List[str] = []
+        params: List[Any] = []
+        for record in batch:
+            vals = [record.get(col) for col in conflict_on]
+            if any(v is None for v in vals):
+                continue
+            conds = []
+            for col in conflict_on:
+                if dialect == "postgresql":
+                    conds.append(f"{col} = ${len(params) + 1}")
+                elif dialect == "mysql":
+                    conds.append(f"{col} = %s")
+                else:  # sqlite
+                    conds.append(f"{col} = ?")
+                params.append(record.get(col))
+            clauses.append(f"({' AND '.join(conds)})")
+
+        if not clauses:
+            return 0
+
+        query = (
+            f"SELECT COUNT(*) AS match_count FROM {self.table_name} "
+            f"WHERE {' OR '.join(clauses)}"
+        )
+        result = await self._execute_query(query, params=params, **kwargs)
+        rows = []
+        if result and "result" in result and result["result"]:
+            rows = result["result"].get("data", []) or []
+        if rows and isinstance(rows[0], dict):
+            value = (
+                rows[0].get("match_count")
+                or rows[0].get("COUNT(*)")
+                or rows[0].get("count")
+                or 0
+            )
+            return int(value)
+        return 0
 
     async def _execute_query(
         self,

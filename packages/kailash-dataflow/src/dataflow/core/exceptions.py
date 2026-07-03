@@ -18,6 +18,7 @@ loop into a single, loud, fail-fast error at the next access.
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 # Re-export the public DataFlow base error so callers can `except
@@ -111,4 +112,106 @@ class DDLFailedError(DataFlowError):
         super().__init__(" — ".join(parts))
 
 
-__all__ = ["DDLFailedError", "DataFlowError"]
+class BulkUpsertConflictTargetError(DataFlowError):
+    """Raised when a bulk upsert's ``conflict_on`` target is not backed by a
+    PRIMARY KEY or UNIQUE constraint.
+
+    Native single-statement upsert (``INSERT ... ON CONFLICT (cols) DO UPDATE``
+    on PostgreSQL/SQLite, ``ON DUPLICATE KEY UPDATE`` on MySQL) requires the
+    conflict-target columns to be a PK or UNIQUE key. When they are not, the
+    database rejects the statement ("ON CONFLICT clause does not match any
+    PRIMARY KEY or UNIQUE constraint" / "there is no unique or exclusion
+    constraint matching the ON CONFLICT specification"). DataFlow converts that
+    opaque driver error into this actionable typed error rather than silently
+    falling back to ``ON CONFLICT (id)`` (which would ignore the caller's intent
+    and land duplicate rows).
+
+    Attributes:
+        conflict_on: The conflict-target columns the caller requested.
+        model_name: The model the upsert targeted (best-effort; may be None).
+        original_error: The underlying driver exception, if any.
+
+    Recovery:
+
+    1. Declare the field(s) ``unique=True`` on the model (or add a UNIQUE
+       index / constraint) so the conflict target is enforceable.
+    2. For genuinely non-unique keys, use single-record ``db.express.upsert``
+       which does a WHERE-precheck instead of a native ON CONFLICT clause —
+       bulk upsert on a non-unique key is ambiguous when the batch itself
+       contains duplicate keys.
+    """
+
+    def __init__(
+        self,
+        conflict_on: Optional[list] = None,
+        model_name: Optional[str] = None,
+        original_error: Optional[BaseException] = None,
+    ) -> None:
+        self.conflict_on = list(conflict_on or [])
+        self.model_name = model_name
+        self.original_error = original_error
+
+        cols = ", ".join(self.conflict_on) or "<none>"
+        model_part = f" on model '{model_name}'" if model_name else ""
+        super().__init__(
+            f"bulk_upsert conflict_on={self.conflict_on!r}{model_part} does not "
+            f"match any PRIMARY KEY or UNIQUE constraint. Native bulk upsert "
+            f"requires the conflict-target column(s) ({cols}) to be backed by a "
+            f"PK or UNIQUE key. Remediation: declare the field(s) unique=True "
+            f"(or add a UNIQUE index), OR — for genuinely non-unique keys — use "
+            f"single-record db.express.upsert (WHERE-precheck) instead of bulk "
+            f"upsert, which is ambiguous when a batch contains duplicate keys."
+        )
+
+
+def is_conflict_target_error(message: str) -> bool:
+    """True iff a driver error signals an unmatched ON CONFLICT target (#1519).
+
+    SQLite emits "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE
+    constraint"; PostgreSQL emits "there is no unique or exclusion constraint
+    matching the ON CONFLICT specification". Shared by the express bulk engine
+    (``features/bulk.py``) and the workflow node (``nodes/bulk_upsert.py``) so
+    both convert the opaque driver message into
+    :class:`BulkUpsertConflictTargetError` rather than a silent fallback.
+    """
+    m = (message or "").lower()
+    return (
+        "does not match any primary key or unique constraint" in m
+        or "no unique or exclusion constraint matching the on conflict" in m
+    )
+
+
+# DB driver errors embed column VALUES in "DETAIL: Key (col)=(value) already
+# exists" clauses. Those values may be user data / PII; they MUST be redacted
+# before a driver message is logged or returned to a caller. Shared by the
+# express bulk engine (``features/bulk.py``) and the workflow node
+# (``nodes/bulk_upsert.py``) so both surfaces scrub identically — one helper,
+# no drift (rules/security.md § Multi-Site Kwarg Plumbing; rules/observability.md
+# Rule 8).
+_DETAIL_RE = re.compile(r"DETAIL:[^\n]*", re.IGNORECASE)
+_KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
+
+
+def sanitize_db_error(msg: str) -> str:
+    """Redact column VALUES from a DB driver error message.
+
+    Preserves the diagnostic SHAPE (the constraint/column names in
+    ``Key (col)=...`` and the presence of a ``DETAIL:`` clause) while
+    replacing the value payload with ``[REDACTED]`` so a unique-violation
+    on a column OTHER than the conflict target cannot leak user data into
+    logs or the returned error string.
+    """
+    if not isinstance(msg, str):
+        return "<non-string error>"
+    msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
+    msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
+    return msg
+
+
+__all__ = [
+    "DDLFailedError",
+    "BulkUpsertConflictTargetError",
+    "is_conflict_target_error",
+    "sanitize_db_error",
+    "DataFlowError",
+]

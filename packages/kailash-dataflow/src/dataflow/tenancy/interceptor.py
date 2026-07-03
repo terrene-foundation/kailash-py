@@ -1026,8 +1026,7 @@ class QueryInterceptor:
                             upsert builders generally: the SQLite precheck path
                             (``build_precheck_upsert_query``, issue #1508) AND
                             the native ``ON CONFLICT`` builders for every dialect
-                            (``build_upsert_query`` on PG/SQLite/MySQL) plus
-                            ``build_bulk_upsert_query`` (``sql/dialects.py``).
+                            (``build_upsert_query`` on PG/SQLite/MySQL).
                             Bound by NAME
                             downstream (``_convert_to_named_parameters`` maps the
                             positional params list to ``{p0, p1, ...}`` by index),

@@ -67,30 +67,6 @@ class SQLDialect(ABC):
         """
         pass
 
-    @abstractmethod
-    def build_bulk_upsert_query(
-        self,
-        table_name: str,
-        records: List[Dict[str, Any]],
-        conflict_columns: List[str],
-        update_fields: List[str],
-        has_updated_at: bool = False,
-    ) -> UpsertQuery:
-        """
-        Build database-specific bulk upsert query.
-
-        Args:
-            table_name: Name of the table
-            records: List of records to upsert
-            conflict_columns: Columns that define uniqueness for conflict detection
-            update_fields: Fields to update on conflict
-            has_updated_at: Whether the model has an updated_at timestamp field
-
-        Returns:
-            UpsertQuery with query string, parameters, and native flag support info
-        """
-        pass
-
     def build_precheck_upsert_query(
         self,
         table_name: str,
@@ -255,70 +231,6 @@ class PostgreSQLDialect(SQLDialect):
             supports_native_flag=True,  # PostgreSQL has xmax
         )
 
-    def build_bulk_upsert_query(
-        self,
-        table_name: str,
-        records: List[Dict[str, Any]],
-        conflict_columns: List[str],
-        update_fields: List[str],
-        has_updated_at: bool = False,
-    ) -> UpsertQuery:
-        """Build PostgreSQL bulk upsert with xmax detection."""
-
-        if not records:
-            raise ValueError("Cannot build bulk upsert query with empty records list")
-
-        # Get columns from first record
-        columns = list(records[0].keys())
-
-        # Build VALUES clause with placeholders
-        values_clauses = []
-        params = {}
-        param_idx = 0
-
-        for record in records:
-            placeholders = []
-            for col in columns:
-                param_key = f"p{param_idx}"
-                placeholders.append(f":{param_key}")
-                params[param_key] = record[col]
-                param_idx += 1
-            values_clauses.append(f"({', '.join(placeholders)})")
-
-        values_str = ",\n            ".join(values_clauses)
-
-        # Build ON CONFLICT clause
-        conflict_cols_str = ", ".join(conflict_columns)
-
-        # Build UPDATE clause
-        update_clauses = []
-        for field in update_fields:
-            if field not in conflict_columns and field != "id":
-                update_clauses.append(f"{field} = EXCLUDED.{field}")
-
-        if has_updated_at:
-            update_clauses.append("updated_at = CURRENT_TIMESTAMP")
-
-        update_clause_str = (
-            ", ".join(update_clauses) if update_clauses else "id = EXCLUDED.id"
-        )
-
-        # Build complete query
-        query = f"""
-            INSERT INTO {table_name} ({", ".join(columns)})
-            VALUES
-            {values_str}
-            ON CONFLICT ({conflict_cols_str})
-            DO UPDATE SET {update_clause_str}
-            RETURNING id, (xmax = 0) AS inserted
-        """
-
-        return UpsertQuery(
-            query=query.strip(),
-            params=params,
-            supports_native_flag=True,  # PostgreSQL has xmax
-        )
-
 
 class SQLiteDialect(SQLDialect):
     """
@@ -392,70 +304,6 @@ class SQLiteDialect(SQLDialect):
             supports_native_flag=False,  # SQLite needs pre-check for INSERT/UPDATE detection
         )
 
-    def build_bulk_upsert_query(
-        self,
-        table_name: str,
-        records: List[Dict[str, Any]],
-        conflict_columns: List[str],
-        update_fields: List[str],
-        has_updated_at: bool = False,
-    ) -> UpsertQuery:
-        """Build SQLite bulk upsert without xmax detection."""
-
-        if not records:
-            raise ValueError("Cannot build bulk upsert query with empty records list")
-
-        # Get columns from first record
-        columns = list(records[0].keys())
-
-        # Build VALUES clause with placeholders
-        values_clauses = []
-        params = {}
-        param_idx = 0
-
-        for record in records:
-            placeholders = []
-            for col in columns:
-                param_key = f"p{param_idx}"
-                placeholders.append(f":{param_key}")
-                params[param_key] = record[col]
-                param_idx += 1
-            values_clauses.append(f"({', '.join(placeholders)})")
-
-        values_str = ",\n            ".join(values_clauses)
-
-        # Build ON CONFLICT clause
-        conflict_cols_str = ", ".join(conflict_columns)
-
-        # Build UPDATE clause
-        update_clauses = []
-        for field in update_fields:
-            if field not in conflict_columns and field != "id":
-                update_clauses.append(f"{field} = EXCLUDED.{field}")
-
-        if has_updated_at:
-            update_clauses.append("updated_at = CURRENT_TIMESTAMP")
-
-        update_clause_str = (
-            ", ".join(update_clauses) if update_clauses else "id = EXCLUDED.id"
-        )
-
-        # Build complete query WITHOUT xmax flag (use constant 1 as placeholder)
-        query = f"""
-            INSERT INTO {table_name} ({", ".join(columns)})
-            VALUES
-            {values_str}
-            ON CONFLICT ({conflict_cols_str})
-            DO UPDATE SET {update_clause_str}
-            RETURNING id, 1 AS inserted
-        """
-
-        return UpsertQuery(
-            query=query.strip(),
-            params=params,
-            supports_native_flag=False,  # SQLite needs pre-check
-        )
-
 
 class MySQLDialect(SQLDialect):
     """
@@ -503,65 +351,6 @@ class MySQLDialect(SQLDialect):
 
         # Build parameters
         params = {f"p{i}": insert_data[col] for i, col in enumerate(insert_columns)}
-
-        return UpsertQuery(
-            query=query.strip(),
-            params=params,
-            supports_native_flag=False,  # MySQL needs ROW_COUNT() check
-        )
-
-    def build_bulk_upsert_query(
-        self,
-        table_name: str,
-        records: List[Dict[str, Any]],
-        conflict_columns: List[str],
-        update_fields: List[str],
-        has_updated_at: bool = False,
-    ) -> UpsertQuery:
-        """Build MySQL bulk upsert with ON DUPLICATE KEY UPDATE."""
-
-        if not records:
-            raise ValueError("Cannot build bulk upsert query with empty records list")
-
-        # Get columns from first record
-        columns = list(records[0].keys())
-
-        # Build VALUES clause with placeholders
-        values_clauses = []
-        params = {}
-        param_idx = 0
-
-        for record in records:
-            placeholders = []
-            for col in columns:
-                param_key = f"p{param_idx}"
-                placeholders.append(f":{param_key}")
-                params[param_key] = record[col]
-                param_idx += 1
-            values_clauses.append(f"({', '.join(placeholders)})")
-
-        values_str = ",\n            ".join(values_clauses)
-
-        # Build UPDATE clause
-        update_clauses = []
-        for field in update_fields:
-            if field not in conflict_columns and field != "id":
-                update_clauses.append(f"{field} = VALUES({field})")
-
-        if has_updated_at:
-            update_clauses.append("updated_at = CURRENT_TIMESTAMP")
-
-        update_clause_str = (
-            ", ".join(update_clauses) if update_clauses else "id = VALUES(id)"
-        )
-
-        # Build complete query
-        query = f"""
-            INSERT INTO {table_name} ({", ".join(columns)})
-            VALUES
-            {values_str}
-            ON DUPLICATE KEY UPDATE {update_clause_str}
-        """
 
         return UpsertQuery(
             query=query.strip(),
