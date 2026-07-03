@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.3] - 2026-07-03
+
+### Fixed
+
+- **SQLite shared-cache `:memory:` cross-thread support for `SQLDatabaseNode` (#1502).** For a SQLite **memory** connection string only, `SQLDatabaseNode` now uses `StaticPool` + `check_same_thread=False` (and normalizes a `file:` shared-cache URI to `sqlite:///file:...&uri=true`) so the sync model-registry path executed in a thread pool no longer raises `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread`. File-backed SQLite, PostgreSQL, and MySQL keep `QueuePool` byte-for-byte (the branch is guarded on `mode=memory`/`:memory:`).
+- **Added `SQLDatabaseNode.dispose_pools_for(connection_string)`** — a targeted, per-connection-string pool dispose (vs the global `cleanup_pools`) so a caller can release exactly its own shared pools at teardown without disturbing other live instances (used by DataFlow's `:memory:` teardown to prevent a leaked shared-cache DB + `id()`-reuse cross-instance aliasing).
+
 ## [2.45.2] - 2026-07-03
 
 ### Fixed
