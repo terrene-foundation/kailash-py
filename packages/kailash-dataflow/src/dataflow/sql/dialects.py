@@ -91,6 +91,98 @@ class SQLDialect(ABC):
         """
         pass
 
+    def build_precheck_upsert_query(
+        self,
+        table_name: str,
+        insert_data: Dict[str, Any],
+        update_data: Dict[str, Any],
+        where: Dict[str, Any],
+        row_exists: bool,
+        has_updated_at: bool = False,
+    ) -> UpsertQuery:
+        """Build an upsert as an explicit INSERT or UPDATE from a caller-supplied
+        existence pre-check result, instead of ``INSERT ... ON CONFLICT``.
+
+        ``ON CONFLICT (target)`` requires the conflict target to be backed by a
+        PRIMARY KEY or UNIQUE constraint; a ``conflict_on`` field that is not
+        declared unique is rejected with "ON CONFLICT clause does not match any
+        PRIMARY KEY or UNIQUE constraint" (issue #1508). Dialects that lack
+        native INSERT/UPDATE detection (SQLite has no PostgreSQL ``xmax``) already
+        run a WHERE-based pre-check to detect INSERT vs UPDATE; that same result
+        lets us emit a plain INSERT (row absent) or UPDATE ... WHERE (row present)
+        with no reliance on a unique constraint. Values are parameter-bound; the
+        interpolated identifiers are model field names resolved from the schema.
+
+        Concrete on the base because the pattern is dialect-agnostic. It is only
+        invoked on the pre-check path (SQLite today); native-detection dialects
+        (PostgreSQL) keep ``build_upsert_query``'s atomic ``ON CONFLICT`` form.
+
+        Placeholders use the ``:p<i>`` sequence and ``params`` is built in the
+        same order, because AsyncSQLDatabaseNode rebuilds the parameter dict
+        positionally from ``list(params.values())`` — placeholder index MUST
+        match value order (see ``build_upsert_query``).
+        """
+        if not row_exists:
+            insert_columns = list(insert_data.keys())
+            placeholders = [f":p{i}" for i in range(len(insert_columns))]
+            query = (
+                f"INSERT INTO {table_name} ({', '.join(insert_columns)})\n"
+                f"            VALUES ({', '.join(placeholders)})\n"
+                f"            RETURNING *"
+            )
+            params = {f"p{i}": insert_data[col] for i, col in enumerate(insert_columns)}
+            return UpsertQuery(
+                query=query.strip(), params=params, supports_native_flag=False
+            )
+
+        # Row exists → UPDATE ... WHERE <where>. Exclude the primary key and the
+        # where/identity columns from the SET clause (updating the identity would
+        # move the row out from under the WHERE match).
+        if not where:
+            # Defensive: the UPDATE branch needs a non-empty WHERE to identify the
+            # row (an empty WHERE would emit invalid SQL and, worse, an unscoped
+            # UPDATE). Unreachable via the upsert node — the pre-check SELECT and
+            # upsert semantics both require a key — but guarded because this is a
+            # public base-class method.
+            raise ValueError(
+                "build_precheck_upsert_query: UPDATE branch requires a non-empty "
+                "'where' to identify the row"
+            )
+        set_clauses: List[str] = []
+        params: Dict[str, Any] = {}
+        idx = 0
+        for col in update_data.keys():
+            if col == "id" or col in where:
+                continue
+            params[f"p{idx}"] = update_data[col]
+            set_clauses.append(f"{col} = :p{idx}")
+            idx += 1
+
+        if has_updated_at:
+            set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+
+        if not set_clauses:
+            # Nothing substantive to update (update payload only named id/where
+            # keys). Emit a no-op self-assignment on the first where column so the
+            # UPDATE still matches the row and RETURNING yields it.
+            first_col = next(iter(where))
+            set_clauses.append(f"{first_col} = {first_col}")
+
+        where_clauses: List[str] = []
+        for col in where.keys():
+            params[f"p{idx}"] = where[col]
+            where_clauses.append(f"{col} = :p{idx}")
+            idx += 1
+
+        query = (
+            f"UPDATE {table_name} SET {', '.join(set_clauses)}\n"
+            f"            WHERE {' AND '.join(where_clauses)}\n"
+            f"            RETURNING *"
+        )
+        return UpsertQuery(
+            query=query.strip(), params=params, supports_native_flag=False
+        )
+
 
 class PostgreSQLDialect(SQLDialect):
     """
