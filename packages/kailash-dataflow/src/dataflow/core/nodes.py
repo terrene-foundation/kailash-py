@@ -3458,14 +3458,30 @@ class NodeGenerator:
 
                         created_flag = not row_exists
 
-                    # Build upsert query using dialect abstraction
-                    upsert_query = dialect.build_upsert_query(
-                        table_name=table_name,
-                        insert_data=insert_data,
-                        update_data=update_data,
-                        conflict_columns=conflict_columns,
-                        has_updated_at=has_updated_at,
-                    )
+                    # Build upsert query using dialect abstraction.
+                    # SQLite: emit an explicit INSERT/UPDATE from the pre-check
+                    # result (row_exists) instead of INSERT ... ON CONFLICT, which
+                    # requires the conflict target to be backed by a UNIQUE
+                    # constraint. A conflict_on field that is not declared unique
+                    # would otherwise fail with "ON CONFLICT clause does not match
+                    # any PRIMARY KEY or UNIQUE constraint" (issue #1508).
+                    if database_type.lower() == "sqlite":
+                        upsert_query = dialect.build_precheck_upsert_query(
+                            table_name=table_name,
+                            insert_data=insert_data,
+                            update_data=update_data,
+                            where=where,
+                            row_exists=row_exists,
+                            has_updated_at=has_updated_at,
+                        )
+                    else:
+                        upsert_query = dialect.build_upsert_query(
+                            table_name=table_name,
+                            insert_data=insert_data,
+                            update_data=update_data,
+                            conflict_columns=conflict_columns,
+                            has_updated_at=has_updated_at,
+                        )
 
                     query = upsert_query.query
                     params = list(upsert_query.params.values())
