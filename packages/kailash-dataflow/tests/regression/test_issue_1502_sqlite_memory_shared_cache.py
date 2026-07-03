@@ -211,3 +211,64 @@ def test_model_registry_sync_path_reaches_shared_memory_db():
     assert "dataflow_model_registry" in tables, tables
 
     db.close()
+
+
+@pytest.mark.regression
+def test_close_disposes_registry_pool_no_id_reuse_aliasing():
+    """R7 (#1502 review): close() disposes the registry StaticPool for this URI.
+
+    The registry sync path acquires a class-level ``SQLDatabaseNode._shared_pools``
+    StaticPool keyed by this instance's ``file:df_mem_<id>?...`` URI. If close()
+    left it open, the in-memory DB would leak AND — because CPython reuses freed
+    ``id()`` addresses — a later ``DataFlow(":memory:")`` at the same address would
+    compute the identical URI, hit the surviving pool, and alias this instance's
+    data. Structural guard: after close(), no ``_shared_pools`` entry for the URI.
+    """
+    from kailash.nodes.data.sql import SQLDatabaseNode
+
+    db = DataFlow(":memory:")
+    uri = db._memory_db_uri
+    assert uri is not None
+
+    @db.model
+    class Thing:
+        id: str
+        name: str
+
+    # Drive the sync model-registry path so it acquires a StaticPool keyed by uri.
+    db._model_registry.initialize()
+    db._model_registry.discover_models()
+
+    assert any(
+        k[0] == uri for k in SQLDatabaseNode._shared_pools
+    ), "registry StaticPool should exist for this instance's URI before close()"
+
+    db.close()
+
+    assert not any(
+        k[0] == uri for k in SQLDatabaseNode._shared_pools
+    ), "close() must dispose the registry StaticPool for this URI (id-reuse guard)"
+
+
+@pytest.mark.regression
+def test_secondary_ddl_connection_path_uses_shared_uri():
+    """R8 (#1502 review): the ``_get_async_sql_connection`` fallback DDL/query path
+    routes through the shared-cache URI, not a fresh bare ``:memory:``.
+
+    This legacy/multi-statement-DDL path built its connection from
+    ``config.database.url`` (bare ``:memory:``), which AsyncSQLDatabaseNode would
+    rewrite to its OWN per-node ``file:kailash_<id(node)>`` DB — a different DB
+    than CRUD/registry, reintroducing a scoped "no such table" for ALTER /
+    multi-statement migrations on ``:memory:``.
+    """
+    db = DataFlow(":memory:")
+    uri = db._memory_db_uri
+    assert uri is not None
+    try:
+        conn = db._get_async_sql_connection()
+        assert conn.connection_string == uri, (
+            "secondary DDL path must use the shared-cache URI, "
+            f"got {conn.connection_string!r} != {uri!r}"
+        )
+    finally:
+        db.close()

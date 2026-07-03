@@ -688,6 +688,36 @@ class SQLDatabaseNode(Node):
             cls._shared_pools.clear()
             cls._pool_metrics.clear()
 
+    @classmethod
+    def dispose_pools_for(cls, connection_string: str) -> int:
+        """Dispose only the shared pools for a specific connection string.
+
+        Issue #1502: a bare-``:memory:`` DataFlow owns a shared-cache SQLite DB
+        keyed by a per-instance ``file:df_mem_<id>?mode=memory&cache=shared`` URI.
+        The registry/state sync path acquires a ``StaticPool`` from
+        ``_shared_pools`` (class-level) whose single connection keeps that
+        shared-cache DB alive. ``DataFlow.close()`` MUST dispose that pool at
+        teardown — otherwise the in-memory DB leaks for the process lifetime AND,
+        because CPython reuses freed ``id()`` addresses, a later
+        ``DataFlow(":memory:")`` at the same address computes the identical URI,
+        hits the surviving pool, and aliases the prior instance's data.
+
+        Targeted (matches ``cache_key[0] == connection_string``) so it never
+        touches other live instances' pools — unlike the global
+        :meth:`cleanup_pools`. Returns the number of pools disposed.
+        """
+        disposed = 0
+        with cls._pool_lock:
+            for key in [k for k in cls._shared_pools if k[0] == connection_string]:
+                engine = cls._shared_pools.pop(key)
+                try:
+                    engine.dispose()
+                except Exception:  # noqa: BLE001 — teardown best-effort
+                    pass
+                cls._pool_metrics.pop(key, None)
+                disposed += 1
+        return disposed
+
     @staticmethod
     def _mask_connection_password(connection_string: str) -> str:
         """Mask password in connection string for secure logging."""

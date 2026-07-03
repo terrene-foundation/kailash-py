@@ -5934,17 +5934,25 @@ class DataFlow(DataFlowEventMixin):
 
                 return sqlite3.connect(":memory:", check_same_thread=False)
 
-            # Create a safe connection string for SQL databases
-            components = ConnectionParser.parse_connection_string(database_url)
-            safe_connection_string = ConnectionParser.build_connection_string(
-                scheme=components.get("scheme"),
-                host=components.get("host"),
-                database=components.get("database"),
-                username=components.get("username"),
-                password=components.get("password"),
-                port=components.get("port"),
-                **components.get("query_params", {}),
-            )
+            # Issue #1502: a bare ``:memory:`` instance MUST route this secondary
+            # DDL/query path through the shared-cache URI so it reaches the SAME
+            # in-memory DB as the CRUD/registry paths (AsyncSQLDatabaseNode handles
+            # the ``file:...`` URI + ``uri=True``). Bypass ConnectionParser here —
+            # it is built for ``scheme://host/db`` and would mangle a ``file:`` URI.
+            if self._memory_db_uri is not None:
+                safe_connection_string = self._memory_db_uri
+            else:
+                # Create a safe connection string for SQL databases
+                components = ConnectionParser.parse_connection_string(database_url)
+                safe_connection_string = ConnectionParser.build_connection_string(
+                    scheme=components.get("scheme"),
+                    host=components.get("host"),
+                    database=components.get("database"),
+                    username=components.get("username"),
+                    password=components.get("password"),
+                    port=components.get("port"),
+                    **components.get("query_params", {}),
+                )
 
             # Create a connection wrapper that supports the needed interface
             class AsyncSQLConnectionWrapper:
@@ -10311,6 +10319,23 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._memory_connection = None
 
+        # Issue #1502: dispose the registry/state StaticPool bound to this
+        # instance's shared-cache URI. Its single connection would otherwise
+        # outlive close() — leaking the in-memory DB AND (because id(self) is
+        # reused by CPython) letting a later DataFlow(":memory:") at the same
+        # address alias this instance's data. Targeted per-URI dispose, so
+        # sibling instances' pools are untouched.
+        _memory_uri = getattr(self, "_memory_db_uri", None)
+        if _memory_uri:
+            try:
+                from kailash.nodes.data.sql import SQLDatabaseNode
+
+                SQLDatabaseNode.dispose_pools_for(_memory_uri)
+            except Exception as e:
+                logger.debug(
+                    "engine.failed_to_dispose_memory_pools", extra={"error": str(e)}
+                )
+
         # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
         #
         # Issue #1002 — the `self.runtime` property resolves to ONE runtime
@@ -10460,6 +10485,20 @@ class DataFlow(DataFlowEventMixin):
                 )
             finally:
                 self._memory_connection = None
+
+        # Issue #1502: dispose the registry/state StaticPool bound to this
+        # instance's shared-cache URI (see close() for the leak + id()-reuse
+        # aliasing rationale). Targeted per-URI dispose.
+        _memory_uri = getattr(self, "_memory_db_uri", None)
+        if _memory_uri:
+            try:
+                from kailash.nodes.data.sql import SQLDatabaseNode
+
+                SQLDatabaseNode.dispose_pools_for(_memory_uri)
+            except Exception as e:
+                logger.debug(
+                    "engine.failed_to_dispose_memory_pools", extra={"error": str(e)}
+                )
 
         # Close audit persistence backend
         if hasattr(self, "_audit_backend") and self._audit_backend is not None:
