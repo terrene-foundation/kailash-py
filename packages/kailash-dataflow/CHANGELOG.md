@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
-## [2.13.8] — 2026-07-03 — multi_tenant upsert binds tenant_id to the active tenant
+## [2.13.9] — 2026-07-03 — bulk_upsert honors conflict_on (SQLite/PG); 3 divergent builders reconciled
+
+### Fixed
+
+- **`bulk_upsert(conflict_on=[...])` now honors the requested conflict target instead of silently `ON CONFLICT (id) DO NOTHING` (#1519).** `db.express.bulk_upsert` and the generated `{Model}BulkUpsertNode` dropped `conflict_on` entirely and hardcoded a skip-on-`id` upsert: the target was never applied, duplicate-key rows landed, and the call returned `created/updated = 0` while rows persisted. Three divergent builders had drifted — `features/bulk.py` (the live express path) hardcoded `ON CONFLICT (id)` for **every** dialect and defaulted the express/generated path to `conflict_resolution="skip"` (→ `DO NOTHING`); `nodes/bulk_upsert.py::DataFlowBulkUpsertNode` used `INSERT OR REPLACE` on SQLite/MySQL (ignores `conflict_on`; not valid MySQL syntax) and fabricated `inserted`/`updated` counts as `rows_affected // 2`; `sql/dialects.py::build_bulk_upsert_query` honored `conflict_on` but was orphaned dead code (zero `src/` callers). Reconciled to one contract: native single-statement `INSERT ... ON CONFLICT (conflict_on) DO UPDATE ... RETURNING` (SQLite/PG) / `ON DUPLICATE KEY UPDATE` (MySQL); the express/generated path defaults to `update`; counts are derived from the write (PG `(xmax = 0)`, SQLite pre-count of existing conflict keys — no `// 2` heuristic); a non-PK/UNIQUE conflict target raises the new typed `BulkUpsertConflictTargetError` (naming the column + remediation) rather than falling back to `ON CONFLICT (id)`. The orphaned `build_bulk_upsert_query` (4 methods, ~211 LOC) was deleted (`rules/orphan-detection.md`). A batch carrying duplicate conflict-target keys is de-duplicated last-wins before the statement, so reported counts match rows written and SQLite/PG behave identically (PG previously raised "ON CONFLICT DO UPDATE command cannot affect row a second time"). Sibling of the single-record #1508; the non-unique-target error mirrors PG's #1520 behavior.
+
+### Security
+
+- **Bulk-upsert identifier validation + driver-error redaction (red-team hardening for #1519).** Every dynamically-interpolated identifier on the bulk path (`table_name`, INSERT/`DO UPDATE SET` column names) — and, closing the same class on the single-record `{Model}UpsertNode` caller — is now validated against the strict allowlist before SQL is built (`rules/dataflow-identifier-safety.md`); a crafted record key can no longer reach the statement. DB driver errors from a _different_ unique constraint (which embed column VALUES / potential PII in `DETAIL:`/`Key(...)=(...)`) are routed through a shared `sanitize_db_error` redactor at every bulk error handler (create/update/delete/upsert), and `exc_info` was dropped from those handlers so the traceback cannot re-leak the raw message.
 
 ### Fixed
 
