@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.13.7] — 2026-07-03 — SQLite upsert conflict_on works without a UNIQUE constraint
+
+### Fixed
+
+- **Single-record SQLite upsert with `conflict_on` on a non-unique field now works (#1508).** An upsert with `conflict_on=["<field>"]` on a model whose field was not declared unique failed with `ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint`. The SQLite single-record upsert path already runs a `WHERE`-based existence pre-check to detect INSERT-vs-UPDATE (SQLite has no PostgreSQL `xmax`), but then still emitted `INSERT ... ON CONFLICT`, which SQLite rejects unless the conflict target is backed by a unique constraint — so the pre-check result was computed and discarded. DataFlow now uses that pre-check result to emit a plain `INSERT` (row absent) or `UPDATE ... WHERE` (row present) via `SQLDialect.build_precheck_upsert_query`, dropping the `ON CONFLICT` constraint dependency on the single-record SQLite path. Values stay parameter-bound; the identity/primary-key columns are excluded from the `SET` clause. PostgreSQL keeps its atomic `ON CONFLICT` + `xmax` form unchanged (PG genuinely requires the unique constraint for an atomic upsert — a non-unique `conflict_on` there raises a driver error tracked in #1520). Pure DML — no runtime DDL. Independent of connection type (reproduces on file-backed SQLite); surfaced, not caused, by the #1502 `:memory:` shared-cache fix which made the table exist so the `ON CONFLICT` was finally reached.
+
 ## [2.13.6] — 2026-07-03 — bare sqlite :memory: multi-connection shared-cache
 
 ### Fixed
