@@ -65,7 +65,7 @@ class TestPostgreSQLUpsertConflictOn:
     async def test_postgresql_upsert_email_conflict(self, postgresql_db_url):
         """IT-2.1.1: Test PostgreSQL upsert with conflict_on=['email'] (custom single field)."""
         # Arrange: Create DataFlow with PostgreSQL
-        db = DataFlow(postgresql_db_url)
+        db = DataFlow(postgresql_db_url, auto_migrate=True)
 
         @db.model
         class User:
@@ -75,8 +75,20 @@ class TestPostgreSQLUpsertConflictOn:
 
         runtime = AsyncLocalRuntime()
 
-        # Create unique index on email for ON CONFLICT to work
+        # Clean slate + unique index for ON CONFLICT (email) to work. The
+        # postgresql_db_url fixture does NOT truncate between runs, so a
+        # persistent `users` table accumulates duplicate-email rows across
+        # runs and CREATE UNIQUE INDEX then fails on the dup data. Drop it,
+        # let auto_migrate recreate it empty, then add the UNIQUE index
+        # (mirrors this file's null-values test which drops first).
         import asyncpg
+
+        conn = await asyncpg.connect(postgresql_db_url)
+        try:
+            await conn.execute("DROP TABLE IF EXISTS users CASCADE")
+        finally:
+            await conn.close()
+        db._ensure_connected()  # auto_migrate recreates the empty table
 
         conn = await asyncpg.connect(postgresql_db_url)
         try:
@@ -152,7 +164,7 @@ class TestPostgreSQLUpsertConflictOn:
     async def test_postgresql_upsert_composite_conflict(self, postgresql_db_url):
         """IT-2.1.2: Test PostgreSQL upsert with conflict_on=['order_id', 'product_id'] (composite keys)."""
         # Arrange: Create DataFlow with PostgreSQL
-        db = DataFlow(postgresql_db_url)
+        db = DataFlow(postgresql_db_url, auto_migrate=True)
 
         @db.model
         class OrderItem:
@@ -164,8 +176,19 @@ class TestPostgreSQLUpsertConflictOn:
 
         runtime = AsyncLocalRuntime()
 
-        # Create composite unique index for ON CONFLICT to work
+        # Clean slate + composite unique index for ON CONFLICT to work. The
+        # persistent `order_items` table accumulates rows across runs (the
+        # fixture does not truncate), so CREATE UNIQUE INDEX on the composite
+        # key fails on leftover dup data. Drop it, let auto_migrate recreate it
+        # empty, then add the composite UNIQUE index.
         import asyncpg
+
+        conn = await asyncpg.connect(postgresql_db_url)
+        try:
+            await conn.execute("DROP TABLE IF EXISTS order_items CASCADE")
+        finally:
+            await conn.close()
+        db._ensure_connected()  # auto_migrate recreates the empty table
 
         conn = await asyncpg.connect(postgresql_db_url)
         try:
@@ -265,7 +288,7 @@ class TestPostgreSQLUpsertConflictOn:
     async def test_postgresql_conflict_on_with_null_values(self, postgresql_db_url):
         """IT-2.1.6: Test conflict_on with NULL values (should always INSERT per SQL standard)."""
         # Arrange: Create DataFlow with PostgreSQL
-        db = DataFlow(postgresql_db_url)
+        db = DataFlow(postgresql_db_url, auto_migrate=True)
 
         @db.model
         class Document:

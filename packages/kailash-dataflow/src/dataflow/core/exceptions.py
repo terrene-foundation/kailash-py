@@ -135,10 +135,14 @@ class BulkUpsertConflictTargetError(DataFlowError):
 
     1. Declare the field(s) ``unique=True`` on the model (or add a UNIQUE
        index / constraint) so the conflict target is enforceable.
-    2. For genuinely non-unique keys, use single-record ``db.express.upsert``
-       which does a WHERE-precheck instead of a native ON CONFLICT clause —
-       bulk upsert on a non-unique key is ambiguous when the batch itself
-       contains duplicate keys.
+    2. On **SQLite only**, for genuinely non-unique keys, use single-record
+       ``db.express.upsert`` which does a WHERE-precheck instead of a native
+       ON CONFLICT clause (issue #1508) — bulk upsert on a non-unique key is
+       ambiguous when the batch itself contains duplicate keys. This fallback
+       does NOT exist on PostgreSQL: PG's single-record upsert also uses an
+       atomic ON CONFLICT and raises :class:`UpsertConflictTargetError` on a
+       non-unique target (issue #1520), so the conflict target MUST be a
+       PK/UNIQUE key there.
     """
 
     def __init__(
@@ -158,9 +162,69 @@ class BulkUpsertConflictTargetError(DataFlowError):
             f"match any PRIMARY KEY or UNIQUE constraint. Native bulk upsert "
             f"requires the conflict-target column(s) ({cols}) to be backed by a "
             f"PK or UNIQUE key. Remediation: declare the field(s) unique=True "
-            f"(or add a UNIQUE index), OR — for genuinely non-unique keys — use "
-            f"single-record db.express.upsert (WHERE-precheck) instead of bulk "
-            f"upsert, which is ambiguous when a batch contains duplicate keys."
+            f"(or add a UNIQUE index), OR — on SQLite, for genuinely non-unique "
+            f"keys — use single-record db.express.upsert (WHERE-precheck) "
+            f"instead of bulk upsert, which is ambiguous when a batch contains "
+            f"duplicate keys. (On PostgreSQL single-record upsert also requires "
+            f"the unique constraint — see UpsertConflictTargetError / #1520.)"
+        )
+
+
+class UpsertConflictTargetError(DataFlowError):
+    """Raised when a single-record upsert's ``conflict_on`` target is not backed
+    by a PRIMARY KEY or UNIQUE constraint (issue #1520).
+
+    On PostgreSQL a native ``INSERT ... ON CONFLICT (cols) DO UPDATE`` requires
+    the conflict-target columns to be a PK or UNIQUE key, and the statement is
+    atomic — DataFlow cannot substitute a WHERE-precheck without a TOCTOU race
+    under concurrency (unlike SQLite, whose single-record upsert path #1508 DOES
+    use a precheck and therefore never reaches this error). When the target is
+    not unique, PostgreSQL rejects the statement with the opaque driver message
+    "there is no unique or exclusion constraint matching the ON CONFLICT
+    specification". DataFlow converts that into this actionable typed error
+    rather than surfacing the raw driver text (which never names ``conflict_on``,
+    the offending field, or the remedy).
+
+    This is the single-record sibling of :class:`BulkUpsertConflictTargetError`.
+
+    Attributes:
+        conflict_on: The conflict-target columns the caller requested.
+        model_name: The model the upsert targeted (best-effort; may be None).
+        original_error: The underlying driver exception, if any.
+
+    Recovery (PostgreSQL — the conflict target MUST be enforceable):
+
+    1. Declare the field(s) ``unique=True`` on the model so DataFlow's migration
+       creates the backing UNIQUE constraint.
+    2. Or add a UNIQUE index / constraint via a migration
+       (``CREATE UNIQUE INDEX ... ON {table} ({cols})``).
+
+    DataFlow does NOT auto-create the index at runtime: runtime DDL is blocked
+    per ``schema-migration.md`` Rule 1, and it would fail anyway on a column that
+    already holds duplicate values.
+    """
+
+    def __init__(
+        self,
+        conflict_on: Optional[list] = None,
+        model_name: Optional[str] = None,
+        original_error: Optional[BaseException] = None,
+    ) -> None:
+        self.conflict_on = list(conflict_on or [])
+        self.model_name = model_name
+        self.original_error = original_error
+
+        cols = ", ".join(self.conflict_on) or "<none>"
+        model_part = f" on model '{model_name}'" if model_name else ""
+        super().__init__(
+            f"upsert conflict_on={self.conflict_on!r}{model_part} does not match "
+            f"any PRIMARY KEY or UNIQUE constraint. Native PostgreSQL upsert "
+            f"(INSERT ... ON CONFLICT) requires the conflict-target column(s) "
+            f"({cols}) to be backed by a PK or UNIQUE key. Remediation: declare "
+            f"the field(s) unique=True on the model (or add a UNIQUE index via a "
+            f"migration). DataFlow does not auto-create the index (blocked by "
+            f"schema-migration policy; it would also fail on existing duplicate "
+            f"values)."
         )
 
 
@@ -211,6 +275,7 @@ def sanitize_db_error(msg: str) -> str:
 __all__ = [
     "DDLFailedError",
     "BulkUpsertConflictTargetError",
+    "UpsertConflictTargetError",
     "is_conflict_target_error",
     "sanitize_db_error",
     "DataFlowError",
