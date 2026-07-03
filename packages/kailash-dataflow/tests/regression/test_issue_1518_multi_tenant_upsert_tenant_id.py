@@ -236,7 +236,9 @@ async def test_issue_1518_cross_tenant_upsert_cannot_corrupt_other_tenant_row():
         # single-tenant PK on ``id`` rejects the second row) and MUST NOT mutate
         # tenant-a's existing row.
         with db.tenant_context.switch("tenant-b"):
-            with pytest.raises(Exception):
+            # Pinned to the PK-collision fail-closed path — a future regression
+            # that threw for an unrelated reason must not keep this green.
+            with pytest.raises(Exception, match="(?i)UNIQUE constraint"):
                 await _upsert(runtime, "doc-a", "HACKED", "hack@example.com")
 
         after = {
@@ -291,3 +293,107 @@ def test_issue_1518_insert_injection_emits_pure_colon_no_qmark():
     assert out_p[-1] == "tenant-a"
     # the tenant value's :pN index must equal its position in the params list
     assert out_p.index("tenant-a") == 3
+
+
+def test_issue_1518_update_where_predicate_colon_emits_indexed_placeholder():
+    """Symmetric structural lock for the UPDATE/WHERE colon branch: the injected
+    tenant predicate on a ``:pN`` UPDATE must be ``:p{len}`` (pure named), never
+    a ``?``, with the value's index == its params position."""
+    interceptor = QueryInterceptor(
+        tenant_id="tenant-a",
+        tenant_tables=["tenant_docs"],
+        tenant_column="tenant_id",
+    )
+    query = (
+        "UPDATE tenant_docs SET title = :p0\n"
+        "            WHERE id = :p1\n"
+        "            RETURNING *"
+    )
+    params = ["A2", "doc-a"]
+    out_q, out_p = interceptor.inject_tenant_conditions(query, params)
+
+    assert "tenant_id = :p2" in out_q, out_q
+    assert "?" not in out_q, f"mixed placeholder regressed: {out_q!r}"
+    assert out_p[-1] == "tenant-a"
+    assert out_p.index("tenant-a") == 2
+
+
+def test_issue_1518_select_colon_injection_is_defense_in_depth_pure_colon():
+    """Defense-in-depth: a (currently-unemitted) ``:pN`` SELECT injected by the
+    interceptor must also be pure ``:pN`` — the read-path symmetry that stops a
+    future named-param SELECT builder silently reopening the #1518 leak."""
+    interceptor = QueryInterceptor(
+        tenant_id="tenant-a",
+        tenant_tables=["tenant_docs"],
+        tenant_column="tenant_id",
+    )
+    query = "SELECT id, tenant_id, title FROM tenant_docs WHERE id = :p0"
+    params = ["doc-a"]
+    out_q, out_p = interceptor.inject_tenant_conditions(query, params)
+
+    assert "tenant_id = :p1" in out_q, out_q
+    assert "?" not in out_q, f"mixed placeholder on SELECT read path: {out_q!r}"
+    assert out_p[-1] == "tenant-a"
+    assert out_p.index("tenant-a") == 1
+
+
+def test_issue_1518_tenant_placeholder_for_style_rejects_colon():
+    """``_tenant_placeholder_for_style`` must FAIL LOUD on colon rather than
+    silently return ``?`` (a ``?`` in a ``:pN`` query is the #1518 defect). This
+    locks the fail-closed guard against a future caller forgetting the inline
+    colon branch."""
+    with pytest.raises(ValueError, match="(?i)colon"):
+        QueryInterceptor._tenant_placeholder_for_style("colon")
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.sqlite
+@pytest.mark.asyncio
+async def test_issue_1518_tenant_id_in_create_is_overwritten_to_active_tenant():
+    """The 'tenant column already present' interceptor branch: when ``create``
+    supplies a WRONG ``tenant_id``, the interceptor MUST overwrite it with the
+    active tenant (never persist the caller-supplied value). Locks the
+    style-agnostic overwrite branch for colon-style upserts."""
+    tmpdir = tempfile.mkdtemp()
+    path = f"{tmpdir}/mt1518_present.db"
+    db = DataFlow(f"sqlite:///{path}", auto_migrate=True, multi_tenant=True)
+
+    @db.model
+    class TenantDoc:
+        id: str
+        tenant_id: str
+        email: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+    runtime = AsyncLocalRuntime()
+    try:
+        doc_id = _uid()
+        wf = WorkflowBuilder()
+        wf.add_node(
+            "TenantDocUpsertNode",
+            "u",
+            {
+                "where": {"id": doc_id},
+                "conflict_on": ["id"],
+                "update": {"title": "A1"},
+                # caller supplies a spoofed tenant_id — must be overwritten.
+                "create": {
+                    "id": doc_id,
+                    "tenant_id": "tenant-EVIL",
+                    "email": "a@example.com",
+                    "title": "A1",
+                },
+            },
+        )
+        with db.tenant_context.switch("tenant-a"):
+            await runtime.execute_workflow_async(wf.build(), inputs={})
+
+        row = _raw_rows(path, "tenant_docs")[0]
+        assert (
+            row["tenant_id"] == "tenant-a"
+        ), f"spoofed tenant_id not overwritten: stored {row['tenant_id']!r}"
+    finally:
+        db.close()

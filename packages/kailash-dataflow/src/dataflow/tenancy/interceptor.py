@@ -843,7 +843,6 @@ class QueryInterceptor:
         # must be type bigint, not type text``). For ``$N`` we emit a sentinel
         # token and renumber the whole query left-to-right after insertion.
         style = self._detect_placeholder_style(modified_query)
-        tenant_ph = self._tenant_placeholder_for_style(style)
 
         # Issue #1249: build the tenant-column reference once. When a genuine
         # alias / explicit table qualifier is needed (multi-table / JOIN
@@ -853,6 +852,53 @@ class QueryInterceptor:
         # FROM clause — a qualifier-vs-FROM quoting mismatch. Bare column avoids
         # that entirely and is unambiguous for the single-table case.
         has_join = len(tenant_tables) > 1 or parsed.has_joins
+
+        # Issue #1518: named ``:pN`` binds by index downstream, position-
+        # independent in the query text, so each tenant value is APPENDED and
+        # referenced as ``:p{len(params)}`` at append time — never insert-at-
+        # index + ``$N`` renumber (that positional path is wrong for ``:pN``,
+        # and ``_count_placeholders_before``'s ``_PLACEHOLDER_RE`` does not even
+        # match ``:pN``). No DataFlow SELECT builder emits ``:pN`` today (only
+        # the upsert builders do), so this branch is defense-in-depth keeping the
+        # read path symmetric with the write path against a future named-param
+        # SELECT builder silently reopening the #1518 mixed-placeholder leak.
+        if style == "colon":
+            tables = tenant_tables if has_join else tenant_tables[:1]
+
+            def _colon_conditions() -> str:
+                parts = []
+                for table in tables:
+                    ph = f":p{len(modified_params)}"
+                    parts.append(
+                        self._build_tenant_condition(
+                            modified_query, table, qualify=has_join, placeholder=ph
+                        )
+                    )
+                    modified_params.append(self.tenant_id)
+                return " AND ".join(parts)
+
+            if "WHERE" in modified_query.upper():
+                where_match = re.search(r"WHERE\s+", modified_query, re.IGNORECASE)
+                conditions = _colon_conditions()
+                modified_query = (
+                    modified_query[: where_match.end()]
+                    + f"{conditions} AND "
+                    + modified_query[where_match.end() :]
+                )
+            else:
+                insertion_point = self._find_insertion_point(modified_query)
+                where_clause = f" WHERE {_colon_conditions()}"
+                if insertion_point:
+                    modified_query = (
+                        modified_query[:insertion_point]
+                        + where_clause
+                        + modified_query[insertion_point:]
+                    )
+                else:
+                    modified_query += where_clause
+            return modified_query, modified_params
+
+        tenant_ph = self._tenant_placeholder_for_style(style)
 
         # Add tenant conditions to WHERE clause.
         # Issue #1249: the tenant VALUE is inserted into ``modified_params`` at
@@ -976,9 +1022,13 @@ class QueryInterceptor:
         Returns one of:
             ``"dollar"``  — PostgreSQL / asyncpg ``$1, $2, ...`` (ordinal).
             ``"percent"`` — psycopg / MySQL ``%s`` (positional).
-            ``"colon"``   — named ``:p0, :p1, ...`` emitted by the SQLite
-                            precheck-upsert builder (issue #1508's
-                            ``build_precheck_upsert_query``). Bound by NAME
+            ``"colon"``   — named ``:p0, :p1, ...`` emitted by the DataFlow
+                            upsert builders generally: the SQLite precheck path
+                            (``build_precheck_upsert_query``, issue #1508) AND
+                            the native ``ON CONFLICT`` builders for every dialect
+                            (``build_upsert_query`` on PG/SQLite/MySQL) plus
+                            ``build_bulk_upsert_query`` (``sql/dialects.py``).
+                            Bound by NAME
                             downstream (``_convert_to_named_parameters`` maps the
                             positional params list to ``{p0, p1, ...}`` by index),
                             so a colon placeholder is position-independent in the
@@ -1008,11 +1058,26 @@ class QueryInterceptor:
         (``_renumber_dollar_placeholders``) assigns the correct ``$N`` once the
         full query is assembled. For ``percent`` / ``qmark`` the placeholder is
         positional, so the literal text is final.
+
+        Issue #1518: ``colon`` (``:pN``) has NO fixed literal — the placeholder
+        index is ``:p{len(params)}`` (the appended value's future index), which
+        only the caller knows. Callers MUST branch on ``colon`` and compute the
+        placeholder inline (see ``_inject_insert_conditions`` /
+        ``_inject_where_predicate`` / ``_inject_select_conditions``). Reaching
+        this helper with ``colon`` is a caller bug — fail LOUD rather than
+        silently return ``?`` (a ``?`` in a ``:pN`` query renumbers to ``:p0``
+        downstream and mis-binds the tenant column — the exact #1518 defect).
         """
         if style == "dollar":
             return cls._TENANT_PLACEHOLDER_TOKEN
         if style == "percent":
             return "%s"
+        if style == "colon":
+            raise ValueError(
+                "colon (:pN) tenant placeholder is index-dependent; the caller "
+                "must emit ':p{len(params)}' inline, not via "
+                "_tenant_placeholder_for_style"
+            )
         return "?"
 
     @classmethod
@@ -1115,9 +1180,11 @@ class QueryInterceptor:
                 elif style == "percent":
                     value_ph = "%s"
                 elif style == "colon":
-                    # Issue #1518: the SQLite precheck-upsert INSERT (issue #1508)
-                    # emits named ``:pN`` placeholders bound positionally by list
-                    # index in ``_convert_to_named_parameters`` (``{p{i}: params[i]}``).
+                    # Issue #1518: the DataFlow upsert builders (the SQLite
+                    # precheck path #1508 + the native ON CONFLICT builders on
+                    # every dialect + bulk) emit named ``:pN`` placeholders bound
+                    # positionally by list index in ``_convert_to_named_parameters``
+                    # (``{p{i}: params[i]}``).
                     # The tenant value is appended to the END of the params list
                     # below, so its placeholder MUST be ``:p{len(params)}`` (its
                     # future index) — NOT a ``?``. A ``?`` here would be renumbered
@@ -1197,7 +1264,8 @@ class QueryInterceptor:
         # unrenumbered after the insertion shifted positions.
         style = self._detect_placeholder_style(modified_query)
 
-        # Issue #1518: named ``:pN`` (SQLite precheck-upsert UPDATE, issue #1508)
+        # Issue #1518: named ``:pN`` (emitted by the DataFlow upsert builders —
+        # the SQLite precheck-upsert UPDATE #1508 + native ON CONFLICT builders)
         # binds by NAME downstream, not by textual position, so the tenant value
         # is APPENDED to the params list and referenced as ``:p{len(params)}``
         # (its future index) regardless of where the predicate text lands. The
