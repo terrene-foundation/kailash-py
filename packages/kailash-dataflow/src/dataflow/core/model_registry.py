@@ -202,6 +202,30 @@ class ModelRegistry:
         # Intentional no-op: derived property.
         pass
 
+    def _registry_connection_url(self) -> str:
+        """Return the connection URL every registry ``SQLDatabaseNode`` MUST use.
+
+        Issue #1502: a bare ``:memory:`` DataFlow instance owns a single
+        shared-cache SQLite DB reachable ONLY via the per-instance
+        ``file:df_mem_<id>?mode=memory&cache=shared`` URI (``_memory_db_uri``,
+        set in ``DataFlow.__init__`` alongside the anchor connection that keeps
+        the shared-cache DB alive). The registry's sync ``SQLDatabaseNode`` path
+        MUST use that same URI so it reads/writes the SAME in-memory DB the
+        engine/anchor uses — otherwise ``get_connection_url()`` returns a bare
+        ``sqlite:///:memory:`` that lands in a DIFFERENT, empty in-memory DB and
+        every registry query fails with ``no such table:
+        dataflow_model_registry``.
+
+        ``_memory_db_uri`` is ``None`` for every non-``:memory:`` configuration
+        (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
+        the in-memory path and those backends keep their normal connection URL.
+        """
+        return getattr(self.dataflow, "_memory_db_uri", None) or (
+            self.dataflow.config.database.get_connection_url(
+                self.dataflow.config.environment
+            )
+        )
+
     def _execute_workflow_sync_safe(
         self, workflow: Any
     ) -> Tuple[Dict[str, Any], Optional[str]]:
@@ -436,9 +460,7 @@ class ModelRegistry:
         on MySQL.
         """
         try:
-            db_url = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
-            )
+            db_url = self._registry_connection_url()
 
             from ..adapters.connection_parser import ConnectionParser
 
@@ -544,9 +566,7 @@ class ModelRegistry:
         is not importable. Each statement runs in its own SQLDatabaseNode
         transaction; partial failure relies on idempotent DDL guards.
         """
-        db_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        db_url = self._registry_connection_url()
         for i, statement in enumerate(statements):
             workflow = WorkflowBuilder()
             workflow.add_node(
@@ -811,9 +831,7 @@ class ModelRegistry:
                 return True
 
             # Register the model with database-specific query
-            db_url = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
-            )
+            db_url = self._registry_connection_url()
 
             # Import connection parser and detect database type
             from ..adapters.connection_parser import ConnectionParser
@@ -958,9 +976,7 @@ class ModelRegistry:
         workflow = WorkflowBuilder()
 
         # Get database-specific query
-        db_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        db_url = self._registry_connection_url()
 
         # Import connection parser and detect database type
         from ..adapters.connection_parser import ConnectionParser
@@ -1071,9 +1087,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1107,9 +1121,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1183,9 +1195,7 @@ class ModelRegistry:
 
         workflow = WorkflowBuilder()
 
-        db_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        db_url = self._registry_connection_url()
 
         # Import connection parser and detect database type
         from ..adapters.connection_parser import ConnectionParser
@@ -1470,9 +1480,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1513,9 +1521,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1560,9 +1566,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1602,9 +1606,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1638,9 +1640,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1700,9 +1700,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1756,9 +1754,7 @@ class ModelRegistry:
         # Get connection URL and detect database type
         from ..adapters.connection_parser import ConnectionParser
 
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._registry_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow.add_node(
@@ -1816,9 +1812,7 @@ class ModelRegistry:
         running mutations without a wrapping transaction.
         """
         with self._registry_lock:
-            db_url = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
-            )
+            db_url = self._registry_connection_url()
             engine = self._acquire_sync_engine(db_url)
             if engine is None:
                 logger.debug("model_registry.transaction.no_engine — yielding None")

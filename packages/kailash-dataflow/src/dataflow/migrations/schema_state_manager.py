@@ -728,6 +728,28 @@ class MigrationHistoryManager:
     def _is_async(self, value: bool) -> None:
         pass  # No-op — derived property.
 
+    def _state_connection_url(self) -> str:
+        """Return the connection URL every state-manager ``SQLDatabaseNode`` uses.
+
+        Issue #1502: a bare ``:memory:`` DataFlow instance owns a single
+        shared-cache SQLite DB reachable ONLY via the per-instance
+        ``file:df_mem_<id>?mode=memory&cache=shared`` URI (``_memory_db_uri``,
+        set in ``DataFlow.__init__``). This manager's sync ``SQLDatabaseNode``
+        path (migration-history reads/writes) MUST use that same URI so it
+        shares the ONE in-memory DB the engine/anchor and model-registry use —
+        otherwise ``get_connection_url()`` returns a bare ``sqlite:///:memory:``
+        that lands in a DIFFERENT, empty in-memory DB.
+
+        ``_memory_db_uri`` is ``None`` for every non-``:memory:`` configuration
+        (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
+        the in-memory path.
+        """
+        return getattr(self.dataflow, "_memory_db_uri", None) or (
+            self.dataflow.config.database.get_connection_url(
+                self.dataflow.config.environment
+            )
+        )
+
     def _extract_query_data(
         self, results: Dict[str, Any], node_id: str
     ) -> Optional[List[Dict[str, Any]]]:
@@ -853,9 +875,7 @@ class MigrationHistoryManager:
         from ..adapters.connection_parser import ConnectionParser
 
         # Get connection URL and detect database type
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         # Serialize operations as JSON
@@ -959,9 +979,7 @@ class MigrationHistoryManager:
         from ..adapters.connection_parser import ConnectionParser
 
         # Get connection URL and detect database type
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         # Serialize operations as JSON
@@ -1040,9 +1058,7 @@ class MigrationHistoryManager:
         from ..adapters.connection_parser import ConnectionParser
 
         # Get connection URL and detect database type
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow = WorkflowBuilder()
@@ -1130,9 +1146,7 @@ class MigrationHistoryManager:
         from ..adapters.connection_parser import ConnectionParser
 
         # Get connection URL and detect database type
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         workflow = WorkflowBuilder()
@@ -1251,9 +1265,7 @@ class MigrationHistoryManager:
         from ..adapters.connection_parser import ConnectionParser
 
         # Get connection URL and detect database type
-        connection_url = self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        connection_url = self._state_connection_url()
         database_type = ConnectionParser.detect_database_type(connection_url)
 
         # Create the migration history table with database-specific SQL
@@ -1492,6 +1504,29 @@ class SchemaStateManager:
         self.change_detector = SchemaChangeDetector()
         self.history_manager = MigrationHistoryManager(dataflow_instance)
 
+    def _state_connection_url(self) -> str:
+        """Return the connection URL every state-manager ``SQLDatabaseNode`` uses.
+
+        Issue #1502: a bare ``:memory:`` DataFlow instance owns a single
+        shared-cache SQLite DB reachable ONLY via the per-instance
+        ``file:df_mem_<id>?mode=memory&cache=shared`` URI (``_memory_db_uri``,
+        set in ``DataFlow.__init__``). This manager's own sync ``SQLDatabaseNode``
+        introspection path (distinct from ``history_manager``'s) MUST use that
+        same URI so it shares the ONE in-memory DB the engine/anchor, the model
+        registry, and the history manager all use — otherwise
+        ``get_connection_url()`` returns a bare ``sqlite:///:memory:`` that lands
+        in a DIFFERENT, empty in-memory DB.
+
+        ``_memory_db_uri`` is ``None`` for every non-``:memory:`` configuration
+        (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
+        the in-memory path.
+        """
+        return getattr(self.dataflow, "_memory_db_uri", None) or (
+            self.dataflow.config.database.get_connection_url(
+                self.dataflow.config.environment
+            )
+        )
+
     def _extract_query_data(
         self, results: Dict[str, Any], node_id: str
     ) -> Optional[List[Dict[str, Any]]]:
@@ -1589,9 +1624,7 @@ class SchemaStateManager:
 
         try:
             # Get connection URL and detect database type
-            connection_url = self.dataflow.config.database.get_connection_url(
-                self.dataflow.config.environment
-            )
+            connection_url = self._state_connection_url()
             database_type = ConnectionParser.detect_database_type(connection_url)
 
             # Get database-specific schema query
