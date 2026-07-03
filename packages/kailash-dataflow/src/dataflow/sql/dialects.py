@@ -119,11 +119,22 @@ class PostgreSQLDialect(SQLDialect):
         # Build ON CONFLICT clause
         conflict_cols_str = ", ".join(conflict_columns)
 
-        # Build UPDATE clause
+        # Build UPDATE clause.
+        # `update_data` (the `update` payload) is DISTINCT from `insert_data`
+        # (the `create` payload) in the DataFlow upsert API. EXCLUDED.<col>
+        # resolves to the value proposed for INSERT (the `create` value), so it
+        # MUST NOT be used to apply the `update` values; bind them as parameters,
+        # continuing the :p<i> sequence (AsyncSQLDatabaseNode rebuilds the param
+        # dict positionally as {p0, p1, ...} from list(params.values())).
         update_clauses = []
+        update_params = {}
+        _poff = len(insert_columns)
         for col in update_data.keys():
             if col not in conflict_columns and col != "id":
-                update_clauses.append(f"{col} = EXCLUDED.{col}")
+                pkey = f"p{_poff}"
+                update_clauses.append(f"{col} = :{pkey}")
+                update_params[pkey] = update_data[col]
+                _poff += 1
 
         # Add updated_at if present
         if has_updated_at:
@@ -142,8 +153,9 @@ class PostgreSQLDialect(SQLDialect):
             RETURNING *, (xmax = 0) AS _upsert_inserted
         """
 
-        # Build parameters
+        # Build parameters (insert values + bound update values)
         params = {f"p{i}": insert_data[col] for i, col in enumerate(insert_columns)}
+        params.update(update_params)
 
         return UpsertQuery(
             query=query.strip(),
@@ -242,11 +254,24 @@ class SQLiteDialect(SQLDialect):
         # Build ON CONFLICT clause
         conflict_cols_str = ", ".join(conflict_columns)
 
-        # Build UPDATE clause
+        # Build UPDATE clause.
+        # The conflict/update payload (`update_data`) is DISTINCT from the
+        # insert payload (`insert_data`) — the DataFlow upsert API takes
+        # separate `create` and `update` dicts. EXCLUDED.<col> resolves to the
+        # value proposed for INSERT (the `create` value), so it MUST NOT be used
+        # to apply the `update` values; bind the update values as parameters.
+        # Placeholders continue the :p<i> sequence (offset by the insert-column
+        # count) because AsyncSQLDatabaseNode rebuilds the param dict positionally
+        # as {p0, p1, ...} from list(params.values()) — the names MUST match index.
         update_clauses = []
+        update_params = {}
+        _poff = len(insert_columns)
         for col in update_data.keys():
             if col not in conflict_columns and col != "id":
-                update_clauses.append(f"{col} = EXCLUDED.{col}")
+                pkey = f"p{_poff}"
+                update_clauses.append(f"{col} = :{pkey}")
+                update_params[pkey] = update_data[col]
+                _poff += 1
 
         # Add updated_at if present
         if has_updated_at:
@@ -265,8 +290,9 @@ class SQLiteDialect(SQLDialect):
             RETURNING *
         """
 
-        # Build parameters
+        # Build parameters (insert values + bound update values)
         params = {f"p{i}": insert_data[col] for i, col in enumerate(insert_columns)}
+        params.update(update_params)
 
         return UpsertQuery(
             query=query.strip(),
