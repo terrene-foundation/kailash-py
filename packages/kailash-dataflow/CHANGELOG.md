@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.13.6] — 2026-07-03 — bare sqlite :memory: multi-connection shared-cache
+
+### Fixed
+
+- **Bare `sqlite :memory:` multi-connection now works end-to-end (#1502).** Each consumer of a bare-`:memory:` DataFlow (Express CRUD node, the 5 `SyncDDLExecutor` sites, the migration system, `migration_connection_manager`, `migration_test_framework`, the model registry, the schema-state manager, and the `_get_async_sql_connection` fallback DDL path) previously turned `:memory:` into its **own private** in-memory database, so migrations created tables in one DB while CRUD/registry read another → `no such table`. DataFlow now computes **one shared-cache URI per instance** (`file:df_mem_<id>?mode=memory&cache=shared`, stored as `_memory_db_uri`) and injects it at every SQLite connection-construction site, plus keeps a **lifetime anchor connection** open so the shared-cache DB survives per-node pool churn and event-loop-driven node recreation. `close()`/`close_async()` dispose the registry's `StaticPool` for the instance's URI (preventing a leaked in-memory DB and `id()`-reuse cross-instance aliasing). `config.database.url` is left as the literal `:memory:`, so all dialect-detection is unchanged; the rewrite fires **only** for bare `:memory:` — file-backed SQLite / PostgreSQL / MySQL are byte-for-byte unaffected. The cross-thread registry `sqlite3.ProgrammingError` is fixed in `kailash` 2.45.3 (`SQLDatabaseNode` StaticPool), hence the floor bump.
+
+### Requires
+
+- `kailash>=2.45.3` (the `SQLDatabaseNode` shared-cache-memory StaticPool + `dispose_pools_for` the registry cross-thread path depends on).
+
 ## [2.13.5] — 2026-07-03 — SQLite/PostgreSQL upsert returns the upserted row and applies update values
 
 ### Fixed
