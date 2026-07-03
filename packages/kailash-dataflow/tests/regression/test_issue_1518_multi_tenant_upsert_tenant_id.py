@@ -337,6 +337,26 @@ def test_issue_1518_select_colon_injection_is_defense_in_depth_pure_colon():
     assert out_p.index("tenant-a") == 1
 
 
+def test_issue_1518_select_colon_no_where_inserts_before_limit():
+    """Defense-in-depth (no-WHERE colon SELECT, insert-before-clause sub-branch):
+    the injected tenant predicate must land BEFORE ``LIMIT`` as a fresh ``:p{len}``
+    so the LIMIT value keeps its own placeholder/index — never a ``?``."""
+    interceptor = QueryInterceptor(
+        tenant_id="tenant-a",
+        tenant_tables=["tenant_docs"],
+        tenant_column="tenant_id",
+    )
+    query = "SELECT id, tenant_id FROM tenant_docs LIMIT :p0"
+    params = [10]
+    out_q, out_p = interceptor.inject_tenant_conditions(query, params)
+
+    assert "?" not in out_q, f"mixed placeholder on no-WHERE SELECT: {out_q!r}"
+    assert "WHERE tenant_id = :p1" in out_q, out_q
+    # WHERE must precede LIMIT; the LIMIT value keeps :p0, tenant gets :p1
+    assert out_q.index("WHERE") < out_q.index("LIMIT"), out_q
+    assert out_p == [10, "tenant-a"], out_p
+
+
 def test_issue_1518_tenant_placeholder_for_style_rejects_colon():
     """``_tenant_placeholder_for_style`` must FAIL LOUD on colon rather than
     silently return ``?`` (a ``?`` in a ``:pN`` query is the #1518 defect). This
