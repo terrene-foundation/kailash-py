@@ -44,6 +44,21 @@ closing **#1508** (the F8 item the prior session approved as next work).
 Closed this session: **#1508** (PR #1521 fix, #1522 release → `dataflow-v2.13.7`).
 Filed this session: **#1518**, **#1519**, **#1520** (all pre-existing, surfaced by #1508 red-team).
 
+## Cross-SDK (kailash-rs) — #1508 NOT applicable
+
+User-authorized READ-ONLY inspection (journal `0010`, `cross-repo-authorized: esperie-enterprise/kailash-rs`).
+Finding: the Rust DataFlow upsert primitive `QueryDialect::upsert_conflict_clause(pk: &str, update_columns)`
+(`crates/kailash-dataflow/src/dialect.rs`, called `upsert_conflict_clause(pk, …)` in `query.rs`) conflicts on
+a **single primary key** (`ON CONFLICT({pk})`) — ALWAYS PK-constraint-backed. It does NOT expose an arbitrary
+non-unique `conflict_on`/`conflict_keys` field, so the #1508 bug class (SQLite ON CONFLICT on a non-unique
+target) is **structurally unreachable** in rs. Legitimate EATP-D6 API divergence (same shape as kailash-py's
+own pk-only bulk path). **No rs fix or issue needed for #1508.** (rs `excluded.col` SET is correct for its
+single-payload upsert — no #1498 divergence: #1498 was py's separate create-vs-update-dict bug.)
+**#1518 (tenant mis-map) NOT assessed in rs** — py-implementation-specific (interceptor INSERT column/param
+misalignment); rs has an independent Rust tenant impl. If rs cross-check for #1518 is wanted, do it from a
+DEDICATED kailash-rs session (its own scope), not cross-repo from here. NO issue filed on rs (scope-fenced;
+filing needs a separate gate per upstream-issue-hygiene MUST-1).
+
 ## Bug-origin context (user asked "why so many issues suddenly?")
 
 NOT new regressions — pre-existing test-coverage debt in the DataFlow upsert/SQLite/multi-tenant
