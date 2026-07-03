@@ -752,14 +752,6 @@ class TestUpsertConflictOnValidation:
             f"Got error: {exc_info.value}"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="conflict_on=['email'] requires a UNIQUE constraint on email that "
-        "the model/table-generation does not create → SQLite 'ON CONFLICT does not "
-        "match any UNIQUE constraint'. Pre-existing bug (independent of :memory:), "
-        "exposed by the #1502 shared-cache fix which makes the table exist so the "
-        "ON CONFLICT is now reached; see #1508. Remove when #1508 lands.",
-    )
     @pytest.mark.asyncio
     async def test_conflict_on_field_mismatch_with_where(self):
         """IT-2.1.9: Test Phase 2 behavior - conflict_on and where can differ."""
