@@ -49,9 +49,11 @@ except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
-from .exceptions import (  # Issue #1519: typed conflict-target error propagation
+from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
     BulkUpsertConflictTargetError,
+    UpsertConflictTargetError,
 )
+from .exceptions import is_conflict_target_error as _is_conflict_target_error
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -3524,13 +3526,36 @@ class NodeGenerator:
                         )
                     # For SQLite, sql_node was already created during pre-check
 
-                    result = await sql_node.async_run(
-                        query=query,
-                        params=params,
-                        fetch_mode="one",
-                        validate_queries=False,
-                        transaction_mode="auto",
-                    )
+                    try:
+                        result = await sql_node.async_run(
+                            query=query,
+                            params=params,
+                            fetch_mode="one",
+                            validate_queries=False,
+                            transaction_mode="auto",
+                        )
+                    except Exception as exec_err:
+                        # Issue #1520: on the native ON CONFLICT path, a conflict
+                        # target that is not a PK/UNIQUE key is a caller error,
+                        # not a transient DB failure. PostgreSQL raises the opaque
+                        # "there is no unique or exclusion constraint matching the
+                        # ON CONFLICT specification"; convert it into the
+                        # actionable typed error naming conflict_on + the remedy,
+                        # mirroring the bulk path (#1519). In practice only the
+                        # PostgreSQL builder reaches this matcher: SQLite's
+                        # single-record upsert enters this same execute but runs
+                        # the WHERE-precheck INSERT/UPDATE (#1508) — never an
+                        # ON CONFLICT clause — so it cannot emit the trigger
+                        # string; MySQL emits ON DUPLICATE KEY UPDATE (no
+                        # ON-CONFLICT-target error). Non-matching errors re-raise
+                        # unchanged below.
+                        if _is_conflict_target_error(str(exec_err)):
+                            raise UpsertConflictTargetError(
+                                conflict_on=conflict_columns,
+                                model_name=self.model_name,
+                                original_error=exec_err,
+                            ) from exec_err
+                        raise
 
                     # Parse result to determine if INSERT or UPDATE occurred
                     if result and "result" in result and "data" in result["result"]:
