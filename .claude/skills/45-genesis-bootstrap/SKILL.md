@@ -34,11 +34,19 @@ for them) and starts each session with `/onboard`.
 
 ## Pre-flight — five gates, in this order (order is load-bearing)
 
-1. **Signing key FIRST.** Configure commit-signing BEFORE any tracked-file write. Absent a key,
-   `signing-mutation-guard.js` puts the session in **degraded read-only** mode — every
-   tracked-file mutation is blocked. The predicate is a working-tree-mutation check (a
-   `git status --porcelain` before/after delta on tracked paths), NOT a tool-name allowlist, so
-   no file-mutation path escapes it. Configure repo-local:
+1. **Signing key FIRST.** Configure commit-signing BEFORE any tracked-file write. **Coordination-opt-in
+   caveat (W1, 2026-06-25):** on a genuinely fresh bootstrap repo coordination resolves OFF, so
+   `signing-mutation-guard.js` **passes through** (it early-returns when `!isCoordinationEnabled`) —
+   the degraded-read-only trap does NOT fire during this first run. Here the signing-key-first
+   discipline is enforced instead by (a) the **unconditional** `validate-bash-command.js`
+   `STATE_PATH_RX` block on Bash state-file mutation, and (b) fold-clean verification — an **unsigned**
+   genesis-anchor never folds into a trust root, so enrollment cannot COMPLETE without the key.
+   (`genesis-anchor-guard.js` itself advisory-passes-through on the genuinely-fresh state per F72 so
+   the first commits can land; its fail-closed block engages only after a real non-scaffold roster
+   exists without a folded anchor.) Once the owner enrolls and
+   coordination turns ON, `signing-mutation-guard.js` puts the session in **degraded read-only** mode
+   (a `git status --porcelain` before/after working-tree-mutation delta on tracked paths, NOT a
+   tool-name allowlist) so no later file-mutation path escapes it. Configure repo-local:
    ```bash
    git config --local gpg.format ssh
    git config --local user.signingkey "$HOME/.ssh/id_ed25519.pub"

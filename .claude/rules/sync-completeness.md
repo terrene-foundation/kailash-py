@@ -178,6 +178,29 @@ node .claude/bin/sync-tier-aware.mjs --build py --verify   # swallowed rows = OU
 
 **Why:** loom#676 — a consumer carrying the conventional Python build-artifact block (`lib/`) silently untracked the entire `.claude/bin/lib/` directory, including `loom-links.mjs` (the canonical NAME→location resolver per `cross-repo.md` MUST-1) + `slot-parser.mjs` + `strip-build-internal.mjs` that the tracked `sync-tier-aware.mjs` imports. It "worked" only because the files were present from the local sync; a fresh clone throws on import. The negation closes the known instance; the post-sync `git check-ignore` gate closes the CLASS for any future `.claude/**` subtree whose basename collides with a root ignore.
 
+### 7. Every Enumerated Target's Gate-2 Distribution MUST Capture The Exact Per-File Manifest Receipt
+
+Under the worktree-from-remote-main Gate-2 model (`artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking"; `journal/0403`), each enumerated target's distribution MUST capture the exact per-file manifest receipt the engine emits. `bin/sync-gate2-worktree.mjs::buildReceipt` returns `{loom_sha, base_sha, target, branch, manifest{added,modified,deleted}, changed_count, pr_url, merge_sha}` (plus `gate`, `lane`, the absolute `worktree` path, and `timestamp`) derived from the worktree's own `git status --porcelain` (`parseManifest`) — NOT a hand-typed file list — and the receipt MUST be recorded per enumerated target (Rule 1) in the gate-op journal receipt plus the coordination-log record, **scrubbed before the journal embed per `user-flow-validation.md` MUST-6** (the `pr_url` org/repo slug and the absolute `worktree` path are the scrub tokens, exactly as `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking" MUST-2 requires). A completion claim citing only the version / headroom table (Rule 2) WITHOUT the per-target exact-manifest receipt is BLOCKED.
+
+```bash
+# DO — capture the engine's per-target manifest receipt for every enumerated target
+for t in $TEMPLATES; do   # $TEMPLATES enumerated from the manifest per Rule 1
+  node .claude/bin/sync-gate2-worktree.mjs --lane use --target "$t" --finalize --worktree "$WT" --json
+done   # each receipt: {loom_sha, base_sha, target, branch, manifest{added,modified,deleted}, changed_count, pr_url, merge_sha}
+
+# DO NOT — record only "all N templates at 2.20.0 ✓" with no per-file manifest
+# (the version table alone cannot answer "which files changed in template rs?")
+```
+
+**BLOCKED rationalizations:**
+
+- "The version table already proves the sync landed"
+- "The per-file manifest is engine-internal, not worth recording"
+- "I can reconstruct the manifest from the diff later"
+- "Hand-typing the changed files is close enough"
+
+**Why:** The per-target version row (Rule 2) answers "did the target reach the bumped version?"; only the exact per-file manifest answers "which files moved, and from which worktree base?" — the audit question a post-incident review or a partial-sync diagnosis needs. Capturing the engine's `buildReceipt` (derived from the worktree's own `git status`) makes the manifest a deterministic record, not a hand-typed reconstruction that drifts from what actually landed.
+
 ## MUST NOT
 
 - **Run `/sync-to-*` without first parsing `sync-manifest.yaml::sync_targets[].templates[].repo` into a variable.**
@@ -251,6 +274,17 @@ The v6.2 plan ((loom-internal reference)) Shards 1+2 (merged PR #218, commit `75
 - **Violation scope:** MUST Rule 6 (swallowed-artifact tracked-ness guarantee) fires the Wiring.
 - **Origin:** loom#676 (2026-06-28) — a consumer's broad `lib/` ignore silently untracked `.claude/bin/lib/`; the negation + post-sync gate close the instance + the class.
 
-Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates. Rule 5 added 2026-06-27 (journal/0352, co-owner-directed origination) — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left the external `../.codex-mcp-guard` target stale.
+### Rule 7 — per-target exact-manifest receipt
+
+- **Severity:** `halt-and-report` at gate-review (cc-architect / reviewer at `/codify` confirms each enumerated target's Gate-2 distribution recorded the engine's `buildReceipt` per-file manifest, not a hand-typed list). `advisory` at the hook layer (receipt-presence is a session-history judgment property, not a single structural tool-call signal, per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing (2026-07-03 → 2026-07-10).
+- **Cumulative posture impact:** same-class violations (a Gate-2 completion claim without the per-target exact-manifest receipt) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** any same-class violation within 7 days routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — no dedicated trigger key, so no self-referential `trust-posture.md` edit is required.
+- **Receipt requirement:** SessionStart `[ack: sync-completeness]` IFF `posture.json::pending_verification` includes this rule_id (shared with the rule's existing ack; soft-gate).
+- **Detection mechanism:** Phase 1 — `cc-architect` / reviewer mechanical sweep at `/codify`: any session transcript citing `/sync-to-build` or `/sync-to-use` MUST show a per-enumerated-target `buildReceipt` capture (`grep`-stable on the `--json` invocation of `sync-gate2-worktree.mjs` + the recorded `manifest{added,modified,deleted}` fields); a completion claim citing only the Rule-2 version table is a HIGH finding. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — audit fixtures land with the detector at `.claude/audit-fixtures/exact-gate-tracking/` per `cc-artifacts.md` Rule 9 (shared with `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking" MUST-2, its distribution-side companion).
+- **Violation scope:** MUST Rule 7 (per-target exact-manifest receipt) fires the Wiring.
+- **Origin:** Directive 1 (2026-07-03, co-owner-directed origination `journal/0403`) — the worktree-from-remote-main Gate-2 model's per-target manifest-receipt requirement; see the Origin line below.
+
+Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates. Rule 5 added 2026-06-27 (journal/0352, co-owner-directed origination) — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left the external `../.codex-mcp-guard` target stale. Rule 7 added 2026-07-03 (journal/0403, Directive 1 co-owner-directed origination) — the worktree-from-remote-main Gate-2 model requires capturing the engine's `buildReceipt` per-file manifest per enumerated target, the distribution-completeness companion to `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking".
 
 <!-- /slot:neutral-body -->

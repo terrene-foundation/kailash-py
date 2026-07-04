@@ -30,7 +30,7 @@ Depth lives in the skills and the rule — this agent ORCHESTRATES; it does not 
 
 - A repo has the substrate but no genesis owner / no folded `genesis-anchor` (fresh bootstrap).
 - An operator is joining, or a fork is being set up.
-- Any ceremony hit a guard refusal (degraded read-only, state-file-mutation block, off-codify-branch).
+- Any ceremony hit a guard refusal (state-file-mutation block, off-codify-branch, or — once coordination is ON — degraded read-only; on a fresh coordination-OFF bootstrap the degraded-read-only + off-codify-branch guards passthrough per W1, and genesis-anchor-guard advisory-passes-through too (F72), so signing-key-first rests on the unconditional state-file-mutation block + fold-clean verification — an unsigned anchor never folds into a trust root).
 - A session needs orientation (`/onboard`) or an operator needs to `/claim` / `/posture` / `/release-claim`.
 
 ## Step 0: Working-Directory Self-Check

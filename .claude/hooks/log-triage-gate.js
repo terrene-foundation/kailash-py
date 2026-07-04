@@ -90,17 +90,6 @@ const EXCLUDED_DIRS = [
   "benchmarks", // perf measurement output (FAIL means "missed perf target", not session-actionable)
 ];
 
-// Structured append-only AUDIT-log files, excluded by FILENAME per
-// observability.md Rule 5a. These record machine-readable events (classifier
-// decisions, journal-skip reasons) whose payload verbatim-quotes commit
-// subjects — a subject like "remove exc_info from ... WARNING log" matches a
-// WARN+ scanner as a guaranteed false positive. Filename-keyed exclusion is
-// the only structural fix that closes the class; per-finding regex suppression
-// is BLOCKED. Composes with EXCLUDED_DIRS above.
-const EXCLUDED_FILES = [
-  ".journal-skipped.log", // journal-classifier audit log (commit subjects verbatim)
-];
-
 function triageLogs(cwd) {
   const messages = [];
 
@@ -191,16 +180,11 @@ function scanRecentLogs(cwd) {
     const prune = pathClauses
       ? `${nameClauses} -o ${pathClauses}`
       : nameClauses;
-    // Exclude audit-log files by FILENAME (observability.md Rule 5a), composed
-    // as `! -name '<f>'` predicates on the -type f branch.
-    const fileExcl = EXCLUDED_FILES.map(
-      (f) => `! -name '${f.replace(/'/g, "'\\''")}'`,
-    ).join(" ");
     // find: prune tool cache dirs + nested git checkouts, then match *.log
-    // (minus excluded audit-log filenames) modified in last 120 min.
+    // modified in last 120 min.
     const cmd =
       `find "${cwd}" \\( -type d \\( ${prune} \\) -prune \\) -o ` +
-      `-type f -name '*.log' ${fileExcl} -mmin -120 -print 2>/dev/null ` +
+      `-type f -name '*.log' -mmin -120 -print 2>/dev/null ` +
       `| head -20 | xargs -I{} grep -HnE 'WARN|ERROR|FAIL' {} 2>/dev/null ` +
       `| head -200`;
     const out = execSync(cmd, { encoding: "utf8", timeout: 3000 });

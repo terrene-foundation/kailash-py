@@ -22,9 +22,22 @@ step-by-step runbook + guard-behavior depth live in `skills/45-genesis-bootstrap
 ### 1. Configure The Signing Key BEFORE Any Roster Or Coordination Write
 
 The commit-signing key MUST be configured before the first tracked-file mutation of a ceremony.
-Absent a key, `signing-mutation-guard.js` enforces **degraded read-only** — a working-tree-mutation
-predicate (a `git status --porcelain` before/after delta on tracked paths), NOT a tool-name
-allowlist, so every tracked-file write is blocked. Writing the roster first is BLOCKED.
+When coordination is ON, `signing-mutation-guard.js` enforces **degraded read-only** — a
+working-tree-mutation predicate (a `git status --porcelain` before/after delta on tracked paths),
+NOT a tool-name allowlist, so every tracked-file write is blocked and writing the roster first is
+BLOCKED. **Coordination-opt-in caveat (W1, 2026-06-25, journal/0330):** on a genuinely fresh
+bootstrap repo (no roster + no genesis anchor) coordination resolves OFF via the implicit fallback,
+so `signing-mutation-guard.js` and `integrity-guard.js` **passthrough** (they early-return when
+`!isCoordinationEnabled`) — the degraded-read-only trap does NOT fire during the first bootstrap
+run. `genesis-anchor-guard.js` ALSO advisory-passes-through on the genuinely-fresh state (F72
+fresh-substrate-adopter / scaffold-roster branches, so the ceremony can land its first commits);
+its fail-closed BLOCK engages only AFTER a real (non-scaffold) roster exists without a folded
+anchor. The coordination-independent teeth that enforce signing-key-first during bootstrap are
+(a) the **unconditional** `validate-bash-command.js` `STATE_PATH_RX` block on Bash state-file
+mutation, and (b) fold-clean verification (MUST-4 / fold rule 9a) — an **unsigned** genesis-anchor
+never folds into a trust root, so enrollment cannot COMPLETE without the key.
+`signing-mutation-guard.js`'s degraded-read-only begins enforcing MUST-1/2 once the owner enrolls
+and coordination turns ON.
 
 ```bash
 # DO — signing key first, then any tracked write
@@ -32,8 +45,9 @@ git config --local gpg.format ssh
 git config --local user.signingkey "$HOME/.ssh/id_ed25519.pub"
 git config --local commit.gpgsign true
 
-# DO NOT — write the roster first; degraded read-only refuses it
-$EDITOR .claude/operators.roster.json   # blocked: no signing key configured
+# DO NOT — write the roster first (STATE_PATH_RX refuses a Bash state-path mutation unconditionally,
+# even on a fresh coordination-OFF repo; the Edit/Write-tool path is additionally permissions.deny'd)
+node -e 'require("fs").writeFileSync(".claude/operators.roster.json","{}")'  # blocked: STATE_PATH_RX before signing-key config
 ```
 
 **BLOCKED rationalizations:** "I'll configure signing after the roster is drafted" / "the guard
@@ -59,7 +73,7 @@ git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" main
 # acquireCodifyLease({displayId, repoDir, scopeFiles}) bound to this branch
 
 # DO NOT — roster edit on main, or a suffixed branch the guard won't honor
-git checkout main && $EDITOR .claude/operators.roster.json     # blocked: off codify branch
+git checkout main && node -e 'require("fs").writeFileSync(".claude/operators.roster.json","{}")'  # blocked: STATE_PATH_RX refuses the roster mutation on any branch; Edit/Write-tool writes are additionally codify-branch-gated by integrity-guard when coordination is ON
 git checkout -b codify/<display_id>-2026-06-23-b                # rejected: not date-terminal
 ```
 
@@ -206,7 +220,19 @@ silent substrate corruption.
   `verify-resource-existence.md` MUST-4; self-enroll + org-admin scope read from the signed
   `genesis-anchor` content). No new sweep tool ships, so no new fixtures (`cc-artifacts.md` Rule 9
   fires only on new tools). Phase 2 (deferred): a Stop-event detector is unnecessary — the guards
-  already block at the tool boundary.
+  already block at the tool boundary. (`no-check: this rule ships NO new detector and NO new
+validate-emit.mjs structural check — MUST-3 is enforced UNCONDITIONALLY by the
+`validate-bash-command.js::detectStateFileMutation` `STATE_PATH_RX`block. MUST-1/2's`signing-mutation-guard.js`/`integrity-guard.js`degraded-read-only + codify-branch/lease fences
+are **coordination-ON-gated** (opt-in per W1 2026-06-25 — they passthrough on a fresh coordination-OFF
+bootstrap repo, per MUST-1's caveat);`genesis-anchor-guard.js` LIKEWISE advisory-passes-through on
+the genuinely-fresh state (F72), blocking only AFTER a real non-scaffold roster exists without a
+folded anchor — NOT on the first fresh commit. So during bootstrap MUST-1/2 rest on the unconditional
+STATE_PATH_RX block + fold-clean verification (an unsigned genesis-anchor never folds into a trust
+root → enrollment cannot COMPLETE without the key); the signing/integrity guards enforce MUST-1/2
+once coordination turns ON.`journal-write-guard.js` backs the journal-slot discipline. MUST 4/5/6 are
+gate-review clauses read by cc-architect. Per the sync-from-build.md new-rule discipline the loom
+placement records this no-check disposition rather than adding a structural check with no detector
+to key on.`)
 - **Violation scope:** MUST 1/2/3 are guard-enforced structural clauses; MUST 4/5/6 are gate-review
   clauses. Every `violations.jsonl` row records which MUST fired.
 - **Origin:** See § Origin.
@@ -226,7 +252,7 @@ Verified against `validate-bash-command.js`, `integrity-guard.js`, `signing-muta
 repos via `/codify` → loom Gate-1 → `/sync`.
 
 **Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Body is
-238 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
+264 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
 codifies SIX distinct fail-closed boundary guards as MUST clauses, each requiring the
 DO / DO NOT + BLOCKED-corpus + `**Why:**` structure `rule-authoring.md` Rules 2/3/4 mandate, plus
 the canonical 8-field Trust Posture Wiring (`trust-posture.md` MUST-8). The API-depth and
