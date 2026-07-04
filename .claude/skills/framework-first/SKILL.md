@@ -147,7 +147,7 @@ Origin: 2026-04-19 — Nexus called `app.router.startup()` / `.shutdown()` as if
 
 ## For Rust-Runtime (Bindings) Consumers
 
-On the Rust runtime (kailash-rs), the bindings give Python a Pythonic API that maps onto the Rust runtime under the hood. **Your code is Python; the kailash-rs runtime executes underneath. You never write Rust.** For canonical API paths in your project, consult the relevant framework specialist (dataflow-specialist, nexus-specialist, kaizen-specialist, mcp-specialist, pact-specialist, ml-specialist) — this skill intentionally avoids listing specific paths to prevent drift.
+On the Rust runtime, the bindings give Python a Pythonic API that maps onto the Rust runtime under the hood. **Your code is Python; the Rust runtime executes underneath. You never write Rust.** For canonical API paths in your project, consult the relevant framework specialist (dataflow-specialist, nexus-specialist, kaizen-specialist, mcp-specialist, pact-specialist, ml-specialist) — this skill intentionally avoids listing specific paths to prevent drift.
 
 The Raw anti-patterns to avoid on the bindings runtime:
 

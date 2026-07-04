@@ -1,6 +1,8 @@
 ---
-priority: 0
-scope: baseline
+priority: 10
+scope: path-scoped
+paths:
+  - ".claude/**"
 ---
 
 # COC Sync Landing — BUILD-Side Discipline
@@ -9,7 +11,7 @@ See `.claude/guides/rule-extracts/coc-sync-landing.md` for BLOCKED-rationalizati
 
 <!-- slot:neutral-body -->
 
-Loom's `/sync-to-build` delivery MUST land on `main` BEFORE any other session work. Pairs with `.claude/hooks/multi-operator-sessionstart.js` (SessionStart).
+Loom's `/sync-to-build` delivery MUST land on `main` BEFORE any other session work. Pairs with `.claude/hooks/multi-operator-sessionstart.js` (SessionStart). Under Directive 1 (`artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking"), that delivery now lands as a loom-authored PR against the target repo, opened from an isolated worktree-from-remote-main — not an uncommitted working-tree overlay a later BUILD session must land — so the sync path no longer OPENS the uncommitted-delivery window MUST-1 guards; MUST-1 still fires on any OTHER uncommitted COC drift found at session start.
 
 ## MUST Rules
 
