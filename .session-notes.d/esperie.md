@@ -5,7 +5,7 @@
 
 ---
 
-last_reconciled_sha: c889f3fa9
+last_reconciled_sha: a1725ffa6
 migrated_from: .session-notes
 ---
 
@@ -13,50 +13,41 @@ migrated_from: .session-notes
 
 ## Where we are
 
-Clean on `main`, 0 open PRs. This session **shipped kailash-dataflow 2.13.10** (`/autonomize` +
-`/redteam` to convergence + full `/release`), closing **#1520** (F-PG — PG single-record upsert with
-`conflict_on` on a non-unique field raised the raw driver text; now raises typed
-`UpsertConflictTargetError` naming field + remedy; PG keeps atomic ON CONFLICT, no auto-DDL). Fix PR
-#1536, release PR #1539, tag `dataflow-v2.13.10`, publish run 28676581625 SUCCESS, clean-venv install
-verified. Also fixed 2 pre-existing PG single-upsert integration test failures (proven pre-existing).
-Filed follow-ups **#1537** (MySQL silent-upsert-on-PK) + **#1538** (`express.list` staleness).
-
-Prior: 2.13.9 closed #1519 (F-BULK). The upsert `conflict_on` family (#1508 SQLite single, #1519
-bulk, #1520 PG single) is now fully shipped.
+Clean on `main`, 0 open PRs. This session shipped **kailash-dataflow 2.13.10** (`/autonomize` +
+`/redteam` + full `/release`), closing **#1520** (F-PG — PG single-record upsert `conflict_on` on a
+non-unique field → actionable typed `UpsertConflictTargetError`; mirrors #1519). Filed follow-ups
+**#1537** (F-MYSQL) + **#1538** (F-LISTSTALE). Upsert `conflict_on` family (#1508/#1519/#1520) now
+fully shipped. **Recommended next: #1537 or #1538** (freshest sibling-class items).
 
 ## Read first
 
-1. `deploy/deployments/2026-07-04-dataflow-v2.13.10-1520-pg-single-upsert-conflict-on.md` — #1520 root cause + red-team + verify.
-2. `workspaces/mops-onboarding/journal/0011-*.md` — #1520 decision + redteam receipts.
-3. `gh issue view 1537` / `gh issue view 1538` — the filed follow-ups (MySQL + list-staleness).
-
-## Recommended next
-
-- **#1537** (F-MYSQL) — MySQL single-record upsert silently upserts on `id` PK ignoring `conflict_on`;
-  needs proactive `information_schema` constraint precheck (different mechanism than #1520's error-catch).
-- **#1538** (F-LISTSTALE) — root-cause the `express.list` read-after-upsert-update staleness.
-- **kailash-rs parity** for #1520 (`cross-sdk-inspection.md`) — needs a fresh read-only rs grant.
+1. `deploy/deployments/2026-07-04-dataflow-v2.13.10-1520-pg-single-upsert-conflict-on.md` — #1520 root cause + red-team + the release pattern to mirror.
+2. `gh issue view 1537` / `gh issue view 1538` — the filed follow-ups (MySQL silent-upsert; list staleness).
+3. `packages/kailash-dataflow/src/dataflow/sql/dialects.py` — `MySQLDialect.build_upsert_query` (the F-MYSQL/#1537 site).
 
 ## Outstanding ledger (forest)
 
-| ID          | Item                                                                                                              | Value-anchor (MUST-1 source)                              | Status                                                                                                                              |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| F-PG        | PG upsert `conflict_on` on non-unique field → cryptic driver error                                                | #1520; sibling of #1508/#1519                             | **CLOSED → dataflow 2.13.10** (PR #1536 fix, #1539 release, tag `dataflow-v2.13.10`; #1520 closed). journal/0011.                   |
-| F-MYSQL     | MySQL single-record upsert silently upserts on `id` PK, ignores `conflict_on`                                     | #1537; dataflow-specialist redteam of #1520 (2026-07-04)  | OPEN MED (#1537) — pre-existing; diff mechanism (proactive `information_schema` constraint precheck, not error-catch); own shard.   |
-| F-LISTSTALE | `express.list(cache_ttl=0)` returns stale rows after an upsert-UPDATE (plain update reads fresh; raw SQL correct) | #1538; discovered while testing #1520 (2026-07-04)        | OPEN (#1538) — pre-existing PG read-snapshot/pool gap (likely the #1519-notes "single-upsert pool gap"); separate class from #1520. |
-| F-LOGSYNC   | Propagate the #1534 log-triage hook fix to loom/USE templates                                                     | cc-architect #1534 LOW-1; artifact-flow (synced hook)     | OPEN LOW — `/codify` proposal so the fix cascades downstream.                                                                       |
-| F-COMPKEY   | multi_tenant single-column `id` PK → tenants can't share natural key                                              | #1526; #1518 AC (user 2026-07-03)                         | OPEN design — composite `(tenant_id,id)`; fails closed today. Maintainer call.                                                      |
-| F6          | Convert `test_production_dataflow` off mock engine (Tier-2 NO-MOCK)                                               | #1503; rules/testing.md §Tier 2                           | queued (#1503) — xfail-strict self-clears                                                                                           |
-| F7          | `test_concurrent_order_processing` PG two-txn isolation fails on main                                             | #1504 (pre-existing at HEAD)                              | queued (#1504) — separate PG-isolation shard                                                                                        |
-| F2          | mops-onboarding cross-repo: loom issue + kailash-rs rollout                                                       | user 2026-06-23 "roll out to kailash-rs…file 2 into loom" | GATED (receipt-gated; dedicated session)                                                                                            |
-| F3          | ~29 prod TODO markers                                                                                             | user 2026-06-26 "leave as baseline"                       | DEFERRED (user)                                                                                                                     |
+| ID          | Item                                                                          | Value-anchor (MUST-1 source)                | Status                                                                                  |
+| ----------- | ----------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| F-MYSQL     | MySQL single-record upsert silently upserts on `id` PK, ignores `conflict_on` | #1537; dataflow-specialist redteam of #1520 | OPEN MED (#1537) — proactive `information_schema` precheck, not error-catch; own shard. |
+| F-LISTSTALE | `express.list(cache_ttl=0)` stale after an upsert-UPDATE                      | #1538; discovered testing #1520             | OPEN (#1538) — pre-existing PG read-snapshot/pool gap.                                  |
+| F-COMPKEY   | multi_tenant single-column `id` PK → tenants can't share natural key          | #1526; #1518 AC (user 2026-07-03)           | OPEN design — composite `(tenant_id,id)`; maintainer call.                              |
+| F-LOGSYNC   | Propagate #1534 log-triage hook fix to loom/USE templates                     | cc-architect #1534 LOW-1; artifact-flow     | OPEN LOW — `/codify` proposal so the fix cascades downstream.                           |
+| F6          | Convert `test_production_dataflow` off mock engine (Tier-2 NO-MOCK)           | #1503; rules/testing.md §Tier 2             | queued (#1503) — xfail-strict self-clears.                                              |
+| F7          | `test_concurrent_order_processing` PG two-txn isolation fails on main         | #1504 (pre-existing at HEAD)                | queued (#1504) — separate PG-isolation shard.                                           |
+| F2          | mops-onboarding cross-repo: loom issue + kailash-rs rollout                   | user 2026-06-23 "roll out to kailash-rs…"   | GATED (receipt-gated; dedicated session).                                               |
+| F3          | ~29 prod TODO markers                                                         | user 2026-06-26 "leave as baseline"         | DEFERRED (user).                                                                        |
 
-Closed this session: `F-BULK` → `dataflow-v2.13.9` (PR #1530 fix, #1531 release, tag `dataflow-v2.13.9`; #1519 closed). Log-triage audit-log false-positive → PR #1534 (F-LOGSYNC opened for its loom propagation).
+Closed this session: `F-PG` → dataflow 2.13.10 (PR #1536 fix, #1539 release, tag `dataflow-v2.13.10`, publish run 28676581625 SUCCESS; #1520 closed).
 
 ## Traps
 
-- Live express bulk path = `features/bulk.py` (P1), NOT `nodes/bulk_upsert.py` (P2) nor `sql/dialects.py`.
-- PG `test_single_upsert_*::TestPostgreSQL*` + `test_bulk_upsert_comprehensive.py` fail/hang on `main` (pre-existing PG-fixture/pool gap, proven via stash). Don't chase.
-- Cross-SDK: #1519/#1520 likely exist in the Rust SDK (bulk/single upsert `conflict_on`) — needs a fresh read-only rs grant (repo-scope-discipline); prior grant was #1508/#1518-scoped.
-- Bulk `conflict_on` requires PK/UNIQUE → else `BulkUpsertConflictTargetError`; SQLite single-record tolerates non-unique via #1508 precheck.
-- PyPI/uv release-verify: `uv pip install --refresh` (uv venv has no pip); PyPI json endpoint confirms publish before the index reflects it.
+- Live single-record upsert path = `core/nodes.py` native-ON-CONFLICT execute (the #1520 guard site); `build_upsert_query` has ONE prod caller there. Bulk = `features/bulk.py` (P1).
+- PG single-upsert integration tests: persistent tables accumulate rows across runs (fixture never truncates) → drop-first + `auto_migrate=True` (as #1520's fix did), else `CREATE UNIQUE INDEX` fails on dup data.
+- In upsert tests, verify persisted state via raw SQL / `pg_suite.get_connection()`, NOT `express.list` — it can read stale after an upsert-UPDATE (#1538).
+- MySQL `ON DUPLICATE KEY UPDATE` ignores `conflict_on` (matches `id` PK) — #1537 needs a constraint precheck, not the #1520 reactive error-catch.
+- PyPI/uv release-verify: `uv pip install --refresh` (uv index cache lag); `/<ver>/json` returns 200 before `info.version` updates.
+
+## Unreleased packages
+
+None — dataflow 2.13.10 released + clean-venv-verified this session; all siblings in-sync with PyPI (checked at release). Post-tag commits are docs/workspace-only (carve-out).
