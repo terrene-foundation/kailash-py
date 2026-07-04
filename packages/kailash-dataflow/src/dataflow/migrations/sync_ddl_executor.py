@@ -18,6 +18,7 @@ This architecture solves the Docker/FastAPI auto_migrate issue:
 """
 
 import logging
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,34 @@ from kailash.db.dialect import _validate_identifier
 from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
+
+_CREATE_INDEX_RE = re.compile(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b")
+
+
+def _is_benign_ddl_object_exists(error_str: str, sql: Optional[str]) -> bool:
+    """Return True when a failed DDL statement means the object already exists.
+
+    Benign already-present signals for an idempotent DDL re-run:
+
+    * PostgreSQL / SQLite — ``"... already exists"`` (any object).
+    * MySQL — error 1061 ``"Duplicate key name"`` on a ``CREATE INDEX``. MySQL's
+      ``CREATE INDEX`` has no ``IF NOT EXISTS`` (issue #1537 dropped it because
+      MySQL rejects it with a 1064 syntax error), so re-migrating an existing
+      table raises 1061. Scope the 1061 tolerance to ``CREATE INDEX`` so a
+      duplicate key *inside* a ``CREATE TABLE`` definition — a genuine schema
+      authoring bug — still surfaces as an error.
+
+    Mirrors ``schema_state_manager.py``'s index-already-exists tolerance. This
+    only governs the LOG LEVEL of the executor's own line; the caller still
+    receives ``{"success": False, "error": ...}`` and applies its own
+    disposition.
+    """
+    error_lower = error_str.lower()
+    if "already exists" in error_lower:
+        return True
+    if "duplicate key name" in error_lower and sql and _CREATE_INDEX_RE.search(sql):
+        return True
+    return False
 
 
 class SyncDDLExecutor:
@@ -214,10 +243,27 @@ class SyncDDLExecutor:
             return {"success": True, "sql": sql}
 
         except Exception as e:
-            logger.error(
-                "sync_ddl_executor.ddl_execution_failed", extra={"error": str(e)}
-            )
-            return {"success": False, "error": str(e), "sql": sql}
+            error_str = str(e)
+            # #1537: MySQL's CREATE INDEX has no IF NOT EXISTS, so a re-migration
+            # (auto_migrate on an existing table) raises 1061 "Duplicate key
+            # name". That — and the PG/SQLite "already exists" form — means the
+            # object is already present, which is benign for an idempotent DDL
+            # re-run. Log it at DEBUG, not ERROR (scope 1061 to CREATE INDEX so a
+            # duplicate key inside a CREATE TABLE still surfaces as ERROR). The
+            # return value is unchanged: the caller still receives
+            # {success: False, error} and applies its own disposition. Mirrors
+            # schema_state_manager.py's index-already-exists tolerance.
+            if _is_benign_ddl_object_exists(error_str, sql):
+                logger.debug(
+                    "sync_ddl_executor.ddl_object_already_exists",
+                    extra={"error": error_str, "sql": (sql or "")[:100]},
+                )
+            else:
+                logger.error(
+                    "sync_ddl_executor.ddl_execution_failed",
+                    extra={"error": error_str},
+                )
+            return {"success": False, "error": error_str, "sql": sql}
 
         finally:
             if conn:
@@ -260,17 +306,30 @@ class SyncDDLExecutor:
             return {"success": True, "executed_count": executed}
 
         except Exception as e:
-            logger.error(
-                "sync_ddl_executor.ddl_batch_execution_failed_at_statement",
-                extra={"executed_1": executed + 1, "error": str(e)},
+            error_str = str(e)
+            failed_sql = (
+                sql_statements[executed] if executed < len(sql_statements) else None
             )
+            # #1537: a MySQL re-migration aborts this batch at the first
+            # IF-NOT-EXISTS-less CREATE INDEX with 1061 "Duplicate key name" —
+            # a benign already-present object (scoped to CREATE INDEX). Log at
+            # DEBUG, not ERROR; the caller still gets {success: False, error}
+            # and decides. Mirrors schema_state_manager.py.
+            if _is_benign_ddl_object_exists(error_str, failed_sql):
+                logger.debug(
+                    "sync_ddl_executor.ddl_batch_object_already_exists",
+                    extra={"executed_1": executed + 1, "error": error_str},
+                )
+            else:
+                logger.error(
+                    "sync_ddl_executor.ddl_batch_execution_failed_at_statement",
+                    extra={"executed_1": executed + 1, "error": error_str},
+                )
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_str,
                 "executed_count": executed,
-                "failed_sql": (
-                    sql_statements[executed] if executed < len(sql_statements) else None
-                ),
+                "failed_sql": failed_sql,
             }
 
         finally:

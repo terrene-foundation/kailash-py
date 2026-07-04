@@ -172,7 +172,7 @@ class BulkUpsertConflictTargetError(DataFlowError):
 
 class UpsertConflictTargetError(DataFlowError):
     """Raised when a single-record upsert's ``conflict_on`` target is not backed
-    by a PRIMARY KEY or UNIQUE constraint (issue #1520).
+    by a PRIMARY KEY or UNIQUE constraint (PostgreSQL #1520 / MySQL #1537).
 
     On PostgreSQL a native ``INSERT ... ON CONFLICT (cols) DO UPDATE`` requires
     the conflict-target columns to be a PK or UNIQUE key, and the statement is
@@ -181,18 +181,31 @@ class UpsertConflictTargetError(DataFlowError):
     use a precheck and therefore never reaches this error). When the target is
     not unique, PostgreSQL rejects the statement with the opaque driver message
     "there is no unique or exclusion constraint matching the ON CONFLICT
-    specification". DataFlow converts that into this actionable typed error
-    rather than surfacing the raw driver text (which never names ``conflict_on``,
-    the offending field, or the remedy).
+    specification"; DataFlow converts that REACTIVELY into this actionable typed
+    error rather than surfacing the raw driver text (which never names
+    ``conflict_on``, the offending field, or the remedy).
+
+    On MySQL the same requirement holds but the failure mode differs: MySQL's
+    ``INSERT ... ON DUPLICATE KEY UPDATE`` has no explicit conflict target and
+    auto-detects whichever UNIQUE/PRIMARY key a row violates. A
+    ``conflict_on=[non_unique_field]`` upsert therefore raises NO driver error —
+    it silently falls through to a plain INSERT on the fresh ``id`` PK and lands
+    a duplicate row. Because there is no error to catch, DataFlow raises this
+    error PROACTIVELY: before executing the upsert it queries
+    ``information_schema.statistics`` for a UNIQUE/PRIMARY index whose column set
+    exactly matches ``conflict_on`` and raises here when none exists (#1537).
+    MySQL has no WHERE-precheck fallback (unlike SQLite) — the conflict target
+    MUST be a real unique key.
 
     This is the single-record sibling of :class:`BulkUpsertConflictTargetError`.
 
     Attributes:
         conflict_on: The conflict-target columns the caller requested.
         model_name: The model the upsert targeted (best-effort; may be None).
-        original_error: The underlying driver exception, if any.
+        original_error: The underlying driver exception, if any (PostgreSQL
+            only; the MySQL proactive precheck has no driver error to attach).
 
-    Recovery (PostgreSQL — the conflict target MUST be enforceable):
+    Recovery (PostgreSQL AND MySQL — the conflict target MUST be enforceable):
 
     1. Declare the field(s) ``unique=True`` on the model so DataFlow's migration
        creates the backing UNIQUE constraint.

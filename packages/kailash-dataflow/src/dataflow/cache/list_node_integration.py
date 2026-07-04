@@ -262,6 +262,28 @@ class ListNodeCacheIntegration:
             invalidates=[f"{prefix}:{{model}}:*"],
         )
 
+        # Issue #1538: upsert / bulk_upsert MUST register invalidation
+        # patterns too. ``CacheInvalidator.invalidate`` only clears keys for
+        # operations that have a matching pattern (see
+        # ``_find_matching_patterns``); without these two, an
+        # ``invalidate_model_cache(model, "upsert", ...)`` /
+        # ``invalidate_model_cache(model, "bulk_upsert", ...)`` call finds
+        # zero patterns and silently no-ops, leaving a stale primed
+        # list/count entry served forever. Same version-wildcard sweep as
+        # the create/update/delete patterns (``rules/tenant-isolation.md``
+        # Rule 3a).
+        upsert_pattern = InvalidationPattern(
+            model="*",
+            operation="upsert",
+            invalidates=[f"{prefix}:{{model}}:*"],
+        )
+
+        bulk_upsert_pattern = InvalidationPattern(
+            model="*",
+            operation="bulk_upsert",
+            invalidates=[f"{prefix}:{{model}}:*"],
+        )
+
         # Register patterns
         patterns = [
             create_pattern,
@@ -270,6 +292,8 @@ class ListNodeCacheIntegration:
             bulk_create_pattern,
             bulk_update_pattern,
             bulk_delete_pattern,
+            upsert_pattern,
+            bulk_upsert_pattern,
         ]
 
         for pattern in patterns:

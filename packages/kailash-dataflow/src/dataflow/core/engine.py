@@ -5713,6 +5713,16 @@ class DataFlow(DataFlowEventMixin):
             List of CREATE INDEX SQL statements
         """
         table_name = self._class_name_to_table_name(model_name)
+        # Defense-in-depth (dataflow-identifier-safety MUST-1/MUST-5): the
+        # index/field/foreign_key identifiers below are already validated before
+        # interpolation, but the derived table_name was not. Validate it too so
+        # a future refactor sourcing the table name from a user-influenced path
+        # (tenant prefix, config, registry) cannot silently reopen a CREATE
+        # INDEX ... ON {table_name} injection vector. #1537 touched these exact
+        # CREATE INDEX lines, so hardening is in-scope per scanner-surface symmetry.
+        from dataflow.query.models import validate_identifier as _validate_id
+
+        _validate_id(table_name)
         indexes = []
 
         # Get model configuration for custom indexes
@@ -5741,12 +5751,20 @@ class DataFlow(DataFlowEventMixin):
 
                     unique_keyword = "UNIQUE " if unique else ""
                     fields_str = ", ".join(fields)
-                    sql = f"CREATE {unique_keyword}INDEX IF NOT EXISTS {index_name} ON {table_name} ({fields_str});"
+                    # MySQL's CREATE INDEX does NOT support IF NOT EXISTS
+                    # (unlike PostgreSQL/SQLite); emitting it raises a 1064
+                    # syntax error and the index — including the UNIQUE index a
+                    # single-record upsert conflict target relies on (#1537) —
+                    # never gets created. schema_state_manager.py already
+                    # branches on this for the migration-history table; mirror
+                    # it here for model indexes.
+                    if_not_exists = (
+                        "" if database_type.lower() == "mysql" else "IF NOT EXISTS "
+                    )
+                    sql = f"CREATE {unique_keyword}INDEX {if_not_exists}{index_name} ON {table_name} ({fields_str});"
                     indexes.append(sql)
 
-        # Add automatic indexes for foreign keys
-        from dataflow.query.models import validate_identifier as _validate_id
-
+        # Add automatic indexes for foreign keys (_validate_id imported above).
         relationships = self.get_relationships(model_name)
         for rel_name, rel_info in relationships.items():
             if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
@@ -5754,7 +5772,11 @@ class DataFlow(DataFlowEventMixin):
                 _validate_id(foreign_key)
                 index_name = f"idx_{table_name}_{foreign_key}"
                 _validate_id(index_name)
-                sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({foreign_key});"
+                # MySQL rejects IF NOT EXISTS on CREATE INDEX (see above).
+                if_not_exists = (
+                    "" if database_type.lower() == "mysql" else "IF NOT EXISTS "
+                )
+                sql = f"CREATE INDEX {if_not_exists}{index_name} ON {table_name} ({foreign_key});"
                 indexes.append(sql)
 
         return indexes
@@ -8196,9 +8218,20 @@ class DataFlow(DataFlowEventMixin):
             error = stmt_result.get("exception") or RuntimeError(
                 stmt_result.get("error") or "DDL failed"
             )
-            # "already exists" is acceptable per legacy semantics.
+            # "already exists" is acceptable per legacy semantics. MySQL's
+            # CREATE INDEX has no IF NOT EXISTS (#1537 dropped it, else 1064),
+            # so a re-migration against an existing table raises 1061 "Duplicate
+            # key name" — the same benign already-present signal. Scope 1061 to
+            # CREATE INDEX statements so a duplicate key WITHIN a CREATE TABLE
+            # definition still surfaces. Mirrors schema_state_manager.py.
             err_text = str(stmt_result.get("error") or "")
-            if "already exists" in err_text.lower():
+            err_lower = err_text.lower()
+            _is_create_index = bool(
+                re.search(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b", statement)
+            )
+            if "already exists" in err_lower or (
+                _is_create_index and "duplicate key name" in err_lower
+            ):
                 logger.debug(
                     "engine.ddl_already_exists",
                     extra={"statement": statement[:100]},
@@ -8290,8 +8323,18 @@ class DataFlow(DataFlowEventMixin):
             error = stmt_result.get("exception") or RuntimeError(
                 stmt_result.get("error") or "DDL failed"
             )
+            # See sync _execute_ddl above: MySQL re-migration raises 1061
+            # "Duplicate key name" on the IF-NOT-EXISTS-less CREATE INDEX (#1537);
+            # treat it as benign (scoped to CREATE INDEX) alongside "already
+            # exists". Mirrors schema_state_manager.py.
             err_text = str(stmt_result.get("error") or "")
-            if "already exists" in err_text.lower():
+            err_lower = err_text.lower()
+            _is_create_index = bool(
+                re.search(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b", statement)
+            )
+            if "already exists" in err_lower or (
+                _is_create_index and "duplicate key name" in err_lower
+            ):
                 logger.debug(
                     "engine.ddl_async_already_exists",
                     extra={"statement": statement[:100]},
@@ -8521,9 +8564,29 @@ class DataFlow(DataFlowEventMixin):
                 for index_sql in indexes:
                     idx_result = executor.execute_ddl(index_sql)
                     if not idx_result.get("success"):
-                        logger.warning(
-                            f"Failed to create index for '{model_name}': {idx_result.get('error')}"
-                        )
+                        idx_error = str(idx_result.get("error") or "")
+                        idx_error_lower = idx_error.lower()
+                        # MySQL re-migration (#1537): CREATE INDEX has no IF NOT
+                        # EXISTS on MySQL, so re-running against an existing table
+                        # raises 1061 "Duplicate key name". Treat that (and the
+                        # PG/SQLite "already exists" form) as benign — the index
+                        # is already present. Mirrors schema_state_manager.py so a
+                        # restart does NOT emit a spurious WARN.
+                        if (
+                            "duplicate key name" in idx_error_lower
+                            or "already exists" in idx_error_lower
+                        ):
+                            logger.debug(
+                                "engine.index_already_exists_ignoring",
+                                extra={
+                                    "model_name": model_name,
+                                    "error": idx_error,
+                                },
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to create index for '{model_name}': {idx_error}"
+                            )
 
                 # Mark as ensured in cache
                 schema_checksum = None
@@ -8588,13 +8651,30 @@ class DataFlow(DataFlowEventMixin):
     def _create_tables_batch(self, model_names: list) -> None:
         """Create tables for multiple models in a single database connection.
 
-        Uses SyncDDLExecutor.execute_ddl_batch() to run all CREATE TABLE and
-        CREATE INDEX statements through one connection. This eliminates the
-        rapid open/close churn that overwhelms Docker Desktop's vpnkit proxy
-        when creating tables for many models (e.g., 21 models = 63+ connections
-        reduced to 1 connection).
+        Uses :meth:`SyncDDLExecutor.execute_ddl_batch_per_statement` to run all
+        CREATE TABLE and CREATE INDEX statements through one connection. This
+        eliminates the rapid open/close churn that overwhelms Docker Desktop's
+        vpnkit proxy when creating tables for many models (e.g., 21 models =
+        63+ connections reduced to 1 connection).
 
-        Falls back to per-model _create_table_sync() if batching fails.
+        Issue #1537 (regression fix): the batch previously used the
+        abort-on-first-error :meth:`execute_ddl_batch`. On a MySQL re-migration
+        the batch aborted at an existing table's ``CREATE INDEX`` (1061
+        "Duplicate key name" — MySQL's ``CREATE INDEX`` has no ``IF NOT
+        EXISTS``); the round-1 benign-1061 disposition then marked EVERY model
+        ensured and skipped the fallback, so a NEW model whose ``CREATE TABLE``
+        was ordered AFTER the abort never ran yet was cached as ensured — first
+        CRUD on it failed table-not-found and never self-healed. The
+        per-statement executor runs ALL statements (no abort): an existing
+        index's 1061 is benign-skipped per-statement (DEBUG), the new table's
+        CREATE TABLE still runs, and a REAL failure on any statement still
+        surfaces. Each model is marked ensured based on ITS OWN CREATE TABLE
+        succeeding (or already existing) — never because a sibling's index 1061
+        was benign.
+
+        Failed CREATE TABLE statements are recorded via ``_record_failed_ddl``
+        so the next ``ensure_table_exists()`` fails-fast (auto_migrate=True) or
+        log-and-continues (auto_migrate="warn"), matching ``_create_table_sync``.
 
         Args:
             model_names: List of model names to create tables for.
@@ -8634,19 +8714,87 @@ class DataFlow(DataFlowEventMixin):
             if not all_sql:
                 return
 
-            # Execute all DDL in one connection
+            # Execute all DDL in one connection, per-statement (issue #1537).
+            # execute_ddl_batch_per_statement does NOT abort on first error, so
+            # an existing model's CREATE INDEX raising 1061 no longer masks a
+            # later NEW model's CREATE TABLE. Each statement's success/failure is
+            # captured independently and dispositioned per-model below.
             # Issue #1502: for bare ``:memory:`` write DDL to the per-instance
             # shared-cache URI so tables land in the SAME DB CRUD reads from.
             executor = SyncDDLExecutor(self._memory_db_uri or database_url)
-            result = executor.execute_ddl_batch(all_sql)
+            results = executor.execute_ddl_batch_per_statement(all_sql)
 
-            if result.get("success"):
-                logger.debug(
-                    "Batch DDL: created %d tables + indexes in single connection",
-                    len(model_names),
-                )
-                # Mark all as ensured in cache
-                for model_name in model_names:
+            # Per-model disposition: a model is marked ensured ONLY if its OWN
+            # CREATE TABLE succeeded (or was benign-already-exists) — never
+            # because a sibling's index 1061 was benign. This mirrors the
+            # per-statement disposition already used by ``_execute_ddl`` /
+            # ``_execute_ddl_async`` and the ensure/record semantics of
+            # ``_create_table_sync``.
+            for model_name in model_names:
+                start, count = model_sql_map[model_name]
+                table_ok = False
+                for offset in range(count):
+                    idx = start + offset
+                    stmt = all_sql[idx]
+                    stmt_result = results[idx]
+                    # The first statement of every model's slice is its
+                    # CREATE TABLE; the remainder are its CREATE INDEX rows.
+                    is_create_table = offset == 0
+
+                    if stmt_result.get("success"):
+                        logger.debug(
+                            "engine.batch_ddl_executed",
+                            extra={
+                                "statement": stmt[:100],
+                                "duration_ms": stmt_result.get("duration_ms"),
+                            },
+                        )
+                        if is_create_table:
+                            table_ok = True
+                        continue
+
+                    err_text = str(stmt_result.get("error") or "")
+                    err_lower = err_text.lower()
+                    # Benign already-present signal: PG/SQLite "already exists"
+                    # (any object) OR MySQL 1061 "Duplicate key name" scoped to a
+                    # CREATE INDEX (MySQL CREATE INDEX has no IF NOT EXISTS, so a
+                    # re-migration re-runs it against an existing table). A 1061
+                    # INSIDE a CREATE TABLE is a genuine schema bug and falls
+                    # through to the real-failure path. Mirrors
+                    # schema_state_manager.py + _execute_ddl.
+                    _is_create_index = bool(
+                        re.search(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b", stmt)
+                    )
+                    if "already exists" in err_lower or (
+                        _is_create_index and "duplicate key name" in err_lower
+                    ):
+                        logger.debug(
+                            "engine.batch_ddl_already_exists",
+                            extra={"statement": stmt[:100]},
+                        )
+                        # A CREATE TABLE that "already exists" IS ensured.
+                        if is_create_table:
+                            table_ok = True
+                        continue
+
+                    # Real failure on this statement — surface it (never swallow).
+                    logger.error(
+                        "engine.batch_ddl_failed",
+                        extra={"statement": stmt[:100], "error": err_text},
+                    )
+                    error = stmt_result.get("exception") or RuntimeError(
+                        err_text or "DDL failed"
+                    )
+                    if is_create_table:
+                        # CREATE TABLE genuinely failed — do NOT mark ensured.
+                        # Record so the next ensure_table_exists() fails-fast
+                        # (auto_migrate=True) or log-and-continues ("warn").
+                        self._record_failed_ddl(model_name, error, stmt)
+                    # Index / FK / other real failures continue under legacy
+                    # semantics (same as _create_table_sync / _execute_ddl):
+                    # logged at ERROR above, non-fatal to the table's existence.
+
+                if table_ok:
                     schema_checksum = None
                     model_info = self._models.get(model_name)
                     if model_info and self._schema_cache.enable_schema_validation:
@@ -8656,31 +8804,6 @@ class DataFlow(DataFlowEventMixin):
                     self._schema_cache.mark_table_ensured(
                         model_name, database_url, schema_checksum
                     )
-            else:
-                error = result.get("error", "")
-                executed = result.get("executed_count", 0)
-                if "already exists" in error.lower():
-                    logger.debug(
-                        "Batch DDL: some tables already exist (OK), "
-                        "executed %d/%d statements",
-                        executed,
-                        len(all_sql),
-                    )
-                    # Mark all as ensured (they exist either way)
-                    for model_name in model_names:
-                        self._schema_cache.mark_table_ensured(
-                            model_name, database_url, None
-                        )
-                else:
-                    logger.warning(
-                        "Batch DDL failed at statement %d: %s. "
-                        "Falling back to per-model creation.",
-                        executed + 1,
-                        error,
-                    )
-                    # Fallback: try each model individually
-                    for model_name in model_names:
-                        self._create_table_sync(model_name)
 
         except ImportError:
             # SyncDDLExecutor not available — fall back to per-model
@@ -8778,8 +8901,19 @@ class DataFlow(DataFlowEventMixin):
                         )
                     else:
                         error = result.get("error", "")
-                        # "already exists" is OK
-                        if "already exists" in error.lower():
+                        # "already exists" is OK. MySQL's CREATE INDEX has no
+                        # IF NOT EXISTS (#1537), so a re-migration raises 1061
+                        # "Duplicate key name" — the same benign already-present
+                        # signal; scope 1061 to CREATE INDEX so a duplicate key
+                        # inside a CREATE TABLE still surfaces. Mirrors
+                        # schema_state_manager.py.
+                        error_lower = error.lower()
+                        _is_create_index = bool(
+                            re.search(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b", statement)
+                        )
+                        if "already exists" in error_lower or (
+                            _is_create_index and "duplicate key name" in error_lower
+                        ):
                             success_count += 1
                             logger.debug(
                                 f"Table/index already exists (OK): {statement[:60]}..."

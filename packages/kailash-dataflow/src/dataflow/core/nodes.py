@@ -3484,6 +3484,103 @@ class NodeGenerator:
 
                         created_flag = not row_exists
 
+                    elif database_type.lower() == "mysql":
+                        # Issue #1537: MySQL's ON DUPLICATE KEY UPDATE has NO
+                        # explicit conflict target — MySQL auto-detects whichever
+                        # UNIQUE/PRIMARY key a candidate row violates. DataFlow
+                        # mandates an `id` PK and generates a fresh id on the
+                        # create branch, so a conflict_on=[non_unique_field]
+                        # upsert hits no key violation → a plain INSERT lands a
+                        # DUPLICATE row and conflict_on is silently ignored. This
+                        # is the MySQL analog of #1520 (PostgreSQL), but a
+                        # SILENT-wrong-result failure mode: MySQL raises no error,
+                        # so the reactive `_is_conflict_target_error` catch below
+                        # (which converts PostgreSQL's opaque driver message) can
+                        # never fire. The complement is a PROACTIVE precheck:
+                        # verify a UNIQUE/PRIMARY index whose column set is
+                        # EXACTLY set(conflict_columns) backs the target BEFORE
+                        # building the ON DUPLICATE KEY UPDATE; if absent, raise
+                        # the same typed UpsertConflictTargetError (#1520) naming
+                        # conflict_on + the remedy.
+                        mysql_precheck_node = (
+                            self.dataflow_instance._get_or_create_async_sql_node(
+                                database_type
+                            )
+                        )
+
+                        # information_schema.statistics.table_schema / table_name
+                        # are string VALUES, not SQL identifiers — bind them as
+                        # parameters (DATABASE() for the live schema, %s for the
+                        # table) so the lookup is injection-safe. table_name is
+                        # ALSO validated by _vid above; this binding is the
+                        # defense-in-depth for the information_schema lookup
+                        # itself (rules/security.md § Parameterized Queries,
+                        # rules/dataflow-identifier-safety.md). non_unique = 0
+                        # selects UNIQUE and PRIMARY indexes only.
+                        index_query = (
+                            "SELECT index_name, column_name "
+                            "FROM information_schema.statistics "
+                            "WHERE table_schema = DATABASE() "
+                            "AND table_name = %s "
+                            "AND non_unique = 0"
+                        )
+                        index_result = await mysql_precheck_node.async_run(
+                            query=index_query,
+                            params=[table_name],
+                            fetch_mode="all",
+                            validate_queries=False,
+                            transaction_mode="auto",
+                        )
+
+                        # Group the fetched rows into {index_name: {columns}}.
+                        unique_index_columns: Dict[str, set] = {}
+                        if (
+                            index_result
+                            and "result" in index_result
+                            and "data" in index_result["result"]
+                        ):
+                            index_rows = index_result["result"]["data"]
+                            if isinstance(index_rows, list):
+                                for _row in index_rows:
+                                    if not isinstance(_row, dict):
+                                        continue
+                                    _idx = _row.get("index_name") or _row.get(
+                                        "INDEX_NAME"
+                                    )
+                                    _col = _row.get("column_name") or _row.get(
+                                        "COLUMN_NAME"
+                                    )
+                                    if _idx is None or _col is None:
+                                        continue
+                                    unique_index_columns.setdefault(_idx, set()).add(
+                                        _col
+                                    )
+
+                        # ON DUPLICATE KEY UPDATE behaves as upsert-on-conflict_on
+                        # ONLY when conflict_on is ITSELF a unique/primary key.
+                        # Require an EXACT column-set match: a unique index over a
+                        # superset/subset of conflict_columns would trigger on a
+                        # DIFFERENT conflict and silently ignore the caller's
+                        # intent. A conflict_on that IS the `id` PK matches the
+                        # PRIMARY index here and correctly proceeds.
+                        target_columns = set(conflict_columns)
+                        has_matching_unique_index = any(
+                            cols == target_columns
+                            for cols in unique_index_columns.values()
+                        )
+                        if not has_matching_unique_index:
+                            logger.debug(
+                                "upsert.mysql.conflict_target_not_unique",
+                                extra={
+                                    "model": self.model_name,
+                                    "conflict_on": list(conflict_columns),
+                                },
+                            )
+                            raise UpsertConflictTargetError(
+                                conflict_on=conflict_columns,
+                                model_name=self.model_name,
+                            )
+
                     # Build upsert query using dialect abstraction.
                     # SQLite: emit an explicit INSERT/UPDATE from the pre-check
                     # result (row_exists) instead of INSERT ... ON CONFLICT, which
@@ -3576,6 +3673,31 @@ class NodeGenerator:
                             row = self._deserialize_json_fields(row)
                             # DATETIME SERIALIZATION FIX: Serialize datetime objects to ISO strings
                             row = self._serialize_datetime_fields(row)
+
+                            # Issue #1538: invalidate the node-level query cache
+                            # (``_cache_integration``) after a successful upsert,
+                            # exactly as the create/update/delete branches do
+                            # (see the ``update`` branch above). Without this the
+                            # UPDATE branch of an upsert leaves a previously-primed
+                            # list/count entry in the node cache; a subsequent
+                            # ``db.express.list(..., cache_ttl=0)`` bypasses the
+                            # Express cache but still hits the stale node-cache
+                            # entry and returns the pre-update row. The Express
+                            # layer's ``_invalidate_model_cache`` only clears the
+                            # Express cache manager, a DIFFERENT backend from
+                            # ``_cache_integration`` — so this node-side call is
+                            # the only thing that clears the node query cache on
+                            # the upsert path. Paired with the ``upsert`` pattern
+                            # registered in
+                            # ``list_node_integration._setup_invalidation_patterns``
+                            # (without a matching pattern this call would no-op).
+                            cache_integration = getattr(
+                                self.dataflow_instance, "_cache_integration", None
+                            )
+                            if cache_integration:
+                                cache_integration.invalidate_model_cache(
+                                    self.model_name, "upsert", row
+                                )
 
                             # Return structure contract:
                             # {

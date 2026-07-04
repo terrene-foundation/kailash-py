@@ -323,9 +323,17 @@ class MySQLDialect(SQLDialect):
     ) -> UpsertQuery:
         """Build MySQL upsert with ON DUPLICATE KEY UPDATE."""
 
-        # Build INSERT clause
+        # Build INSERT clause.
+        # MySQL's adapter (aiomysql) binds POSITIONAL %s placeholders — it does
+        # NOT understand the :p<i> named style the PostgreSQL/SQLite builders
+        # emit (AsyncSQLDatabaseNode's MySQL branch keeps the query verbatim and
+        # passes params as a tuple, so a :p0 query yields "not all arguments
+        # converted during string formatting"). Emit %s here, matching the
+        # hand-built %s create/update SQL in core/nodes.py. nodes.py passes
+        # ``list(upsert_query.params.values())`` — an ordered list — which lines
+        # up positionally with these %s placeholders. (#1537)
         insert_columns = list(insert_data.keys())
-        insert_placeholders = [f":p{i}" for i in range(len(insert_columns))]
+        insert_placeholders = ["%s" for _ in range(len(insert_columns))]
 
         # Build UPDATE clause
         update_clauses = []
