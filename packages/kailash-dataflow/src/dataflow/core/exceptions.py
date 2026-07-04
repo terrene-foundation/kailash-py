@@ -112,6 +112,58 @@ class DDLFailedError(DataFlowError):
         super().__init__(" — ".join(parts))
 
 
+class MigrationNotAppliedError(DataFlowError):
+    """Raised when the async migration system completed WITHOUT applying the
+    schema (``auto_migrate`` returned ``success=False``) but did NOT itself
+    raise.
+
+    Origin: GitHub issue #1548 — silent write loss. The async lazy-DDL path
+    (``ensure_table_exists`` → ``_execute_postgresql_migration_system_async``)
+    treated ``auto_migrate`` returning ``success=False`` (a genuine
+    not-applied outcome under connection-pool exhaustion / process-state
+    accumulation) as merely a ``logger.warning`` and returned normally. The
+    outer ``ensure_table_exists`` handler then marked the table ensured and
+    returned ``True`` while the table physically did not exist — subsequent
+    CRUD "succeeded" via read-your-writes on a pooled connection but the row
+    was never durable.
+
+    This typed error converts that not-applied outcome into a real failure
+    signal that propagates to the outer ``ensure_table_exists`` handler. That
+    handler makes PHYSICAL EXISTENCE the arbiter: it verifies the table against
+    committed state on a fresh connection and
+
+      * if the table is ABSENT — records the failed-DDL state and raises
+        :class:`DDLFailedError` so the caller sees a loud failure and the next
+        access self-heals (the genuine #1548 silent-write-loss);
+      * if the table is PRESENT — treats the not-applied outcome as a benign
+        false-negative (the migration system diffs a single-table target
+        against the whole DB and can refuse a spurious cross-table DROP even
+        though this table exists) and marks it ensured.
+
+    Note: ``auto_migrate`` returning ``(True, [])`` for "already applied" /
+    "no changes needed" is SUCCESS, not failure — those paths are non-raising
+    and never construct this error.
+
+    Attributes:
+        model_name: The model whose migration did not apply.
+
+    See Also:
+        - ``rules/zero-tolerance.md`` Rule 3 (silent fallbacks BLOCKED)
+        - GitHub #1548 (origin issue)
+    """
+
+    def __init__(self, model_name: str, detail: str = "") -> None:
+        self.model_name = model_name
+        self.detail = detail
+        message = (
+            f"Migration for model '{model_name}' completed without applying "
+            f"the schema (auto_migrate returned success=False)"
+        )
+        if detail:
+            message += f": {detail}"
+        super().__init__(message)
+
+
 class BulkUpsertConflictTargetError(DataFlowError):
     """Raised when a bulk upsert's ``conflict_on`` target is not backed by a
     PRIMARY KEY or UNIQUE constraint.
@@ -287,6 +339,7 @@ def sanitize_db_error(msg: str) -> str:
 
 __all__ = [
     "DDLFailedError",
+    "MigrationNotAppliedError",
     "BulkUpsertConflictTargetError",
     "UpsertConflictTargetError",
     "is_conflict_target_error",

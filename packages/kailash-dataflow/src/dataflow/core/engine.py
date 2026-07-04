@@ -886,8 +886,18 @@ class DataFlow(DataFlowEventMixin):
         # without restarting the application (though restart is the
         # canonical recovery path documented on DDLFailedError).
         from .exceptions import DDLFailedError as _DDLFailedError
+        from .exceptions import MigrationNotAppliedError as _MigrationNotAppliedError
+        from .exceptions import sanitize_db_error as _sanitize_db_error
 
         self._DDLFailedError = _DDLFailedError  # cached symbol for hot path
+        # Issue #1548: typed "migration completed but did not apply" error
+        # raised by the async lazy-DDL helpers when auto_migrate returns
+        # success=False, so the outer ensure_table_exists() fails loud.
+        self._MigrationNotAppliedError = _MigrationNotAppliedError
+        # Issue #1548 (red-team #6): redact DB DETAIL/Key(value) clauses from a
+        # surfaced DDL error before it enters DDLFailedError's message, matching
+        # the bulk-upsert error paths.
+        self._sanitize_db_error = _sanitize_db_error
         self._failed_table_creations: Dict[str, FailedDDLRecord] = {}
 
     # ------------------------------------------------------------------
@@ -2274,6 +2284,32 @@ class DataFlow(DataFlowEventMixin):
                     model_name, fields
                 )
 
+            # Issue #1548: defense-in-depth physical-existence verification.
+            # Before trusting the schema-management success path, confirm the
+            # table PHYSICALLY exists using a FRESH connection that reflects
+            # COMMITTED state (NOT the pooled connection that may see
+            # uncommitted read-your-writes). This closes the silent-write-loss
+            # class even if some other path reports false success. It runs ONCE
+            # per actual ensure-miss (the schema-cache HIT fast path returned
+            # early above, so ADR-001 performance is untouched). A DEFINITIVE
+            # "table absent" raises below so the caller sees a loud failure and
+            # the next access self-heals; an INCONCLUSIVE check (verification
+            # could not run) logs WARN and does not block — the primary
+            # durability guarantee is the un-swallowed migration path above.
+            physically_exists = await self._verify_table_physically_exists(
+                model_name, database_url
+            )
+            if physically_exists is False:
+                # DEFINITIVE absent despite a "success" return — the exact
+                # silent-write-loss #1548 targets. Raise a plain signal; the
+                # except handler below is the single producer of DDLFailedError
+                # (it re-confirms absence, records failed-DDL state, and raises).
+                raise RuntimeError(
+                    "schema management reported success but the table does not "
+                    "physically exist (issue #1548 silent-write-loss guard); "
+                    "fresh committed-state existence check returned absent"
+                )
+
             # ADR-001: Mark as successfully ensured in cache
             self._schema_cache.mark_table_ensured(
                 model_name, database_url, schema_checksum
@@ -2288,11 +2324,53 @@ class DataFlow(DataFlowEventMixin):
         except Exception as e:
             logger.error(
                 "engine.failed_to_ensure_table_exists_for",
-                extra={"model_name": model_name, "error": str(e)},
+                # Issue #1548: sanitize — a DDL error may carry a
+                # `DETAIL: Key(col)=(value)` PII clause (security.md § no-secrets-in-logs).
+                extra={
+                    "model_name": model_name,
+                    "error": self._sanitize_db_error(str(e)),
+                },
             )
 
-            # ADR-001: Mark as failed in cache
-            self._schema_cache.mark_table_failed(model_name, database_url, str(e))
+            # Issue #1548: physical existence is the ARBITER. A migration
+            # "failure" signal (the now-un-swallowed raise from the async
+            # migration helpers) is NOT automatically a durability loss — the
+            # migration system builds a SINGLE-table target schema and diffs it
+            # against the WHOLE database, so on a shared/multi-table DB it can
+            # report success=False (or refuse a spurious cross-table DROP) even
+            # though THIS model's table exists perfectly. Before declaring a
+            # failure, verify committed physical existence: if the table IS
+            # present the "failure" was benign — mark ensured and return True
+            # (no false DDLFailedError, no false circuit-breaker trip). Only a
+            # DEFINITIVE-absent (or inconclusive) table proceeds to the loud
+            # failure path below, which IS the genuine silent-write-loss #1548
+            # was filed for. This reconciliation runs ONLY on the already-slow
+            # error path — the cache-hit fast path is untouched.
+            physically_exists = await self._verify_table_physically_exists(
+                model_name, database_url
+            )
+            if physically_exists is True:
+                logger.debug(
+                    "engine.ensure_recovered_table_physically_present",
+                    extra={"model_name": model_name},
+                )
+                # Clear any stale failed-DDL record so the circuit breaker does
+                # not fail-fast a model whose table actually exists (#696 wiring).
+                self._clear_failed_ddl(model_name)
+                self._schema_cache.mark_table_ensured(
+                    model_name, database_url, schema_checksum
+                )
+                return True
+
+            # ADR-001: Mark as failed in cache. Issue #1548: sanitize the
+            # failure reason — schema_cache renders it in a WARN log AND in the
+            # cache-info diagnostic return (`last_failure_reason`), both of which
+            # could otherwise surface a `DETAIL: Key(col)=(value)` PII clause
+            # (security.md § no-secrets-in-logs; sibling of the 2 sanitized sites
+            # in this same handler).
+            self._schema_cache.mark_table_failed(
+                model_name, database_url, self._sanitize_db_error(str(e))
+            )
 
             # Issue #696: record failed-DDL state so the next access fails-fast
             # instead of re-entering this method (which would re-fire the DDL
@@ -2307,13 +2385,167 @@ class DataFlow(DataFlowEventMixin):
             # structured exception, not a silent False return that the caller
             # likely ignores.
             if not self._auto_migrate_warn:
+                # Red-team #6: redact any DB DETAIL / Key(value) clause from the
+                # surfaced error text before it enters DDLFailedError's message
+                # (symmetry with the bulk-upsert error paths). The original
+                # exception type name is preserved for diagnosability; the raw
+                # exception stays as __cause__ (traceback-only, not user-facing).
+                safe_text = self._sanitize_db_error(f"{type(e).__name__}: {e}")
                 raise self._DDLFailedError(
                     model_name=model_name,
-                    original_error=e,
+                    original_error=RuntimeError(safe_text),
                     statement_preview="",
                 ) from e
 
             return False
+
+    async def _verify_table_physically_exists(
+        self, model_name: str, database_url: str
+    ) -> Optional[bool]:
+        """Issue #1548: verify a table PHYSICALLY exists using a fresh
+        connection that reflects COMMITTED state.
+
+        The async lazy-DDL path can (under fault injection or a genuinely
+        false-success migration) report success without the table existing.
+        A pooled connection may then satisfy CRUD via read-your-writes while
+        the row is never durable. This check deliberately opens a FRESH
+        connection (not the pooled one) so it sees only committed state.
+
+        Returns:
+            True  — the table definitively exists (proceed to mark ensured).
+            False — the table is definitively absent (caller raises
+                    DDLFailedError; the silent-write-loss guard).
+            None  — the check could not run conclusively (e.g. bare in-memory
+                    SQLite with no shared URI, or a verification-time
+                    connection error). Logged at WARN; caller does NOT block,
+                    because the primary durability guarantee is the
+                    un-swallowed migration path, not this secondary check.
+
+        The identifier is DataFlow-internally generated (model → table name)
+        and is passed as a BOUND parameter to the existence query — never
+        f-string interpolated into the SQL text.
+
+        Schema resolution (red-team #2 — default-schema parity): DataFlow uses
+        UNQUALIFIED table names for BOTH DDL creation (``SyncDDLExecutor``
+        psycopg2 + the migration-system asyncpg connection, all built from the
+        same DSN) AND CRUD (``AsyncSQLDatabaseNode`` pooled connections). It
+        never issues a runtime ``SET search_path`` on the creation path, so a
+        table lands in the schema the DSN resolves to — ``public`` by default,
+        or whatever the DSN's ``options=-csearch_path=...`` carries. This fresh
+        verify connection is rebuilt from the SAME DSN (``ConnectionParser``
+        preserves ``query_params``/``options``), so ``to_regclass(<bare name>)``
+        resolves against the identical search_path the table was CREATED under —
+        verify parity holds with creation. Deployments that place DataFlow
+        tables in a non-default schema exclusively via a runtime ``SET
+        search_path`` on pooled connections (NOT the DSN) are unsupported by the
+        creation path itself and out of scope here.
+        """
+        table_name = self._get_table_name(model_name)
+        url_lower = database_url.lower()
+
+        try:
+            if "postgresql" in url_lower or "postgres" in url_lower:
+                import asyncpg
+
+                from ..adapters.connection_parser import ConnectionParser
+
+                components = ConnectionParser.parse_connection_string(database_url)
+                safe = ConnectionParser.build_connection_string(
+                    scheme=components.get("scheme"),
+                    host=components.get("host"),
+                    database=components.get("database"),
+                    username=components.get("username"),
+                    password=components.get("password"),
+                    port=components.get("port"),
+                    **components.get("query_params", {}),
+                )
+                # Red-team #4: bound connect timeout. This fresh, non-pool
+                # connect happens during the exact pool-exhaustion scenario
+                # #1548 targets; a short timeout makes a saturated server fail
+                # FAST → inconclusive (None) rather than hanging and piling onto
+                # the saturation. 5s is generous for a same-host verify yet far
+                # below any request deadline.
+                conn = await asyncpg.connect(safe, timeout=5)
+                try:
+                    # to_regclass() returns NULL when the relation does not
+                    # exist; the table name is bound as a parameter (value
+                    # binding), so this is injection-safe. Resolution honors
+                    # the connection search_path, matching how CRUD reaches
+                    # the same table (see the schema-resolution note above).
+                    reg = await conn.fetchval("SELECT to_regclass($1)", table_name)
+                    return reg is not None
+                finally:
+                    await conn.close()
+
+            elif (
+                "sqlite" in url_lower
+                or database_url == ":memory:"
+                or database_url.endswith(".db")
+            ):
+                import sqlite3
+
+                if self._memory_db_uri is not None:
+                    # Shared-cache in-memory DB: a fresh connection to the SAME
+                    # shared URI sees committed state. A bare ``:memory:``
+                    # connection would be a DIFFERENT empty DB and produce a
+                    # false "absent" — hence the shared URI is required here.
+                    conn = sqlite3.connect(
+                        self._memory_db_uri, uri=True, check_same_thread=False
+                    )
+                elif database_url in (":memory:", "sqlite:///:memory:"):
+                    # Bare in-memory with no shared URI — cannot verify against
+                    # committed state without reopening a different empty DB.
+                    logger.warning(
+                        "engine.table_existence_check_inconclusive_memory",
+                        extra={"model_name": model_name},
+                    )
+                    return None
+                else:
+                    # File-based SQLite: strip the scheme prefix if present.
+                    path = database_url
+                    for prefix in ("sqlite:///", "sqlite://"):
+                        if path.startswith(prefix):
+                            path = path[len(prefix) :]
+                            break
+                    conn = sqlite3.connect(path, check_same_thread=False)
+                try:
+                    cur = conn.execute(
+                        "SELECT name FROM sqlite_master "
+                        "WHERE type='table' AND name=?",
+                        (table_name,),
+                    )
+                    return cur.fetchone() is not None
+                finally:
+                    conn.close()
+
+            else:
+                # Unknown backend (e.g. MongoDB) — no SQL table concept to
+                # verify. Inconclusive, do not block.
+                logger.warning(
+                    "engine.table_existence_check_inconclusive_backend",
+                    extra={"model_name": model_name},
+                )
+                return None
+
+        except Exception as e:
+            # A verification-time connection error is inconclusive, NOT a
+            # definitive "absent". Log at WARN and let the caller proceed — the
+            # primary durability guarantee is the un-swallowed migration path;
+            # a false raise here would break legitimate flows under a transient
+            # connection blip.
+            # Red-team #5: log the exception TYPE + a masked DB URL only. The raw
+            # exception message is NOT logged — ConnectionParser errors can echo
+            # DSN/URL fragments (credentials), and mask_url canonicalizes the URL
+            # to scheme://***@host form (observability.md Rule 6).
+            logger.warning(
+                "engine.table_existence_check_error",
+                extra={
+                    "model_name": model_name,
+                    "error_type": type(e).__name__,
+                    "database": mask_url(database_url),
+                },
+            )
+            return None
 
     def _get_table_status(self, model_name: str) -> str:
         """
@@ -2382,16 +2614,41 @@ class DataFlow(DataFlowEventMixin):
                     f"SQLite table '{table_name}' ready for model '{model_name}'"
                 )
             else:
-                logger.warning(
-                    f"SQLite migration failed for model '{model_name}': {migrations}"
+                # Issue #1548: symmetric with the PostgreSQL path. A
+                # success=False return is a genuine "migration did not apply"
+                # outcome; log AND raise so ensure_table_exists() records the
+                # failed-DDL state and re-raises DDLFailedError rather than
+                # silently marking the (non-existent) table ensured.
+                # "already applied" / "no changes needed" returns success=True.
+                # Red-team #3: match the clean PG sibling — the ERROR log carries
+                # only model_name (NOT str(migrations), which serializes
+                # column names/types = schema-level identifiers, observability.md
+                # Rule 8). The migrations detail stays at DEBUG, and the raised
+                # error carries no schema detail.
+                logger.error(
+                    "engine.sqlite_migration_not_applied_for_model",
+                    extra={"model_name": model_name},
                 )
+                logger.debug(
+                    "engine.sqlite_migration_not_applied_detail",
+                    extra={"model_name": model_name, "migrations": str(migrations)},
+                )
+                raise self._MigrationNotAppliedError(model_name)
 
         except Exception as e:
+            # Issue #1548: log AND re-raise. Previously this swallowed the
+            # exception ("table will be created on-demand"), letting the outer
+            # ensure_table_exists() mark the table ensured despite the failure.
             logger.error(
                 "engine.sqlite_migration_error_for_model",
-                extra={"model_name": model_name, "error": str(e)},
+                # Issue #1548: sanitize — DDL error may carry a
+                # `DETAIL: Key(col)=(value)` PII clause (security.md).
+                extra={
+                    "model_name": model_name,
+                    "error": self._sanitize_db_error(str(e)),
+                },
             )
-            # Don't fail the entire process - table will be created on-demand
+            raise
 
     async def _execute_postgresql_schema_management_async(
         self, model_name: str, fields: Dict[str, Any]
@@ -2521,15 +2778,36 @@ class DataFlow(DataFlowEventMixin):
                             f"Applied migration {migration.version} with {len(migration.operations)} operations"
                         )
             else:
-                logger.warning(
-                    f"PostgreSQL migration was not applied for model '{model_name}'"
+                # Issue #1548: auto_migrate returning success=False is a genuine
+                # "migration did not apply" outcome (e.g. under connection-pool
+                # exhaustion / process-state accumulation). Previously this was
+                # only a logger.warning and the method returned normally, so the
+                # outer ensure_table_exists() then marked the table ensured and
+                # returned True while the table physically did NOT exist —
+                # silent write loss. Log AND raise so the outer handler records
+                # the failed-DDL state and re-raises DDLFailedError (loud).
+                # NOTE: "already applied" / "no changes needed" returns
+                # success=True (not False) and never reaches this branch.
+                logger.error(
+                    "engine.postgresql_migration_not_applied_for_model",
+                    extra={"model_name": model_name},
                 )
+                raise self._MigrationNotAppliedError(model_name)
 
         except Exception as e:
+            # Issue #1548: log AND re-raise. Swallowing the exception here (the
+            # historical bug) let control return normally to ensure_table_exists,
+            # which marked the table ensured despite the DDL having failed.
             logger.error(
                 "engine.postgresql_migration_error_for_model",
-                extra={"model_name": model_name, "error": str(e)},
+                # Issue #1548: sanitize — DDL error may carry a
+                # `DETAIL: Key(col)=(value)` PII clause (security.md).
+                extra={
+                    "model_name": model_name,
+                    "error": self._sanitize_db_error(str(e)),
+                },
             )
+            raise
 
     async def auto_migrate(
         self,
@@ -8391,9 +8669,17 @@ class DataFlow(DataFlowEventMixin):
             # aggregators.
             return existing
 
+        # Issue #1548: sanitize the stored error text ONCE at this single
+        # storage point so BOTH the circuit-breaker re-raise (_check_failed_ddl
+        # rebuilds DDLFailedError from record.error_message) AND the ERROR log
+        # below are redacted — matching the first-access raise site in
+        # ensure_table_exists. A DDL error can carry a `DETAIL: Key(col)=(value)`
+        # clause (e.g. CREATE UNIQUE INDEX on duplicate data) whose value is
+        # PII; per security.md § "No secrets in logs" + Multi-Site Kwarg
+        # Plumbing, every surface that renders it MUST be redacted, not just one.
         record = FailedDDLRecord(
             timestamp=time.time(),
-            error_message=f"{type(error).__name__}: {error}",
+            error_message=self._sanitize_db_error(f"{type(error).__name__}: {error}"),
             statement_preview=(statement or "")[:200],
         )
         self._failed_table_creations[model_name] = record
@@ -8407,7 +8693,7 @@ class DataFlow(DataFlowEventMixin):
             extra={
                 "model_name": model_name,
                 "error_type": type(error).__name__,
-                "error_message": str(error)[:500],
+                "error_message": record.error_message[:500],
                 "statement_preview": record.statement_preview,
                 "auto_migrate_mode": (
                     "warn" if self._auto_migrate_warn else "fail-fast"
