@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from dataflow.adapters.base_adapter import BaseAdapter
+from dataflow.core.exceptions import sanitize_db_error
 
 # Motor types are runtime-only — see ``connect()`` for the lazy import.
 # The class attributes ``_client`` and ``_db`` are typed as ``Any`` so
@@ -169,7 +170,8 @@ class MongoDBAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(
-                "mongodb.failed_to_connect_to_mongodb", extra={"error": str(e)}
+                "mongodb.failed_to_connect_to_mongodb",
+                extra={"error": sanitize_db_error(str(e))},
             )
             raise ConnectionError(f"MongoDB connection failed: {e}") from e
 
@@ -194,7 +196,8 @@ class MongoDBAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(
-                "mongodb.error_disconnecting_from_mongodb", extra={"error": str(e)}
+                "mongodb.error_disconnecting_from_mongodb",
+                extra={"error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -238,11 +241,14 @@ class MongoDBAdapter(BaseAdapter):
             }
 
         except Exception as e:
-            logger.error("mongodb.health_check_failed", extra={"error": str(e)})
+            logger.error(
+                "mongodb.health_check_failed",
+                extra={"error": sanitize_db_error(str(e))},
+            )
             return {
                 "connected": False,
                 "database": self._db.name if self._db else None,
-                "error": str(e),
+                "error": sanitize_db_error(str(e)),
             }
 
     def supports_feature(self, feature: str) -> bool:
@@ -315,7 +321,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_insert_document_into",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -359,7 +365,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_bulk_insert_into",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -404,7 +410,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_find_document_in",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -470,7 +476,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_find_documents_in",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -526,7 +532,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_update_document_in",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -582,7 +588,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_update_documents_in",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -622,7 +628,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_delete_document_from",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -663,7 +669,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_delete_documents_from",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -704,7 +710,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_count_documents_in",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -751,7 +757,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_execute_aggregation_on",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -813,7 +819,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_create_index_on",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -849,7 +855,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_list_indexes_on",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -881,7 +887,7 @@ class MongoDBAdapter(BaseAdapter):
                 extra={
                     "index_name": index_name,
                     "collection": collection,
-                    "error": str(e),
+                    "error": sanitize_db_error(str(e)),
                 },
             )
             raise
@@ -921,7 +927,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_create_collection",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -945,7 +951,7 @@ class MongoDBAdapter(BaseAdapter):
         except Exception as e:
             logger.error(
                 "mongodb.failed_to_drop_collection",
-                extra={"collection": collection, "error": str(e)},
+                extra={"collection": collection, "error": sanitize_db_error(str(e))},
             )
             raise
 
@@ -972,7 +978,10 @@ class MongoDBAdapter(BaseAdapter):
             return collection_names
 
         except Exception as e:
-            logger.error("mongodb.failed_to_list_collections", extra={"error": str(e)})
+            logger.error(
+                "mongodb.failed_to_list_collections",
+                extra={"error": sanitize_db_error(str(e))},
+            )
             raise
 
     async def collection_exists(self, collection: str) -> bool:
@@ -1004,7 +1013,8 @@ class MongoDBAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(
-                "mongodb.failed_to_check_collection_existence", extra={"error": str(e)}
+                "mongodb.failed_to_check_collection_existence",
+                extra={"error": sanitize_db_error(str(e))},
             )
             raise
 

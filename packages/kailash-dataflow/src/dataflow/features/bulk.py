@@ -1356,6 +1356,17 @@ class BulkOperations:
             total_skipped = 0
             batches_processed = 0
 
+            # Issue #1546: resolve the MySQL row-alias upsert form ONCE before the
+            # batch loop (one cached SELECT VERSION() round-trip, shared with the
+            # single-record path via the DataFlow instance).
+            mysql_use_row_alias = False
+            if database_type.lower() == "mysql":
+                mysql_use_row_alias = (
+                    await self.dataflow._resolve_mysql_row_alias_support(
+                        self.dataflow._get_or_create_async_sql_node(database_type)
+                    )
+                )
+
             # Process in batches
             for i in range(0, len(data), batch_size):
                 batch = data[i : i + batch_size]
@@ -1380,6 +1391,7 @@ class BulkOperations:
                         conflict_resolution,
                         model_name,
                         conflict_columns,
+                        use_row_alias=mysql_use_row_alias,
                     )
                 else:  # sqlite
                     # SQLite: INSERT ... ON CONFLICT (<conflict_on>) DO UPDATE
@@ -1585,12 +1597,20 @@ class BulkOperations:
         conflict_resolution: str,
         model_name: str,
         conflict_columns: List[str],
+        use_row_alias: bool = False,
     ) -> tuple:
         """Build MySQL upsert query with ON DUPLICATE KEY UPDATE clause.
 
         MySQL auto-detects the violated UNIQUE/PRIMARY key, so ``conflict_on``
         does not appear in the clause itself — it only governs which columns are
         excluded from the update set.
+
+        Issue #1546: ``VALUES(col)`` inside ON DUPLICATE KEY UPDATE is DEPRECATED on
+        MySQL 8.0.20+. When ``use_row_alias`` is True (resolved by the caller to
+        non-MariaDB MySQL >= 8.0.19), emit the row-alias form
+        ``VALUES (...) AS new_row ... col = new_row.col``. The INSERT-side alias
+        declaration and the ODKU-side references are built together here so the two
+        halves cannot drift. MariaDB / MySQL < 8.0.19 keep the legacy form.
         """
         column_names = ", ".join(columns)
         values_placeholders = []
@@ -1606,23 +1626,28 @@ class BulkOperations:
             params.extend(record_params)
 
         values_clause = ", ".join(values_placeholders)
+        alias = "new_row"
+        alias_decl = f" AS {alias}" if use_row_alias else ""
 
         # Build ON DUPLICATE KEY UPDATE clause
         if conflict_resolution in ["skip", "ignore"]:
             # MySQL has no DO NOTHING; a no-op self-assignment of the first
-            # conflict column keeps existing rows unchanged.
+            # conflict column keeps existing rows unchanged (valid in both forms).
             noop_col = conflict_columns[0] if conflict_columns else "id"
             duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
         else:  # update
             update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
-                set_parts = [f"{col} = VALUES({col})" for col in update_columns]
+                if use_row_alias:
+                    set_parts = [f"{col} = {alias}.{col}" for col in update_columns]
+                else:
+                    set_parts = [f"{col} = VALUES({col})" for col in update_columns]
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
             else:
                 noop_col = conflict_columns[0] if conflict_columns else "id"
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
 
-        query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {duplicate_clause}"
+        query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause}{alias_decl} {duplicate_clause}"
         return query, params
 
     def _build_sqlite_upsert(

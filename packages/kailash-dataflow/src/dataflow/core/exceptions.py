@@ -359,15 +359,54 @@ _KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
 # 'name'``. This carries the offending column VALUE but has NEITHER a ``DETAIL:``
 # clause NOR the PostgreSQL ``Key (col)=(value)`` form, so the two regexes above
 # miss it entirely (issue #1550 red-team). Redact the entry value, keep the key
-# name (schema shape, matching the PG ``Key (col)`` treatment). Lazy ``.*?`` to
-# the ``' for key`` anchor so a value containing a literal quote (``O'Brien``)
-# still redacts fully.
-# NOTE (issue #1552 red-team, documented follow-up): the lazy ``.*?`` anchors on
-# the FIRST ``' for key`` occurrence, so a value that literally CONTAINS the
-# substring ``' for key`` leaks the tail. A greedy fix risks over-matching and
-# breaking the keyname-preservation contract pinned by #1550's test; the adversarial
-# edge is tracked separately and intentionally left as-is here.
-_MYSQL_DUP_ENTRY_RE = re.compile(r"Duplicate entry '.*?' for key", re.IGNORECASE)
+# name (schema shape, matching the PG ``Key (col)`` treatment).
+#
+# Issue #1557 fix: the value class is GREEDY (``.*``) and the redaction anchors on
+# the FINAL ``' for key '<name>'`` structured suffix, NOT the first ``' for key``.
+# The prior lazy ``.*?`` anchored on the FIRST occurrence, so a value that
+# literally CONTAINS the substring ``' for key`` (e.g. ``x' for key 'y``) left its
+# tail un-redacted. Greedy-to-final-suffix folds any embedded ``' for key`` into
+# the redacted value while STILL preserving the trailing key NAME (the ``([^']*)``
+# capture group, re-emitted via the replacement fn). The keyname group is OPTIONAL
+# so a truncated ``Duplicate entry 'v' for key`` (no ``'<name>'``) still redacts
+# rather than leaking. ``re.DOTALL`` is REQUIRED (issue #1556 red-team): a column
+# VALUE containing a literal newline (a TEXT column with an embedded LF) would
+# otherwise pin ``.*`` to the first line, the ``' for key`` anchor would sit on a
+# later line, the match would FAIL, and the value would leak un-redacted. DOTALL
+# lets greedy ``.*`` span the newline to the final suffix (fail-closed — the input
+# is a SINGLE driver error's ``str(e)``, so spanning newlines cannot over-match
+# across unrelated errors). The benign errno-1061 ``Duplicate key name
+# 'idx_email'`` shape lacks the ``Duplicate entry '`` prefix, so it never matches —
+# the #1550 keyname-tolerance contract is preserved.
+_MYSQL_DUP_ENTRY_RE = re.compile(
+    r"Duplicate entry '.*' for key(?: '([^']*)')?", re.IGNORECASE | re.DOTALL
+)
+
+
+def _redact_mysql_dup_entry(match: "re.Match[str]") -> str:
+    """Replacement fn for ``_MYSQL_DUP_ENTRY_RE`` — redact the value, preserve the
+    trailing key NAME when present (issue #1557)."""
+    keyname = match.group(1)
+    if keyname is not None:
+        return f"Duplicate entry '[REDACTED]' for key '{keyname}'"
+    return "Duplicate entry '[REDACTED]' for key"
+
+
+# MongoDB duplicate-key (E11000): ``... dup key: { field: "value" }``. pymongo
+# renders this via ``str(e)`` on the insert/bulk-insert/update paths. The offending
+# VALUE lives in a ``{ field: "value" }`` payload none of the SQL regexes above
+# target (no ``DETAIL:``, no ``Key (col)=``, no ``Duplicate entry``), so it survives
+# unredacted (issue #1556, NoSQL sibling of #1552). Redact the whole ``dup key: {
+# ... }`` brace payload while PRESERVING the ``collection:``/``index:`` names before
+# it. Greedy ``.*`` anchors to the FINAL ``}`` on the line, so a pymongo ``, full
+# error: {...}`` suffix (which echoes the same value inside ``errmsg``/``keyValue``)
+# AND a value that embeds a literal ``}`` both collapse into the redaction
+# (fail-closed). ``re.DOTALL`` is REQUIRED (issue #1556 red-team): a real pymongo
+# ``DuplicateKeyError`` renders an embedded newline in the value LITERALLY, which
+# without DOTALL would pin ``.*`` to the first line, leave the closing ``}`` on a
+# later line, fail the match, and leak the value. DOTALL lets greedy ``.*`` span
+# the newline to the final ``}`` (fail-closed — a single driver error's ``str(e)``).
+_MONGO_DUP_KEY_RE = re.compile(r"dup key:\s*\{.*\}", re.IGNORECASE | re.DOTALL)
 
 
 def sanitize_db_error(msg: str) -> str:
@@ -394,7 +433,11 @@ def sanitize_db_error(msg: str) -> str:
     # ``DETAIL:[^\n]*`` leaked. _MYSQL_DUP_ENTRY_RE stays last.
     msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
     msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
-    msg = _MYSQL_DUP_ENTRY_RE.sub("Duplicate entry '[REDACTED]' for key", msg)
+    # Issue #1557: greedy anchor to the final ``' for key '<name>'`` suffix,
+    # preserving the key name via the replacement fn.
+    msg = _MYSQL_DUP_ENTRY_RE.sub(_redact_mysql_dup_entry, msg)
+    # Issue #1556: MongoDB E11000 ``dup key: { field: "value" }`` payload.
+    msg = _MONGO_DUP_KEY_RE.sub("dup key: { [REDACTED] }", msg)
     return msg
 
 

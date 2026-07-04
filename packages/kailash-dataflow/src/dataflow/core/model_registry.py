@@ -29,6 +29,39 @@ from kailash.workflow.builder import WorkflowBuilder
 logger = logging.getLogger(__name__)
 
 
+def _ensure_sync_mysql_driver(url: str) -> str:
+    """Normalize a MySQL connection URL to the sync ``pymysql`` driver.
+
+    The model registry executes its DDL/DML through ``SQLDatabaseNode``, which is
+    SQLAlchemy-SYNC. A bare ``mysql://`` URL makes SQLAlchemy default to the
+    ``mysqldb`` (mysqlclient) driver, which is not a DataFlow dependency, so the
+    registry table creation fails with ``ModuleNotFoundError: No module named
+    'MySQLdb'`` (issue #1547). ``mysql+aiomysql://`` names an ASYNC driver the sync
+    node cannot drive either. Every non-``pymysql`` MySQL scheme is rewritten to
+    ``mysql+pymysql://`` — the same sync driver ``SyncDDLExecutor`` already uses
+    (see ``migrations/sync_ddl_executor.py``).
+
+    Non-MySQL URLs (sqlite, postgresql, the in-memory shared-cache ``file:`` URI)
+    pass through unchanged — the scheme check below never matches them.
+
+    Only the SCHEME segment (before ``://``) is lowercased for matching, so
+    mixed-case schemes (``MYSQL://``, ``mysql+MySQLdb://``) are normalized too; the
+    userinfo/host/path remainder is preserved byte-for-byte (a password may legally
+    contain uppercase).
+    """
+    if not isinstance(url, str):
+        return url
+    sep = "://"
+    idx = url.find(sep)
+    if idx == -1:
+        return url
+    scheme = url[:idx]
+    remainder = url[idx + len(sep) :]  # userinfo/host/path — preserved verbatim
+    if scheme.lower() in ("mysql", "mysql+mysqldb", "mysql+aiomysql"):
+        return "mysql+pymysql://" + remainder
+    return url
+
+
 def _normalize_runtime_result(
     result: Any,
 ) -> Tuple[Dict[str, Any], Optional[str]]:
@@ -220,11 +253,15 @@ class ModelRegistry:
         (file SQLite, PostgreSQL, MySQL), so the ``or`` fallback is a no-op off
         the in-memory path and those backends keep their normal connection URL.
         """
-        return getattr(self.dataflow, "_memory_db_uri", None) or (
+        url = getattr(self.dataflow, "_memory_db_uri", None) or (
             self.dataflow.config.database.get_connection_url(
                 self.dataflow.config.environment
             )
         )
+        # Issue #1547: the registry's SQLDatabaseNode is SQLAlchemy-sync; a bare
+        # ``mysql://`` URL defaults to the (uninstalled) ``mysqldb`` driver. Pin
+        # the sync ``pymysql`` driver for every MySQL scheme. No-op off MySQL.
+        return _ensure_sync_mysql_driver(url)
 
     def _execute_workflow_sync_safe(
         self, workflow: Any
@@ -798,6 +835,67 @@ class ModelRegistry:
         # Registry is initialized, register immediately
         return self._do_register_model(model_name, model_class, application_id)
 
+    def _probe_mysql_version_sync(self, db_url: str) -> str:
+        """Run a single sync ``SELECT VERSION()`` through the registry's own
+        SQLDatabaseNode path and return the raw version string (or "")."""
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "SQLDatabaseNode",
+            "probe_mysql_version",
+            {
+                "connection_string": db_url,
+                "database_type": "mysql",
+                "query": "SELECT VERSION() AS version",
+            },
+        )
+        results, _ = self._execute_workflow_sync_safe(workflow)
+        data = self._extract_query_data(results, "probe_mysql_version")
+        if data and len(data) > 0:
+            row = data[0]
+            return str(row.get("version") or row.get("VERSION") or "")
+        return ""
+
+    def _mysql_registry_use_row_alias(self, db_url: str) -> bool:
+        """Issue #1546 (registry path): whether the registry's MySQL upsert should
+        emit the 8.0.19+ row-alias form instead of the deprecated ``VALUES(col)``.
+
+        Shares the process-level cache with the single-record and bulk upsert paths
+        (keyed on the raw configured connection URL, so all paths agree on one probe
+        per server per process). Fails CLOSED to the legacy ``VALUES()`` form — which
+        is still correct, only deprecated — if the version probe cannot run, and does
+        NOT cache the failure so a later registration can re-probe.
+        """
+        from ..sql.dialects import (
+            mysql_row_alias_cache_key,
+            mysql_row_alias_support_cached,
+            resolve_mysql_row_alias_support_sync,
+        )
+
+        # Key on the RAW configured URL (what the async engine path keys on) so the
+        # registry and the upsert paths share ONE cache entry; probe via the
+        # pymysql-normalized db_url the registry actually executes against.
+        raw_url = (
+            getattr(
+                getattr(getattr(self.dataflow, "config", None), "database", None),
+                "url",
+                "",
+            )
+            or db_url
+        )
+        cache_key = mysql_row_alias_cache_key(raw_url)
+        if mysql_row_alias_support_cached(cache_key) is not None:
+            return mysql_row_alias_support_cached(cache_key)
+        try:
+            return resolve_mysql_row_alias_support_sync(
+                cache_key, lambda: self._probe_mysql_version_sync(db_url)
+            )
+        except Exception as e:  # noqa: BLE001 — fail closed to legacy VALUES()
+            logger.debug(
+                "model_registry.mysql_version_probe_failed",
+                extra={"error": str(e)},
+            )
+            return False
+
     def _do_register_model(
         self, model_name: str, model_class: type, application_id: str = None
     ) -> bool:
@@ -876,14 +974,28 @@ class ModelRegistry:
                     },
                 )
             elif database_type == "mysql":
-                # MySQL uses ON DUPLICATE KEY UPDATE and %s parameters
-                workflow.add_node(
-                    "SQLDatabaseNode",
-                    "register_model",
-                    {
-                        "connection_string": db_url,
-                        "database_type": database_type,
-                        "query": """
+                # MySQL uses ON DUPLICATE KEY UPDATE and %s parameters.
+                # Issue #1546: ``VALUES(col)`` is deprecated on MySQL 8.0.20+. Emit
+                # the 8.0.19+ row-alias form for non-MariaDB MySQL >= 8.0.19, else
+                # the legacy form (MariaDB / older MySQL). The INSERT-side ``AS
+                # new_row`` alias and the ODKU ``new_row.col`` references are built
+                # from the SAME flag so they cannot drift. This registry path became
+                # reachable on MySQL via the #1547 pymysql-driver fix, so without
+                # this gate every model registration would emit 1287 warnings.
+                if self._mysql_registry_use_row_alias(db_url):
+                    mysql_register_query = """
+                        INSERT INTO dataflow_model_registry
+                        (model_name, model_checksum, model_definitions, application_id,
+                         status, version, metadata)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s) AS new_row
+                        ON DUPLICATE KEY UPDATE
+                            model_checksum = new_row.model_checksum,
+                            model_definitions = new_row.model_definitions,
+                            updated_at = CURRENT_TIMESTAMP,
+                            version = dataflow_model_registry.version + 1
+                    """
+                else:
+                    mysql_register_query = """
                         INSERT INTO dataflow_model_registry
                         (model_name, model_checksum, model_definitions, application_id,
                          status, version, metadata)
@@ -893,7 +1005,14 @@ class ModelRegistry:
                             model_definitions = VALUES(model_definitions),
                             updated_at = CURRENT_TIMESTAMP,
                             version = version + 1
-                    """,
+                    """
+                workflow.add_node(
+                    "SQLDatabaseNode",
+                    "register_model",
+                    {
+                        "connection_string": db_url,
+                        "database_type": database_type,
+                        "query": mysql_register_query,
                         "parameters": [
                             model_name,
                             model_checksum,

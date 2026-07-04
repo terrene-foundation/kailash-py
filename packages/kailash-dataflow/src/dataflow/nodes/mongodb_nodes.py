@@ -11,6 +11,7 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 
 from dataflow.adapters.mongodb import MongoDBAdapter
+from dataflow.core.exceptions import sanitize_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -108,12 +109,13 @@ class DocumentInsertNode(AsyncNode):
             }
 
         except Exception as e:
+            sanitized = sanitize_db_error(str(e))
             logger.error(
-                "mongodb_nodes.document_insert_failed", extra={"error": str(e)}
+                "mongodb_nodes.document_insert_failed", extra={"error": sanitized}
             )
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -235,11 +237,14 @@ class DocumentFindNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error("mongodb_nodes.document_find_failed", extra={"error": str(e)})
+            sanitized = sanitize_db_error(str(e))
+            logger.error(
+                "mongodb_nodes.document_find_failed", extra={"error": sanitized}
+            )
             return {
                 "documents": [],
                 "count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -359,13 +364,14 @@ class DocumentUpdateNode(AsyncNode):
             }
 
         except Exception as e:
+            sanitized = sanitize_db_error(str(e))
             logger.error(
-                "mongodb_nodes.document_update_failed", extra={"error": str(e)}
+                "mongodb_nodes.document_update_failed", extra={"error": sanitized}
             )
             return {
                 "matched_count": 0,
                 "modified_count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -460,12 +466,13 @@ class DocumentDeleteNode(AsyncNode):
             }
 
         except Exception as e:
+            sanitized = sanitize_db_error(str(e))
             logger.error(
-                "mongodb_nodes.document_delete_failed", extra={"error": str(e)}
+                "mongodb_nodes.document_delete_failed", extra={"error": sanitized}
             )
             return {
                 "deleted_count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -565,11 +572,12 @@ class MongoAggregateNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error("mongodb_nodes.aggregation_failed", extra={"error": str(e)})
+            sanitized = sanitize_db_error(str(e))
+            logger.error("mongodb_nodes.aggregation_failed", extra={"error": sanitized})
             return {
                 "results": [],
                 "count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -678,14 +686,15 @@ class BulkDocumentInsertNode(AsyncNode):
             }
 
         except Exception as e:
+            sanitized = sanitize_db_error(str(e))
             logger.error(
-                "mongodb_nodes.bulk_document_insert_failed", extra={"error": str(e)}
+                "mongodb_nodes.bulk_document_insert_failed", extra={"error": sanitized}
             )
             return {
                 "success": False,
                 "inserted_ids": [],
                 "inserted_count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -796,10 +805,13 @@ class CreateIndexNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error("mongodb_nodes.index_creation_failed", extra={"error": str(e)})
+            sanitized = sanitize_db_error(str(e))
+            logger.error(
+                "mongodb_nodes.index_creation_failed", extra={"error": sanitized}
+            )
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }
 
@@ -877,9 +889,12 @@ class DocumentCountNode(AsyncNode):
             return {"count": count, "collection": validated_inputs["collection"]}
 
         except Exception as e:
-            logger.error("mongodb_nodes.document_count_failed", extra={"error": str(e)})
+            sanitized = sanitize_db_error(str(e))
+            logger.error(
+                "mongodb_nodes.document_count_failed", extra={"error": sanitized}
+            )
             return {
                 "count": 0,
-                "error": str(e),
+                "error": sanitized,
                 "collection": validated_inputs["collection"],
             }

@@ -49,12 +49,12 @@ except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
+from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VALUES
 from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
     BulkUpsertConflictTargetError,
     UpsertConflictTargetError,
 )
 from .exceptions import is_conflict_target_error as _is_conflict_target_error
-from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VALUES
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -3448,6 +3448,10 @@ class NodeGenerator:
                     # For databases without native INSERT/UPDATE detection (e.g., SQLite),
                     # perform pre-check to determine if row exists
                     created_flag = None
+                    # Issue #1546: resolved in the MySQL branch below to non-MariaDB
+                    # MySQL >= 8.0.19 (the row-alias upsert form); default False keeps
+                    # the deprecated-but-required VALUES() form for every other backend.
+                    mysql_use_row_alias = False
                     if database_type.lower() == "sqlite":
                         # SQLite pre-check pattern:
                         # Why: SQLite's last_insert_rowid() only works with INTEGER PRIMARY KEY
@@ -3522,53 +3526,94 @@ class NodeGenerator:
                             )
                         )
 
-                        # information_schema.statistics.table_schema / table_name
-                        # are string VALUES, not SQL identifiers — bind them as
-                        # parameters (DATABASE() for the live schema, %s for the
-                        # table) so the lookup is injection-safe. table_name is
-                        # ALSO validated by _vid above; this binding is the
-                        # defense-in-depth for the information_schema lookup
-                        # itself (rules/security.md § Parameterized Queries,
-                        # rules/dataflow-identifier-safety.md). non_unique = 0
-                        # selects UNIQUE and PRIMARY indexes only.
-                        index_query = (
-                            "SELECT index_name, column_name "
-                            "FROM information_schema.statistics "
-                            "WHERE table_schema = DATABASE() "
-                            "AND table_name = %s "
-                            "AND non_unique = 0"
+                        # Issue #1545: cache the per-table UNIQUE/PRIMARY index
+                        # column-sets on the DataFlow instance. The #1537 precheck
+                        # otherwise re-queries information_schema.statistics on
+                        # EVERY single-record MySQL upsert. Populate once per table
+                        # per process; the cache is invalidated by
+                        # clear_schema_cache / clear_table_cache on any
+                        # index-altering schema change (same hooks the schema cache
+                        # uses). Correctness-neutral: the precheck below still
+                        # raises UpsertConflictTargetError when no matching unique
+                        # index backs conflict_on.
+                        _ui_cache = self.dataflow_instance._unique_index_cache
+                        _db_url = (
+                            getattr(self.dataflow_instance.config.database, "url", "")
+                            or ""
                         )
-                        index_result = await mysql_precheck_node.async_run(
-                            query=index_query,
-                            params=[table_name],
-                            fetch_mode="all",
-                            validate_queries=False,
-                            transaction_mode="auto",
-                        )
+                        # Hash the db_url portion so no credential sits in the
+                        # in-memory cache key (observability.md Rule 6.3). The
+                        # ``:{table_name}`` suffix stays verbatim so
+                        # ``engine.clear_table_cache``'s ``endswith(f":{table}")``
+                        # invalidation still matches.
+                        import hashlib as _hashlib
 
-                        # Group the fetched rows into {index_name: {columns}}.
-                        unique_index_columns: Dict[str, set] = {}
-                        if (
-                            index_result
-                            and "result" in index_result
-                            and "data" in index_result["result"]
-                        ):
-                            index_rows = index_result["result"]["data"]
-                            if isinstance(index_rows, list):
-                                for _row in index_rows:
-                                    if not isinstance(_row, dict):
-                                        continue
-                                    _idx = _row.get("index_name") or _row.get(
-                                        "INDEX_NAME"
-                                    )
-                                    _col = _row.get("column_name") or _row.get(
-                                        "COLUMN_NAME"
-                                    )
-                                    if _idx is None or _col is None:
-                                        continue
-                                    unique_index_columns.setdefault(_idx, set()).add(
-                                        _col
-                                    )
+                        _db_url_hash = _hashlib.sha256(
+                            _db_url.encode("utf-8")
+                        ).hexdigest()[:16]
+                        _ui_key = f"{_db_url_hash}:{table_name}"
+                        unique_index_columns: Optional[Dict[str, set]] = _ui_cache.get(
+                            _ui_key
+                        )
+                        if unique_index_columns is None:
+                            # information_schema.statistics.table_schema / table_name
+                            # are string VALUES, not SQL identifiers — bind them as
+                            # parameters (DATABASE() for the live schema, %s for the
+                            # table) so the lookup is injection-safe. table_name is
+                            # ALSO validated by _vid above; this binding is the
+                            # defense-in-depth for the information_schema lookup
+                            # itself (rules/security.md § Parameterized Queries,
+                            # rules/dataflow-identifier-safety.md). non_unique = 0
+                            # selects UNIQUE and PRIMARY indexes only.
+                            index_query = (
+                                "SELECT index_name, column_name "
+                                "FROM information_schema.statistics "
+                                "WHERE table_schema = DATABASE() "
+                                "AND table_name = %s "
+                                "AND non_unique = 0"
+                            )
+                            index_result = await mysql_precheck_node.async_run(
+                                query=index_query,
+                                params=[table_name],
+                                fetch_mode="all",
+                                validate_queries=False,
+                                transaction_mode="auto",
+                            )
+
+                            # Group the fetched rows into {index_name: {columns}}.
+                            unique_index_columns = {}
+                            if (
+                                index_result
+                                and "result" in index_result
+                                and "data" in index_result["result"]
+                            ):
+                                index_rows = index_result["result"]["data"]
+                                if isinstance(index_rows, list):
+                                    for _row in index_rows:
+                                        if not isinstance(_row, dict):
+                                            continue
+                                        _idx = _row.get("index_name") or _row.get(
+                                            "INDEX_NAME"
+                                        )
+                                        _col = _row.get("column_name") or _row.get(
+                                            "COLUMN_NAME"
+                                        )
+                                        if _idx is None or _col is None:
+                                            continue
+                                        unique_index_columns.setdefault(
+                                            _idx, set()
+                                        ).add(_col)
+
+                            _ui_cache[_ui_key] = unique_index_columns
+
+                        # Issue #1546: resolve once whether this MySQL server
+                        # supports the 8.0.19+ ``VALUES (...) AS alias`` row-alias
+                        # upsert form (``VALUES(col)`` is deprecated on 8.0.20+).
+                        # Centralized on the DataFlow instance — ONE cached
+                        # SELECT VERSION() round-trip shared with the bulk paths.
+                        mysql_use_row_alias = await self.dataflow_instance._resolve_mysql_row_alias_support(
+                            mysql_precheck_node
+                        )
 
                         # ON DUPLICATE KEY UPDATE behaves as upsert-on-conflict_on
                         # ONLY when conflict_on is ITSELF a unique/primary key.
@@ -3618,6 +3663,7 @@ class NodeGenerator:
                             update_data=update_data,
                             conflict_columns=conflict_columns,
                             has_updated_at=has_updated_at,
+                            use_row_alias=mysql_use_row_alias,  # #1546
                         )
 
                     query = upsert_query.query
