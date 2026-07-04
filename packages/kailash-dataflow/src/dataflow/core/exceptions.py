@@ -50,9 +50,23 @@ class DDLFailedError(DataFlowError):
     Attributes:
         model_name: The model whose CREATE TABLE / ALTER TABLE failed.
         original_error: The underlying exception from the DDL execution.
+            On the auto-migrate DDL paths this is a SANITIZED wrapper
+            (``RuntimeError`` whose text has been passed through
+            ``sanitize_db_error``), so both ``str(self)`` and
+            ``str(self.original_error)`` are safe to log.
         statement_preview: First 200 characters of the failed DDL
             statement (truncated to avoid leaking large schemas through
             error chains).
+
+    Security note (issue #1550): the RAW driver exception is preserved as
+    ``__cause__`` (via ``raise ... from error``) for local traceback
+    diagnosability. Its ``str()`` may still carry a value-bearing
+    ``DETAIL: Key(col)=(value)`` / ``Duplicate entry 'value' ...`` clause.
+    The user-facing message (``str(self)``) and ``original_error`` are
+    redacted, but callers MUST NOT log this exception with ``exc_info=True``
+    / ``logger.exception(...)`` on a log-aggregator surface — that emits the
+    ``__cause__`` chain and re-leaks the raw value. Log ``e.model_name`` +
+    ``str(e.original_error)`` instead (see Example).
 
     Example:
         >>> try:
@@ -319,6 +333,14 @@ def is_conflict_target_error(message: str) -> bool:
 # Rule 8).
 _DETAIL_RE = re.compile(r"DETAIL:[^\n]*", re.IGNORECASE)
 _KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
+# MySQL/MariaDB duplicate-key (errno 1062): ``Duplicate entry 'value' for key
+# 'name'``. This carries the offending column VALUE but has NEITHER a ``DETAIL:``
+# clause NOR the PostgreSQL ``Key (col)=(value)`` form, so the two regexes above
+# miss it entirely (issue #1550 red-team). Redact the entry value, keep the key
+# name (schema shape, matching the PG ``Key (col)`` treatment). Lazy ``.*?`` to
+# the ``' for key`` anchor so a value containing a literal quote (``O'Brien``)
+# still redacts fully.
+_MYSQL_DUP_ENTRY_RE = re.compile(r"Duplicate entry '.*?' for key", re.IGNORECASE)
 
 
 def sanitize_db_error(msg: str) -> str:
@@ -329,11 +351,16 @@ def sanitize_db_error(msg: str) -> str:
     replacing the value payload with ``[REDACTED]`` so a unique-violation
     on a column OTHER than the conflict target cannot leak user data into
     logs or the returned error string.
+
+    Covers PostgreSQL (``DETAIL:`` clauses, ``Key (col)=(value)``) AND
+    MySQL/MariaDB (``Duplicate entry 'value' for key 'name'``) driver-error
+    shapes; SQLite ``UNIQUE constraint failed: table.col`` carries no value.
     """
     if not isinstance(msg, str):
         return "<non-string error>"
     msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
     msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
+    msg = _MYSQL_DUP_ENTRY_RE.sub("Duplicate entry '[REDACTED]' for key", msg)
     return msg
 
 
