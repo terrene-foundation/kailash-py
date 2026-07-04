@@ -346,6 +346,38 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             columns = list(deduplicated_data[0].keys())
             column_names = ", ".join(columns)
 
+            # Issue #1546: resolve the MySQL row-alias upsert form ONCE before the
+            # batch loop. This node has no DataFlow instance (only connection_string
+            # + database_type), so it version-probes via its own AsyncSQLDatabaseNode
+            # through the shared process-cached helper — one SELECT VERSION() per
+            # server per process. ``VALUES(col)`` is deprecated on MySQL 8.0.20+.
+            mysql_use_row_alias = False
+            if (self.database_type or "").lower() == "mysql" and self.connection_string:
+                from dataflow.sql.dialects import (
+                    mysql_row_alias_cache_key,
+                    mysql_row_alias_support_cached,
+                    resolve_mysql_row_alias_support,
+                )
+
+                _key = mysql_row_alias_cache_key(self.connection_string)
+                _cached = mysql_row_alias_support_cached(_key)
+                if _cached is not None:
+                    mysql_use_row_alias = _cached
+                else:
+                    # Cache miss: probe via a throwaway node, then clean it up so no
+                    # unclosed connection leaks a ResourceWarning.
+                    _version_node = AsyncSQLDatabaseNode(
+                        connection_string=self.connection_string,
+                        database_type=self.database_type,
+                        validate_queries=False,
+                    )
+                    try:
+                        mysql_use_row_alias = await resolve_mysql_row_alias_support(
+                            _version_node, _key
+                        )
+                    finally:
+                        await _version_node.cleanup()
+
             # Handle batching
             total_rows_affected = 0
             total_inserted = 0
@@ -366,6 +398,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     return_records,
                     merge_strategy,
                     conflict_on,
+                    use_row_alias=mysql_use_row_alias,  # #1546
                 )
 
                 # Execute batch using connection pool if available, otherwise fallback
@@ -520,6 +553,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         return_records: bool,
         merge_strategy: str,
         conflict_on: List[str],
+        use_row_alias: bool = False,
     ) -> tuple[str, List[Any]]:
         """Build UPSERT query with parameterized VALUES (issue #492).
 
@@ -572,6 +606,9 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             f"INSERT INTO {self.table_name} ({column_names}) "
             f"VALUES {', '.join(value_rows)}"
         )
+        # Issue #1546: declare the row alias on the INSERT (MySQL 8.0.19+ only).
+        # Built from the SAME use_row_alias flag as the ODKU references below.
+        mysql_alias_decl = " AS new_row" if use_row_alias else ""
 
         conflict_columns_str = ", ".join(conflict_on)
 
@@ -616,21 +653,31 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             # Issue #1519: MySQL uses ON DUPLICATE KEY UPDATE (INSERT OR REPLACE
             # is not valid MySQL syntax). MySQL auto-detects the violated unique
             # key, so conflict_on governs only which columns are excluded.
+            # Issue #1546: mysql_alias_decl declares the row alias on the INSERT
+            # when use_row_alias is set; the ODKU references match via
+            # _build_update_clauses(use_row_alias=...). The noop self-assignment
+            # references a table column, valid in both forms.
             if merge_strategy == "ignore":
                 noop = conflict_on[0] if conflict_on else "id"
-                query = f"{base_query} ON DUPLICATE KEY UPDATE {noop} = {noop}"
+                query = (
+                    f"{base_query}{mysql_alias_decl} "
+                    f"ON DUPLICATE KEY UPDATE {noop} = {noop}"
+                )
             else:
                 update_clauses = self._build_update_clauses(
-                    columns, conflict_on, mysql=True
+                    columns, conflict_on, mysql=True, use_row_alias=use_row_alias
                 )
                 if update_clauses:
                     query = (
-                        f"{base_query} ON DUPLICATE KEY UPDATE "
+                        f"{base_query}{mysql_alias_decl} ON DUPLICATE KEY UPDATE "
                         f"{', '.join(update_clauses)}"
                     )
                 else:
                     noop = conflict_on[0] if conflict_on else "id"
-                    query = f"{base_query} ON DUPLICATE KEY UPDATE {noop} = {noop}"
+                    query = (
+                        f"{base_query}{mysql_alias_decl} "
+                        f"ON DUPLICATE KEY UPDATE {noop} = {noop}"
+                    )
 
         return query, params
 
@@ -641,6 +688,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         *,
         sqlite: bool = False,
         mysql: bool = False,
+        use_row_alias: bool = False,
     ) -> List[str]:
         """Build the SET clauses for a DO UPDATE / ON DUPLICATE KEY UPDATE.
 
@@ -649,6 +697,12 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         ``CURRENT_TIMESTAMP``; everything else copies the incoming value with the
         dialect-appropriate reference (``EXCLUDED.col`` on PG/SQLite,
         ``VALUES(col)`` on MySQL).
+
+        Issue #1546: ``VALUES(col)`` is deprecated on MySQL 8.0.20+. When
+        ``use_row_alias`` is True (MySQL >= 8.0.19, non-MariaDB) the MySQL branch
+        references the INSERT row alias (``new_row.col``) instead. The alias is
+        declared on the INSERT in ``_build_upsert_query`` — the two halves are set
+        from the SAME ``use_row_alias`` flag so they cannot drift.
         """
         clauses: List[str] = []
         for col in columns:
@@ -659,7 +713,10 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             elif col == "updated_at" and self.auto_timestamps:
                 clauses.append(f"{col} = CURRENT_TIMESTAMP")
             elif mysql:
-                clauses.append(f"{col} = VALUES({col})")
+                if use_row_alias:
+                    clauses.append(f"{col} = new_row.{col}")
+                else:
+                    clauses.append(f"{col} = VALUES({col})")
             else:  # postgresql / sqlite both use excluded/EXCLUDED
                 ref = "excluded" if sqlite else "EXCLUDED"
                 clauses.append(f"{col} = {ref}.{col}")
@@ -802,7 +859,13 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             validate_queries=False,  # Allow UPSERT operations
         )
 
-        return await db_node.async_run(query=query, params=params)
+        # Each call creates a fresh (non-pooled) node; clean it up after the query
+        # so its connection does not leak a ResourceWarning on GC. The result dict
+        # is fully materialized by async_run, so cleanup after is safe.
+        try:
+            return await db_node.async_run(query=query, params=params)
+        finally:
+            await db_node.cleanup()
 
 
 # For backward compatibility, also alias the old method name

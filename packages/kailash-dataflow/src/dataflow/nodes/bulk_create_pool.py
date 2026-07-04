@@ -7,9 +7,9 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
-from ..core.exceptions import (
+from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
+)
 from .workflow_connection_manager import SmartNodeConnectionMixin
 
 
@@ -384,6 +384,40 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
             for record in processed_data:
                 record["tenant_id"] = tenant_id
 
+        # Issue #1546: for conflict_resolution="update" on MySQL, resolve the
+        # row-alias upsert form ONCE (``VALUES(col)`` is deprecated on 8.0.20+).
+        # This node has no DataFlow instance, so it version-probes via its own
+        # AsyncSQLDatabaseNode through the shared process-cached helper.
+        mysql_use_row_alias = False
+        if (
+            self.conflict_resolution == "update"
+            and self.database_type.lower() == "mysql"
+        ):
+            from dataflow.sql.dialects import (
+                mysql_row_alias_cache_key,
+                mysql_row_alias_support_cached,
+                resolve_mysql_row_alias_support,
+            )
+
+            _key = mysql_row_alias_cache_key(connection_string)
+            _cached = mysql_row_alias_support_cached(_key)
+            if _cached is not None:
+                mysql_use_row_alias = _cached
+            else:
+                # Cache miss: probe via a throwaway node, then clean it up so no
+                # unclosed connection leaks a ResourceWarning.
+                _version_node = AsyncSQLDatabaseNode(
+                    connection_string=connection_string,
+                    database_type=self.database_type,
+                    validate_queries=False,
+                )
+                try:
+                    mysql_use_row_alias = await resolve_mysql_row_alias_support(
+                        _version_node, _key
+                    )
+                finally:
+                    await _version_node.cleanup()
+
         # Initialize result tracking
         total_inserted = 0
         batches_processed = 0
@@ -453,21 +487,41 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                         else:
                             conflict_clause = "ON CONFLICT (id) DO NOTHING"
                     else:  # MySQL
+                        # Issue #1546: emit the row-alias form on MySQL 8.0.19+
+                        # (``VALUES(col)`` deprecated on 8.0.20+); the INSERT-side
+                        # ``AS new_row`` alias and the ODKU ``new_row.col`` references
+                        # are built from the same flag so they cannot drift.
                         update_columns = [col for col in columns if col != "id"]
                         if update_columns:
-                            set_parts = [
-                                f"{col} = VALUES({col})" for col in update_columns
-                            ]
+                            if mysql_use_row_alias:
+                                set_parts = [
+                                    f"{col} = new_row.{col}" for col in update_columns
+                                ]
+                            else:
+                                set_parts = [
+                                    f"{col} = VALUES({col})" for col in update_columns
+                                ]
                             conflict_clause = (
                                 f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
                             )
                         else:
                             conflict_clause = "ON DUPLICATE KEY UPDATE id = id"
-                    query = f"INSERT INTO {self.table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
+                    mysql_alias_decl = (
+                        " AS new_row"
+                        if (
+                            mysql_use_row_alias
+                            and self.database_type.lower() == "mysql"
+                        )
+                        else ""
+                    )
+                    query = f"INSERT INTO {self.table_name} ({column_names}) VALUES {values_clause}{mysql_alias_decl} {conflict_clause}"
                 else:  # error mode (default)
                     query = f"INSERT INTO {self.table_name} ({column_names}) VALUES {values_clause}"
 
-                # Execute batch using AsyncSQLDatabaseNode
+                # Execute batch using AsyncSQLDatabaseNode. Each batch creates a
+                # fresh (non-pooled) node; clean it up after the query so its
+                # connection does not leak a ResourceWarning on GC — symmetry with
+                # the sibling bulk_upsert.py::_execute_query cleanup (#1546 round-2).
                 sql_node = AsyncSQLDatabaseNode(
                     connection_string=connection_string,
                     database_type=self.database_type,
@@ -477,7 +531,10 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                     validate_queries=False,
                     transaction_mode="auto",
                 )
-                result = await sql_node.async_run()
+                try:
+                    result = await sql_node.async_run()
+                finally:
+                    await sql_node.cleanup()
 
                 # Extract rows_affected from result
                 rows_affected = 0

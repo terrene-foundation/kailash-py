@@ -874,6 +874,14 @@ class DataFlow(DataFlowEventMixin):
             f"max_size={self.config.migration.schema_cache_max_size}"
         )
 
+        # Issue #1546: undetected until the first MySQL upsert runs one
+        # ``SELECT VERSION()``; None distinguishes "not yet detected" from
+        # the resolved bool. No-op for non-MySQL backends.
+        self._mysql_upsert_row_alias = None
+        # Issue #1545: per-table UNIQUE/PRIMARY index column-sets cache for the
+        # MySQL upsert conflict-target precheck. Keyed ``f"{db_url}:{table}"``.
+        self._unique_index_cache = {}
+
         # Track models that need table creation (deferred until _ensure_connected)
         self._pending_table_creations: list = []
 
@@ -1062,6 +1070,16 @@ class DataFlow(DataFlowEventMixin):
         "_classification_policy",
         "_model_registry",
         "_schema_cache",
+        # Issue #1546: cached per-instance flag — does this MySQL server support
+        # the 8.0.19+ ``VALUES (...) AS alias`` row-alias upsert form? Resolved
+        # once via a single ``SELECT VERSION()`` round-trip. None = undetected.
+        "_mysql_upsert_row_alias",
+        # Issue #1545: cached per-table UNIQUE/PRIMARY index column-sets, keyed
+        # ``f"{db_url}:{table}"`` → {index_name: {columns}}. Populated once per
+        # table by the MySQL upsert conflict-target precheck (#1537); avoids a
+        # per-upsert information_schema.statistics round-trip. Invalidated by the
+        # same clear_schema_cache / clear_table_cache hooks schema changes use.
+        "_unique_index_cache",
         # Lazily-allocated caches / monitors.
         "_pool_monitor",
         "_lightweight_pool",
@@ -11161,6 +11179,27 @@ class DataFlow(DataFlowEventMixin):
             )
             return False
 
+    async def _resolve_mysql_row_alias_support(self, async_sql_node) -> bool:
+        """Issue #1546: whether this instance's MySQL server supports the 8.0.19+
+        row-alias upsert form. Cached on ``self._mysql_upsert_row_alias``, delegating
+        to the shared process-cached helper so the single-record path and the
+        ``db.bulk`` path version-probe the server exactly once. ``VALUES(col)`` is
+        deprecated on MySQL 8.0.20+; MariaDB / MySQL < 8.0.19 keep the legacy form.
+        """
+        if self._mysql_upsert_row_alias is not None:
+            return self._mysql_upsert_row_alias
+        from ..sql.dialects import (
+            mysql_row_alias_cache_key,
+            resolve_mysql_row_alias_support,
+        )
+
+        db_url = getattr(self.config.database, "url", "") or ""
+        support = await resolve_mysql_row_alias_support(
+            async_sql_node, mysql_row_alias_cache_key(db_url)
+        )
+        self._mysql_upsert_row_alias = support
+        return support
+
     # ADR-001: Schema cache management methods
 
     def clear_schema_cache(self) -> None:
@@ -11173,6 +11212,10 @@ class DataFlow(DataFlowEventMixin):
             >>> # All tables will be re-validated on next access
         """
         self._schema_cache.clear()
+        # Issue #1545: the unique-index precheck cache is a sibling of the schema
+        # cache — an external schema change (added/dropped UNIQUE index) that
+        # justifies clearing the schema cache invalidates the index cache too.
+        self._unique_index_cache.clear()
         logger.debug("Schema cache cleared")
 
     def clear_table_cache(
@@ -11197,6 +11240,18 @@ class DataFlow(DataFlowEventMixin):
         """
         if database_url is None:
             database_url = self.config.database.url or ":memory:"
+        # Issue #1545: invalidate the model's cached unique-index column-sets so
+        # the next MySQL upsert re-reads information_schema. The index cache is
+        # keyed by DB table name (``f"{db_url}:{table}"``), so resolve the model's
+        # table and drop every entry ending in ``:{table}`` (db_url-prefix-agnostic
+        # — the precheck's db_url may differ from ``config.database.url``).
+        model_info = self._models.get(model_name)
+        table_name = (
+            model_info.get("table_name") if isinstance(model_info, dict) else None
+        ) or model_name
+        suffix = f":{table_name}"
+        for key in [k for k in self._unique_index_cache if k.endswith(suffix)]:
+            del self._unique_index_cache[key]
         return self._schema_cache.clear_table(model_name, database_url)
 
     def clear_async_sql_node_cache(self) -> None:

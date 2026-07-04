@@ -13,9 +13,134 @@ PostgreSQL  SQLite   MySQL   MongoDB
 Dialect     Dialect  Dialect  Dialect
 """
 
+import hashlib
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+# Issue #1546: the ``VALUES(col)`` reference inside ``ON DUPLICATE KEY UPDATE`` is
+# DEPRECATED as of MySQL 8.0.20. MySQL 8.0.19 introduced the replacement row-alias
+# form ``INSERT ... VALUES (...) AS alias ON DUPLICATE KEY UPDATE col = alias.col``.
+# The row-alias form is NOT supported by MariaDB (any version) nor MySQL < 8.0.19,
+# so the emitter version-gates on this floor.
+_MYSQL_ROW_ALIAS_MIN_VERSION: Tuple[int, int, int] = (8, 0, 19)
+
+_MYSQL_VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+
+
+def parse_mysql_server_version(
+    version_string: str,
+) -> Tuple[Tuple[int, int, int], bool]:
+    """Parse a MySQL/MariaDB ``SELECT VERSION()`` string.
+
+    Returns ``((major, minor, patch), is_mariadb)``. MariaDB advertises itself in
+    the version string (e.g. ``"10.11.2-MariaDB"`` or the compat-prefixed
+    ``"5.5.5-10.11.2-MariaDB"``); the flavor flag is decided by that substring, not
+    the numeric tuple. An unparseable string yields ``((0, 0, 0), is_mariadb)`` —
+    which fails the row-alias floor closed (legacy ``VALUES()`` form).
+    """
+    is_mariadb = "mariadb" in (version_string or "").lower()
+    match = _MYSQL_VERSION_RE.search(version_string or "")
+    if not match:
+        return ((0, 0, 0), is_mariadb)
+    return (
+        (int(match.group(1)), int(match.group(2)), int(match.group(3))),
+        is_mariadb,
+    )
+
+
+def mysql_supports_row_alias_upsert(version_string: str) -> bool:
+    """Whether this MySQL server emits the 8.0.19+ row-alias upsert form.
+
+    ``True`` only for non-MariaDB MySQL >= 8.0.19. MariaDB (which does not support
+    the ``VALUES (...) AS alias`` syntax) and MySQL < 8.0.19 keep the legacy
+    ``VALUES(col)`` form. Fails closed (legacy form) on an unparseable version.
+    """
+    version, is_mariadb = parse_mysql_server_version(version_string)
+    if is_mariadb:
+        return False
+    return version >= _MYSQL_ROW_ALIAS_MIN_VERSION
+
+
+# Issue #1546: process-level cache of per-server row-alias support, keyed by a
+# credential-safe hash of the connection string. Shared by ALL upsert paths
+# (single-record + the three bulk paths) so a given MySQL server is version-probed
+# with exactly one ``SELECT VERSION()`` round-trip per process.
+_MYSQL_ROW_ALIAS_SUPPORT_CACHE: Dict[str, bool] = {}
+
+
+def mysql_row_alias_cache_key(connection_string: str) -> str:
+    """Credential-safe process-cache key for a MySQL server.
+
+    Hashes the connection string so no raw password sits in the in-memory cache key
+    (``observability.md`` Rule 6.3). Distinct servers → distinct keys.
+    """
+    return hashlib.sha256((connection_string or "").encode("utf-8")).hexdigest()[:16]
+
+
+def mysql_row_alias_support_cached(cache_key: str) -> Optional[bool]:
+    """Return the cached row-alias support for ``cache_key`` without a round-trip.
+
+    ``None`` = not yet probed. Lets callers that must construct their own version
+    node (the standalone bulk nodes, which have no DataFlow instance) skip node
+    creation entirely on a cache hit.
+    """
+    return _MYSQL_ROW_ALIAS_SUPPORT_CACHE.get(cache_key)
+
+
+def _extract_mysql_version_string(version_result: Any) -> str:
+    """Pull the ``VERSION()`` string out of an AsyncSQLDatabaseNode result dict."""
+    if not isinstance(version_result, dict):
+        return ""
+    payload = version_result.get("result")
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if isinstance(data, list) and data:
+        data = data[0]
+    if isinstance(data, dict):
+        return str(data.get("version") or data.get("VERSION") or "")
+    return ""
+
+
+async def resolve_mysql_row_alias_support(async_sql_node: Any, cache_key: str) -> bool:
+    """Whether this MySQL server supports the 8.0.19+ row-alias upsert form.
+
+    THE single shared version-detection helper. Runs ONE ``SELECT VERSION()``
+    round-trip per distinct ``cache_key`` per process and caches the result, so the
+    single-record upsert path and all three bulk upsert paths version-probe a given
+    server exactly once. ``cache_key`` MUST be a stable per-server token — use
+    :func:`mysql_row_alias_cache_key` on the connection string.
+    """
+    cached = _MYSQL_ROW_ALIAS_SUPPORT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    version_result = await async_sql_node.async_run(
+        query="SELECT VERSION() AS version",
+        fetch_mode="one",
+        validate_queries=False,
+        transaction_mode="auto",
+    )
+    support = mysql_supports_row_alias_upsert(
+        _extract_mysql_version_string(version_result)
+    )
+    _MYSQL_ROW_ALIAS_SUPPORT_CACHE[cache_key] = support
+    return support
+
+
+def resolve_mysql_row_alias_support_sync(cache_key: str, fetch_version_string) -> bool:
+    """Sync sibling of :func:`resolve_mysql_row_alias_support` for the SYNC registry
+    write path (SQLDatabaseNode). ``fetch_version_string`` is a zero-arg callable
+    returning the server's ``VERSION()`` string; it is invoked at most once per
+    distinct ``cache_key`` per process. Shares the SAME process cache as the async
+    paths, so a server keyed identically is version-probed exactly once regardless
+    of which path (single-record, bulk, or registry) probes first.
+    """
+    cached = _MYSQL_ROW_ALIAS_SUPPORT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    support = mysql_supports_row_alias_upsert(fetch_version_string() or "")
+    _MYSQL_ROW_ALIAS_SUPPORT_CACHE[cache_key] = support
+    return support
 
 
 @dataclass
@@ -51,6 +176,7 @@ class SQLDialect(ABC):
         update_data: Dict[str, Any],
         conflict_columns: List[str],
         has_updated_at: bool = False,
+        use_row_alias: bool = False,
     ) -> UpsertQuery:
         """
         Build database-specific upsert query.
@@ -61,6 +187,9 @@ class SQLDialect(ABC):
             update_data: Data to update if record exists
             conflict_columns: Columns that define uniqueness for conflict detection
             has_updated_at: Whether the model has an updated_at timestamp field
+            use_row_alias: MySQL-only (issue #1546). When True, emit the 8.0.19+
+                ``VALUES (...) AS alias`` row-alias upsert form instead of the
+                deprecated ``VALUES(col)`` reference. Ignored by non-MySQL dialects.
 
         Returns:
             UpsertQuery with query string, parameters, and native flag support info
@@ -177,8 +306,10 @@ class PostgreSQLDialect(SQLDialect):
         update_data: Dict[str, Any],
         conflict_columns: List[str],
         has_updated_at: bool = False,
+        use_row_alias: bool = False,
     ) -> UpsertQuery:
-        """Build PostgreSQL upsert with xmax detection."""
+        """Build PostgreSQL upsert with xmax detection (``use_row_alias`` is
+        MySQL-only and ignored here)."""
 
         # Build INSERT clause
         insert_columns = list(insert_data.keys())
@@ -248,8 +379,10 @@ class SQLiteDialect(SQLDialect):
         update_data: Dict[str, Any],
         conflict_columns: List[str],
         has_updated_at: bool = False,
+        use_row_alias: bool = False,
     ) -> UpsertQuery:
-        """Build SQLite upsert without xmax (requires pre-check)."""
+        """Build SQLite upsert without xmax (``use_row_alias`` is MySQL-only and
+        ignored here)."""
 
         # Build INSERT clause
         insert_columns = list(insert_data.keys())
@@ -320,8 +453,19 @@ class MySQLDialect(SQLDialect):
         update_data: Dict[str, Any],
         conflict_columns: List[str],
         has_updated_at: bool = False,
+        use_row_alias: bool = False,
     ) -> UpsertQuery:
-        """Build MySQL upsert with ON DUPLICATE KEY UPDATE."""
+        """Build MySQL upsert with ON DUPLICATE KEY UPDATE.
+
+        Issue #1546: ``VALUES(col)`` inside ``ON DUPLICATE KEY UPDATE`` is
+        DEPRECATED as of MySQL 8.0.20. When ``use_row_alias`` is True (resolved by
+        the caller to non-MariaDB MySQL >= 8.0.19), emit the replacement row-alias
+        form ``INSERT ... VALUES (...) AS new_row ON DUPLICATE KEY UPDATE
+        col = new_row.col``. Otherwise (MariaDB / MySQL < 8.0.19) keep the legacy
+        ``VALUES(col)`` form, which those servers still require. The INSERT-side
+        alias declaration and the ODKU-side reference are built together here so
+        the two halves can never drift.
+        """
 
         # Build INSERT clause.
         # MySQL's adapter (aiomysql) binds POSITIONAL %s placeholders — it does
@@ -335,23 +479,41 @@ class MySQLDialect(SQLDialect):
         insert_columns = list(insert_data.keys())
         insert_placeholders = ["%s" for _ in range(len(insert_columns))]
 
-        # Build UPDATE clause
+        # The row alias is a table alias in a distinct namespace, so it cannot
+        # collide with a column named the same (``new_row.new_row`` is still valid).
+        alias = "new_row"
+
+        # Build UPDATE clause. Reference the row alias (8.0.19+) or fall back to
+        # the deprecated VALUES(col) form. updated_at is a literal, not a value
+        # reference, in both branches.
         update_clauses = []
         for col in update_data.keys():
             if col not in conflict_columns and col != "id":
-                update_clauses.append(f"{col} = VALUES({col})")
+                if use_row_alias:
+                    update_clauses.append(f"{col} = {alias}.{col}")
+                else:
+                    update_clauses.append(f"{col} = VALUES({col})")
 
-        # Add updated_at if present
         if has_updated_at:
             update_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-        update_clause_str = (
-            ", ".join(update_clauses) if update_clauses else "id = VALUES(id)"
-        )
+        if update_clauses:
+            update_clause_str = ", ".join(update_clauses)
+        elif use_row_alias:
+            update_clause_str = f"id = {alias}.id"
+        else:
+            update_clause_str = "id = VALUES(id)"
 
         # Build complete query
         # Note: MySQL doesn't have RETURNING clause, needs separate SELECT
-        query = f"""
+        if use_row_alias:
+            query = f"""
+            INSERT INTO {table_name} ({", ".join(insert_columns)})
+            VALUES ({", ".join(insert_placeholders)}) AS {alias}
+            ON DUPLICATE KEY UPDATE {update_clause_str}
+        """
+        else:
+            query = f"""
             INSERT INTO {table_name} ({", ".join(insert_columns)})
             VALUES ({", ".join(insert_placeholders)})
             ON DUPLICATE KEY UPDATE {update_clause_str}
