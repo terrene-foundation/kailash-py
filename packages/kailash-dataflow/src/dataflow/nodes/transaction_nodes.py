@@ -20,6 +20,13 @@ from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
 
+# Issue #1552: redact driver-error column VALUES (PG ``DETAIL: Key(col)=(value)``,
+# MySQL ``Duplicate entry 'value'``) before baking the raw exception text into a
+# user-facing NodeExecutionError message. A COMMIT of deferred constraints raises
+# a value-bearing driver error; the raw exception is preserved as ``__cause__``
+# (``from e``) for traceback diagnosability — only the message string is sanitized.
+from dataflow.core.exceptions import sanitize_db_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,9 +172,12 @@ class TransactionScopeNode(AsyncNode):
 
         except Exception as e:
             logger.error(
-                "transaction_nodes.failed_to_begin_transaction", extra={"error": str(e)}
+                "transaction_nodes.failed_to_begin_transaction",
+                extra={"error": sanitize_db_error(str(e))},
             )
-            raise NodeExecutionError(f"Failed to begin transaction: {e}") from e
+            raise NodeExecutionError(
+                f"Failed to begin transaction: {sanitize_db_error(str(e))}"
+            ) from e
 
 
 class TransactionCommitNode(AsyncNode):
@@ -221,7 +231,10 @@ class TransactionCommitNode(AsyncNode):
         except Exception as e:
             logger.error(
                 "transaction_nodes.failed_to_commit_transaction",
-                extra={"transaction_id": transaction_id, "error": str(e)},
+                extra={
+                    "transaction_id": transaction_id,
+                    "error": sanitize_db_error(str(e)),
+                },
             )
             # Attempt cleanup on commit failure
             try:
@@ -234,7 +247,9 @@ class TransactionCommitNode(AsyncNode):
                 )
             self.set_workflow_context("active_transaction", None)
             self.set_workflow_context("transaction_context_manager", None)
-            raise NodeExecutionError(f"Failed to commit transaction: {e}") from e
+            raise NodeExecutionError(
+                f"Failed to commit transaction: {sanitize_db_error(str(e))}"
+            ) from e
 
 
 class TransactionRollbackNode(AsyncNode):
@@ -300,7 +315,10 @@ class TransactionRollbackNode(AsyncNode):
         except Exception as e:
             logger.error(
                 "transaction_nodes.failed_to_rollback_transaction",
-                extra={"transaction_id": transaction_id, "error": str(e)},
+                extra={
+                    "transaction_id": transaction_id,
+                    "error": sanitize_db_error(str(e)),
+                },
             )
             # Attempt cleanup
             try:
@@ -313,7 +331,9 @@ class TransactionRollbackNode(AsyncNode):
                 )
             self.set_workflow_context("active_transaction", None)
             self.set_workflow_context("transaction_context_manager", None)
-            raise NodeExecutionError(f"Failed to rollback transaction: {e}") from e
+            raise NodeExecutionError(
+                f"Failed to rollback transaction: {sanitize_db_error(str(e))}"
+            ) from e
 
 
 class TransactionSavepointNode(AsyncNode):
@@ -382,7 +402,9 @@ class TransactionSavepointNode(AsyncNode):
             }
 
         except Exception as e:
-            raise NodeExecutionError(f"Failed to create savepoint: {e}") from e
+            raise NodeExecutionError(
+                f"Failed to create savepoint: {sanitize_db_error(str(e))}"
+            ) from e
 
 
 class TransactionRollbackToSavepointNode(AsyncNode):
@@ -465,4 +487,6 @@ class TransactionRollbackToSavepointNode(AsyncNode):
             }
 
         except Exception as e:
-            raise NodeExecutionError(f"Failed to rollback to savepoint: {e}") from e
+            raise NodeExecutionError(
+                f"Failed to rollback to savepoint: {sanitize_db_error(str(e))}"
+            ) from e

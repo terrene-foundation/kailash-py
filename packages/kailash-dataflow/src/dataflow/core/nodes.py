@@ -54,6 +54,7 @@ from .exceptions import (  # Issue #1519/#1520: typed conflict-target error prop
     UpsertConflictTargetError,
 )
 from .exceptions import is_conflict_target_error as _is_conflict_target_error
+from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VALUES
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -2082,7 +2083,14 @@ class NodeGenerator:
 
                         if isinstance(e, _DDLFailedError):
                             raise
-                        original_error = str(e)
+                        # Issue #1552: sanitize at the source so the driver
+                        # error's column VALUES (PG "DETAIL: Key(col)=(value)",
+                        # MySQL "Duplicate entry 'value' for key") never reach a
+                        # log line or the returned error dict. The param-mismatch
+                        # detector substrings ("could not determine data type of
+                        # parameter", "parameter $N") are NOT touched by
+                        # sanitize_db_error, so the $11 detection below still fires.
+                        original_error = sanitize_db_error(str(e))
                         logger.debug(
                             f"CREATE {self.model_name} failed with error: {original_error}"
                         )
@@ -2189,10 +2197,16 @@ class NodeGenerator:
                             )
                             logger.error(error_msg)
                         else:
+                            # Issue #1552: log + return the SANITIZED driver
+                            # error (one value for both surfaces) so a constraint
+                            # violation cannot leak a column VALUE into the ERROR
+                            # log or the returned error dict.
+                            sanitized_error = sanitize_db_error(str(e))
                             logger.error(
-                                "nodes.create_operation_failed", extra={"error": str(e)}
+                                "nodes.create_operation_failed",
+                                extra={"error": sanitized_error},
                             )
-                            error_msg = str(e)
+                            error_msg = sanitized_error
 
                         return {"success": False, "error": error_msg}
 
@@ -3991,9 +4005,13 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
+                            # Issue #1552: sanitize once, use for BOTH the ERROR
+                            # log and the returned error dict so a constraint
+                            # violation cannot leak a column VALUE.
+                            sanitized = sanitize_db_error(str(e))
                             logger.error(
                                 "nodes.bulk_create_operation_failed",
-                                extra={"error": str(e)},
+                                extra={"error": sanitized},
                             )
                             return {
                                 "processed": 0,
@@ -4001,7 +4019,7 @@ class NodeGenerator:
                                 "batch_size": batch_size,
                                 "operation": operation,
                                 "success": False,
-                                "error": str(e),
+                                "error": sanitized,
                             }
                     elif operation == "bulk_update" and (
                         data or "filter" in kwargs_fixed
@@ -4113,9 +4131,13 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
+                            # Issue #1552: sanitize once, use for BOTH the ERROR
+                            # log and the returned error dict so a constraint
+                            # violation cannot leak a column VALUE.
+                            sanitized = sanitize_db_error(str(e))
                             logger.error(
                                 "nodes.bulk_update_operation_failed",
-                                extra={"error": str(e)},
+                                extra={"error": sanitized},
                             )
                             return {
                                 "processed": 0,
@@ -4123,7 +4145,7 @@ class NodeGenerator:
                                 "batch_size": batch_size,
                                 "operation": operation,
                                 "success": False,
-                                "error": str(e),
+                                "error": sanitized,
                             }
                     elif operation == "bulk_delete" and (
                         data or "filter" in kwargs_fixed
@@ -4218,9 +4240,13 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
+                            # Issue #1552: sanitize once, use for BOTH the ERROR
+                            # log and the returned error dict so a constraint
+                            # violation cannot leak a column VALUE.
+                            sanitized = sanitize_db_error(str(e))
                             logger.error(
                                 "nodes.bulk_delete_operation_failed",
-                                extra={"error": str(e)},
+                                extra={"error": sanitized},
                             )
                             return {
                                 "processed": 0,
@@ -4228,7 +4254,7 @@ class NodeGenerator:
                                 "batch_size": batch_size,
                                 "operation": operation,
                                 "success": False,
-                                "error": str(e),
+                                "error": sanitized,
                             }
                     elif operation == "bulk_upsert" and (
                         data or "data" in kwargs_fixed
@@ -4325,9 +4351,13 @@ class NodeGenerator:
                             # {"success": False} dict the express layer ignores.
                             raise
                         except Exception as e:
+                            # Issue #1552: sanitize once, use for BOTH the ERROR
+                            # log and the returned error dict so a constraint
+                            # violation cannot leak a column VALUE.
+                            sanitized = sanitize_db_error(str(e))
                             logger.error(
                                 "nodes.bulk_upsert_operation_failed",
-                                extra={"error": str(e)},
+                                extra={"error": sanitized},
                             )
                             return {
                                 "processed": 0,
@@ -4335,7 +4365,7 @@ class NodeGenerator:
                                 "batch_size": batch_size,
                                 "operation": operation,
                                 "success": False,
-                                "error": str(e),
+                                "error": sanitized,
                             }
                     else:
                         # Fallback for unsupported bulk operations

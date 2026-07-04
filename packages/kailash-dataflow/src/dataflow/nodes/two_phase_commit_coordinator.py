@@ -13,6 +13,10 @@ from kailash.nodes.transaction.two_phase_commit import (
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
+
 
 class TransactionPhase(Enum):
     """Two-phase commit transaction phases."""
@@ -195,7 +199,7 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitize_db_error(str(e)),
                 "transaction_id": transaction_id,
                 "final_phase": TransactionPhase.ABORTED.value,
             }
@@ -300,7 +304,7 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
                 "phase": transaction_state["phase"],
                 "prepared_participants": transaction_state["prepared_participants"],
                 "aborted_participants": transaction_state["aborted_participants"],
-                "failure_reasons": [str(e)],
+                "failure_reasons": [sanitize_db_error(str(e))],
                 "prepare_latency": prepare_latency,
                 "commit_latency": commit_latency,
                 "participant_latencies": participant_latencies,
@@ -358,11 +362,11 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
                         {
                             "id": participant_id,
                             "name": participant.get("name", "unknown"),
-                            "error": str(e),
+                            "error": sanitize_db_error(str(e)),
                         }
                     )
                     failure_reasons.append(
-                        f"Participant {participant_id} prepare error: {str(e)}"
+                        f"Participant {participant_id} prepare error: {sanitize_db_error(str(e))}"
                     )
                     return False
         else:
@@ -382,11 +386,16 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
                 participant_id = participant.get("id", str(uuid.uuid4()))
 
                 if isinstance(result, Exception):
+                    # Issue #1552: the concurrent prepare path renders the raw
+                    # gather exception (a participant-prepare DRIVER error carrying
+                    # a constraint column VALUE) into the returned dict. Sanitize
+                    # to match the sequential sibling path above (365/369).
                     transaction_state["failed_participants"].append(
-                        {"id": participant_id, "error": str(result)}
+                        {"id": participant_id, "error": sanitize_db_error(str(result))}
                     )
                     failure_reasons.append(
-                        f"Participant {participant_id} prepare error: {str(result)}"
+                        f"Participant {participant_id} prepare error: "
+                        f"{sanitize_db_error(str(result))}"
                     )
                     return False
                 elif not result["prepared"]:
@@ -446,11 +455,18 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
             participant_id = prepared["id"]
 
             if isinstance(result, Exception):
+                # Issue #1552: symmetry with the prepare path — sanitize the raw
+                # gather exception before it reaches the returned dict.
                 transaction_state["failed_participants"].append(
-                    {"id": participant_id, "phase": "commit", "error": str(result)}
+                    {
+                        "id": participant_id,
+                        "phase": "commit",
+                        "error": sanitize_db_error(str(result)),
+                    }
                 )
                 failure_reasons.append(
-                    f"Participant {participant_id} commit error: {str(result)}"
+                    f"Participant {participant_id} commit error: "
+                    f"{sanitize_db_error(str(result))}"
                 )
                 all_committed = False
             elif result["committed"]:
@@ -555,7 +571,7 @@ class DataFlowTwoPhaseCommitNode(AsyncNode):
 
             return {"committed": True}
         except Exception as e:
-            return {"committed": False, "reason": str(e)}
+            return {"committed": False, "reason": sanitize_db_error(str(e))}
 
     async def _abort_participant_async(
         self,

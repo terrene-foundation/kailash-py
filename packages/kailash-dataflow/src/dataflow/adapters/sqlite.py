@@ -73,6 +73,9 @@ def _require_aiosqlite() -> None:
 
 from .base import DatabaseAdapter
 from .dialect import DialectManager
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
 from .exceptions import ConnectionError, QueryError, TransactionError
 
 _sqlite_dialect = DialectManager.get_dialect("sqlite")
@@ -540,7 +543,10 @@ class SQLiteAdapter(DatabaseAdapter):
                 return results
 
         except Exception as e:
-            raise QueryError(f"Query execution failed: {e}")
+            # Issue #1552 (FIX 8, defense-in-depth): SQLite executes DML through
+            # execute_query; redact any VALUE-bearing driver error in the raised
+            # QueryError. Dead/out-of-class on the DataFlow hot path today.
+            raise QueryError(f"Query execution failed: {sanitize_db_error(str(e))}")
 
     async def execute_transaction(
         self, queries: List[Tuple[str, List[Any]]]
@@ -597,8 +603,11 @@ class SQLiteAdapter(DatabaseAdapter):
                     raise e
 
         except Exception as e:
-            logger.error("sqlite.transaction_failed", extra={"error": str(e)})
-            raise TransactionError(f"Transaction failed: {e}")
+            # Issue #1552 (FIX 8, defense-in-depth): a transaction runs an
+            # arbitrary query list (DML-capable). Redact both surfaces.
+            safe_error = sanitize_db_error(str(e))
+            logger.error("sqlite.transaction_failed", extra={"error": safe_error})
+            raise TransactionError(f"Transaction failed: {safe_error}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
         """Get SQLite table schema."""
@@ -671,6 +680,8 @@ class SQLiteAdapter(DatabaseAdapter):
             logger.info("sqlite.created_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path (#1550 owns DDL); CREATE TABLE carries
+            # no row VALUES — out-of-class here. Left raw.
             raise QueryError(f"Failed to create table {table_name}: {e}")
 
     async def drop_table(self, table_name: str) -> None:
@@ -687,6 +698,8 @@ class SQLiteAdapter(DatabaseAdapter):
             logger.info("sqlite.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path (#1550 owns DDL); DROP carries no row
+            # VALUES — out-of-class here. Left raw.
             raise QueryError(f"Failed to drop table {table_name}: {e}")
 
     def get_dialect(self) -> str:
@@ -774,8 +787,14 @@ class SQLiteAdapter(DatabaseAdapter):
                 return {"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount}
 
         except Exception as e:
-            logger.error("sqlite.sqlite_insert_failed", extra={"error": str(e)})
-            raise QueryError(f"Insert failed: {e}")
+            # Issue #1552 (FIX 4, defense-in-depth): redact any VALUE-bearing driver
+            # error in BOTH the ERROR log and the raised QueryError message. No
+            # callers today but latent; sanitizing at the render prevents a future
+            # wiring from reintroducing the leak. (SQLite UNIQUE errors carry no
+            # value, but the render is unified with the PG/MySQL adapters.)
+            safe_error = sanitize_db_error(str(e))
+            logger.error("sqlite.sqlite_insert_failed", extra={"error": safe_error})
+            raise QueryError(f"Insert failed: {safe_error}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
         """Execute bulk insert operation."""
@@ -790,8 +809,12 @@ class SQLiteAdapter(DatabaseAdapter):
                 await db.commit()
 
         except Exception as e:
-            logger.error("sqlite.sqlite_bulk_insert_failed", extra={"error": str(e)})
-            raise QueryError(f"Bulk insert failed: {e}")
+            # Issue #1552 (FIX 4, defense-in-depth): see execute_insert above.
+            safe_error = sanitize_db_error(str(e))
+            logger.error(
+                "sqlite.sqlite_bulk_insert_failed", extra={"error": safe_error}
+            )
+            raise QueryError(f"Bulk insert failed: {safe_error}")
 
     def get_connection_parameters(self) -> Dict[str, Any]:
         """Get SQLite connection parameters."""

@@ -291,7 +291,14 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             # {"success": False} dict a caller might treat as a soft outcome.
             raise
         except Exception as e:
-            return {"success": False, "error": str(e), "rows_affected": 0}
+            # Issue #1552 (FIX 6 sweep): DataFlowBulkUpsertNode runs real upserts;
+            # a constraint violation carries DETAIL: Key(col)=(value). Sanitize the
+            # returned-dict error (mirrors the already-sanitized batch path at L410).
+            return {
+                "success": False,
+                "error": _sanitize_db_error(str(e)),
+                "rows_affected": 0,
+            }
 
     def _validate_data_schema(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Validate input data for consistent schema."""
@@ -441,7 +448,12 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             # not be re-wrapped in a generic NodeExecutionError.
             raise
         except Exception as e:
-            raise NodeExecutionError(f"Database upsert error: {str(e)}")
+            # Issue #1552 (FIX 6 sweep): sanitize the raised NodeExecutionError
+            # message; `from e` preserves the raw exception as __cause__ for local
+            # traceback diagnosability (mirrors #1550 / FIX 11).
+            raise NodeExecutionError(
+                f"Database upsert error: {_sanitize_db_error(str(e))}"
+            ) from e
 
     def _prepare_data_for_upsert(
         self, data: List[Dict[str, Any]], tenant_id: Optional[str]

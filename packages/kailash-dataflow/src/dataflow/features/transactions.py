@@ -25,6 +25,10 @@ import asyncio
 import logging
 import threading
 import warnings
+
+from dataflow.core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional
@@ -429,7 +433,11 @@ class TransactionManager:
                 "transaction.rollback",
                 extra={
                     "transaction_id": txn_id,
-                    "error": str(e),
+                    # Issue #1552 (FIX 3): the rolled-back transaction's driver
+                    # error may carry a VALUE-bearing constraint clause; sanitize
+                    # the ERROR log. The re-raise below preserves the caller's raw
+                    # exception for local diagnosability (mirrors #1550 / FIX 1).
+                    "error": sanitize_db_error(str(e)),
                 },
             )
             raise

@@ -13,6 +13,10 @@ from kailash.nodes.transaction.saga_coordinator import (
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
+
 
 class SagaState(Enum):
     """Saga execution states."""
@@ -193,7 +197,7 @@ class DataFlowSagaCoordinatorNode(AsyncNode):
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitize_db_error(str(e)),
                 "saga_id": saga_id,
                 "final_state": SagaState.FAILED.value,
             }
@@ -271,7 +275,7 @@ class DataFlowSagaCoordinatorNode(AsyncNode):
                             saga_state["failed_step"] = {
                                 "id": step_id,
                                 "name": step["name"],
-                                "error": str(e),
+                                "error": sanitize_db_error(str(e)),
                                 "retries": retry + 1,
                             }
                             saga_state["state"] = SagaState.COMPENSATING
@@ -287,7 +291,7 @@ class DataFlowSagaCoordinatorNode(AsyncNode):
                                 "completed_steps": saga_state["completed_steps"],
                                 "failed_step": saga_state["failed_step"],
                                 "compensated_steps": saga_state["compensated_steps"],
-                                "failure_reason": str(e),
+                                "failure_reason": sanitize_db_error(str(e)),
                                 "context": saga_state["context"],
                                 "step_latencies": step_latencies,
                                 "compensation_latencies": compensation_latencies,
@@ -338,7 +342,7 @@ class DataFlowSagaCoordinatorNode(AsyncNode):
                 "state": saga_state["state"],
                 "completed_steps": saga_state["completed_steps"],
                 "compensated_steps": saga_state["compensated_steps"],
-                "failure_reason": str(e),
+                "failure_reason": sanitize_db_error(str(e)),
                 "context": saga_state["context"],
                 "step_latencies": step_latencies,
                 "compensation_latencies": compensation_latencies,

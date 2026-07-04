@@ -7,6 +7,9 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
 from .workflow_connection_manager import SmartNodeConnectionMixin
 
 
@@ -206,7 +209,14 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
             # Let validation errors propagate for proper test handling
             raise
         except Exception as e:
-            raise NodeExecutionError(f"Bulk create operation failed: {str(e)}")
+            # Issue #1552 (FIX 11, HIGH): BulkCreatePoolNode is @register_node()
+            # and runs REAL batch INSERTs; a duplicate-value INSERT raises a driver
+            # error carrying DETAIL: Key(col)=(value). Sanitize the raised message
+            # (same class as core/nodes.py BulkCreate). `from e` preserves the raw
+            # exception as __cause__ for local traceback diagnosability (mirrors #1550).
+            raise NodeExecutionError(
+                f"Bulk create operation failed: {sanitize_db_error(str(e))}"
+            ) from e
 
     async def _process_with_pool_tracked(
         self,
@@ -297,7 +307,11 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
 
             except Exception as e:
                 results["error_count"] += len(batch)
-                results["errors"].append(f"Batch {results['batches']} error: {str(e)}")
+                # Issue #1552 (FIX 11): sanitize the driver error before it lands
+                # in the returned results["errors"] list (returned-dict surface).
+                results["errors"].append(
+                    f"Batch {results['batches']} error: {sanitize_db_error(str(e))}"
+                )
 
                 if self.conflict_resolution == "error":
                     break
@@ -485,7 +499,9 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                     )
 
         except Exception as e:
-            errors.append(str(e))
+            # Issue #1552 (FIX 11): sanitize the driver error before it lands in
+            # the returned errors list (returned-dict surface).
+            errors.append(sanitize_db_error(str(e)))
             return {
                 "created_count": total_inserted,
                 "batches": batches_processed,

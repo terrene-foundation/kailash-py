@@ -22,7 +22,7 @@ from dataflow.adapters.exceptions import AdapterError, ConnectionError, QueryErr
 from dataflow.adapters.factory import AdapterFactory
 from dataflow.adapters.mysql import MySQLAdapter
 from dataflow.adapters.postgresql import PostgreSQLAdapter
-from dataflow.adapters.sql_dialects import DialectManager
+from dataflow.adapters.dialect import DialectManager
 from dataflow.adapters.sqlite import SQLiteAdapter
 
 

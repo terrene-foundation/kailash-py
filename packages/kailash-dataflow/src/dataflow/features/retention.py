@@ -20,6 +20,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional
 
+from dataflow.core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -143,17 +147,21 @@ class RetentionEngine:
             try:
                 results[name] = await self._execute_policy(policy, dry_run)
             except Exception as exc:
+                # Issue #1552 (FIX 3): retention runs DELETE/UPDATE SQL; a
+                # constraint/driver failure surfaces a VALUE-bearing error. Redact
+                # once for both the ERROR log and the returned RetentionResult.error.
+                safe_error = sanitize_db_error(str(exc))
                 logger.error(
                     "Retention policy '%s' for %s failed: %s",
                     policy.policy,
                     name,
-                    exc,
+                    safe_error,
                 )
                 results[name] = RetentionResult(
                     model_name=name,
                     policy=policy.policy,
                     affected_rows=0,
-                    error=str(exc),
+                    error=safe_error,
                 )
         return results
 
