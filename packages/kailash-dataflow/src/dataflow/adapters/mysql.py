@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Tuple
 
 from .base import DatabaseAdapter
 from .dialect import DialectManager
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
 
 _mysql_dialect = DialectManager.get_dialect("mysql")
@@ -146,8 +149,16 @@ class MySQLAdapter(DatabaseAdapter):
                     return list(rows) if rows else []
 
         except Exception as e:
-            logger.error("mysql.mysql_query_execution_failed", extra={"error": str(e)})
-            raise QueryError(f"Query execution failed: {e}")
+            # Issue #1552 (FIX 8, defense-in-depth): execute_query runs an
+            # arbitrary query (DML-capable); redact any VALUE-bearing driver error
+            # in BOTH the ERROR log and the raised QueryError. Dead/out-of-class on
+            # the DataFlow hot path today (which uses AsyncSQLDatabaseNode), but
+            # unified with the execute_insert render so a future wiring can't leak.
+            safe_error = sanitize_db_error(str(e))
+            logger.error(
+                "mysql.mysql_query_execution_failed", extra={"error": safe_error}
+            )
+            raise QueryError(f"Query execution failed: {safe_error}")
 
     async def execute_insert(self, query: str, params: List[Any] = None) -> Any:
         """Execute INSERT query and return last insert ID."""
@@ -170,8 +181,14 @@ class MySQLAdapter(DatabaseAdapter):
                     return {"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount}
 
         except Exception as e:
-            logger.error("mysql.mysql_insert_failed", extra={"error": str(e)})
-            raise QueryError(f"Insert failed: {e}")
+            # Issue #1552 (FIX 4, defense-in-depth): redact the VALUE-bearing driver
+            # error (MySQL "Duplicate entry 'value' for key") in BOTH the ERROR log
+            # and the raised QueryError message. This method has no callers today
+            # but is latent; sanitizing at the render prevents a future wiring from
+            # reintroducing the leak.
+            safe_error = sanitize_db_error(str(e))
+            logger.error("mysql.mysql_insert_failed", extra={"error": safe_error})
+            raise QueryError(f"Insert failed: {safe_error}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
         """Execute bulk insert operation."""
@@ -187,8 +204,10 @@ class MySQLAdapter(DatabaseAdapter):
                     await connection.commit()
 
         except Exception as e:
-            logger.error("mysql.mysql_bulk_insert_failed", extra={"error": str(e)})
-            raise QueryError(f"Bulk insert failed: {e}")
+            # Issue #1552 (FIX 4, defense-in-depth): see execute_insert above.
+            safe_error = sanitize_db_error(str(e))
+            logger.error("mysql.mysql_bulk_insert_failed", extra={"error": safe_error})
+            raise QueryError(f"Bulk insert failed: {safe_error}")
 
     def transaction(self):
         """Return transaction context manager."""
@@ -218,8 +237,12 @@ class MySQLAdapter(DatabaseAdapter):
             logger.debug("Transaction completed successfully")
             return results
         except Exception as e:
-            logger.error("mysql.transaction_failed", extra={"error": str(e)})
-            raise TransactionError(f"Transaction failed: {e}")
+            # Issue #1552 (FIX 8, defense-in-depth): a transaction runs an
+            # arbitrary query list (DML-capable; deferred constraints can fire at
+            # COMMIT with a VALUE-bearing error). Redact both surfaces.
+            safe_error = sanitize_db_error(str(e))
+            logger.error("mysql.transaction_failed", extra={"error": safe_error})
+            raise TransactionError(f"Transaction failed: {safe_error}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
         """Get MySQL table schema using INFORMATION_SCHEMA."""
@@ -271,6 +294,8 @@ class MySQLAdapter(DatabaseAdapter):
             return schema
 
         except Exception as e:
+            # NOTE (issue #1552): introspection path (INFORMATION_SCHEMA); no row
+            # VALUES flow here, so out-of-class for the driver-VALUE leak. Left raw.
             logger.error("mysql.failed_to_get_table_schema", extra={"error": str(e)})
             raise QueryError(f"Failed to get table schema: {e}")
 
@@ -312,6 +337,8 @@ class MySQLAdapter(DatabaseAdapter):
             logger.info("mysql.created_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path; #1550 owns DDL-error sanitization and
+            # CREATE TABLE carries no row VALUES — out-of-class here. Left raw.
             logger.error("mysql.failed_to_create_table", extra={"error": str(e)})
             raise QueryError(f"Failed to create table: {e}")
 
@@ -327,6 +354,8 @@ class MySQLAdapter(DatabaseAdapter):
             logger.info("mysql.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path (#1550 owns DDL); DROP carries no row
+            # VALUES — out-of-class here. Left raw.
             logger.error("mysql.failed_to_drop_table", extra={"error": str(e)})
             raise QueryError(f"Failed to drop table: {e}")
 

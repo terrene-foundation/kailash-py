@@ -57,7 +57,7 @@ from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
 from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
-from dataflow.core.exceptions import DDLFailedError
+from dataflow.core.exceptions import DDLFailedError, sanitize_db_error
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.protection import ProtectionViolation
 from dataflow.core.tenant_context import get_current_tenant_id
@@ -464,7 +464,15 @@ class DataFlowExpress:
                 plan=plan,
                 agent_id=self._trust_agent_id(),
                 trust_context=None,
-                error=str(error),
+                # Issue #1552 (HIGH-1): the persisted trust-audit store
+                # (query_wrapper.record_query_failure → result=f"failure:{error}")
+                # is a broader-access surface than the DB. A single-record
+                # create/update/delete/upsert that hits a UNIQUE violation funnels
+                # its RAW driver exception here; sanitize the VALUE-bearing driver
+                # error (PG DETAIL/Key, MySQL Duplicate entry) before it is persisted
+                # in the clear. The re-raised exception (caller's own) is left raw
+                # for local diagnosability, mirroring #1550.
+                error=sanitize_db_error(str(error)),
                 query_params=query_params,
             )
         except Exception as exc:  # pragma: no cover - defensive
@@ -2015,7 +2023,15 @@ class DataFlowExpress:
                         # generic `except Exception` swallow below.
                         raise
                     except Exception as exc:
-                        errors.append(f"Upsert failed for record: {exc}")
+                        # Issue #1552 (FIX 5, HIGH): import_file is a public API
+                        # returning {"imported": int, "errors": [...]}; upsert()
+                        # re-raises the RAW driver error (left raw for the caller
+                        # per FIX 1), but rendering it into the RETURNED errors
+                        # list is the #1552 returned-error leak surface on a live
+                        # public path. Sanitize the VALUE-bearing driver error.
+                        errors.append(
+                            f"Upsert failed for record: {sanitize_db_error(str(exc))}"
+                        )
             else:
                 try:
                     await self.bulk_create(model_name, records)
@@ -2025,7 +2041,9 @@ class DataFlowExpress:
                     # branch above. Same I5 hard-stop discipline.
                     raise
                 except Exception as exc:
-                    errors.append(f"Bulk create failed: {exc}")
+                    # Issue #1552 (FIX 5, HIGH): same returned-`errors`-list leak
+                    # surface as the upsert branch above — sanitize the driver error.
+                    errors.append(f"Bulk create failed: {sanitize_db_error(str(exc))}")
 
         return {"imported": imported, "errors": errors}
 

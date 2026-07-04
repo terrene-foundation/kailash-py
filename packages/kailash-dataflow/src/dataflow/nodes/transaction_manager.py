@@ -12,6 +12,10 @@ from kailash.nodes.transaction.distributed_transaction_manager import (
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
+
 
 @register_node()
 class DataFlowTransactionManagerNode(AsyncNode):
@@ -175,7 +179,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitize_db_error(str(e)),
                 "transaction_id": transaction_id,
                 "status": "failed",
             }
@@ -216,7 +220,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                         {
                             "operation_id": operation.get("id", str(uuid.uuid4())),
                             "operation_type": operation.get("type"),
-                            "error": str(e),
+                            "error": sanitize_db_error(str(e)),
                         }
                     )
 
@@ -230,7 +234,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                         "status": "rolled_back",
                         "completed_operations": [],
                         "failed_operations": failed,
-                        "error_details": [str(e)],
+                        "error_details": [sanitize_db_error(str(e))],
                         "operation_latencies": operation_latencies,
                     }
 
@@ -254,7 +258,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                 "status": "failed",
                 "completed_operations": [],
                 "failed_operations": failed,
-                "error_details": [str(e)],
+                "error_details": [sanitize_db_error(str(e))],
                 "operation_latencies": operation_latencies,
             }
 
@@ -294,7 +298,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                         {
                             "operation_id": operation.get("id", str(uuid.uuid4())),
                             "operation_type": operation.get("type"),
-                            "error": str(e),
+                            "error": sanitize_db_error(str(e)),
                         }
                     )
 
@@ -306,7 +310,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                         "status": "aborted",
                         "completed_operations": [],
                         "failed_operations": failed,
-                        "error_details": [str(e)],
+                        "error_details": [sanitize_db_error(str(e))],
                         "operation_latencies": operation_latencies,
                     }
 
@@ -330,10 +334,13 @@ class DataFlowTransactionManagerNode(AsyncNode):
                         "status": "partial_commit",
                         "completed_operations": committed,
                         "failed_operations": [
-                            {"operation_id": prep_op["operation_id"], "error": str(e)}
+                            {
+                                "operation_id": prep_op["operation_id"],
+                                "error": sanitize_db_error(str(e)),
+                            }
                         ],
                         "error_details": [
-                            f"Partial commit - manual intervention required: {str(e)}"
+                            f"Partial commit - manual intervention required: {sanitize_db_error(str(e))}"
                         ],
                         "operation_latencies": operation_latencies,
                     }
@@ -356,7 +363,7 @@ class DataFlowTransactionManagerNode(AsyncNode):
                 "status": "failed",
                 "completed_operations": [],
                 "failed_operations": failed,
-                "error_details": [str(e)],
+                "error_details": [sanitize_db_error(str(e))],
                 "operation_latencies": operation_latencies,
             }
 

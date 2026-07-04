@@ -331,7 +331,29 @@ def is_conflict_target_error(message: str) -> bool:
 # (``nodes/bulk_upsert.py``) so both surfaces scrub identically — one helper,
 # no drift (rules/security.md § Multi-Site Kwarg Plumbing; rules/observability.md
 # Rule 8).
-_DETAIL_RE = re.compile(r"DETAIL:[^\n]*", re.IGNORECASE)
+# Issue #1552 (FIX 7): redact the ENTIRE ``DETAIL:`` clause, including any
+# continuation lines, up to the next PG structured-field marker at line-start
+# (HINT/CONTEXT/QUERY/…) OR end-of-string. The old single-line ``DETAIL:[^\n]*``
+# leaked value-bearing DETAIL content that spanned a newline in TWO shapes:
+#   (MED-1) a ``Key (col)=(value)`` value containing an embedded ``)`` AND a
+#           newline — ``_KEY_VALUES_RE``'s ``[^)]*`` stops at the ``)``, and the
+#           single-line ``DETAIL:`` collapsed only to the newline → tail leaked;
+#   (MED-2) PG ``DETAIL: Failing row contains (…)`` (CHECK / NOT-NULL / exclusion
+#           violations dump the WHOLE row) spanning a newline — ``_KEY_VALUES_RE``
+#           never matches it and single-line ``DETAIL:`` missed the continuation.
+# Block redaction is fail-closed: it redacts the whole DETAIL body while
+# PRESERVING any trailing HINT/CONTEXT/etc. structured fields. For a single-line
+# ``DETAIL: … already exists.`` with nothing after, ``.*?`` expands to EOS →
+# ``DETAIL: [REDACTED]`` (BYTE-IDENTICAL to the pre-FIX-7 single-line output);
+# with a trailing ``\nHINT:`` it stops before HINT (also identical to before).
+_DETAIL_RE = re.compile(
+    r"DETAIL:.*?(?=\n(?:HINT|CONTEXT|QUERY|WHERE|STATEMENT|LINE|LOCATION|"
+    r"SCHEMA NAME|TABLE NAME|COLUMN NAME|CONSTRAINT NAME|DATATYPE NAME):|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+# _KEY_VALUES_RE runs FIRST (belt-and-suspenders for a ``Key (col)=(value)`` clause
+# that appears OUTSIDE a DETAIL: line); the block _DETAIL_RE then owns everything
+# inside the DETAIL clause. Its value class ``[^)]*`` spans newlines.
 _KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
 # MySQL/MariaDB duplicate-key (errno 1062): ``Duplicate entry 'value' for key
 # 'name'``. This carries the offending column VALUE but has NEITHER a ``DETAIL:``
@@ -340,6 +362,11 @@ _KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
 # name (schema shape, matching the PG ``Key (col)`` treatment). Lazy ``.*?`` to
 # the ``' for key`` anchor so a value containing a literal quote (``O'Brien``)
 # still redacts fully.
+# NOTE (issue #1552 red-team, documented follow-up): the lazy ``.*?`` anchors on
+# the FIRST ``' for key`` occurrence, so a value that literally CONTAINS the
+# substring ``' for key`` leaks the tail. A greedy fix risks over-matching and
+# breaking the keyname-preservation contract pinned by #1550's test; the adversarial
+# edge is tracked separately and intentionally left as-is here.
 _MYSQL_DUP_ENTRY_RE = re.compile(r"Duplicate entry '.*?' for key", re.IGNORECASE)
 
 
@@ -358,8 +385,15 @@ def sanitize_db_error(msg: str) -> str:
     """
     if not isinstance(msg, str):
         return "<non-string error>"
-    msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
+    # Issue #1552 (FIX 2 + FIX 7): _KEY_VALUES_RE runs FIRST to catch any
+    # ``Key (col)=(value)`` clause OUTSIDE a DETAIL: line (its ``[^)]*`` value
+    # class spans newlines). Then the BLOCK _DETAIL_RE (FIX 7) redacts the ENTIRE
+    # DETAIL clause including continuation lines up to the next PG structured-field
+    # marker or EOS — closing the newline-truncation residuals (embedded-``)`` +
+    # newline; ``Failing row contains (…)`` multi-line) the old single-line
+    # ``DETAIL:[^\n]*`` leaked. _MYSQL_DUP_ENTRY_RE stays last.
     msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
+    msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
     msg = _MYSQL_DUP_ENTRY_RE.sub("Duplicate entry '[REDACTED]' for key", msg)
     return msg
 

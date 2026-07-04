@@ -30,6 +30,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Literal, Optional
 
+from dataflow.core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -319,14 +323,21 @@ class DerivedModelEngine:
         except Exception as exc:
             elapsed_ms = (time.monotonic() - start) * 1000
             meta.status = "error"
-            meta.last_error = str(exc)
-            logger.error("Refresh of derived model '%s' failed: %s", model_name, exc)
+            # Issue #1552 (FIX 3): the refresh runs SQL against source/derived
+            # models; a constraint violation surfaces a VALUE-bearing driver error.
+            # Redact once and use for the persisted status (meta.last_error, read by
+            # db.derived_model_status()), the ERROR log, and the returned error.
+            safe_error = sanitize_db_error(str(exc))
+            meta.last_error = safe_error
+            logger.error(
+                "Refresh of derived model '%s' failed: %s", model_name, safe_error
+            )
             return RefreshResult(
                 model_name=model_name,
                 records_upserted=0,
                 duration_ms=elapsed_ms,
                 sources_queried={},
-                error=str(exc),
+                error=safe_error,
             )
 
     # ------------------------------------------------------------------
@@ -458,12 +469,16 @@ class DerivedModelEngine:
         try:
             await self.refresh(meta.model_name)
         except Exception as exc:
-            meta.last_error = str(exc)
+            # Issue #1552 (FIX 3): same VALUE-bearing driver-error class as the
+            # refresh() handler above — redact before persisting to meta.last_error
+            # (status surface) and before the ERROR log.
+            safe_error = sanitize_db_error(str(exc))
+            meta.last_error = safe_error
             meta.status = "error"
             logger.error(
                 "Derived model '%s' on_source_change refresh failed: %s",
                 meta.model_name,
-                exc,
+                safe_error,
             )
 
     # ------------------------------------------------------------------

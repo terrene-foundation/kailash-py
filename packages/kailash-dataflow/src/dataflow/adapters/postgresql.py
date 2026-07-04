@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Tuple
 
 from .base import DatabaseAdapter
 from .dialect import DialectManager
+from ..core.exceptions import (
+    sanitize_db_error,
+)  # Issue #1552: redact driver-error VALUES
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
 
 _pg_dialect = DialectManager.get_dialect("postgresql")
@@ -136,10 +139,16 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 return [dict(row) for row in rows]
 
         except Exception as e:
+            # Issue #1552 (FIX 8, defense-in-depth): execute_query runs an
+            # arbitrary query (DML-capable); redact any VALUE-bearing driver error
+            # in BOTH the ERROR log and the raised QueryError. Dead/out-of-class on
+            # the DataFlow hot path today, unified with execute_insert.
+            safe_error = sanitize_db_error(str(e))
             logger.error(
-                "postgresql.postgresql_query_execution_failed", extra={"error": str(e)}
+                "postgresql.postgresql_query_execution_failed",
+                extra={"error": safe_error},
             )
-            raise QueryError(f"Query execution failed: {e}")
+            raise QueryError(f"Query execution failed: {safe_error}")
 
     async def execute_insert(self, query: str, params: List[Any] = None) -> Any:
         """Execute INSERT query and return result."""
@@ -156,8 +165,15 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     return await connection.execute(pg_query)
 
         except Exception as e:
-            logger.error("postgresql.postgresql_insert_failed", extra={"error": str(e)})
-            raise QueryError(f"Insert failed: {e}")
+            # Issue #1552 (FIX 4, defense-in-depth): redact the VALUE-bearing driver
+            # error (PG "DETAIL: Key (col)=(value)") in BOTH the ERROR log and the
+            # raised QueryError message. No callers today but latent; sanitizing at
+            # the render prevents a future wiring from reintroducing the leak.
+            safe_error = sanitize_db_error(str(e))
+            logger.error(
+                "postgresql.postgresql_insert_failed", extra={"error": safe_error}
+            )
+            raise QueryError(f"Insert failed: {safe_error}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
         """Execute bulk insert operation."""
@@ -171,10 +187,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 await connection.executemany(pg_query, params_list)
 
         except Exception as e:
+            # Issue #1552 (FIX 4, defense-in-depth): see execute_insert above.
+            safe_error = sanitize_db_error(str(e))
             logger.error(
-                "postgresql.postgresql_bulk_insert_failed", extra={"error": str(e)}
+                "postgresql.postgresql_bulk_insert_failed", extra={"error": safe_error}
             )
-            raise QueryError(f"Bulk insert failed: {e}")
+            raise QueryError(f"Bulk insert failed: {safe_error}")
 
     def transaction(self):
         """Return transaction context manager."""
@@ -228,11 +246,15 @@ class PostgreSQLAdapter(DatabaseAdapter):
             )
             return results
         except Exception as e:
+            # Issue #1552 (FIX 8, defense-in-depth): a transaction runs an
+            # arbitrary query list (DML-capable; deferred constraints fire at
+            # COMMIT with a VALUE-bearing error). Redact both surfaces.
+            safe_error = sanitize_db_error(str(e))
             logger.error(
                 "transaction.error",
-                extra={"error": str(e), "query_count": len(queries)},
+                extra={"error": safe_error, "query_count": len(queries)},
             )
-            raise TransactionError(f"Transaction failed: {e}")
+            raise TransactionError(f"Transaction failed: {safe_error}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
         """Get PostgreSQL table schema using INFORMATION_SCHEMA."""
@@ -291,6 +313,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
             return schema
 
         except Exception as e:
+            # NOTE (issue #1552): introspection path (INFORMATION_SCHEMA); no row
+            # VALUES flow here — out-of-class for the driver-VALUE leak. Left raw.
             logger.error(
                 "postgresql.failed_to_get_table_schema", extra={"error": str(e)}
             )
@@ -343,6 +367,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.info("postgresql.created_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path (#1550 owns DDL); CREATE TABLE carries
+            # no row VALUES — out-of-class here. Left raw.
             logger.error("postgresql.failed_to_create_table", extra={"error": str(e)})
             raise QueryError(f"Failed to create table: {e}")
 
@@ -357,6 +383,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.info("postgresql.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
+            # NOTE (issue #1552): DDL path (#1550 owns DDL); DROP carries no row
+            # VALUES — out-of-class here. Left raw.
             logger.error("postgresql.failed_to_drop_table", extra={"error": str(e)})
             raise QueryError(f"Failed to drop table: {e}")
 
