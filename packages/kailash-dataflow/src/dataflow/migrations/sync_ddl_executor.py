@@ -25,6 +25,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from kailash.db.dialect import _validate_identifier
 from kailash.utils.url_credentials import mask_url
 
+# Issue #1550: this executor is the LOWEST layer that touches the raw driver
+# exception on the eager-DDL path — it logs the error BEFORE returning it to the
+# engine, so sanitizing only at the engine layer leaves this log raw. Redact
+# here, at the single point every DDL caller (engine, schema_state_manager,
+# auto_migration_system) funnels through.
+from dataflow.core.exceptions import sanitize_db_error
+
 logger = logging.getLogger(__name__)
 
 _CREATE_INDEX_RE = re.compile(r"(?i)\bCREATE\s+(UNIQUE\s+)?INDEX\b")
@@ -243,7 +250,12 @@ class SyncDDLExecutor:
             return {"success": True, "sql": sql}
 
         except Exception as e:
-            error_str = str(e)
+            # Issue #1550: redact value-bearing driver DETAILs / MySQL
+            # `Duplicate entry 'value'` at the source, so neither the ERROR log
+            # below NOR the returned `error` dict carries the raw value. Benign-
+            # detection keywords ("already exists", "duplicate key name") are not
+            # touched by the redactor, so _is_benign_ddl_object_exists is unaffected.
+            error_str = sanitize_db_error(str(e))
             # #1537: MySQL's CREATE INDEX has no IF NOT EXISTS, so a re-migration
             # (auto_migrate on an existing table) raises 1061 "Duplicate key
             # name". That — and the PG/SQLite "already exists" form — means the
@@ -306,7 +318,8 @@ class SyncDDLExecutor:
             return {"success": True, "executed_count": executed}
 
         except Exception as e:
-            error_str = str(e)
+            # Issue #1550: redact at the source (see execute_ddl above).
+            error_str = sanitize_db_error(str(e))
             failed_sql = (
                 sql_statements[executed] if executed < len(sql_statements) else None
             )

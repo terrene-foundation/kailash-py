@@ -2672,7 +2672,9 @@ class DataFlow(DataFlowEventMixin):
                 enhanced_success = True
             except Exception as e:
                 logger.warning(
-                    f"Enhanced schema management failed for '{model_name}', falling back to migration system: {e}"
+                    f"Enhanced schema management failed for '{model_name}', "
+                    f"falling back to migration system: "
+                    f"{self._sanitize_db_error(str(e))}"  # issue #1550
                 )
 
         # Fall back to migration system if enhanced failed or unavailable
@@ -2739,7 +2741,8 @@ class DataFlow(DataFlowEventMixin):
                 )
         except Exception as e:
             logger.error(
-                f"PostgreSQL enhanced schema management error for model '{model_name}': {e}"
+                f"PostgreSQL enhanced schema management error for model "
+                f"'{model_name}': {self._sanitize_db_error(str(e))}"  # issue #1550
             )
             raise  # Re-raise to trigger fallback
 
@@ -8518,7 +8521,10 @@ class DataFlow(DataFlowEventMixin):
 
             logger.error(
                 "engine.ddl_failed",
-                extra={"statement": statement[:100], "error": err_text},
+                extra={
+                    "statement": statement[:100],
+                    "error": self._sanitize_db_error(err_text),
+                },
             )
             # Issue #696: record the failure under the extracted table name so
             # the next ensure_table_exists() for that model raises
@@ -8529,9 +8535,16 @@ class DataFlow(DataFlowEventMixin):
                 if not self._auto_migrate_warn and re.search(
                     r"(?i)\bCREATE\s+TABLE\b", statement
                 ):
+                    # Issue #1550: sanitize the driver error before it enters
+                    # DDLFailedError's message (mirrors the #1548 lazy-path
+                    # first-access raise). The raw exception stays as __cause__
+                    # (traceback-only, not user-facing) via ``from error``.
+                    safe_text = self._sanitize_db_error(
+                        f"{type(error).__name__}: {error}"
+                    )
                     raise self._DDLFailedError(
                         model_name=table,
-                        original_error=error,
+                        original_error=RuntimeError(safe_text),
                         statement_preview=statement,
                     ) from error
             # Index / FK / type / schema setup failures continue under legacy
@@ -8621,7 +8634,10 @@ class DataFlow(DataFlowEventMixin):
 
             logger.error(
                 "engine.ddl_async_failed",
-                extra={"statement": statement[:100], "error": err_text},
+                extra={
+                    "statement": statement[:100],
+                    "error": self._sanitize_db_error(err_text),
+                },
             )
             # Issue #696: same circuit-breaker semantics as the sync path —
             # record under the extracted table name and abort the batch in
@@ -8632,9 +8648,16 @@ class DataFlow(DataFlowEventMixin):
                 if not self._auto_migrate_warn and re.search(
                     r"(?i)\bCREATE\s+TABLE\b", statement
                 ):
+                    # Issue #1550: sanitize the driver error before it enters
+                    # DDLFailedError's message (mirrors the #1548 lazy-path
+                    # first-access raise). The raw exception stays as __cause__
+                    # (traceback-only, not user-facing) via ``from error``.
+                    safe_text = self._sanitize_db_error(
+                        f"{type(error).__name__}: {error}"
+                    )
                     raise self._DDLFailedError(
                         model_name=table,
-                        original_error=error,
+                        original_error=RuntimeError(safe_text),
                         statement_preview=statement,
                     ) from error
 
@@ -8902,7 +8925,10 @@ class DataFlow(DataFlowEventMixin):
 
                 logger.warning(
                     "engine.sync_ddl_failed_for_model",
-                    extra={"model_name": model_name, "error": error},
+                    extra={
+                        "model_name": model_name,
+                        "error": self._sanitize_db_error(error),
+                    },
                 )
                 # Issue #696: record failed-DDL state. Next access via
                 # ensure_table_exists will fail-fast (auto_migrate=True)
@@ -8925,7 +8951,8 @@ class DataFlow(DataFlowEventMixin):
 
         except Exception as e:
             logger.warning(
-                f"Sync table creation failed for '{model_name}': {e}. "
+                f"Sync table creation failed for '{model_name}': "
+                f"{self._sanitize_db_error(str(e))}. "
                 f"Table will be created on first access."
             )
             # Issue #696: record so the next access fails-fast.
@@ -9066,7 +9093,10 @@ class DataFlow(DataFlowEventMixin):
                     # Real failure on this statement — surface it (never swallow).
                     logger.error(
                         "engine.batch_ddl_failed",
-                        extra={"statement": stmt[:100], "error": err_text},
+                        extra={
+                            "statement": stmt[:100],
+                            "error": self._sanitize_db_error(err_text),
+                        },
                     )
                     error = stmt_result.get("exception") or RuntimeError(
                         err_text or "DDL failed"
@@ -9097,7 +9127,8 @@ class DataFlow(DataFlowEventMixin):
                 self._create_table_sync(model_name)
         except Exception as e:
             logger.warning(
-                "Batch DDL failed: %s. Falling back to per-model creation.", e
+                "Batch DDL failed: %s. Falling back to per-model creation.",
+                self._sanitize_db_error(str(e)),
             )
             for model_name in model_names:
                 self._create_table_sync(model_name)
@@ -9206,7 +9237,8 @@ class DataFlow(DataFlowEventMixin):
                             )
                         else:
                             logger.warning(
-                                "engine.sync_ddl_failed", extra={"error": error}
+                                "engine.sync_ddl_failed",
+                                extra={"error": self._sanitize_db_error(error)},
                             )
                             # Issue #696: record per-table failure
                             table = self._extract_table_from_statement(statement)
@@ -9222,11 +9254,14 @@ class DataFlow(DataFlowEventMixin):
                                 if not self._auto_migrate_warn and re.search(
                                     r"(?i)\bCREATE\s+TABLE\b", statement
                                 ):
+                                    # Issue #1550: sanitize before the raw driver
+                                    # text enters DDLFailedError's message.
+                                    safe_text = self._sanitize_db_error(
+                                        error or "sync DDL failed"
+                                    )
                                     raise self._DDLFailedError(
                                         model_name=table,
-                                        original_error=RuntimeError(
-                                            error or "sync DDL failed"
-                                        ),
+                                        original_error=RuntimeError(safe_text),
                                         statement_preview=statement,
                                     )
 
@@ -9253,7 +9288,14 @@ class DataFlow(DataFlowEventMixin):
             return False
 
         except Exception as e:
-            logger.error("engine.sync_table_creation_failed", extra={"error": str(e)})
+            # Issue #1550: sanitize — a driver exception raised past the inner
+            # per-statement path (e.g. connection drop mid-DDL) can still carry
+            # a value-bearing DETAIL. Mirrors the sanitized twin in
+            # _create_table_sync's outer except.
+            logger.error(
+                "engine.sync_table_creation_failed",
+                extra={"error": self._sanitize_db_error(str(e))},
+            )
             return False
 
     def _register_specialized_nodes(self):
@@ -9585,7 +9627,14 @@ class DataFlow(DataFlowEventMixin):
             return True
 
         except Exception as e:
-            logger.error("engine.schema_validation_failed", extra={"error": str(e)})
+            # Issue #1550: sanitize for uniformity — schema-validation errors are
+            # normally connection/permission/type-mismatch (no value DETAIL), but
+            # route through the shared redactor so no raw driver text can reach
+            # the log on ANY engine error path.
+            logger.error(
+                "engine.schema_validation_failed",
+                extra={"error": self._sanitize_db_error(str(e))},
+            )
             return False
 
     async def _get_current_schema_via_workflow(self) -> Dict[str, Any]:
