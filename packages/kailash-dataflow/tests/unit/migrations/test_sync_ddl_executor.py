@@ -190,3 +190,61 @@ class TestSyncDDLEdgeCases:
 
         executor = SyncDDLExecutor(f"sqlite:///{db_path}")
         assert executor.table_exists("this_table_does_not_exist") is False
+
+
+@pytest.mark.unit
+class TestIsBenignDDLObjectExists:
+    """Pin the scoping of ``_is_benign_ddl_object_exists`` — the single guarantee
+    the whole 1061-tolerance (issue #1537) rests on.
+
+    The batch/per-statement re-migration paths mark a model's table ensured (and
+    swallow the error at DEBUG) ONLY when this helper returns True. If the scoping
+    ever loosens so that a 1061 INSIDE a ``CREATE TABLE`` (a genuine schema
+    authoring bug) is treated as benign, real failures would be masked; if it
+    tightens so that a re-run ``CREATE INDEX`` 1061 is NOT benign, every MySQL
+    restart re-emits a WARN. This test locks both edges.
+    """
+
+    def test_1061_inside_create_table_is_not_benign(self):
+        """A 1061 'Duplicate key name' raised by a CREATE TABLE definition is a
+        genuine schema bug — MUST surface (False), NOT be swallowed."""
+        from dataflow.migrations.sync_ddl_executor import (
+            _is_benign_ddl_object_exists,
+        )
+
+        err = "(1061, \"Duplicate key name 'idx_email'\")"
+        sql = "CREATE TABLE `docs` (id INT, email VARCHAR(255), UNIQUE KEY `idx_email` (email), KEY `idx_email` (email))"
+        assert _is_benign_ddl_object_exists(err, sql) is False
+
+    def test_1061_on_create_index_is_benign(self):
+        """A 1061 'Duplicate key name' raised by a re-run CREATE INDEX (MySQL has
+        no IF NOT EXISTS) means the index already exists — benign (True)."""
+        from dataflow.migrations.sync_ddl_executor import (
+            _is_benign_ddl_object_exists,
+        )
+
+        err = "(1061, \"Duplicate key name 'idx_email'\")"
+        sql = "CREATE UNIQUE INDEX `idx_email` ON `docs` (`email`)"
+        assert _is_benign_ddl_object_exists(err, sql) is True
+
+    def test_1064_syntax_on_create_index_is_not_benign(self):
+        """A real 1064 syntax error on a CREATE INDEX is NOT an already-present
+        signal — MUST surface (False) even though the statement is CREATE INDEX."""
+        from dataflow.migrations.sync_ddl_executor import (
+            _is_benign_ddl_object_exists,
+        )
+
+        err = "(1064, \"You have an error in your SQL syntax near 'ONN'\")"
+        sql = "CREATE INDEX `idx_email` ONN `docs` (`email`)"
+        assert _is_benign_ddl_object_exists(err, sql) is False
+
+    def test_already_exists_on_create_table_is_benign(self):
+        """PostgreSQL / SQLite 'already exists' on any object (here CREATE TABLE)
+        is the canonical benign already-present signal (True)."""
+        from dataflow.migrations.sync_ddl_executor import (
+            _is_benign_ddl_object_exists,
+        )
+
+        err = 'relation "docs" already exists'
+        sql = 'CREATE TABLE "docs" (id INTEGER PRIMARY KEY, email TEXT)'
+        assert _is_benign_ddl_object_exists(err, sql) is True
