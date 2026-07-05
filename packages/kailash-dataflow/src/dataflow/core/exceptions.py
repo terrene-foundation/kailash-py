@@ -408,6 +408,84 @@ def _redact_mysql_dup_entry(match: "re.Match[str]") -> str:
 # the newline to the final ``}`` (fail-closed — a single driver error's ``str(e)``).
 _MONGO_DUP_KEY_RE = re.compile(r"dup key:\s*\{.*\}", re.IGNORECASE | re.DOTALL)
 
+# Issue #1569: value-bearing NON-dup-key driver errors. The four regexes above
+# cover only the duplicate-key/constraint shapes; ANY OTHER driver error that
+# echoes a user VALUE (a malformed date, a non-UTF8 string, an out-of-range
+# number, a failed type cast) rendered that value VERBATIM into logs / node-return
+# dicts — the same PII-to-logs boundary #1552 closed for dup-key, re-opened for
+# every type/format violation. Surfaced as an adjacent gap in the #1567 red-team.
+#
+# FAIL-CLOSED DESIGN DECISION (issue #1569 AC #3) — DIALECT-SCOPED FAMILY redaction,
+# NOT per-errno whack-a-mole AND NOT a blanket quoted-literal sweep:
+#   * Per-errno shapes (add a regex per errno) would leave the NEXT value-bearing
+#     errno leaking until someone files it — the whack-a-mole the issue rejects.
+#   * A blanket "redact every quoted literal" would ALSO strip the diagnostic
+#     schema names (column / key / constraint names) the dup-key redactors above
+#     deliberately PRESERVE, and over-redact benign quoted identifiers.
+#   The chosen middle ground: one regex per DIALECT covering its whole value-
+#   echoing FAMILY, anchored on the error-text preamble so the value is redacted
+#   while the type word + trailing "for column '<col>'" schema name survive.
+#
+# Covered families (value is echoed → redacted):
+#   * MySQL errno 1292 ER_TRUNCATED_WRONG_VALUE — "Incorrect <type> value: '<v>'"
+#     AND "Truncated incorrect <TYPE> value: '<v>'" (datetime/integer/decimal/
+#     double/…); errno 1366 ER_TRUNCATED_WRONG_VALUE_FOR_FIELD — "Incorrect string
+#     value: '<v>' for column '<c>' at row <n>". One family regex covers all.
+#   * PostgreSQL, value AFTER a colon — "invalid input syntax for [type] <t>:
+#     \"<v>\"", "invalid input value for [enum] <t>: \"<v>\"", "date/time field
+#     value out of range: \"<v>\"", "time zone displacement out of range: \"<v>\"",
+#     "malformed (array|range) literal: \"<v>\"" (all empirically confirmed).
+#   * PostgreSQL, value BEFORE the descriptor — "value \"<v>\" is out of range for
+#     type <t>" (numeric overflow, errcode 22003; empirically confirmed against PG
+#     — the value is BETWEEN ``value `` and `` is out of range``, NOT after a
+#     trailing colon, so the colon-anchored family regex above cannot reach it).
+#   PG echoes the value DOUBLE-quoted in the PRIMARY message (not a DETAIL: clause,
+#   so _DETAIL_RE never reached it).
+# Explicitly NOT redacted (documented — these errno shapes echo only the COLUMN
+# name, no user value, so the schema name is preserved by design, matching the
+# dup-key keyname treatment): MySQL 1264 "Out of range value for column '<c>'",
+# 1406 "Data too long for column '<c>'", 1265 "Data truncated for column '<c>'";
+# PG "value too long for type character varying(N)".
+#
+# _MYSQL_INCORRECT_VALUE_RE: greedy value ('.*') with DOTALL, bounded by a
+# LOOKAHEAD so the closing "'" sits just before an optional " for column '<c>' at
+# row <n>" suffix OR the message terminator ('"', ')', whitespace, EOS/newline) —
+# the #1557 greedy-to-final-suffix discipline. The suffix + terminators live in
+# the lookahead, so they are NOT consumed and the column NAME is preserved. DOTALL
+# lets a value with an embedded quote/newline (a TEXT column) span to the final
+# suffix (fail-closed — the input is one driver error's str(e)).
+_MYSQL_INCORRECT_VALUE_RE = re.compile(
+    r"((?:Truncated incorrect|Incorrect) (?:\w+ )?value): '.*'"
+    r"(?=(?: for column '[^'\n]*' at row \d+)?[\"')\s]*(?:$|\n))",
+    re.IGNORECASE | re.DOTALL,
+)
+# _PG_QUOTED_VALUE_RE: PG echoes the offending value DOUBLE-quoted at the tail of
+# the primary message. Anchored on the known value-echoing PG phrase lead-ins so
+# benign quoted identifiers elsewhere are untouched; greedy value bounded by a
+# lookahead requiring only closing chars ()/./whitespace) before EOS/newline (so
+# a trailing "\nHINT: …" continuation is preserved). Value redacted, phrase +
+# type name preserved.
+_PG_QUOTED_VALUE_RE = re.compile(
+    r'((?:invalid input syntax for (?:type )?[^\n:"]*'
+    r'|invalid input value for (?:enum )?[^\n:"]*'
+    r"|date/time field value out of range"
+    r"|time zone displacement out of range"
+    r"|malformed (?:array|range) literal)): \"(?:.*)\""
+    r"(?=[)\s.]*(?:$|\n))",
+    re.IGNORECASE | re.DOTALL,
+)
+# _PG_VALUE_OUT_OF_RANGE_RE (issue #1569 red-team): the PG numeric-overflow shape
+# ``value "<v>" is out of range for type <t>`` (errcode 22003) puts the value
+# BEFORE the descriptor, so _PG_QUOTED_VALUE_RE's colon-anchored family cannot
+# reach it. Empirically confirmed emitted by PG for int/smallint/bigint casts.
+# Redact the double-quoted value, preserve the ``type <t>`` name. Greedy value
+# anchored to the required `` is out of range for type <t>`` suffix (#1557
+# greedy-to-final-suffix discipline; DOTALL for a value with an embedded newline).
+_PG_VALUE_OUT_OF_RANGE_RE = re.compile(
+    r'(value) "(?:.*)"( is out of range for type \w+)',
+    re.IGNORECASE | re.DOTALL,
+)
+
 
 def sanitize_db_error(msg: str) -> str:
     """Redact column VALUES from a DB driver error message.
@@ -418,9 +496,14 @@ def sanitize_db_error(msg: str) -> str:
     on a column OTHER than the conflict target cannot leak user data into
     logs or the returned error string.
 
-    Covers PostgreSQL (``DETAIL:`` clauses, ``Key (col)=(value)``) AND
-    MySQL/MariaDB (``Duplicate entry 'value' for key 'name'``) driver-error
-    shapes; SQLite ``UNIQUE constraint failed: table.col`` carries no value.
+    Covers PostgreSQL (``DETAIL:`` clauses, ``Key (col)=(value)``,
+    ``invalid input syntax/value for …: "<v>"``, ``… value out of range: "<v>"``)
+    AND MySQL/MariaDB (``Duplicate entry 'value' for key 'name'``,
+    ``Incorrect <type> value: '<v>'`` / ``Truncated incorrect <TYPE> value:
+    '<v>'`` errno 1292/1366) driver-error shapes — dup-key AND the value-bearing
+    non-dup-key families (issue #1569); SQLite ``UNIQUE constraint failed:
+    table.col`` carries no value. Column-name-only shapes (MySQL ``Out of range
+    value for column``, ``Data too long for column``) are preserved unredacted.
     """
     if not isinstance(msg, str):
         return "<non-string error>"
@@ -438,6 +521,17 @@ def sanitize_db_error(msg: str) -> str:
     msg = _MYSQL_DUP_ENTRY_RE.sub(_redact_mysql_dup_entry, msg)
     # Issue #1556: MongoDB E11000 ``dup key: { field: "value" }`` payload.
     msg = _MONGO_DUP_KEY_RE.sub("dup key: { [REDACTED] }", msg)
+    # Issue #1569: value-bearing NON-dup-key families. MySQL ``Incorrect <type>
+    # value: '<v>'`` / ``Truncated incorrect <TYPE> value: '<v>'`` (errno
+    # 1292/1366) and PostgreSQL ``invalid input syntax/value for …: "<v>"`` /
+    # ``… value out of range: "<v>"``. Redact the value, preserve the type word +
+    # any trailing ``for column '<c>'`` schema name. Disjoint preambles from the
+    # dup-key subs above, so ordering is irrelevant.
+    msg = _MYSQL_INCORRECT_VALUE_RE.sub(r"\1: '[REDACTED]'", msg)
+    msg = _PG_QUOTED_VALUE_RE.sub(r'\1: "[REDACTED]"', msg)
+    # Issue #1569 red-team: PG numeric-overflow ``value "<v>" is out of range for
+    # type <t>`` (value BEFORE the descriptor — the colon-anchored sub above misses it).
+    msg = _PG_VALUE_OUT_OF_RANGE_RE.sub(r'\1 "[REDACTED]"\2', msg)
     return msg
 
 
