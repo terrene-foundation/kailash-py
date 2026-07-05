@@ -182,26 +182,33 @@ async def test_pg_inspect_closes_pool_on_mid_discovery_exception(monkeypatch):
 async def test_sqlite_inspect_disconnects_on_mid_discovery_exception(monkeypatch):
     """SQLite: a mid-discovery exception still disconnects the adapter (try/finally)."""
     engine = DataFlow(database_url="sqlite:///:memory:")
-    with tempfile.TemporaryDirectory() as tmp:
-        db_path = os.path.join(tmp, "regression_1575.db")
-        sqlite_url = f"sqlite:///{db_path}"
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "regression_1575.db")
+            sqlite_url = f"sqlite:///{db_path}"
 
-        _FailMidDiscoverySQLiteAdapter.instances.clear()
-        monkeypatch.setattr(
-            "dataflow.adapters.sqlite.SQLiteAdapter",
-            _FailMidDiscoverySQLiteAdapter,
-        )
+            _FailMidDiscoverySQLiteAdapter.instances.clear()
+            monkeypatch.setattr(
+                "dataflow.adapters.sqlite.SQLiteAdapter",
+                _FailMidDiscoverySQLiteAdapter,
+            )
 
-        with pytest.raises(RuntimeError, match="injected mid-discovery failure"):
-            await engine._inspect_sqlite_schema_real(sqlite_url)
+            with pytest.raises(RuntimeError, match="injected mid-discovery failure"):
+                await engine._inspect_sqlite_schema_real(sqlite_url)
 
-        assert _FailMidDiscoverySQLiteAdapter.instances, "adapter never constructed"
-        adapter = _FailMidDiscoverySQLiteAdapter.instances[-1]
-        assert adapter.disconnect_calls >= 1, (
-            "SQLite adapter was NOT disconnected on the mid-discovery exception "
-            "path — the try/finally in _inspect_sqlite_schema_real is missing "
-            "(issue #1575 regression)"
-        )
+            assert _FailMidDiscoverySQLiteAdapter.instances, "adapter never constructed"
+            adapter = _FailMidDiscoverySQLiteAdapter.instances[-1]
+            assert adapter.disconnect_calls >= 1, (
+                "SQLite adapter was NOT disconnected on the mid-discovery exception "
+                "path — the try/finally in _inspect_sqlite_schema_real is missing "
+                "(issue #1575 regression)"
+            )
+    finally:
+        # Close the DataFlow so its persistent sync ``_memory_connection``
+        # (sqlite3.connect for the ``:memory:`` engine) does not surface a
+        # ``ResourceWarning: unclosed database`` at GC (test-cleanup hygiene,
+        # rules/testing.md § Test Resource Cleanup).
+        engine.close()
 
 
 # ---------------------------------------------------------------------------
