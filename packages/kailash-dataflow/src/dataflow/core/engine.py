@@ -6023,7 +6023,13 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             List of CREATE INDEX SQL statements
         """
-        table_name = self._class_name_to_table_name(model_name)
+        # Issue #1541: resolve the model's ACTUAL table name (respects
+        # ``__tablename__``) — NOT the pluralized class-name default. CREATE TABLE
+        # (_generate_create_table_sql) uses the resolved name; the CREATE INDEX DDL
+        # here MUST target the same table or the declared indexes are emitted
+        # against a non-existent table and silently WARN-skipped, so a
+        # custom-__tablename__ model's indexes never materialize.
+        table_name = self._get_table_name(model_name)
         # Defense-in-depth (dataflow-identifier-safety MUST-1/MUST-5): the
         # index/field/foreign_key identifiers below are already validated before
         # interpolation, but the derived table_name was not. Validate it too so
@@ -6104,7 +6110,11 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             List of ALTER TABLE SQL statements for foreign keys
         """
-        table_name = self._class_name_to_table_name(model_name)
+        # Issue #1541: the owning table of the FK ALTER MUST be the model's
+        # resolved table (respects ``__tablename__``), matching CREATE TABLE —
+        # otherwise a custom-__tablename__ model's FK constraint targets a
+        # non-existent default-named table and is silently WARN-skipped.
+        table_name = self._get_table_name(model_name)
         constraints = []
 
         # Get relationships for this model
@@ -6119,7 +6129,8 @@ class DataFlow(DataFlowEventMixin):
 
                 # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 1):
                 # validate every identifier before interpolation into DDL.
-                # `table_name` comes from `_class_name_to_table_name`,
+                # `table_name` comes from `_get_table_name` (respects
+                # `__tablename__`; a user-supplied override — issue #1541),
                 # `foreign_key` / `target_table` / `target_key` come from
                 # model-relationship metadata which is model-registry-derived
                 # today but may be caller-influenced after a future refactor.
