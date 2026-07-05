@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.13.19] — 2026-07-05 — Sync→async bridge drains adapter pools before closing its transient loop (#1572)
+
+### Fixed
+
+- **The sync→async bridge (`async_utils`) no longer leaves MySQL/PostgreSQL adapter pools bound to a dead event loop after `await db.close_async()` (#1572).** `async_safe_run` / `_run_in_thread_pool` run coroutines on a _transient_ loop that is created, run to completion, and closed; a pool created during that run (an adapter reachability probe, or `EnterpriseConnectionPool` min-size connections) had its aiomysql/asyncpg transports bound to that loop, and once the loop closed the transports could never be drained — surfacing as ~10 GC-time `RuntimeError: Event loop is closed` / `ResourceWarning: Unclosed connection` from `Connection.__del__`, well after `close_async()` had done everything it could. Both bridge branches (thread-pool worker and the no-running-loop path) now route through a single `_run_on_new_loop` helper that stamps each transient loop with a marker and drains every pool registered against it — bounded to 5s per pool, best-effort, never raising — BEFORE cancelling tasks and closing the loop. Persistent application loops (FastAPI, Jupyter) are never marked and therefore never drained, so a live app pool is untouched. The registry lives in core `kailash` (`kailash.utils.loop_pool_registry`, kailash 2.45.4) because `dataflow -> kailash` is the only legal import direction; DataFlow's `PostgreSQLAdapter`/`MySQLAdapter` register their pool's `disconnect` at pool-creation time. **Floor bumped to `kailash>=2.45.4`** — this release will not import against an older core.
+- **Follow-up tracked separately (#1575):** sibling non-bridge transient loops (schema discovery, and the owned per-instance loops in `engine`/`model_registry`/`express`/`transactions`) are a pre-existing, heterogeneous same-class gap outside this fix's shard budget.
+
+### Tests
+
+- **#1572:** Tier-2 regression against real PostgreSQL (5434) and MySQL (3307) — a deterministic bridge-drain assertion (`adapter._pool is None` after the bridge returns) that fails pre-fix (reproducing the exact `Connection.__del__` `RuntimeError`) and passes post-fix, plus an Express-lifecycle GC-capture test and 6 registry unit tests. 10/10 green.
+
 ## [2.13.18] — 2026-07-05 — Driver-error redaction broadened to value-bearing non-dup-key errors (#1569) & `__tablename__`-aware index/FK DDL (#1541)
 
 ### Fixed

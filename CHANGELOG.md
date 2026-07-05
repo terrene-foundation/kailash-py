@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.4] - 2026-07-05
+
+### Added
+
+- **`kailash.utils.loop_pool_registry`** — a per-loop connection-pool drain registry for DataFlow's sync→async bridge (#1572). Adapter pools (aiomysql/asyncpg) created on a transient bridge loop (`async_safe_run` / `_run_in_thread_pool`) previously had their transports bound to that loop with no way to drain them before the loop closed — `close_async()` could not help because once the loop is closed the transports belong to a dead loop. Pool-creation sites now call `register_pool_drain_on_current_loop(drain)`, gated on a `BRIDGE_LOOP_ATTR` marker the bridge stamps onto loops it creates; persistent application loops (FastAPI, Jupyter) never carry the marker and are never registered, so a live app pool is never touched. The bridge calls `drain_loop_pools(loop)` in its `finally` block, before task cancellation and loop close, bounding each drain to 5s and never raising. Core owns the registry (not DataFlow) because `dataflow -> kailash` is the only legal import direction, so both a DataFlow adapter pool and a core `EnterpriseConnectionPool` pool (covered transitively via its inner adapter's `connect()`) register through the same path.
+
+### Fixed
+
+- **`AsyncSQL` PostgreSQL/MySQL adapter `connect()` now registers its pool for bridge-loop drain, and `disconnect()` is idempotent (#1572).** `PostgreSQLAdapter.connect()` / `MySQLAdapter.connect()` call `register_pool_drain_on_current_loop(self.disconnect)` immediately after pool creation (a no-op off the transient bridge loop); `disconnect()` now nulls `self._pool` after closing so a later `cleanup()` / bridge-drain double-close is a guarded no-op instead of a double-close error. This closes the core half of the ~10 GC-time `RuntimeError: Event loop is closed` / `ResourceWarning: Unclosed connection` reports that surfaced after `await db.close_async()` on DataFlow's bridge; see kailash-dataflow 2.13.19 for the bridge-side half (`dataflow.core.async_utils`).
+
 ## [2.45.3] - 2026-07-03
 
 ### Fixed
