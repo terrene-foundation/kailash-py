@@ -166,18 +166,6 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def get_upsert_sql(
-        self,
-        table: str,
-        columns: List[str],
-        values: List[Any],
-        conflict_columns: List[str],
-        update_columns: Optional[List[str]] = None,
-    ) -> Tuple[str, List[Any]]:
-        """Generate UPSERT (INSERT ... ON CONFLICT) SQL."""
-        pass
-
-    @abstractmethod
     def get_limit_offset_sql(self, limit: Optional[int], offset: Optional[int]) -> str:
         """Generate LIMIT/OFFSET clause."""
         pass
@@ -379,37 +367,6 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """PostgreSQL current timestamp."""
         return "CURRENT_TIMESTAMP"
 
-    def get_upsert_sql(
-        self,
-        table: str,
-        columns: List[str],
-        values: List[Any],
-        conflict_columns: List[str],
-        update_columns: Optional[List[str]] = None,
-    ) -> Tuple[str, List[Any]]:
-        """PostgreSQL UPSERT using ON CONFLICT."""
-        quoted_table = self.quote_identifier(table)
-        quoted_columns = [self.quote_identifier(col) for col in columns]
-        placeholders = [f"${i + 1}" for i in range(len(values))]
-
-        sql = f"""
-        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
-        VALUES ({", ".join(placeholders)})
-        ON CONFLICT ({", ".join(self.quote_identifier(c) for c in conflict_columns)})
-        """
-
-        if update_columns:
-            updates = []
-            for col in update_columns:
-                updates.append(
-                    f"{self.quote_identifier(col)} = EXCLUDED.{self.quote_identifier(col)}"
-                )
-            sql += f"DO UPDATE SET {', '.join(updates)}"
-        else:
-            sql += "DO NOTHING"
-
-        return sql.strip(), values
-
     def get_limit_offset_sql(self, limit: Optional[int], offset: Optional[int]) -> str:
         """PostgreSQL LIMIT/OFFSET."""
         parts = []
@@ -536,33 +493,6 @@ class MySQLAdapter(DatabaseAdapter):
         """MySQL current timestamp."""
         return "CURRENT_TIMESTAMP"
 
-    def get_upsert_sql(
-        self,
-        table: str,
-        columns: List[str],
-        values: List[Any],
-        conflict_columns: List[str],
-        update_columns: Optional[List[str]] = None,
-    ) -> Tuple[str, List[Any]]:
-        """MySQL UPSERT using ON DUPLICATE KEY UPDATE."""
-        quoted_table = self.quote_identifier(table)
-        quoted_columns = [self.quote_identifier(col) for col in columns]
-        placeholders = ["%s" for _ in values]
-
-        sql = f"""
-        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
-        VALUES ({", ".join(placeholders)})
-        """
-
-        if update_columns:
-            updates = []
-            for col in update_columns:
-                quoted_col = self.quote_identifier(col)
-                updates.append(f"{quoted_col} = VALUES({quoted_col})")
-            sql += f"ON DUPLICATE KEY UPDATE {', '.join(updates)}"
-
-        return sql.strip(), values
-
     def get_limit_offset_sql(self, limit: Optional[int], offset: Optional[int]) -> str:
         """MySQL LIMIT/OFFSET."""
         if limit is not None and offset is not None:
@@ -658,36 +588,6 @@ class SQLiteAdapter(DatabaseAdapter):
     def get_current_timestamp_sql(self) -> str:
         """SQLite current timestamp."""
         return "CURRENT_TIMESTAMP"
-
-    def get_upsert_sql(
-        self,
-        table: str,
-        columns: List[str],
-        values: List[Any],
-        conflict_columns: List[str],
-        update_columns: Optional[List[str]] = None,
-    ) -> Tuple[str, List[Any]]:
-        """SQLite UPSERT using ON CONFLICT (SQLite 3.24+)."""
-        quoted_table = self.quote_identifier(table)
-        quoted_columns = [self.quote_identifier(col) for col in columns]
-        placeholders = ["?" for _ in values]
-
-        sql = f"""
-        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
-        VALUES ({", ".join(placeholders)})
-        ON CONFLICT ({", ".join(self.quote_identifier(c) for c in conflict_columns)})
-        """
-
-        if update_columns:
-            updates = []
-            for col in update_columns:
-                quoted_col = self.quote_identifier(col)
-                updates.append(f"{quoted_col} = excluded.{quoted_col}")
-            sql += f"DO UPDATE SET {', '.join(updates)}"
-        else:
-            sql += "DO NOTHING"
-
-        return sql.strip(), values
 
     def get_limit_offset_sql(self, limit: Optional[int], offset: Optional[int]) -> str:
         """SQLite LIMIT/OFFSET."""
