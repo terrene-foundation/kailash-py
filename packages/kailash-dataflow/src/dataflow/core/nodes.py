@@ -2285,9 +2285,13 @@ class NodeGenerator:
                     else:
                         database_type = self.dataflow_instance._detect_database_type()
 
-                    # Use DataFlow's select SQL generation
-                    select_templates = self.dataflow_instance._generate_select_sql(
-                        self.model_name, database_type
+                    # Use DataFlow's select SQL generation (Issue #1564: async
+                    # twin — the sync detector returns [] inside the async_run
+                    # event loop, degrading the SELECT column list).
+                    select_templates = (
+                        await self.dataflow_instance._generate_select_sql_async(
+                            self.model_name, database_type
+                        )
                     )
                     query = select_templates["select_by_id"]
 
@@ -2585,15 +2589,25 @@ class NodeGenerator:
                             self.model_name
                         )
 
-                        # CRITICAL FIX: Check if updated_at column exists before using it
+                        # Issue #1564: resolve the physical column set via the
+                        # async path. The sync _get_table_columns returns [] from
+                        # inside the async_run event loop, which silently disabled
+                        # the updated_at bump on PostgreSQL/SQLite.
                         try:
-                            actual_columns = self.dataflow_instance._get_table_columns(
-                                table_name
+                            actual_columns = await self.dataflow_instance._resolve_table_columns_async(
+                                self.model_name
                             )
                             has_updated_at = (
                                 actual_columns and "updated_at" in actual_columns
                             )
-                        except Exception:
+                        except Exception as _e:
+                            logger.debug(
+                                "nodes.updated_at_detection_fallback",
+                                extra={
+                                    "model": self.model_name,
+                                    "error_type": type(_e).__name__,
+                                },
+                            )
                             has_updated_at = False
 
                         # Issue #480: quote identifiers via the dialect
@@ -3102,8 +3116,10 @@ class NodeGenerator:
                                 self.dataflow_instance._detect_database_type()
                             )
 
-                        select_templates = self.dataflow_instance._generate_select_sql(
-                            self.model_name, database_type
+                        select_templates = (
+                            await self.dataflow_instance._generate_select_sql_async(
+                                self.model_name, database_type
+                            )
                         )
 
                         if count_only:
@@ -3402,15 +3418,27 @@ class NodeGenerator:
                     # Build database-specific upsert query using SQL Dialect Abstraction
                     table_name = self.dataflow_instance._get_table_name(self.model_name)
 
-                    # Check if updated_at column exists before using it
+                    # Issue #1564: resolve the physical column set via the async
+                    # path. The sync _get_table_columns returns [] from inside the
+                    # async_run event loop, which silently disabled the updated_at
+                    # bump on PostgreSQL/SQLite.
                     try:
-                        actual_columns = self.dataflow_instance._get_table_columns(
-                            table_name
+                        actual_columns = (
+                            await self.dataflow_instance._resolve_table_columns_async(
+                                self.model_name
+                            )
                         )
                         has_updated_at = (
                             actual_columns and "updated_at" in actual_columns
                         )
-                    except Exception:
+                    except Exception as _e:
+                        logger.debug(
+                            "nodes.upsert_updated_at_detection_fallback",
+                            extra={
+                                "model": self.model_name,
+                                "error_type": type(_e).__name__,
+                            },
+                        )
                         has_updated_at = False
 
                     # Determine conflict columns
@@ -3890,8 +3918,10 @@ class NodeGenerator:
                                 self.dataflow_instance._detect_database_type()
                             )
 
-                        select_templates = self.dataflow_instance._generate_select_sql(
-                            self.model_name, database_type
+                        select_templates = (
+                            await self.dataflow_instance._generate_select_sql_async(
+                                self.model_name, database_type
+                            )
                         )
 
                         query = select_templates["count_all"]

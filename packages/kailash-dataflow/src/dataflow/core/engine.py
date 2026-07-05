@@ -881,6 +881,13 @@ class DataFlow(DataFlowEventMixin):
         # Issue #1545: per-table UNIQUE/PRIMARY index column-sets cache for the
         # MySQL upsert conflict-target precheck. Keyed ``f"{db_url}:{table}"``.
         self._unique_index_cache = {}
+        # Issue #1564: per-table physical column-list cache for the
+        # existing-schema / non-auto-migrate branch of async column
+        # resolution (``_resolve_columns_via_introspection``). Keyed
+        # ``f"{db_url}:{table}"``. The auto-migrate managed path derives
+        # columns from in-memory model metadata and never touches this cache.
+        # Invalidated by the same clear_schema_cache / clear_table_cache hooks.
+        self._column_cache = {}
 
         # Track models that need table creation (deferred until _ensure_connected)
         self._pending_table_creations: list = []
@@ -1080,6 +1087,11 @@ class DataFlow(DataFlowEventMixin):
         # per-upsert information_schema.statistics round-trip. Invalidated by the
         # same clear_schema_cache / clear_table_cache hooks schema changes use.
         "_unique_index_cache",
+        # Issue #1564: cached per-table physical column list for the
+        # existing-schema introspection branch of async column resolution,
+        # keyed ``f"{db_url}:{table}"``. Same in-memory-cache lifecycle as
+        # ``_unique_index_cache`` — stripped on pickle, repopulated lazily.
+        "_column_cache",
         # Lazily-allocated caches / monitors.
         "_pool_monitor",
         "_lightweight_pool",
@@ -7827,49 +7839,9 @@ class DataFlow(DataFlowEventMixin):
             )
             # Don't fail the whole operation if table creation fails
 
-    def _get_table_columns(self, table_name: str) -> List[str]:
-        """Get actual column names from database table.
-
-        Note: This method will return an empty list when called from async contexts
-        to prevent deadlocks. Use _get_table_columns_async() in async contexts.
-
-        Args:
-            table_name: Name of the table to inspect
-
-        Returns:
-            List of column names that exist in the table
-        """
-        try:
-            # Use the discover_schema functionality to get table info
-            schema = self.discover_schema(use_real_inspection=True)
-            if table_name in schema:
-                table_info = schema[table_name]
-                if "columns" in table_info:
-                    return [col["name"] for col in table_info["columns"]]
-                elif "fields" in table_info:
-                    return list(table_info["fields"].keys())
-
-            # Fallback: return empty list if table not found
-            return []
-
-        except RuntimeError as e:
-            if "cannot be called from a running async context" in str(e):
-                # In async context - return empty list to use fallback columns
-                # The caller should use _get_table_columns_async() for async contexts
-                logger.debug(
-                    f"Cannot get table columns for {table_name} in async context - using fallback"
-                )
-                return []
-            raise
-        except Exception as e:
-            logger.debug(
-                "engine.failed_to_get_table_columns_for",
-                extra={"table_name": table_name, "error": str(e)},
-            )
-            return []
-
     async def _get_table_columns_async(self, table_name: str) -> List[str]:
-        """Async version of _get_table_columns for use in async contexts.
+        """Resolve actual column names from the database via async schema
+        introspection (safe inside a running event loop; Issue #1564).
 
         Args:
             table_name: Name of the table to inspect
@@ -7893,24 +7865,41 @@ class DataFlow(DataFlowEventMixin):
         except Exception as e:
             logger.debug(
                 "engine.failed_to_get_table_columns_async",
-                extra={"table_name": table_name, "error": str(e)},
+                # Log the exception CLASS only — an introspection/connection
+                # error's str() can embed the DSN/credential (security.md).
+                extra={"table_name": table_name, "error_type": type(e).__name__},
             )
             return []
 
-    def _generate_select_sql(
+    async def _generate_select_sql_async(
         self, model_name: str, database_type: str = "postgresql"
     ) -> Dict[str, str]:
-        """Generate SELECT SQL templates for a model.
+        """Generate SELECT SQL templates for a model (Issue #1564).
 
-        Args:
-            model_name: Name of the model class
-            database_type: Target database type
-
-        Returns:
-            Dictionary of SELECT SQL templates for different operations
+        Resolves the physical column set via :meth:`_resolve_table_columns_async`
+        — zero DB cost for the auto-migrate managed path, cached async catalog
+        introspection for the existing-schema path — so column-accurate SELECT
+        templates are produced from inside the node ``async_run`` event loop
+        (where a sync ``discover_schema`` probe would raise "cannot be called
+        from a running async context").
         """
-        # CRITICAL FIX: Use stored table_name from model registration
-        # This respects custom __tablename__ overrides for existing schema mode
+        actual_columns = await self._resolve_table_columns_async(model_name)
+        return self._build_select_sql_templates(
+            model_name, database_type, actual_columns
+        )
+
+    def _build_select_sql_templates(
+        self,
+        model_name: str,
+        database_type: str,
+        actual_columns: List[str],
+    ) -> Dict[str, str]:
+        """Build SELECT/COUNT templates from an already-resolved column list.
+
+        Pure builder for the async SELECT-template path
+        (:meth:`_generate_select_sql_async`); ``actual_columns`` is resolved by
+        the caller via :meth:`_resolve_table_columns_async` (Issue #1564).
+        """
         model_info = self._models.get(model_name, {})
         table_name = model_info.get("table_name") or self._class_name_to_table_name(
             model_name
@@ -7923,19 +7912,12 @@ class DataFlow(DataFlowEventMixin):
         if "id" not in field_names:
             field_names = ["id"] + field_names
 
-        # CRITICAL FIX: Use actual table columns for SELECT statements
-        # This prevents failures when timestamp columns don't exist
-        try:
-            actual_columns = self._get_table_columns(table_name)
-            if actual_columns:
-                # Use only columns that actually exist in the table
-                expected_columns = field_names + ["created_at", "updated_at"]
-                all_columns = [col for col in expected_columns if col in actual_columns]
-            else:
-                # Fallback to model fields only (no timestamp assumptions)
-                all_columns = field_names
-        except Exception:
-            # If table inspection fails, use model fields only
+        if actual_columns:
+            # Use only columns that actually exist in the table
+            expected_columns = field_names + ["created_at", "updated_at"]
+            all_columns = [col for col in expected_columns if col in actual_columns]
+        else:
+            # Fallback to model fields only (no timestamp assumptions)
             all_columns = field_names
 
         # Issue #480: quote every identifier via the dialect helper so
@@ -7970,6 +7952,80 @@ class DataFlow(DataFlowEventMixin):
             "count_all": f"SELECT COUNT(*) FROM {quoted_table}",
             "count_with_filter": f"SELECT COUNT(*) FROM {quoted_table} WHERE {{filter_condition}}",
         }
+
+    async def _resolve_table_columns_async(self, model_name: str) -> List[str]:
+        """Authoritative ordered physical column list for a model's table (Issue #1564).
+
+        The DataFlow node CRUD SQL generators run inside the ``async_run``
+        coroutine, where a sync ``discover_schema`` probe raises "cannot be
+        called from a running async context" and yields ``[]`` — which
+        silently disabled column-accurate SQL (``updated_at`` never bumped on
+        PostgreSQL/SQLite; SELECT column lists degraded to model fields).
+
+        Two branches:
+
+        * **Managed schema** (``auto_migrate`` and not ``existing_schema_mode``):
+          DataFlow owns the DDL and :meth:`_generate_create_table_sql`
+          unconditionally appends ``created_at`` + ``updated_at``, so the
+          physical column set is derivable from in-memory model metadata at
+          ZERO DB cost.
+        * **Existing schema / non-auto-migrate**: the physical table may
+          diverge from the model, so resolve via cached async catalog
+          introspection (:meth:`_resolve_columns_via_introspection`).
+        """
+        if self._auto_migrate and not self._existing_schema_mode:
+            fields = self.get_model_fields(model_name)
+            declared = [
+                f for f in fields if f not in ("id", "created_at", "updated_at")
+            ]
+            return ["id", *declared, "created_at", "updated_at"]
+        return await self._resolve_columns_via_introspection(model_name)
+
+    async def _resolve_columns_via_introspection(self, model_name: str) -> List[str]:
+        """Cached async catalog introspection for the existing-schema branch (Issue #1564).
+
+        Memoized per ``f"{db_url}:{table}"`` in ``self._column_cache`` so the
+        whole-catalog ``discover_schema_async`` round-trip happens once per
+        table, not once per operation. Invalidated by ``clear_schema_cache`` /
+        ``clear_table_cache`` (the same hooks external schema changes use).
+        Empty results are NOT cached, so a transient failure (or a
+        not-yet-created table) is retried rather than pinned.
+        """
+        if self._column_cache is None:  # stripped on unpickle; repopulate lazily
+            self._column_cache = {}
+        model_info = self._models.get(model_name, {})
+        table_name = model_info.get("table_name") or self._class_name_to_table_name(
+            model_name
+        )
+        # Hash the db_url portion so no credential sits in the in-memory cache
+        # key (observability.md Rule 6.3), mirroring the _unique_index_cache
+        # sibling. The ``:{table_name}`` suffix stays verbatim so
+        # clear_table_cache's ``endswith(f":{table}")`` invalidation still matches.
+        import hashlib as _hashlib
+
+        db_url = self.config.database.url or ":memory:"
+        db_url_hash = _hashlib.sha256(db_url.encode("utf-8")).hexdigest()[:16]
+        cache_key = f"{db_url_hash}:{table_name}"
+        cached = self._column_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        try:
+            columns = await self._get_table_columns_async(table_name)
+        except Exception as e:
+            # discover_schema_async unsupported/failed (e.g. MySQL raises
+            # NotImplementedError) — fall back to model-field columns. Log the
+            # exception CLASS only: a connection error's str() can embed the
+            # DSN/credential, which sanitize_db_error does NOT redact (it
+            # targets constraint VALUES), so the class name is the safe signal.
+            logger.debug(
+                "engine.column_introspection_fallback",
+                extra={"table_name": table_name, "error_type": type(e).__name__},
+            )
+            columns = []
+        if columns:
+            # Only cache a positive result; do not pin an empty/failed lookup.
+            self._column_cache[cache_key] = columns
+        return columns
 
     # Issue #1249: valid tenant isolation strategies. "row" is implemented on
     # every backend (QueryInterceptor SQL injection). "schema"/"database" denote
@@ -10907,7 +10963,15 @@ class DataFlow(DataFlowEventMixin):
         # Issue #1545: the unique-index precheck cache is a sibling of the schema
         # cache — an external schema change (added/dropped UNIQUE index) that
         # justifies clearing the schema cache invalidates the index cache too.
-        self._unique_index_cache.clear()
+        # None-guard both in-memory sibling caches: __setstate__ leaves them
+        # None on a freshly-unpickled instance until re-init (Issue #1564).
+        if self._unique_index_cache is not None:
+            self._unique_index_cache.clear()
+        # Issue #1564: the per-table physical column cache is a sibling of the
+        # schema cache — an external schema change (added/dropped column) that
+        # justifies clearing the schema cache invalidates the column cache too.
+        if self._column_cache is not None:
+            self._column_cache.clear()
         logger.debug("Schema cache cleared")
 
     def clear_table_cache(
@@ -10944,6 +11008,10 @@ class DataFlow(DataFlowEventMixin):
         suffix = f":{table_name}"
         for key in [k for k in self._unique_index_cache if k.endswith(suffix)]:
             del self._unique_index_cache[key]
+        # Issue #1564: evict this table's cached physical column list too.
+        if self._column_cache is not None:
+            for key in [k for k in self._column_cache if k.endswith(suffix)]:
+                del self._column_cache[key]
         return self._schema_cache.clear_table(model_name, database_url)
 
     def clear_async_sql_node_cache(self) -> None:
