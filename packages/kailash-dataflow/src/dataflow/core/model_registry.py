@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from .async_utils import async_safe_run
 from .type_introspection import union_non_none_args
 
 try:
@@ -317,8 +318,12 @@ class ModelRegistry:
             in_event_loop = False
 
         if not in_event_loop:
-            # Safe to run the async variant directly.
-            result = asyncio.run(runtime.execute_workflow_async(built, inputs={}))
+            # Issue #1575: async_safe_run runs the coroutine on a transient loop
+            # stamped with BRIDGE_LOOP_ATTR, so any adapter / EnterpriseConnectionPool
+            # the DDL workflow opens on that loop is drained before it closes.
+            # Bare asyncio.run left those pools bound to a dead loop ->
+            # "Event loop is closed" + "Unclosed connection" at GC (#1572 class).
+            result = async_safe_run(runtime.execute_workflow_async(built, inputs={}))
             return _normalize_runtime_result(result)
 
         # We're inside an event loop; can't call asyncio.run.
@@ -326,21 +331,13 @@ class ModelRegistry:
         # runtime captured above — NOT self.runtime, which would re-resolve to
         # the sync singleton in the worker thread's loop-less context (#1498).
         def _run_in_thread() -> Any:
-            new_loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(new_loop)
-                return new_loop.run_until_complete(
-                    runtime.execute_workflow_async(built, inputs={})
-                )
-            finally:
-                try:
-                    new_loop.close()
-                except Exception:  # pragma: no cover — shutdown hygiene
-                    logger.debug(
-                        "model_registry.workflow_bridge.loop_close_failed",
-                        exc_info=True,
-                    )
-                asyncio.set_event_loop(None)
+            # Issue #1575: the worker thread owns no running loop, so
+            # async_safe_run routes through _run_on_new_loop — it stamps
+            # BRIDGE_LOOP_ATTR, drains any pool the DDL workflow opens on the
+            # transient loop, then closes it with asyncio.run() semantics. The
+            # runtime was resolved in the caller frame (issue #1498) and is
+            # closed over here, so no sync-singleton re-resolution occurs.
+            return async_safe_run(runtime.execute_workflow_async(built, inputs={}))
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=1,
