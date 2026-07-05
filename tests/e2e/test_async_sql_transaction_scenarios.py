@@ -1,6 +1,5 @@
 """End-to-end tests for AsyncSQLDatabaseNode transaction scenarios."""
 
-import asyncio
 from datetime import datetime
 
 import pytest
@@ -345,16 +344,41 @@ class TestAsyncSQLTransactionScenarios:
 
     @pytest.mark.asyncio
     async def test_concurrent_order_processing(self, e2e_database_setup):
-        """Test concurrent order processing with proper isolation."""
+        """Pin real transaction isolation under row-lock contention (issue #1504).
+
+        This pins the ACTUAL PostgreSQL behavior when two manual transactions
+        contend on the same inventory row, which the previous version of this
+        test asserted incorrectly (it expected ``count == 2``):
+
+        1. node1 and node2 each INSERT their own order row (separate rows).
+        2. node1 reserves stock on ``product_id=3``, taking a row-level write lock.
+        3. node2 tries to reserve the same row. Because node2 set a small
+           ``lock_timeout``, PostgreSQL CANCELS the blocked UPDATE
+           ("canceling statement due to lock timeout"). A cancelled statement
+           puts node2's transaction into the ABORTED state (SQLSTATE 25P02).
+        4. node2's later ``commit()`` on an aborted transaction returns without
+           raising, but PostgreSQL treats COMMIT-on-aborted as a ROLLBACK — so
+           node2's order2 INSERT is discarded along with its failed UPDATE.
+
+        Correct isolation outcome therefore is: ONLY node1's order persists,
+        node2's order is lost, and inventory reflects only node1's committed
+        reservation (25 - 20 = 5). The SDK behavior is correct; the old
+        ``count == 2`` assertion was the bug.
+
+        Determinism/speed: node2 sets ``SET LOCAL lock_timeout = '1s'`` so the
+        contended UPDATE fails in ~1s instead of blocking on the 60s server-side
+        ``statement_timeout``. The old test leaned on that 60s wait (+ the node's
+        internal timeout retries), which is why it ran ~62s. This runs in ~2s.
+        """
         conn_string = e2e_database_setup
 
-        # Create two nodes for concurrent processing
+        # Two independent connections/transactions contending on one row.
         node1 = AsyncSQLDatabaseNode(
             name="processor1",
             database_type="postgresql",
             connection_string=conn_string,
             transaction_mode="manual",
-            timeout=10.0,  # 10 second timeout to prevent indefinite waits
+            timeout=10.0,
         )
 
         node2 = AsyncSQLDatabaseNode(
@@ -362,7 +386,7 @@ class TestAsyncSQLTransactionScenarios:
             database_type="postgresql",
             connection_string=conn_string,
             transaction_mode="manual",
-            timeout=10.0,  # 10 second timeout to prevent indefinite waits
+            timeout=10.0,
         )
 
         try:
@@ -370,37 +394,37 @@ class TestAsyncSQLTransactionScenarios:
             await node1.begin_transaction()
             await node2.begin_transaction()
 
-            # Both try to order the same product
-            # First processor creates order
+            # Each processor creates its own order row (distinct rows, no contention yet)
             order1_result = await node1.execute_async(
                 query="INSERT INTO orders (customer_id, status) VALUES (:customer_id, :status) RETURNING id",
                 params={"customer_id": 11111, "status": "processing"},
             )
             order1_id = order1_result["result"]["data"][0]["id"]
 
-            # Second processor creates order
             order2_result = await node2.execute_async(
                 query="INSERT INTO orders (customer_id, status) VALUES (:customer_id, :status) RETURNING id",
                 params={"customer_id": 22222, "status": "processing"},
             )
             order2_id = order2_result["result"]["data"][0]["id"]
 
-            # Both check inventory for same product (product_id=3, available=25)
+            # Both see the same initial inventory (product_id=3, available=25)
             inventory1 = await node1.execute_async(
                 query="SELECT available_quantity FROM inventory WHERE product_id = :product_id",
                 params={"product_id": 3},
             )
-
             inventory2 = await node2.execute_async(
                 query="SELECT available_quantity FROM inventory WHERE product_id = :product_id",
                 params={"product_id": 3},
             )
-
-            # Both see the same initial inventory
             assert inventory1["result"]["data"][0]["available_quantity"] == 25
             assert inventory2["result"]["data"][0]["available_quantity"] == 25
 
-            # First processor reserves 20 units with row locking
+            # Bound node2's lock wait so the contended UPDATE fails fast (deterministic
+            # ~1s) instead of blocking on the 60s server-side statement_timeout. LOCAL
+            # scope means it applies only to node2's active transaction.
+            await node2.execute_async(query="SET LOCAL lock_timeout = '1s'")
+
+            # node1 reserves 20 units, taking a row-level write lock on product_id=3.
             await node1.execute_async(
                 query="""
                     UPDATE inventory
@@ -410,9 +434,11 @@ class TestAsyncSQLTransactionScenarios:
                 params={"product_id": 3, "quantity": 20},
             )
 
-            # Second processor tries to reserve 15 units (would exceed available after first)
-            # This should either wait for the first transaction or get a timeout
-            try:
+            # node2 tries to reserve the same row. It blocks on node1's lock, hits its
+            # 1s lock_timeout, PostgreSQL cancels the statement, and node2's transaction
+            # enters the ABORTED state. The node's retry then surfaces
+            # "current transaction is aborted" as a NodeExecutionError.
+            with pytest.raises(NodeExecutionError):
                 await node2.execute_async(
                     query="""
                         UPDATE inventory
@@ -421,34 +447,48 @@ class TestAsyncSQLTransactionScenarios:
                     """,
                     params={"product_id": 3, "quantity": 15},
                 )
-            except NodeExecutionError:
-                # Timeout or deadlock is expected here
-                pass
 
-            # Commit first transaction
+            # node1 commits normally, releasing its lock and persisting its reservation.
             await node1.commit()
 
-            # Try to commit second transaction (should succeed because of isolation)
+            # node2.commit() on an ABORTED transaction returns WITHOUT raising, but
+            # PostgreSQL applies COMMIT-on-aborted as a ROLLBACK. This must not raise —
+            # pinning that the SDK forwards PostgreSQL's silent-rollback-on-commit.
             await node2.commit()
 
-            # Check final inventory (last commit wins in this scenario)
-            # In a real system, you'd use optimistic locking or check constraints
-            final_inventory = await node1.execute_async(
-                query="SELECT available_quantity FROM inventory WHERE product_id = :product_id",
-                params={"product_id": 3},
+            # --- Read-back verification (every write verified with a read) ---
+
+            # order1 persisted; order2 was discarded with node2's aborted transaction.
+            order1_check = await node1.execute_async(
+                query="SELECT COUNT(*) as count FROM orders WHERE id = :order_id",
+                params={"order_id": order1_id},
+            )
+            order2_check = await node1.execute_async(
+                query="SELECT COUNT(*) as count FROM orders WHERE id = :order_id",
+                params={"order_id": order2_id},
+            )
+            assert (
+                order1_check["result"]["data"][0]["count"] == 1
+            ), "node1's committed order must persist"
+            assert order2_check["result"]["data"][0]["count"] == 0, (
+                "node2's order must be lost: its transaction aborted on lock timeout, "
+                "so commit()=rollback discarded the order2 INSERT (issue #1504)"
             )
 
-            # The final result depends on transaction commit order
-            # Both transactions succeeded, so inventory could be negative or last-writer-wins
-            final_available = final_inventory["result"]["data"][0]["available_quantity"]
-
-            # Verify both orders exist
+            # Exactly one of the two contended orders survived.
             orders_result = await node1.execute_async(
                 query="SELECT COUNT(*) as count FROM orders WHERE id IN (:id1, :id2)",
                 params={"id1": order1_id, "id2": order2_id},
             )
+            assert orders_result["result"]["data"][0]["count"] == 1
 
-            assert orders_result["result"]["data"][0]["count"] == 2
+            # Inventory reflects ONLY node1's committed reservation (25 - 20 = 5).
+            # node2's UPDATE never applied — it rolled back with the aborted transaction.
+            final_inventory = await node1.execute_async(
+                query="SELECT available_quantity FROM inventory WHERE product_id = :product_id",
+                params={"product_id": 3},
+            )
+            assert final_inventory["result"]["data"][0]["available_quantity"] == 5
 
         finally:
             await node1.cleanup()
