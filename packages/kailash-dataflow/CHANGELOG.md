@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.13.16] — 2026-07-05 — Legacy MySQL migration DDL + connection-leak & dead-code follow-ups from the 2.13.15 red-team (#1559/#1560/#1561/#1562)
+
+### Fixed
+
+- **The legacy `AutoMigrationSystem` no longer emits Postgres-only DDL on MySQL (#1559).** `_detect_database_type` never returned `"mysql"` — a `mysql://` URL fell through to the `"postgresql"` default, so `self.dialect` was wrong even when the caller passed `dialect="mysql"`. When the enhanced-schema path fell back to the legacy migration system on MySQL, `_ensure_migration_table` emitted `TIMESTAMP WITH TIME ZONE`, `JSONB`, `USING GIN`, and a partial unique index (`WHERE status = 'applied'`) — all of which raise a MySQL 1064 syntax error, surfacing as `MigrationNotAppliedError`. `_detect_database_type` now returns `"mysql"` for `mysql://`, `mysql+pymysql://`, `mysql+aiomysql://`, and mixed-case spellings; a new `_get_mysql_migration_table_statements()` emits MySQL-valid DDL (`DATETIME`/`JSON`, inline `INDEX`, `CREATE TABLE IF NOT EXISTS`, no `USING GIN`, no partial-index predicate); and `_ensure_migration_table` + `_load_migration_history` gained MySQL branches (a `table_schema = DATABASE()`-scoped `information_schema` validation query and a MySQL-typed `required_columns` map). Verified end-to-end against real MySQL 8.0.46 driving the legacy `AutoMigrationSystem` with read-back.
+- **The `$11` param-type-cast create retry no longer leaks a connection (#1560).** A throwaway `AsyncSQLDatabaseNode` constructed on the create node's `$11` type-inference retry path awaited `async_run()` with no matching `cleanup()`, leaking a connection (`ResourceWarning: AsyncSQLDatabaseNode GC'd while still connected`) — the same class the 2.13.15 fixes closed in `bulk_upsert._execute_query` and `BulkCreatePoolNode._process_direct`, in a distinct pre-existing method. The retry `async_run` is now wrapped in `try/finally: await sql_node.cleanup()`; the original DB error is preserved (the `finally` guards only the retry call, never the raised error). Verified against real PostgreSQL with zero GC ResourceWarnings.
+
+### Test hygiene
+
+- **The `bulk_upsert` SQL-injection suite no longer leaks `AsyncSQLDatabaseNode`s (#1561).** Every fixture/probe in `tests/integration/security/test_bulk_upsert_sql_injection.py` that ran DDL/DQL through an anonymous `AsyncSQLDatabaseNode(...).async_run()` now cleans it up in `try/finally` (the assertions live outside the `finally`, so cleanup cannot mask an injection-detection failure). All injection payloads and canary assertions are preserved verbatim; the suite runs with zero GC ResourceWarnings.
+
+### Removed
+
+- **Dead-orphan CRUD/upsert SQL generators removed (#1562).** `DataFlow._generate_bulk_sql` (carrying the deprecated `ON DUPLICATE KEY UPDATE col = VALUES(col)` pattern, never version-gated because it was never wired) and its sole caller `generate_all_crud_sql` were zero-caller dead code; removing them exposed three further transitively-dead private generators (`_generate_insert_sql`, `_generate_update_sql`, `_generate_delete_sql`) reachable only through the deleted `generate_all_crud_sql` — all five (`_generate_bulk_sql` + `generate_all_crud_sql` + the three `_generate_{insert,update,delete}_sql`) removed, grep-verified zero-caller, collection intact. `_generate_select_sql` (3 live callers) and the `MySQLAdapter.get_upsert_sql` / `MySQLDialect.upsert_clause` abstractmethod overrides (deletion-in-isolation breaks class instantiation) are retained; full removal of the zero-caller `get_upsert_sql`/`upsert_clause` adapter family is deferred as a separate public-API deprecation change.
+
 ## [2.13.15] — 2026-07-05 — MongoDB/MySQL driver-error VALUE-leak follow-ups (#1556/#1557) + MySQL upsert-family: pymysql registry driver, VALUES()-deprecation row-alias, index-precheck cache (#1547/#1546/#1545)
 
 ### Fixed
