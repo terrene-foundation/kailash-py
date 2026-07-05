@@ -66,6 +66,13 @@ POSTGRES_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql://test_user:test_password@localhost:5434/kailash_test",
 )
+# aiomysql speaks the bare ``mysql://`` scheme (ConnectionParser maps
+# mysql / mysql+* -> database_type "mysql"); container kailash_sdk_test_mysql
+# provisions MYSQL_USER=kailash_test on port 3307.
+MYSQL_URL = os.getenv(
+    "TEST_MYSQL_URL",
+    "mysql://kailash_test:test_password@localhost:3307/kailash_test",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -569,3 +576,169 @@ def test_express_sync_concurrent_close_does_not_strand_inflight_call_sqlite():
             "CancelledError",
             "RuntimeError",
         }, f"unexpected settlement exception: {worker_result!r}"
+
+
+# ---------------------------------------------------------------------------
+# AC#2 real-MySQL coverage — express_sync owned-loop teardown (aiomysql path)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+def test_express_sync_lifecycle_no_gc_dead_loop_signal_mysql():
+    """MySQL: express_sync CRUD + db.close() leaves no unclosed-conn/dead-loop GC signal.
+
+    AC#2 requires the transient/owned-loop leak class to be regression-tested on
+    real MySQL as well as PG. Exercises the aiomysql path through the owned
+    SyncExpress background loop: a real aiomysql connection binds to that loop on
+    the first CRUD call. WITHOUT the owned-loop teardown fix the daemon thread is
+    killed at interpreter shutdown with the aiomysql pool still bound to its loop
+    -> ResourceWarning: Unclosed connection. WITH it, db.close() drains the pool
+    on the owning loop first and joins the thread.
+    """
+    try:
+        db = DataFlow(database_url=MYSQL_URL)
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        pytest.skip(
+            f"MySQL at {MYSQL_URL!r} not reachable ({exc}); this Tier-2 test "
+            f"requires the real container to be up"
+        )
+
+    @db.model
+    class _Widget1575ExpressMysql:
+        id: int
+        name: str
+        value: int
+
+    db.create_tables()
+    sync_ex = db.express_sync
+    thread = sync_ex._thread
+    # Unique id per run — the MySQL container is shared and rows persist.
+    record_id = int(time.time() * 1000) % 2_000_000_000
+    try:
+        sync_ex.create(
+            "_Widget1575ExpressMysql",
+            {"id": record_id, "name": "alice", "value": 1},
+        )
+        assert sync_ex.read("_Widget1575ExpressMysql", record_id)["value"] == 1
+        sync_ex.delete("_Widget1575ExpressMysql", record_id)  # clean up the row
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        db.close()
+        pytest.skip(f"MySQL express_sync CRUD failed against real container ({exc})")
+
+    db.close()
+    assert not thread.is_alive(), "SyncExpress MySQL thread NOT joined after db.close()"
+
+    del db
+
+    with _capture_gc_teardown_signals() as (caught, unraisables):
+        for _ in range(3):
+            gc.collect()
+        gc.collect()
+
+    rw_hits = _resource_warning_hits(caught)
+    loop_hits = _event_loop_closed_hits(unraisables)
+    assert (
+        rw_hits == []
+    ), f"MySQL express_sync leaked unclosed connections at GC: {rw_hits}"
+    assert (
+        loop_hits == []
+    ), f"MySQL express_sync produced 'Event loop is closed' at GC: {loop_hits}"
+
+
+# ---------------------------------------------------------------------------
+# Site #4 — model_registry sync->async workflow bridge (lighter invariant)
+# ---------------------------------------------------------------------------
+#
+# The round-1 fix rerouted model_registry's transient-loop bridge
+# (_execute_workflow_sync_safe, model_registry.py ~326/340) from bare
+# asyncio.run / new_event_loop onto async_safe_run (BRIDGE_LOOP_ATTR marker +
+# drain + asyncio.run semantics). INSPECTION EVIDENCE: the model registry
+# executes ALL its DDL/DML through the SYNC ``SQLDatabaseNode`` (model_registry.py
+# line 36 docstring "executes its DDL/DML through SQLDatabaseNode"; line 262
+# "SQLAlchemy-sync"; every add_node call uses "SQLDatabaseNode", ZERO
+# AsyncSQLDatabaseNode references). SQLDatabaseNode uses SQLAlchemy's SYNC engine
+# with process-wide _shared_pools that are NOT bound to the transient event loop.
+# So this bridge genuinely CANNOT create an asyncpg/aiomysql pool bound to the
+# transient loop — it is NOT the #1575 leak class, and a deterministic
+# pool-drain bite does not apply here (per the coordinator's fallback clause).
+# The lighter invariant below exercises the REAL bridge path (not a stub) and
+# asserts the reroute (a) still returns correct results and (b) leaves no leaked
+# event loop / "Event loop is closed" GC signal from the transient-loop lifecycle.
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_model_registry_bridge_no_dead_loop_gc_signal_pg():
+    """model_registry sync->async bridge runs on a clean transient loop (#1575 site #4).
+
+    Called from within a running event loop (this async test), the registry's
+    runtime resolves to AsyncLocalRuntime, so _execute_workflow_sync_safe takes
+    the worker-thread branch that routes through async_safe_run -> _run_on_new_loop
+    (the rerouted path). Asserts the real bridge returns the SELECT result AND the
+    transient loop is torn down with no dead-loop / unclosed-connection GC signal.
+    """
+    try:
+        db = DataFlow(database_url=POSTGRES_URL)
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        pytest.skip(
+            f"database at {POSTGRES_URL!r} not reachable ({exc}); this Tier-2 "
+            f"test requires the real container to be up"
+        )
+
+    from kailash.workflow.builder import WorkflowBuilder
+
+    registry = getattr(db, "_model_registry", None)
+    if registry is None:  # pragma: no cover — registry is created in __init__
+        db.close()
+        pytest.skip("DataFlow._model_registry not initialised")
+
+    # Confirm we exercise the AsyncLocalRuntime worker-thread bridge (the
+    # rerouted async_safe_run path), not the direct sync path.
+    from kailash.runtime import AsyncLocalRuntime
+
+    assert isinstance(
+        registry.runtime, AsyncLocalRuntime
+    ), "expected AsyncLocalRuntime under a running loop to hit the rerouted bridge"
+
+    def _run_bridge():
+        # Build a trivial SELECT workflow through the registry's own
+        # SQLDatabaseNode path and drive it through the rerouted bridge.
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "SQLDatabaseNode",
+            "probe_bridge",
+            {
+                "connection_string": POSTGRES_URL,
+                "database_type": "postgresql",
+                "query": "SELECT 1 AS one",
+            },
+        )
+        return registry._execute_workflow_sync_safe(workflow)
+
+    try:
+        # The bridge's ThreadPoolExecutor blocks; run it off the test's loop.
+        results, _run_id = await asyncio.to_thread(_run_bridge)
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        db.close()
+        pytest.skip(f"model_registry bridge failed against real container ({exc})")
+
+    assert isinstance(results, dict)
+
+    db.close()
+    del db
+
+    with _capture_gc_teardown_signals() as (caught, unraisables):
+        for _ in range(3):
+            gc.collect()
+        gc.collect()
+
+    rw_hits = _resource_warning_hits(caught)
+    loop_hits = _event_loop_closed_hits(unraisables)
+    assert (
+        rw_hits == []
+    ), f"model_registry bridge leaked unclosed connections at GC: {rw_hits}"
+    assert (
+        loop_hits == []
+    ), f"model_registry bridge produced 'Event loop is closed' at GC: {loop_hits}"

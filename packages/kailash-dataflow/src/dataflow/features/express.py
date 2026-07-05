@@ -2126,20 +2126,30 @@ class SyncExpress:
         # `AttributeError: 'NoneType' object has no attribute
         # 'call_soon_threadsafe'` that `run_coroutine_threadsafe(coro, None)`
         # would raise (zero-tolerance.md Rule 3a). Mirrors SyncTransactionManager.
-        loop = self._loop
-        if self._closed or loop is None:
-            coro.close()
-            raise RuntimeError(
-                "SyncExpress is closed — the DataFlow was closed via "
-                "db.close()/await db.close_async(); construct a fresh DataFlow "
-                "instance for further sync Express operations."
-            )
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        # Track the future so a concurrent close() can cancel it (bounded settle
-        # via CancelledError) rather than leaving this thread blocked on
-        # future.result() forever once the loop stops. The done-callback discards
-        # it as soon as it settles (normal completion, error, or cancellation).
+        #
+        # Issue #1575 (Round-4) — serialize [closed-check + submit + track] under
+        # _pending_lock so it strictly orders against close()'s [flip _closed +
+        # snapshot _pending], which takes the SAME lock. Either this submits and
+        # tracks the future BEFORE close flips _closed (→ close's snapshot sees it
+        # and cancels it), or close flips _closed first (→ this raises). Neither
+        # branch leaves an untracked future submitted onto a stopping loop — the
+        # narrow submit-during-close hang window is closed.
+        #
+        # run_coroutine_threadsafe under the lock only SCHEDULES onto the loop; it
+        # does not re-enter _pending_lock. The done-callback and future.result()
+        # stay OUTSIDE the lock so a fast/cancelled future firing _discard_pending
+        # (which takes _pending_lock) cannot deadlock against a held lock, and the
+        # actual work is never serialized.
         with self._pending_lock:
+            loop = self._loop
+            if self._closed or loop is None:
+                coro.close()
+                raise RuntimeError(
+                    "SyncExpress is closed — the DataFlow was closed via "
+                    "db.close()/await db.close_async(); construct a fresh DataFlow "
+                    "instance for further sync Express operations."
+                )
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
             self._pending.add(future)
         future.add_done_callback(self._discard_pending)
         return future.result()
@@ -2241,13 +2251,22 @@ class SyncExpress:
         """
         if self._closed:
             return
-        self._closed = True
+
+        # Issue #1575 (Round-4) — flip _closed AND snapshot the in-flight futures
+        # atomically under _pending_lock so this strictly orders against
+        # _run_sync's guarded [check + submit + track] (same lock). A future
+        # submitted+tracked before this flip IS in `pending` (→ cancelled below);
+        # a submit racing in after this flip sees _closed and raises. Neither
+        # leaves an untracked future stranded on a stopping loop — no hang window.
+        with self._pending_lock:
+            self._closed = True
+            pending = list(self._pending)
 
         loop = self._loop
         thread = self._thread
-        # Drop references first so any concurrent/after-close `_run_sync` observes
-        # the closed state and raises the typed closed-error (never AttributeError
-        # via run_coroutine_threadsafe(None), never a hang) — issue #1575 Round-3.
+        # Drop references so any after-close `_run_sync` observes the closed state
+        # and raises the typed closed-error (never AttributeError via
+        # run_coroutine_threadsafe(None), never a hang) — issue #1575 Round-3/4.
         self._loop = None
         self._thread = None
 
@@ -2267,13 +2286,11 @@ class SyncExpress:
                     extra={"error_type": type(exc).__name__},
                 )
 
-        # (a2) Cancel any still-tracked in-flight futures. On-loop task
-        #      cancellation (drain step 3) covers coroutines already scheduled as
-        #      tasks; this covers the narrow window where a future was submitted
+        # (a2) Cancel the in-flight futures snapshotted atomically above. On-loop
+        #      task cancellation (drain step 3) covers coroutines already scheduled
+        #      as tasks; this covers the narrow window where a future was submitted
         #      but its task had not yet been scheduled, so its caller's
         #      future.result() cannot hang past close.
-        with self._pending_lock:
-            pending = list(self._pending)
         for pending_future in pending:
             pending_future.cancel()
 
