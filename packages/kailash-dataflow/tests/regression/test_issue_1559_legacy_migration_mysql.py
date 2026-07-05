@@ -108,6 +108,7 @@ async def test_legacy_migration_system_creates_table_on_mysql():
     # lazily; auto_migrate=False keeps this test scoped to the legacy path only.
     db = DataFlow(MYSQL_URL, auto_migrate=False)
     migrations_dir = tempfile.mkdtemp(prefix=f"df1559_{int(time.time())}_")
+    ams = None
 
     try:
         ams = AutoMigrationSystem(
@@ -141,6 +142,10 @@ async def test_legacy_migration_system_creates_table_on_mysql():
         for required in ("version", "name", "checksum", "status"):
             assert required in cols, required
     finally:
+        # AutoMigrationSystem has no close(); release its ConnectionManagerAdapter
+        # runtime ref explicitly so it does not emit an Unclosed ResourceWarning.
+        if ams is not None and ams._connection_adapter is not None:
+            ams._connection_adapter.close()
         conn.cursor().execute("DROP TABLE IF EXISTS dataflow_migrations")
         conn.commit()
         conn.close()
