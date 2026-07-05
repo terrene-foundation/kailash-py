@@ -2100,6 +2100,17 @@ class SyncExpress:
         # `close()` idempotent.
         self._closed = False
 
+        # Issue #1575 (Round-3) — track in-flight futures so a concurrent
+        # `close()` can cancel them within bounded time instead of stranding the
+        # caller on a no-timeout `future.result()` when the loop stops mid-call.
+        self._pending: set = set()
+        self._pending_lock = threading.Lock()
+
+    def _discard_pending(self, future: Any) -> None:
+        """Done-callback: drop a settled future from the in-flight set."""
+        with self._pending_lock:
+            self._pending.discard(future)
+
     def _run_sync(self, coro):
         """Run an async coroutine synchronously on the persistent event loop.
 
@@ -2108,7 +2119,29 @@ class SyncExpress:
         critical for database drivers like aiosqlite that bind connections to
         the loop they were created on.
         """
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        # Issue #1575 (Round-3) — closed-guard BEFORE submit. If the owning loop
+        # was torn down (or is being torn down) by close(), the coroutine can
+        # never run. Close it (avoids the "coroutine was never awaited"
+        # RuntimeWarning) and raise a TYPED error, not the opaque
+        # `AttributeError: 'NoneType' object has no attribute
+        # 'call_soon_threadsafe'` that `run_coroutine_threadsafe(coro, None)`
+        # would raise (zero-tolerance.md Rule 3a). Mirrors SyncTransactionManager.
+        loop = self._loop
+        if self._closed or loop is None:
+            coro.close()
+            raise RuntimeError(
+                "SyncExpress is closed — the DataFlow was closed via "
+                "db.close()/await db.close_async(); construct a fresh DataFlow "
+                "instance for further sync Express operations."
+            )
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        # Track the future so a concurrent close() can cancel it (bounded settle
+        # via CancelledError) rather than leaving this thread blocked on
+        # future.result() forever once the loop stops. The done-callback discards
+        # it as soon as it settles (normal completion, error, or cancellation).
+        with self._pending_lock:
+            self._pending.add(future)
+        future.add_done_callback(self._discard_pending)
         return future.result()
 
     # --- Lifecycle (issue #1575) ---
@@ -2179,6 +2212,21 @@ class SyncExpress:
                     extra={"error_type": type(exc).__name__},
                 )
 
+        # (3) Issue #1575 (Round-3): cancel every OTHER task still pending on
+        #     this loop. An in-flight `_run_sync` coroutine submitted before
+        #     `close()` runs as a task here; once the loop stops its
+        #     ``run_coroutine_threadsafe`` future would never settle, hanging the
+        #     caller's no-timeout ``future.result()`` FOREVER. Cancelling the
+        #     task makes that future resolve with ``CancelledError`` (bounded)
+        #     instead. Runs LAST, on the loop, so the drain above is unaffected.
+        try:
+            current = asyncio.current_task()
+            for task in asyncio.all_tasks():
+                if task is not current:
+                    task.cancel()
+        except RuntimeError:  # pragma: no cover — no running loop (unreachable here)
+            pass
+
     def close(self) -> None:
         """Drain express-loop-bound pools, then stop the BG event-loop thread.
 
@@ -2197,13 +2245,16 @@ class SyncExpress:
 
         loop = self._loop
         thread = self._thread
-        # Drop references first so any concurrent `_run_sync` observes the
-        # closed state (its `run_coroutine_threadsafe` will raise, not hang).
+        # Drop references first so any concurrent/after-close `_run_sync` observes
+        # the closed state and raises the typed closed-error (never AttributeError
+        # via run_coroutine_threadsafe(None), never a hang) — issue #1575 Round-3.
         self._loop = None
         self._thread = None
 
         # (a) Drain express-loop-bound resources ON the owning loop, bounded so
-        #     a hung disconnect cannot block teardown forever.
+        #     a hung disconnect cannot block teardown forever. The drain's final
+        #     step cancels every in-flight task on the loop so a slow call
+        #     submitted before close() settles with CancelledError (bounded).
         if loop is not None and loop.is_running():
             try:
                 future = asyncio.run_coroutine_threadsafe(
@@ -2215,6 +2266,16 @@ class SyncExpress:
                     "express.sync.drain_failed",
                     extra={"error_type": type(exc).__name__},
                 )
+
+        # (a2) Cancel any still-tracked in-flight futures. On-loop task
+        #      cancellation (drain step 3) covers coroutines already scheduled as
+        #      tasks; this covers the narrow window where a future was submitted
+        #      but its task had not yet been scheduled, so its caller's
+        #      future.result() cannot hang past close.
+        with self._pending_lock:
+            pending = list(self._pending)
+        for pending_future in pending:
+            pending_future.cancel()
 
         # (b) Stop the loop, (c) join the BG thread (bounded), (d) close the loop.
         if loop is not None and loop.is_running():

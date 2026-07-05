@@ -10530,7 +10530,7 @@ class DataFlow(DataFlowEventMixin):
             except Exception as e:
                 logger.debug(
                     "engine.error_closing_express_sync",
-                    extra={"error": str(e)},
+                    extra={"error_type": type(e).__name__},
                 )
             finally:
                 self._express_sync = None
@@ -10720,7 +10720,7 @@ class DataFlow(DataFlowEventMixin):
             except Exception as e:
                 logger.debug(
                     "engine.error_closing_express_sync",
-                    extra={"error": str(e)},
+                    extra={"error_type": type(e).__name__},
                 )
             finally:
                 self._express_sync = None

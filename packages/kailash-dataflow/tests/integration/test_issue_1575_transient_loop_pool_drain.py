@@ -52,6 +52,7 @@ import gc
 import os
 import sys
 import tempfile
+import threading
 import time
 import warnings
 
@@ -457,3 +458,114 @@ def test_express_sync_lifecycle_no_gc_dead_loop_signal_pg():
     assert (
         loop_hits == []
     ), f"express_sync produced 'Event loop is closed' at GC: {loop_hits}"
+
+
+# ---------------------------------------------------------------------------
+# ROUND-3 hardening — defects the owned-loop close() fix introduced
+# ---------------------------------------------------------------------------
+#
+# The SyncExpress.close() teardown (Round-2) introduced two concurrency defects
+# in the sync dispatch surface: (1) a call submitted AFTER close() hit
+# run_coroutine_threadsafe(coro, None) -> opaque AttributeError instead of a
+# clear closed-error; (2) a call IN-FLIGHT when close() stopped the loop blocked
+# forever on a no-timeout future.result(). Round-3 hardens _run_sync with a
+# closed-guard + tracks/cancels in-flight futures so both settle in bounded time.
+
+
+def test_express_sync_call_after_close_raises_typed_error_sqlite():
+    """A sync Express call AFTER db.close() raises a TYPED closed-error (#1575 R3).
+
+    Deterministic bite: WITHOUT the closed-guard, _run_sync submits to
+    run_coroutine_threadsafe(coro, None) after close() nulled the loop, raising
+    ``AttributeError: 'NoneType' object has no attribute 'call_soon_threadsafe'``.
+    WITH the guard it raises a clear ``RuntimeError("SyncExpress is closed …")``.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "reg1575_after_close.db")
+        db = DataFlow(database_url=f"sqlite:///{db_path}")
+
+        @db.model
+        class _Widget1575AfterClose:
+            id: int
+            name: str
+
+        db.create_tables()
+        sync_ex = db.express_sync
+        sync_ex.create("_Widget1575AfterClose", {"id": 1, "name": "alice"})
+
+        db.close()
+
+        # The captured (now-closed) SyncExpress must reject further calls with a
+        # TYPED error — not AttributeError, not a hang.
+        with pytest.raises(RuntimeError, match="SyncExpress is closed"):
+            sync_ex.create("_Widget1575AfterClose", {"id": 2, "name": "bob"})
+        with pytest.raises(RuntimeError, match="SyncExpress is closed"):
+            sync_ex.read("_Widget1575AfterClose", 1)
+
+
+def test_express_sync_concurrent_close_does_not_strand_inflight_call_sqlite():
+    """A slow in-flight sync call settles (bounded) when close() races it (#1575 R3).
+
+    Deterministic bite: a worker thread submits a slow coroutine through
+    ``_run_sync`` (blocking on the no-timeout ``future.result()``); the main
+    thread calls ``db.close()`` while it is in-flight. WITHOUT the drain-time
+    task cancellation, stopping the loop strands the worker's future FOREVER —
+    the worker thread never settles (``join(timeout=8)`` finds it still alive).
+    WITH the fix the drain cancels the in-flight task, the future resolves with
+    CancelledError, and the worker settles well within the join ceiling.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "reg1575_concurrent_close.db")
+        db = DataFlow(database_url=f"sqlite:///{db_path}")
+
+        @db.model
+        class _Widget1575Concurrent:
+            id: int
+            name: str
+
+        db.create_tables()
+        sync_ex = db.express_sync
+        # Warm the loop with a real connection bound to the BG loop.
+        sync_ex.create("_Widget1575Concurrent", {"id": 1, "name": "alice"})
+
+        worker_result: dict = {}
+        started = threading.Event()
+
+        def _worker():
+            # A slow coroutine submitted through the real sync dispatch path.
+            # It runs as a task ON the owned background loop; close() must make
+            # this settle rather than hang.
+            started.set()
+            try:
+                sync_ex._run_sync(asyncio.sleep(30))
+                worker_result["outcome"] = "completed"
+            except BaseException as exc:  # CancelledError is BaseException-derived
+                worker_result["outcome"] = "settled"
+                worker_result["exc_type"] = type(exc).__name__
+
+        worker = threading.Thread(target=_worker, name="reg1575-inflight", daemon=True)
+        worker.start()
+        assert started.wait(timeout=2.0)
+        # Give the coroutine time to actually be scheduled as a task on the loop.
+        time.sleep(0.5)
+
+        # Close the DataFlow (and thus the SyncExpress owned loop) while the slow
+        # call is in-flight on another thread.
+        db.close()
+
+        # The worker MUST settle within a bounded wall-clock — NOT hang forever.
+        worker.join(timeout=8.0)
+        assert not worker.is_alive(), (
+            "in-flight SyncExpress call hung past db.close() — a concurrent close "
+            "strands the caller on future.result() (issue #1575 Round-3)"
+        )
+        assert worker_result.get("outcome") == "settled", (
+            f"expected the in-flight call to settle with an exception, got "
+            f"{worker_result!r}"
+        )
+        # CancelledError (from task cancellation) or the typed closed-RuntimeError
+        # are both acceptable bounded settlements; a hang is not.
+        assert worker_result.get("exc_type") in {
+            "CancelledError",
+            "RuntimeError",
+        }, f"unexpected settlement exception: {worker_result!r}"
