@@ -53,6 +53,7 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.loop_pool_registry import register_pool_drain_on_current_loop
 from kailash.utils.url_credentials import redact_pool_key
 
 logger = logging.getLogger(__name__)
@@ -1163,11 +1164,18 @@ class PostgreSQLAdapter(DatabaseAdapter):
             max_inactive_connection_lifetime=300.0,
             init=_init_connection,
         )
+        # Issue #1572: if this pool was created on a transient bridge loop,
+        # register ``disconnect`` so the bridge drains it before closing the
+        # loop (no-op on a persistent app loop — the marker gates it).
+        register_pool_drain_on_current_loop(self.disconnect)
 
     async def disconnect(self) -> None:
-        """Close connection pool."""
+        """Close connection pool (idempotent)."""
         if self._pool:
             await self._pool.close()
+            # Null the pool so a later cleanup()/bridge-drain double-close is a
+            # guarded no-op (issue #1572).
+            self._pool = None
 
     async def execute(
         self,
@@ -1550,12 +1558,19 @@ class MySQLAdapter(DatabaseAdapter):
             autocommit=False,
             connect_timeout=10,
         )
+        # Issue #1572: if this pool was created on a transient bridge loop,
+        # register ``disconnect`` so the bridge drains it before closing the
+        # loop (no-op on a persistent app loop — the marker gates it).
+        register_pool_drain_on_current_loop(self.disconnect)
 
     async def disconnect(self) -> None:
-        """Close connection pool."""
+        """Close connection pool (idempotent)."""
         if self._pool:
             self._pool.close()
             await self._pool.wait_closed()
+            # Null the pool so a later cleanup()/bridge-drain double-close is a
+            # guarded no-op (issue #1572).
+            self._pool = None
 
     async def execute(
         self,
