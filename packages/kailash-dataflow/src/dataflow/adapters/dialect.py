@@ -76,18 +76,6 @@ class SQLDialect(ABC):
         """Primary-key auto-increment modifier for CREATE TABLE."""
 
     @abstractmethod
-    def upsert_clause(
-        self,
-        table: str,
-        conflict_cols: List[str],
-        update_cols: List[str],
-    ) -> str:
-        """Dialect-specific upsert SQL template.
-
-        Returns a template string using column names directly.
-        """
-
-    @abstractmethod
     def returning_clause(self, cols: List[str]) -> str:
         """RETURNING clause (empty string when unsupported)."""
 
@@ -141,18 +129,6 @@ class PostgreSQLDialect(SQLDialect):
 
     def auto_increment_clause(self) -> str:
         return "SERIAL"
-
-    def upsert_clause(
-        self,
-        table: str,
-        conflict_cols: List[str],
-        update_cols: List[str],
-    ) -> str:
-        conflict = ", ".join(conflict_cols)
-        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-        if not updates:
-            updates = f"{conflict_cols[0]} = EXCLUDED.{conflict_cols[0]}"
-        return f"ON CONFLICT ({conflict}) DO UPDATE SET {updates}"
 
     def returning_clause(self, cols: List[str]) -> str:
         if not cols:
@@ -254,17 +230,6 @@ class MySQLDialect(SQLDialect):
     def auto_increment_clause(self) -> str:
         return "AUTO_INCREMENT"
 
-    def upsert_clause(
-        self,
-        table: str,
-        conflict_cols: List[str],
-        update_cols: List[str],
-    ) -> str:
-        updates = ", ".join(f"{c} = VALUES({c})" for c in update_cols)
-        if not updates:
-            updates = f"{conflict_cols[0]} = VALUES({conflict_cols[0]})"
-        return f"ON DUPLICATE KEY UPDATE {updates}"
-
     def returning_clause(self, cols: List[str]) -> str:
         # MySQL does not support RETURNING
         return ""
@@ -362,18 +327,6 @@ class SQLiteDialect(SQLDialect):
 
     def auto_increment_clause(self) -> str:
         return "AUTOINCREMENT"
-
-    def upsert_clause(
-        self,
-        table: str,
-        conflict_cols: List[str],
-        update_cols: List[str],
-    ) -> str:
-        conflict = ", ".join(conflict_cols)
-        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-        if not updates:
-            updates = f"{conflict_cols[0]} = EXCLUDED.{conflict_cols[0]}"
-        return f"ON CONFLICT ({conflict}) DO UPDATE SET {updates}"
 
     def returning_clause(self, cols: List[str]) -> str:
         # SQLite 3.35+ supports RETURNING but we return empty for
