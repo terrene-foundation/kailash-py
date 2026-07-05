@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [2.13.18] — 2026-07-05 — Driver-error redaction broadened to value-bearing non-dup-key errors (#1569) & `__tablename__`-aware index/FK DDL (#1541)
+
+### Fixed
+
+- **Security (#1569):** `sanitize_db_error` now redacts value-bearing driver errors
+  beyond the four duplicate-key shapes — previously any other value-bearing error
+  rendered the offending user value verbatim into logs / node-return dicts. Covered,
+  dialect-family-scoped (fail-closed, not per-errno): MySQL `Incorrect <type> value`
+  / `Truncated incorrect <TYPE> value` (errno 1292/1366); PostgreSQL `invalid input
+syntax/value for …`, `date/time field value out of range`, `value "<v>" is out of
+range for type <t>` (numeric overflow), and `malformed (array|range) literal`.
+  Diagnostic shape (error code, type word, column/constraint name) is preserved;
+  column-name-only errors (MySQL 1264/1406/1265) pass through unredacted.
+- **#1541:** `auto_migrate` now resolves a model's `__tablename__` when generating
+  `CREATE INDEX` and foreign-key `ALTER TABLE` DDL. Previously these used the default
+  pluralized class name, so a custom-`__tablename__` model's declared indexes and FK
+  constraints targeted a non-existent table and were silently skipped (WARN-only) —
+  the index/FK never materialized. Identifier-validation guards are preserved.
+
+### Tests
+
+- **#1503:** `tests/integration/core_engine/test_production_dataflow.py` converted off
+  a mock engine to the real `DataFlow` against real infrastructure (PostgreSQL, MySQL,
+  file-backed SQLite), resolving a Tier-2 NO-MOCKING violation; assertions re-grounded
+  on the real node return-shape contract with cross-connection read-back verification.
+
 ## [2.13.17] — 2026-07-05 — Node CRUD async column detection (updated_at bump + full SELECT columns) & dead upsert-family removal (#1564)
 
 ### Fixed
