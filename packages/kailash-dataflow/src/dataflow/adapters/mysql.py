@@ -10,11 +10,11 @@ import traceback
 import warnings
 from typing import Any, Dict, List, Tuple
 
+from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
+    sanitize_db_error,
+)
 from .base import DatabaseAdapter
 from .dialect import DialectManager
-from ..core.exceptions import (
-    sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
 
 _mysql_dialect = DialectManager.get_dialect("mysql")
@@ -93,6 +93,16 @@ class MySQLAdapter(DatabaseAdapter):
             # Create connection pool
             self.connection_pool = await aiomysql.create_pool(**params)
             self.is_connected = True
+
+            # Issue #1572: this 1-conn reachability probe pool may be created
+            # on a transient bridge loop; register ``close_connection_pool`` so
+            # the bridge drains it before closing the loop (no-op on a
+            # persistent app loop — the BRIDGE_LOOP_ATTR marker gates it).
+            from kailash.utils.loop_pool_registry import (
+                register_pool_drain_on_current_loop,
+            )
+
+            register_pool_drain_on_current_loop(self.close_connection_pool)
 
             # Route host/port/database through ``safe_log_value`` so
             # Emit a connection-established INFO without any URL-derived

@@ -28,6 +28,13 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Callable, Coroutine, Optional, TypeVar
 
+# Issue #1572: core kailash owns the transient-bridge-loop marker + the
+# per-loop pool drain registry. dataflow -> kailash is the legal import
+# direction; both a dataflow adapter pool and a core EnterpriseConnectionPool
+# pool register through this single registry so the bridge can drain them
+# before it closes the transient loop they were created on.
+from kailash.utils.loop_pool_registry import BRIDGE_LOOP_ATTR, drain_loop_pools
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -123,8 +130,12 @@ def async_safe_run(coro: Coroutine[Any, Any, T], timeout: Optional[float] = None
     Execute a coroutine safely in any context.
 
     This function intelligently handles async/sync boundaries:
-    - If no event loop is running: uses asyncio.run() (standard sync context)
-    - If event loop is running: uses thread pool with separate event loop
+    - If no event loop is running: runs the coroutine on a fresh transient
+      loop via ``_run_on_new_loop`` (which drains issue-#1572 bridge pools and
+      preserves asyncio.run()'s shutdown_asyncgens / shutdown_default_executor
+      semantics), standard sync context.
+    - If event loop is running: uses a thread pool whose worker runs the
+      coroutine on the same ``_run_on_new_loop`` transient-loop path.
 
     This replaces unsafe `asyncio.run()` calls that fail in FastAPI/Docker.
 
@@ -171,20 +182,17 @@ def async_safe_run(coro: Coroutine[Any, Any, T], timeout: Optional[float] = None
             loop = None
 
         if not loop_is_running:
-            # No event loop running - safe to use asyncio.run()
+            # No event loop running - run on a fresh transient loop. We use
+            # ``_run_on_new_loop`` instead of bare ``asyncio.run()`` so that
+            # pools created on this loop (issue #1572) are drained before the
+            # loop closes; the helper preserves asyncio.run()'s semantics
+            # (shutdown_asyncgens, set_event_loop(None)).
             context = get_execution_context()
             logger.debug(
-                f"async_safe_run: No running loop, using asyncio.run() [context={context}]"
+                f"async_safe_run: No running loop, using transient loop [context={context}]"
             )
 
-            if timeout is not None:
-
-                async def with_timeout():
-                    return await asyncio.wait_for(coro, timeout=timeout)
-
-                return asyncio.run(with_timeout())
-            else:
-                return asyncio.run(coro)
+            return _run_on_new_loop(coro, timeout=timeout)
 
         # Event loop is running - need to use thread pool
         context = get_execution_context()
@@ -221,31 +229,9 @@ def _run_in_thread_pool(
     result_container = {"result": None, "exception": None}
 
     def run_coro_in_new_loop():
-        """Execute coroutine in a new event loop in this thread."""
+        """Execute coroutine on a fresh transient event loop in this thread."""
         try:
-            # Create new event loop for this thread
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            try:
-                if timeout is not None:
-
-                    async def with_timeout():
-                        return await asyncio.wait_for(coro, timeout=timeout)
-
-                    result_container["result"] = new_loop.run_until_complete(
-                        with_timeout()
-                    )
-                else:
-                    result_container["result"] = new_loop.run_until_complete(coro)
-            finally:
-                # Clean up: cancel pending tasks and close loop
-                try:
-                    _cancel_all_tasks(new_loop)
-                except Exception as e:
-                    logger.warning(
-                        "async_utils.error_cancelling_tasks", extra={"error": str(e)}
-                    )
-                new_loop.close()
+            result_container["result"] = _run_on_new_loop(coro, timeout=timeout)
         except Exception as e:
             result_container["exception"] = e
 
@@ -269,6 +255,87 @@ def _run_in_thread_pool(
         raise result_container["exception"]
 
     return result_container["result"]
+
+
+def _run_on_new_loop(
+    coro: Coroutine[Any, Any, T], timeout: Optional[float] = None
+) -> T:
+    """Run ``coro`` on a fresh transient event loop, draining bridge pools first.
+
+    This is the single loop-owning code path for BOTH the no-running-loop
+    branch of :func:`async_safe_run` (formerly a bare ``asyncio.run``) and the
+    thread-pool worker branch. Both create-run-close a transient loop, and
+    both are the SAME leak class for issue #1572: a pool created on the loop
+    (an adapter reachability probe, or ``EnterpriseConnectionPool`` min-size
+    connections) is bound to it, so once the loop closes the pool's transports
+    belong to a dead loop and surface at GC as ``RuntimeError: Event loop is
+    closed`` / ``ResourceWarning: Unclosed connection``.
+
+    The fix: stamp the loop with :data:`BRIDGE_LOOP_ATTR` so pool-creation
+    sites register their async close method via
+    :func:`register_pool_drain_on_current_loop`, then in ``finally`` drain
+    those pools (while the loop is still alive) BEFORE cancelling tasks and
+    closing. The teardown order matters: DRAIN -> cancel_all_tasks ->
+    shutdown_asyncgens -> close, so connections close gracefully. The
+    ``shutdown_asyncgens`` + ``set_event_loop(None)`` steps preserve
+    ``asyncio.run()`` semantics for the sync branch that previously used it.
+    """
+    new_loop = asyncio.new_event_loop()
+    # Mark this loop transient so pool-creation sites register a drain against
+    # it (persistent app loops lack the marker and are never registered).
+    setattr(new_loop, BRIDGE_LOOP_ATTR, True)
+    asyncio.set_event_loop(new_loop)
+    try:
+        if timeout is not None:
+
+            async def with_timeout():
+                return await asyncio.wait_for(coro, timeout=timeout)
+
+            return new_loop.run_until_complete(with_timeout())
+        return new_loop.run_until_complete(coro)
+    finally:
+        # (a) Drain pools created on this transient loop BEFORE cancel/close,
+        #     so aiomysql/asyncpg transports close gracefully while the loop
+        #     still lives (issue #1572). Best-effort — never raise in teardown.
+        try:
+            new_loop.run_until_complete(drain_loop_pools(new_loop))
+        except Exception as e:
+            # Log the exception TYPE only — never str(e), which could embed a
+            # credential-bearing DSN (security.md / observability.md 6.3),
+            # matching the drain registry's own logging discipline.
+            logger.debug(
+                "async_utils.error_draining_pools",
+                extra={"error_type": type(e).__name__},
+            )
+        # (b) Cancel any still-pending tasks (existing behavior).
+        try:
+            _cancel_all_tasks(new_loop)
+        except Exception as e:
+            logger.warning(
+                "async_utils.error_cancelling_tasks", extra={"error": str(e)}
+            )
+        # (c) Shut down async generators — preserves asyncio.run() semantics
+        #     for the sync branch that previously called asyncio.run().
+        try:
+            new_loop.run_until_complete(new_loop.shutdown_asyncgens())
+        except Exception as e:
+            logger.debug(
+                "async_utils.error_shutting_down_asyncgens",
+                extra={"error_type": type(e).__name__},
+            )
+        # (d) Shut down the loop's default thread/process executor — the final
+        #     step asyncio.run() performs, restored here for the no-running-loop
+        #     branch that previously delegated to asyncio.run().
+        try:
+            new_loop.run_until_complete(new_loop.shutdown_default_executor())
+        except Exception as e:
+            logger.debug(
+                "async_utils.error_shutting_down_default_executor",
+                extra={"error_type": type(e).__name__},
+            )
+        # (e) Close the loop, then (f) detach it from this thread.
+        new_loop.close()
+        asyncio.set_event_loop(None)
 
 
 def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
