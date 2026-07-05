@@ -37,7 +37,7 @@ Per-operator fragment `<base>/.session-notes.d/<display_id>.md` + forest ledger 
 
 ## Format
 
-Hard cap: **50 lines**. Overflow means the content belongs in `todos/active/` or `journal/`, not here. Omit any section that would be empty.
+Hard cap: **50 lines**. Overflow means the content belongs in `todos/active/` or `journal/`, not here. Omit any section that would be empty — EXCEPT the three always-present sections, which write an explicit empty-sentinel rather than vanish: **Read first** (the mandatory entry point), **Outstanding ledger** ("Forest empty — …"), and **Executed this session** ("None — no external actions this session"). Absence of these three is indistinguishable from a forgotten section, so it must be explicit.
 
 ```markdown
 # Session Notes — <YYYY-MM-DD>
@@ -58,6 +58,18 @@ change. Just enough for the next session to orient — not a history.
 - Uncommitted decisions, half-done refactors, mid-migration state.
 - Facts that are true NOW but aren't in git/todos/journal yet.
   (omit if none)
+
+## Executed this session
+
+- Consequential actions this session TOOK whose state is NOT in THIS repo's
+  `git log` — distribution PRs opened/merged on OTHER repos, releases cut,
+  cross-repo syncs landed, external issues filed. One line each, by external
+  pointer (repo#PR, tag), so the next session knows what is in-flight ELSEWHERE.
+  SCRUB operator paths + private-org slugs per `rules/user-flow-validation.md`
+  MUST-6 — `.session-notes` syncs to 30+ consumers. (The rationale + the "is it
+  in THIS repo's `git log`?" test live in Hard rules.)
+  (write "None — no external actions this session" if none; never omit
+  silently — absence is explicit, like the forest ledger)
 
 ## Outstanding ledger (forest)
 
@@ -140,7 +152,7 @@ ledger (step 6; `/sweep` Sweep 6).
 
 - **Write, not verify (closed allowlist — EXACTLY these three tool calls, nothing else).** **(a)** one optional `ls workspaces/` — ONLY to orient the "Read first" pointers; the fragment write target is the root split (§ Where to write), so no base resolution is needed; **(b)** one read of the immediately-prior `.session-notes` — that exact file, no other path — for ledger carry-forward; **(c)** one write of the new `.session-notes`. **Tool call cap: 3.** ANY other tool call — including any additional read of any other file, any grep / git / gh / pytest / find — is BLOCKED. The allowlist is the operative bound; this is not a denylist with examples. The single bounded prior-`.session-notes` read is the carry-forward source, categorically not the verification cascade.
 - **Memory only.** Produce the notes from conversation memory. If you're unsure whether a claim is still true, omit it — the next session can discover it from git.
-- **No accomplishments list.** The next session reads `git log`. Do not describe what happened this session.
+- **No LOCAL accomplishments list — but the "Executed this session" external-signal IS required.** The next session reads `git log` for LOCAL work, so do NOT describe what happened in THIS repo this session. The carve-out: consequential EXTERNAL actions (distribution PRs on other repos, releases, cross-repo merges, filed issues) are NOT in this repo's `git log`, so the next session cannot recover them there — capture those, and only those, under "## Executed this session". The test: "is this action's state visible in `git log` of THIS repo?" — yes → omit (accomplishments-list ban); no → it belongs in the execution-signal.
 - **No itemized-todo list — but the forest ledger is REQUIRED.** The next session reads `todos/active/` for per-task itemization; do NOT reproduce that here. The Outstanding ledger is the deliberate, scoped exception: it is **forest-level only** (workstreams / blocked-items, typically 2–6 rows), explicitly distinct from per-task todos. Every ledger row MUST carry a value-anchor per `rules/value-prioritization.md` MUST-1+2. Itemizing individual todos in the ledger is BLOCKED (that defeats forest-vs-trees); omitting the ledger entirely is BLOCKED (that is the stale-snapshot trap).
 - **No decision log.** Journal decisions with `/journal` before running `/wrapup`, not in session notes.
 - **No quantitative claims.** Do not write "N tests passing", "3 files changed", or "27 todos remaining". Numbers must be verified; verification is forbidden here. Point at the source of truth instead.
