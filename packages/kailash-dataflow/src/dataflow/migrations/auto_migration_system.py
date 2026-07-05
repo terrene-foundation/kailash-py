@@ -1819,6 +1819,15 @@ class AutoMigrationSystem:
             "postgres"
         ):
             return "postgresql"
+        elif connection_lower.startswith("mysql"):
+            # Covers ``mysql://`` and every SQLAlchemy driver variant
+            # (``mysql+pymysql://``, ``mysql+aiomysql://``, ``mysql+mysqldb://``).
+            # Mirrors the mysql-detection precedent in
+            # ``core/connection_builder.py`` (``driver.startswith("mysql")``).
+            # Without this branch a ``mysql://`` URL fell through to the
+            # ``"://" -> postgresql`` default below (issue #1559), so the legacy
+            # migration fallback emitted Postgres-only DDL against MySQL.
+            return "mysql"
         else:
             # Try to infer from connection string format
             if "://" in connection_string:
@@ -2200,9 +2209,11 @@ class AutoMigrationSystem:
         return self.inspector.compare_schemas(current_schema, target_schema)
 
     async def _ensure_migration_table(self):
-        """Ensure migration tracking table exists for both PostgreSQL and SQLite."""
+        """Ensure migration tracking table exists for PostgreSQL, MySQL, and SQLite."""
         if self.dialect == "sqlite":
             statements = self._get_sqlite_migration_table_statements()
+        elif self.dialect == "mysql":
+            statements = self._get_mysql_migration_table_statements()
         else:
             statements = self._get_postgresql_migration_table_statements()
 
@@ -2265,6 +2276,36 @@ class AutoMigrationSystem:
             """,
         ]
 
+    def _get_mysql_migration_table_statements(self) -> List[str]:
+        """Get MySQL migration table creation statements (issue #1559).
+
+        MySQL-valid DDL only — the Postgres variant uses constructs MySQL
+        rejects with error 1064: ``TIMESTAMP WITH TIME ZONE`` (use ``DATETIME``),
+        ``JSONB`` (use ``JSON``), ``USING GIN`` (no GIN indexes), and a partial
+        unique index ``WHERE status = 'applied'`` (MySQL has no partial-index
+        predicate). ``CREATE INDEX IF NOT EXISTS`` is also unsupported on MySQL,
+        so the secondary indexes are declared INLINE in the ``CREATE TABLE`` and
+        the whole statement is idempotent via ``CREATE TABLE IF NOT EXISTS``.
+        The checksum partial-unique index is omitted (no MySQL equivalent
+        without changing its semantics across statuses).
+        """
+        return [
+            """
+            CREATE TABLE IF NOT EXISTS dataflow_migrations (
+                version VARCHAR(255) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                checksum VARCHAR(32) NOT NULL,
+                applied_at DATETIME,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                operations JSON,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_migrations_status (status),
+                INDEX idx_migrations_applied_at (applied_at),
+                CONSTRAINT valid_status CHECK (status IN ('pending', 'applied', 'failed', 'rolled_back'))
+            )
+            """,
+        ]
+
     def _get_sqlite_migration_table_statements(self) -> List[str]:
         """Get SQLite migration table creation statements."""
         return [
@@ -2301,6 +2342,15 @@ class AutoMigrationSystem:
                 validate_query = """
                     SELECT name as column_name, type as data_type
                     FROM pragma_table_info('dataflow_migrations')
+                """
+            elif self.dialect == "mysql":
+                # MySQL scopes information_schema by the active database, not the
+                # Postgres ``public`` schema; DATABASE() resolves it (issue #1559).
+                validate_query = """
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = 'dataflow_migrations'
+                    AND table_schema = DATABASE()
                 """
             else:  # PostgreSQL
                 validate_query = """
@@ -2350,6 +2400,19 @@ class AutoMigrationSystem:
                         "operations": "TEXT",
                         "applied_at": "TEXT",
                         "created_at": "TEXT",
+                    }
+                elif self.dialect == "mysql":
+                    # information_schema.data_type values MySQL reports for the
+                    # MySQL-variant DDL (issue #1559): VARCHAR -> 'varchar',
+                    # JSON -> 'json', DATETIME -> 'datetime'.
+                    required_columns = {
+                        "version": "varchar",
+                        "name": "varchar",
+                        "checksum": "varchar",
+                        "status": "varchar",
+                        "operations": "json",
+                        "applied_at": "datetime",
+                        "created_at": "datetime",
                     }
                 else:  # PostgreSQL
                     required_columns = {

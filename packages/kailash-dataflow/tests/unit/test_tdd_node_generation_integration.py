@@ -119,7 +119,6 @@ class TestTDDNodeGenerationIntegration:
             "postgresql://prod"
         )
         mock_dataflow._detect_database_type.return_value = "postgresql"
-        mock_dataflow._generate_insert_sql.return_value = "INSERT INTO users..."
 
         # Create NodeGenerator and generate node
         generator = NodeGenerator(mock_dataflow)

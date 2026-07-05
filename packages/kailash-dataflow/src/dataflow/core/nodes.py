@@ -2128,13 +2128,23 @@ class NodeGenerator:
                                         connection_string=connection_string,
                                         database_type=database_type,
                                     )
-                                    result = await sql_node.async_run(
-                                        query=fixed_sql,
-                                        params=values,
-                                        fetch_mode="one",  # RETURNING clause should return one record
-                                        validate_queries=False,
-                                        transaction_mode="auto",  # Ensure auto-commit for create operations
-                                    )
+                                    # Fresh (non-pooled) node — clean it up after the
+                                    # query so its connection does not leak a
+                                    # ResourceWarning on GC (issue #1560; same class as
+                                    # the 2.13.15 bulk_upsert._execute_query and
+                                    # BulkCreatePoolNode._process_direct fixes). The
+                                    # result dict is fully materialized by async_run,
+                                    # so cleanup after is safe.
+                                    try:
+                                        result = await sql_node.async_run(
+                                            query=fixed_sql,
+                                            params=values,
+                                            fetch_mode="one",  # RETURNING clause should return one record
+                                            validate_queries=False,
+                                            transaction_mode="auto",  # Ensure auto-commit for create operations
+                                        )
+                                    finally:
+                                        await sql_node.cleanup()
 
                                     if (
                                         result
