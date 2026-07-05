@@ -79,12 +79,10 @@ async def upsert_table(test_suite):
     upsert_name = f"test_bulk_upsert_sqli_{suffix}"
     canary_name = "test_canary_492"  # name MUST match the payload literal
 
-    setup = AsyncSQLDatabaseNode(
-        connection_string=connection_string,
-        database_type="postgresql",
-        validate_queries=False,
-    )
-    # Drop both tables fresh
+    # Drop both tables fresh. Each DDL runs through a fresh node that is cleaned
+    # up immediately (try/finally) so it does not leak a ResourceWarning on GC
+    # (issue #1561). The prior anonymous ``AsyncSQLDatabaseNode(...).async_run()``
+    # never called cleanup() — one leaked connection per statement.
     for sql in [
         f"DROP TABLE IF EXISTS {upsert_name} CASCADE",
         f"DROP TABLE IF EXISTS {canary_name} CASCADE",
@@ -106,14 +104,16 @@ async def upsert_table(test_suite):
         ),
         f"INSERT INTO {canary_name} (marker) VALUES ('CANARY_PRESENT')",
     ]:
-        await AsyncSQLDatabaseNode(
+        setup = AsyncSQLDatabaseNode(
             connection_string=connection_string,
             database_type="postgresql",
             query=sql,
             validate_queries=False,
-        ).async_run()
-
-    await setup.cleanup()
+        )
+        try:
+            await setup.async_run()
+        finally:
+            await setup.cleanup()
 
     yield connection_string, upsert_name, canary_name
 
@@ -128,8 +128,10 @@ async def upsert_table(test_suite):
             query=sql,
             validate_queries=False,
         )
-        await cleanup.async_run()
-        await cleanup.cleanup()
+        try:
+            await cleanup.async_run()
+        finally:
+            await cleanup.cleanup()
 
 
 async def _assert_canary_intact(connection_string: str, canary_name: str) -> None:
@@ -140,8 +142,10 @@ async def _assert_canary_intact(connection_string: str, canary_name: str) -> Non
         query=f"SELECT marker FROM {canary_name}",
         validate_queries=False,
     )
-    result = await probe.async_run()
-    await probe.cleanup()
+    try:
+        result = await probe.async_run()
+    finally:
+        await probe.cleanup()
     rows = result["result"]["data"]
     assert rows, f"canary table {canary_name} was dropped — SQLi succeeded"
     assert rows[0]["marker"] == "CANARY_PRESENT"
@@ -189,8 +193,10 @@ async def test_bulk_upsert_rejects_sql_injection_in_string_field(upsert_table, p
         query=f"SELECT name FROM {upsert_name} WHERE notes = 'first row'",
         validate_queries=False,
     )
-    rows = (await probe.async_run())["result"]["data"]
-    await probe.cleanup()
+    try:
+        rows = (await probe.async_run())["result"]["data"]
+    finally:
+        await probe.cleanup()
     assert len(rows) == 1
     assert (
         rows[0]["name"] == payload
@@ -229,8 +235,10 @@ async def test_bulk_upsert_mixed_safe_and_malicious_batch(upsert_table):
         query=f"SELECT email, name FROM {upsert_name} ORDER BY email",
         validate_queries=False,
     )
-    landed = (await probe.async_run())["result"]["data"]
-    await probe.cleanup()
+    try:
+        landed = (await probe.async_run())["result"]["data"]
+    finally:
+        await probe.cleanup()
     assert len(landed) == 3
     by_email = {r["email"]: r["name"] for r in landed}
     assert by_email["safe1@example.com"] == "Alice"
