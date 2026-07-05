@@ -52,6 +52,7 @@ import gc
 import os
 import sys
 import tempfile
+import time
 import warnings
 
 import pytest
@@ -307,3 +308,145 @@ def test_pg_discover_schema_no_gc_dead_loop_signal():
     assert (
         loop_hits == []
     ), f"discover_schema produced 'Event loop is closed' at GC: {loop_hits}"
+
+
+# ---------------------------------------------------------------------------
+# OWNED-LOOP teardown — SyncExpress (issue #1575, Round-2 gap)
+# ---------------------------------------------------------------------------
+#
+# SyncExpress owns a PERSISTENT daemon-thread event loop; DB connections opened
+# by Express through the sync surface BIND to that loop. Before this fix,
+# SyncExpress had no close()/__del__ and DataFlow.close()/close_async() never
+# tore it down, so every DataFlow that touched db.express_sync leaked
+# {daemon thread + loop + loop-bound connections} on owner teardown — surfacing
+# at interpreter shutdown as ResourceWarning: Unclosed connection. The fix adds
+# SyncExpress.close() (drain-on-owning-loop, then stop+join+close) + __del__,
+# wired into DataFlow.close()/close_async().
+
+
+def test_express_sync_close_joins_thread_and_closes_owned_loop_sqlite():
+    """db.close() tears down the SyncExpress owned loop + BG thread (#1575).
+
+    Deterministic bite: WITHOUT the fix, SyncExpress has no close() and
+    DataFlow.close() never tears it down, so the daemon thread stays alive and
+    the loop stays open after db.close() — this assertion fails. WITH the fix,
+    the thread is joined and the loop is closed.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "reg1575_express.db")
+        db = DataFlow(database_url=f"sqlite:///{db_path}")
+
+        @db.model
+        class _Widget1575Express:
+            id: int
+            name: str
+
+        db.create_tables()
+
+        # Access express_sync — creates the owned loop + daemon thread.
+        sync_ex = db.express_sync
+        thread = sync_ex._thread
+        loop = sync_ex._loop
+        assert thread is not None and thread.is_alive()
+        assert loop is not None and not loop.is_closed()
+
+        # Real CRUD through the sync surface — opens a real aiosqlite connection
+        # BOUND to the owned background loop (the leak vector).
+        created = sync_ex.create("_Widget1575Express", {"id": 1, "name": "alice"})
+        assert created["id"] == 1
+        assert sync_ex.read("_Widget1575Express", 1)["name"] == "alice"
+
+        # Owner teardown MUST close the SyncExpress owned loop + join the thread.
+        db.close()
+
+        assert not thread.is_alive(), (
+            "SyncExpress background thread NOT joined after db.close() — the "
+            "owned loop + its bound connections leak (issue #1575)"
+        )
+        assert (
+            loop.is_closed()
+        ), "SyncExpress owned event loop NOT closed after db.close() (#1575)"
+        assert getattr(sync_ex, "_closed", False) is True
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+def test_express_sync_close_is_idempotent_sqlite():
+    """SyncExpress.close() is safe to call repeatedly (owner + explicit)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "reg1575_express_idem.db")
+        db = DataFlow(database_url=f"sqlite:///{db_path}")
+
+        @db.model
+        class _Widget1575ExpressIdem:
+            id: int
+            name: str
+
+        db.create_tables()
+        sync_ex = db.express_sync
+        sync_ex.create("_Widget1575ExpressIdem", {"id": 1, "name": "bob"})
+
+        sync_ex.close()
+        # Second + third calls must be no-ops, not raise.
+        sync_ex.close()
+        db.close()
+        assert getattr(sync_ex, "_closed", False) is True
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+def test_express_sync_lifecycle_no_gc_dead_loop_signal_pg():
+    """PG: express_sync CRUD + db.close() leaves no unclosed-conn / dead-loop GC signal.
+
+    Exercises the asyncpg path (Postgres) through the owned SyncExpress loop.
+    WITHOUT the fix the daemon thread is killed at interpreter shutdown with the
+    asyncpg pool still bound to its loop -> ResourceWarning. WITH the fix,
+    db.close() drains the pool on the owning loop first.
+    """
+    try:
+        db = DataFlow(database_url=POSTGRES_URL)
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        pytest.skip(
+            f"database at {POSTGRES_URL!r} not reachable ({exc}); this Tier-2 "
+            f"test requires the real container to be up"
+        )
+
+    @db.model
+    class _Widget1575ExpressPg:
+        id: int
+        name: str
+        value: int
+
+    db.create_tables()
+    sync_ex = db.express_sync
+    thread = sync_ex._thread
+    # Unique id per run — the PG container is shared and rows persist across
+    # runs, so a fixed id would collide on the pkey (test isolation, not the
+    # leak under test).
+    record_id = int(time.time() * 1000) % 2_000_000_000
+    try:
+        sync_ex.create(
+            "_Widget1575ExpressPg", {"id": record_id, "name": "alice", "value": 1}
+        )
+        assert sync_ex.read("_Widget1575ExpressPg", record_id)["value"] == 1
+        sync_ex.delete("_Widget1575ExpressPg", record_id)  # clean up the row
+    except Exception as exc:  # pragma: no cover — infra-down skip
+        db.close()
+        pytest.skip(f"PG express_sync CRUD failed against real container ({exc})")
+
+    db.close()
+    assert not thread.is_alive(), "SyncExpress PG thread NOT joined after db.close()"
+
+    del db
+
+    with _capture_gc_teardown_signals() as (caught, unraisables):
+        for _ in range(3):
+            gc.collect()
+        gc.collect()
+
+    rw_hits = _resource_warning_hits(caught)
+    loop_hits = _event_loop_closed_hits(unraisables)
+    assert rw_hits == [], f"express_sync leaked unclosed connections at GC: {rw_hits}"
+    assert (
+        loop_hits == []
+    ), f"express_sync produced 'Event loop is closed' at GC: {loop_hits}"

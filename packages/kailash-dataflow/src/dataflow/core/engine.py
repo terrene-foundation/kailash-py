@@ -10517,6 +10517,24 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._transactions_sync = None
 
+        # Issue #1575 — stop the SyncExpress BG event-loop thread BEFORE the
+        # pool/adapter teardown below. SyncExpress owns a persistent daemon-loop
+        # and the Express CRUD nodes it caches are bound to THAT loop; its
+        # close() drains those nodes ON the owning loop first, so the
+        # _async_sql_node_cache teardown (which runs on a transient loop via
+        # async_safe_run) cannot strand a connection on a dead loop. Lazy
+        # attribute — only present if a caller accessed `db.express_sync`.
+        if hasattr(self, "_express_sync") and self._express_sync is not None:
+            try:
+                self._express_sync.close()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_sync",
+                    extra={"error": str(e)},
+                )
+            finally:
+                self._express_sync = None
+
         # Stop pool monitor
         if self._pool_monitor is not None:
             try:
@@ -10690,6 +10708,22 @@ class DataFlow(DataFlowEventMixin):
                 )
             finally:
                 self._transactions_sync = None
+
+        # Issue #1575 — stop the SyncExpress BG event-loop thread BEFORE the
+        # pool/adapter teardown. close() runs its drain on the SyncExpress
+        # OWNING loop (a different thread), so blocking here briefly on its
+        # bounded join does not touch this coroutine's loop. Lazy attribute —
+        # only present if a caller accessed `db.express_sync`.
+        if hasattr(self, "_express_sync") and self._express_sync is not None:
+            try:
+                self._express_sync.close()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_sync",
+                    extra={"error": str(e)},
+                )
+            finally:
+                self._express_sync = None
 
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:
