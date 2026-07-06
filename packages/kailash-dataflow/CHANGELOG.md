@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [2.13.21] — 2026-07-06 — Generated CRUD nodes are transaction-aware; Express cache adapter closed on teardown (#1581, #1587)
+
+### Fixed
+
+- **Generated DataFlow CRUD nodes now participate in an enclosing `TransactionScopeNode` (#1581).** Previously every generated CRUD node ran each statement on its own cached `AsyncSQLDatabaseNode` in `transaction_mode="auto"` (per-statement autocommit) — the `transaction_mode="auto"` kwarg at the call sites was inert because `async_run` read the mode from config at init, never from inputs. Inside a `TransactionScopeNode` a CRUD write therefore committed independently and **survived a later `TransactionRollbackNode`** (a silent data-integrity violation). A module-level `_run_sql_in_scope(node, sql_node, **kw)` now reads `active_transaction` off the workflow context and injects `scope.transaction` (requires core `kailash>=2.45.5`); all 10 single-record CRUD sites (create/read/update/delete/list/count/upsert + the MySQL pre-check + the read-back) route through it, so reads inside the scope see the scope's uncommitted writes and writes are discarded on rollback. **Fail-closed:** an active scope with no `.transaction` handle raises `NodeExecutionError` rather than silently autocommitting. The PostgreSQL `$11`-param-type retry fallback was fixed to run on the POOLED node (joining the scope) instead of a fresh non-pooled node that would escape it. Bulk CRUD nodes (`BulkCreate/Update/Delete/Upsert`) are a separate subsystem and are NOT yet scope-aware — tracked as follow-up #1585 (an `xfail(strict=True)` pin holds the gap).
+- **`TransactionSavepointNode` and `TransactionRollbackToSavepointNode` are now registered (#1581).** Both were defined and exported but never registered with the node registry, so no workflow could reach them. With single-record CRUD now transaction-aware, a `ROLLBACK TO SAVEPOINT` discards post-savepoint single-record CRUD writes. The savepoint-name validation was tightened from `re.match(...$)` to `re.fullmatch(...)` (the `$` form accepted a trailing newline), newly load-bearing now that the nodes are reachable.
+- **The Express cache backend is closed on `DataFlow.close()` / `close_async()` (#1587).** `DataFlowExpress` eagerly auto-detects a cache backend at construction; when Redis is reachable that is an `AsyncRedisCacheAdapter` owning a `ThreadPoolExecutor`. Neither close path tore it down, so every `DataFlow` closed via the documented cleanup path (FastAPI lifespan, async fixture) leaked the executor's worker threads (`ResourceWarning: AsyncRedisCacheAdapter not closed` at GC). `AsyncRedisCacheAdapter` gains a sync `close()` sibling to `close_async()`; `DataFlowExpress` gains `close()`/`close_async()` closing its `_cache_manager`; and both `DataFlow` close paths now tear down the async Express instance AND the engine-level `_cache_integration` adapter. `close_async` offloads the blocking executor shutdown via `asyncio.to_thread` so it does not freeze the event loop. The leak was invisible on `[dev]`-only CI (no Redis reachable → in-memory fallback → no executor).
+
+### Tests
+
+- **#1581:** regression suite `test_issue_1581_crud_transaction_awareness.py` — 8 passed + 1 `xfail(strict=True)` (commit-persists, rollback-discards, read-your-writes, no-scope-autocommits, savepoint-partial, SQLite parity, fail-closed, core batch-borrow, and the bulk-in-scope escape pinned for #1585). Plus the #1560 retry-cleanup source-pin re-anchored to survive the #1581 scope-branch restructure.
+- **#1587:** `test_dataflow_close_cache_adapter_leak.py` — deterministic (recording cache-manager, no Redis dependency) coverage of the close wiring on both sync and async paths, both the Express and the `_cache_integration` adapters, plus the `asyncio.to_thread` offload path.
+
 ## [2.13.20] — 2026-07-06 — Transient/owned loops outside the bridge drain their adapter pools on teardown (#1575)
 
 ### Fixed

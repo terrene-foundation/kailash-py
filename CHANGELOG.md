@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.5] - 2026-07-06
+
+### Added
+
+- **`AsyncSQLDatabaseNode` is transaction-scope aware (#1581).** `_AdapterTransactionScope` gained a `.transaction` property exposing the raw driver transaction handle, and `async_run` now reads `inputs.get("transaction")` and threads it through `_execute_with_retry` → `_execute_with_transaction` (and the batch path `execute_many_async` → `_execute_many_with_transaction`). When a transaction handle is supplied, a new leading borrow-don't-own branch runs `adapter.execute(..., transaction=...)` with NO begin/commit/rollback — the enclosing scope owns the lifecycle — so a statement issued inside a `TransactionScopeNode` participates in that transaction instead of autocommitting on its own connection. The handle is param-threaded, never stored on the (shared, cached) node instance, so concurrent operations cannot leak one scope's transaction into another.
+
+### Fixed
+
+- **Uniform `adapter.transaction()` contract + pool-safe commit/rollback (#1580).** The PostgreSQL, MySQL, and SQLite adapters now expose a single consistent `transaction()` async-context contract; commit/rollback return the borrowed connection to the pool exactly once (the prior double-release and begin-orphan paths are closed), and the SQLite terminal-close path is quiet so it cannot mask the underlying driver error. This is the core half of the adapter-transaction correctness work that #1581's DataFlow transaction-awareness builds on.
+
 ## [2.45.4] - 2026-07-05
 
 ### Added
