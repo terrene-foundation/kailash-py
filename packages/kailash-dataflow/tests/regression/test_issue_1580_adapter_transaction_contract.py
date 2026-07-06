@@ -650,3 +650,25 @@ async def test_sqlite_rollback_failure_still_decrements_depth(sqlite_adapter):
     with pytest.raises(RuntimeError, match="sqlite rollback boom"):
         await sqlite_adapter.rollback_transaction((_RollbackBoomConn(), None, 1))
     assert sqlite_adapter._transaction_depth == 0
+
+
+async def test_sqlite_commit_failure_close_error_does_not_mask_original(sqlite_adapter):
+    """Redteam round-3 LOW: if db.close() in the terminal finally ALSO raises, it
+    must NOT replace the ORIGINAL driver commit error the caller keys a retry on —
+    _close_quietly logs the close error and never raises. Depth is still reset
+    (the decrement precedes the close), so the next begin is not poisoned."""
+
+    class _CloseBoomConn(_SQLiteBoomConn):
+        async def close(self):
+            self.calls.append("close")
+            raise RuntimeError("sqlite close boom")
+
+    sqlite_adapter._transaction_depth = 1  # file-DB adapter -> depth-0 close fires
+    boom = _CloseBoomConn()
+    # The original commit error surfaces, NOT "sqlite close boom".
+    with pytest.raises(RuntimeError, match="sqlite commit boom"):
+        await sqlite_adapter.commit_transaction((boom, None, 1))
+    assert sqlite_adapter._transaction_depth == 0
+    assert (
+        "close" in boom.calls
+    )  # the close was attempted (and its error swallowed+logged)

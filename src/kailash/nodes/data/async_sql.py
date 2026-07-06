@@ -2475,6 +2475,20 @@ class SQLiteAdapter(DatabaseAdapter):
                 },
             )
 
+    async def _close_quietly(self, db: Any) -> None:
+        """Close ``db``, logging (not raising) a close error.
+
+        A close failure in a terminal ``finally`` MUST NOT replace the in-flight
+        driver commit/rollback error the caller keys a retry on (issue #1580
+        redteam LOW; the SQLite sibling of PostgreSQLAdapter._release_quietly).
+        The depth-decrement precedes the close, so the #1070 depth invariant
+        holds regardless of whether close raises.
+        """
+        try:
+            await db.close()
+        except Exception:
+            logger.error("async_sql.sqlite.close_failed", exc_info=True)
+
     async def commit_transaction(self, transaction: Any) -> None:
         """
         Commit a transaction or release a savepoint.
@@ -2525,7 +2539,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 # transaction ends — mirrors the PG/MySQL "always release" contract.
                 self._transaction_depth -= 1
                 if not self._is_memory_db and self._transaction_depth == 0:
-                    await db.close()
+                    await self._close_quietly(db)
         else:
             # Old API - just commit (backward compatibility)
             await transaction.commit()
@@ -2563,7 +2577,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 # begin_transaction (issue #1070 class; mirrors commit_transaction).
                 self._transaction_depth -= 1
                 if not self._is_memory_db and self._transaction_depth == 0:
-                    await db.close()
+                    await self._close_quietly(db)
         else:
             # Old API - just rollback (backward compatibility)
             await transaction.rollback()
