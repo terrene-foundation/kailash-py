@@ -44,10 +44,10 @@ from __future__ import annotations
 import time
 
 import pytest
-
-from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 
 @pytest.fixture
@@ -361,8 +361,9 @@ async def test_sqlite_create_in_scope_discarded_after_rollback(tmp_path):
 # ---------------------------------------------------------------------------
 @pytest.mark.regression
 async def test_run_sql_in_scope_fails_closed_without_transaction_handle():
-    from dataflow.core.nodes import _run_sql_in_scope
     from kailash.sdk_exceptions import NodeExecutionError
+
+    from dataflow.core.nodes import _run_sql_in_scope
 
     class _ScopeWithoutTransaction:
         """A stand-in for a corrupt/unexpected active_transaction object."""
@@ -416,25 +417,17 @@ async def test_execute_many_async_borrowed_transaction_rollback_discards(pg_suit
 
 
 # ---------------------------------------------------------------------------
-# AC9 — DEFERRED CONTRACT (xfail-strict): bulk write nodes are NOT yet
-#        transaction-aware. A BulkCreate inside a rolled-back scope currently
-#        auto-commits and survives. When #1585 makes bulk scope-aware this test
-#        XPASSes and the marker MUST be removed same-shard (rules/testing.md
-#        § xfail-strict). Tracked by #1585.
+# AC9 — bulk scope-awareness (CLOSED by #1585): a BulkCreate inside a
+#        rolled-back TransactionScope is discarded. This was the xfail-strict
+#        deferral pin for #1585; the fix (thread scope.transaction through the
+#        bulk dispatch → features/bulk.py) landed, so the marker is removed here
+#        same-shard (rules/testing.md § xfail-strict). Full bulk coverage
+#        (update/delete/upsert, SQLite, standalone nodes) lives in
+#        test_issue_1585_bulk_transaction_awareness.py.
 # ---------------------------------------------------------------------------
 @pytest.mark.regression
 @pytest.mark.integration
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Deferred: bulk CRUD nodes bypass the transaction scope (bulk.py / "
-        "bulk_create_pool.py / bulk_upsert.py run auto-commit and do not join "
-        "active_transaction). A BulkCreate inside a rolled-back TransactionScope "
-        "auto-commits and survives, so count is 2 (not 0). XPASSes when #1585 "
-        "makes bulk scope-aware; remove marker same-shard. Tracked by #1585."
-    ),
-)
-async def test_bulk_create_in_scope_discarded_after_rollback_xfail(pg_suite):
+async def test_bulk_create_in_scope_discarded_after_rollback(pg_suite):
     url = pg_suite.config.url
     await _drop_table(url, "issue1581_bulk_products")
 

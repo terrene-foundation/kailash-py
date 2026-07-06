@@ -58,6 +58,42 @@ from .exceptions import is_conflict_target_error as _is_conflict_target_error
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
+def _resolve_scope_transaction(node: Any) -> Optional[Any]:
+    """Return the active transaction-scope handle for a generated node, or ``None``.
+
+    ``TransactionScopeNode`` stores an ``_AdapterTransactionScope`` under the
+    workflow-context key ``active_transaction`` (the runtime injects the SAME
+    ``_workflow_context`` dict onto every node in the workflow). This helper
+    reads that scope and returns ``scope.transaction`` — the raw adapter txn
+    handle ``(conn, tx)`` — so the caller can thread it into
+    ``async_run(transaction=...)`` / ``bulk_*(transaction=...)``. Because the
+    handle carries its OWN connection, the borrow branch in
+    ``AsyncSQLDatabaseNode`` runs the statement ON the scope's connection
+    regardless of which node/adapter issues it — the mechanism that makes both
+    single-record CRUD (#1581) and bulk writes (#1585) join the scope.
+
+    Fail-closed (#1581/#1585): an active scope that exposes no ``.transaction``
+    handle raises ``NodeExecutionError`` rather than letting the write
+    auto-commit and escape the scope. Returns ``None`` when no scope is active
+    (``db.express`` calls, or a workflow with no transaction node) so the caller
+    preserves the prior auto-commit behavior byte-for-byte.
+    """
+    scope = node.get_workflow_context("active_transaction")
+    if scope is None:
+        return None
+    txn = getattr(scope, "transaction", None)
+    if txn is None:
+        from kailash.sdk_exceptions import NodeExecutionError
+
+        raise NodeExecutionError(
+            "active_transaction present in workflow context but exposes no "
+            f"'.transaction' handle (got {type(scope).__name__}); refusing to "
+            "run a write auto-commit and escape the transaction scope "
+            "(#1581/#1585). The scope must be an _AdapterTransactionScope."
+        )
+    return txn
+
+
 async def _run_sql_in_scope(node: Any, sql_node: Any, **kwargs: Any) -> Dict[str, Any]:
     """Run an ``AsyncSQLDatabaseNode`` call, joining an active transaction scope.
 
@@ -66,40 +102,20 @@ async def _run_sql_in_scope(node: Any, sql_node: Any, **kwargs: Any) -> Dict[str
     autocommit), so a CRUD write inside a ``TransactionScopeNode`` workflow
     committed independently and survived a later rollback.
 
-    ``TransactionScopeNode`` stores an ``_AdapterTransactionScope`` under the
-    workflow-context key ``active_transaction`` (the runtime injects the SAME
-    ``_workflow_context`` dict onto every node in the workflow). When a scope is
-    present, this helper passes ``scope.transaction`` — the raw adapter txn
-    handle — into ``async_run`` so the statement runs ON the scope's connection.
-    The scope's ``TransactionCommitNode`` / ``TransactionRollbackNode`` then
-    governs the CRUD write. Reads (LIST/READ/COUNT) join too, giving
-    read-your-writes inside the scope.
+    When a scope is present, this helper passes ``scope.transaction`` — the raw
+    adapter txn handle — into ``async_run`` so the statement runs ON the scope's
+    connection. The scope's ``TransactionCommitNode`` / ``TransactionRollbackNode``
+    then governs the CRUD write. Reads (LIST/READ/COUNT) join too, giving
+    read-your-writes inside the scope. Scope resolution + the fail-closed guard
+    live in :func:`_resolve_scope_transaction` (shared with the #1585 bulk path).
 
-    When no scope is active (``db.express`` calls, or a workflow with no
-    transaction node) the call is byte-identical to the prior direct
-    ``sql_node.async_run(**kwargs)`` — auto-commit behavior is preserved.
-
-    An explicit ``transaction`` already present in ``kwargs`` is never
-    overridden.
+    When no scope is active the call is byte-identical to the prior direct
+    ``sql_node.async_run(**kwargs)`` — auto-commit behavior is preserved. An
+    explicit ``transaction`` already present in ``kwargs`` is never overridden.
     """
     if "transaction" not in kwargs:
-        scope = node.get_workflow_context("active_transaction")
-        if scope is not None:
-            # Fail closed: an active scope with no usable transaction handle must
-            # NOT silently auto-commit (that is the exact #1581 escape). The only
-            # producer of ``active_transaction`` is TransactionScopeNode, which
-            # stores an _AdapterTransactionScope exposing ``.transaction`` — so a
-            # missing handle means a contract violation, not a benign no-op.
-            txn = getattr(scope, "transaction", None)
-            if txn is None:
-                from kailash.sdk_exceptions import NodeExecutionError
-
-                raise NodeExecutionError(
-                    "active_transaction present in workflow context but exposes no "
-                    f"'.transaction' handle (got {type(scope).__name__}); refusing to "
-                    "run a CRUD write auto-commit and escape the transaction scope "
-                    "(#1581). The scope must be an _AdapterTransactionScope."
-                )
+        txn = _resolve_scope_transaction(node)
+        if txn is not None:
             kwargs["transaction"] = txn
             import logging
 
@@ -4134,6 +4150,14 @@ class NodeGenerator:
                     data = validated_inputs.get("data", [])
                     batch_size = validated_inputs.get("batch_size", 1000)
 
+                    # #1585: resolve the active transaction scope ONCE for every
+                    # bulk op so bulk writes join a TransactionScopeNode and are
+                    # governed by its commit/rollback (parity with single-record
+                    # CRUD's _run_sql_in_scope). Fail-closed if a scope is present
+                    # but exposes no `.transaction` handle. ``None`` when no scope
+                    # is active → bulk_*() preserves prior auto-commit behavior.
+                    scope_txn = _resolve_scope_transaction(self)
+
                     if operation == "bulk_create" and (data or "data" in kwargs_fixed):
                         # Use DataFlow's bulk create operations
                         try:
@@ -4141,6 +4165,7 @@ class NodeGenerator:
                                 model_name=self.model_name,
                                 data=data,
                                 batch_size=batch_size,
+                                transaction=scope_txn,  # #1585: join active scope
                                 **{
                                     k: v
                                     for k, v in kwargs_fixed.items()
@@ -4262,6 +4287,7 @@ class NodeGenerator:
                                 filter_criteria=filter_criteria,
                                 update_values=update_values,
                                 batch_size=batch_size,
+                                transaction=scope_txn,  # #1585: join active scope
                                 **{
                                     k: v
                                     for k, v in kwargs.items()
@@ -4374,6 +4400,7 @@ class NodeGenerator:
                                 data=data,
                                 filter_criteria=filter_criteria,
                                 batch_size=batch_size,
+                                transaction=scope_txn,  # #1585: join active scope
                                 **{
                                     k: v
                                     for k, v in kwargs_fixed.items()
@@ -4464,6 +4491,7 @@ class NodeGenerator:
                                 conflict_resolution=conflict_resolution,
                                 conflict_on=conflict_on,
                                 batch_size=batch_size,
+                                transaction=scope_txn,  # #1585: join active scope
                                 **{
                                     k: v
                                     for k, v in kwargs_fixed.items()

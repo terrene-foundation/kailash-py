@@ -337,9 +337,17 @@ class BulkOperations:
         model_name: str,
         data: List[Dict[str, Any]],
         batch_size: int = 1000,
+        transaction: Optional[Any] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Perform bulk create operation."""
+        """Perform bulk create operation.
+
+        #1585: when ``transaction`` is a borrowed adapter txn handle ``(conn, tx)``
+        (threaded from a generated bulk node inside a ``TransactionScopeNode``),
+        every batch INSERT runs ON that transaction's connection instead of
+        auto-committing on its own — so a bulk write inside a rolled-back scope
+        is discarded. ``None`` (``db.express``/no-scope) preserves auto-commit.
+        """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -487,6 +495,7 @@ class BulkOperations:
                     fetch_mode="all",
                     validate_queries=False,
                     transaction_mode="auto",
+                    transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
                 logger.warning("bulk.bulk_create_sql_result", extra={"result": result})
@@ -551,9 +560,15 @@ class BulkOperations:
         filter_criteria: Optional[Dict[str, Any]] = None,
         update_values: Optional[Dict[str, Any]] = None,
         batch_size: int = 1000,
+        transaction: Optional[Any] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Perform bulk update operation."""
+        """Perform bulk update operation.
+
+        #1585: a borrowed ``transaction`` handle makes every UPDATE run ON the
+        scope's connection (joins a ``TransactionScopeNode``); ``None`` preserves
+        auto-commit.
+        """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -706,6 +721,7 @@ class BulkOperations:
                     fetch_mode="all",
                     validate_queries=False,
                     transaction_mode="auto",
+                    transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
                 logger.warning("bulk.bulk_update_sql_result", extra={"result": result})
@@ -898,6 +914,7 @@ class BulkOperations:
                             fetch_mode="all",
                             validate_queries=False,
                             transaction_mode="auto",
+                            transaction=transaction,  # #1585: join active scope
                         )
 
                         # Extract rows_affected
@@ -960,9 +977,15 @@ class BulkOperations:
         data: Optional[List[Dict[str, Any]]] = None,
         filter_criteria: Optional[Dict[str, Any]] = None,
         batch_size: int = 1000,
+        transaction: Optional[Any] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Perform bulk delete operation."""
+        """Perform bulk delete operation.
+
+        #1585: a borrowed ``transaction`` handle makes the DELETE (and its
+        pre-delete existence SELECT) run ON the scope's connection (joins a
+        ``TransactionScopeNode``); ``None`` preserves auto-commit.
+        """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -1068,6 +1091,7 @@ class BulkOperations:
                     fetch_mode="all",
                     validate_queries=False,
                     transaction_mode="auto",
+                    transaction=transaction,  # #1585: read-your-writes inside scope
                 )
                 logger.warning(
                     "bulk.bulk_delete_pre_delete_count_check",
@@ -1085,6 +1109,7 @@ class BulkOperations:
                     fetch_mode="all",
                     validate_queries=False,
                     transaction_mode="auto",
+                    transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
                 logger.warning("bulk.bulk_delete_sql_result", extra={"result": result})
@@ -1154,9 +1179,14 @@ class BulkOperations:
         conflict_resolution: str = "update",
         batch_size: int = 1000,
         conflict_on: Optional[List[str]] = None,
+        transaction: Optional[Any] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Perform bulk upsert (insert or update) operation.
+
+        #1585: a borrowed ``transaction`` handle makes every UPSERT batch run ON
+        the scope's connection (joins a ``TransactionScopeNode``); ``None``
+        preserves auto-commit.
 
         Args:
             model_name: Name of the model
@@ -1423,7 +1453,11 @@ class BulkOperations:
                     "ignore",
                 ):
                     preexisting = await self._count_existing_conflicts(
-                        sql_node, table_name, conflict_columns, batch
+                        sql_node,
+                        table_name,
+                        conflict_columns,
+                        batch,
+                        transaction=transaction,  # #1585: read-your-writes in scope
                     )
 
                 try:
@@ -1433,6 +1467,7 @@ class BulkOperations:
                         fetch_mode="all",
                         validate_queries=False,
                         transaction_mode="auto",
+                        transaction=transaction,  # #1585: join active scope
                     )
                 except Exception as exec_err:
                     # Issue #1519: a conflict target that is not a PK/UNIQUE key
@@ -1708,6 +1743,7 @@ class BulkOperations:
         table_name: str,
         conflict_columns: List[str],
         batch: List[Dict[str, Any]],
+        transaction: Optional[Any] = None,
     ) -> int:
         """Count rows already present matching the batch's conflict-target keys.
 
@@ -1747,6 +1783,7 @@ class BulkOperations:
             fetch_mode="all",
             validate_queries=False,
             transaction_mode="auto",
+            transaction=transaction,  # #1585: count on the scope's connection
         )
         rows = []
         if result and "result" in result:

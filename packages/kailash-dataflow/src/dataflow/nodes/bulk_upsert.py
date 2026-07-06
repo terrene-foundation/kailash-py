@@ -150,13 +150,39 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute bulk upsert operation asynchronously with connection pool support."""
+        # #1585: if this node runs inside a TransactionScopeNode, the upsert MUST
+        # join the scope's connection so a rollback discards it. The scope's
+        # asyncpg connection is bound to the runtime's event loop, but
+        # _execute_with_connection resolves the coroutine via async_safe_run(),
+        # which runs it on a SEPARATE loop/thread — a borrowed connection cannot
+        # cross that boundary. So when a scope is active, await _perform_bulk_upsert
+        # DIRECTLY on the runtime loop (where the borrowed connection lives) and
+        # thread the borrowed transaction through to the fresh execution node.
+        # Fail-closed if the scope exposes no `.transaction` handle.
+        from ..core.nodes import _resolve_scope_transaction
+
+        scope_txn = _resolve_scope_transaction(self)
+        if scope_txn is not None:
+            return await self._perform_bulk_upsert(
+                _scope_transaction=scope_txn, **kwargs
+            )
+
+        # No scope: preserve the prior sync/async_safe_run execution path.
         # _execute_with_connection is synchronous: when operation_func is a
         # coroutine function it internally resolves via async_safe_run() and
         # returns the already-resolved dict result. The value is NOT awaitable.
         return self._execute_with_connection(self._perform_bulk_upsert, **kwargs)
 
-    async def _perform_bulk_upsert(self, **kwargs) -> dict[str, Any]:
-        """Perform the actual bulk upsert operation."""
+    async def _perform_bulk_upsert(
+        self, _scope_transaction: Optional[Any] = None, **kwargs
+    ) -> dict[str, Any]:
+        """Perform the actual bulk upsert operation.
+
+        #1585: ``_scope_transaction`` is a borrowed adapter txn handle from an
+        active ``TransactionScopeNode`` (threaded from ``async_run`` when a scope
+        is present). It is forwarded to ``_execute_real_bulk_upsert`` →
+        ``_execute_query`` so every UPSERT runs ON the scope's connection.
+        """
         import time
 
         start_time = time.time()
@@ -187,6 +213,27 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     f"Data validation failed: {validation_result['errors']}"
                 )
 
+            # #1585 fail-closed (symmetric with BulkCreatePoolNode): a standalone
+            # upsert inside a TransactionScopeNode with no connection_string cannot
+            # join the scope. Falling through to the dry-run-shaped else branch
+            # below would report fabricated success (rows_affected=len(data)) while
+            # writing nothing AND discarding the borrowed handle — the caller would
+            # believe the upsert persisted inside the scope. Refuse rather than
+            # silently no-op (the _execute_query guard fires too late; the else
+            # branch short-circuits before any query runs).
+            if (
+                _scope_transaction is not None
+                and not self.connection_string
+                and not dry_run
+            ):
+                raise NodeExecutionError(
+                    "DataFlowBulkUpsertNode is inside a TransactionScopeNode but "
+                    "has no connection_string to join the scope's connection "
+                    "(#1585). Provide connection_string, or use the generated "
+                    "'<Model>BulkUpsertNode' / db.express.bulk_upsert which are "
+                    "scope-aware."
+                )
+
             # Execute the bulk upsert operation
             if self.connection_string and not dry_run:
                 # Remove parameters that are passed explicitly to avoid duplicate argument error
@@ -208,6 +255,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     return_records,
                     merge_strategy,
                     conflict_on,
+                    _scope_transaction=_scope_transaction,  # #1585: join active scope
                     **kwargs_copy,
                 )
             else:
@@ -284,11 +332,20 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
             return result
 
-        except (ValueError, NodeValidationError, BulkUpsertConflictTargetError):
+        except (
+            ValueError,
+            NodeValidationError,
+            NodeExecutionError,
+            BulkUpsertConflictTargetError,
+        ):
             # Issue #1519: a conflict-target error is a caller error, not a
             # transient DB failure — surface it as a typed raise (like ValueError
             # / NodeValidationError) instead of flattening it into a
             # {"success": False} dict a caller might treat as a soft outcome.
+            # #1585: NodeExecutionError (the fail-closed scope guard above) is
+            # likewise a caller/config error and MUST propagate as a raise, not be
+            # flattened — a refused scope-join must be loud, matching the sibling
+            # BulkCreatePoolNode's fail-closed raise.
             raise
         except Exception as e:
             # Issue #1552 (FIX 6 sweep): DataFlowBulkUpsertNode runs real upserts;
@@ -325,9 +382,15 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         return_records: bool,
         merge_strategy: str,
         conflict_on: List[str],
+        _scope_transaction: Optional[Any] = None,
         **kwargs,
     ) -> tuple[int, int, int, List[Dict[str, Any]], int]:
-        """Execute real bulk upsert using database connection."""
+        """Execute real bulk upsert using database connection.
+
+        #1585: ``_scope_transaction`` (a borrowed adapter txn handle) is forwarded
+        to every ``_execute_query`` call so the UPSERT runs ON the scope's
+        connection and joins an active ``TransactionScopeNode``.
+        """
         try:
             # Import here to avoid circular imports
             from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
@@ -408,9 +471,17 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                     # `// 2`). The batch is already deduped on conflict_on, so
                     # each matching pre-existing key is exactly one UPDATE.
                     preexisting = await self._count_existing_conflicts(
-                        batch, conflict_on, **kwargs
+                        batch,
+                        conflict_on,
+                        transaction=_scope_transaction,  # #1585: count on scope conn
+                        **kwargs,
                     )
-                    result = await self._execute_query(query, params=params, **kwargs)
+                    result = await self._execute_query(
+                        query,
+                        params=params,
+                        transaction=_scope_transaction,  # #1585: join active scope
+                        **kwargs,
+                    )
 
                     # Process result to count upserts and get records
                     batch_rows, batch_inserted, batch_updated, batch_records = (
@@ -824,9 +895,14 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         self,
         query: str,
         params: Optional[List[Any]] = None,
+        transaction: Optional[Any] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Execute parameterized SQL query (issue #492).
+
+        #1585: ``transaction`` is a borrowed adapter txn handle ``(conn, tx)`` from
+        an active ``TransactionScopeNode``. When present the fresh execution node
+        runs ON that connection (joins the scope); ``None`` = auto-commit.
 
         ``params`` is a flat positional list bound by the driver and
         forwarded through ``AsyncSQLDatabaseNode``.
@@ -863,7 +939,9 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         # so its connection does not leak a ResourceWarning on GC. The result dict
         # is fully materialized by async_run, so cleanup after is safe.
         try:
-            return await db_node.async_run(query=query, params=params)
+            return await db_node.async_run(
+                query=query, params=params, transaction=transaction
+            )
         finally:
             await db_node.cleanup()
 
