@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [2.13.22] — 2026-07-06 — Bulk CRUD nodes are transaction-aware (#1585)
+
+### Fixed
+
+- **Bulk CRUD nodes now participate in an enclosing `TransactionScopeNode` (#1585).** #1581 made single-record CRUD nodes transaction-aware but left the bulk write surface (`BulkCreate`/`BulkUpdate`/`BulkDelete`/`BulkUpsert`) running auto-commit on its own connection — so a bulk write inside a `TransactionScopeNode` committed independently and **survived a later `TransactionRollbackNode`** (the same silent data-integrity violation as #1581, at a larger blast radius since bulk ops move more rows). The fix threads the scope's borrowed transaction handle through the bulk path so bulk writes run ON the scope's connection and are discarded on rollback:
+  - **Generated `<Model>Bulk*Node` (Path A):** a shared `_resolve_scope_transaction(node)` helper (extracted from the #1581 `_run_sql_in_scope`, same fail-closed guard) resolves the active scope at the four bulk dispatch sites in `core/nodes.py`; each `bulk_*()` in `features/bulk.py` accepts a `transaction=` handle and threads it into every `AsyncSQLDatabaseNode.async_run(transaction=...)` site (all four verbs, the bulk-delete pre-count SELECT, and the SQLite upsert insert/update-breakdown COUNT) — routing to the #1581 borrow-don't-own branch (requires core `kailash>=2.45.5`). When no scope is active the path is byte-identical to the prior auto-commit behavior.
+  - **Standalone `DataFlowBulkUpsertNode` / `BulkCreatePoolNode` (Path B):** both resolve the scope in their execution path and thread the borrowed handle to their fresh execution node. `DataFlowBulkUpsertNode.async_run` normally resolves through `async_safe_run` (a separate event loop where a borrowed asyncpg connection cannot be used), so when a scope is active it bypasses that boundary and awaits directly on the runtime loop. `BulkCreatePoolNode` forces its direct borrow path when a scope is active (its own connection pool cannot join the scope).
+  - **Fail-closed:** an active scope exposing no `.transaction` handle raises `NodeExecutionError` (shared helper); and a standalone bulk node inside a scope with no `connection_string` to join the scope raises rather than returning a fabricated-success simulation stub — symmetric across `BulkCreatePoolNode` and `DataFlowBulkUpsertNode`.
+- Removes the `xfail(strict=True)` deferral pin `test_bulk_create_in_scope_discarded_after_rollback` in the #1581 regression suite (it now passes as a real test).
+
+### Changed
+
+- **`DataFlowBulkUpsertNode` now raises `NodeExecutionError` on a batch/DB failure instead of returning `{"success": False, ...}` (#1585).** `NodeExecutionError` was added to the typed-reraise set in `_perform_bulk_upsert` so the new fail-closed scope guard propagates loudly (a scoped bulk failure must fail the node so the enclosing scope rolls back, not return a soft outcome the workflow might commit over). This aligns the standalone upsert node's hard-error contract with its sibling `BulkCreatePoolNode`, which already raises on DB errors. The delegation/express path (`db.bulk.bulk_upsert` → `features/bulk.py`) is unaffected and continues to return the per-row outcome dict.
+
+### Tests
+
+- **#1585:** new regression suite `test_issue_1585_bulk_transaction_awareness.py` — 10 tests against live PostgreSQL + SQLite: commit-persists (bulk create), rollback-discards for all four bulk verbs, SQLite parity, both standalone nodes (exercising the `async_safe_run` bypass and the pool-bypass), and fail-closed guards for both standalone nodes (AC9/AC10). Rollback outcomes are asserted via a fresh asyncpg connection independent of any pool/cache/scope. Full #1585 + #1581 transaction-awareness suites: 19 passed.
+
 ## [2.13.21] — 2026-07-06 — Generated CRUD nodes are transaction-aware; Express cache adapter closed on teardown (#1581, #1587)
 
 ### Fixed

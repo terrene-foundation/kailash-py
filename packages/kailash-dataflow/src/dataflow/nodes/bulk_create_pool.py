@@ -149,7 +149,25 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
             # Track whether connection pool was actually used
             actually_used_pool = False
 
-            if use_pooled_connection and self.connection_pool_id:
+            # #1585: if this node runs inside a TransactionScopeNode, the write
+            # MUST join the scope's connection so a later rollback discards it.
+            # The pooled path uses an UNRELATED connection pool that cannot join
+            # the scope, so force the direct borrow path when a scope is active
+            # (the borrowed txn handle carries the scope's connection). Resolving
+            # here is loop-safe: async_run awaits _perform_bulk_create directly on
+            # the runtime's event loop (no async_safe_run boundary), so the
+            # borrowed asyncpg connection stays on its owning loop. Fail-closed if
+            # the scope exposes no `.transaction` handle.
+            from ..core.nodes import _resolve_scope_transaction
+
+            scope_txn = _resolve_scope_transaction(self)
+
+            if scope_txn is not None:
+                # Force direct execution ON the scope's connection (bypass pool).
+                results = await self._process_direct(
+                    data, tenant_id, return_ids, dry_run, transaction=scope_txn
+                )
+            elif use_pooled_connection and self.connection_pool_id:
                 # Try to process using connection pool
                 results, actually_used_pool = await self._process_with_pool_tracked(
                     data, tenant_id, return_ids, dry_run
@@ -339,6 +357,7 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
         tenant_id: Optional[str],
         return_ids: bool,
         dry_run: bool,
+        transaction: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Process bulk create without connection pool (fallback implementation).
 
@@ -347,6 +366,12 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
 
         Note: This implementation mirrors the standard BulkOperations.bulk_create()
         pattern but operates within the node architecture.
+
+        #1585: ``transaction`` is a borrowed adapter txn handle ``(conn, tx)`` from
+        an active ``TransactionScopeNode`` (resolved in ``_perform_bulk_create``).
+        When present, every batch INSERT runs ON that connection instead of
+        auto-committing, so the write joins the scope and is discarded on
+        rollback. ``None`` preserves the prior auto-commit behavior.
         """
         if dry_run:
             return {
@@ -365,6 +390,21 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
         # Check if connection_string is available
         connection_string = getattr(self, "connection_string", None)
         if not connection_string:
+            if transaction is not None:
+                # #1585 fail-closed: an active transaction scope with no
+                # connection_string cannot join the scope, and returning the
+                # simulation stub below would report fabricated success while
+                # writing nothing — the caller would believe the bulk write
+                # persisted inside the scope. Refuse rather than silently no-op.
+                from kailash.sdk_exceptions import NodeExecutionError
+
+                raise NodeExecutionError(
+                    "BulkCreatePoolNode is inside a TransactionScopeNode but has "
+                    "no connection_string to join the scope's connection (#1585). "
+                    "Provide connection_string, or use the generated "
+                    "'<Model>BulkCreateNode' / db.express.bulk_create which are "
+                    "scope-aware."
+                )
             # Fallback to simulation mode for backward compatibility
             # This allows tests to run without requiring a real database connection
             # In production, either connection_string or use_pooled_connection should be provided
@@ -532,7 +572,9 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                     transaction_mode="auto",
                 )
                 try:
-                    result = await sql_node.async_run()
+                    # #1585: transaction=None → auto-commit (unchanged); a
+                    # borrowed scope handle → run ON the scope's connection.
+                    result = await sql_node.async_run(transaction=transaction)
                 finally:
                     await sql_node.cleanup()
 
