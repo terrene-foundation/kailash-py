@@ -35,196 +35,89 @@ class TestDataFlowNodeTransactionAwareness:
     """Test DataFlow node transaction awareness."""
 
     def test_dataflow_node_uses_transaction_connection(self, test_suite):
-        """Test that DataFlow nodes use connection from transaction context."""
-        from dataflow import DataFlow
-        from dataflow.nodes.transaction_nodes import (
-            TransactionCommitNode,
-            TransactionScopeNode,
-        )
+        """Generated DataFlow CRUD nodes run on the scope's transaction connection.
 
-        # Create DataFlow instance with test database
-        # Using the test PostgreSQL instance on port 5434
+        #1581: this previously wrapped each CRUD node in a threaded
+        ``PythonCodeNode`` and hand-injected ``active_transaction``. That path
+        only "passed" because CRUD nodes IGNORED ``active_transaction`` and
+        auto-committed on their own thread-loop connection (the exact #1581 bug)
+        — and asyncpg connections are event-loop-bound, so a CRUD node that
+        genuinely joins the scope cannot run cross-loop. The corrected test
+        exercises the REAL path: CRUD nodes as direct workflow nodes on the
+        runtime loop, joining the scope's connection (read-your-writes) and
+        surviving the commit.
+        """
+        import time
+
+        from dataflow import DataFlow
+
         db = DataFlow(database_url=test_suite.config.url)
 
-        # Define a test model
         @db.model
         class TestUser:
             name: str
             email: str
             age: int = 18
 
-        # Ensure table exists - DataFlow should create it automatically
-        # but we'll use a simple check to ensure it's there
-        try:
-            # Try to query the table to ensure it exists
-            from kailash.runtime.local import LocalRuntime
+        db.create_tables()
+        email = f"tx_test_{int(time.time() * 1_000_000)}@example.com"
 
-            check_workflow = WorkflowBuilder()
-            check_workflow.add_node("TestUserListNode", "check", {"limit": 1})
-            runtime = LocalRuntime()
-            runtime.execute(
-                check_workflow.build(),
-                parameters={"workflow_context": {"dataflow_instance": db}},
-            )
-        except Exception:
-            # Table might not exist, that's okay - DataFlow will create it on first use
-            pass
-
-        # Create workflow
         workflow = WorkflowBuilder()
-
-        # Start transaction
         workflow.add_node(
             "TransactionScopeNode", "start_tx", {"isolation_level": "READ_COMMITTED"}
         )
-
-        # Use PythonCodeNode to create user within transaction
-        # This avoids the validation issue with dynamically generated nodes
         workflow.add_node(
-            "PythonCodeNode",
+            "TestUserCreateNode",
             "create_user",
-            {
-                "code": """
-# Get the DataFlow instance and transaction connection from context
-dataflow_instance = get_workflow_context('dataflow_instance')
-tx_connection = get_workflow_context('transaction_connection')
-
-# Import the generated node class
-TestUserCreateNode = dataflow_instance._nodes['TestUserCreateNode']
-
-# Create node instance and set workflow context
-create_node = TestUserCreateNode()
-create_node._workflow_context = {
-    'dataflow_instance': dataflow_instance,
-    'transaction_connection': tx_connection,
-    'active_transaction': get_workflow_context('active_transaction')
-}
-
-# Execute the create operation
-result = create_node.execute(
-    name="Transaction Test User",
-    email="tx_test@example.com",
-    age=25
-)
-"""
-            },
+            {"name": "Transaction Test User", "email": email, "age": 25},
         )
-
-        # List users within same transaction
+        # List within the SAME transaction — must see the uncommitted row
+        # (read-your-writes), proving the CRUD ran on the scope's connection.
         workflow.add_node(
-            "PythonCodeNode",
+            "TestUserListNode",
             "list_in_tx",
-            {
-                "code": """
-# Get context
-dataflow_instance = get_workflow_context('dataflow_instance')
-tx_connection = get_workflow_context('transaction_connection')
-
-# Use list node
-TestUserListNode = dataflow_instance._nodes['TestUserListNode']
-list_node = TestUserListNode()
-list_node._workflow_context = {
-    'dataflow_instance': dataflow_instance,
-    'transaction_connection': tx_connection,
-    'active_transaction': get_workflow_context('active_transaction')
-}
-
-# List users with the test email
-result = list_node.execute(
-    filter={"email": "tx_test@example.com"},
-    limit=10
-)
-"""
-            },
+            {"filter": {"email": email}, "limit": 10},
         )
-
-        # Commit transaction
         workflow.add_node("TransactionCommitNode", "commit_tx", {})
-
-        # List users after commit (without transaction)
-        workflow.add_node(
-            "PythonCodeNode",
-            "list_after_commit",
-            {
-                "code": """
-# Get DataFlow instance (no transaction context)
-dataflow_instance = get_workflow_context('dataflow_instance')
-
-# Use list node without transaction
-TestUserListNode = dataflow_instance._nodes['TestUserListNode']
-list_node = TestUserListNode()
-list_node._workflow_context = {
-    'dataflow_instance': dataflow_instance
-}
-
-# List users
-result = list_node.execute(
-    filter={"email": "tx_test@example.com"},
-    limit=10
-)
-"""
-            },
-        )
-
-        # Connect nodes
-        workflow.add_connection("start_tx", "result", "create_user", "input_data")
-        workflow.add_connection("create_user", "result", "list_in_tx", "input_data")
-        workflow.add_connection("list_in_tx", "result", "commit_tx", "input_data")
         workflow.add_connection(
-            "commit_tx", "result", "list_after_commit", "input_data"
+            "start_tx", "transaction_id", "create_user", "transaction_id"
         )
+        workflow.add_connection("create_user", "id", "list_in_tx", "previous_id")
+        workflow.add_connection("list_in_tx", "count", "commit_tx", "record_count")
 
-        # Execute with DataFlow instance in context
         runtime = LocalRuntime()
-        results, run_id = runtime.execute(
-            workflow.build(), parameters={"workflow_context": {"dataflow_instance": db}}
+        results, _ = runtime.execute(
+            workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
         )
 
-        # Verify transaction was used
-        create_result = results.get("create_user", {}).get("result", {})
-        list_in_tx_result = results.get("list_in_tx", {}).get("result", {})
+        create_result = results.get("create_user", {})
+        list_in_tx_result = results.get("list_in_tx", {})
         commit_result = results.get("commit_tx", {})
-        list_after_result = results.get("list_after_commit", {}).get("result", {})
 
-        # User should be created
+        # User created inside the transaction.
         assert "id" in create_result
         assert create_result.get("name") == "Transaction Test User"
 
-        # User should be visible within transaction (before commit)
-        assert list_in_tx_result.get("count", 0) >= 1
+        # Visible within the transaction BEFORE commit (read-your-writes) —
+        # proves the LIST joined the scope's connection.
+        assert list_in_tx_result.get("count", 0) == 1
         tx_users = list_in_tx_result.get("records", [])
-        assert any(u["email"] == "tx_test@example.com" for u in tx_users)
+        assert any(u["email"] == email for u in tx_users)
 
-        # Transaction should commit successfully
-        # The TransactionCommitNode returns mock results since we're in test mode
-        assert "status" in commit_result or "result" in commit_result
+        # Transaction committed.
+        assert commit_result.get("status") == "committed"
 
-        # User should still be visible after commit
-        assert list_after_result.get("count", 0) >= 1
-        after_users = list_after_result.get("records", [])
-        assert any(u["email"] == "tx_test@example.com" for u in after_users)
-
-        # Cleanup - delete test data
-        created_id = create_result.get("id")
-        if created_id:
-            workflow_cleanup = WorkflowBuilder()
-            workflow_cleanup.add_node(
-                "PythonCodeNode",
-                "cleanup",
-                {
-                    "code": f"""
-dataflow_instance = get_workflow_context('dataflow_instance')
-TestUserDeleteNode = dataflow_instance._nodes['TestUserDeleteNode']
-delete_node = TestUserDeleteNode()
-delete_node._workflow_context = {{'dataflow_instance': dataflow_instance}}
-result = delete_node.execute(id={created_id})
-"""
-                },
-            )
-            runtime.execute(
-                workflow_cleanup.build(),
-                parameters={"workflow_context": {"dataflow_instance": db}},
-            )
+        # Still visible after commit, on a separate (no-scope) read.
+        verify = WorkflowBuilder()
+        verify.add_node(
+            "TestUserListNode", "check", {"filter": {"email": email}, "limit": 10}
+        )
+        verify_results, _ = runtime.execute(
+            verify.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
+        assert verify_results.get("check", {}).get("count", 0) == 1
 
     def test_dataflow_node_without_transaction_context(self, test_suite):
         """Test DataFlow nodes work normally without transaction context."""

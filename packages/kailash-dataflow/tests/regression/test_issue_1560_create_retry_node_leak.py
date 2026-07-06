@@ -150,11 +150,19 @@ def test_retry_site_wraps_async_run_in_cleanup():
     runtime contract (``rules/testing.md`` Behavioral Regression)."""
     src = Path(__file__).resolve().parents[2] / "src/dataflow/core/nodes.py"
     text = src.read_text()
-    # Locate the $11 retry construction and assert a cleanup() follows within it.
+    # Locate the $11 retry block, then the throwaway (non-pooled) node it
+    # constructs. #1581 routes the in-scope retry through the POOLED node (the
+    # pool owns that connection's lifecycle, so it needs no explicit cleanup);
+    # only the no-scope path builds a fresh AsyncSQLDatabaseNode, and THAT is the
+    # node the #1560 leak-fix must clean up. Anchor on the fresh-node
+    # construction so a legitimate scope-branch insertion above it (as #1581 did)
+    # cannot silently slide the cleanup out of a fixed char window.
     anchor = text.index("PARAM $11 FIX: Detected parameter $11 issue")
-    window = text[anchor : anchor + 2600]
-    assert "await sql_node.cleanup()" in window, (
+    retry_region = text[anchor : anchor + 4000]
+    node_pos = retry_region.index("sql_node = AsyncSQLDatabaseNode(")
+    tail = retry_region[node_pos:]
+    assert "await sql_node.cleanup()" in tail, (
         "the #1560 retry node is no longer cleaned up — the throwaway "
         "AsyncSQLDatabaseNode leak has been reintroduced"
     )
-    assert "finally:" in window
+    assert "finally:" in tail

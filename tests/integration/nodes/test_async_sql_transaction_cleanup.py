@@ -271,22 +271,20 @@ class TestAsyncSQLTransactionCleanup:
 
     @pytest.mark.asyncio
     async def test_transaction_context_manager_pattern(self, postgres_adapter):
-        """Test using transaction context manager for automatic cleanup."""
-        # This test verifies the new PostgreSQLTransactionContext pattern
+        """Test using transaction context manager for automatic cleanup.
 
-        # Arrange
-        from kailash.nodes.data.async_sql import PostgreSQLTransactionContext
-
-        # Act - Use context manager
-        async with PostgreSQLTransactionContext(
-            postgres_adapter._pool
-        ) as transaction_ctx:
+        #1580 replaced the old ``PostgreSQLTransactionContext`` with the uniform
+        ``adapter.transaction()`` async-CM yielding an ``_AdapterTransactionScope``
+        (``.connection`` + ``.transaction`` + async ``.commit()`` / ``.rollback()``).
+        """
+        # Act - Use the uniform transaction() async context manager
+        async with postgres_adapter.transaction() as scope:
             await postgres_adapter.execute(
                 "INSERT INTO test_transaction_cleanup (value) VALUES ($1)",
                 params=["context_test"],
-                transaction=transaction_ctx,
+                transaction=scope.transaction,
             )
-            await transaction_ctx.commit()
+            await scope.commit()
 
         # Assert - Data should be in database
         result = await postgres_adapter.execute(
@@ -297,19 +295,14 @@ class TestAsyncSQLTransactionCleanup:
 
     @pytest.mark.asyncio
     async def test_transaction_context_auto_rollback_on_error(self, postgres_adapter):
-        """Test context manager auto-rollback on exception."""
-        # Arrange
-        from kailash.nodes.data.async_sql import PostgreSQLTransactionContext
-
-        # Act & Assert
+        """Test context manager auto-rollback on exception (#1580 contract)."""
+        # Act & Assert - the async CM rolls back when the body raises.
         with pytest.raises(ValueError):
-            async with PostgreSQLTransactionContext(
-                postgres_adapter._pool
-            ) as transaction_ctx:
+            async with postgres_adapter.transaction() as scope:
                 await postgres_adapter.execute(
                     "INSERT INTO test_transaction_cleanup (value) VALUES ($1)",
                     params=["auto_rollback_test"],
-                    transaction=transaction_ctx,
+                    transaction=scope.transaction,
                 )
                 raise ValueError("Simulated error")
 

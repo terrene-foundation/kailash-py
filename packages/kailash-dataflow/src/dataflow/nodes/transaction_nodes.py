@@ -16,16 +16,15 @@ import logging
 import uuid
 from typing import Any, Dict, Optional
 
-from kailash.nodes.base import NodeParameter
-from kailash.nodes.base_async import AsyncNode
-from kailash.sdk_exceptions import NodeExecutionError
-
 # Issue #1552: redact driver-error column VALUES (PG ``DETAIL: Key(col)=(value)``,
 # MySQL ``Duplicate entry 'value'``) before baking the raw exception text into a
 # user-facing NodeExecutionError message. A COMMIT of deferred constraints raises
 # a value-bearing driver error; the raw exception is preserved as ``__cause__``
 # (``from e``) for traceback diagnosability — only the message string is sanitized.
 from dataflow.core.exceptions import sanitize_db_error
+from kailash.nodes.base import NodeParameter
+from kailash.nodes.base_async import AsyncNode
+from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +374,7 @@ class TransactionSavepointNode(AsyncNode):
         # Validate savepoint name to prevent SQL injection
         import re
 
-        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$", savepoint_name):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", savepoint_name):
             raise NodeExecutionError(
                 f"Invalid savepoint name '{savepoint_name}': must be alphanumeric/underscores, "
                 "start with a letter or underscore, and be 1-63 characters"
@@ -455,7 +454,7 @@ class TransactionRollbackToSavepointNode(AsyncNode):
         # Validate savepoint name to prevent SQL injection
         import re
 
-        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$", savepoint_name):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", savepoint_name):
             raise NodeExecutionError(
                 f"Invalid savepoint name '{savepoint_name}': must be alphanumeric/underscores, "
                 "start with a letter or underscore, and be 1-63 characters"

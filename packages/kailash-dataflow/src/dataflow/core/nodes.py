@@ -58,6 +58,58 @@ from .exceptions import is_conflict_target_error as _is_conflict_target_error
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
+async def _run_sql_in_scope(node: Any, sql_node: Any, **kwargs: Any) -> Dict[str, Any]:
+    """Run an ``AsyncSQLDatabaseNode`` call, joining an active transaction scope.
+
+    Issue #1581: generated DataFlow CRUD nodes ran every statement on their own
+    cached ``AsyncSQLDatabaseNode`` in ``transaction_mode="auto"`` (per-statement
+    autocommit), so a CRUD write inside a ``TransactionScopeNode`` workflow
+    committed independently and survived a later rollback.
+
+    ``TransactionScopeNode`` stores an ``_AdapterTransactionScope`` under the
+    workflow-context key ``active_transaction`` (the runtime injects the SAME
+    ``_workflow_context`` dict onto every node in the workflow). When a scope is
+    present, this helper passes ``scope.transaction`` — the raw adapter txn
+    handle — into ``async_run`` so the statement runs ON the scope's connection.
+    The scope's ``TransactionCommitNode`` / ``TransactionRollbackNode`` then
+    governs the CRUD write. Reads (LIST/READ/COUNT) join too, giving
+    read-your-writes inside the scope.
+
+    When no scope is active (``db.express`` calls, or a workflow with no
+    transaction node) the call is byte-identical to the prior direct
+    ``sql_node.async_run(**kwargs)`` — auto-commit behavior is preserved.
+
+    An explicit ``transaction`` already present in ``kwargs`` is never
+    overridden.
+    """
+    if "transaction" not in kwargs:
+        scope = node.get_workflow_context("active_transaction")
+        if scope is not None:
+            # Fail closed: an active scope with no usable transaction handle must
+            # NOT silently auto-commit (that is the exact #1581 escape). The only
+            # producer of ``active_transaction`` is TransactionScopeNode, which
+            # stores an _AdapterTransactionScope exposing ``.transaction`` — so a
+            # missing handle means a contract violation, not a benign no-op.
+            txn = getattr(scope, "transaction", None)
+            if txn is None:
+                from kailash.sdk_exceptions import NodeExecutionError
+
+                raise NodeExecutionError(
+                    "active_transaction present in workflow context but exposes no "
+                    f"'.transaction' handle (got {type(scope).__name__}); refusing to "
+                    "run a CRUD write auto-commit and escape the transaction scope "
+                    "(#1581). The scope must be an _AdapterTransactionScope."
+                )
+            kwargs["transaction"] = txn
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "nodes.crud_joined_transaction_scope",
+                extra={"node": type(node).__name__},
+            )
+    return await sql_node.async_run(**kwargs)
+
+
 def _normalize_field_specs(fields: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """Normalize a model-fields dict into the canonical {"type": <type>, ...} shape.
 
@@ -1884,7 +1936,9 @@ class NodeGenerator:
                         )
 
                         # Execute the async node properly in async context
-                        result = await sql_node.async_run(
+                        result = await _run_sql_in_scope(
+                            self,
+                            sql_node,
                             query=query,
                             params=serialized_values,  # Use serialized values
                             fetch_mode=fetch_mode,
@@ -1924,7 +1978,9 @@ class NodeGenerator:
                                         f"SELECT * FROM {quoted_table} "
                                         f"WHERE {dialect.quote_identifier('id')} = ?"
                                     )
-                                    readback_result = await sql_node.async_run(
+                                    readback_result = await _run_sql_in_scope(
+                                        self,
+                                        sql_node,
                                         query=readback_query,
                                         params=[record_id],
                                         fetch_mode="one",
@@ -2119,32 +2175,54 @@ class NodeGenerator:
                                     # Add explicit type casting for parameter $11
                                     fixed_sql = query.replace("$11", "$11::integer")
 
-                                    # Import and retry with the fixed SQL
-                                    from kailash.nodes.data.async_sql import (
-                                        AsyncSQLDatabaseNode,
+                                    # #1581: inside a workflow transaction scope the
+                                    # retry MUST run on the POOLED node that joins the
+                                    # scope's connection. A fresh non-pooled node uses a
+                                    # different connection and would silently escape the
+                                    # transaction — the create would commit independently
+                                    # and survive a rollback (the exact bug #1581 fixes).
+                                    scope = self.get_workflow_context(
+                                        "active_transaction"
                                     )
-
-                                    sql_node = AsyncSQLDatabaseNode(
-                                        connection_string=connection_string,
-                                        database_type=database_type,
-                                    )
-                                    # Fresh (non-pooled) node — clean it up after the
-                                    # query so its connection does not leak a
-                                    # ResourceWarning on GC (issue #1560; same class as
-                                    # the 2.13.15 bulk_upsert._execute_query and
-                                    # BulkCreatePoolNode._process_direct fixes). The
-                                    # result dict is fully materialized by async_run,
-                                    # so cleanup after is safe.
-                                    try:
-                                        result = await sql_node.async_run(
+                                    if scope is not None:
+                                        pooled_node = self.dataflow_instance._get_or_create_async_sql_node(
+                                            database_type
+                                        )
+                                        result = await _run_sql_in_scope(
+                                            self,
+                                            pooled_node,
                                             query=fixed_sql,
                                             params=values,
                                             fetch_mode="one",  # RETURNING clause should return one record
                                             validate_queries=False,
-                                            transaction_mode="auto",  # Ensure auto-commit for create operations
                                         )
-                                    finally:
-                                        await sql_node.cleanup()
+                                    else:
+                                        # No scope: retry on a fresh (non-pooled) node.
+                                        from kailash.nodes.data.async_sql import (
+                                            AsyncSQLDatabaseNode,
+                                        )
+
+                                        sql_node = AsyncSQLDatabaseNode(
+                                            connection_string=connection_string,
+                                            database_type=database_type,
+                                        )
+                                        # Fresh node — clean it up after the query so its
+                                        # connection does not leak a ResourceWarning on GC
+                                        # (issue #1560; same class as the 2.13.15
+                                        # bulk_upsert._execute_query and
+                                        # BulkCreatePoolNode._process_direct fixes). The
+                                        # result dict is fully materialized by async_run,
+                                        # so cleanup after is safe.
+                                        try:
+                                            result = await sql_node.async_run(
+                                                query=fixed_sql,
+                                                params=values,
+                                                fetch_mode="one",  # RETURNING clause should return one record
+                                                validate_queries=False,
+                                                transaction_mode="auto",  # Ensure auto-commit for create operations
+                                            )
+                                        finally:
+                                            await sql_node.cleanup()
 
                                     if (
                                         result
@@ -2306,7 +2384,9 @@ class NodeGenerator:
                         query, read_params
                     )
 
-                    result = await sql_node.async_run(
+                    result = await _run_sql_in_scope(
+                        self,
+                        sql_node,
                         query=query,
                         params=read_params,
                         fetch_mode="one",
@@ -2726,7 +2806,9 @@ class NodeGenerator:
                         # Apply tenant isolation to the query
                         query, values = self._apply_tenant_isolation(query, values)
 
-                        result = await sql_node.async_run(
+                        result = await _run_sql_in_scope(
+                            self,
+                            sql_node,
                             query=query,
                             params=values,
                             fetch_mode="one",
@@ -2910,7 +2992,9 @@ class NodeGenerator:
                         query, delete_params
                     )
 
-                    result = await sql_node.async_run(
+                    result = await _run_sql_in_scope(
+                        self,
+                        sql_node,
                         query=query,
                         params=delete_params,
                         fetch_mode="one",
@@ -3177,7 +3261,9 @@ class NodeGenerator:
                         sql_node = self.dataflow_instance._get_or_create_async_sql_node(
                             db_type
                         )
-                        sql_result = await sql_node.async_run(
+                        sql_result = await _run_sql_in_scope(
+                            self,
+                            sql_node,
                             query=query,
                             params=params,
                             fetch_mode="all" if not count_only else "one",
@@ -3517,7 +3603,9 @@ class NodeGenerator:
                             check_query, check_params
                         )
 
-                        check_result = await sql_node.async_run(
+                        check_result = await _run_sql_in_scope(
+                            self,
+                            sql_node,
                             query=check_query,
                             params=check_params,
                             fetch_mode="one",
@@ -3610,7 +3698,9 @@ class NodeGenerator:
                                 "AND table_name = %s "
                                 "AND non_unique = 0"
                             )
-                            index_result = await mysql_precheck_node.async_run(
+                            index_result = await _run_sql_in_scope(
+                                self,
+                                mysql_precheck_node,
                                 query=index_query,
                                 params=[table_name],
                                 fetch_mode="all",
@@ -3722,7 +3812,9 @@ class NodeGenerator:
                     # For SQLite, sql_node was already created during pre-check
 
                     try:
-                        result = await sql_node.async_run(
+                        result = await _run_sql_in_scope(
+                            self,
+                            sql_node,
                             query=query,
                             params=params,
                             fetch_mode="one",
@@ -3958,7 +4050,9 @@ class NodeGenerator:
                     sql_node = self.dataflow_instance._get_or_create_async_sql_node(
                         db_type
                     )
-                    result = await sql_node.async_run(
+                    result = await _run_sql_in_scope(
+                        self,
+                        sql_node,
                         query=query,
                         params=params,
                         fetch_mode="one",
