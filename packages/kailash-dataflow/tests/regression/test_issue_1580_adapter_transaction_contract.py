@@ -38,9 +38,11 @@ import pytest
 
 from kailash.nodes.data.async_sql import (
     _AdapterTransactionContext,
+    AsyncSQLDatabaseNode,
     DatabaseAdapter,
     DatabaseConfig,
     DatabaseType,
+    FetchMode,
     MySQLAdapter,
     PostgreSQLAdapter,
     ProductionMySQLAdapter,
@@ -403,3 +405,248 @@ async def test_aexit_surfaces_commit_failure_on_clean_body():
     with pytest.raises(RuntimeError, match="cleanup commit failure"):
         async with _HarnessContext(_FailingScope()):
             pass
+
+
+# ---------------------------------------------------------------------------
+# Round 2 — begin-transaction acquire->start orphan window (redteam security-MEDIUM)
+# ---------------------------------------------------------------------------
+
+
+class _BeginBoomTransaction:
+    """A transaction object whose start() raises — boundary injection for the
+    begin_transaction failure path."""
+
+    async def start(self):
+        raise RuntimeError("driver begin boom")
+
+
+class _BeginBoomConnection:
+    """Stand-in pooled connection whose transaction().start() raises."""
+
+    def transaction(self, *args, **kwargs):
+        return _BeginBoomTransaction()
+
+
+class _BeginBoomPool:
+    """Minimal pool whose acquire() hands out a connection that fails to start a
+    transaction; release() records the returned connection. Boundary injection
+    for begin_transaction's acquire->start orphan window — no database needed."""
+
+    def __init__(self):
+        self.releases = []
+        self.handed = None
+
+    async def acquire(self, *args, **kwargs):
+        self.handed = _BeginBoomConnection()
+        return self.handed
+
+    async def release(self, conn, *args, **kwargs):
+        self.releases.append(conn)
+
+
+async def test_pg_begin_failure_releases_connection():
+    """Redteam security-MEDIUM (round 2): if the driver transaction start raises,
+    PostgreSQLAdapter.begin_transaction returns the acquired pooled connection to
+    the pool — otherwise a repeated BEGIN-failure workload orphans connections and
+    drains the bounded pool (the begin half of the acquire->teardown window that
+    commit_transaction / rollback_transaction guard on the other side)."""
+    config = DatabaseConfig(
+        type=DatabaseType.POSTGRESQL,
+        connection_string="postgresql://unused:unused@localhost:5432/unused",
+    )
+    adapter = ProductionPostgreSQLAdapter(config)
+    pool = _BeginBoomPool()
+    adapter._pool = pool
+    with pytest.raises(RuntimeError, match="driver begin boom"):
+        await adapter.begin_transaction()
+    # Released despite the begin failure — the connection is not orphaned.
+    assert pool.releases == [pool.handed]
+
+
+async def test_mysql_begin_failure_releases_connection():
+    """MySQL sibling of the begin-failure release guarantee. MySQL begins via
+    ``conn.begin()`` (no separate transaction object), so the stand-in connection
+    raises there."""
+
+    class _MySQLBeginBoomConn:
+        async def begin(self):
+            raise RuntimeError("driver begin boom")
+
+    class _MySQLBeginBoomPool(_BeginBoomPool):
+        async def acquire(self, *args, **kwargs):
+            self.handed = _MySQLBeginBoomConn()
+            return self.handed
+
+    config = DatabaseConfig(
+        type=DatabaseType.MYSQL,
+        connection_string="mysql://unused:unused@localhost:3306/unused",
+    )
+    adapter = ProductionMySQLAdapter(config)
+    pool = _MySQLBeginBoomPool()
+    adapter._pool = pool
+    with pytest.raises(RuntimeError, match="driver begin boom"):
+        await adapter.begin_transaction()
+    assert pool.releases == [pool.handed]
+
+
+# ---------------------------------------------------------------------------
+# Round 2 — auto-transaction caller invokes EXACTLY ONE terminal primitive
+# (redteam HIGH: a failed commit must NOT be followed by rollback_transaction,
+#  which would double-release the pooled connection / double-decrement depth)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingAdapter:
+    """Records begin/execute/commit/rollback calls so a test can assert the
+    auto-transaction caller invokes exactly ONE terminal primitive per
+    transaction. Boundary injection over the caller's control flow — NOT a
+    database mock (no I/O, deterministic)."""
+
+    def __init__(self, *, commit_raises: bool = False, execute_raises: bool = False):
+        self.calls: list[str] = []
+        self._commit_raises = commit_raises
+        self._execute_raises = execute_raises
+
+    async def begin_transaction(self):
+        self.calls.append("begin")
+        return ("conn", "tx")
+
+    async def execute(self, **kwargs):
+        self.calls.append("execute")
+        if self._execute_raises:
+            raise RuntimeError("driver execute boom")
+        return {"data": []}
+
+    async def execute_many(self, *args, **kwargs):
+        self.calls.append("execute_many")
+        if self._execute_raises:
+            raise RuntimeError("driver execute boom")
+
+    async def commit_transaction(self, transaction):
+        self.calls.append("commit")
+        if self._commit_raises:
+            raise RuntimeError("driver commit boom")
+
+    async def rollback_transaction(self, transaction):
+        self.calls.append("rollback")
+
+
+class _AutoTxNode:
+    """Minimal stand-in exposing only the two attributes the
+    _execute(_many)_with_transaction methods read from ``self`` — lets us drive
+    the REAL unbound method (its exact control flow) without constructing a full
+    AsyncSQLDatabaseNode."""
+
+    _active_transaction = None
+    _transaction_mode = "auto"
+
+
+async def test_auto_execute_commit_failure_invokes_no_rollback():
+    """Redteam HIGH: in auto mode a COMMIT failure must NOT be followed by
+    rollback_transaction. commit_transaction self-releases the pooled connection
+    (#1580), so a following rollback would double-release it / double-decrement
+    the SQLite depth. Assert exactly one terminal primitive (commit) runs and the
+    ORIGINAL commit error propagates."""
+    adapter = _RecordingAdapter(commit_raises=True)
+    with pytest.raises(RuntimeError, match="driver commit boom"):
+        await AsyncSQLDatabaseNode._execute_with_transaction(
+            _AutoTxNode(), adapter, "SELECT 1", None, FetchMode.ALL, None
+        )
+    assert adapter.calls == ["begin", "execute", "commit"]
+    assert "rollback" not in adapter.calls
+
+
+async def test_auto_execute_body_failure_invokes_rollback_not_commit():
+    """Complement: an EXECUTE (body) failure DOES roll back — and only rolls back,
+    never commits — preserving the #1070 cancellation-safety contract (rollback on
+    a cancelled/failed body resets _transaction_depth)."""
+    adapter = _RecordingAdapter(execute_raises=True)
+    with pytest.raises(RuntimeError, match="driver execute boom"):
+        await AsyncSQLDatabaseNode._execute_with_transaction(
+            _AutoTxNode(), adapter, "SELECT 1", None, FetchMode.ALL, None
+        )
+    assert adapter.calls == ["begin", "execute", "rollback"]
+    assert "commit" not in adapter.calls
+
+
+async def test_auto_execute_success_commits_only():
+    """The clean path commits exactly once and never rolls back."""
+    adapter = _RecordingAdapter()
+    result = await AsyncSQLDatabaseNode._execute_with_transaction(
+        _AutoTxNode(), adapter, "SELECT 1", None, FetchMode.ALL, None
+    )
+    assert result == {"data": []}
+    assert adapter.calls == ["begin", "execute", "commit"]
+
+
+async def test_auto_execute_many_commit_failure_invokes_no_rollback():
+    """execute_many sibling of the commit-failure single-terminal assertion."""
+    adapter = _RecordingAdapter(commit_raises=True)
+    with pytest.raises(RuntimeError, match="driver commit boom"):
+        await AsyncSQLDatabaseNode._execute_many_with_transaction(
+            _AutoTxNode(), adapter, "INSERT INTO t VALUES (?)", [(1,)]
+        )
+    assert adapter.calls == ["begin", "execute_many", "commit"]
+    assert "rollback" not in adapter.calls
+
+
+# ---------------------------------------------------------------------------
+# Round 2 — SQLite commit/rollback failure still resets _transaction_depth
+# (redteam HIGH SQLite half: a failed commit must not leave depth > 0 and poison
+#  the next begin_transaction — #1070 class)
+# ---------------------------------------------------------------------------
+
+
+class _SQLiteBoomConn:
+    """Stand-in aiosqlite connection whose commit()/rollback() raise — boundary
+    injection for the SQLite commit_transaction failure path. execute()/close()
+    are no-ops so the cleanup-rollback + close paths run without a database."""
+
+    def __init__(self):
+        self.calls: list[str] = []
+
+    async def commit(self):
+        self.calls.append("commit")
+        raise RuntimeError("sqlite commit boom")
+
+    async def rollback(self):
+        self.calls.append("rollback")
+
+    async def execute(self, *args, **kwargs):
+        self.calls.append("execute")
+
+    async def close(self):
+        self.calls.append("close")
+
+
+async def test_sqlite_commit_failure_decrements_depth_and_rolls_back(sqlite_adapter):
+    """Redteam HIGH (SQLite half): SQLiteAdapter.commit_transaction decrements
+    _transaction_depth in its finally even when db.commit() raises, and rolls the
+    transaction back so a shared connection is not left mid-transaction — the
+    ORIGINAL commit error propagates (the cleanup rollback does not mask it)."""
+    sqlite_adapter._transaction_depth = 1
+    boom = _SQLiteBoomConn()
+    with pytest.raises(RuntimeError, match="sqlite commit boom"):
+        # (connection, savepoint_name=None -> outer transaction, depth)
+        await sqlite_adapter.commit_transaction((boom, None, 1))
+    # Depth decremented despite the failure (finally ran) — next begin is not poisoned.
+    assert sqlite_adapter._transaction_depth == 0
+    # The failed commit triggered a rollback of the SQLite transaction.
+    assert "rollback" in boom.calls
+
+
+async def test_sqlite_rollback_failure_still_decrements_depth(sqlite_adapter):
+    """Sibling: rollback_transaction decrements depth in its finally even when the
+    driver rollback raises, so a failed rollback does not poison the next begin."""
+
+    class _RollbackBoomConn:
+        async def rollback(self):
+            raise RuntimeError("sqlite rollback boom")
+
+        async def close(self):
+            pass
+
+    sqlite_adapter._transaction_depth = 1
+    with pytest.raises(RuntimeError, match="sqlite rollback boom"):
+        await sqlite_adapter.rollback_transaction((_RollbackBoomConn(), None, 1))
+    assert sqlite_adapter._transaction_depth == 0

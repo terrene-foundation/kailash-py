@@ -1588,9 +1588,34 @@ class PostgreSQLAdapter(DatabaseAdapter):
     async def begin_transaction(self) -> Any:
         """Begin a transaction."""
         conn = await self._pool.acquire()
-        tx = conn.transaction()
-        await tx.start()
-        return (conn, tx)
+        started = False
+        try:
+            tx = conn.transaction()
+            await tx.start()
+            started = True
+            return (conn, tx)
+        finally:
+            if not started:
+                # Release the pooled connection if the transaction fails to
+                # start (or the start is cancelled) — otherwise a repeated
+                # BEGIN-failure workload orphans connections and drains the
+                # bounded pool. This is the begin half of the acquire->teardown
+                # window; commit_transaction / rollback_transaction guard the
+                # commit/rollback half (issue #1580 redteam).
+                await self._release_quietly(conn)
+
+    async def _release_quietly(self, conn: Any) -> None:
+        """Return ``conn`` to the pool, logging (not raising) a release error.
+
+        A release failure MUST NOT mask the in-flight driver error the caller
+        needs (e.g. the serialization failure it keys a retry on); asyncpg
+        already terminates + reclaims the pool slot on a release error, so
+        logging is the correct disposition (issue #1580 redteam LOW).
+        """
+        try:
+            await self._pool.release(conn)
+        except Exception:
+            logger.error("async_sql.postgresql.pool_release_failed", exc_info=True)
 
     async def commit_transaction(self, transaction: Any) -> None:
         """Commit a transaction."""
@@ -1602,8 +1627,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
             # driver commit raises (serialization failure, deferred-constraint
             # violation fired at COMMIT, mid-commit connection loss). Without the
             # finally the connection is orphaned and the pool drains under a
-            # repeated commit-failure workload (issue #1580 redteam MEDIUM).
-            await self._pool.release(conn)
+            # repeated commit-failure workload (issue #1580 redteam MEDIUM). The
+            # caller MUST NOT also roll back after a failed commit — this
+            # primitive self-releases (issue #1580 redteam HIGH).
+            await self._release_quietly(conn)
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
@@ -1612,7 +1639,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             await tx.rollback()
         finally:
             # Release even if the driver rollback raises (see commit_transaction).
-            await self._pool.release(conn)
+            await self._release_quietly(conn)
 
 
 class MySQLAdapter(DatabaseAdapter):
@@ -1865,8 +1892,29 @@ class MySQLAdapter(DatabaseAdapter):
     async def begin_transaction(self) -> Any:
         """Begin a transaction."""
         conn = await self._pool.acquire()
-        await conn.begin()
-        return conn
+        started = False
+        try:
+            await conn.begin()
+            started = True
+            return conn
+        finally:
+            if not started:
+                # Release if BEGIN fails/cancels — otherwise a repeated
+                # BEGIN-failure workload orphans connections and drains the
+                # bounded pool (see PostgreSQLAdapter.begin_transaction,
+                # issue #1580 redteam).
+                await self._release_quietly(conn)
+
+    async def _release_quietly(self, conn: Any) -> None:
+        """Return ``conn`` to the pool, logging (not raising) a release error.
+
+        A release failure MUST NOT mask the in-flight driver error the caller
+        needs (issue #1580 redteam LOW; see PostgreSQLAdapter._release_quietly).
+        """
+        try:
+            await self._pool.release(conn)
+        except Exception:
+            logger.error("async_sql.mysql.pool_release_failed", exc_info=True)
 
     async def commit_transaction(self, transaction: Any) -> None:
         """Commit a transaction."""
@@ -1876,7 +1924,9 @@ class MySQLAdapter(DatabaseAdapter):
             # Always return the connection to the bounded pool even if the driver
             # commit raises — otherwise the connection is orphaned and the pool
             # drains under repeated commit failures (issue #1580 redteam MEDIUM).
-            await self._pool.release(transaction)
+            # The caller MUST NOT also roll back after a failed commit — this
+            # primitive self-releases (issue #1580 redteam HIGH).
+            await self._release_quietly(transaction)
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
@@ -1884,7 +1934,7 @@ class MySQLAdapter(DatabaseAdapter):
             await transaction.rollback()
         finally:
             # Release even if the driver rollback raises (see commit_transaction).
-            await self._pool.release(transaction)
+            await self._release_quietly(transaction)
 
 
 class SQLiteAdapter(DatabaseAdapter):
@@ -2440,19 +2490,42 @@ class SQLiteAdapter(DatabaseAdapter):
         if isinstance(transaction, tuple):
             db, savepoint_name, depth = transaction
 
-            if savepoint_name:
-                # Nested transaction - release savepoint
-                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
-            else:
-                # Outer transaction - commit
-                await db.commit()
-
-            # Decrement transaction depth
-            self._transaction_depth -= 1
-
-            # Close connection if not memory database and depth is 0
-            if not self._is_memory_db and self._transaction_depth == 0:
-                await db.close()
+            try:
+                if savepoint_name:
+                    # Nested transaction - release savepoint
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                else:
+                    # Outer transaction - commit
+                    await db.commit()
+            except BaseException:
+                # Commit / RELEASE SAVEPOINT failed: roll the SQLite transaction
+                # back so a shared :memory: connection is not left mid-transaction
+                # (which would poison the next begin_transaction with "cannot
+                # start a transaction within a transaction"). The finally still
+                # performs the single depth-decrement + close, so the caller MUST
+                # NOT issue a separate rollback_transaction after a failed commit
+                # — that double-decrements _transaction_depth (issue #1070 class,
+                # #1580 redteam HIGH). Best-effort; the original commit error
+                # propagates via the bare raise.
+                try:
+                    if savepoint_name:
+                        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                    else:
+                        await db.rollback()
+                except BaseException:
+                    logger.error(
+                        "async_sql.sqlite.commit_cleanup_rollback_failed",
+                        exc_info=True,
+                    )
+                raise
+            finally:
+                # Decrement transaction depth exactly once (success OR failure)
+                # and close the connection (non-memory) when the outermost
+                # transaction ends — mirrors the PG/MySQL "always release" contract.
+                self._transaction_depth -= 1
+                if not self._is_memory_db and self._transaction_depth == 0:
+                    await db.close()
         else:
             # Old API - just commit (backward compatibility)
             await transaction.commit()
@@ -2475,20 +2548,22 @@ class SQLiteAdapter(DatabaseAdapter):
         if isinstance(transaction, tuple):
             db, savepoint_name, depth = transaction
 
-            if savepoint_name:
-                # Nested transaction - rollback to savepoint
-                await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
-                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
-            else:
-                # Outer transaction - rollback
-                await db.rollback()
-
-            # Decrement transaction depth
-            self._transaction_depth -= 1
-
-            # Close connection if not memory database and depth is 0
-            if not self._is_memory_db and self._transaction_depth == 0:
-                await db.close()
+            try:
+                if savepoint_name:
+                    # Nested transaction - rollback to savepoint
+                    await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                else:
+                    # Outer transaction - rollback
+                    await db.rollback()
+            finally:
+                # Decrement transaction depth exactly once and close (non-memory)
+                # even if the driver rollback raises — otherwise a failed rollback
+                # leaves _transaction_depth > 0 and poisons the next
+                # begin_transaction (issue #1070 class; mirrors commit_transaction).
+                self._transaction_depth -= 1
+                if not self._is_memory_db and self._transaction_depth == 0:
+                    await db.close()
         else:
             # Old API - just rollback (backward compatibility)
             await transaction.rollback()
@@ -5664,18 +5739,24 @@ class AsyncSQLDatabaseNode(AsyncNode):
             transaction = await adapter.begin_transaction()
             try:
                 await adapter.execute_many(query, params_list, transaction)
-                await adapter.commit_transaction(transaction)
-                return len(params_list)
             except BaseException:
                 # Issue #1070: BaseException (not Exception) so a cancelled
                 # coroutine (asyncio.CancelledError is BaseException, not
                 # Exception, on Py3.8+) ALSO runs rollback_transaction —
                 # which resets _transaction_depth. Without this, a
-                # cancellation between begin and commit skips the rollback,
+                # cancellation between begin and the execute skips the rollback,
                 # leaves depth > 0, and poisons the next begin_transaction()
                 # on the same (e.g. :memory: shared-connection) adapter.
                 await adapter.rollback_transaction(transaction)
                 raise
+            # Commit OUTSIDE the try/except: commit_transaction fully tears the
+            # transaction down on failure too (PG/MySQL release the pooled
+            # connection; SQLite rolls back + resets depth), so a failed commit
+            # MUST NOT be followed by rollback_transaction — that would
+            # double-release the pooled connection / double-decrement the SQLite
+            # depth (issue #1070 class, #1580 redteam HIGH).
+            await adapter.commit_transaction(transaction)
+            return len(params_list)
         else:
             # No transaction mode
             await adapter.execute_many(query, params_list)
@@ -5727,16 +5808,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     transaction=transaction,
                     parameter_types=parameter_types,
                 )
-                await adapter.commit_transaction(transaction)
-                return result
             except BaseException:
                 # Issue #1070: see _execute_many_with_transaction — catch
                 # BaseException so an asyncio.CancelledError between begin and
-                # commit still runs rollback_transaction (which resets
+                # the execute still runs rollback_transaction (which resets
                 # _transaction_depth) instead of leaking a poisoned state into
                 # the next begin_transaction() on the same adapter.
                 await adapter.rollback_transaction(transaction)
                 raise
+            # Commit OUTSIDE the try/except: commit_transaction self-cleans on
+            # failure (releases the pooled connection / resets SQLite depth), so
+            # a failed commit MUST NOT be followed by rollback_transaction —
+            # that double-releases / double-decrements depth (issue #1070 class,
+            # #1580 redteam HIGH). See _execute_many_with_transaction.
+            await adapter.commit_transaction(transaction)
+            return result
         else:
             # No transaction mode
             return await adapter.execute(
