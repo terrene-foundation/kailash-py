@@ -4494,11 +4494,15 @@ class DataFlow(DataFlowEventMixin):
             Dictionary containing PostgreSQL schema information
         """
 
-        try:
-            # Get PostgreSQL adapter for real introspection
-            from ..adapters.postgresql import PostgreSQLAdapter
+        # Issue #1575: create the adapter BEFORE the try so the ``finally``
+        # can always close its pool — including on a mid-discovery exception,
+        # where the asyncpg pool would otherwise leak (bound to a possibly
+        # transient loop that then closes -> "Event loop is closed" +
+        # "Unclosed connection" at GC, the #1572 leak class).
+        from ..adapters.postgresql import PostgreSQLAdapter
 
-            adapter = PostgreSQLAdapter(database_url)
+        adapter = PostgreSQLAdapter(database_url)
+        try:
             await adapter.create_connection_pool()
 
             schema = {}
@@ -4627,8 +4631,6 @@ class DataFlow(DataFlowEventMixin):
                     "indexes": indexes,
                 }
 
-            await adapter.close_connection_pool()
-
             # Add reverse has_many relationships
             self._add_reverse_relationships_real(schema)
 
@@ -4642,6 +4644,20 @@ class DataFlow(DataFlowEventMixin):
                 "engine.postgresql_schema_discovery_failed", extra={"error": str(e)}
             )
             raise
+        finally:
+            # Issue #1575: drain the adapter pool on EVERY exit path (success AND
+            # mid-discovery exception). Idempotent (close_connection_pool guards
+            # on self.connection_pool) and guarded so a close failure never masks
+            # the original error nor leaks a credential-bearing string — log the
+            # exception TYPE only (rules/observability.md 6.3 + the
+            # loop_pool_registry teardown discipline).
+            try:
+                await adapter.close_connection_pool()
+            except Exception as close_exc:  # noqa: BLE001 — teardown must not raise
+                logger.debug(
+                    "engine.postgresql_schema_discovery.pool_close_failed",
+                    extra={"error_type": type(close_exc).__name__},
+                )
 
     async def _inspect_sqlite_schema_real(self, database_url: str) -> Dict[str, Any]:
         """Inspect SQLite database schema using sqlite_master table.
@@ -4669,11 +4685,13 @@ class DataFlow(DataFlowEventMixin):
                 )
                 raise enhanced
 
-        try:
-            # Get SQLite adapter for real introspection
-            from ..adapters.sqlite import SQLiteAdapter
+        # Issue #1575: create the adapter BEFORE the try so the ``finally`` can
+        # always disconnect it — including on a mid-discovery exception, where
+        # the connection would otherwise leak on a possibly-transient loop.
+        from ..adapters.sqlite import SQLiteAdapter
 
-            adapter = SQLiteAdapter(database_url)
+        adapter = SQLiteAdapter(database_url)
+        try:
             await adapter.connect()
 
             schema = {}
@@ -4774,8 +4792,6 @@ class DataFlow(DataFlowEventMixin):
                     "indexes": indexes,
                 }
 
-            await adapter.disconnect()
-
             # Add reverse has_many relationships
             self._add_reverse_relationships_real(schema)
 
@@ -4789,6 +4805,17 @@ class DataFlow(DataFlowEventMixin):
                 "engine.sqlite_schema_discovery_failed", extra={"error": str(e)}
             )
             raise
+        finally:
+            # Issue #1575: disconnect on EVERY exit path. Guarded so a close
+            # failure never masks the original error; log the exception TYPE
+            # only (rules/observability.md 6.3).
+            try:
+                await adapter.disconnect()
+            except Exception as close_exc:  # noqa: BLE001 — teardown must not raise
+                logger.debug(
+                    "engine.sqlite_schema_discovery.pool_close_failed",
+                    extra={"error_type": type(close_exc).__name__},
+                )
 
     def _normalize_sqlite_type(self, sqlite_type: str) -> str:
         """Normalize SQLite data types to standard types."""
@@ -4915,8 +4942,12 @@ class DataFlow(DataFlowEventMixin):
                             "This prevents deadlocks with session-scoped pytest event loops. "
                             "See: DATAFLOW-SESSION-LOOP-DEADLOCK-001"
                         )
-                    # Loop reported as not running — safe to use asyncio.run()
-                    discovered_schema = asyncio.run(
+                    # Loop reported as not running — bridge via async_safe_run
+                    # (issue #1575): it runs the coroutine on a transient loop
+                    # stamped with BRIDGE_LOOP_ATTR, so an adapter pool created
+                    # during inspection is drained before the loop closes
+                    # (defense-in-depth atop the inspector's own try/finally).
+                    discovered_schema = async_safe_run(
                         self._inspect_database_schema_real()
                     )
                 except RuntimeError as e:
@@ -4924,8 +4955,8 @@ class DataFlow(DataFlowEventMixin):
                         # Re-raise our own error
                         raise
                     # asyncio.get_running_loop() raised → no event loop running
-                    logger.debug("No existing event loop, using asyncio.run()")
-                    discovered_schema = asyncio.run(
+                    logger.debug("No existing event loop, using async_safe_run()")
+                    discovered_schema = async_safe_run(
                         self._inspect_database_schema_real()
                     )
 
@@ -6872,20 +6903,18 @@ class DataFlow(DataFlowEventMixin):
                     f"Existing schema mode enabled. Validating compatibility for '{model_name}'..."
                 )
 
-                import asyncio
-
                 async def validate_schema():
                     return await self._validate_existing_schema_compatibility(
                         model_name, target_schema
                     )
 
-                try:
-                    loop = asyncio.get_event_loop()
-                    is_compatible = loop.run_until_complete(validate_schema())
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    is_compatible = loop.run_until_complete(validate_schema())
+                # Issue #1575: route through async_safe_run — the canonical
+                # sync->async bridge. It stamps the transient loop with
+                # BRIDGE_LOOP_ATTR (so any pool created during validation drains
+                # before close) AND closes the loop deterministically. The prior
+                # ``new_event_loop()`` fallback never closed its loop, leaking a
+                # loop resource on every existing-schema-mode validation.
+                is_compatible = async_safe_run(validate_schema())
 
                 if not is_compatible:
                     # Enhanced error with catalog-based solutions (DF-501)
@@ -7021,22 +7050,14 @@ class DataFlow(DataFlowEventMixin):
                     self._migration_system, "inspector"
                 ):
                     try:
-                        # Use asyncio to get current schema
-                        import asyncio
-
-                        try:
-                            loop = asyncio.get_event_loop()
-                            current_schema = loop.run_until_complete(
-                                self._migration_system.inspector.get_current_schema()
-                            )
-                        except RuntimeError:
-                            # Create new event loop if none exists
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            current_schema = loop.run_until_complete(
-                                self._migration_system.inspector.get_current_schema()
-                            )
-                            loop.close()
+                        # Issue #1575: route through async_safe_run — stamps the
+                        # transient loop with BRIDGE_LOOP_ATTR (so any pool the
+                        # inspector opens drains before close) and guarantees the
+                        # loop is closed. The prior ``get_event_loop()`` branch
+                        # never closed its loop.
+                        current_schema = async_safe_run(
+                            self._migration_system.inspector.get_current_schema()
+                        )
 
                         logger.debug(
                             f"Existing schema mode: preserving {len(current_schema)} existing tables (via fallback)"
@@ -10496,6 +10517,24 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._transactions_sync = None
 
+        # Issue #1575 — stop the SyncExpress BG event-loop thread BEFORE the
+        # pool/adapter teardown below. SyncExpress owns a persistent daemon-loop
+        # and the Express CRUD nodes it caches are bound to THAT loop; its
+        # close() drains those nodes ON the owning loop first, so the
+        # _async_sql_node_cache teardown (which runs on a transient loop via
+        # async_safe_run) cannot strand a connection on a dead loop. Lazy
+        # attribute — only present if a caller accessed `db.express_sync`.
+        if hasattr(self, "_express_sync") and self._express_sync is not None:
+            try:
+                self._express_sync.close()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_sync",
+                    extra={"error_type": type(e).__name__},
+                )
+            finally:
+                self._express_sync = None
+
         # Stop pool monitor
         if self._pool_monitor is not None:
             try:
@@ -10669,6 +10708,22 @@ class DataFlow(DataFlowEventMixin):
                 )
             finally:
                 self._transactions_sync = None
+
+        # Issue #1575 — stop the SyncExpress BG event-loop thread BEFORE the
+        # pool/adapter teardown. close() runs its drain on the SyncExpress
+        # OWNING loop (a different thread), so blocking here briefly on its
+        # bounded join does not touch this coroutine's loop. Lazy attribute —
+        # only present if a caller accessed `db.express_sync`.
+        if hasattr(self, "_express_sync") and self._express_sync is not None:
+            try:
+                self._express_sync.close()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_sync",
+                    extra={"error_type": type(e).__name__},
+                )
+            finally:
+                self._express_sync = None
 
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:

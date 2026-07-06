@@ -50,6 +50,7 @@ import logging
 import os
 import threading
 import time
+import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 from dataflow.cache.auto_detection import CacheBackend
@@ -2093,6 +2094,23 @@ class SyncExpress:
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
 
+        # Issue #1575 — explicit close path (mirrors SyncTransactionManager).
+        # `_closed` lets `__del__` distinguish "user forgot to close"
+        # (ResourceWarning) from "user closed correctly" (silent), and makes
+        # `close()` idempotent.
+        self._closed = False
+
+        # Issue #1575 (Round-3) — track in-flight futures so a concurrent
+        # `close()` can cancel them within bounded time instead of stranding the
+        # caller on a no-timeout `future.result()` when the loop stops mid-call.
+        self._pending: set = set()
+        self._pending_lock = threading.Lock()
+
+    def _discard_pending(self, future: Any) -> None:
+        """Done-callback: drop a settled future from the in-flight set."""
+        with self._pending_lock:
+            self._pending.discard(future)
+
     def _run_sync(self, coro):
         """Run an async coroutine synchronously on the persistent event loop.
 
@@ -2101,8 +2119,224 @@ class SyncExpress:
         critical for database drivers like aiosqlite that bind connections to
         the loop they were created on.
         """
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        # Issue #1575 (Round-3) — closed-guard BEFORE submit. If the owning loop
+        # was torn down (or is being torn down) by close(), the coroutine can
+        # never run. Close it (avoids the "coroutine was never awaited"
+        # RuntimeWarning) and raise a TYPED error, not the opaque
+        # `AttributeError: 'NoneType' object has no attribute
+        # 'call_soon_threadsafe'` that `run_coroutine_threadsafe(coro, None)`
+        # would raise (zero-tolerance.md Rule 3a). Mirrors SyncTransactionManager.
+        #
+        # Issue #1575 (Round-4) — serialize [closed-check + submit + track] under
+        # _pending_lock so it strictly orders against close()'s [flip _closed +
+        # snapshot _pending], which takes the SAME lock. Either this submits and
+        # tracks the future BEFORE close flips _closed (→ close's snapshot sees it
+        # and cancels it), or close flips _closed first (→ this raises). Neither
+        # branch leaves an untracked future submitted onto a stopping loop — the
+        # narrow submit-during-close hang window is closed.
+        #
+        # run_coroutine_threadsafe under the lock only SCHEDULES onto the loop; it
+        # does not re-enter _pending_lock. The done-callback and future.result()
+        # stay OUTSIDE the lock so a fast/cancelled future firing _discard_pending
+        # (which takes _pending_lock) cannot deadlock against a held lock, and the
+        # actual work is never serialized.
+        with self._pending_lock:
+            loop = self._loop
+            if self._closed or loop is None:
+                coro.close()
+                raise RuntimeError(
+                    "SyncExpress is closed — the DataFlow was closed via "
+                    "db.close()/await db.close_async(); construct a fresh DataFlow "
+                    "instance for further sync Express operations."
+                )
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            self._pending.add(future)
+        future.add_done_callback(self._discard_pending)
         return future.result()
+
+    # --- Lifecycle (issue #1575) ---
+
+    async def _drain_loop_resources(self) -> None:
+        """Disconnect express-loop-bound resources — runs ON the BG loop.
+
+        Submitted via ``run_coroutine_threadsafe`` by :meth:`close`, so every
+        ``await`` here closes a resource bound to THIS persistent loop while it
+        is still alive. The Express CRUD path caches ``AsyncSQLDatabaseNode``
+        instances keyed by ``(node, loop_id)`` on the OWNING DataFlow; the node
+        created for an Express call made through this sync surface is bound to
+        this background loop. ``DataFlow.close()`` otherwise drains that cache
+        via ``async_safe_run`` on a DIFFERENT (transient) loop, which cannot
+        close a pool bound to this one — leaking the connection to GC
+        (``RuntimeError: Event loop is closed`` / ``ResourceWarning: Unclosed
+        connection``). Draining here, on the owning loop, is the fix.
+
+        Best-effort by contract: guarded per resource, never raises, logs the
+        exception TYPE only — never ``str(exc)`` / a DSN / a pool key
+        (``rules/observability.md`` 6.3 + the loop_pool_registry discipline).
+        """
+        try:
+            loop_id = id(asyncio.get_running_loop())
+        except RuntimeError:  # pragma: no cover — always running here
+            return
+
+        # (1) Disconnect cached AsyncSQLDatabaseNode adapters bound to THIS loop,
+        #     then drop them from the owning cache so DataFlow.close() does not
+        #     re-await them on a transient loop. Nodes bound to a DIFFERENT loop
+        #     (or created loop-less, loop_id=None) that are NOT ours are left in
+        #     place for the owner to drain.
+        db = getattr(self._express, "_db", None)
+        node_cache = getattr(db, "_async_sql_node_cache", None)
+        if isinstance(node_cache, dict):
+            for db_type, entry in list(node_cache.items()):
+                try:
+                    node, cached_loop_id = entry
+                except (TypeError, ValueError):
+                    continue
+                if cached_loop_id is not None and cached_loop_id != loop_id:
+                    continue  # bound to another loop; not this surface's to drain
+                teardown = getattr(node, "cleanup", None) or getattr(
+                    node, "close", None
+                )
+                if callable(teardown):
+                    try:
+                        await teardown()
+                    except Exception as exc:  # noqa: BLE001 — teardown must not raise
+                        logger.debug(
+                            "express.sync.node_drain_failed",
+                            extra={"error_type": type(exc).__name__},
+                        )
+                node_cache.pop(db_type, None)
+
+        # (2) Close the Express cache backend if it holds loop-bound resources
+        #     (AsyncRedisCacheAdapter.close_async); InMemoryCache holds none.
+        cache = getattr(self._express, "_cache_manager", None)
+        closer = getattr(cache, "close_async", None) or getattr(cache, "close", None)
+        if callable(closer):
+            try:
+                result = closer()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as exc:  # noqa: BLE001 — teardown must not raise
+                logger.debug(
+                    "express.sync.cache_close_failed",
+                    extra={"error_type": type(exc).__name__},
+                )
+
+        # (3) Issue #1575 (Round-3): cancel every OTHER task still pending on
+        #     this loop. An in-flight `_run_sync` coroutine submitted before
+        #     `close()` runs as a task here; once the loop stops its
+        #     ``run_coroutine_threadsafe`` future would never settle, hanging the
+        #     caller's no-timeout ``future.result()`` FOREVER. Cancelling the
+        #     task makes that future resolve with ``CancelledError`` (bounded)
+        #     instead. Runs LAST, on the loop, so the drain above is unaffected.
+        try:
+            current = asyncio.current_task()
+            for task in asyncio.all_tasks():
+                if task is not current:
+                    task.cancel()
+        except RuntimeError:  # pragma: no cover — no running loop (unreachable here)
+            pass
+
+    def close(self) -> None:
+        """Drain express-loop-bound pools, then stop the BG event-loop thread.
+
+        Wired into :func:`DataFlow.close` / :func:`DataFlow.close_async` so
+        ``with DataFlow(...)`` / ``async with`` callers do not need to invoke
+        this manually. Idempotent — safe to call repeatedly.
+
+        Order matters: DRAIN on the owning loop (while it is alive) BEFORE the
+        loop stops, so aiosqlite/asyncpg connections created by Express through
+        this sync surface close gracefully instead of stranding on a dead loop
+        (issue #1575). Every step is guarded and logs the exception TYPE only.
+        """
+        if self._closed:
+            return
+
+        # Issue #1575 (Round-4) — flip _closed AND snapshot the in-flight futures
+        # atomically under _pending_lock so this strictly orders against
+        # _run_sync's guarded [check + submit + track] (same lock). A future
+        # submitted+tracked before this flip IS in `pending` (→ cancelled below);
+        # a submit racing in after this flip sees _closed and raises. Neither
+        # leaves an untracked future stranded on a stopping loop — no hang window.
+        with self._pending_lock:
+            self._closed = True
+            pending = list(self._pending)
+
+        loop = self._loop
+        thread = self._thread
+        # Drop references so any after-close `_run_sync` observes the closed state
+        # and raises the typed closed-error (never AttributeError via
+        # run_coroutine_threadsafe(None), never a hang) — issue #1575 Round-3/4.
+        self._loop = None
+        self._thread = None
+
+        # (a) Drain express-loop-bound resources ON the owning loop, bounded so
+        #     a hung disconnect cannot block teardown forever. The drain's final
+        #     step cancels every in-flight task on the loop so a slow call
+        #     submitted before close() settles with CancelledError (bounded).
+        if loop is not None and loop.is_running():
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    self._drain_loop_resources(), loop
+                )
+                future.result(timeout=5.0)
+            except Exception as exc:  # noqa: BLE001 — teardown must not raise
+                logger.debug(
+                    "express.sync.drain_failed",
+                    extra={"error_type": type(exc).__name__},
+                )
+
+        # (a2) Cancel the in-flight futures snapshotted atomically above. On-loop
+        #      task cancellation (drain step 3) covers coroutines already scheduled
+        #      as tasks; this covers the narrow window where a future was submitted
+        #      but its task had not yet been scheduled, so its caller's
+        #      future.result() cannot hang past close.
+        for pending_future in pending:
+            pending_future.cancel()
+
+        # (b) Stop the loop, (c) join the BG thread (bounded), (d) close the loop.
+        if loop is not None and loop.is_running():
+            try:
+                loop.call_soon_threadsafe(loop.stop)
+            except RuntimeError:
+                # Loop already stopped/destroyed — the closed flag prevents reuse.
+                pass
+
+        if thread is not None and thread.is_alive():
+            # Bounded join — the loop stops near-instantly; a 5s ceiling
+            # prevents a pathological hang from deadlocking teardown.
+            thread.join(timeout=5.0)
+
+        if loop is not None:
+            try:
+                loop.close()
+            except RuntimeError:
+                # Loop may already be closed by run_forever() shutdown —
+                # the closed flag is the source of truth.
+                pass
+
+    def __del__(self, _warnings: Any = warnings) -> None:
+        """Emit ``ResourceWarning`` if the BG thread was not stopped cleanly.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup: emit warning, do
+        nothing else. We do NOT call ``close`` here — touching the BG loop /
+        thread (or any log-emitting path) from a finalizer is the deadlock
+        pattern that rule documents. Real cleanup is the caller's via
+        ``db.close()`` / ``await db.close_async()``.
+        """
+        if not getattr(self, "_closed", True):
+            try:
+                _warnings.warn(
+                    f"{type(self).__name__} not closed; call "
+                    f"db.close()/await db.close_async() to stop the BG "
+                    f"event loop thread cleanly.",
+                    ResourceWarning,
+                    stacklevel=2,
+                )
+            except Exception:
+                # Finalizer must not raise. Hooks/cleanup carve-out per
+                # rules/zero-tolerance.md Rule 3.
+                pass
 
     def _check_append_only(self, model: str, operation: str) -> None:
         """Sync delegate to :meth:`DataFlowExpress._check_append_only`.
