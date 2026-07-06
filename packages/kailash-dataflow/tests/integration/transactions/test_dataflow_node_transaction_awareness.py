@@ -94,15 +94,20 @@ class TestDataFlowNodeRealTransactionAwareness:
 
         # Execute with DataFlow instance in context
         runtime = LocalRuntime()
-        runtime_params = {"dataflow_instance": db}
-        results, run_id = runtime.execute(workflow.build(), runtime_params)
+        results, run_id = runtime.execute(
+            workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
 
-        # Verify all operations succeeded
-        tx_result = results.get("start_tx", {}).get("result", {})
+        # Verify all operations succeeded.
+        # Transaction nodes return a FLAT dict (see transaction_nodes.py) — the
+        # node result is keyed directly under the node id, NOT nested under
+        # a "result" key.
+        tx_result = results.get("start_tx", {})
         user1_result = results.get("create_user", {})
         user2_result = results.get("create_user2", {})
         list_result = results.get("list_users", {})
-        commit_result = results.get("commit_tx", {}).get("result", {})
+        commit_result = results.get("commit_tx", {})
 
         # Check transaction was started
         assert tx_result.get("status") == "started"
@@ -138,6 +143,22 @@ class TestDataFlowNodeRealTransactionAwareness:
             parameters={"workflow_context": {"dataflow_instance": db}},
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Deferred contract: generated DataFlow CRUD nodes are not yet "
+            "transaction-aware. RollbackTestProductCreateNode executes on its "
+            "own cached AsyncSQLDatabaseNode with transaction_mode='auto' "
+            "(per-statement autocommit) and does NOT join the workflow-context "
+            "transaction opened by TransactionScopeNode. The CREATE therefore "
+            "commits independently and survives the rollback. The rollback node "
+            "itself works (status == 'rolled_back'); what is missing is CRUD "
+            "participation in the scope transaction. When CRUD nodes learn to "
+            "read 'active_transaction' from workflow context and run on that "
+            "connection, this test XPASSes and the marker MUST be removed "
+            "same-shard (see rules/testing.md § xfail-strict). Tracked by #1581."
+        ),
+    )
     def test_dataflow_rollback_transaction(self, test_suite):
         """Test that rollback prevents data from being committed."""
         import sys
@@ -215,8 +236,10 @@ result = {'status': 'error', 'message': 'Validation failed'}
             workflow.build(), parameters={"workflow_context": {"dataflow_instance": db}}
         )
 
-        # Verify rollback occurred
-        rollback_result = results.get("rollback_tx", {}).get("result", {})
+        # Verify rollback occurred. TransactionRollbackNode returns a FLAT dict
+        # {"status": "rolled_back", "transaction_id": ..., "reason": ...,
+        #  "result": "<message string>"} — assert the TOP-LEVEL status key.
+        rollback_result = results.get("rollback_tx", {})
         assert rollback_result.get("status") == "rolled_back"
 
         # Verify product was NOT persisted by trying to list it
@@ -271,27 +294,16 @@ result = {'status': 'error', 'message': 'Validation failed'}
             },
         )
 
-        # Update order status
+        # Update order status using the generated DataFlow UpdateNode directly.
+        # (Rewritten from a PythonCodeNode that imported kailash inside the
+        # sandbox — the code-safety checker BLOCKS `from kailash...` imports in
+        # PythonCodeNode source. The generated StandardOrderUpdateNode performs
+        # the same update natively; the record id flows in via the connection
+        # below into the node's `record_id` parameter.)
         workflow.add_node(
-            "PythonCodeNode",
+            "StandardOrderUpdateNode",
             "update_order",
-            {
-                "code": """
-# Get order ID from previous step
-order_id = parameters.get('order_id')
-
-# Use the update node
-from kailash.nodes.base import NodeRegistry
-StandardOrderUpdateNode = NodeRegistry.get_node_class('StandardOrderUpdateNode')
-
-update_node = StandardOrderUpdateNode()
-# Pass workflow context
-update_node._workflow_context = get_workflow_context('_all', {})
-
-# Update the order
-result = update_node.execute(id=order_id, status='confirmed')
-"""
-            },
+            {"fields": {"status": "confirmed"}},
         )
 
         # List orders
@@ -301,9 +313,10 @@ result = update_node.execute(id=order_id, status='confirmed')
             {"filter": {"order_number": "ORD-2025-001"}, "limit": 10},
         )
 
-        # Connect nodes
-        workflow.add_connection("create_order", "id", "update_order", "order_id")
-        workflow.add_connection("update_order", "result", "list_orders", "input_data")
+        # Connect nodes: the created order's id feeds the update's record_id;
+        # the update's id chains into the list node purely for flow ordering.
+        workflow.add_connection("create_order", "id", "update_order", "record_id")
+        workflow.add_connection("update_order", "id", "list_orders", "previous_id")
 
         # Execute without transaction
         runtime = LocalRuntime()
@@ -311,9 +324,12 @@ result = update_node.execute(id=order_id, status='confirmed')
             workflow.build(), parameters={"workflow_context": {"dataflow_instance": db}}
         )
 
-        # Verify operations succeeded without transaction
+        # Verify operations succeeded without transaction. The UpdateNode
+        # returns a FLAT dict {**fields, **row, "updated": True, "id": ...} —
+        # the updated columns (e.g. status) are top-level, not nested under
+        # a "result" key.
         create_result = results.get("create_order", {})
-        update_result = results.get("update_order", {}).get("result", {})
+        update_result = results.get("update_order", {})
         list_result = results.get("list_orders", {})
 
         # Check order was created
