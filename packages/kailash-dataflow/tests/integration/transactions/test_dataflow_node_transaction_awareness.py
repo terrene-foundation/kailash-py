@@ -143,24 +143,16 @@ class TestDataFlowNodeRealTransactionAwareness:
             parameters={"workflow_context": {"dataflow_instance": db}},
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Deferred contract: generated DataFlow CRUD nodes are not yet "
-            "transaction-aware. RollbackTestProductCreateNode executes on its "
-            "own cached AsyncSQLDatabaseNode with transaction_mode='auto' "
-            "(per-statement autocommit) and does NOT join the workflow-context "
-            "transaction opened by TransactionScopeNode. The CREATE therefore "
-            "commits independently and survives the rollback. The rollback node "
-            "itself works (status == 'rolled_back'); what is missing is CRUD "
-            "participation in the scope transaction. When CRUD nodes learn to "
-            "read 'active_transaction' from workflow context and run on that "
-            "connection, this test XPASSes and the marker MUST be removed "
-            "same-shard (see rules/testing.md § xfail-strict). Tracked by #1581."
-        ),
-    )
     def test_dataflow_rollback_transaction(self, test_suite):
-        """Test that rollback prevents data from being committed."""
+        """Test that rollback prevents data from being committed.
+
+        #1581: generated DataFlow CRUD nodes are now transaction-aware — a
+        CreateNode inside a TransactionScopeNode reads 'active_transaction' from
+        workflow context (via DataFlowNode._run_sql_in_scope → the scope's
+        borrowed transaction) and runs on the scope's connection, so
+        TransactionRollbackNode discards the create. Previously xfail-strict
+        (CRUD auto-committed independently and survived the rollback).
+        """
         import sys
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))

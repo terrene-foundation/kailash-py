@@ -1032,6 +1032,21 @@ class _AdapterTransactionScope:
         self._rolled_back = True
         await self._adapter.rollback_transaction(self._txn)
 
+    @property
+    def transaction(self) -> Any:
+        """The raw adapter transaction handle for ``adapter.execute(transaction=...)``.
+
+        This is the same object ``adapter.begin_transaction()`` returns — the
+        exact shape the ``execute`` / ``execute_many`` ``transaction=`` kwarg
+        expects. DataFlow's generated CRUD nodes read this off the
+        workflow-context scope (``active_transaction``) and pass it into
+        ``AsyncSQLDatabaseNode.async_run(transaction=...)`` so a CRUD statement
+        joins the scope's transaction instead of opening its own auto-commit
+        transaction (#1581). Exposed as a property so callers never reach into
+        the private ``_txn`` attribute.
+        """
+        return self._txn
+
 
 class _AdapterTransactionContext:
     """Async context manager returned by :meth:`DatabaseAdapter.transaction`.
@@ -5058,6 +5073,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
             parameter_types = inputs.get(
                 "parameter_types", self.config.get("parameter_types")
             )
+            # #1581: an explicit borrowed transaction (a workflow-context
+            # scope's raw txn handle, threaded by DataFlow's generated CRUD
+            # nodes). When present the query runs ON that transaction and the
+            # node does NOT begin/commit/rollback — the scope owns lifecycle.
+            borrowed_transaction = inputs.get("transaction")
 
             if not query:
                 raise NodeExecutionError("No query provided")
@@ -5123,6 +5143,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 fetch_size=fetch_size,
                 user_context=user_context,
                 parameter_types=parameter_types,
+                transaction=borrowed_transaction,
             )
 
             # Check for special SQLite lastrowid result
@@ -5346,7 +5367,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
             )
 
     async def execute_many_async(
-        self, query: str, params_list: list[dict[str, Any]]
+        self,
+        query: str,
+        params_list: list[dict[str, Any]],
+        transaction: Optional[Any] = None,
     ) -> dict[str, Any]:
         """Execute the same query multiple times with different parameters.
 
@@ -5401,6 +5425,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 adapter=adapter,
                 query=query,
                 params_list=params_list,  # type: ignore[arg-type]
+                transaction=transaction,
             )
 
             return {
@@ -5489,6 +5514,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         fetch_size: Optional[int],
         user_context: Any | None = None,
         parameter_types: Optional[dict[str, str]] = None,
+        transaction: Optional[Any] = None,
     ) -> Any:
         """Execute query with retry logic for transient failures.
 
@@ -5518,6 +5544,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     fetch_mode=fetch_mode,
                     fetch_size=fetch_size,
                     parameter_types=parameter_types,
+                    transaction=transaction,
                 )
 
                 # Apply data masking if access control is enabled
@@ -5627,6 +5654,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         adapter: DatabaseAdapter,
         query: str,
         params_list: list[Union[tuple, dict]],
+        transaction: Optional[Any] = None,
     ) -> int:
         """Execute batch operation with retry logic.
 
@@ -5650,6 +5678,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     adapter=adapter,
                     query=query,
                     params_list=params_list,
+                    transaction=transaction,
                 )
 
             except Exception as e:
@@ -5729,6 +5758,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         adapter: DatabaseAdapter,
         query: str,
         params_list: list[Union[tuple, dict]],
+        transaction: Optional[Any] = None,
     ) -> int:
         """Execute batch operation with automatic transaction management.
 
@@ -5736,6 +5766,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
             adapter: Database adapter
             query: SQL query to execute
             params_list: List of parameter dictionaries
+            transaction: An explicit borrowed transaction handle (#1581). When
+                provided, the batch runs ON that transaction and this method
+                does NOT begin/commit/rollback — the borrowing scope owns the
+                transaction lifecycle.
 
         Returns:
             Number of affected rows (estimated)
@@ -5743,6 +5777,14 @@ class AsyncSQLDatabaseNode(AsyncNode):
         Raises:
             Exception: Re-raises any execution errors after rollback
         """
+        if transaction is not None:
+            # #1581: borrowed transaction (a workflow-context scope). Run ON the
+            # caller's transaction; the scope's commit/rollback node governs the
+            # batch. Mirrors the manual `_active_transaction` branch below but
+            # sources the handle from the explicit param (see
+            # _execute_with_transaction for why instance state is not mutated).
+            await adapter.execute_many(query, params_list, transaction)
+            return len(params_list)
         if self._active_transaction:
             # Use existing transaction (manual mode)
             await adapter.execute_many(query, params_list, self._active_transaction)
@@ -5784,6 +5826,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         fetch_mode: FetchMode,
         fetch_size: Optional[int],
         parameter_types: Optional[dict[str, str]] = None,
+        transaction: Optional[Any] = None,
     ) -> Any:
         """Execute query with automatic transaction management.
 
@@ -5793,6 +5836,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
             params: Query parameters
             fetch_mode: How to fetch results
             fetch_size: Number of rows for 'many' mode
+            transaction: An explicit borrowed transaction handle (#1581). When
+                provided, the query runs ON that transaction and this method
+                does NOT begin/commit/rollback — the borrowing scope owns the
+                transaction lifecycle.
 
         Returns:
             Query results
@@ -5800,6 +5847,22 @@ class AsyncSQLDatabaseNode(AsyncNode):
         Raises:
             Exception: Re-raises any execution errors after rollback
         """
+        if transaction is not None:
+            # #1581: borrowed transaction (a workflow-context scope). Run ON the
+            # caller's transaction; do NOT begin/commit/rollback — the scope's
+            # commit/rollback node governs the write. This mirrors the manual
+            # `_active_transaction` branch below but sources the handle from the
+            # explicit param instead of mutating instance state (the per-loop
+            # cached node is shared across operations, so mutating
+            # `_active_transaction` would leak the scope into unrelated calls).
+            return await adapter.execute(
+                query=query,
+                params=params,
+                fetch_mode=fetch_mode,
+                fetch_size=fetch_size,
+                transaction=transaction,
+                parameter_types=parameter_types,
+            )
         if self._active_transaction:
             # Use existing transaction (manual mode)
             return await adapter.execute(

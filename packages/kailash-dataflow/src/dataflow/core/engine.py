@@ -9112,6 +9112,8 @@ class DataFlow(DataFlowEventMixin):
                 SchemaModificationNode,
                 TransactionCommitNode,
                 TransactionRollbackNode,
+                TransactionRollbackToSavepointNode,
+                TransactionSavepointNode,
                 TransactionScopeNode,
             )
         except ImportError:
@@ -9121,6 +9123,19 @@ class DataFlow(DataFlowEventMixin):
         NodeRegistry.register(TransactionScopeNode, alias="TransactionScopeNode")
         NodeRegistry.register(TransactionCommitNode, alias="TransactionCommitNode")
         NodeRegistry.register(TransactionRollbackNode, alias="TransactionRollbackNode")
+        # #1581: the savepoint nodes were defined + exported but never registered,
+        # so no workflow could reach them (orphan). Register them alongside the
+        # other transaction nodes — single-record CRUD is now transaction-aware,
+        # so a ROLLBACK TO SAVEPOINT discards post-savepoint single-record CRUD
+        # writes. (Bulk write nodes are not yet scope-aware — see the #1581 bulk
+        # follow-up — so a post-savepoint BULK write is NOT discarded yet.)
+        NodeRegistry.register(
+            TransactionSavepointNode, alias="TransactionSavepointNode"
+        )
+        NodeRegistry.register(
+            TransactionRollbackToSavepointNode,
+            alias="TransactionRollbackToSavepointNode",
+        )
 
         # Register schema nodes
         NodeRegistry.register(SchemaModificationNode, alias="SchemaModificationNode")
@@ -9130,6 +9145,10 @@ class DataFlow(DataFlowEventMixin):
         self._nodes["TransactionScopeNode"] = TransactionScopeNode
         self._nodes["TransactionCommitNode"] = TransactionCommitNode
         self._nodes["TransactionRollbackNode"] = TransactionRollbackNode
+        self._nodes["TransactionSavepointNode"] = TransactionSavepointNode
+        self._nodes["TransactionRollbackToSavepointNode"] = (
+            TransactionRollbackToSavepointNode
+        )
         self._nodes["SchemaModificationNode"] = SchemaModificationNode
         self._nodes["MigrationNode"] = MigrationNode
 
