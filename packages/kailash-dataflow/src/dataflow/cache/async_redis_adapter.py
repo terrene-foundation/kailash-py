@@ -400,13 +400,20 @@ class AsyncRedisCacheAdapter:
 
         Per ``rules/patterns.md`` § Async Resource Cleanup, callers MUST
         invoke this (or use the adapter as an ``async with`` context) to
-        release the executor's worker threads. ``__del__`` only emits a
-        ``ResourceWarning`` — it does NOT call shutdown, because doing so
-        from a GC finalizer deadlocks against the root logging lock.
+        release the executor's worker threads. ``__del__`` emits a
+        ``ResourceWarning`` AND calls ``shutdown(wait=False)`` (a purely
+        synchronous, non-logging call that is safe from a finalizer); it does
+        NOT call ``close``/``close_async``, because their ``logger.debug`` line
+        would fire from inside GC's logging machinery and deadlock against the
+        root logging lock (see ``__del__``).
+
+        The join is offloaded via ``asyncio.to_thread`` so ``shutdown(wait=True)``
+        (which blocks until every worker thread exits) does not freeze the event
+        loop while the pool drains.
         """
         if self._closed:
             return
-        self._executor.shutdown(wait=True)
+        await asyncio.to_thread(self._executor.shutdown, wait=True)
         self._closed = True
         logger.debug("AsyncRedisCacheAdapter executor shut down")
 
