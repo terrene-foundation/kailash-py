@@ -23,6 +23,7 @@ Run with: pytest tests/integration/bulk_operations/test_bulk_upsert_comprehensiv
 
 import asyncio
 import time
+from collections import OrderedDict
 from typing import Any, Dict, List
 
 import pytest
@@ -127,17 +128,44 @@ async def _count_records(connection_string: str, table_name: str) -> int:
 async def _insert_test_data(
     connection_string: str, table_name: str, records: List[Dict[str, Any]]
 ):
-    """Insert test data into table for setup."""
+    """Insert test data into table for setup.
+
+    Rows sharing a column signature are inserted in a single multi-row INSERT
+    (one node/round-trip per signature), instead of one node per record. The old
+    per-record loop created a fresh AsyncSQLDatabaseNode for every row, so seeding
+    a large batch (e.g. 500 rows in test_bulk_upsert_large_mixed_batch) took ~16s
+    and blew past that test's 5s timeout marker — even though the bulk-upsert path
+    under test is fast (~0.3s for 1000 rows). The slowness was entirely setup
+    overhead, not the SDK. (#1594)
+    """
+    if not records:
+        return
+
+    # Group by column signature (all callers here share one signature, but stay
+    # correct if a caller ever mixes shapes).
+    groups: "OrderedDict[tuple, List[Dict[str, Any]]]" = OrderedDict()
     for record in records:
-        columns = ", ".join(record.keys())
-        values = ", ".join(
-            [f"'{v}'" if isinstance(v, str) else str(v) for v in record.values()]
+        groups.setdefault(tuple(record.keys()), []).append(record)
+
+    for columns_tuple, group in groups.items():
+        columns = ", ".join(columns_tuple)
+        # Values are interpolated (not bound) to match the prior fixture pattern.
+        # Every caller passes controlled test literals with no single-quotes, so
+        # this is safe here; it is NOT a general-purpose insert helper.
+        rows_sql = ", ".join(
+            "("
+            + ", ".join(
+                f"'{record[c]}'" if isinstance(record[c], str) else str(record[c])
+                for c in columns_tuple
+            )
+            + ")"
+            for record in group
         )
 
         insert_node = AsyncSQLDatabaseNode(
             connection_string=connection_string,
             database_type="postgresql",
-            query=f"INSERT INTO {table_name} ({columns}) VALUES ({values})",
+            query=f"INSERT INTO {table_name} ({columns}) VALUES {rows_sql}",
             validate_queries=False,
         )
         await insert_node.async_run()

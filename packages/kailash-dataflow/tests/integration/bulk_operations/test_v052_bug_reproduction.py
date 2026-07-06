@@ -31,12 +31,21 @@ async def setup_agent_memory_table(test_suite):
     """Create agent_memory table matching user's production schema."""
     connection_string = test_suite.config.url
 
-    # Drop and create table with correct pluralized name
-    # DataFlow converts AgentMemory -> agent_memorys (adds 's')
+    # Derive the table name from DataFlow's own resolver so this fixture stays in
+    # lockstep with the auto-generated node's target. It was previously hardcoded
+    # "agent_memorys" (naive +s), but DataFlow correctly pluralizes
+    # AgentMemory -> "agent_memories"; the hardcoded name drifted from the resolver
+    # and every bulk op hit 'relation "agent_memories" does not exist'. (#1594)
+    from dataflow import DataFlow
+
+    table = DataFlow(connection_string, auto_migrate=False)._class_name_to_table_name(
+        "AgentMemory"
+    )
+
     drop_node = AsyncSQLDatabaseNode(
         connection_string=connection_string,
         database_type="postgresql",
-        query="DROP TABLE IF EXISTS agent_memorys CASCADE",
+        query=f"DROP TABLE IF EXISTS {table} CASCADE",
         validate_queries=False,
     )
     await drop_node.async_run()
@@ -45,8 +54,8 @@ async def setup_agent_memory_table(test_suite):
     setup_node = AsyncSQLDatabaseNode(
         connection_string=connection_string,
         database_type="postgresql",
-        query="""
-        CREATE TABLE agent_memorys (
+        query=f"""
+        CREATE TABLE {table} (
             id SERIAL PRIMARY KEY,
             workflow_run_id INTEGER NOT NULL,
             agent_id VARCHAR(100) NOT NULL,
@@ -62,19 +71,22 @@ async def setup_agent_memory_table(test_suite):
     await setup_node.async_run()
     await setup_node.cleanup()
 
-    # Insert test data
+    # Insert test data. The table name is interpolated but the JSONB VALUES carry
+    # literal braces, so only the leading clause is an f-string; the rest are plain
+    # string literals to keep the JSON braces out of f-string parsing.
     insert_node = AsyncSQLDatabaseNode(
         connection_string=connection_string,
         database_type="postgresql",
-        query="""
-        INSERT INTO agent_memorys (workflow_run_id, agent_id, memory_type, key, value, importance_score)
-        VALUES
-            (1, 'agent1', 'insight', 'key1', '{"data": "value1"}', 0.8),
-            (1, 'agent1', 'insight', 'key2', '{"data": "value2"}', 0.7),
-            (2, 'agent2', 'context', 'key3', '{"data": "value3"}', 0.6),
-            (2, 'agent2', 'context', 'key4', '{"data": "value4"}', 0.5),
-            (3, 'agent1', 'insight', 'key5', '{"data": "value5"}', 0.9)
-        """,
+        query=(
+            f"INSERT INTO {table} "
+            "(workflow_run_id, agent_id, memory_type, key, value, importance_score) "
+            "VALUES "
+            "(1, 'agent1', 'insight', 'key1', '{\"data\": \"value1\"}', 0.8), "
+            "(1, 'agent1', 'insight', 'key2', '{\"data\": \"value2\"}', 0.7), "
+            "(2, 'agent2', 'context', 'key3', '{\"data\": \"value3\"}', 0.6), "
+            "(2, 'agent2', 'context', 'key4', '{\"data\": \"value4\"}', 0.5), "
+            "(3, 'agent1', 'insight', 'key5', '{\"data\": \"value5\"}', 0.9)"
+        ),
         validate_queries=False,
     )
     await insert_node.async_run()
@@ -86,7 +98,7 @@ async def setup_agent_memory_table(test_suite):
     cleanup_node = AsyncSQLDatabaseNode(
         connection_string=connection_string,
         database_type="postgresql",
-        query="DROP TABLE IF EXISTS agent_memorys CASCADE",
+        query=f"DROP TABLE IF EXISTS {table} CASCADE",
         validate_queries=False,
     )
     await cleanup_node.async_run()
@@ -146,12 +158,12 @@ class TestBug1_BulkDeleteEmptyFilter:
         assert delete_result is not None, "No result returned from bulk delete"
 
         # Should have deleted all 5 records
-        assert delete_result.get("success"), (
-            f"Delete failed: {delete_result.get('error')}"
-        )
-        assert delete_result.get("deleted") == 5, (
-            f"Expected 5 deleted, got {delete_result.get('deleted')}"
-        )
+        assert delete_result.get(
+            "success"
+        ), f"Delete failed: {delete_result.get('error')}"
+        assert (
+            delete_result.get("deleted") == 5
+        ), f"Expected 5 deleted, got {delete_result.get('deleted')}"
 
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_filter_without_confirmation_fails(
@@ -199,9 +211,9 @@ class TestBug1_BulkDeleteEmptyFilter:
         assert (
             "confirmed" in error_msg.lower() or "confirmation" in error_msg.lower()
         ), f"Error should mention confirmation requirement, got: {error_msg}"
-        assert "empty filter" in error_msg.lower(), (
-            f"Error should mention empty filter, got: {error_msg}"
-        )
+        assert (
+            "empty filter" in error_msg.lower()
+        ), f"Error should mention empty filter, got: {error_msg}"
 
 
 class TestBug2_BulkCreateUnsupportedOperation:
@@ -260,12 +272,12 @@ class TestBug2_BulkCreateUnsupportedOperation:
         assert create_result is not None, "No result returned from bulk create"
 
         # Should have created 1 record
-        assert create_result.get("success"), (
-            f"Create failed: {create_result.get('error')}"
-        )
-        assert create_result.get("inserted") == 1, (
-            f"Expected 1 inserted, got {create_result.get('inserted')}"
-        )
+        assert create_result.get(
+            "success"
+        ), f"Create failed: {create_result.get('error')}"
+        assert (
+            create_result.get("inserted") == 1
+        ), f"Expected 1 inserted, got {create_result.get('inserted')}"
 
     @pytest.mark.asyncio
     async def test_bulk_create_with_empty_data_list(self, setup_agent_memory_table):
@@ -303,17 +315,17 @@ class TestBug2_BulkCreateUnsupportedOperation:
 
         # Should either succeed with 0 inserted OR have clear error (not "Unsupported operation")
         if create_result.get("success"):
-            assert create_result.get("inserted", 0) == 0, (
-                "Should have 0 insertions for empty data"
-            )
+            assert (
+                create_result.get("inserted", 0) == 0
+            ), "Should have 0 insertions for empty data"
         else:
             error_msg = create_result.get("error", "")
-            assert "Unsupported bulk operation" not in error_msg, (
-                f"Should not report 'Unsupported operation', got: {error_msg}"
-            )
-            assert "No data" in error_msg or "empty" in error_msg.lower(), (
-                f"Error should mention empty data, got: {error_msg}"
-            )
+            assert (
+                "Unsupported bulk operation" not in error_msg
+            ), f"Should not report 'Unsupported operation', got: {error_msg}"
+            assert (
+                "No data" in error_msg or "empty" in error_msg.lower()
+            ), f"Error should mention empty data, got: {error_msg}"
 
 
 class TestBug3_GenericErrorMessages:
@@ -371,15 +383,15 @@ class TestBug3_GenericErrorMessages:
 
         # Error should NOT be generic
         assert error_msg != "Operation failed", f"Error too generic: {error_msg}"
-        assert error_msg != "Operation failed (no error details provided)", (
-            f"No details provided: {error_msg}"
-        )
+        assert (
+            error_msg != "Operation failed (no error details provided)"
+        ), f"No details provided: {error_msg}"
 
         # Error should mention what went wrong with specific details
         assert len(error_msg) > 20, f"Error message too short: {error_msg}"
-        assert "confirmed" in error_msg.lower(), (
-            f"Error should mention 'confirmed' requirement: {error_msg}"
-        )
-        assert "empty filter" in error_msg.lower(), (
-            f"Error should mention 'empty filter': {error_msg}"
-        )
+        assert (
+            "confirmed" in error_msg.lower()
+        ), f"Error should mention 'confirmed' requirement: {error_msg}"
+        assert (
+            "empty filter" in error_msg.lower()
+        ), f"Error should mention 'empty filter': {error_msg}"
