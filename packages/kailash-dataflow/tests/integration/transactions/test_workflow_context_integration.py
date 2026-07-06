@@ -322,7 +322,9 @@ result = list_node.execute(
 
         assert "id" in create_result
         assert create_result.get("name") == "No Transaction Product"
-        assert create_result.get("price") == 99.99
+        # price round-trips through a float(4) column, so exact-equality fails
+        # (99.99 -> 99.98999786376953). Assert within tolerance instead.
+        assert create_result.get("price") == pytest.approx(99.99, abs=0.01)
 
         assert list_result.get("count") >= 1
         products = list_result.get("records", [])
@@ -441,6 +443,17 @@ else:
             },
         )
 
+        # Wire the pipeline so nodes execute in order: start -> operate -> commit.
+        # Without connections the runtime has no dependency edge to order these
+        # independent nodes, and db_operation would run before start_transaction
+        # sets transaction_active in the workflow context.
+        workflow.add_connection(
+            "start_transaction", "result", "db_operation", "input_data"
+        )
+        workflow.add_connection(
+            "db_operation", "result", "commit_transaction", "input_data"
+        )
+
         # Execute the workflow with transaction context
         results, run_id = runtime.execute(
             workflow.build(),
@@ -535,6 +548,17 @@ else:
     }
 """
             },
+        )
+
+        # Wire the pipeline so nodes execute in order: start -> fail -> rollback.
+        # Without connections the runtime has no dependency edge to order these
+        # independent nodes; rollback_transaction must run after failing_operation
+        # sets operation_failed in the workflow context.
+        workflow.add_connection(
+            "start_transaction", "result", "failing_operation", "input_data"
+        )
+        workflow.add_connection(
+            "failing_operation", "result", "rollback_transaction", "input_data"
         )
 
         results, run_id = runtime.execute(

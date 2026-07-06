@@ -988,6 +988,92 @@ class EnterpriseConnectionPool:
         logger.info(f"Pool '{self.pool_id}' closed successfully")
 
 
+class _AdapterTransactionScope:
+    """Scope yielded by :meth:`DatabaseAdapter.transaction`.
+
+    Exposes the surface DataFlow's transaction nodes and every dialect-level
+    ``adapter.transaction()`` already rely on: a live ``.connection`` to run
+    statements on (savepoints, in-transaction queries) plus explicit async
+    ``.commit()`` / ``.rollback()``. It wraps the adapter's
+    ``begin/commit/rollback_transaction`` primitives so both are driven through
+    one uniform contract. ``.commit()`` / ``.rollback()`` are idempotent — a
+    caller that commits explicitly and then lets the context manager exit does
+    NOT double-commit or double-release the connection.
+    """
+
+    def __init__(self, adapter: "DatabaseAdapter", txn: Any):
+        self._adapter = adapter
+        self._txn = txn
+        # PostgreSQL returns ``(conn, tx)`` and SQLite ``(conn, savepoint, depth)``;
+        # MySQL returns the connection directly. The live connection is the first
+        # element of the tuple, or the value itself.
+        self.connection = txn[0] if isinstance(txn, tuple) else txn
+        self._committed = False
+        self._rolled_back = False
+
+    async def commit(self) -> None:
+        if self._committed or self._rolled_back:
+            return
+        # Single-shot: mark terminal BEFORE the await. A commit_transaction that
+        # partially completes then raises mid-teardown (e.g. SQLite ``db.close()``
+        # after the depth decrement, or PG ``pool.release`` after ``tx.commit``)
+        # MUST NOT let a fallback ``__aexit__`` re-enter ``rollback`` over the
+        # half-torn-down transaction — that double-decrements the SQLite nesting
+        # depth (issue #1070 class) / double-releases the pooled connection. The
+        # exception still propagates to the caller; the scope is simply spent.
+        self._committed = True
+        await self._adapter.commit_transaction(self._txn)
+
+    async def rollback(self) -> None:
+        if self._committed or self._rolled_back:
+            return
+        # Single-shot (see commit above): an attempted rollback is terminal even
+        # if the primitive raises mid-teardown.
+        self._rolled_back = True
+        await self._adapter.rollback_transaction(self._txn)
+
+
+class _AdapterTransactionContext:
+    """Async context manager returned by :meth:`DatabaseAdapter.transaction`.
+
+    On enter, opens a transaction via ``adapter.begin_transaction()`` and yields
+    an :class:`_AdapterTransactionScope`. On exit it commits when the body left
+    cleanly and rolls back when an exception propagated — both idempotent, so an
+    explicit ``scope.commit()`` inside the body makes the exit a no-op.
+    """
+
+    def __init__(self, adapter: "DatabaseAdapter"):
+        self._adapter = adapter
+        self._scope: Optional[_AdapterTransactionScope] = None
+
+    async def __aenter__(self) -> "_AdapterTransactionScope":
+        txn = await self._adapter.begin_transaction()
+        self._scope = _AdapterTransactionScope(self._adapter, txn)
+        return self._scope
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if self._scope is None:
+            return False
+        try:
+            if exc_type is None:
+                await self._scope.commit()
+            else:
+                await self._scope.rollback()
+        except Exception as cleanup_error:
+            if exc_type is None:
+                # Clean body: a commit failure IS the error the caller must see.
+                raise
+            # Body already raising: log the rollback failure but let the ORIGINAL
+            # exception propagate — never mask the real cause with a cleanup error
+            # (mirrors dataflow PostgreSQLTransaction.__aexit__).
+            logger.error(
+                "async_sql.transaction_context.cleanup_failed",
+                extra={"cleanup_error": str(cleanup_error)},
+                exc_info=True,
+            )
+        return False
+
+
 class DatabaseAdapter(ABC):
     """Abstract base class for database adapters."""
 
@@ -1128,6 +1214,22 @@ class DatabaseAdapter(ABC):
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
         pass
+
+    def transaction(self) -> "_AdapterTransactionContext":
+        """Return an async context manager for a transaction scope.
+
+        Yields an :class:`_AdapterTransactionScope` with a live ``.connection``
+        plus explicit async ``.commit()`` / ``.rollback()``, wrapping this
+        adapter's ``begin/commit/rollback_transaction`` primitives. Every
+        adapter that implements those three primitives therefore exposes one
+        uniform ``transaction()`` contract — matching the dialect-level
+        ``adapter.transaction()`` the DataFlow transaction nodes rely on::
+
+            async with adapter.transaction() as txn:
+                await txn.connection.execute("INSERT ...")
+                # commits on clean exit, rolls back if the block raises
+        """
+        return _AdapterTransactionContext(self)
 
 
 class PostgreSQLAdapter(DatabaseAdapter):
@@ -1493,14 +1595,24 @@ class PostgreSQLAdapter(DatabaseAdapter):
     async def commit_transaction(self, transaction: Any) -> None:
         """Commit a transaction."""
         conn, tx = transaction
-        await tx.commit()
-        await self._pool.release(conn)
+        try:
+            await tx.commit()
+        finally:
+            # Always return the connection to the bounded pool, even if the
+            # driver commit raises (serialization failure, deferred-constraint
+            # violation fired at COMMIT, mid-commit connection loss). Without the
+            # finally the connection is orphaned and the pool drains under a
+            # repeated commit-failure workload (issue #1580 redteam MEDIUM).
+            await self._pool.release(conn)
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
         conn, tx = transaction
-        await tx.rollback()
-        await self._pool.release(conn)
+        try:
+            await tx.rollback()
+        finally:
+            # Release even if the driver rollback raises (see commit_transaction).
+            await self._pool.release(conn)
 
 
 class MySQLAdapter(DatabaseAdapter):
@@ -1758,13 +1870,21 @@ class MySQLAdapter(DatabaseAdapter):
 
     async def commit_transaction(self, transaction: Any) -> None:
         """Commit a transaction."""
-        await transaction.commit()
-        await self._pool.release(transaction)
+        try:
+            await transaction.commit()
+        finally:
+            # Always return the connection to the bounded pool even if the driver
+            # commit raises — otherwise the connection is orphaned and the pool
+            # drains under repeated commit failures (issue #1580 redteam MEDIUM).
+            await self._pool.release(transaction)
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
-        await transaction.rollback()
-        await self._pool.release(transaction)
+        try:
+            await transaction.rollback()
+        finally:
+            # Release even if the driver rollback raises (see commit_transaction).
+            await self._pool.release(transaction)
 
 
 class SQLiteAdapter(DatabaseAdapter):
