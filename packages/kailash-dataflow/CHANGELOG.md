@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [2.13.20] — 2026-07-06 — Transient/owned loops outside the bridge drain their adapter pools on teardown (#1575)
+
+### Fixed
+
+- **Non-bridge transient loops that create an adapter pool during schema discovery no longer leak it on the exception path (#1575).** `DataFlowEngine._inspect_database_schema_real` (reached from the sync `discover_schema`) opens a real asyncpg / aiosqlite adapter, walks the catalog, and closes it — but pre-fix the close sat OUTSIDE any `try/finally`, so a mid-discovery exception jumped over it and stranded the connection on a loop that then closed, surfacing as GC-time `RuntimeError: Event loop is closed` / `ResourceWarning: Unclosed connection`. Both the PostgreSQL and the SQLite inspection branches now drain the adapter in a guarded `finally` on every exit path (idempotent; logs the exception type only, never a DSN). The transient loop-creating sites (`discover_schema`, `validate_schema`, the `current_schema` fallback, and the model-registry workflow bridge) are additionally routed through `async_safe_run`, which stamps each transient loop with the `BRIDGE_LOOP_ATTR` marker so any pool created on it is drained by the #1572 registry before the loop closes (defense-in-depth atop the inspector's own `try/finally`).
+- **`SyncExpress` (`db.express_sync`) now closes its persistent owned event loop and drains its loop-bound connections on owner teardown (#1575).** The sync Express surface runs all operations on a persistent background-thread loop, so aiosqlite/asyncpg connections bind to that loop and survive across calls. Pre-fix nothing tore that loop down — every `DataFlow` instance that used `db.express_sync` leaked a daemon thread + event loop + its bound connections, and at interpreter shutdown the daemon thread was killed with connections still bound (the same `Unclosed connection` class). `DataFlow.close()` / `close_async()` now drive a new `SyncExpress.close()` that drains the loop-bound adapters ON the owning loop (while it is alive) and then stops, joins (bounded 5s), and closes it; a `__del__` emits a `ResourceWarning` if the caller never closed the `DataFlow` (mirrors the existing `SyncTransactionManager` teardown). The other owned per-instance loop (`SyncTransactionManager`) was already correct — its per-transaction connections close in a `finally` before the loop closes, so no pool outlives the drain.
+- **`SyncExpress` dispatch is hardened against concurrent / after-close use.** `_run_sync` now raises a typed "SyncExpress is closed" error (instead of an opaque `AttributeError`) when called after `db.close()`, and a call in flight when `close()` runs settles with `CancelledError` in bounded time rather than blocking the caller thread forever on `future.result()`; the submit-vs-close window is serialized under the existing pending-futures lock (real work is never serialized — `future.result()` stays outside the lock).
+
+### Tests
+
+- **#1575:** Tier-2 regression against real PostgreSQL (5434), MySQL (3307), and file-backed SQLite — deterministic exception-path drain assertions for the PG + SQLite inspect branches (fail pre-fix, pass post-fix), a `SyncExpress` owned-loop lifecycle GC-capture on both PG and MySQL (thread joined, no `Unclosed connection` / `Event loop is closed`), a model-registry bridge-reroute invariant, the after-close typed-error + concurrent-close no-strand hardening tests, and an idempotent-close test. 11/11 green; suite runs clean under `-W error::ResourceWarning`.
+
 ## [2.13.19] — 2026-07-05 — Sync→async bridge drains adapter pools before closing its transient loop (#1572)
 
 ### Fixed
