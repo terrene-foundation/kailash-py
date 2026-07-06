@@ -10608,7 +10608,8 @@ class DataFlow(DataFlowEventMixin):
                     closer()
                 except Exception as e:
                     logger.debug(
-                        "engine.error_closing_cache_adapter", extra={"error": str(e)}
+                        "engine.error_closing_cache_adapter",
+                        extra={"error_type": type(e).__name__},
                     )
             self._cache_integration = None
 
