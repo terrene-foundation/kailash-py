@@ -410,6 +410,22 @@ class AsyncRedisCacheAdapter:
         self._closed = True
         logger.debug("AsyncRedisCacheAdapter executor shut down")
 
+    def close(self) -> None:
+        """Synchronously shut down the executor thread pool.
+
+        The sync sibling of ``close_async`` for callers already on a
+        blocking path (``DataFlow.close()``). ``ThreadPoolExecutor.shutdown``
+        is purely synchronous, and the ``logger.debug`` here is safe because
+        it runs only on an explicit close — NOT from ``__del__`` (see
+        ``__del__`` for the finalizer/root-logging-lock deadlock distinction
+        that forbids logging from the finalizer path).
+        """
+        if self._closed:
+            return
+        self._executor.shutdown(wait=True)
+        self._closed = True
+        logger.debug("AsyncRedisCacheAdapter executor shut down (sync)")
+
     def __del__(self, _warnings=warnings) -> None:
         """Emit ResourceWarning if the adapter was not closed.
 

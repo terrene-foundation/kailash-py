@@ -10535,6 +10535,21 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._express_sync = None
 
+        # Close the async Express instance's cache backend (sync path). See the
+        # close_async() counterpart: DataFlowExpress eagerly auto-detects a
+        # cache backend, and a Redis-reachable AsyncRedisCacheAdapter leaks its
+        # ThreadPoolExecutor threads unless closed. The in-memory fallback
+        # no-ops. Eager attribute — created in __init__.
+        express_async = getattr(self, "_express_dataflow", None)
+        if express_async is not None:
+            try:
+                express_async.close()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_async",
+                    extra={"error_type": type(e).__name__},
+                )
+
         # Stop pool monitor
         if self._pool_monitor is not None:
             try:
@@ -10577,6 +10592,25 @@ class DataFlow(DataFlowEventMixin):
                         extra={"db_type": db_type, "error": str(e)},
                     )
             self._async_sql_node_cache.clear()
+
+        # Close the query-cache adapter's executor thread pool. When the cache
+        # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
+        # owns a ThreadPoolExecutor whose worker threads leak (ResourceWarning
+        # at GC) unless explicitly closed. AsyncRedisCacheAdapter.close() is a
+        # sync shutdown (safe on this blocking path); the in-memory fallback has
+        # no close(), so the getattr guard no-ops on that branch.
+        integration = getattr(self, "_cache_integration", None)
+        if integration is not None:
+            manager = getattr(integration, "cache_manager", None)
+            closer = getattr(manager, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception as e:
+                    logger.debug(
+                        "engine.error_closing_cache_adapter", extra={"error": str(e)}
+                    )
+            self._cache_integration = None
 
         # Clean up connection manager
         # close_all_connections() is async; bridge to sync via async_safe_run.
@@ -10725,6 +10759,21 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._express_sync = None
 
+        # Close the async Express instance's cache backend. DataFlowExpress
+        # eagerly auto-detects a cache backend at construction; when Redis is
+        # reachable that is an AsyncRedisCacheAdapter owning a ThreadPoolExecutor
+        # whose worker threads leak (ResourceWarning at GC) unless closed. The
+        # in-memory fallback no-ops. Eager attribute — created in __init__.
+        express_async = getattr(self, "_express_dataflow", None)
+        if express_async is not None:
+            try:
+                await express_async.close_async()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_express_async",
+                    extra={"error_type": type(e).__name__},
+                )
+
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:
             try:
@@ -10761,6 +10810,26 @@ class DataFlow(DataFlowEventMixin):
                         extra={"db_type": db_type, "error": str(e)},
                     )
             self._async_sql_node_cache.clear()
+
+        # Close the query-cache adapter's executor thread pool. When the cache
+        # backend auto-detected to AsyncRedisCacheAdapter (Redis reachable), it
+        # owns a ThreadPoolExecutor whose worker threads leak (ResourceWarning
+        # at GC) unless explicitly closed — neither close path used to tear it
+        # down. The in-memory fallback has no close_async, so the getattr guard
+        # no-ops on that branch.
+        integration = getattr(self, "_cache_integration", None)
+        if integration is not None:
+            manager = getattr(integration, "cache_manager", None)
+            closer = getattr(manager, "close_async", None)
+            if callable(closer):
+                try:
+                    await closer()
+                except Exception as e:
+                    logger.debug(
+                        "engine.error_closing_cache_adapter_async",
+                        extra={"error": str(e)},
+                    )
+            self._cache_integration = None
 
         # Clean up connection manager
         if hasattr(self, "_connection_manager") and self._connection_manager:
