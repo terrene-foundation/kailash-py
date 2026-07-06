@@ -2048,6 +2048,31 @@ class DataFlowExpress:
 
         return {"imported": imported, "errors": errors}
 
+    async def close_async(self) -> None:
+        """Release Express-owned resources — the cache backend's executor.
+
+        When the cache backend auto-detected to ``AsyncRedisCacheAdapter``
+        (Redis reachable), it owns a ``ThreadPoolExecutor`` whose worker
+        threads leak (``ResourceWarning`` at GC) unless explicitly closed.
+        The in-memory fallback has no ``close_async``, so the getattr guard
+        no-ops on that branch. Wired into :func:`DataFlow.close_async` so
+        ``async with DataFlow(...)`` callers do not close it manually.
+        Idempotent — ``AsyncRedisCacheAdapter.close_async`` guards double-close.
+        """
+        closer = getattr(self._cache_manager, "close_async", None)
+        if callable(closer):
+            await closer()
+
+    def close(self) -> None:
+        """Sync sibling of :func:`close_async` — release the cache backend's
+        executor on a blocking teardown path (``DataFlow.close``). The
+        in-memory fallback has no ``close``, so the getattr guard no-ops.
+        Idempotent.
+        """
+        closer = getattr(self._cache_manager, "close", None)
+        if callable(closer):
+            closer()
+
 
 ExpressDataFlow = DataFlowExpress  # Deprecated alias
 
