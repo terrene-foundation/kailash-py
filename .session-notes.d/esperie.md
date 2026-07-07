@@ -5,49 +5,52 @@
 
 ---
 
-last_reconciled_sha: a1725ffa6
+last_reconciled_sha: 699b0e20e
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-07-04
+# Session Notes — 2026-07-07 (session 8)
 
 ## Where we are
 
-Clean on `main`, 0 open PRs. This session shipped **kailash-dataflow 2.13.10** (`/autonomize` +
-`/redteam` + full `/release`), closing **#1520** (F-PG — PG single-record upsert `conflict_on` on a
-non-unique field → actionable typed `UpsertConflictTargetError`; mirrors #1519). Filed follow-ups
-**#1537** (F-MYSQL) + **#1538** (F-LISTSTALE). Upsert `conflict_on` family (#1508/#1519/#1520) now
-fully shipped. **Recommended next: #1537 or #1538** (freshest sibling-class items).
+kailash-dataflow **2.14.2 is redteam-converged, merged, and live on PyPI**
+(clean-venv verified `dataflow.__version__ == 2.14.2`). The 6-issue follow-up
+cluster from journal 0022 is closed. Repo on `main` @ `699b0e20e`, tree clean
+(only untracked `workspaces/mops-onboarding/.session-notes`). No active todos.
 
 ## Read first
 
-1. `deploy/deployments/2026-07-04-dataflow-v2.13.10-1520-pg-single-upsert-conflict-on.md` — #1520 root cause + red-team + the release pattern to mirror.
-2. `gh issue view 1537` / `gh issue view 1538` — the filed follow-ups (MySQL silent-upsert; list staleness).
-3. `packages/kailash-dataflow/src/dataflow/sql/dialects.py` — `MySQLDialect.build_upsert_query` (the F-MYSQL/#1537 site).
+1. `workspaces/mops-onboarding/.session-notes` — live workspace notes (this repo's session-start surfaces that path; fullest context).
+2. `workspaces/mops-onboarding/journal/0024-...-dataflow-2.14.2-released.md` — release receipt (PR #1608, tag, PyPI verify). NOT in git log.
+3. `workspaces/mops-onboarding/journal/0023-...-wave1-correctness.md` — Wave-1 G1 convergence + the #1252 leak-refutation lesson.
+4. `workspaces/mops-onboarding/04-validate/sweep-2026-07-07.md` — full /sweep (board clean; 15-issue backlog).
+5. `packages/kailash-dataflow/CHANGELOG.md` `[2.14.2]` — exactly what shipped.
+
+## Executed this session
+
+- Released **kailash-dataflow 2.14.2** to PyPI (PR #1608 / tag `dataflow-v2.14.2`, publish run all-green, clean-venv verified) — NOT recoverable from git log alone.
+- Filed **#1606** (cache-key DB-identity, cross-SDK) + **#1607** (enterprise-doc unbacked-key fiction audit).
 
 ## Outstanding ledger (forest)
 
-| ID          | Item                                                                          | Value-anchor (MUST-1 source)                | Status                                                                                  |
-| ----------- | ----------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| F-MYSQL     | MySQL single-record upsert silently upserts on `id` PK, ignores `conflict_on` | #1537; dataflow-specialist redteam of #1520 | OPEN MED (#1537) — proactive `information_schema` precheck, not error-catch; own shard. |
-| F-LISTSTALE | `express.list(cache_ttl=0)` stale after an upsert-UPDATE                      | #1538; discovered testing #1520             | OPEN (#1538) — pre-existing PG read-snapshot/pool gap.                                  |
-| F-COMPKEY   | multi_tenant single-column `id` PK → tenants can't share natural key          | #1526; #1518 AC (user 2026-07-03)           | OPEN design — composite `(tenant_id,id)`; maintainer call.                              |
-| F-LOGSYNC   | Propagate #1534 log-triage hook fix to loom/USE templates                     | cc-architect #1534 LOW-1; artifact-flow     | OPEN LOW — `/codify` proposal so the fix cascades downstream.                           |
-| F6          | Convert `test_production_dataflow` off mock engine (Tier-2 NO-MOCK)           | #1503; rules/testing.md §Tier 2             | queued (#1503) — xfail-strict self-clears.                                              |
-| F7          | `test_concurrent_order_processing` PG two-txn isolation fails on main         | #1504 (pre-existing at HEAD)                | queued (#1504) — separate PG-isolation shard.                                           |
-| F2          | mops-onboarding cross-repo: loom issue + kailash-rs rollout                   | user 2026-06-23 "roll out to kailash-rs…"   | GATED (receipt-gated; dedicated session).                                               |
-| F3          | ~29 prod TODO markers                                                         | user 2026-06-26 "leave as baseline"         | DEFERRED (user).                                                                        |
+Authoritative forest = root `.session-notes.shared.md`: F1 (mops-onboarding program, BLOCKED on user cross-repo re-confirm), F13 (SDK backlog #1573/#1526/#1532), F14/FC (SAFR cluster, BLOCKED on user scoping), F19 (#1606), F20 (#1607).
 
-Closed this session: `F-PG` → dataflow 2.13.10 (PR #1536 fix, #1539 release, tag `dataflow-v2.13.10`, publish run 28676581625 SUCCESS; #1520 closed).
+Closed this session: `#1600` `#1603` `#1604` `#1605` `#1599` → PR #1608 (dataflow 2.14.2); `#1252` → test-fix in same PR.
+
+Prior-fragment ledger reconcile (07-04 lineage, superseded): `F2`→ now `F1` (cross-repo); `F-COMPKEY`(#1526) → folded into `F13`; `F-MYSQL`(#1537) `F-LISTSTALE`(#1538) `F-LOGSYNC`(#1534) `F6`(#1503) `F7`(#1504) → CLOSED in interim sessions (absent from the 15 open issues); `F3` (~33 prod TODO markers) → user-baselined "leave as baseline" (2026-06-26).
 
 ## Traps
 
-- Live single-record upsert path = `core/nodes.py` native-ON-CONFLICT execute (the #1520 guard site); `build_upsert_query` has ONE prod caller there. Bulk = `features/bulk.py` (P1).
-- PG single-upsert integration tests: persistent tables accumulate rows across runs (fixture never truncates) → drop-first + `auto_migrate=True` (as #1520's fix did), else `CREATE UNIQUE INDEX` fails on dup data.
-- In upsert tests, verify persisted state via raw SQL / `pg_suite.get_connection()`, NOT `express.list` — it can read stale after an upsert-UPDATE (#1538).
-- MySQL `ON DUPLICATE KEY UPDATE` ignores `conflict_on` (matches `id` PK) — #1537 needs a constraint precheck, not the #1520 reactive error-catch.
-- PyPI/uv release-verify: `uv pip install --refresh` (uv index cache lag); `/<ver>/json` returns 200 before `info.version` updates.
+- `bulk.py`: 4 intentional `logger.warning` (2 empty-filter + 2 per-record skip, keys/id only) + a 5th in `_model_has_tenant_field`. Do NOT re-flag.
+- DB tests: PG on 5434, no `psql` → asyncpg via ROOT `.venv/bin/python`; `-p no:xdist -o "addopts="`; deselect #1594 hang (`test_bulk_upsert_large_mixed_batch` + `test_v052*`); teardown "Logging error" spam ≠ failure.
+- `core_engine/` integration has ~35 PRE-EXISTING local failures (baseline on main; PG-test-manager infra-dependent). NOT from 2.14.2 (set-diff proven). CI is the arbiter.
+- A "swept all sites" claim is a code-claim: enumerate → grep-verify → THEN write. Independent adversarial verify + baseline set-diff refuted TWO scary findings this session (a 35-test "regression" and a "cross-tenant leak" — both innocent).
+- PyPI/uv lag: `/<ver>/json` 200 + install works but `uv pip install` unresolvable → `uv pip install --refresh` (or pip `--no-cache-dir`), retry ~60s.
 
 ## Unreleased packages
 
-None — dataflow 2.13.10 released + clean-venv-verified this session; all siblings in-sync with PyPI (checked at release). Post-tag commits are docs/workspace-only (carve-out).
+None — dataflow 2.14.2 released + clean-venv-verified this session; all 8 siblings at PyPI parity (checked at release). Post-tag commits are docs/workspace-only (carve-out).
+
+## Recommended next pick (human owns it)
+
+**#1573** (AutoMigrationSystem ignores `__tablename__`) — same subsystem as this session's #1600, warm context. Cross-repo (F1) + SAFR (F14) BLOCKED on a user turn per repo-scope-discipline.
