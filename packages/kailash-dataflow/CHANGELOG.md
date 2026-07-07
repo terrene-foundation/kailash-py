@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.14.3] — 2026-07-08 — AutoMigrationSystem trigger/tracking paths respect `__tablename__` (#1573)
+
+### Fixed
+
+- **AutoMigrationSystem trigger + migration-diff/tracking paths now respect `__tablename__` (`core/engine.py`, #1573; sibling of #1541).** #1541 routed the CREATE INDEX / FK ALTER generators through the `__tablename__`-respecting resolver `_get_table_name`, but the migration TRIGGER paths (`_trigger_sqlite_migration_system` + the async `_execute_sqlite_migration_system_async` / `_execute_postgresql_enhanced_schema_management_async` / `_execute_postgresql_migration_system_async` variants), the diff/target builders (`_trigger_postgresql_enhanced_schema_management`, `_trigger_postgresql_migration_system`, `_build_incremental_model_schema`), and the tracking DDL path (`_execute_postgresql_migration_with_tracking` → `_generate_migration_sql`, including its two model reverse-lookups) still keyed the migration TARGET schema / diff / ALTER DDL to the pluralized class-name default (`_class_name_to_table_name`). For a model with a custom `__tablename__`, the schema-state-manager planned DDL against the WRONG table name — a phantom default-named table in the diff, or (via the tracking path's reverse-lookup) an ALTER that silently resolved to an empty statement. All 11 in-scope sites now route through `_get_table_name(model_name)` (the two reverse-lookups through `_get_table_name(name)`), so every migration path resolves the table name consistently with CREATE TABLE. Note the `_relationships` FK-detection keying (keyed by the class-name default by established contract — see the #1541 regression test) is a separate, higher-blast-radius concern and is intentionally NOT changed here. Behavioral regression tests (real PostgreSQL) prove the incremental-schema builder keys to the custom table and the tracking-path ALTER generator resolves the custom table (both RED→GREEN verified), plus an end-to-end guard that no phantom default table is created and migration-history keying stays consistent.
+
 ## [2.14.2] — 2026-07-07 — auto-migrate ALTER-ADD; bulk identifier quoting; find_one include_deleted; unknown-key warning; versioned fiction purge
 
 ### Added

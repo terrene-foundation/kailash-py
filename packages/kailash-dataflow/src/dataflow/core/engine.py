@@ -3089,7 +3089,10 @@ class DataFlow(DataFlowEventMixin):
     ):
         """Execute SQLite migration system asynchronously - ARCHITECTURAL FIX."""
 
-        table_name = self._class_name_to_table_name(model_name)
+        # issue #1573 (sibling of #1541): resolve ``__tablename__`` so the
+        # migration target schema keys to the SAME table CREATE TABLE uses —
+        # not the pluralized class-name default (which builds a phantom table).
+        table_name = self._get_table_name(model_name)
 
         # Build expected table schema from model fields
         dict_schema = {
@@ -3196,7 +3199,9 @@ class DataFlow(DataFlowEventMixin):
 
         # Build model schema for the specific model being registered
         model_fields = {}
-        table_name = self._class_name_to_table_name(model_name)
+        # issue #1573 (sibling of #1541): respect ``__tablename__`` so the
+        # enhanced-schema diff keys to the real table, not the default plural.
+        table_name = self._get_table_name(model_name)
 
         for field_name, field_info in fields.items():
             model_fields[field_name] = {
@@ -3262,7 +3267,9 @@ class DataFlow(DataFlowEventMixin):
     ):
         """Execute PostgreSQL migration system asynchronously - ARCHITECTURAL FIX."""
 
-        table_name = self._class_name_to_table_name(model_name)
+        # issue #1573 (sibling of #1541): resolve ``__tablename__`` so the
+        # target schema keys to the real table, matching CREATE TABLE.
+        table_name = self._get_table_name(model_name)
 
         # Build expected table schema from model fields
         dict_schema = {
@@ -7184,7 +7191,9 @@ class DataFlow(DataFlowEventMixin):
     def _trigger_sqlite_migration_system(self, model_name: str, fields: Dict[str, Any]):
         """Trigger SQLite migration system to ensure table exists."""
 
-        table_name = self._class_name_to_table_name(model_name)
+        # issue #1573 (sibling of #1541): resolve ``__tablename__`` so the
+        # migration target schema keys to the SAME table CREATE TABLE uses.
+        table_name = self._get_table_name(model_name)
 
         # Build expected table schema from model fields in dictionary format
         dict_schema = {
@@ -7301,7 +7310,9 @@ class DataFlow(DataFlowEventMixin):
         # The existing_schema_mode is handled at the migration comparison level
         model_schema = ModelSchema(
             tables={
-                self._class_name_to_table_name(model_name): {
+                # issue #1573 (sibling of #1541): key the diff to ``__tablename__``,
+                # not the pluralized default (else the diff plans a phantom table).
+                self._get_table_name(model_name): {
                     "columns": self._convert_fields_to_columns(
                         fields, soft_delete=self._model_has_soft_delete(model_name)
                     )
@@ -7369,7 +7380,9 @@ class DataFlow(DataFlowEventMixin):
         """Trigger PostgreSQL migration system for model registration."""
         try:
             # Create target schema from model definition
-            table_name = self._class_name_to_table_name(model_name)
+            # issue #1573 (sibling of #1541): resolve ``__tablename__`` so the
+            # AutoMigrationSystem diff keys to the real table, not the default.
+            table_name = self._get_table_name(model_name)
 
             # Convert fields to AutoMigrationSystem format
             from ..migrations.auto_migration_system import (
@@ -7649,7 +7662,9 @@ class DataFlow(DataFlowEventMixin):
                 model_schema_tables[table_name] = {"columns": columns}
 
             # Add or update the current model's table
-            table_name = self._class_name_to_table_name(model_name)
+            # issue #1573 (sibling of #1541): resolve ``__tablename__`` so the
+            # incremental diff keys to the real table, matching CREATE TABLE.
+            table_name = self._get_table_name(model_name)
             soft_delete = self._model_has_soft_delete(model_name)
             model_schema_tables[table_name] = {
                 "columns": self._convert_fields_to_columns(
@@ -7672,7 +7687,9 @@ class DataFlow(DataFlowEventMixin):
 
             return ModelSchema(
                 tables={
-                    self._class_name_to_table_name(model_name): {
+                    # issue #1573 (sibling of #1541): fallback path also keys to
+                    # ``__tablename__`` so the diff matches CREATE TABLE.
+                    self._get_table_name(model_name): {
                         "columns": self._convert_fields_to_columns(
                             fields,
                             soft_delete=self._model_has_soft_delete(model_name),
@@ -7843,7 +7860,10 @@ class DataFlow(DataFlowEventMixin):
 
         try:
             # Execute specific migration operations instead of recreating the table
-            table_name = self._class_name_to_table_name(model_name)
+            # issue #1573 (sibling of #1541): the tracking path emits real ALTER
+            # DDL — resolve ``__tablename__`` so the DDL targets the custom table,
+            # not the pluralized default (which would ALTER a non-existent table).
+            table_name = self._get_table_name(model_name)
             connection = self._get_async_sql_connection()
 
             # Detect database type for SQL generation
@@ -7954,9 +7974,13 @@ class DataFlow(DataFlowEventMixin):
             _validate_identifier(column_name)
 
             # Get the field info for this column from the model
+            # issue #1573 (sibling of #1541): match the physical ``table_name``
+            # (resolved via _get_table_name at the tracking call site) back to its
+            # model using the SAME resolver — else a custom-``__tablename__`` model
+            # never matches and the ALTER SQL is silently dropped (empty string).
             model_name = None
             for name, info in self._models.items():
-                if self._class_name_to_table_name(name) == table_name:
+                if self._get_table_name(name) == table_name:
                     model_name = name
                     break
 
@@ -8016,9 +8040,11 @@ class DataFlow(DataFlowEventMixin):
 
         elif operation_type == "CREATE_TABLE":
             # For CREATE_TABLE operations, use the existing method
+            # issue #1573 (sibling of #1541): resolve the model via the same
+            # ``__tablename__``-aware resolver used to build ``table_name``.
             model_name = None
             for name, info in self._models.items():
-                if self._class_name_to_table_name(name) == table_name:
+                if self._get_table_name(name) == table_name:
                     model_name = name
                     break
 
@@ -9850,6 +9876,12 @@ class DataFlow(DataFlowEventMixin):
 
         # Get the discovered schema for PostgreSQL
         schema = self.discover_schema()
+        # NB: the ``_relationships`` dict is keyed by the pluralized class-name
+        # default (the established contract ``get_relationships`` +
+        # ``_generate_foreign_key_constraints_sql`` read through — see the #1541
+        # regression test). Changing this key to ``__tablename__`` is a separate,
+        # higher-blast-radius concern than #1573's migration-diff paths and is
+        # intentionally NOT done here.
         table_name = self._class_name_to_table_name(model_name)
 
         # Initialize relationships storage if not exists
@@ -9926,6 +9958,9 @@ class DataFlow(DataFlowEventMixin):
             )
             return
 
+        # NB: keyed by the pluralized class-name default — the established
+        # ``_relationships`` contract (see #1541 test + the sync sibling above).
+        # Deliberately NOT changed for #1573 (separate concern).
         table_name = self._class_name_to_table_name(model_name)
 
         # Initialize relationships storage if not exists
@@ -10808,6 +10843,8 @@ class DataFlow(DataFlowEventMixin):
             return {}
 
         if model_name:
+            # NB: ``_relationships`` is keyed by the pluralized class-name default
+            # (the established contract; see #1541 test). NOT changed for #1573.
             table_name = self._class_name_to_table_name(model_name)
             return self._relationships.get(table_name, {})
 
