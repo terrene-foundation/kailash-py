@@ -187,3 +187,33 @@ async def test_auto_migrate_alter_adds_new_plain_column_to_existing_table(
         if dialect == "postgresql":
             await _pg_drop(url, table)
         # sqlite: tmp_path file is discarded by pytest — no cleanup needed.
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("database_type", ["postgresql", "sqlite"])
+def test_reconciler_rejects_injection_column_identifier(tmp_path, database_type):
+    """The auto-migrate ALTER-ADD reconciler routes every column identifier
+    through ``dialect.quote_identifier`` (validate-then-quote, reject-don't-
+    escape) before it reaches the DDL string — an injection-shaped column name
+    is REJECTED, never interpolated raw (rules/dataflow-identifier-safety.md
+    Rule 3). This pins the DDL-building path's identifier safety directly.
+    """
+    from dataflow.adapters.dialect import DialectManager
+    from dataflow.adapters.dialect import InvalidIdentifierError
+
+    db = DataFlow(f"sqlite:///{tmp_path}/inj.db")
+    dialect = DialectManager.get_dialect(database_type)
+    meta = {"type": "TEXT", "nullable": True, "default": None}
+
+    for hostile in (
+        'x"; DROP TABLE users; --',
+        "col WITH DATA",
+        "1_starts_with_digit",
+        'a" , "b',
+    ):
+        with pytest.raises(InvalidIdentifierError):
+            db._build_add_column_clause(dialect, hostile, meta, database_type)
+
+    # A legitimate identifier still builds a clause (quoted).
+    clause = db._build_add_column_clause(dialect, "extra", meta, database_type)
+    assert "extra" in clause

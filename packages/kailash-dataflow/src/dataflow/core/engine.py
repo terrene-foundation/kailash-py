@@ -2658,27 +2658,39 @@ class DataFlow(DataFlowEventMixin):
         if not missing:
             return
 
-        quoted_table = dialect.quote_identifier(table_name)
-        alter_statements: List[str] = []
-        for col_name in missing:
-            meta = target_columns[col_name]
-            if meta.get("primary_key"):
-                # A primary key is created with the table; never ALTER-ADD one.
-                continue
-            clause = self._build_add_column_clause(
-                dialect, col_name, meta, database_type
-            )
-            if clause:
-                alter_statements.append(
-                    f"ALTER TABLE {quoted_table} ADD COLUMN {clause}"
+        try:
+            quoted_table = dialect.quote_identifier(table_name)
+            alter_statements: List[str] = []
+            for col_name in missing:
+                meta = target_columns[col_name]
+                if meta.get("primary_key"):
+                    # A primary key is created with the table; never ALTER-ADD one.
+                    continue
+                clause = self._build_add_column_clause(
+                    dialect, col_name, meta, database_type
                 )
+                if clause:
+                    alter_statements.append(
+                        f"ALTER TABLE {quoted_table} ADD COLUMN {clause}"
+                    )
 
-        if not alter_statements:
+            if not alter_statements:
+                return
+
+            await self._apply_alter_add_statements(
+                alter_statements, database_url, database_type
+            )
+        except Exception as e:
+            # Reconciliation is best-effort: a quote/build/ALTER failure must not
+            # break table setup (the CREATE already succeeded). Skip this pass
+            # with an explicit WARN rather than propagating to the generic
+            # table-ensure handler. observability.md Rule 8: error_type only,
+            # never the (schema-revealing) identifier.
+            logger.warning(
+                "engine.column_reconcile_error",
+                extra={"model_name": model_name, "error_type": type(e).__name__},
+            )
             return
-
-        await self._apply_alter_add_statements(
-            alter_statements, database_url, database_type
-        )
         # observability.md Rule 8: count only — never the (schema-revealing)
         # column names.
         logger.info(
@@ -2927,16 +2939,37 @@ class DataFlow(DataFlowEventMixin):
         if not missing:
             return
 
-        dialect = DialectManager.get_dialect(database_type)
-        quoted_table = dialect.quote_identifier(table_name)
+        try:
+            dialect = DialectManager.get_dialect(database_type)
+            quoted_table = dialect.quote_identifier(table_name)
+        except Exception as e:
+            # A dialect lookup / identifier-quoting failure is a reconcile-only
+            # problem — the CREATE already succeeded. Skip this pass with an
+            # explicit WARN rather than marking a physically-present table as
+            # failed (mirrors the async path's recover-and-proceed). Rule 8:
+            # error_type only, never the identifier.
+            logger.warning(
+                "engine.column_reconcile_error",
+                extra={"model_name": model_name, "error_type": type(e).__name__},
+            )
+            return
         added = 0
         for col_name in missing:
             meta = target_columns[col_name]
             if meta.get("primary_key"):
                 continue
-            clause = self._build_add_column_clause(
-                dialect, col_name, meta, database_type
-            )
+            try:
+                clause = self._build_add_column_clause(
+                    dialect, col_name, meta, database_type
+                )
+            except Exception as e:
+                # A hostile/invalid column identifier is rejected by
+                # quote_identifier here; skip that column, never break setup.
+                logger.warning(
+                    "engine.column_reconcile_error",
+                    extra={"model_name": model_name, "error_type": type(e).__name__},
+                )
+                continue
             if not clause:
                 continue
             result = executor.execute_ddl(
@@ -2950,8 +2983,15 @@ class DataFlow(DataFlowEventMixin):
             if "already exists" in err_lower or "duplicate column" in err_lower:
                 added += 1  # concurrent/benign — the column is present
             else:
+                # observability.md Rule 8: the sanitized driver error may name
+                # the column/constraint (schema-revealing) — keep that at DEBUG.
+                # The operational WARN carries only model_name.
                 logger.warning(
                     "engine.column_reconcile_alter_failed",
+                    extra={"model_name": model_name},
+                )
+                logger.debug(
+                    "engine.column_reconcile_alter_failed_detail",
                     extra={
                         "model_name": model_name,
                         "error": self._sanitize_db_error(err),
