@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2.14.2] — 2026-07-07 — auto-migrate ALTER-ADD; bulk identifier quoting; find_one include_deleted; unknown-key warning; versioned fiction purge
+
+### Added
+
+- **`express.find_one` now accepts `include_deleted` for soft_delete models (`features/express.py`, #1604).** `list` / `read` / `count` already accepted `include_deleted: bool = False`; `find_one` (and the `express_sync.find_one` variant) now mirror them, so a tombstoned row can be fetched via a non-PK filter. `include_deleted` participates in the cache-key params hash (no `False`/`True` slot collision) while `tenant_id` stays a separate cache-key dimension for `multi_tenant` models (`tenant-isolation.md` Rule 1). Tier-2 verified on PostgreSQL + SQLite.
+- **Unrecognized `__dataflow__` model-config keys now warn loudly (`core/engine.py`, #1599).** A `__dataflow__` key that DataFlow's code does not consume (the exact silent-no-op failure mode of the removed `versioned` flag) now emits a non-breaking `UserWarning` naming the key(s) and the model, stating they have no effect and listing the recognized keys. It is a warning, never a raise — a working model still registers if the allowlist is ever incomplete. Recognized keys: `soft_delete`, `multi_tenant`, `indexes`, `retention`, `use_native_arrays`, `audit_log`.
+
+### Fixed
+
+- **Auto-migrate now ALTER-ADDs new columns to existing tables (`core/engine.py`, #1600).** `ensure_table_exists` relied on `CREATE TABLE IF NOT EXISTS`, which no-ops on an existing table, so a model that gained a field never got the column on a pre-existing table (new tables were unaffected; evolved tables silently lacked the column and every query on it failed). An additive column reconciler is now wired into both the async ensure path and the eager sync `_create_tables_batch` / `_create_table_sync` paths (the sync path marks the table ensured before the async reconciler could run, so the fix lives on both). It reuses the existing `_convert_fields_to_columns`, `SQLiteMigrationGenerator`, and `SyncDDLExecutor` — no parallel migration SQL. Additive only: never drops or retypes a column; a `NOT NULL` column with no default is added `NULLABLE` (existing rows cannot satisfy `NOT NULL` on a freshly-added column on either dialect). Every dynamic identifier routes through `dialect.quote_identifier` (`dataflow-identifier-safety.md`). Reconciliation is best-effort and fails open (a quote/build/ALTER failure logs a WARN and skips, never breaks table setup). Dialect-portable (PostgreSQL + SQLite).
+- **Bulk operations now quote every dynamic SET/WHERE/table identifier (`features/bulk.py`, #1603).** The `bulk_update` SET clause (and, on audit, `bulk_create` / `bulk_delete` / `bulk_upsert` and the three upsert builders) interpolated column and table identifiers directly instead of routing them through `dialect.quote_identifier()`. Values were (and remain) parameter-bound, so this was a defense-in-depth gap, not an active vulnerability — but the bulk verbs now match the sibling `core/nodes.py` / `core/engine.py` paths (validate-then-quote, reject-don't-escape), closing the class against a future refactor that admits caller-influenced identifiers with no test signal (`dataflow-identifier-safety.md` Rule 1/2/3). A behavioral regression test asserts injection-shaped identifiers are rejected across the bulk paths.
+
+### Removed
+
+- **Fictional `versioned` / optimistic-locking / `RetryNode` references purged from the test suite and docs (#1605).** The `versioned` model-flag, the optimistic-locking API, and `RetryNode` have zero backing code; 2.14.0/2.14.1 removed them from the primary docs/examples, but the fiction persisted across ~18 test sites (~10 files) and remaining doc files. Removed `versioned: True` from every test site; deleted `test_optimistic_locking` and `test_versioned_records_enterprise_feature` (both asserted the no-op flag); dropped the `RetryNode` / `ConditionalRetryNode` doc references in `docs/workflows/error-handling.md` + `transactions.md`, reframing to the real `AsyncSQLDatabaseNode` `retry_config` / `RetryConfig` API and the real `UpdateNode` `filter` + `fields` API (`zero-tolerance.md` Rule 2; `orphan-detection.md` Rule 4/4a — the removal sweeps tests in the same change, `pytest --collect-only` stays exit 0).
+
 ## [2.14.1] — 2026-07-07 — bulk logging PII/schema hygiene; completed versioned-flag removal
 
 ### Fixed
