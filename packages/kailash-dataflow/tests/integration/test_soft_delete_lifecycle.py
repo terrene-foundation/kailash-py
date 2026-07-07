@@ -23,8 +23,10 @@ verified with an independent raw read-back:
 * a NON-soft_delete control model still HARD-deletes (row gone from the DB)
 
 Two PG-only engine-level tests round it out: the migration-diff schema-dict
-(fix #2 deliverable) and a strict-xfail pinning the pre-existing generic
-auto-migrate ALTER-ADD gap.
+(fix #2 deliverable) and an end-to-end contract that a pre-existing table gains
+deleted_at when a soft_delete model is registered against it (issue #1600 — the
+generic auto-migrate ALTER-ADD wiring; formerly a strict-xfail pin against the
+pre-existing gap, flipped to a passing test once the wiring landed).
 
 Run (PostgreSQL on 5434 must be up; SQLite is file-backed under tmp_path):
     TEST_DATABASE_URL="postgresql://test_user:test_password@localhost:5434/kailash_test" \
@@ -495,7 +497,7 @@ async def test_bulk_update_include_deleted_undeletes(dialect_db):
 
 # --------------------------------------------------------------------------
 # Engine-level migration-diff coverage (PostgreSQL — fix #2 deliverable + the
-# strict-xfail pin for the pre-existing generic auto-migrate ALTER-ADD gap).
+# end-to-end ALTER-ADD contract for issue #1600, formerly a strict-xfail pin).
 # --------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_soft_delete_schema_dict_includes_deleted_at():
@@ -538,25 +540,14 @@ async def test_soft_delete_schema_dict_includes_deleted_at():
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Pre-existing SDK gap (reported, NOT worked around): DataFlow's "
-        "auto-migrate (ensure_table_exists / initialize / DATAFLOW_AUTO_MIGRATE) "
-        "does NOT ALTER-ADD ANY new column — regular fields OR deleted_at — to a "
-        "pre-existing table; it relies on CREATE TABLE IF NOT EXISTS, which no-ops "
-        "when the table already exists. The incremental-ALTER capability exists at "
-        "the migration-handler level but is not wired into the model-registration/"
-        "ensure auto-migrate flow. The schema-dict fix (#2) correctly makes "
-        "deleted_at part of the migration TARGET, so this test XPASSes the moment "
-        "the generic ALTER-ADD wiring lands — forcing removal of this marker."
-    ),
-)
 async def test_auto_migrate_adds_deleted_at_to_existing_table():
-    """End-to-end migration-diff contract (strict-xfail against the pre-existing
-    generic auto-migrate ALTER-ADD gap): a pre-existing table WITHOUT deleted_at
-    gains the column when a model declaring soft_delete=True is registered
-    against the same table name."""
+    """End-to-end migration contract (issue #1600 — the generic auto-migrate
+    ALTER-ADD wiring): a pre-existing table WITHOUT deleted_at gains the column
+    when a model declaring soft_delete=True is registered against the same table
+    name. Previously a strict-xfail pin against the pre-existing SDK gap; the
+    additive column-reconciliation in ensure_table_exists closed it, so the
+    marker was removed (per testing.md: a strict-xfail that XPASSes forces
+    same-shard removal)."""
     table = f"sd_migrate_{uuid.uuid4().hex[:8]}"
 
     db1 = DataFlow(TEST_DATABASE_URL, auto_migrate=True)
