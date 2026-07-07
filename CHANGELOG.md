@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.45.6] - 2026-07-07
+
+### Fixed
+
+- **Conditional-execution performance and fallback metrics are now recorded.** `ConditionalExecutionMixin._track_conditional_execution_performance` and `_track_fallback_usage` called `_record_execution_metrics()` with a single metrics dict, but the real `LocalRuntime._record_execution_metrics` signature is `(workflow, execution_time, node_count, skipped_nodes, execution_mode)`. The arity mismatch raised a `TypeError` that the surrounding `except` swallowed, so `conditional_execution="skip_branches"` runs and fallback events silently recorded no metrics. Both call sites now pass the correct 5-argument signature; a regression test asserts the fallback metric lands.
+
 ## [2.45.5] - 2026-07-06
 
 ### Added

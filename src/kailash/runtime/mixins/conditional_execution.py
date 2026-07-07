@@ -535,19 +535,20 @@ class ConditionalExecutionMixin:
                     f"Conditional execution performance: {performance_improvement:.1f}% reduction in executed nodes ({skipped_nodes}/{total_nodes} skipped)"
                 )
 
-            # Track for monitoring (could be sent to metrics system)
+            # Track for monitoring (could be sent to metrics system).
+            # Signature must match LocalRuntime._record_execution_metrics(
+            #   workflow, execution_time, node_count, skipped_nodes, execution_mode).
+            # Passing a single metrics dict silently raised a swallowed
+            # "missing 4 required positional arguments" WARN on every
+            # skip_branches execution.
             if hasattr(self, "_record_execution_metrics"):
-                metrics = {
-                    "execution_mode": "conditional",
-                    "total_nodes": total_nodes,
-                    "executed_nodes": executed_nodes,
-                    "skipped_nodes": skipped_nodes,
-                    "performance_improvement_percent": (
-                        (skipped_nodes / total_nodes) * 100 if total_nodes > 0 else 0
-                    ),
-                    "duration": duration,
-                }
-                self._record_execution_metrics(metrics)
+                self._record_execution_metrics(
+                    workflow,
+                    duration,
+                    executed_nodes,
+                    skipped_nodes,
+                    "conditional",
+                )
 
         except Exception as e:
             self.logger.warning(
@@ -625,16 +626,21 @@ class ConditionalExecutionMixin:
             # Log fallback usage
             self.logger.info(f"Fallback used for workflow '{workflow.name}': {reason}")
 
-            # Track for monitoring (could be sent to metrics system)
+            # Track for monitoring (could be sent to metrics system).
+            # Signature must match LocalRuntime._record_execution_metrics(
+            #   workflow, execution_time, node_count, skipped_nodes, execution_mode);
+            # the fallback reason is already surfaced in the info log above.
+            # Passing a single metrics dict silently raised a swallowed
+            # "missing 4 required positional arguments" WARN on every fallback
+            # (same defect as _track_conditional_execution_performance).
             if hasattr(self, "_record_execution_metrics"):
-                metrics = {
-                    "execution_mode": "fallback",
-                    "workflow_name": workflow.name,
-                    "workflow_id": workflow.workflow_id,
-                    "fallback_reason": reason,
-                    "timestamp": time.time(),
-                }
-                self._record_execution_metrics(metrics)
+                self._record_execution_metrics(
+                    workflow,
+                    0.0,
+                    0,
+                    0,
+                    "fallback",
+                )
 
         except Exception as e:
             self.logger.warning(f"Error tracking fallback usage: {e}")
