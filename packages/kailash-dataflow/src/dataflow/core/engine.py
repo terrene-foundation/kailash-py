@@ -2622,7 +2622,13 @@ class DataFlow(DataFlowEventMixin):
         table_name = self._class_name_to_table_name(model_name)
 
         # Build expected table schema from model fields
-        dict_schema = {table_name: {"columns": self._convert_fields_to_columns(fields)}}
+        dict_schema = {
+            table_name: {
+                "columns": self._convert_fields_to_columns(
+                    fields, soft_delete=self._model_has_soft_delete(model_name)
+                )
+            }
+        }
 
         # Convert to TableDefinition format expected by migration system
         target_schema = self._convert_dict_schema_to_table_definitions(dict_schema)
@@ -2732,7 +2738,12 @@ class DataFlow(DataFlowEventMixin):
         # Use the correct ModelSchema format with tables
         model_schema = ModelSchema(
             tables={
-                table_name: {"columns": self._convert_fields_to_columns(model_fields)}
+                table_name: {
+                    "columns": self._convert_fields_to_columns(
+                        model_fields,
+                        soft_delete=self._model_has_soft_delete(model_name),
+                    )
+                }
             }
         )
 
@@ -2784,7 +2795,13 @@ class DataFlow(DataFlowEventMixin):
         table_name = self._class_name_to_table_name(model_name)
 
         # Build expected table schema from model fields
-        dict_schema = {table_name: {"columns": self._convert_fields_to_columns(fields)}}
+        dict_schema = {
+            table_name: {
+                "columns": self._convert_fields_to_columns(
+                    fields, soft_delete=self._model_has_soft_delete(model_name)
+                )
+            }
+        }
 
         # Convert to TableDefinition format expected by migration system
         target_schema = self._convert_dict_schema_to_table_definitions(dict_schema)
@@ -2893,7 +2910,9 @@ class DataFlow(DataFlowEventMixin):
                 table_name = model_info["table_name"]
                 fields = model_info["fields"]
                 dict_schema[table_name] = {
-                    "columns": self._convert_fields_to_columns(fields)
+                    "columns": self._convert_fields_to_columns(
+                        fields, soft_delete=self._model_has_soft_delete(model_name)
+                    )
                 }
 
             # Convert dictionary schema to TableDefinition format
@@ -5927,6 +5946,28 @@ class DataFlow(DataFlowEventMixin):
 
         return " ".join(definition_parts)
 
+    def _model_has_soft_delete(self, model_name: str) -> bool:
+        """Return True if the registered model declares ``soft_delete: True``.
+
+        Mirrors the config-access pattern used by the read path
+        (``nodes.py`` list/read soft-delete auto-filter): prefer the
+        structured ``_models[...]['config']`` dict, fall back to the
+        registered class's ``_dataflow_config`` attribute. This is the
+        single source of truth for the soft-delete DDL/DML decisions so the
+        schema CREATE, migration-diff, and DELETE paths stay in lockstep.
+        """
+        model_info = self._models.get(model_name)
+        if isinstance(model_info, dict):
+            config = model_info.get("config")
+            if isinstance(config, dict) and config.get("soft_delete", False):
+                return True
+        model_cls = self._registered_models.get(model_name)
+        if model_cls is not None:
+            cfg = getattr(model_cls, "_dataflow_config", None)
+            if isinstance(cfg, dict) and cfg.get("soft_delete", False):
+                return True
+        return False
+
     def _generate_create_table_sql(
         self,
         model_name: str,
@@ -5974,6 +6015,7 @@ class DataFlow(DataFlowEventMixin):
         quoted_id = dialect.quote_identifier("id")
         quoted_created_at = dialect.quote_identifier("created_at")
         quoted_updated_at = dialect.quote_identifier("updated_at")
+        has_soft_delete = self._model_has_soft_delete(model_name)
 
         # Start building CREATE TABLE statement with safety protection
         sql_parts = [f"CREATE TABLE IF NOT EXISTS {quoted_table} ("]
@@ -6035,6 +6077,22 @@ class DataFlow(DataFlowEventMixin):
             column_definitions.append(
                 f"    {quoted_updated_at} TEXT DEFAULT CURRENT_TIMESTAMP"
             )
+
+        # Soft-delete tombstone column (NULL = live row, non-NULL = deleted).
+        # The read path (nodes.py list/read) already auto-filters on
+        # ``deleted_at IS NULL`` for soft_delete models; this DDL creates the
+        # column so the filter has a column to reference and DELETE has a
+        # column to stamp. Identifier quoted via the dialect helper per
+        # rules/dataflow-identifier-safety.md.
+        # Guard: only auto-add when the model did NOT already declare a
+        # ``deleted_at`` field (legacy models declared it manually to work
+        # around the missing column). Double-emitting raises DuplicateColumn.
+        if has_soft_delete and "deleted_at" not in fields:
+            quoted_deleted_at = dialect.quote_identifier("deleted_at")
+            if database_type.lower() in ("postgresql", "mysql"):
+                column_definitions.append(f"    {quoted_deleted_at} TIMESTAMP")
+            else:  # sqlite
+                column_definitions.append(f"    {quoted_deleted_at} TEXT")
 
         # Join all column definitions
         sql_parts.extend([",\n".join(column_definitions)])
@@ -6659,7 +6717,13 @@ class DataFlow(DataFlowEventMixin):
         table_name = self._class_name_to_table_name(model_name)
 
         # Build expected table schema from model fields in dictionary format
-        dict_schema = {table_name: {"columns": self._convert_fields_to_columns(fields)}}
+        dict_schema = {
+            table_name: {
+                "columns": self._convert_fields_to_columns(
+                    fields, soft_delete=self._model_has_soft_delete(model_name)
+                )
+            }
+        }
 
         # Convert to TableDefinition format expected by migration system
         target_schema = self._convert_dict_schema_to_table_definitions(dict_schema)
@@ -6768,7 +6832,9 @@ class DataFlow(DataFlowEventMixin):
         model_schema = ModelSchema(
             tables={
                 self._class_name_to_table_name(model_name): {
-                    "columns": self._convert_fields_to_columns(fields)
+                    "columns": self._convert_fields_to_columns(
+                        fields, soft_delete=self._model_has_soft_delete(model_name)
+                    )
                 }
             }
         )
@@ -7114,8 +7180,11 @@ class DataFlow(DataFlowEventMixin):
 
             # Add or update the current model's table
             table_name = self._class_name_to_table_name(model_name)
+            soft_delete = self._model_has_soft_delete(model_name)
             model_schema_tables[table_name] = {
-                "columns": self._convert_fields_to_columns(fields)
+                "columns": self._convert_fields_to_columns(
+                    fields, soft_delete=soft_delete
+                )
             }
 
             logger.debug(
@@ -7134,13 +7203,25 @@ class DataFlow(DataFlowEventMixin):
             return ModelSchema(
                 tables={
                     self._class_name_to_table_name(model_name): {
-                        "columns": self._convert_fields_to_columns(fields)
+                        "columns": self._convert_fields_to_columns(
+                            fields,
+                            soft_delete=self._model_has_soft_delete(model_name),
+                        )
                     }
                 }
             )
 
-    def _convert_fields_to_columns(self, fields: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert DataFlow field format to schema state manager column format."""
+    def _convert_fields_to_columns(
+        self, fields: Dict[str, Any], soft_delete: bool = False
+    ) -> Dict[str, Any]:
+        """Convert DataFlow field format to schema state manager column format.
+
+        Args:
+            fields: DataFlow field metadata dict.
+            soft_delete: When True, include the ``deleted_at`` tombstone
+                column so the migration diff ALTER-ADDs it to existing tables
+                (mirrors the CREATE TABLE path in ``_generate_create_table_sql``).
+        """
         columns = {}
 
         # Check if model has a string ID field
@@ -7207,6 +7288,21 @@ class DataFlow(DataFlowEventMixin):
             "unique": False,
             "default": "CURRENT_TIMESTAMP",
         }
+
+        # Soft-delete tombstone column: nullable, no default (NULL = live row).
+        # Included only for soft_delete models so the migration diff ALTER-ADDs
+        # ``deleted_at`` to a pre-existing table when a model gains soft_delete.
+        # Guard: skip when the model already declared deleted_at (the loop
+        # above already emitted it), so the auto-managed entry does not clobber
+        # a user-declared column definition.
+        if soft_delete and "deleted_at" not in columns:
+            columns["deleted_at"] = {
+                "type": "TIMESTAMP",
+                "nullable": True,
+                "primary_key": False,
+                "unique": False,
+                "default": None,
+            }
 
         return columns
 
@@ -7947,6 +8043,19 @@ class DataFlow(DataFlowEventMixin):
         if actual_columns:
             # Use only columns that actually exist in the table
             expected_columns = field_names + ["created_at", "updated_at"]
+            # Soft-delete models MUST project deleted_at so the read-by-id
+            # tombstone check (nodes.py ReadNode: a row with non-null
+            # deleted_at is treated as not-found) has the column to inspect.
+            # deleted_at is an auto-managed column (not a declared model
+            # field), so without this it is filtered out of the projection
+            # and the read path silently returns tombstoned rows. Gated on
+            # actual_columns membership below, so non-soft-delete tables are
+            # unaffected.
+            if (
+                self._model_has_soft_delete(model_name)
+                and "deleted_at" not in expected_columns
+            ):
+                expected_columns.append("deleted_at")
             all_columns = [col for col in expected_columns if col in actual_columns]
         else:
             # Fallback to model fields only (no timestamp assumptions)
@@ -8010,7 +8119,15 @@ class DataFlow(DataFlowEventMixin):
             declared = [
                 f for f in fields if f not in ("id", "created_at", "updated_at")
             ]
-            return ["id", *declared, "created_at", "updated_at"]
+            managed = ["id", *declared, "created_at", "updated_at"]
+            # _generate_create_table_sql appends deleted_at for soft_delete
+            # models, so the authoritative managed column set includes it.
+            # Required for the read-by-id tombstone SELECT projection. Guard on
+            # membership so a model that declared deleted_at explicitly (already
+            # in `declared`) is not double-listed.
+            if self._model_has_soft_delete(model_name) and "deleted_at" not in managed:
+                managed.append("deleted_at")
+            return managed
         return await self._resolve_columns_via_introspection(model_name)
 
     async def _resolve_columns_via_introspection(self, model_name: str) -> List[str]:

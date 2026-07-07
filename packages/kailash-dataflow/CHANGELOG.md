@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [2.14.0] — 2026-07-07 — soft_delete completed end-to-end; bulk_update read-consistency; versioned docs removed
+
+### Added
+
+- **`include_deleted` parameter on `db.express.list` / `read` / `count` (+ sync variants).** Reveals tombstoned rows on demand; `include_deleted` is part of the cache key, so an `include_deleted=False` result never collides with an `include_deleted=True` query. Recover a tombstoned row with `db.express.update(model, id, {"deleted_at": None})`.
+- **`db.bulk.bulk_update` read-consistency for `soft_delete` models.** The filter-based path (`filter_criteria=`) excludes tombstoned rows by default (`deleted_at IS NULL`, matching the read auto-filter); pass `include_deleted=True` to bypass (e.g. to restore rows). The record/id-based path is unchanged (explicit-id targeting is the intended restore path).
+
+### Fixed
+
+- **`__dataflow__ = {"soft_delete": True}` now works end-to-end (was half-implemented).** The read auto-filter (`deleted_at IS NULL` on list/read/count) was wired, but the schema generator never created the `deleted_at` column and `delete()` performed a hard `DELETE FROM` — so a soft_delete model errored (`column "deleted_at" does not exist` on PostgreSQL) or returned no rows. Completed across every surface:
+  - **Schema (`core/engine.py`):** `_generate_create_table_sql` appends a nullable `deleted_at TIMESTAMP` for soft_delete models; `_convert_fields_to_columns` (threaded through every migration-target schema-build site) includes `deleted_at` in the diff schema; the read-by-id SELECT now projects `deleted_at`.
+  - **Delete (`core/nodes.py`):** `DeleteNode` tombstones (`UPDATE ... SET deleted_at = CURRENT_TIMESTAMP WHERE id = ... AND deleted_at IS NULL`) for soft_delete models; non-soft-delete models keep the hard DELETE.
+  - **Bulk delete (`features/bulk.py`):** `bulk_delete` tombstones for soft_delete models — closes a silent data-loss bug where bulk delete permanently destroyed rows soft_delete was meant to preserve. This is the convergence point shared by `db.bulk.bulk_delete`, `BulkDeleteNode`, and `db.express.bulk_delete`.
+  - Works on PostgreSQL and SQLite; every write is verified with an independent raw read-back in the new lifecycle suite.
+
+### Removed
+
+- **Removed the advertised-but-unimplemented `versioned` model flag from the docs.** `__dataflow__ = {"versioned": True}` was documented in five files (one describing a non-existent `enable_optimistic_locking` implementation) but had zero backing code — it silently did nothing. The docs no longer advertise it. (Building real optimistic locking is tracked separately.)
+
+### Docs
+
+- Replaced the fictional "Optimistic Locking" USER_GUIDE example with a real "Soft Delete" section; rewrote `examples/02_advanced_features.py` onto real features (soft_delete, `db.tenant_context` multi-tenancy, `$like` search).
+
+### Tests
+
+- New Tier-2 regression suite `tests/integration/test_soft_delete_lifecycle.py` — full lifecycle via `db.express` on real PostgreSQL + file-SQLite (17 passed, 1 strict-xfail pinning the pre-existing auto-migrate-ALTER limitation: existing tables do not yet gain new columns on model change).
+- Restored transaction-suite coverage (`tests/integration/transactions/test_workflow_integration.py`, #1582) on the current SwitchNode / Transaction*Node + monitoring APIs; fixed the `execute_raw` write-protection tests (#1584).
+
 ## [2.13.22] — 2026-07-06 — Bulk CRUD nodes are transaction-aware (#1585)
 
 ### Fixed

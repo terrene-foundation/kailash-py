@@ -1,406 +1,348 @@
 """
 Advanced DataFlow Features
 
-This example demonstrates:
-- Multi-tenancy with automatic isolation
-- Optimistic locking for concurrent updates
-- Soft deletes with recovery
+This example demonstrates, on the current DataFlow API:
+- Soft deletes with recovery (real `__dataflow__={"soft_delete": True}` feature)
+- Multi-tenancy with automatic isolation (real `db.tenant_context` API)
+- Search with the `$like` filter operator
 - Bulk operations for performance
-- Transaction management
-- Real-time monitoring
+- Transaction management with SwitchNode commit/rollback routing
+- Real-time monitoring via the connection-pool inspection API
+
+It runs against local SQLite files (no external infrastructure required).
+
+Notes on the current API:
+- Soft delete is a first-class model feature: `__dataflow__={"soft_delete": True}`
+  adds tombstone handling; `db.express.delete(...)` tombstones the row and
+  `db.express.list(..., include_deleted=True)` recovers it.
+- Multi-tenancy uses `DataFlow(..., multi_tenant=True)` + a model flagged
+  `__dataflow__={"multi_tenant": True}` + `db.tenant_context.register_tenant(...)`
+  / `switch(...)`; writes auto-stamp tenant_id and reads auto-filter by the
+  bound tenant. A multi_tenant instance requires a bound tenant for EVERY
+  model, so the tenant demo uses its own DataFlow instance.
+- Transaction primitives are `TransactionScopeNode` / `TransactionCommitNode`
+  / `TransactionRollbackNode`; conditional routing uses `SwitchNode`
+  true/false-output ports (there are no `add_connection(condition=...)` edges).
+- On SQLite, `express.create` does not echo the generated id, so ids are read
+  back with a follow-up `express.list`.
 """
 
 import asyncio
-from datetime import datetime, timedelta
-
-from dataflow import DataFlow, DataFlowConfig, Environment
+import os
+import time
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# Configure with advanced features
-config = DataFlowConfig(
-    environment=Environment.DEVELOPMENT,
-    monitoring=True,  # Enable monitoring
-    multi_tenant=True,  # Enable multi-tenancy
-)
+from dataflow import DataFlow
 
-db = DataFlow(config)
+# Persistent SQLite files so tables survive across the multiple short-lived
+# connections DataFlow opens (an in-memory database would give each connection
+# its own empty schema).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_DB_PATH = os.path.join(_HERE, "02_advanced_demo.db")
+_TENANT_DB_PATH = os.path.join(_HERE, "02_advanced_tenant_demo.db")
+for _p in (_DB_PATH, _TENANT_DB_PATH):
+    if os.path.exists(_p):
+        os.remove(_p)
+
+db = DataFlow(f"sqlite:///{_DB_PATH}", monitoring=True)
 
 
-# Model with advanced features
 @db.model
 class Product:
-    """Product model with enterprise features"""
+    """Product model with soft-delete enabled."""
 
     name: str
     price: float
     stock: int
     category: str
-    active: bool = True
 
-    # Enable advanced features
-    __dataflow__ = {
-        "soft_delete": True,  # Adds deleted_at field
-        "versioned": True,  # Adds version field for optimistic locking
-        "multi_tenant": True,  # Adds tenant_id field
-    }
+    # Real soft-delete feature: delete tombstones the row (recoverable),
+    # rather than removing it.
+    __dataflow__ = {"soft_delete": True}
 
     __indexes__ = [
-        {"name": "idx_category_active", "fields": ["category", "active"]},
+        {"name": "idx_category", "fields": ["category"]},
         {"name": "idx_price", "fields": ["price"]},
     ]
 
 
-def demo_multi_tenancy():
-    """Demonstrate multi-tenant data isolation"""
-    print("\n=== MULTI-TENANCY DEMO ===")
+async def _create_and_get_id(model: str, data: dict) -> int:
+    """Create a record and return its id.
 
-    workflow = WorkflowBuilder()
-
-    # Create products for different tenants
-    # DataFlow automatically isolates data by tenant
-
-    # Tenant A products
-    workflow.metadata["tenant_id"] = "tenant_a"
-    workflow.add_node(
-        "ProductCreateNode",
-        "create_a1",
-        {
-            "name": "Laptop Pro",
-            "price": 1299.99,
-            "stock": 50,
-            "category": "Electronics",
-        },
-    )
-    workflow.add_node(
-        "ProductCreateNode",
-        "create_a2",
-        {
-            "name": "Wireless Mouse",
-            "price": 29.99,
-            "stock": 200,
-            "category": "Electronics",
-        },
-    )
-
-    # Tenant B products
-    workflow.metadata["tenant_id"] = "tenant_b"
-    workflow.add_node(
-        "ProductCreateNode",
-        "create_b1",
-        {"name": "Office Chair", "price": 299.99, "stock": 30, "category": "Furniture"},
-    )
-
-    # List products - automatically filtered by tenant
-    workflow.metadata["tenant_id"] = "tenant_a"
-    workflow.add_node("ProductListNode", "list_tenant_a", {})
-
-    workflow.metadata["tenant_id"] = "tenant_b"
-    workflow.add_node("ProductListNode", "list_tenant_b", {})
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-
-    print(f"Tenant A products: {len(results['list_tenant_a']['output'])}")
-    for product in results["list_tenant_a"]["output"]:
-        print(f"  - {product['name']} (${product['price']})")
-
-    print(f"\nTenant B products: {len(results['list_tenant_b']['output'])}")
-    for product in results["list_tenant_b"]["output"]:
-        print(f"  - {product['name']} (${product['price']})")
+    On SQLite ``express.create`` does not echo the generated id, so it is read
+    back via a list filtered on the (unique) name.
+    """
+    await db.express.create(model, data)
+    rows = await db.express.list(model, {"name": data["name"]})
+    return rows[0]["id"]
 
 
-def demo_optimistic_locking():
-    """Demonstrate optimistic locking for concurrent updates"""
-    print("\n=== OPTIMISTIC LOCKING DEMO ===")
-
-    # Create a product
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "ProductCreateNode",
-        "create",
-        {"name": "Popular Item", "price": 99.99, "stock": 100, "category": "Hot Deals"},
-    )
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-    product = results["create"]["output"]
-
-    # Simulate concurrent updates
-    workflow = WorkflowBuilder()
-
-    # User 1 tries to update stock
-    workflow.add_node(
-        "ProductUpdateNode",
-        "update_1",
-        {
-            "conditions": {
-                "id": product["id"],
-                "version": product["version"],  # Version check
-            },
-            "updates": {"stock": 90, "version": product["version"] + 1},
-        },
-    )
-
-    # User 2 tries to update price with same version (will fail)
-    workflow.add_node(
-        "ProductUpdateNode",
-        "update_2",
-        {
-            "conditions": {
-                "id": product["id"],
-                "version": product["version"],  # Same version - conflict!
-            },
-            "updates": {"price": 89.99, "version": product["version"] + 1},
-        },
-    )
-
-    results, run_id = runtime.execute(workflow.build())
-
-    if results["update_1"]["status"] == "success":
-        print("Update 1 succeeded (stock update)")
-
-    if results["update_2"]["status"] == "failed":
-        print("Update 2 failed due to version conflict (as expected)")
-        print("This prevents lost updates in concurrent scenarios")
-
-
-def demo_soft_delete():
-    """Demonstrate soft delete and recovery"""
+async def demo_soft_delete():
+    """Demonstrate soft delete + recovery (real soft_delete feature)."""
     print("\n=== SOFT DELETE DEMO ===")
 
-    workflow = WorkflowBuilder()
-
-    # Create a product
-    workflow.add_node(
-        "ProductCreateNode",
-        "create",
-        {
-            "name": "Discontinued Item",
-            "price": 49.99,
-            "stock": 10,
-            "category": "Clearance",
-        },
+    tok = str(int(time.time() * 1_000_000))
+    name = f"Discontinued Item {tok}"
+    product_id = await _create_and_get_id(
+        "Product",
+        {"name": name, "price": 49.99, "stock": 10, "category": "Clearance"},
     )
 
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-    product_id = results["create"]["output"]["id"]
+    visible = await db.express.list("Product", {"name": name})
+    print(f"Before delete, normal list finds: {len(visible)} (expected 1)")
 
-    # Soft delete the product
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "ProductDeleteNode", "soft_delete", {"conditions": {"id": product_id}}
-    )
+    # Soft delete tombstones the row.
+    await db.express.delete("Product", product_id)
 
-    # Try to read it normally (won't find it)
-    workflow.add_node(
-        "ProductReadNode", "read_deleted", {"conditions": {"id": product_id}}
-    )
+    after = await db.express.list("Product", {"name": name})
+    print(f"After delete, normal list finds: {len(after)} (expected 0)")
 
-    # Read including soft deleted
-    workflow.add_node(
-        "ProductReadNode",
-        "read_with_deleted",
-        {"conditions": {"id": product_id}, "include_deleted": True},
-    )
-
-    results, run_id = runtime.execute(workflow.build())
-
-    print(f"Normal read found: {results['read_deleted']['output'] is not None}")
-    print(
-        f"Read with deleted found: {results['read_with_deleted']['output'] is not None}"
-    )
-
-    if results["read_with_deleted"]["output"]:
-        print(f"Deleted at: {results['read_with_deleted']['output']['deleted_at']}")
-
-    # Restore the product
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "ProductUpdateNode",
-        "restore",
-        {
-            "conditions": {"id": product_id},
-            "updates": {"deleted_at": None},
-            "include_deleted": True,
-        },
-    )
-
-    runtime.execute(workflow.build())
-    print("Product restored successfully")
+    recovered = await db.express.list("Product", {"name": name}, include_deleted=True)
+    print(f"With include_deleted=True, list finds: {len(recovered)} (expected 1)")
+    print("The tombstoned row is recoverable, not destroyed.")
 
 
-def demo_bulk_operations():
-    """Demonstrate high-performance bulk operations"""
+async def demo_multi_tenancy():
+    """Demonstrate automatic tenant isolation (real db.tenant_context API)."""
+    print("\n=== MULTI-TENANCY DEMO ===")
+
+    # A multi_tenant instance requires a bound tenant for every model, so the
+    # tenant demo uses its own DataFlow instance.
+    tdb = DataFlow(f"sqlite:///{_TENANT_DB_PATH}", multi_tenant=True)
+
+    @tdb.model
+    class TenantProduct:
+        __tablename__ = "tenant_product"
+        name: str
+        price: float
+        __dataflow__ = {"multi_tenant": True}
+
+    await tdb.create_tables_async()
+
+    tdb.tenant_context.register_tenant("tenant_a", "Tenant A")
+    tdb.tenant_context.register_tenant("tenant_b", "Tenant B")
+
+    # Writes inside a tenant context are auto-stamped with that tenant_id.
+    with tdb.tenant_context.switch("tenant_a"):
+        await tdb.express.create(
+            "TenantProduct", {"name": "Laptop Pro", "price": 1299.99}
+        )
+        await tdb.express.create(
+            "TenantProduct", {"name": "Wireless Mouse", "price": 29.99}
+        )
+    with tdb.tenant_context.switch("tenant_b"):
+        await tdb.express.create(
+            "TenantProduct", {"name": "Office Chair", "price": 299.99}
+        )
+
+    # Reads inside a tenant context are auto-filtered to that tenant.
+    with tdb.tenant_context.switch("tenant_a"):
+        products_a = await tdb.express.list("TenantProduct", {})
+    with tdb.tenant_context.switch("tenant_b"):
+        products_b = await tdb.express.list("TenantProduct", {})
+
+    print(f"Tenant A products: {len(products_a)}")
+    for p in sorted(products_a, key=lambda r: r["name"]):
+        print(f"  - {p['name']} (${p['price']})")
+    print(f"Tenant B products: {len(products_b)}")
+    for p in sorted(products_b, key=lambda r: r["name"]):
+        print(f"  - {p['name']} (${p['price']})")
+    print("Each tenant sees only its own rows — isolation is automatic.")
+
+
+async def demo_search():
+    """Demonstrate search with the $like filter operator."""
+    print("\n=== SEARCH DEMO ===")
+
+    tok = str(int(time.time() * 1_000_000))
+    titles = [
+        f"Getting Started with DataFlow {tok}",
+        f"DataFlow Performance Optimization {tok}",
+        f"Building APIs with DataFlow {tok}",
+        f"Unrelated Cooking Recipes {tok}",
+    ]
+    for i, title in enumerate(titles):
+        await db.express.create(
+            "Product",
+            {"name": title, "price": 10.0 + i, "stock": 5, "category": "Guides"},
+        )
+
+    # Real $like operator (maps to SQL LIKE) — no python-side filtering.
+    matches = await db.express.list("Product", {"name": {"$like": f"%DataFlow%{tok}"}})
+    print(f"Products matching '%DataFlow%': {len(matches)} (expected 3)")
+    for p in sorted(matches, key=lambda r: r["name"]):
+        print(f"  - {p['name']}")
+
+
+async def demo_bulk_operations():
+    """Demonstrate high-performance bulk operations."""
     print("\n=== BULK OPERATIONS DEMO ===")
 
-    workflow = WorkflowBuilder()
-
-    # Bulk create 1000 products
+    tok = str(int(time.time() * 1_000_000))
     products = [
         {
-            "name": f"Product {i}",
+            "name": f"Bulk {tok} Product {i}",
             "price": 10.0 + (i % 100),
             "stock": 100 + (i % 50),
-            "category": f"Category {i % 10}",
+            "category": f"Category {tok}_{i % 10}",
         }
         for i in range(1000)
     ]
 
-    workflow.add_node("ProductBulkCreateNode", "bulk_create", {"records": products})
+    start = time.time()
+    runtime = LocalRuntime()
 
-    # Bulk update prices (10% discount)
-    workflow.add_node(
+    # Bulk create (the current bulk param is `data`).
+    bc_wf = WorkflowBuilder()
+    bc_wf.add_node("ProductBulkCreateNode", "bulk_create", {"data": products})
+    bc_results, _ = await runtime.execute_async(bc_wf.build())
+
+    # Bulk update: 10% discount on one category.
+    bu_wf = WorkflowBuilder()
+    bu_wf.add_node(
         "ProductBulkUpdateNode",
         "bulk_update",
-        {"filter": {"category": "Category 5"}, "updates": {"price": "price * 0.9"}},
+        {"filter": {"category": f"Category {tok}_5"}, "fields": {"price": 9.0}},
     )
+    bu_results, _ = await runtime.execute_async(bu_wf.build())
 
-    # Bulk delete old stock
-    workflow.add_node(
-        "ProductBulkDeleteNode", "bulk_delete", {"filter": {"stock": {"$lt": 110}}}
+    # Bulk delete: drop low-stock rows from this run.
+    bd_wf = WorkflowBuilder()
+    bd_wf.add_node(
+        "ProductBulkDeleteNode",
+        "bulk_delete",
+        {"filter": {"category": f"Category {tok}_0", "stock": {"$lt": 110}}},
     )
-
-    import time
-
-    start = time.time()
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-
+    bd_results, _ = await runtime.execute_async(bd_wf.build())
     elapsed = time.time() - start
 
     print(f"Bulk operations completed in {elapsed:.2f} seconds")
-    print(f"Created: {len(results['bulk_create']['output'])} products")
-    print(f"Updated: {results['bulk_update']['output']['updated_count']} products")
-    print(f"Deleted: {results['bulk_delete']['output']['deleted_count']} products")
+    print(f"Created: {bc_results['bulk_create'].get('inserted')} products")
+    print(f"Updated: {bu_results['bulk_update'].get('updated')} products")
+    print(f"Deleted: {bd_results['bulk_delete'].get('deleted')} products")
 
 
-def demo_transactions():
-    """Demonstrate transaction management"""
+async def demo_transactions():
+    """Demonstrate transaction management with SwitchNode commit/rollback routing."""
     print("\n=== TRANSACTION MANAGEMENT DEMO ===")
 
+    tok = str(int(time.time() * 1_000_000))
+    # skip_branches prunes the untaken commit/rollback terminal; the transaction
+    # nodes read the DataFlow instance from the workflow context.
+    runtime = LocalRuntime(conditional_execution="skip_branches")
     workflow = WorkflowBuilder()
 
-    # Start transaction
+    # Begin a real transaction scope.
     workflow.add_node(
-        "BeginTransactionNode", "txn_start", {"isolation_level": "read_committed"}
+        "TransactionScopeNode", "txn_start", {"isolation_level": "READ_COMMITTED"}
     )
-
-    # Create order
+    # Do work inside the scope.
     workflow.add_node(
         "ProductCreateNode",
         "create_order",
-        {"name": "Customer Order", "price": 299.99, "stock": 1, "category": "Orders"},
+        {
+            "name": f"Customer Order {tok}",
+            "price": 299.99,
+            "stock": 1,
+            "category": "Orders",
+        },
     )
-
-    # Update inventory (will fail if not enough stock)
+    # Decide the outcome, then route to commit (success) or rollback.
     workflow.add_node(
-        "ProductUpdateNode",
-        "update_inventory",
-        {"conditions": {"name": "Laptop Pro"}, "updates": {"stock": "stock - 1"}},
+        "PythonCodeNode",
+        "decide",
+        {"code": "result = {'status': 'success' if rows_affected else 'failed'}"},
     )
+    workflow.add_node(
+        "SwitchNode",
+        "route",
+        {"condition_field": "status", "operator": "==", "value": "success"},
+    )
+    workflow.add_node("TransactionCommitNode", "txn_commit", {})
+    workflow.add_node("TransactionRollbackNode", "txn_rollback", {})
 
-    # Commit if all successful
-    workflow.add_node("CommitTransactionNode", "txn_commit", {})
-
-    # Rollback on any failure
-    workflow.add_node("RollbackTransactionNode", "txn_rollback", {})
-
-    # Connect nodes with conditional routing
-    workflow.add_connection("txn_start", "create_order")
     workflow.add_connection(
-        "create_order", "update_inventory", condition="status == 'success'"
+        "txn_start", "transaction_id", "create_order", "transaction_id"
     )
-    workflow.add_connection(
-        "update_inventory", "txn_commit", condition="status == 'success'"
+    workflow.add_connection("create_order", "rows_affected", "decide", "rows_affected")
+    workflow.add_connection("decide", "result", "route", "input_data")
+    workflow.add_connection("route", "true_output", "txn_commit", "trigger")
+    workflow.add_connection("route", "false_output", "txn_rollback", "trigger")
+
+    results, _ = await runtime.execute_async(
+        workflow.build(),
+        parameters={"workflow_context": {"dataflow_instance": db}},
     )
 
-    # Rollback paths
-    workflow.add_connection(
-        "create_order", "txn_rollback", condition="status == 'failed'"
-    )
-    workflow.add_connection(
-        "update_inventory", "txn_rollback", condition="status == 'failed'"
-    )
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-
-    if results.get("txn_commit", {}).get("status") == "success":
+    if results.get("txn_commit", {}).get("status") == "committed":
         print("Transaction committed successfully")
     else:
         print("Transaction rolled back due to error")
 
 
 async def demo_monitoring():
-    """Demonstrate real-time monitoring capabilities"""
+    """Demonstrate monitoring via the connection-pool inspection API."""
     print("\n=== MONITORING DEMO ===")
 
-    # Access monitoring nodes
-    monitors = db.get_monitor_nodes()
+    # Inspect the connection pool — the monitoring surface for DataFlow.
+    pool = db.get_connection_pool()
+    health = await pool.get_health_status()
+    print(f"Pool health: {health['status']}")
 
-    if monitors:
-        print("Active monitors:")
-        for name, monitor in monitors.items():
-            print(f"  - {name}: {type(monitor).__name__}")
-
-        # Simulate some database activity
-        workflow = WorkflowBuilder()
-
-        # Create many quick operations
-        for i in range(10):
-            workflow.add_node(
-                "ProductListNode",
-                f"query_{i}",
-                {"filter": {"category": f"Category {i}"}},
-            )
-
-        # One slow operation
+    # Simulate some database activity.
+    runtime = LocalRuntime()
+    workflow = WorkflowBuilder()
+    for i in range(10):
         workflow.add_node(
             "ProductListNode",
-            "slow_query",
-            {
-                "filter": {"price": {"$gte": 100}},
-                "order_by": ["-price", "name"],
-                "limit": 1000,
-            },
+            f"query_{i}",
+            {"filter": {"category": f"Category {i}"}, "limit": 100},
         )
+    workflow.add_node(
+        "ProductListNode",
+        "slow_query",
+        {
+            "filter": {"price": {"$gte": 100}},
+            "order_by": ["-price", "name"],
+            "limit": 1000,
+        },
+    )
+    await runtime.execute_async(workflow.build())
 
-        runtime = LocalRuntime()
-        runtime.execute(workflow.build())
-
-        # Check metrics
-        if "metrics" in monitors:
-            print("\nPerformance metrics available:")
-            print("- Query count by operation")
-            print("- Average response time")
-            print("- Slow query log")
-            print("- Connection pool statistics")
+    # Read pool metrics after the activity.
+    metrics = await pool.get_metrics()
+    print("\nConnection pool metrics:")
+    print(f"- total_connections: {metrics['total_connections']}")
+    print(f"- connections_created: {metrics['connections_created']}")
+    print(f"- connections_reused: {metrics['connections_reused']}")
+    print(f"- active_connections: {metrics['active_connections']}")
 
 
-if __name__ == "__main__":
+async def main():
     print("DataFlow Advanced Features Example")
     print("=" * 50)
 
-    # Demonstrate all advanced features
-    demo_multi_tenancy()
-    demo_optimistic_locking()
-    demo_soft_delete()
-    demo_bulk_operations()
-    demo_transactions()
+    await db.create_tables_async()
 
-    # Run async monitoring demo
-    asyncio.run(demo_monitoring())
+    await demo_soft_delete()
+    await demo_multi_tenancy()
+    await demo_search()
+    await demo_bulk_operations()
+    await demo_transactions()
+    await demo_monitoring()
 
     print("\n" + "=" * 50)
     print("Advanced features demonstrated successfully!")
     print("\nKey takeaways:")
-    print("1. Multi-tenancy provides automatic data isolation")
-    print("2. Optimistic locking prevents lost updates")
-    print("3. Soft delete allows data recovery")
+    print("1. Soft delete tombstones rows and keeps them recoverable")
+    print("2. Multi-tenancy isolates data automatically via db.tenant_context")
+    print("3. Search uses the $like filter operator")
     print("4. Bulk operations provide high performance")
-    print("5. Transaction management ensures consistency")
-    print("6. Built-in monitoring for production insights")
+    print("5. Transaction management with SwitchNode commit/rollback routing")
+    print("6. Built-in monitoring via connection-pool inspection")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

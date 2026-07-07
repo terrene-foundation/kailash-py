@@ -156,8 +156,10 @@ class TestExpressListOrderBy:
             order_by=None,
             cache_ttl=None,
             use_primary=False,
+            include_deleted=False,
         ):
             captured["order_by"] = order_by
+            captured["include_deleted"] = include_deleted
             return []
 
         async_express = MagicMock()

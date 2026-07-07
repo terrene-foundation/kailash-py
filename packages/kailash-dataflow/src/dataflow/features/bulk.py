@@ -39,6 +39,29 @@ class BulkOperations:
         except Exception:
             return False
 
+    def _model_has_soft_delete(self, model_name: str) -> bool:
+        """True iff the model declares ``soft_delete: True`` in ``__dataflow__``.
+
+        Mirrors the config-access pattern used by the read path (core/nodes.py
+        list/read/count soft-delete auto-filter) and the DeleteNode single-record
+        tombstone: prefer the structured ``_models[...]['config']`` dict, fall
+        back to the registered class's ``_dataflow_config`` attribute. This is
+        the source of truth for the bulk_delete tombstone-vs-hard-delete branch
+        so bulk deletes stay consistent with single-record deletes.
+        """
+        model_info = self.dataflow._models.get(model_name)
+        if isinstance(model_info, dict):
+            config = model_info.get("config")
+            if isinstance(config, dict) and config.get("soft_delete", False):
+                return True
+        registered = getattr(self.dataflow, "_registered_models", {})
+        model_cls = registered.get(model_name) if isinstance(registered, dict) else None
+        if model_cls is not None:
+            cfg = getattr(model_cls, "_dataflow_config", None)
+            if isinstance(cfg, dict) and cfg.get("soft_delete", False):
+                return True
+        return False
+
     def _resolve_bulk_tenant(self, model_name: str) -> Optional[str]:
         """Resolve the bound tenant for a bulk op, fail-closed under multi-tenant.
 
@@ -561,6 +584,7 @@ class BulkOperations:
         update_values: Optional[Dict[str, Any]] = None,
         batch_size: int = 1000,
         transaction: Optional[Any] = None,
+        include_deleted: bool = False,
         **kwargs,
     ) -> Dict[str, Any]:
         """Perform bulk update operation.
@@ -568,6 +592,15 @@ class BulkOperations:
         #1585: a borrowed ``transaction`` handle makes every UPDATE run ON the
         scope's connection (joins a ``TransactionScopeNode``); ``None`` preserves
         auto-commit.
+
+        ``include_deleted`` (soft_delete models only, FILTER-based path):
+        by default a filter-based bulk_update adds a ``deleted_at IS NULL``
+        guard so it skips tombstoned rows — consistent with the list/read/count
+        read auto-filter. ``include_deleted=True`` bypasses that guard, enabling
+        the un-delete workflow (``update_values={"deleted_at": None}``). The
+        explicit per-row ``data=[{id:..}]`` path is NEVER guarded: it targets
+        rows by primary key, so mutating a named tombstoned row is intentional
+        (mirrors single-record update-by-PK).
         """
         import logging
 
@@ -705,8 +738,32 @@ class BulkOperations:
                         where_clause = f"WHERE {tenant_fragment}"
                     params.extend(tenant_params)
 
+                # SOFT DELETE read-consistency: by default a FILTER-based
+                # bulk_update skips tombstoned rows (deleted_at IS NULL),
+                # matching the list/read/count read auto-filter — a
+                # bulk_update(filter_criteria={status:"active"}) must not
+                # silently mutate rows the caller can't even see. The
+                # ``AND deleted_at IS NULL`` fragment has no bound parameter,
+                # so params numbering is untouched. include_deleted=True skips
+                # the guard (un-delete: update_values={"deleted_at": None}).
+                # deleted_at is dialect-quoted per dataflow-identifier-safety.
+                # The explicit per-row data= path (below) is intentionally NOT
+                # guarded — it targets rows by PK.
+                if self._model_has_soft_delete(model_name) and not include_deleted:
+                    from ..adapters.dialect import DialectManager
+
+                    dialect = DialectManager.get_dialect(database_type)
+                    quoted_deleted_at = dialect.quote_identifier("deleted_at")
+                    if where_clause:
+                        where_clause = f"{where_clause} AND {quoted_deleted_at} IS NULL"
+                    else:
+                        where_clause = f"WHERE {quoted_deleted_at} IS NULL"
+
                 query = f"UPDATE {table_name} {set_clause} {where_clause}"
-                logger.warning(
+                # DEBUG (not WARN): the query carries schema column names and
+                # params carry row VALUES (potential PII) — must not reach log
+                # aggregators at WARN+ (observability.md Rule 8, security.md).
+                logger.debug(
                     f"BULK_UPDATE: Executing query='{query}' with params={params}"
                 )
 
@@ -877,7 +934,15 @@ class BulkOperations:
 
                         set_clause = "SET " + ", ".join(set_parts)
 
-                        # Build WHERE clause for id
+                        # Build WHERE clause for id.
+                        # SOFT DELETE decision: this explicit per-row path targets
+                        # a row by its PRIMARY KEY, so it is intentionally NOT
+                        # guarded with deleted_at IS NULL — the caller named the
+                        # exact row, which is precisely the un-delete / restore
+                        # surface (e.g. data=[{"id": rid, "deleted_at": None}]).
+                        # This matches single-record update-by-PK (UpdateNode),
+                        # which also does not filter tombstoned rows. Only the
+                        # FILTER-based path above (query-shaped) gets the guard.
                         if database_type.lower() == "postgresql":
                             where_clause = f"WHERE id = ${len(params) + 1}"
                         elif database_type.lower() == "mysql":
@@ -1098,8 +1163,37 @@ class BulkOperations:
                     extra={"check_result": check_result},
                 )
 
-                query = f"DELETE FROM {table_name} {where_clause}"
-                logger.warning(
+                # SOFT DELETE (delete-surface consistency): for soft_delete
+                # models a bulk delete MUST tombstone (UPDATE deleted_at), NOT
+                # physically remove rows — mirroring the single-record
+                # DeleteNode tombstone (core/nodes.py). Hard DELETE on a
+                # soft_delete model is silent data loss. The ``AND deleted_at
+                # IS NULL`` guard makes a repeat bulk_delete a no-op (already
+                # tombstoned rows are not re-stamped). Non-soft-delete models
+                # keep the hard DELETE. deleted_at is dialect-quoted per
+                # rules/dataflow-identifier-safety.md. The tenant predicate is
+                # already ANDed into where_clause above, so tombstone writes
+                # inherit the same tenant scoping as the hard delete.
+                if self._model_has_soft_delete(model_name):
+                    from ..adapters.dialect import DialectManager
+
+                    dialect = DialectManager.get_dialect(database_type)
+                    quoted_deleted_at = dialect.quote_identifier("deleted_at")
+                    if where_clause:
+                        query = (
+                            f"UPDATE {table_name} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                            f"{where_clause} AND {quoted_deleted_at} IS NULL"
+                        )
+                    else:
+                        query = (
+                            f"UPDATE {table_name} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                            f"WHERE {quoted_deleted_at} IS NULL"
+                        )
+                else:
+                    query = f"DELETE FROM {table_name} {where_clause}"
+                # DEBUG (not WARN): query carries schema names, params carry row
+                # VALUES (potential PII) — observability.md Rule 8, security.md.
+                logger.debug(
                     f"BULK_DELETE: Executing query='{query}' with params={params}"
                 )
 

@@ -15,11 +15,11 @@ from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins import ConditionalExecutionMixin
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
 from kailash.workflow import Workflow
+
 from tests.unit.runtime.helpers_runtime import (
     create_empty_workflow,
     create_large_workflow,
@@ -120,13 +120,28 @@ class ConditionalRuntimeStub(BaseRuntime, ConditionalExecutionMixin):
         """
         return {"results": {}, "errors": {}}
 
-    def _record_execution_metrics(self, metrics: Dict[str, Any]) -> None:
+    def _record_execution_metrics(
+        self,
+        workflow: Any,
+        execution_time: float,
+        node_count: int,
+        skipped_nodes: int,
+        execution_mode: str,
+    ) -> None:
         """Record execution metrics (test implementation).
 
-        Args:
-            metrics: Metrics to record
+        Mirrors the real ``LocalRuntime._record_execution_metrics`` signature
+        (workflow, execution_time, node_count, skipped_nodes, execution_mode).
         """
-        self.recorded_metrics.append(metrics)
+        self.recorded_metrics.append(
+            {
+                "workflow": workflow,
+                "execution_time": execution_time,
+                "node_count": node_count,
+                "skipped_nodes": skipped_nodes,
+                "execution_mode": execution_mode,
+            }
+        )
 
     def _should_stop_on_error(self, error: Exception, node_id: str) -> bool:
         """Determine if execution should stop on error (test implementation).
@@ -546,13 +561,26 @@ class TestFallbackTracking:
         # All reasons tracked successfully
 
     def test_track_fallback_usage_with_monitoring(self):
-        """Test fallback tracking records metrics when monitoring enabled."""
+        """Regression: fallback tracking records a metric with the real
+        5-arg ``_record_execution_metrics`` signature.
+
+        Guards the sibling of the conditional-performance fix: previously
+        ``_track_fallback_usage`` called ``_record_execution_metrics(metrics)``
+        with a single dict, which raised ``TypeError: missing 4 required
+        positional arguments`` that the surrounding ``except`` swallowed — so
+        the fallback metric was NEVER recorded. Assert it now lands with
+        ``execution_mode == "fallback"``.
+        """
         runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         reason = "Switch execution failed"
 
         runtime._track_fallback_usage(workflow, reason)
-        # Fallback tracked with monitoring enabled
+
+        assert len(runtime.recorded_metrics) == 1
+        recorded = runtime.recorded_metrics[0]
+        assert recorded["execution_mode"] == "fallback"
+        assert recorded["workflow"] is workflow
 
 
 class TestExecuteConditionalApproachTemplateMethod:

@@ -1,6 +1,7 @@
 # Kailash DataFlow User Guide
 
 ## Table of Contents
+
 1. [Introduction](#introduction)
 2. [Why DataFlow?](#why-dataflow)
 3. [Framework Comparisons](#framework-comparisons)
@@ -46,18 +47,19 @@ DataFlow leverages Kailash's workflow-centric architecture:
 
 ### DataFlow vs Django ORM
 
-| Feature | Django ORM | DataFlow | Improvement |
-|---------|------------|----------|-------------|
-| **Connection Pooling** | Thread-local, limited | Actor-based, workflow-scoped | 50x capacity |
-| **Async Support** | Minimal (Django 4.1+) | Native async throughout | 10x throughput |
-| **Transaction Scope** | Request-bound | Workflow-bound | Matches business logic |
-| **Bulk Operations** | Manual optimization | Automatic database-specific optimization | 100x faster bulk operations |
-| **Error Recovery** | Manual try/catch | Automatic retry and cleanup | Zero-config resilience |
-| **Monitoring** | Django Debug Toolbar | Real-time, production-grade | Enterprise-ready |
-| **Multi-tenancy** | Manual implementation | Built-in with isolation | Secure by default |
-| **Data Safety** | Manual transaction management | Automatic protection | No data corruption |
+| Feature                | Django ORM                    | DataFlow                                 | Improvement                 |
+| ---------------------- | ----------------------------- | ---------------------------------------- | --------------------------- |
+| **Connection Pooling** | Thread-local, limited         | Actor-based, workflow-scoped             | 50x capacity                |
+| **Async Support**      | Minimal (Django 4.1+)         | Native async throughout                  | 10x throughput              |
+| **Transaction Scope**  | Request-bound                 | Workflow-bound                           | Matches business logic      |
+| **Bulk Operations**    | Manual optimization           | Automatic database-specific optimization | 100x faster bulk operations |
+| **Error Recovery**     | Manual try/catch              | Automatic retry and cleanup              | Zero-config resilience      |
+| **Monitoring**         | Django Debug Toolbar          | Real-time, production-grade              | Enterprise-ready            |
+| **Multi-tenancy**      | Manual implementation         | Built-in with isolation                  | Secure by default           |
+| **Data Safety**        | Manual transaction management | Automatic protection                     | No data corruption          |
 
 #### Django Example - Complex Order Processing
+
 ```python
 # Django - Manual error handling required
 from django.db import models, transaction
@@ -99,6 +101,7 @@ def process_order(customer_id, items):
 ```
 
 #### DataFlow Example - Automatic Safety
+
 ```python
 # DataFlow - Automatic error handling and optimization
 from kailash_dataflow import DataFlow
@@ -148,15 +151,16 @@ workflow.add_node("EmailNotificationNode", "send_email", {
 
 ### DataFlow vs Prisma
 
-| Feature | Prisma | DataFlow | Advantage |
-|---------|--------|----------|-----------|
-| **Schema Definition** | schema.prisma file | Python classes | No separate schema file |
-| **Type Safety** | Generated TypeScript | Native Python types | Built-in type hints |
-| **Migrations** | Prisma Migrate | Kailash migrations | Async, versioned |
-| **Query Builder** | Prisma Client | Workflow nodes | Composable operations |
-| **Performance** | Good | Excellent | Workflow optimization |
+| Feature               | Prisma               | DataFlow            | Advantage               |
+| --------------------- | -------------------- | ------------------- | ----------------------- |
+| **Schema Definition** | schema.prisma file   | Python classes      | No separate schema file |
+| **Type Safety**       | Generated TypeScript | Native Python types | Built-in type hints     |
+| **Migrations**        | Prisma Migrate       | Kailash migrations  | Async, versioned        |
+| **Query Builder**     | Prisma Client        | Workflow nodes      | Composable operations   |
+| **Performance**       | Good                 | Excellent           | Workflow optimization   |
 
 #### Prisma Example
+
 ```prisma
 // schema.prisma
 model Product {
@@ -169,11 +173,12 @@ model Product {
 ```typescript
 // TypeScript code
 const product = await prisma.product.create({
-  data: { name: 'iPhone 15', price: 999.99 }
+  data: { name: "iPhone 15", price: 999.99 },
 });
 ```
 
 #### DataFlow Example
+
 ```python
 # Single Python file - no schema separation
 @db.model
@@ -190,14 +195,15 @@ workflow.add_node("ProductCreateNode", "create", {
 
 ### DataFlow vs SQLAlchemy
 
-| Feature | SQLAlchemy | DataFlow | Benefit |
-|---------|------------|----------|---------|
-| **Setup Complexity** | High (engine, session, base) | Zero config | Instant productivity |
-| **Async Support** | SQLAlchemy 2.0+ | Native | Better performance |
-| **Session Management** | Manual | Automatic | No session leaks |
-| **Query Execution** | Imperative | Declarative workflows | Better composition |
+| Feature                | SQLAlchemy                   | DataFlow              | Benefit              |
+| ---------------------- | ---------------------------- | --------------------- | -------------------- |
+| **Setup Complexity**   | High (engine, session, base) | Zero config           | Instant productivity |
+| **Async Support**      | SQLAlchemy 2.0+              | Native                | Better performance   |
+| **Session Management** | Manual                       | Automatic             | No session leaks     |
+| **Query Execution**    | Imperative                   | Declarative workflows | Better composition   |
 
 #### SQLAlchemy Example
+
 ```python
 # SQLAlchemy - Complex setup
 from sqlalchemy import create_engine, Column, String, Float
@@ -225,6 +231,7 @@ finally:
 ```
 
 #### DataFlow Example
+
 ```python
 # DataFlow - Zero setup
 db = DataFlow()  # Auto-configures everything
@@ -282,6 +289,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 That's it! DataFlow automatically:
+
 - Creates an in-memory database
 - Generates CRUD and bulk operation nodes
 - Handles connections and connection pooling
@@ -313,7 +321,6 @@ class BlogPost:
     # DataFlow options
     __dataflow__ = {
         'soft_delete': True,      # Adds deleted_at field
-        'versioned': True,        # Adds version field
         'multi_tenant': True,     # Adds tenant_id field
     }
 
@@ -329,6 +336,7 @@ class BlogPost:
 For each model, DataFlow automatically generates these nodes:
 
 #### Basic Operations
+
 1. **CreateNode** - Insert new records
 2. **ReadNode** - Fetch single record
 3. **UpdateNode** - Modify existing records
@@ -336,12 +344,14 @@ For each model, DataFlow automatically generates these nodes:
 5. **ListNode** - Query multiple records
 
 #### High-Performance Bulk Operations
+
 6. **BulkCreateNode** - Insert thousands of records efficiently
 7. **BulkUpdateNode** - Update multiple records with smart filtering
 8. **BulkDeleteNode** - Remove multiple records safely
 9. **BulkUpsertNode** - Insert or update records intelligently
 
 #### Example: What You Get Automatically
+
 ```python
 @db.model
 class Product:
@@ -362,6 +372,7 @@ class Product:
 ```
 
 #### Bulk Operations Benefits
+
 - **Database-Optimized**: Uses PostgreSQL COPY, MySQL batch INSERT, etc.
 - **Chunking**: Automatically splits large datasets for optimal memory usage
 - **Progress Tracking**: Real-time progress reporting for long operations
@@ -373,6 +384,7 @@ class Product:
 Database operations integrate naturally with Kailash workflows:
 
 #### Simple Operations
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -393,6 +405,7 @@ workflow.add_connection("create_post", "increment_views", "id", "post_id")
 ```
 
 #### Bulk Operations for High Performance
+
 ```python
 # Import thousands of products efficiently
 workflow = WorkflowBuilder()
@@ -419,6 +432,7 @@ workflow.add_node("ReportGeneratorNode", "create_import_report", {
 ```
 
 #### Real-World Example: E-commerce Data Migration
+
 ```python
 # Migrate product catalog from old system
 workflow = WorkflowBuilder()
@@ -590,22 +604,38 @@ workflow.add_node("CustomerListNode", "list_customers", {
 })
 ```
 
-### Optimistic Locking
+### Soft Delete
+
+Declaring `soft_delete` adds a `deleted_at` column and turns deletes into
+tombstones: `delete()` sets `deleted_at` instead of physically removing the
+row, and reads exclude tombstoned rows by default so deleted records are
+recoverable.
 
 ```python
 @db.model
 class Product:
+    id: str
     name: str
     stock: int
 
-    __dataflow__ = {'versioned': True}
+    __dataflow__ = {'soft_delete': True}   # adds deleted_at
 
-# Update with version check
-workflow.add_node("ProductUpdateNode", "update_stock", {
-    "conditions": {"id": 1, "version": 5},
-    "updates": {"stock": 100},
-    # Fails if version changed (concurrent update)
-})
+# delete() tombstones instead of destroying the row
+await db.express.delete("Product", "p1")
+
+# reads exclude tombstoned rows by default
+await db.express.list("Product", {})                      # p1 not returned
+await db.express.read("Product", "p1")                    # not found
+
+# pass include_deleted=True to view or recover tombstoned rows
+await db.express.list("Product", {}, include_deleted=True)  # p1 (deleted_at set)
+await db.express.read("Product", "p1", include_deleted=True)
+
+# bulk_delete tombstones too (never a silent hard delete)
+await db.express.bulk_delete("Product", ["p1", "p2"])
+
+# restore a tombstoned row by clearing deleted_at
+await db.express.update("Product", "p1", {"deleted_at": None})
 ```
 
 ### Real-Time Monitoring
@@ -613,21 +643,20 @@ workflow.add_node("ProductUpdateNode", "update_stock", {
 DataFlow includes enterprise-grade monitoring that tracks everything automatically:
 
 ```python
-# Enable comprehensive monitoring (enabled by default in production)
+# Enable monitoring
 db = DataFlow(
     monitoring=True,
-    slow_query_threshold=1.0,      # Alert on queries > 1s
-    query_insights=True,           # Detailed metrics
-    performance_monitoring=True,   # Track bulk operation performance
-    safety_monitoring=True,        # Monitor automatic recovery actions
+    slow_query_threshold=1.0,      # Flag queries slower than 1s
 )
 
-# Access monitoring data
-monitor = db.get_monitor_nodes()
-transaction_monitor = monitor['transaction']    # Tracks multi-step operations
-metrics_collector = monitor['metrics']          # Performance metrics
-bulk_monitor = monitor['bulk_operations']       # Bulk operation insights
-safety_monitor = monitor['safety']              # Automatic recovery tracking
+# Inspect the connection pool health and metrics.
+pool = db.get_connection_pool()
+health = await pool.get_health_status()   # {'status': 'healthy', ...}
+metrics = await pool.get_metrics()         # connection counts, reuse, ...
+
+print(health["status"])                     # 'healthy'
+print(metrics["total_connections"])         # pool capacity
+print(metrics["connections_created"])       # connections opened so far
 ```
 
 #### What Gets Monitored Automatically
@@ -718,18 +747,23 @@ db = DataFlow(
 
 1. **Connection Pool Optimization**
    ```python
-# Calculate optimal pool size
-pool_size = cpu_count * 4  # General rule
-max_overflow = pool_size * 2
+
    ```
 
+# Calculate optimal pool size
+
+pool_size = cpu_count * 4 # General rule
+max_overflow = pool_size * 2
+
+````
+
 2. **Read Replicas**
-   ```python
+```python
 # Automatic read/write splitting
 workflow.add_node("ProductListNode", "read_products", {
-    # Automatically routes to read replica
+ # Automatically routes to read replica
 })
-   ```
+````
 
 3. **Caching Layer**
    ```python
@@ -746,6 +780,7 @@ workflow.add_node("ProductListNode", "read_products", {
 See [Django Migration Guide](migration-guides/from-django.md) for detailed steps.
 
 Key differences:
+
 - Models use Python type hints instead of Django fields
 - Operations are workflow nodes instead of view functions
 - Connections persist across workflow instead of per-request
@@ -755,6 +790,7 @@ Key differences:
 See [SQLAlchemy Migration Guide](migration-guides/from-sqlalchemy.md).
 
 Key improvements:
+
 - No session management needed
 - Automatic connection pooling
 - Built-in async support
@@ -764,6 +800,7 @@ Key improvements:
 See [Prisma Migration Guide](migration-guides/from-prisma.md).
 
 Key advantages:
+
 - No separate schema file
 - Python-native type safety
 - Workflow integration
@@ -785,12 +822,14 @@ Key advantages:
 ### When to Use What
 
 #### Use Basic Operations For:
+
 - Simple CRUD operations
 - Individual record processing
 - Development and prototyping
 - Operations on <100 records
 
 #### Use Bulk Operations For:
+
 - Data imports/exports
 - Batch processing
 - Analytics data loading
@@ -798,18 +837,21 @@ Key advantages:
 - Performance-critical workflows
 
 #### Use Maximum Safety Level For:
+
 - Financial transactions
 - Medical records
 - Legal document processing
 - Any system where data loss is unacceptable
 
 #### Use Balanced Safety Level For:
+
 - E-commerce applications
 - Content management systems
 - User-generated content
 - Most business applications
 
 #### Use Development Safety Level For:
+
 - Local development
 - Testing environments
 - Prototyping

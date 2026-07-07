@@ -11,11 +11,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
-from dataflow import DataFlow
-
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -153,26 +153,33 @@ result = (q1 * p1) + (q2 * p2)
         assert order["total"] == pytest.approx(expected_total, 0.01)
         assert order["status"] == "completed"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Conditional connection routing (add_connection(condition=..., "
-        "output_map=...) and SwitchNode true/false-path kwargs) is not part of the "
-        "current WorkflowBuilder API — add_connection is 4-positional "
-        "(from_node, from_output, to_node, to_input) with no conditional edges. "
-        "Faithful porting to the current SwitchNode port-routing idiom is a "
-        "redesign, not a stale-API fix — deferred per #1582.",
-    )
     @pytest.mark.asyncio
-    async def test_conditional_workflow(self, test_suite, runtime):
-        """Test conditional execution with DataFlow nodes."""
-        dataflow = DataFlow(test_suite.config.url)
+    async def test_conditional_workflow(self, test_suite):
+        """Conditional execution with DataFlow nodes via SwitchNode routing.
 
-        @dataflow.model
+        Re-expressed on the current API (#1582): the removed conditional
+        connection edges (add_connection(condition=..., output_map=...)) are
+        replaced by the real SwitchNode port-routing idiom — a boolean switch
+        emits ``true_output`` / ``false_output`` ports wired 4-positionally, and
+        ``LocalRuntime(conditional_execution="skip_branches")`` prunes the
+        branch that is not taken.
+        """
+        db = DataFlow(test_suite.config.url)
+        runtime = LocalRuntime(conditional_execution="skip_branches")
+
+        @db.model
         class Account:
             account_number: str
             balance: float
             account_type: str  # standard, premium
             overdraft_limit: float = 0.0
+
+        await db.create_tables_async()
+
+        # Unique account numbers per run keep the assertions isolated from
+        # rows left by prior runs of the shared PostgreSQL test database.
+        tok = str(int(time.time() * 1_000_000))
+        std_no, prm_no = f"STD-{tok}", f"PRM-{tok}"
 
         # Create test accounts
         setup_workflow = WorkflowBuilder()
@@ -180,7 +187,7 @@ result = (q1 * p1) + (q2 * p2)
             "AccountCreateNode",
             "standard_acc",
             {
-                "account_number": "STD-001",
+                "account_number": std_no,
                 "balance": 100.0,
                 "account_type": "standard",
                 "overdraft_limit": 0.0,
@@ -191,99 +198,128 @@ result = (q1 * p1) + (q2 * p2)
             "AccountCreateNode",
             "premium_acc",
             {
-                "account_number": "PRM-001",
+                "account_number": prm_no,
                 "balance": 100.0,
                 "account_type": "premium",
                 "overdraft_limit": 500.0,
             },
         )
 
-        await runtime.execute_async(setup_workflow.build())
+        await runtime.execute_async(
+            setup_workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
 
         # Test conditional withdrawal workflow
         async def test_withdrawal(account_number: str, amount: float):
             workflow = WorkflowBuilder()
 
-            # Get account
+            # Fetch the account. The current ReadNode requires an id, so a
+            # filtered list is the by-natural-key read idiom.
             workflow.add_node(
-                "AccountReadNode",
+                "AccountListNode",
                 "get_account",
-                {"conditions": {"account_number": account_number}},
+                {"filter": {"account_number": account_number}, "limit": 1},
             )
 
-            # Check if withdrawal is allowed
+            # Decide whether the withdrawal is allowed. Connected inputs are
+            # injected as local variables; the node exposes its dict on `result`.
             workflow.add_node(
                 "PythonCodeNode",
                 "check_balance",
                 {
                     "code": f"""
-account = inputs['account']
+account = records[0]
 withdrawal_amount = {amount}
-
 available = account['balance'] + account['overdraft_limit']
-can_withdraw = available >= withdrawal_amount
-
-outputs = {{
-    'can_withdraw': can_withdraw,
+result = {{
+    'can_withdraw': available >= withdrawal_amount,
     'new_balance': account['balance'] - withdrawal_amount,
-    'account_id': account['id']
+    'account_id': account['id'],
 }}
 """
                 },
             )
 
-            # Conditional execution using SwitchNode
-            workflow.add_node("SwitchNode", "decide", {"condition": ":can_withdraw"})
-
-            # Success path: Update balance
+            # Boolean SwitchNode: routes the check_balance dict to true_output
+            # when can_withdraw is True, else to false_output.
             workflow.add_node(
-                "AccountUpdateNode",
-                "withdraw",
-                {
-                    "conditions": {"id": ":account_id"},
-                    "updates": {"balance": ":new_balance"},
-                },
+                "SwitchNode",
+                "decide",
+                {"condition_field": "can_withdraw", "operator": "==", "value": True},
             )
 
-            # Failure path: Log rejection
+            # Success path: unpack the approved id/new balance, then update.
+            # The intermediate node keeps the update reachable under
+            # skip_branches (a dotted connection straight off the switch output
+            # is not treated as a live branch edge by the pruning planner).
+            workflow.add_node(
+                "PythonCodeNode",
+                "approve",
+                {
+                    "code": """
+result = {'id': input_data['account_id'], 'balance': input_data['new_balance']}
+"""
+                },
+            )
+            workflow.add_node("AccountUpdateNode", "withdraw", {})
+
+            # Failure path: log the rejection.
             workflow.add_node(
                 "PythonCodeNode",
                 "reject",
                 {
                     "code": """
-outputs = {
-    'status': 'rejected',
-    'reason': 'Insufficient funds'
-}
+result = {'status': 'rejected', 'reason': 'Insufficient funds'}
 """
                 },
             )
 
-            # Connect workflow
-            workflow.add_connection("get_account", "check_balance", "output", "account")
+            # Wire the graph (4-positional add_connection, no conditional edges).
             workflow.add_connection(
-                "check_balance", "decide", output_map={"can_withdraw": "can_withdraw"}
+                "get_account", "records", "check_balance", "records"
             )
-            workflow.add_connection(
-                "decide",
-                "withdraw",
-                condition="true",
-                output_map={"account_id": "account_id", "new_balance": "new_balance"},
+            workflow.add_connection("check_balance", "result", "decide", "input_data")
+            # True branch: switch -> approve -> update (id + new balance).
+            workflow.add_connection("decide", "true_output", "approve", "input_data")
+            workflow.add_connection("approve", "result.id", "withdraw", "id")
+            workflow.add_connection("approve", "result.balance", "withdraw", "balance")
+            # False branch.
+            workflow.add_connection("decide", "false_output", "reject", "input_data")
+
+            return await runtime.execute_async(
+                workflow.build(),
+                parameters={"workflow_context": {"dataflow_instance": db}},
             )
-            workflow.add_connection("decide", "reject", condition="false")
 
-            return await runtime.execute_async(workflow.build())
-
-        # Test standard account (should fail for 150)
-        results, _ = await test_withdrawal("STD-001", 150.0)
+        # Standard account cannot cover 150 (100 + 0 overdraft) -> rejected;
+        # the success branch is pruned.
+        results, _ = await test_withdrawal(std_no, 150.0)
         assert "reject" in results
-        assert results["reject"]["output"]["status"] == "rejected"
+        assert results["reject"]["result"]["status"] == "rejected"
+        assert "withdraw" not in results
 
-        # Test premium account (should succeed for 150)
-        results, _ = await test_withdrawal("PRM-001", 150.0)
+        # Premium account can cover 150 (100 + 500 overdraft) -> withdrawn;
+        # the failure branch is pruned.
+        results, _ = await test_withdrawal(prm_no, 150.0)
         assert "withdraw" in results
-        assert results["withdraw"]["status"] == "success"
-        assert results["withdraw"]["output"]["balance"] == -50.0
+        assert results["withdraw"]["balance"] == pytest.approx(-50.0, abs=0.01)
+        assert "reject" not in results
+
+        # State-persistence read-back: PRM balance is now -50.
+        verify = WorkflowBuilder()
+        verify.add_node(
+            "AccountListNode",
+            "check",
+            {"filter": {"account_number": prm_no}, "limit": 1},
+        )
+        verify_results, _ = await runtime.execute_async(
+            verify.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
+        assert verify_results["check"]["records"][0]["balance"] == pytest.approx(
+            -50.0, abs=0.01
+        )
 
     @pytest.mark.asyncio
     async def test_parallel_execution(self, test_suite, runtime):
@@ -343,261 +379,270 @@ outputs = {
 class TestTransactionManagement:
     """Test transaction management in workflows."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="The transaction-node routing here relies on conditional connection "
-        "edges (add_connection(node, target, condition=\"status == 'success'\") and "
-        "\"status == 'failed'\" rollback branches) that are not part of the current "
-        "WorkflowBuilder API — add_connection is 4-positional with no conditional "
-        "edges. The Begin/Commit/RollbackTransactionNode primitives work post-fix, "
-        "but the commit/rollback branching contract is a redesign — deferred per #1582.",
-    )
     @pytest.mark.asyncio
-    async def test_workflow_transaction(self, test_suite, runtime):
-        """Test transaction boundaries in workflows."""
-        dataflow = DataFlow(test_suite.config.url)
+    async def test_workflow_transaction(self, test_suite):
+        """Transaction boundaries with SwitchNode commit/rollback routing.
 
-        @dataflow.model
+        Re-expressed on the current API (#1582): the removed conditional
+        connection edges (condition="status == 'success'" / "status == 'failed'")
+        are replaced by the real transaction nodes (TransactionScopeNode /
+        TransactionCommitNode / TransactionRollbackNode) plus a boolean
+        SwitchNode routing to commit on success and rollback on failure.
+        ``skip_branches`` prunes the untaken transaction terminal.
+        """
+        db = DataFlow(test_suite.config.url)
+        runtime = LocalRuntime(conditional_execution="skip_branches")
+
+        @db.model
         class BankAccount:
             account_number: str
             balance: float
             locked: bool = False
 
-        # Create accounts
+        await db.create_tables_async()
+
+        tok = str(int(time.time() * 1_000_000))
+        acc1_no, acc2_no = f"ACC-001-{tok}", f"ACC-002-{tok}"
+
+        # Create accounts, capturing their ids (UpdateNode filters by id).
         setup_workflow = WorkflowBuilder()
         setup_workflow.add_node(
             "BankAccountCreateNode",
             "acc1",
-            {"account_number": "ACC-001", "balance": 1000.0},
+            {"account_number": acc1_no, "balance": 1000.0},
         )
         setup_workflow.add_node(
             "BankAccountCreateNode",
             "acc2",
-            {"account_number": "ACC-002", "balance": 500.0},
+            {"account_number": acc2_no, "balance": 500.0},
         )
+        setup_results, _ = await runtime.execute_async(
+            setup_workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
+        acc1_id = setup_results["acc1"]["id"]
+        acc2_id = setup_results["acc2"]["id"]
 
-        await runtime.execute_async(setup_workflow.build())
-
-        # Transfer workflow with transaction
+        # Transfer workflow with a real transaction scope + commit/rollback route
+        transfer_amount = 200.0
         transfer_workflow = WorkflowBuilder()
 
         # Begin transaction
         transfer_workflow.add_node(
-            "BeginTransactionNode", "begin_txn", {"isolation_level": "read_committed"}
+            "TransactionScopeNode",
+            "begin_txn",
+            {"isolation_level": "READ_COMMITTED"},
         )
 
-        # Lock accounts
-        transfer_workflow.add_node(
-            "BankAccountUpdateNode",
-            "lock_from",
-            {"conditions": {"account_number": "ACC-001"}, "updates": {"locked": True}},
-        )
-
-        transfer_workflow.add_node(
-            "BankAccountUpdateNode",
-            "lock_to",
-            {"conditions": {"account_number": "ACC-002"}, "updates": {"locked": True}},
-        )
-
-        # Transfer amount
-        transfer_amount = 200.0
+        # Debit ACC-001, credit ACC-002 on the scope's connection.
         transfer_workflow.add_node(
             "BankAccountUpdateNode",
             "debit",
             {
-                "conditions": {"account_number": "ACC-001"},
-                "updates": {"balance": f"balance - {transfer_amount}"},
+                "filter": {"id": acc1_id},
+                "fields": {"balance": 1000.0 - transfer_amount},
             },
         )
-
         transfer_workflow.add_node(
             "BankAccountUpdateNode",
             "credit",
+            {"filter": {"id": acc2_id}, "fields": {"balance": 500.0 + transfer_amount}},
+        )
+
+        # Decide the transaction outcome from both updates succeeding.
+        transfer_workflow.add_node(
+            "PythonCodeNode",
+            "decide",
             {
-                "conditions": {"account_number": "ACC-002"},
-                "updates": {"balance": f"balance + {transfer_amount}"},
+                "code": """
+result = {
+    'status': 'success' if (debit_id is not None and credit_id is not None) else 'failed'
+}
+"""
             },
         )
 
-        # Unlock accounts
+        # Boolean SwitchNode: success -> true_output -> commit; else rollback.
         transfer_workflow.add_node(
-            "BankAccountUpdateNode",
-            "unlock_from",
-            {"conditions": {"account_number": "ACC-001"}, "updates": {"locked": False}},
+            "SwitchNode",
+            "route",
+            {"condition_field": "status", "operator": "==", "value": "success"},
         )
 
-        transfer_workflow.add_node(
-            "BankAccountUpdateNode",
-            "unlock_to",
-            {"conditions": {"account_number": "ACC-002"}, "updates": {"locked": False}},
-        )
+        # Commit / rollback terminals
+        transfer_workflow.add_node("TransactionCommitNode", "commit_txn", {})
+        transfer_workflow.add_node("TransactionRollbackNode", "rollback_txn", {})
 
-        # Commit transaction
-        transfer_workflow.add_node("CommitTransactionNode", "commit_txn", {})
-
-        # Rollback node (for error cases)
-        transfer_workflow.add_node("RollbackTransactionNode", "rollback_txn", {})
-
-        # Connect success path
-        transfer_workflow.add_connection("begin_txn", "lock_from")
-        transfer_workflow.add_connection("begin_txn", "lock_to")
+        # Wire the graph (4-positional add_connection, no conditional edges).
         transfer_workflow.add_connection(
-            "lock_from", "debit", condition="status == 'success'"
+            "begin_txn", "transaction_id", "debit", "transaction_id"
+        )
+        transfer_workflow.add_connection("debit", "id", "credit", "previous_id")
+        transfer_workflow.add_connection("debit", "id", "decide", "debit_id")
+        transfer_workflow.add_connection("credit", "id", "decide", "credit_id")
+        transfer_workflow.add_connection("decide", "result", "route", "input_data")
+        transfer_workflow.add_connection(
+            "route", "true_output", "commit_txn", "trigger"
         )
         transfer_workflow.add_connection(
-            "lock_to", "credit", condition="status == 'success'"
+            "route", "false_output", "rollback_txn", "trigger"
         )
-        transfer_workflow.add_connection("debit", "unlock_from")
-        transfer_workflow.add_connection("credit", "unlock_to")
-        transfer_workflow.add_connection("unlock_from", "commit_txn")
-        transfer_workflow.add_connection("unlock_to", "commit_txn")
-
-        # Connect rollback paths
-        for node in ["lock_from", "lock_to", "debit", "credit"]:
-            transfer_workflow.add_connection(
-                node, "rollback_txn", condition="status == 'failed'"
-            )
 
         # Execute transfer
-        results, _ = await runtime.execute_async(transfer_workflow.build())
+        results, _ = await runtime.execute_async(
+            transfer_workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
 
-        # Verify transaction completed
-        if "commit_txn" in results:
-            assert results["commit_txn"]["status"] == "success"
+        # Success path taken: commit ran, rollback pruned.
+        assert results["commit_txn"]["status"] == "committed"
+        assert "rollback_txn" not in results
 
-            # Check final balances
-            verify_workflow = WorkflowBuilder()
-            verify_workflow.add_node("BankAccountListNode", "check", {})
+        # State-persistence read-back: balances transferred, locks clear.
+        verify_workflow = WorkflowBuilder()
+        verify_workflow.add_node("BankAccountListNode", "check", {"limit": 1000})
+        verify_results, _ = await runtime.execute_async(
+            verify_workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
+        accounts = verify_results["check"]["records"]
 
-            verify_results, _ = await runtime.execute_async(verify_workflow.build())
-            accounts = verify_results["check"]["output"]
+        acc1 = next(a for a in accounts if a["account_number"] == acc1_no)
+        acc2 = next(a for a in accounts if a["account_number"] == acc2_no)
 
-            acc1 = next(a for a in accounts if a["account_number"] == "ACC-001")
-            acc2 = next(a for a in accounts if a["account_number"] == "ACC-002")
+        assert acc1["balance"] == pytest.approx(800.0, abs=0.01)  # 1000 - 200
+        assert acc2["balance"] == pytest.approx(700.0, abs=0.01)  # 500 + 200
+        assert acc1["locked"] is False
+        assert acc2["locked"] is False
 
-            assert acc1["balance"] == 800.0  # 1000 - 200
-            assert acc2["balance"] == 700.0  # 500 + 200
-            assert acc1["locked"] is False
-            assert acc2["locked"] is False
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Savepoint/nested-transaction routing here relies on a conditional "
-        'connection edge (add_connection(..., condition="balanced == false")) that '
-        "is not part of the current WorkflowBuilder API — add_connection is "
-        "4-positional with no conditional edges. Begin/Commit/RollbackTransactionNode "
-        "with savepoint_name work post-fix, but the conditional rollback-to-savepoint "
-        "branching contract is a redesign — deferred per #1582.",
-    )
     @pytest.mark.asyncio
-    async def test_nested_transactions(self, test_suite, runtime):
-        """Test nested transaction handling."""
-        dataflow = DataFlow(test_suite.config.url)
+    async def test_nested_transactions(self, test_suite):
+        """Nested transaction handling via savepoint + SwitchNode routing.
 
-        @dataflow.model
+        Re-expressed on the current API (#1582): the removed conditional
+        connection edge (condition="balanced == false") is replaced by a
+        TransactionSavepointNode / TransactionRollbackToSavepointNode pair plus
+        a boolean SwitchNode routing on a needs_rollback flag. entry2 is written
+        inside the savepoint and removed by the rollback-to-savepoint; entry1
+        and entry3 survive to the outer commit.
+        """
+        db = DataFlow(test_suite.config.url)
+        runtime = LocalRuntime(conditional_execution="skip_branches")
+
+        @db.model
         class Ledger:
             entry_type: str
             amount: float
             description: str
 
-        # Workflow with nested transactions
+        await db.create_tables_async()
+
+        # Unique descriptions per run keep the assertions isolated from rows
+        # left by prior runs of the shared PostgreSQL test database.
+        tok = str(int(time.time() * 1_000_000))
+        d1 = f"First entry {tok}"
+        d2 = f"Second entry {tok}"
+        d3 = f"Balance adjustment {tok}"
+
+        # Workflow with an outer transaction + inner savepoint
         workflow = WorkflowBuilder()
 
         # Outer transaction
         workflow.add_node(
-            "BeginTransactionNode",
+            "TransactionScopeNode",
             "outer_txn",
-            {"isolation_level": "read_committed", "savepoint_name": "outer"},
+            {"isolation_level": "READ_COMMITTED"},
         )
 
         # First operation
         workflow.add_node(
             "LedgerCreateNode",
             "entry1",
-            {"entry_type": "debit", "amount": 100.0, "description": "First entry"},
+            {"entry_type": "debit", "amount": 100.0, "description": d1},
         )
 
-        # Inner transaction (savepoint)
-        workflow.add_node(
-            "BeginTransactionNode", "inner_txn", {"savepoint_name": "inner"}
-        )
+        # Inner savepoint
+        workflow.add_node("TransactionSavepointNode", "inner_sp", {"name": "inner"})
 
-        # Second operation
+        # Second operation (written inside the savepoint)
         workflow.add_node(
             "LedgerCreateNode",
             "entry2",
-            {"entry_type": "credit", "amount": 100.0, "description": "Second entry"},
+            {"entry_type": "credit", "amount": 100.0, "description": d2},
         )
 
-        # Simulate error in inner transaction
+        # Balance check forces a rollback of the inner savepoint (removes entry2).
         workflow.add_node(
             "PythonCodeNode",
             "check_balance",
             {
                 "code": """
-# Simulate balance check
-entries = inputs.get('entries', [])
-debit_total = sum(e['amount'] for e in entries if e['entry_type'] == 'debit')
-credit_total = sum(e['amount'] for e in entries if e['entry_type'] == 'credit')
-
-# Force error for testing
-outputs = {
-    'balanced': False,  # Force rollback
-    'difference': debit_total - credit_total
-}
+# Force an imbalance so the inner savepoint is rolled back.
+result = {'needs_rollback': True}
 """
             },
         )
 
-        # Rollback to savepoint
+        # Boolean SwitchNode: needs_rollback -> true_output -> rollback savepoint.
         workflow.add_node(
-            "RollbackTransactionNode", "rollback_inner", {"savepoint_name": "inner"}
+            "SwitchNode",
+            "route",
+            {"condition_field": "needs_rollback", "operator": "==", "value": True},
         )
 
-        # Continue with outer transaction
+        # Rollback to savepoint (removes entry2)
+        workflow.add_node(
+            "TransactionRollbackToSavepointNode",
+            "rollback_inner",
+            {"savepoint": "inner"},
+        )
+
+        # Continue with the outer transaction
         workflow.add_node(
             "LedgerCreateNode",
             "entry3",
-            {
-                "entry_type": "adjustment",
-                "amount": 0.0,
-                "description": "Balance adjustment",
-            },
+            {"entry_type": "adjustment", "amount": 0.0, "description": d3},
         )
 
-        # Commit outer transaction
-        workflow.add_node("CommitTransactionNode", "commit_outer", {})
+        # Commit the outer transaction
+        workflow.add_node("TransactionCommitNode", "commit_outer", {})
 
-        # Connect workflow
-        workflow.add_connection("outer_txn", "entry1")
-        workflow.add_connection("entry1", "inner_txn")
-        workflow.add_connection("inner_txn", "entry2")
-        workflow.add_connection("entry2", "check_balance")
+        # Wire the graph (4-positional add_connection, no conditional edges).
         workflow.add_connection(
-            "check_balance", "rollback_inner", condition="balanced == false"
+            "outer_txn", "transaction_id", "entry1", "transaction_id"
         )
-        workflow.add_connection("rollback_inner", "entry3")
-        workflow.add_connection("entry3", "commit_outer")
+        workflow.add_connection("entry1", "id", "inner_sp", "previous_id")
+        workflow.add_connection("inner_sp", "status", "entry2", "sp_status")
+        workflow.add_connection("entry2", "id", "check_balance", "entry2_id")
+        workflow.add_connection("check_balance", "result", "route", "input_data")
+        workflow.add_connection("route", "true_output", "rollback_inner", "trigger")
+        workflow.add_connection("rollback_inner", "status", "entry3", "rb_status")
+        workflow.add_connection("entry3", "id", "commit_outer", "record_count")
 
         # Execute
-        results, _ = await runtime.execute_async(workflow.build())
+        results, _ = await runtime.execute_async(
+            workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
 
         # Verify results
-        assert results["entry1"]["status"] == "success"
-        assert results["rollback_inner"]["status"] == "success"
-        assert results["commit_outer"]["status"] == "success"
+        assert results["entry1"]["id"] is not None
+        assert results["rollback_inner"]["status"] == "rolled_back_to_savepoint"
+        assert results["commit_outer"]["status"] == "committed"
 
-        # Check final state - entry2 should be rolled back
+        # State-persistence read-back: entry1 + entry3 persist, entry2 rolled back.
         check_workflow = WorkflowBuilder()
-        check_workflow.add_node("LedgerListNode", "check", {})
+        check_workflow.add_node("LedgerListNode", "check", {"limit": 1000})
 
-        check_results, _ = await runtime.execute_async(check_workflow.build())
-        entries = check_results["check"]["output"]
+        check_results, _ = await runtime.execute_async(
+            check_workflow.build(),
+            parameters={"workflow_context": {"dataflow_instance": db}},
+        )
+        descriptions = [e["description"] for e in check_results["check"]["records"]]
 
-        assert len(entries) == 2  # Only entry1 and entry3
-        assert any(e["description"] == "First entry" for e in entries)
-        assert any(e["description"] == "Balance adjustment" for e in entries)
-        assert not any(e["description"] == "Second entry" for e in entries)
+        assert d1 in descriptions
+        assert d3 in descriptions
+        assert d2 not in descriptions
 
 
 @pytest.mark.integration
@@ -606,17 +651,15 @@ outputs = {
 class TestMonitoringIntegration:
     """Test monitoring integration with DataFlow."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="db.get_monitor_nodes() is not part of the current DataFlow API — "
-        "no such method exists in packages/kailash-dataflow/src (only stale docs/"
-        "examples reference it). Monitoring is surfaced via monitoring=True + the "
-        "connection-pool inspection API (get_connection_pool / get_metrics). "
-        "Deferred monitor-node contract — see #1582.",
-    )
     @pytest.mark.asyncio
     async def test_query_monitoring(self, test_suite):
-        """Test query performance monitoring."""
+        """Query performance monitoring via monitoring=True + pool inspection.
+
+        Re-expressed on the current API (#1582): the old monitor-nodes
+        accessor was removed; the monitoring surface is monitoring=True plus
+        the connection-pool inspection API (get_connection_pool /
+        get_health_status / get_metrics).
+        """
         # Create DataFlow with monitoring enabled
         db = DataFlow(
             test_suite.config.url, monitoring=True, slow_query_threshold=0.05
@@ -627,74 +670,77 @@ class TestMonitoringIntegration:
         class MetricData:
             metric_name: str
             value: float
-            tags: Dict[str, str] = {}
+            # NB: the field is named `labels` (not `tags`): `tags` is a reserved
+            # node-metadata key on the SDK's base Node (a set), so a DataFlow
+            # model field named `tags` collides at CreateNode construction.
+            labels: Dict[str, str] = {}
 
-        # Get monitor nodes
-        monitors = db.get_monitor_nodes()
-        assert monitors is not None
-        assert "transaction" in monitors
-        assert "metrics" in monitors
+        await db.create_tables_async()
+
+        # Real monitoring surface: inspect connection-pool health (replaces the
+        # removed monitor-nodes accessor).
+        pool = db.get_connection_pool()
+        health = await pool.get_health_status()
+        assert health["status"] == "healthy"
+        assert health["total_connections"] <= pool.max_connections
+
+        tok = str(int(time.time() * 1_000_000))
 
         # Create workflow with various query patterns
         workflow = WorkflowBuilder()
 
-        # Fast query
+        # Fast single-record write
         workflow.add_node(
             "MetricDataCreateNode",
             "fast_op",
-            {"metric_name": "cpu_usage", "value": 45.5, "tags": {"host": "server1"}},
-        )
-
-        # Potentially slow query (bulk operation)
-        slow_data = [
-            {"metric_name": f"metric_{i}", "value": i * 0.1, "tags": {"batch": "test"}}
-            for i in range(100)
-        ]
-
-        workflow.add_node("MetricDataBulkCreateNode", "slow_op", {"records": slow_data})
-
-        # Complex aggregation query
-        workflow.add_node(
-            "SQLDatabaseNode",
-            "complex_query",
             {
-                "connection_string": db.config.database.get_connection_url(
-                    db.config.environment
-                ),
-                "query": """
-                SELECT
-                    metric_name,
-                    AVG(value) as avg_value,
-                    COUNT(*) as count,
-                    MAX(value) as max_value,
-                    MIN(value) as min_value
-                FROM metricdata
-                GROUP BY metric_name
-                HAVING COUNT(*) > 0
-                ORDER BY avg_value DESC
-                LIMIT 10
-            """,
+                "metric_name": f"cpu_usage_{tok}",
+                "value": 45.5,
+                "labels": {"host": "server1"},
             },
         )
+
+        # Potentially slow operation (bulk write)
+        slow_data = [
+            {
+                "metric_name": f"metric_{tok}_{i}",
+                "value": i * 0.1,
+                "labels": {"batch": "test"},
+            }
+            for i in range(100)
+        ]
+        workflow.add_node("MetricDataBulkCreateNode", "slow_op", {"data": slow_data})
+
+        # Read query (verifies the fast write persisted -> read-back)
+        workflow.add_node(
+            "MetricDataListNode",
+            "query",
+            {"filter": {"metric_name": f"cpu_usage_{tok}"}, "limit": 10},
+        )
+        # Order the read after the fast write so it sees the committed row.
+        workflow.add_connection("fast_op", "id", "query", "after_fast")
 
         # Execute workflow
         start_time = time.time()
         results, _ = await runtime.execute_async(workflow.build())
         execution_time = time.time() - start_time
 
-        # All operations should complete
-        assert results["fast_op"]["status"] == "success"
-        assert results["slow_op"]["status"] == "success"
-        assert results["complex_query"]["status"] == "success"
+        # All operations completed.
+        assert results["fast_op"]["id"] is not None
+        assert results["slow_op"]["success"] is True
+        assert results["slow_op"]["inserted"] == 100
+        # State-persistence read-back: the fast write is queryable.
+        assert results["query"]["count"] == 1
 
         # Monitoring should track performance
-        # In production, slow queries would be logged
         print(f"Workflow execution time: {execution_time:.3f}s")
         print("Monitoring active - slow queries would be tracked")
 
-        # Check if transaction monitor detected any issues
-        transaction_monitor = monitors["transaction"]
-        # In real implementation, we'd check monitor metrics
+        # Monitoring surface: pool metrics are exposed for the operator.
+        metrics = await pool.get_metrics()
+        assert metrics["total_connections"] == pool.max_connections
+        assert metrics["connections_created"] > 0
+        assert metrics["active_connections"] >= 0
 
     @pytest.mark.asyncio
     async def test_connection_pool_monitoring(self, test_suite):
@@ -750,16 +796,15 @@ class TestMonitoringIntegration:
 
         print(f"Pool metrics: {metrics}")
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="db.get_monitor_nodes() is not part of the current DataFlow API — "
-        "no such method exists in packages/kailash-dataflow/src (only stale docs/"
-        "examples reference it). Performance-anomaly monitor nodes were never "
-        "shipped on the current surface. Deferred monitor-node contract — see #1582.",
-    )
     @pytest.mark.asyncio
     async def test_performance_anomaly_detection(self, test_suite):
-        """Test performance anomaly detection."""
+        """Performance anomaly detection via monitoring=True + pool metrics.
+
+        Re-expressed on the current API (#1582): the old monitor-nodes
+        accessor was removed; monitoring is surfaced via monitoring=True and
+        the connection-pool inspection API. The spike is detected by reading
+        the sensor's series back and filtering the anomalous values.
+        """
         db = DataFlow(test_suite.config.url, monitoring=True, slow_query_threshold=0.1)
         runtime = LocalRuntime()
 
@@ -769,7 +814,12 @@ class TestMonitoringIntegration:
             value: float
             sensor_id: str
 
-        monitors = db.get_monitor_nodes()
+        await db.create_tables_async()
+
+        # Unique sensor id per run keeps the spike count isolated from rows
+        # left by prior runs of the shared PostgreSQL test database.
+        tok = str(int(time.time() * 1_000_000))
+        sensor = f"sensor_{tok}"
 
         # Normal operations to establish baseline
         normal_workflow = WorkflowBuilder()
@@ -782,7 +832,7 @@ class TestMonitoringIntegration:
                 {
                     "timestamp": base_time.isoformat(),
                     "value": 20.0 + (i * 0.1),
-                    "sensor_id": "sensor_001",
+                    "sensor_id": sensor,
                 },
             )
 
@@ -799,23 +849,29 @@ class TestMonitoringIntegration:
                 {
                     "timestamp": datetime.now().isoformat(),
                     "value": 100.0 + (i * 10),  # Much higher than normal
-                    "sensor_id": "sensor_001",
+                    "sensor_id": sensor,
                 },
             )
 
-        # Complex query that might be slow
-        anomaly_workflow.add_node(
+        await runtime.execute_async(anomaly_workflow.build())
+
+        # Read the sensor series back and detect the spike (value > 50).
+        detect_workflow = WorkflowBuilder()
+        detect_workflow.add_node(
             "TimeSeriesDataListNode",
             "detect_spike",
-            {"filter": {"sensor_id": "sensor_001", "value": {"$gt": 50.0}}},
+            {"filter": {"sensor_id": sensor}, "limit": 100},
         )
-
-        results, _ = await runtime.execute_async(anomaly_workflow.build())
+        results, _ = await runtime.execute_async(detect_workflow.build())
 
         # Check if anomaly was detected
-        spike_data = results["detect_spike"]["output"]
+        records = results["detect_spike"]["records"]
+        spike_data = [r for r in records if r["value"] > 50.0]
         assert len(spike_data) == 5  # All anomaly records
 
-        # In production, PerformanceAnomalyNode would alert on this
-        if "anomaly" in monitors:
-            print("Performance anomaly detection active")
+        # Monitoring surface: pool metrics are available for anomaly alerting.
+        pool = db.get_connection_pool()
+        metrics = await pool.get_metrics()
+        assert metrics["total_connections"] == pool.max_connections
+        assert metrics["connections_created"] > 0
+        print("Performance anomaly detection active")
