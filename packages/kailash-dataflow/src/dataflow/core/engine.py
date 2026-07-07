@@ -99,6 +99,31 @@ from .type_introspection import (  # issue #772: shared union detection
 # Source name validation (used in Redis keys, cache keys, endpoint paths)
 _SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
 
+# Recognized top-level ``__dataflow__`` model-config keys (issue #1599).
+# Every entry is a key DataFlow actually reads at registration / node-generation
+# time; an unknown key silently does nothing, so registration emits a loud (but
+# non-breaking) ``UserWarning`` naming it — the guard that makes a fictional flag
+# like ``versioned`` (removed in 2.14.0, zero backing code) visible instead of a
+# silent no-op. Read-site evidence per key:
+#   soft_delete       -> core/nodes.py, features/bulk.py, engine._model_has_soft_delete
+#   multi_tenant      -> core/engine_production.py (set_tenant_context); adds tenant_id
+#   indexes           -> engine._create_custom_indexes (config.get("indexes"))
+#   retention         -> engine._register_model_internal (RetentionPolicy registration)
+#   use_native_arrays -> features/bulk.py _serialize_params_for_sql
+#   audit_log         -> recognized documented flag retained by 2.14.0 (audit surface)
+# The warning is intentionally a warning, never a raise: an over-tight allowlist
+# must degrade to noise on a valid model, never break it (issue #1599).
+_KNOWN_DATAFLOW_CONFIG_KEYS = frozenset(
+    {
+        "soft_delete",
+        "multi_tenant",
+        "indexes",
+        "retention",
+        "use_native_arrays",
+        "audit_log",
+    }
+)
+
 # ErrorEnhancer for rich error messages
 # Platform ErrorEnhancer for module-level (static) enhancements
 try:
@@ -2036,6 +2061,24 @@ class DataFlow(DataFlowEventMixin):
         config = {}
         if hasattr(cls, "__dataflow__"):
             config = getattr(cls, "__dataflow__", {})
+
+        # Issue #1599: warn (loudly, but non-breakingly) on unrecognized
+        # ``__dataflow__`` keys. An unknown key silently does nothing — the
+        # exact failure mode of the removed ``versioned`` flag — so surface it
+        # as a UserWarning naming the key(s) and the model. This is a warning,
+        # never a raise: if the allowlist is missing a valid key, a working
+        # model MUST still register (it just emits noise), never break.
+        if isinstance(config, dict):
+            unknown_keys = sorted(set(config) - _KNOWN_DATAFLOW_CONFIG_KEYS)
+            if unknown_keys:
+                warnings.warn(
+                    f"Model '{model_name}' declares unknown __dataflow__ key(s) "
+                    f"{unknown_keys}: DataFlow does not recognize these and they "
+                    f"have no effect. Recognized keys: "
+                    f"{sorted(_KNOWN_DATAFLOW_CONFIG_KEYS)}.",
+                    UserWarning,
+                    stacklevel=3,
+                )
 
         # Determine table name - check for __tablename__ override
         table_name = getattr(cls, "__tablename__", None)
