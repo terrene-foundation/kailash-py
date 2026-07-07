@@ -238,10 +238,11 @@ else:
 
 ## Retry Strategies
 
-Database operations retry transient failures (connection resets, deadlocks,
-serialization failures) automatically via the `retry_config` parameter on
-`AsyncSQLDatabaseNode`. Retry is built into the node — there is no separate
-retry-wrapper node.
+Database operations retry transient failures (connection resets, timeouts,
+network errors, and SQLite "database is locked") automatically via the
+`retry_config` parameter on `AsyncSQLDatabaseNode`. Deadlock and serialization
+retries are opt-in via `retryable_errors` (see below). Retry is built into the
+node — there is no separate retry-wrapper node.
 
 ### Simple Retry
 
@@ -280,9 +281,10 @@ workflow.add_node("AsyncSQLDatabaseNode", "resilient_query", {
 
 ### Customizing Retryable Errors
 
-By default `retry_config` retries only transient connection/deadlock errors and
-surfaces application errors immediately. Pass `retryable_errors` to override which
-error substrings trigger a retry:
+By default `retry_config` retries only transient connection, timeout, and
+network errors (plus SQLite "database is locked") and surfaces application errors
+— including deadlocks and serialization failures — immediately. Pass
+`retryable_errors` to override which error substrings trigger a retry:
 
 ```python
 workflow.add_node("AsyncSQLDatabaseNode", "custom_retry", {

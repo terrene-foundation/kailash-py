@@ -1547,7 +1547,6 @@ class BulkOperations:
 
             # Get column names from first record
             columns = list(data[0].keys())
-            column_names = ", ".join(columns)
 
             # Issue #1519 + rules/dataflow-identifier-safety.md MUST-1: the
             # conflict-target columns are interpolated into ``ON CONFLICT (...)``
