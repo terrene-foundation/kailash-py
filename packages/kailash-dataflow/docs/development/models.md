@@ -32,20 +32,20 @@ class User:
 
 ### Supported Python Types
 
-| Python Type | SQL Type | Notes |
-|------------|----------|-------|
-| `str` | VARCHAR/TEXT | Length specified via metadata |
-| `int` | INTEGER/BIGINT | Auto-detect size |
-| `float` | FLOAT/DOUBLE | Precision configurable |
-| `bool` | BOOLEAN | INTEGER(0,1) in SQLite |
-| `datetime` | TIMESTAMP | Auto timezone handling |
-| `date` | DATE | Date only |
-| `time` | TIME | Time only |
-| `bytes` | BLOB/BYTEA | Binary data |
-| `dict` | JSON/JSONB | Structured data |
-| `list` | JSON/JSONB | Array data |
-| `Decimal` | DECIMAL | Precise numbers |
-| `UUID` | UUID | Unique identifiers |
+| Python Type | SQL Type       | Notes                         |
+| ----------- | -------------- | ----------------------------- |
+| `str`       | VARCHAR/TEXT   | Length specified via metadata |
+| `int`       | INTEGER/BIGINT | Auto-detect size              |
+| `float`     | FLOAT/DOUBLE   | Precision configurable        |
+| `bool`      | BOOLEAN        | INTEGER(0,1) in SQLite        |
+| `datetime`  | TIMESTAMP      | Auto timezone handling        |
+| `date`      | DATE           | Date only                     |
+| `time`      | TIME           | Time only                     |
+| `bytes`     | BLOB/BYTEA     | Binary data                   |
+| `dict`      | JSON/JSONB     | Structured data               |
+| `list`      | JSON/JSONB     | Array data                    |
+| `Decimal`   | DECIMAL        | Precise numbers               |
+| `UUID`      | UUID           | Unique identifiers            |
 
 ### Advanced Type Examples
 
@@ -123,7 +123,6 @@ class Order:
         # Features
         'multi_tenant': True,  # Adds tenant_id field
         'soft_delete': True,   # Adds deleted_at field
-        'versioned': True,     # Adds version field
         'audit_log': True,     # Track all changes
         'timestamps': True,    # Add created_at, updated_at
 
@@ -390,6 +389,7 @@ db.auto_migrate()  # Detects and applies changes
 ## Best Practices
 
 ### 1. Use Type Hints
+
 ```python
 # Good
 name: str
@@ -401,6 +401,7 @@ name = ""  # No type hint
 ```
 
 ### 2. Provide Defaults
+
 ```python
 # Good
 status: str = "active"
@@ -411,6 +412,7 @@ status: str  # Required field might be forgotten
 ```
 
 ### 3. Index Frequently Queried Fields
+
 ```python
 @db.model
 class User:
@@ -419,6 +421,7 @@ class User:
 ```
 
 ### 4. Use Appropriate Types
+
 ```python
 # Good
 price: Decimal  # For money
@@ -431,6 +434,7 @@ metadata: str  # Requires manual JSON handling
 ```
 
 ### 5. Plan for Growth
+
 ```python
 __dataflow__ = {
     'multi_tenant': True,  # Easy to add tenancy later
@@ -442,6 +446,7 @@ __dataflow__ = {
 ## Common Patterns
 
 ### User Model
+
 ```python
 @db.model
 class User:
@@ -472,6 +477,7 @@ class User:
 ```
 
 ### Product Model
+
 ```python
 @db.model
 class Product:

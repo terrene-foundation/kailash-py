@@ -2980,9 +2980,59 @@ class NodeGenerator:
                     quoted_table = dialect.quote_identifier(table_name)
                     quoted_id = dialect.quote_identifier("id")
 
-                    # Database-specific DELETE query
+                    # SOFT DELETE (v0.10.6+ completion)
+                    # If the model declares soft_delete: True, a DELETE is a
+                    # tombstone UPDATE (deleted_at = now) rather than a physical
+                    # row removal — matching the read-path auto-filter
+                    # (list/read exclude deleted_at IS NOT NULL) and industry
+                    # convention (Django, Rails, Laravel). The config-access
+                    # pattern mirrors the list/read soft-delete blocks above.
+                    model_config = getattr(self, "_dataflow_config", {})
+                    if not model_config:
+                        model_info = self.dataflow_instance._models.get(model_name)
+                        if isinstance(model_info, dict):
+                            model_config = model_info.get("config", {})
+                        # Fall through (NOT elif) when the config dict is present
+                        # but EMPTY — the soft_delete flag may live only on the
+                        # registered class's _dataflow_config. Without this,
+                        # DeleteNode would hard-delete a soft_delete model whose
+                        # schema path DID create deleted_at → silent data loss
+                        # (matches engine._model_has_soft_delete's independent checks).
+                        if not model_config:
+                            model_cls = self.dataflow_instance._registered_models.get(
+                                model_name
+                            )
+                            if model_cls and hasattr(model_cls, "_dataflow_config"):
+                                model_config = getattr(
+                                    model_cls, "_dataflow_config", {}
+                                )
+                    has_soft_delete = model_config.get("soft_delete", False)
+
+                    if has_soft_delete:
+                        # Tombstone UPDATE. The ``AND deleted_at IS NULL`` guard
+                        # makes a repeat delete a no-op (0 rows affected → not
+                        # found), so an already-deleted row is not re-stamped.
+                        quoted_deleted_at = dialect.quote_identifier("deleted_at")
+                        if database_type.lower() == "mysql":
+                            query = (
+                                f"UPDATE {quoted_table} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                                f"WHERE {quoted_id} = %s AND {quoted_deleted_at} IS NULL"
+                            )
+                        elif database_type.lower() == "postgresql":
+                            query = (
+                                f"UPDATE {quoted_table} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                                f"WHERE {quoted_id} = $1 AND {quoted_deleted_at} IS NULL "
+                                f"RETURNING {quoted_id}"
+                            )
+                        else:  # sqlite
+                            query = (
+                                f"UPDATE {quoted_table} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                                f"WHERE {quoted_id} = ? AND {quoted_deleted_at} IS NULL "
+                                f"RETURNING {quoted_id}"
+                            )
+                    # Database-specific DELETE query (hard delete)
                     # PostgreSQL/SQLite support RETURNING, MySQL does not
-                    if database_type.lower() == "mysql":
+                    elif database_type.lower() == "mysql":
                         query = f"DELETE FROM {quoted_table} WHERE {quoted_id} = %s"
                     elif database_type.lower() == "postgresql":
                         query = f"DELETE FROM {quoted_table} WHERE {quoted_id} = $1 RETURNING {quoted_id}"

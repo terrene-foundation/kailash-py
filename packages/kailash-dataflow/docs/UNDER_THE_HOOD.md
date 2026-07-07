@@ -238,7 +238,6 @@ def model(self, cls: Type) -> Type:
             indexes=[],
             constraints=[],
             soft_delete=False,
-            versioned=False,
             multi_tenant=False
         )
 
@@ -299,7 +298,6 @@ def model(self, cls: Type) -> Type:
                     WHERE {{{{conditions}}}}
                     RETURNING *
                 """,
-                enable_optimistic_locking=model_meta.versioned,
                 **config
             ),
             'model_name': cls.__name__,

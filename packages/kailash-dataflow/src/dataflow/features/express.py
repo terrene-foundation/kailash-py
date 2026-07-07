@@ -758,6 +758,7 @@ class DataFlowExpress:
         id: Union[str, int],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Read a single record by ID.
@@ -766,17 +767,28 @@ class DataFlowExpress:
             model: Model name (e.g., "User")
             id: Record ID
             cache_ttl: Optional cache TTL override
+            include_deleted: For soft_delete models, when True a tombstoned
+                row (non-null ``deleted_at``) is returned instead of treated
+                as not-found (default: False). Part of the cache-key params so
+                an include-deleted read never collides with a default read.
 
         Returns:
             Record or None if not found
 
         Example:
             user = await db.express.read("User", "user-123")
+            tombstoned = await db.express.read("Doc", "doc-1", include_deleted=True)
         """
         effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
+        # include_deleted is part of the cache-key params (distinct slot from a
+        # default read) AND forwarded to the ReadNode tombstone check.
+        cache_params = {"id": id, "include_deleted": include_deleted}
+
         # Check cache first
-        cached_result = await self._cache_get(model, "read", {"id": id}, effective_ttl)
+        cached_result = await self._cache_get(
+            model, "read", cache_params, effective_ttl
+        )
         if cached_result is not None:
             logger.debug("express.cache_hit_for_read", extra={"model": model, "id": id})
             return cached_result
@@ -786,7 +798,7 @@ class DataFlowExpress:
             plan = await self._trust_check_read(model, {"id": id})
             try:
                 node = self._create_node(model, "Read")
-                result = await node.async_run(id=id)
+                result = await node.async_run(id=id, include_deleted=include_deleted)
 
                 # Apply PII/column filter from the trust plan, if any.
                 if plan is not None:
@@ -796,8 +808,10 @@ class DataFlowExpress:
                 # caller's clearance context.
                 result = self._apply_classification_mask_record(model, result)
 
-                # Cache result (TSG-104)
-                await self._cache_set(model, "read", {"id": id}, result, effective_ttl)
+                # Cache result (TSG-104) — same key params as the get above.
+                await self._cache_set(
+                    model, "read", cache_params, result, effective_ttl
+                )
 
                 await self._trust_record_success(
                     model,
@@ -1019,6 +1033,7 @@ class DataFlowExpress:
         order_by: Optional[str] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         List records with optional filtering.
@@ -1030,14 +1045,28 @@ class DataFlowExpress:
             offset: Skip first N records (default: 0)
             order_by: Optional field name to sort by (e.g., "created_at" or "-created_at" for desc)
             cache_ttl: Optional cache TTL override
+            include_deleted: For soft_delete models, when True bypass the
+                ``deleted_at IS NULL`` auto-filter and return tombstoned rows
+                too (default: False). Part of the cache-key params so an
+                include-deleted result never collides with a default query.
 
         Returns:
             List of records
 
         Example:
             users = await db.express.list("User", filter={"status": "active"}, limit=50)
+            all_incl_deleted = await db.express.list("Doc", include_deleted=True)
         """
-        params = {"filter": filter or {}, "limit": limit, "offset": offset}
+        # include_deleted is placed INTO params so it (a) forwards to the
+        # ListNode auto-filter and (b) becomes part of the cache key — a
+        # False result MUST NOT be served to a True query (tenant-isolation.md
+        # cache-key discipline applied to the soft-delete dimension).
+        params = {
+            "filter": filter or {},
+            "limit": limit,
+            "offset": offset,
+            "include_deleted": include_deleted,
+        }
         if order_by:
             params["order_by"] = order_by
         effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
@@ -1200,6 +1229,7 @@ class DataFlowExpress:
         filter: Optional[Dict[str, Any]] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> int:
         """
         Count records with optional filtering.
@@ -1210,14 +1240,21 @@ class DataFlowExpress:
             model: Model name (e.g., "User")
             filter: Optional MongoDB-style filter criteria
             cache_ttl: Optional cache TTL override
+            include_deleted: For soft_delete models, when True count tombstoned
+                rows too (bypass the ``deleted_at IS NULL`` auto-filter;
+                default: False). Part of the cache-key params so an
+                include-deleted count never collides with a default count.
 
         Returns:
             Number of matching records
 
         Example:
             active_count = await db.express.count("User", filter={"status": "active"})
+            total_incl_deleted = await db.express.count("Doc", include_deleted=True)
         """
-        params = {"filter": filter or {}}
+        # include_deleted in params → forwarded to the CountNode auto-filter
+        # AND part of the cache key (distinct slot from a default count).
+        params = {"filter": filter or {}, "include_deleted": include_deleted}
         effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
@@ -2398,6 +2435,7 @@ class SyncExpress:
         id: Union[str, int],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Read a single record by ID (sync).
 
@@ -2406,12 +2444,20 @@ class SyncExpress:
             id: Record ID
             cache_ttl: Optional cache TTL override
             use_primary: Force read from primary adapter (TSG-105)
+            include_deleted: For soft_delete models, return a tombstoned row
+                instead of treating it as not-found (default: False).
 
         Returns:
             Record or None if not found
         """
         return self._run_sync(
-            self._express.read(model, id, cache_ttl, use_primary=use_primary)
+            self._express.read(
+                model,
+                id,
+                cache_ttl,
+                use_primary=use_primary,
+                include_deleted=include_deleted,
+            )
         )
 
     def update(
@@ -2458,6 +2504,7 @@ class SyncExpress:
         order_by: Optional[str] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> List[Dict[str, Any]]:
         """List records with optional filtering (sync).
 
@@ -2469,6 +2516,8 @@ class SyncExpress:
             order_by: Optional field name to sort by (e.g., "created_at" or "-created_at" for desc)
             cache_ttl: Optional cache TTL override
             use_primary: Force read from primary adapter (TSG-105)
+            include_deleted: For soft_delete models, include tombstoned rows
+                (bypass the deleted_at IS NULL auto-filter; default: False).
 
         Returns:
             List of records
@@ -2482,6 +2531,7 @@ class SyncExpress:
                 order_by,
                 cache_ttl,
                 use_primary=use_primary,
+                include_deleted=include_deleted,
             )
         )
 
@@ -2513,6 +2563,7 @@ class SyncExpress:
         filter: Optional[Dict[str, Any]] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> int:
         """Count records with optional filtering (sync).
 
@@ -2521,12 +2572,20 @@ class SyncExpress:
             filter: Optional MongoDB-style filter criteria
             cache_ttl: Optional cache TTL override
             use_primary: Force read from primary adapter (TSG-105)
+            include_deleted: For soft_delete models, count tombstoned rows too
+                (bypass the deleted_at IS NULL auto-filter; default: False).
 
         Returns:
             Number of matching records
         """
         return self._run_sync(
-            self._express.count(model, filter, cache_ttl, use_primary=use_primary)
+            self._express.count(
+                model,
+                filter,
+                cache_ttl,
+                use_primary=use_primary,
+                include_deleted=include_deleted,
+            )
         )
 
     def upsert(

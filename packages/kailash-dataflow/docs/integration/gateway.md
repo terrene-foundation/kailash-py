@@ -5,6 +5,7 @@ Create production-ready REST APIs from DataFlow models using the Kailash Gateway
 ## Overview
 
 The DataFlow + Gateway integration provides:
+
 - **Automatic REST API Generation**: CRUD endpoints for all models
 - **OpenAPI Documentation**: Auto-generated API specs
 - **Authentication & Authorization**: Built-in security
@@ -50,6 +51,7 @@ gateway = create_gateway(
 ```
 
 This automatically creates:
+
 ```
 GET    /api/users          # List users
 POST   /api/users          # Create user
@@ -464,7 +466,7 @@ gateway = create_gateway(
 
 ### OpenAPI/Swagger Integration
 
-```python
+````python
 gateway = create_gateway(
     title="Well-Documented API",
     description="Complete API documentation with examples",
@@ -518,7 +520,7 @@ gateway = create_gateway(
         }
     }
 )
-```
+````
 
 ## WebSocket Support
 
@@ -735,8 +737,7 @@ class Post:
             {'fields': ['author_id', 'published']},
             {'fields': ['tags'], 'type': 'gin'}  # PostgreSQL
         ],
-        'soft_delete': True,
-        'versioned': True
+        'soft_delete': True
     }
 
 @db.model

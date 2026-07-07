@@ -5,6 +5,7 @@ Integrate DataFlow with Nexus to create unified multi-channel platforms with aut
 ## Overview
 
 The DataFlow + Nexus integration provides:
+
 - **Automatic API Generation**: REST endpoints for all DataFlow models
 - **CLI Commands**: Command-line interface for database operations
 - **MCP Tools**: AI agents can perform database operations
@@ -48,6 +49,7 @@ nexus = Nexus(
 ```
 
 This automatically creates:
+
 - REST API endpoints for Products and Orders
 - CLI commands for all CRUD operations
 - MCP tools for AI agents
@@ -521,7 +523,6 @@ class Product:
     category: str
     __dataflow__ = {
         'multi_tenant': True,
-        'versioned': True,
         'cache': True
     }
     __indexes__ = [

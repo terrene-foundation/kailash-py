@@ -36,6 +36,7 @@ the transaction-scope confirms the row's pre-block value survived.
 
 import socket
 import tempfile
+import uuid
 from typing import Iterator
 
 import pytest
@@ -100,26 +101,30 @@ class TestTransactionsExecuteRawProtection:
             id: str
             title: str
 
+        # Unique PK per run so re-runs never collide on the persisted
+        # __doc_asyncs table (asyncpg has no per-test teardown here).
+        seed_id = f"seed-{uuid.uuid4().hex[:8]}"
         try:
             await db.initialize()
 
             seed = await db.express.create(
-                "_DocAsync", {"id": "seed-1", "title": "original"}
+                "_DocAsync", {"id": seed_id, "title": "original"}
             )
-            assert seed["id"] == "seed-1"
+            assert seed["id"] == seed_id
 
             db.enable_read_only_mode("issue #1083 follow-up txn raw delete")
 
             # The bypass surface: raw DELETE through transactions.
+            # asyncpg-native placeholders ($N) — this class is PG-only.
             with pytest.raises(ProtectionViolation):
                 async with db.transactions.begin() as tx:
                     await tx.execute_raw(
-                        "DELETE FROM _docasync WHERE id = ?", ["seed-1"]
+                        "DELETE FROM __doc_asyncs WHERE id = $1", [seed_id]
                     )
 
             # READ is allowed under read-only (spec invariant I7) —
             # read-back confirms the row survived the block.
-            row = await db.express.read("_DocAsync", "seed-1")
+            row = await db.express.read("_DocAsync", seed_id)
             assert row is not None
             assert row["title"] == "original"
         finally:
@@ -137,20 +142,21 @@ class TestTransactionsExecuteRawProtection:
             id: str
             title: str
 
+        seed_id = f"seed-{uuid.uuid4().hex[:8]}"
         try:
             await db.initialize()
-            await db.express.create("_DocUpd", {"id": "seed-1", "title": "original"})
+            await db.express.create("_DocUpd", {"id": seed_id, "title": "original"})
 
             db.enable_read_only_mode("issue #1083 follow-up txn raw update")
 
             with pytest.raises(ProtectionViolation):
                 async with db.transactions.begin() as tx:
                     await tx.execute_raw(
-                        "UPDATE _docupd SET title = ? WHERE id = ?",
-                        ["MUTATED", "seed-1"],
+                        "UPDATE __doc_upds SET title = $1 WHERE id = $2",
+                        ["MUTATED", seed_id],
                     )
 
-            row = await db.express.read("_DocUpd", "seed-1")
+            row = await db.express.read("_DocUpd", seed_id)
             assert row is not None
             assert row["title"] == "original"
         finally:
@@ -169,9 +175,10 @@ class TestTransactionsExecuteRawProtection:
             id: str
             title: str
 
+        seed_id = f"seed-{uuid.uuid4().hex[:8]}"
         try:
             await db.initialize()
-            await db.express.create("_DocRead", {"id": "seed-1", "title": "original"})
+            await db.express.create("_DocRead", {"id": seed_id, "title": "original"})
 
             db.enable_read_only_mode("issue #1083 follow-up txn raw select")
 
@@ -179,7 +186,7 @@ class TestTransactionsExecuteRawProtection:
             # classifier as "read" and not as a write.
             async with db.transactions.begin() as tx:
                 rows = await tx.execute_raw(
-                    "SELECT id, title FROM _docread WHERE id = ?", ["seed-1"]
+                    "SELECT id, title FROM __doc_reads WHERE id = $1", [seed_id]
                 )
             assert rows is not None
         finally:
@@ -198,17 +205,18 @@ class TestTransactionsExecuteRawProtection:
             id: str
             title: str
 
+        seed_id = f"seed-{uuid.uuid4().hex[:8]}"
         try:
             await db.initialize()
-            await db.express.create("_DocOff", {"id": "seed-1", "title": "original"})
+            await db.express.create("_DocOff", {"id": seed_id, "title": "original"})
 
             async with db.transactions.begin() as tx:
                 await tx.execute_raw(
-                    "UPDATE _docoff SET title = ? WHERE id = ?",
-                    ["MUTATED", "seed-1"],
+                    "UPDATE __doc_offs SET title = $1 WHERE id = $2",
+                    ["MUTATED", seed_id],
                 )
 
-            row = await db.express.read("_DocOff", "seed-1")
+            row = await db.express.read("_DocOff", seed_id)
             assert row is not None
             assert row["title"] == "MUTATED"
         finally:
@@ -245,7 +253,7 @@ class TestSyncTransactionsExecuteRawProtection:
 
             with pytest.raises(ProtectionViolation):
                 with db.transactions_sync.begin() as tx:
-                    tx.execute_raw("DELETE FROM _docsync WHERE id = ?", ["seed-1"])
+                    tx.execute_raw("DELETE FROM __doc_syncs WHERE id = ?", ["seed-1"])
 
             row = await db.express.read("_DocSync", "seed-1")
             assert row is not None
