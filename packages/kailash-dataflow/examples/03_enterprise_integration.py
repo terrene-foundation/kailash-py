@@ -39,7 +39,6 @@ class Customer:
 
     __dataflow__ = {
         "soft_delete": True,
-        "versioned": True,
         "multi_tenant": True,
     }
 
@@ -59,7 +58,6 @@ class Order:
     payment_status: str = "pending"  # pending, authorized, captured, refunded
 
     __dataflow__ = {
-        "versioned": True,
         "multi_tenant": True,
     }
 
@@ -90,7 +88,7 @@ class Inventory:
     warehouse_location: str
 
     __dataflow__ = {
-        "versioned": True,  # For optimistic locking
+        "soft_delete": True,  # tombstone inventory rows instead of hard-deleting
     }
 
 

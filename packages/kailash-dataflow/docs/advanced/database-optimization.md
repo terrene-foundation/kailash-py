@@ -474,31 +474,6 @@ workflow.add_node("LockMonitorNode", "monitor_locks", {
 })
 ```
 
-### Optimistic Locking
-
-```python
-@db.model
-class Product:
-    id: int
-    name: str
-    price: float
-    version: int = 1
-
-    __dataflow__ = {
-        'optimistic_lock': 'version',
-        'retry_on_conflict': 3
-    }
-
-# Use optimistic locking in workflow
-workflow.add_node("OptimisticUpdateNode", "update_product", {
-    "model": "Product",
-    "id": product_id,
-    "updates": {"price": new_price},
-    "conflict_resolution": "retry",  # or "merge", "fail"
-    "max_retries": 3
-})
-```
-
 ## Hardware Optimization
 
 ### SSD Optimization
