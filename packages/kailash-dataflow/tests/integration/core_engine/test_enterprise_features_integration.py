@@ -24,12 +24,14 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
+
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
+
 
 class TestEnterpriseFeatureIntegration:
     """Test comprehensive enterprise feature integration."""
@@ -110,7 +112,7 @@ class TestEnterpriseFeatureIntegration:
             category: str
             value: Decimal
 
-            __dataflow__ = {"multi_tenant": True, "audit_log": True, "versioned": True}
+            __dataflow__ = {"multi_tenant": True, "audit_log": True}
 
         workflow = WorkflowBuilder()
 
@@ -285,61 +287,6 @@ class TestEnterpriseFeatureIntegration:
         built_workflow = workflow.build()
         assert built_workflow is not None
         assert len(built_workflow.nodes) == 4
-
-    def test_versioned_records_enterprise_feature(self, test_suite):
-        """Test versioned records for optimistic locking."""
-        db = DataFlow(test_suite.config.url, multi_tenant=True)
-
-        @db.model
-        class VersionedModel:
-            name: str
-            value: float
-            status: str
-
-            __dataflow__ = {"multi_tenant": True, "versioned": True}
-
-        workflow = WorkflowBuilder()
-
-        # Create versioned record
-        workflow.add_node(
-            "VersionedModelCreateNode",
-            "create_versioned",
-            {
-                "name": "Versioned Record",
-                "value": 100.0,
-                "status": "active",
-                "tenant_id": "versioned_tenant",
-            },
-        )
-
-        # Update with version check (optimistic locking)
-        workflow.add_node(
-            "VersionedModelUpdateNode",
-            "update_versioned",
-            {
-                "id": "${create_versioned.id}",
-                "value": 150.0,
-                "status": "updated",
-                "version": "${create_versioned.version}",
-                "tenant_id": "versioned_tenant",
-            },
-        )
-
-        # Read updated record to verify version increment
-        workflow.add_node(
-            "VersionedModelReadNode",
-            "read_updated",
-            {"id": "${create_versioned.id}", "tenant_id": "versioned_tenant"},
-        )
-
-        workflow.add_connection(
-            "create_versioned", "output", "update_versioned", "input"
-        )
-        workflow.add_connection("update_versioned", "output", "read_updated", "input")
-
-        built_workflow = workflow.build()
-        assert built_workflow is not None
-        assert len(built_workflow.nodes) == 3
 
     def test_distributed_transaction_integration(self, test_suite):
         """Test distributed transaction management."""
@@ -604,7 +551,7 @@ class TestEnterpriseFeatureIntegration:
             status: str = "pending"
             items: str  # JSON string of items
 
-            __dataflow__ = {"multi_tenant": True, "audit_log": True, "versioned": True}
+            __dataflow__ = {"multi_tenant": True, "audit_log": True}
 
         @db.model
         class AuditLog:

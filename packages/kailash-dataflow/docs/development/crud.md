@@ -28,6 +28,7 @@ class User:
 ```
 
 For this model, DataFlow automatically generates:
+
 - `UserCreateNode` - Create new users
 - `UserReadNode` - Read single user by ID
 - `UserUpdateNode` - Update existing users
@@ -187,13 +188,15 @@ workflow.add_node("UserUpdateNode", "update_user_partial", {
 ### Conditional Updates
 
 ```python
-# Update with version checking (optimistic locking)
-workflow.add_node("UserUpdateNode", "update_user_versioned", {
-    "record_id": 1,
-    "version": 5,  # Current version
+# Update only when the current field values match the filter.
+# The row is updated iff a record matches ALL filter conditions — use this to
+# guard an update on the value you last read (e.g. a status or a numeric guard
+# column). Rows that no longer match are left untouched.
+workflow.add_node("UserUpdateNode", "update_user_guarded", {
+    "filter": {"id": 1, "status": "active"},
     "fields": {
         "name": "Updated Name",
-        "version": 6
+        "status": "processing"
     }
 })
 

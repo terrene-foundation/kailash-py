@@ -759,7 +759,7 @@ class TestSaaSApplicationMultiTenant:
             status: str = "todo"
             due_date: float = None
 
-            __dataflow__ = {"multi_tenant": True, "versioned": True}
+            __dataflow__ = {"multi_tenant": True}
 
         @db.model
         class Usage:
@@ -1479,8 +1479,6 @@ class TestProductionScenarios:
             user_id: int
             balance: float
             version: int = 1
-
-            __dataflow__ = {"versioned": True}  # Optimistic locking
 
         @db.model
         class Transaction:

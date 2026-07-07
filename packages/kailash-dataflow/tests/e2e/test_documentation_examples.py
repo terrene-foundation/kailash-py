@@ -95,7 +95,6 @@ class TestDocumentationExamples:
             __dataflow__ = {
                 "multi_tenant": True,  # Adds tenant_id field
                 "soft_delete": True,  # Adds deleted_at field
-                "versioned": True,  # Adds version field for optimistic locking
                 "audit_log": True,  # Tracks all changes
             }
 

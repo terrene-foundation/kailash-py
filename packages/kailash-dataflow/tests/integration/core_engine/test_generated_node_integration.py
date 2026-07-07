@@ -23,12 +23,14 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
+
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
+
 
 class TestGeneratedNodeIntegration:
     """Test integration of DataFlow generated nodes with workflow execution."""
@@ -228,7 +230,6 @@ class TestGeneratedNodeIntegration:
             __dataflow__ = {
                 "multi_tenant": True,
                 "soft_delete": True,
-                "versioned": True,
                 "audit_log": True,
             }
 
@@ -680,7 +681,7 @@ class TestGeneratedNodeIntegration:
             status: str = "pending"
             tenant_id: str
 
-            __dataflow__ = {"multi_tenant": True, "audit_log": True, "versioned": True}
+            __dataflow__ = {"multi_tenant": True, "audit_log": True}
 
         # Complete order processing workflow
         workflow = WorkflowBuilder()

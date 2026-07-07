@@ -745,7 +745,7 @@ DataFlow generates these 9 classes:
 
 1. **UserCreateNode** - Single record INSERT
 2. **UserReadNode** - Single record SELECT
-3. **UserUpdateNode** - Single record UPDATE with optimistic locking
+3. **UserUpdateNode** - Single record UPDATE
 4. **UserDeleteNode** - Single record DELETE (soft or hard)
 5. **UserListNode** - Multi-record SELECT with filtering/pagination
 6. **UserBulkCreateNode** - High-performance batch INSERT

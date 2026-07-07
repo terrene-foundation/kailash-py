@@ -56,7 +56,6 @@ class TestEnterpriseMultiTenantSetup:
             __dataflow__ = {
                 "multi_tenant": True,
                 "soft_delete": True,
-                "versioned": True,
             }
 
         # Create customers for Tenant A
@@ -400,10 +399,6 @@ class TestEnterpriseDistributedTransactions:
             total_amount: float
             status: str = "pending"
 
-            __dataflow__ = {
-                "versioned": True,
-            }
-
         @db.model
         class Payment:
             order_id: int
@@ -416,10 +411,6 @@ class TestEnterpriseDistributedTransactions:
             product_id: str
             quantity: int
             reserved: int = 0
-
-            __dataflow__ = {
-                "versioned": True,  # For optimistic locking
-            }
 
         @db.model
         class Shipment:
@@ -571,10 +562,6 @@ class TestEnterpriseDistributedTransactions:
             account_number: str
             balance: float
             locked: bool = False
-
-            __dataflow__ = {
-                "versioned": True,
-            }
 
         @db.model
         class TransactionLog:

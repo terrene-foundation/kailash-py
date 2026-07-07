@@ -5,6 +5,7 @@ Comprehensive guide to error handling in DataFlow workflows.
 ## Overview
 
 DataFlow provides robust error handling mechanisms at multiple levels:
+
 - Node-level error handling
 - Workflow-level error recovery
 - Transaction rollback on errors
@@ -237,58 +238,66 @@ else:
 
 ## Retry Strategies
 
+Database operations retry transient failures (connection resets, deadlocks,
+serialization failures) automatically via the `retry_config` parameter on
+`AsyncSQLDatabaseNode`. Retry is built into the node — there is no separate
+retry-wrapper node.
+
 ### Simple Retry
 
 ```python
-# Retry failed operations
-workflow.add_node("RetryNode", "retry_wrapper", {
-    "target_node": "unreliable_operation",
-    "max_attempts": 3,
-    "delay": 1.0  # 1 second between attempts
-})
-
-workflow.add_node("HTTPRequestNode", "unreliable_operation", {
-    "url": "https://flaky-api.com/data",
-    "timeout": 5.0
+# Automatic retry on transient database errors
+workflow.add_node("AsyncSQLDatabaseNode", "query_with_retry", {
+    "database_type": "postgresql",
+    "connection_string": db_url,
+    "query": "SELECT * FROM orders WHERE status = $1",
+    "params": ["pending"],
+    "retry_config": {
+        "max_retries": 3,
+        "initial_delay": 1.0,  # seconds before the first retry
+    },
 })
 ```
 
 ### Exponential Backoff
 
 ```python
-workflow.add_node("RetryNode", "smart_retry", {
-    "target_node": "api_call",
-    "max_attempts": 5,
-    "backoff": "exponential",
-    "initial_delay": 1.0,  # 1, 2, 4, 8, 16 seconds
-    "max_delay": 30.0,
-    "jitter": True  # Add randomness to prevent thundering herd
+# Exponential backoff with jitter to avoid a thundering herd
+workflow.add_node("AsyncSQLDatabaseNode", "resilient_query", {
+    "database_type": "postgresql",
+    "connection_string": db_url,
+    "query": "SELECT * FROM inventory WHERE product_id = $1",
+    "params": [product_id],
+    "retry_config": {
+        "max_retries": 5,
+        "initial_delay": 1.0,
+        "exponential_base": 2.0,  # 1, 2, 4, 8, 16 seconds
+        "max_delay": 30.0,
+        "jitter": True,  # add randomness to prevent a thundering herd
+    },
 })
 ```
 
-### Conditional Retry
+### Customizing Retryable Errors
+
+By default `retry_config` retries only transient connection/deadlock errors and
+surfaces application errors immediately. Pass `retryable_errors` to override which
+error substrings trigger a retry:
 
 ```python
-workflow.add_node("PythonCodeNode", "check_retry", {
-    "code": """
-error = get_input_data("error")
-error_code = error.get("status_code", 0)
-
-# Retry on specific errors
-retryable_codes = [429, 502, 503, 504]  # Rate limit, gateway errors
-if error_code in retryable_codes:
-    result = {"should_retry": True, "delay": 5.0}
-elif error_code == 401:  # Authentication error
-    result = {"should_retry": True, "action": "refresh_token"}
-else:
-    result = {"should_retry": False, "action": "fail"}
-"""
-})
-
-workflow.add_node("ConditionalRetryNode", "conditional_retry", {
-    "target_node": "api_call",
-    "condition_node": "check_retry",
-    "max_attempts": 3
+workflow.add_node("AsyncSQLDatabaseNode", "custom_retry", {
+    "database_type": "postgresql",
+    "connection_string": db_url,
+    "query": "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+    "params": [amount, account_id],
+    "retry_config": {
+        "max_retries": 3,
+        "retryable_errors": [
+            "deadlock detected",
+            "could not serialize access",
+            "lock timeout",
+        ],
+    },
 })
 ```
 
