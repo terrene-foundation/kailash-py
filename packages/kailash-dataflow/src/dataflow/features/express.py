@@ -1132,6 +1132,7 @@ class DataFlowExpress:
         filter: Dict[str, Any],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Find a single record by filter criteria (non-PK lookup).
@@ -1144,6 +1145,12 @@ class DataFlowExpress:
             model: Model name (e.g., "User")
             filter: MongoDB-style filter criteria (required, must not be empty)
             cache_ttl: Optional cache TTL override
+            include_deleted: For soft_delete models, when True bypass the
+                ``deleted_at IS NULL`` auto-filter so a tombstoned row matched
+                by this (non-PK) filter is returned instead of treated as
+                not-found (default: False). Part of the cache-key params so an
+                include-deleted lookup never collides with a default find_one
+                (matching list/read/count).
 
         Returns:
             Single record dict or None if not found
@@ -1164,6 +1171,11 @@ class DataFlowExpress:
             # Returns None if not found
             user = await db.express.find_one("User", filter={"email": "nonexistent@example.com"})
             assert user is None
+
+            # Fetch a tombstoned row via a non-PK filter
+            gone = await db.express.find_one(
+                "Doc", filter={"slug": "archived"}, include_deleted=True
+            )
         """
         # Validate filter is not empty - empty filter should use list()
         if not filter:
@@ -1172,7 +1184,17 @@ class DataFlowExpress:
                 "For unfiltered queries, use list() with limit=1."
             )
 
-        params = {"filter": filter, "limit": 1, "offset": 0}
+        # include_deleted is placed INTO params so it (a) forwards to the
+        # ListNode auto-filter and (b) becomes part of the cache key — a
+        # False result MUST NOT be served to a True query (tenant-isolation.md
+        # cache-key discipline applied to the soft-delete dimension), matching
+        # list/read/count.
+        params = {
+            "filter": filter,
+            "limit": 1,
+            "offset": 0,
+            "include_deleted": include_deleted,
+        }
         effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
@@ -2541,6 +2563,7 @@ class SyncExpress:
         filter: Dict[str, Any],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
+        include_deleted: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Find a single record by filter criteria (sync).
 
@@ -2549,12 +2572,22 @@ class SyncExpress:
             filter: MongoDB-style filter criteria (required, must not be empty)
             cache_ttl: Optional cache TTL override
             use_primary: Force read from primary adapter (TSG-105)
+            include_deleted: For soft_delete models, when True return a
+                tombstoned row matched by this (non-PK) filter instead of
+                treating it as not-found (bypass the deleted_at IS NULL
+                auto-filter; part of the cache key; default: False).
 
         Returns:
             Single record dict or None if not found
         """
         return self._run_sync(
-            self._express.find_one(model, filter, cache_ttl, use_primary=use_primary)
+            self._express.find_one(
+                model,
+                filter,
+                cache_ttl,
+                use_primary=use_primary,
+                include_deleted=include_deleted,
+            )
         )
 
     def count(
