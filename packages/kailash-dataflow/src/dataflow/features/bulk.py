@@ -131,13 +131,21 @@ class BulkOperations:
         Returns:
             tuple: (fragment: str, params: list) e.g. ``("tenant_id = $3", [tid])``.
         """
+        # tenant_id is a fixed column literal, but quote it via the dialect so
+        # every identifier this file interpolates goes through one path
+        # (rules/dataflow-identifier-safety.md MUST-1, defense-in-depth).
+        from ..adapters.dialect import DialectManager
+
+        quoted_tenant = DialectManager.get_dialect(database_type).quote_identifier(
+            "tenant_id"
+        )
         db_lower = database_type.lower()
         if db_lower == "postgresql":
-            fragment = f"tenant_id = ${params_offset + 1}"
+            fragment = f"{quoted_tenant} = ${params_offset + 1}"
         elif db_lower == "mysql":
-            fragment = "tenant_id = %s"
+            fragment = f"{quoted_tenant} = %s"
         else:  # sqlite
-            fragment = "tenant_id = ?"
+            fragment = f"{quoted_tenant} = ?"
         return fragment, [tenant_id]
 
     def _serialize_params_for_sql(self, params: list, model_name: str) -> list:
@@ -211,11 +219,20 @@ class BulkOperations:
         if not filter_criteria:
             return ("", [])
 
+        # rules/dataflow-identifier-safety.md MUST-1 + security.md: filter keys
+        # are column IDENTIFIERS interpolated into the WHERE clause (drivers
+        # cannot bind identifiers). Route every one through
+        # ``dialect.quote_identifier`` (validate-then-quote, reject-don't-escape)
+        # matching core/nodes.py + core/engine.py. Values stay BOUND params.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
         where_parts = []
         params = []
         db_lower = database_type.lower()
 
         for field, value in filter_criteria.items():
+            quoted_field = dialect.quote_identifier(field)
             # Check if value is a MongoDB-style operator dict
             if isinstance(value, dict) and len(value) == 1:
                 operator = list(value.keys())[0]
@@ -268,7 +285,7 @@ class BulkOperations:
                     else:  # sqlite
                         placeholders = ", ".join(["?"] * len(operand_deduped))
 
-                    where_parts.append(f"{field} IN ({placeholders})")
+                    where_parts.append(f"{quoted_field} IN ({placeholders})")
                     params.extend(operand_deduped)
 
                 elif operator == "$nin":
@@ -318,7 +335,7 @@ class BulkOperations:
                     else:  # sqlite
                         placeholders = ", ".join(["?"] * len(operand_deduped))
 
-                    where_parts.append(f"{field} NOT IN ({placeholders})")
+                    where_parts.append(f"{quoted_field} NOT IN ({placeholders})")
                     params.extend(operand_deduped)
 
                 elif operator in ["$gt", "$gte", "$lt", "$lte", "$ne"]:
@@ -334,33 +351,35 @@ class BulkOperations:
 
                     if db_lower == "postgresql":
                         where_parts.append(
-                            f"{field} {sql_operator} ${len(params) + params_offset + 1}"
+                            f"{quoted_field} {sql_operator} ${len(params) + params_offset + 1}"
                         )
                     elif db_lower == "mysql":
-                        where_parts.append(f"{field} {sql_operator} %s")
+                        where_parts.append(f"{quoted_field} {sql_operator} %s")
                     else:  # sqlite
-                        where_parts.append(f"{field} {sql_operator} ?")
+                        where_parts.append(f"{quoted_field} {sql_operator} ?")
                     params.append(operand)
 
                 else:
                     # Unknown operator - treat as equality
                     if db_lower == "postgresql":
                         where_parts.append(
-                            f"{field} = ${len(params) + params_offset + 1}"
+                            f"{quoted_field} = ${len(params) + params_offset + 1}"
                         )
                     elif db_lower == "mysql":
-                        where_parts.append(f"{field} = %s")
+                        where_parts.append(f"{quoted_field} = %s")
                     else:  # sqlite
-                        where_parts.append(f"{field} = ?")
+                        where_parts.append(f"{quoted_field} = ?")
                     params.append(value)
             else:
                 # Regular equality comparison
                 if db_lower == "postgresql":
-                    where_parts.append(f"{field} = ${len(params) + params_offset + 1}")
+                    where_parts.append(
+                        f"{quoted_field} = ${len(params) + params_offset + 1}"
+                    )
                 elif db_lower == "mysql":
-                    where_parts.append(f"{field} = %s")
+                    where_parts.append(f"{quoted_field} = %s")
                 else:  # sqlite
-                    where_parts.append(f"{field} = ?")
+                    where_parts.append(f"{quoted_field} = ?")
                 params.append(value)
 
         where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
@@ -478,9 +497,18 @@ class BulkOperations:
                     "success": True,
                 }
 
-            # Get column names from first record
+            # Get column names from first record.
+            # rules/dataflow-identifier-safety.md MUST-1: table_name AND every
+            # column key are interpolated as bare identifiers (drivers cannot
+            # bind identifiers). Record keys are NOT constrained to declared
+            # model fields, so quote-validate each via the dialect before
+            # interpolation (reject-don't-escape), matching bulk_upsert + core.
+            from ..adapters.dialect import DialectManager
+
+            dialect = DialectManager.get_dialect(database_type)
+            quoted_table = dialect.quote_identifier(table_name)
             columns = list(data[0].keys())
-            column_names = ", ".join(columns)
+            column_names = ", ".join(dialect.quote_identifier(c) for c in columns)
 
             # Build VALUES clause with placeholders
             total_inserted = 0
@@ -515,9 +543,7 @@ class BulkOperations:
                     params.extend(record_params)
 
                 values_clause = ", ".join(values_placeholders)
-                query = (
-                    f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause}"
-                )
+                query = f"INSERT INTO {quoted_table} ({column_names}) VALUES {values_clause}"
 
                 # DEBUG (not WARN): the query carries schema column names —
                 # observability.md Rule 8.
@@ -721,16 +747,27 @@ class BulkOperations:
                     f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
+                # rules/dataflow-identifier-safety.md MUST-1: table_name AND
+                # every SET/WHERE column key are interpolated as bare
+                # identifiers (drivers cannot bind identifiers). update_values
+                # keys are NOT constrained to declared model fields, so
+                # quote-validate each via the dialect (reject-don't-escape).
+                from ..adapters.dialect import DialectManager
+
+                dialect = DialectManager.get_dialect(database_type)
+                quoted_table = dialect.quote_identifier(table_name)
+
                 # Build SET clause from update_values
                 set_parts = []
                 params = []
                 for field, value in update_values.items():
+                    quoted_field = dialect.quote_identifier(field)
                     if database_type.lower() == "postgresql":
-                        set_parts.append(f"{field} = ${len(params) + 1}")
+                        set_parts.append(f"{quoted_field} = ${len(params) + 1}")
                     elif database_type.lower() == "mysql":
-                        set_parts.append(f"{field} = %s")
+                        set_parts.append(f"{quoted_field} = %s")
                     else:  # sqlite
-                        set_parts.append(f"{field} = ?")
+                        set_parts.append(f"{quoted_field} = ?")
                     # BUG #515 FIX + NATIVE ARRAY FIX: Use _serialize_params_for_sql
                     # This respects use_native_arrays config for PostgreSQL TEXT[] etc.
                     serialized_value = self._serialize_params_for_sql(
@@ -782,7 +819,7 @@ class BulkOperations:
                     else:
                         where_clause = f"WHERE {quoted_deleted_at} IS NULL"
 
-                query = f"UPDATE {table_name} {set_clause} {where_clause}"
+                query = f"UPDATE {quoted_table} {set_clause} {where_clause}"
                 # DEBUG (not WARN): the query carries schema column names and
                 # params carry row VALUES (potential PII) — must not reach log
                 # aggregators at WARN+ (observability.md Rule 8, security.md).
@@ -919,6 +956,17 @@ class BulkOperations:
                     f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
+                # rules/dataflow-identifier-safety.md MUST-1: table_name, the id
+                # PK column, and every SET column key are interpolated as bare
+                # identifiers (drivers cannot bind identifiers). Record keys are
+                # NOT constrained to declared model fields, so quote-validate
+                # each via the dialect (reject-don't-escape).
+                from ..adapters.dialect import DialectManager
+
+                dialect = DialectManager.get_dialect(database_type)
+                quoted_table = dialect.quote_identifier(table_name)
+                quoted_id = dialect.quote_identifier("id")
+
                 total_updated = 0
                 batches_processed = 0
 
@@ -943,12 +991,13 @@ class BulkOperations:
                         for field, value in record.items():
                             if field == "id":
                                 continue
+                            quoted_field = dialect.quote_identifier(field)
                             if database_type.lower() == "postgresql":
-                                set_parts.append(f"{field} = ${len(params) + 1}")
+                                set_parts.append(f"{quoted_field} = ${len(params) + 1}")
                             elif database_type.lower() == "mysql":
-                                set_parts.append(f"{field} = %s")
+                                set_parts.append(f"{quoted_field} = %s")
                             else:  # sqlite
-                                set_parts.append(f"{field} = ?")
+                                set_parts.append(f"{quoted_field} = ?")
                             # BUG #515 FIX: Serialize dict/list for SQL parameter binding
                             if isinstance(value, (dict, list)):
                                 params.append(json.dumps(value))
@@ -975,11 +1024,11 @@ class BulkOperations:
                         # which also does not filter tombstoned rows. Only the
                         # FILTER-based path above (query-shaped) gets the guard.
                         if database_type.lower() == "postgresql":
-                            where_clause = f"WHERE id = ${len(params) + 1}"
+                            where_clause = f"WHERE {quoted_id} = ${len(params) + 1}"
                         elif database_type.lower() == "mysql":
-                            where_clause = "WHERE id = %s"
+                            where_clause = f"WHERE {quoted_id} = %s"
                         else:  # sqlite
-                            where_clause = "WHERE id = ?"
+                            where_clause = f"WHERE {quoted_id} = ?"
                         params.append(record["id"])
 
                         # Issue #1252 — AND the tenant predicate so the per-id
@@ -995,7 +1044,7 @@ class BulkOperations:
                             where_clause = f"{where_clause} AND {tenant_fragment}"
                             params.extend(tenant_params)
 
-                        query = f"UPDATE {table_name} {set_clause} {where_clause}"
+                        query = f"UPDATE {quoted_table} {set_clause} {where_clause}"
 
                         # Execute using cached AsyncSQLDatabaseNode
                         # FIX: Use cached node instead of creating fresh instance
@@ -1152,6 +1201,17 @@ class BulkOperations:
                     f"BULK_DELETE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
+                # rules/dataflow-identifier-safety.md MUST-1: table_name is
+                # interpolated as a bare identifier (drivers cannot bind
+                # identifiers). Quote-validate via the dialect
+                # (reject-don't-escape). WHERE columns are quoted inside
+                # ``_build_where_clause``.
+                from ..adapters.dialect import DialectManager
+
+                quoted_table = DialectManager.get_dialect(
+                    database_type
+                ).quote_identifier(table_name)
+
                 # Build WHERE clause from filter using shared helper
                 where_clause, params = self._build_where_clause(
                     filter_criteria, database_type, params_offset=0
@@ -1184,7 +1244,7 @@ class BulkOperations:
 
                 # DEBUG: First, check if records exist
                 check_query = (
-                    f"SELECT COUNT(*) as count FROM {table_name} {where_clause}"
+                    f"SELECT COUNT(*) as count FROM {quoted_table} {where_clause}"
                 )
                 check_result = await sql_node.async_run(
                     query=check_query,
@@ -1217,16 +1277,16 @@ class BulkOperations:
                     quoted_deleted_at = dialect.quote_identifier("deleted_at")
                     if where_clause:
                         query = (
-                            f"UPDATE {table_name} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                            f"UPDATE {quoted_table} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
                             f"{where_clause} AND {quoted_deleted_at} IS NULL"
                         )
                     else:
                         query = (
-                            f"UPDATE {table_name} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
+                            f"UPDATE {quoted_table} SET {quoted_deleted_at} = CURRENT_TIMESTAMP "
                             f"WHERE {quoted_deleted_at} IS NULL"
                         )
                 else:
-                    query = f"DELETE FROM {table_name} {where_clause}"
+                    query = f"DELETE FROM {quoted_table} {where_clause}"
                 # DEBUG (not WARN): query carries schema names, params carry row
                 # VALUES (potential PII) — observability.md Rule 8, security.md.
                 logger.debug(
@@ -1487,7 +1547,6 @@ class BulkOperations:
 
             # Get column names from first record
             columns = list(data[0].keys())
-            column_names = ", ".join(columns)
 
             # Issue #1519 + rules/dataflow-identifier-safety.md MUST-1: the
             # conflict-target columns are interpolated into ``ON CONFLICT (...)``
@@ -1719,7 +1778,15 @@ class BulkOperations:
         conflict_columns: List[str],
     ) -> tuple:
         """Build PostgreSQL upsert query with ON CONFLICT clause."""
-        column_names = ", ".join(columns)
+        # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
+        # are interpolated as bare identifiers (drivers cannot bind
+        # identifiers). Quote-validate via the dialect (reject-don't-escape);
+        # raw ``columns`` stays for ``record.get(col)`` value lookup.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("postgresql")
+        quoted_table = dialect.quote_identifier(table_name)
+        column_names = ", ".join(dialect.quote_identifier(c) for c in columns)
         values_placeholders = []
         params = []
 
@@ -1735,7 +1802,9 @@ class BulkOperations:
             params.extend(record_params)
 
         values_clause = ", ".join(values_placeholders)
-        conflict_target = ", ".join(conflict_columns)
+        conflict_target = ", ".join(
+            dialect.quote_identifier(c) for c in conflict_columns
+        )
 
         # Build ON CONFLICT clause with RETURNING to distinguish INSERT vs UPDATE.
         # xmax = 0 → INSERT, xmax > 0 → UPDATE (exact per-row flag).
@@ -1747,7 +1816,10 @@ class BulkOperations:
         else:  # update
             update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
-                set_parts = [f"{col} = EXCLUDED.{col}" for col in update_columns]
+                set_parts = [
+                    f"{dialect.quote_identifier(col)} = EXCLUDED.{dialect.quote_identifier(col)}"
+                    for col in update_columns
+                ]
                 conflict_clause = (
                     f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
                     f"{', '.join(set_parts)} RETURNING id, (xmax = 0) AS inserted"
@@ -1759,7 +1831,7 @@ class BulkOperations:
                     f"RETURNING id, (xmax = 0) AS inserted"
                 )
 
-        query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
+        query = f"INSERT INTO {quoted_table} ({column_names}) VALUES {values_clause} {conflict_clause}"
         return query, params
 
     def _build_mysql_upsert(
@@ -1785,7 +1857,15 @@ class BulkOperations:
         declaration and the ODKU-side references are built together here so the two
         halves cannot drift. MariaDB / MySQL < 8.0.19 keep the legacy form.
         """
-        column_names = ", ".join(columns)
+        # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
+        # are interpolated as bare identifiers (drivers cannot bind
+        # identifiers). Quote-validate via the dialect (reject-don't-escape);
+        # raw ``columns`` stays for ``record.get(col)`` value lookup.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("mysql")
+        quoted_table = dialect.quote_identifier(table_name)
+        column_names = ", ".join(dialect.quote_identifier(c) for c in columns)
         values_placeholders = []
         params = []
 
@@ -1806,21 +1886,31 @@ class BulkOperations:
         if conflict_resolution in ["skip", "ignore"]:
             # MySQL has no DO NOTHING; a no-op self-assignment of the first
             # conflict column keeps existing rows unchanged (valid in both forms).
-            noop_col = conflict_columns[0] if conflict_columns else "id"
+            noop_col = dialect.quote_identifier(
+                conflict_columns[0] if conflict_columns else "id"
+            )
             duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
         else:  # update
             update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
                 if use_row_alias:
-                    set_parts = [f"{col} = {alias}.{col}" for col in update_columns]
+                    set_parts = [
+                        f"{dialect.quote_identifier(col)} = {alias}.{dialect.quote_identifier(col)}"
+                        for col in update_columns
+                    ]
                 else:
-                    set_parts = [f"{col} = VALUES({col})" for col in update_columns]
+                    set_parts = [
+                        f"{dialect.quote_identifier(col)} = VALUES({dialect.quote_identifier(col)})"
+                        for col in update_columns
+                    ]
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
             else:
-                noop_col = conflict_columns[0] if conflict_columns else "id"
+                noop_col = dialect.quote_identifier(
+                    conflict_columns[0] if conflict_columns else "id"
+                )
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
 
-        query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause}{alias_decl} {duplicate_clause}"
+        query = f"INSERT INTO {quoted_table} ({column_names}) VALUES {values_clause}{alias_decl} {duplicate_clause}"
         return query, params
 
     def _build_sqlite_upsert(
@@ -1839,7 +1929,15 @@ class BulkOperations:
         (see ``_count_existing_conflicts``). RETURNING id lets the caller count
         how many rows the statement actually affected.
         """
-        column_names = ", ".join(columns)
+        # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
+        # are interpolated as bare identifiers (drivers cannot bind
+        # identifiers). Quote-validate via the dialect (reject-don't-escape);
+        # raw ``columns`` stays for ``record.get(col)`` value lookup.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("sqlite")
+        quoted_table = dialect.quote_identifier(table_name)
+        column_names = ", ".join(dialect.quote_identifier(c) for c in columns)
         values_placeholders = []
         params = []
 
@@ -1853,7 +1951,9 @@ class BulkOperations:
             params.extend(record_params)
 
         values_clause = ", ".join(values_placeholders)
-        conflict_target = ", ".join(conflict_columns)
+        conflict_target = ", ".join(
+            dialect.quote_identifier(c) for c in conflict_columns
+        )
 
         # SQLite 3.35+ supports RETURNING.
         if conflict_resolution in ["skip", "ignore"]:
@@ -1862,7 +1962,10 @@ class BulkOperations:
         else:  # update
             update_columns = self._upsert_update_columns(columns, conflict_columns)
             if update_columns:
-                set_parts = [f"{col} = excluded.{col}" for col in update_columns]
+                set_parts = [
+                    f"{dialect.quote_identifier(col)} = excluded.{dialect.quote_identifier(col)}"
+                    for col in update_columns
+                ]
                 conflict_clause = (
                     f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
                     f"{', '.join(set_parts)} RETURNING id"
@@ -1872,7 +1975,7 @@ class BulkOperations:
                     f"ON CONFLICT ({conflict_target}) DO NOTHING RETURNING id"
                 )
 
-        query = f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
+        query = f"INSERT INTO {quoted_table} ({column_names}) VALUES {values_clause} {conflict_clause}"
         return query, params
 
     async def _count_existing_conflicts(
@@ -1900,13 +2003,24 @@ class BulkOperations:
         input is de-duplicated on the conflict target upstream, so a batch can
         no longer self-conflict.
         """
+        # rules/dataflow-identifier-safety.md MUST-1: table_name + conflict
+        # columns are interpolated as bare identifiers (drivers cannot bind
+        # identifiers). Quote-validate via the dialect (reject-don't-escape);
+        # raw ``conflict_columns`` stays for ``record.get(col)`` value lookup.
+        # This pre-count runs only on the SQLite upsert path.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("sqlite")
+        quoted_table = dialect.quote_identifier(table_name)
         clauses: List[str] = []
         params: List[Any] = []
         for record in batch:
             vals = [record.get(col) for col in conflict_columns]
             if any(v is None for v in vals):
                 continue
-            conds = " AND ".join(f"{col} = ?" for col in conflict_columns)
+            conds = " AND ".join(
+                f"{dialect.quote_identifier(col)} = ?" for col in conflict_columns
+            )
             clauses.append(f"({conds})")
             params.extend(vals)
 
@@ -1914,7 +2028,7 @@ class BulkOperations:
             return 0
 
         where = " OR ".join(clauses)
-        query = f"SELECT COUNT(*) AS match_count FROM {table_name} WHERE {where}"
+        query = f"SELECT COUNT(*) AS match_count FROM {quoted_table} WHERE {where}"
         result = await sql_node.async_run(
             query=query,
             params=params,

@@ -375,48 +375,6 @@ workflow.add_connection("create_shipment", "release_inventory",
                        on_error=True)
 ```
 
-### Optimistic Locking
-
-```python
-# Update with version check
-workflow = WorkflowBuilder()
-
-# Read current version
-workflow.add_node("ProductReadNode", "get_product", {
-    "id": product_id,
-    "lock": False  # Don't lock for read
-})
-
-# Update with version check
-workflow.add_node("ProductUpdateNode", "update_product", {
-    "id": product_id,
-    "price": new_price,
-    "version": ":current_version + 1",
-    "where": {
-        "version": ":current_version"  # Only update if version matches
-    }
-})
-
-# Check if update succeeded
-workflow.add_node("PythonCodeNode", "check_update", {
-    "code": """
-update_result = get_input_data("update_product")
-if update_result["affected_rows"] == 0:
-    result = {"success": False, "error": "Version conflict"}
-else:
-    result = {"success": True}
-"""
-})
-
-# Retry logic for conflicts
-workflow.add_node("RetryNode", "retry_on_conflict", {
-    "target_node": "get_product",
-    "condition": ":conflict_detected",
-    "max_retries": 3,
-    "backoff": "exponential"
-})
-```
-
 ### Pessimistic Locking
 
 ```python

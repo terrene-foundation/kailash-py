@@ -432,9 +432,6 @@ class TestEnterpriseArchitectIntegration:
             status: str  # 'pending', 'confirmed', 'shipped', 'cancelled'
             created_at: datetime = None
 
-            class Meta:
-                versioned = True  # Enable optimistic locking
-
         @db.model
         class OrderItem:
             order_id: int
@@ -447,9 +444,6 @@ class TestEnterpriseArchitectIntegration:
             product_id: int
             available_quantity: int
             reserved_quantity: int = 0
-
-            class Meta:
-                versioned = True
 
         @db.model
         class Payment:

@@ -10,15 +10,19 @@
 ## Executive Summary
 
 ### Problem
+
 DataFlow's auto-generated CRUD nodes have severe API inconsistencies causing 4+ hours of debugging time, poor developer experience, and high support burden.
 
 ### Solution
+
 Phased migration strategy:
+
 - **Phase 1** (Week 1): Enhanced validation and documentation
 - **Phase 2** (Weeks 2-3): Builder pattern API
 - **Phase 3** (Months 2-3): Unified API v2.0
 
 ### Success Criteria
+
 - Time to first CRUD success: <30 minutes (Phase 1), <15 minutes (Phase 2), <5 minutes (Phase 3)
 - Developer satisfaction: >8/10
 - Support tickets: -70% reduction
@@ -39,6 +43,7 @@ Phased migration strategy:
 **Description**: All CRUD operations (Create, Read, Update, Delete, List, Bulk) must follow a unified parameter structure that is predictable and discoverable.
 
 **Current State**:
+
 ```python
 # CreateNode - Flat structure (17+ parameters)
 workflow.add_node("UserCreateNode", "create", {
@@ -68,6 +73,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 ```
 
 **Required Behavior** (Phase 3):
+
 ```python
 # ALL operations follow consistent structure
 workflow.add_node("UserCreateNode", "create", {
@@ -89,6 +95,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 ```
 
 **Acceptance Criteria**:
+
 - [ ] All 9 generated nodes use same top-level parameter names
 - [ ] Filter/where conditions use identical syntax across all nodes
 - [ ] Field updates use identical syntax across all nodes
@@ -97,6 +104,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 - [ ] Performance within 5% of current implementation
 
 **User Journey**:
+
 1. Developer learns CreateNode parameter pattern
 2. Applies same pattern to UpdateNode → succeeds immediately
 3. Scales to BulkUpdateNode → same pattern works
@@ -107,6 +115,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 **Description**: MongoDB-style filter operators must work identically across List, Update, BulkUpdate, Delete, and BulkDelete operations.
 
 **Current State**:
+
 ```python
 # ListNode - Full operator support
 {"age": {"$gte": 18, "$lte": 65}}
@@ -119,6 +128,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 ```
 
 **Required Behavior**:
+
 ```python
 # ALL operations support identical filter syntax
 FILTER_OPERATORS = [
@@ -140,6 +150,7 @@ workflow.add_node("UserDeleteNode", "delete", {"filter": age_filter})
 ```
 
 **Acceptance Criteria**:
+
 - [ ] All 15 operators work identically across all operations
 - [ ] Validation errors are consistent across operations
 - [ ] Performance within 10% across operations
@@ -147,6 +158,7 @@ workflow.add_node("UserDeleteNode", "delete", {"filter": age_filter})
 - [ ] Examples demonstrate cross-operation filter reuse
 
 **Edge Cases**:
+
 - Empty filters: `{}` (should update ALL records with confirmation)
 - Invalid operators: `{"age": {"$invalid": 10}}` (clear error message)
 - Type mismatches: `{"age": {"$gte": "eighteen"}}` (type coercion or error)
@@ -156,6 +168,7 @@ workflow.add_node("UserDeleteNode", "delete", {"filter": age_filter})
 **Description**: MongoDB-style update operators (`$set`, `$inc`, `$mul`, etc.) must work identically across Update and BulkUpdate operations.
 
 **Current State**:
+
 ```python
 # UpdateNode - Operators work but undocumented
 workflow.add_node("UserUpdateNode", "update", {
@@ -176,6 +189,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 ```
 
 **Required Behavior**:
+
 ```python
 UPDATE_OPERATORS = [
     "$set",         # Set field value
@@ -206,6 +220,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 ```
 
 **Acceptance Criteria**:
+
 - [ ] All 7 update operators supported in both Update and BulkUpdate
 - [ ] Operator validation messages are identical
 - [ ] Type checking works for all operators
@@ -213,6 +228,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 - [ ] Examples show operator composition
 
 **Validation Rules**:
+
 - `$inc`, `$dec`, `$mul`: Only numeric fields
 - `$append`, `$remove`: Only array fields (or JSON arrays)
 - `$concat`: Only string fields
@@ -233,6 +249,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 **Common Mistakes**:
 
 1. **Flat parameters in UpdateNode**:
+
    ```python
    # MISTAKE: Flat structure like CreateNode
    workflow.add_node("UserUpdateNode", "update", {
@@ -258,6 +275,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
    ```
 
 2. **Missing filter/conditions**:
+
    ```python
    # MISTAKE: Only updates, no filter
    workflow.add_node("UserUpdateNode", "update", {
@@ -302,6 +320,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
    ```
 
 **Acceptance Criteria**:
+
 - [ ] 100% of common mistakes detected with <1ms validation overhead
 - [ ] Error messages include example corrected code
 - [ ] Error messages link to relevant documentation
@@ -309,6 +328,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 - [ ] Deprecation warnings don't break code execution
 
 **Success Metrics**:
+
 - Time from error to fix: <1 minute
 - Error message satisfaction: >9/10
 - Repeat mistakes: <5%
@@ -318,6 +338,7 @@ workflow.add_node("UserBulkUpdateNode", "bulk_update", {
 **Description**: Basic operations should be simple, with advanced features discoverable through documentation and error messages.
 
 **Simple Use Case** (80% of usage):
+
 ```python
 # Basic update - simple and obvious
 workflow.add_node("UserUpdateNode", "update", {
@@ -327,6 +348,7 @@ workflow.add_node("UserUpdateNode", "update", {
 ```
 
 **Advanced Use Case** (15% of usage):
+
 ```python
 # Advanced update with operators - discovered through docs
 workflow.add_node("UserUpdateNode", "update", {
@@ -342,27 +364,26 @@ workflow.add_node("UserUpdateNode", "update", {
 ```
 
 **Expert Use Case** (5% of usage):
+
 ```python
-# Expert update with version control and multi-tenant
+# Expert update with a guarded filter and multi-tenant scope
 workflow.add_node("UserUpdateNode", "update", {
     "filter": {
         "id": 1,
         "tenant_id": "tenant_123",
-        "version": 5  # Optimistic locking
+        "status": "pending"  # only update rows still in this state
     },
     "fields": {
-        "status": "verified",
-        "version": {"$inc": 1}
+        "status": "verified"
     },
     "options": {
-        "return_fields": ["id", "version", "updated_at"],
-        "validate_version": True,
-        "rollback_on_conflict": True
+        "return_fields": ["id", "status", "updated_at"]
     }
 })
 ```
 
 **Acceptance Criteria**:
+
 - [ ] Simple case requires <3 parameters
 - [ ] Advanced features documented with examples
 - [ ] Error messages suggest simpler alternatives when over-complex
@@ -370,6 +391,7 @@ workflow.add_node("UserUpdateNode", "update", {
 - [ ] Each complexity level has 3+ examples
 
 **Validation Messages**:
+
 ```python
 # Over-complex for simple use case
 if using_operators and all_fields_use_$set:
@@ -415,15 +437,16 @@ See: https://docs.kailash.ai/dataflow/filters
 
 **Type Coercion Policy**:
 
-| Parameter | Expected Type | Coercion Rules | Example |
-|-----------|--------------|----------------|---------|
-| `filter` | `dict` | No coercion, strict validation | `{"id": 1}` |
-| `fields` | `dict` | No coercion, strict validation | `{"name": "Alice"}` |
-| `options` | `dict` | Optional, defaults to `{}` | `{"return_fields": [...]}` |
-| Field values | Model type | Coerce if unambiguous | `"123"` → `123` for int field |
-| `return_fields` | `list[str]` | Coerce from string | `"id,name"` → `["id", "name"]` |
+| Parameter       | Expected Type | Coercion Rules                 | Example                        |
+| --------------- | ------------- | ------------------------------ | ------------------------------ |
+| `filter`        | `dict`        | No coercion, strict validation | `{"id": 1}`                    |
+| `fields`        | `dict`        | No coercion, strict validation | `{"name": "Alice"}`            |
+| `options`       | `dict`        | Optional, defaults to `{}`     | `{"return_fields": [...]}`     |
+| Field values    | Model type    | Coerce if unambiguous          | `"123"` → `123` for int field  |
+| `return_fields` | `list[str]`   | Coerce from string             | `"id,name"` → `["id", "name"]` |
 
 **Acceptance Criteria**:
+
 - [ ] All parameters have explicit type requirements
 - [ ] Type errors include example of correct type
 - [ ] Coercion policy documented for each parameter
@@ -443,6 +466,7 @@ See: https://docs.kailash.ai/dataflow/filters
 **Description**: Every error message must provide the next action the developer should take.
 
 **Error Message Template**:
+
 ```
 {ErrorType}: {What went wrong}
 
@@ -456,6 +480,7 @@ See: https://docs.kailash.ai/dataflow/filters
 **Examples**:
 
 1. **Missing Required Parameter**:
+
    ```
    NodeValidationError: Required parameter 'filter' missing in UpdateNode.
 
@@ -472,6 +497,7 @@ See: https://docs.kailash.ai/dataflow/filters
    ```
 
 2. **Invalid Operator**:
+
    ```
    NodeValidationError: Invalid update operator '$invalid' in field 'age'.
 
@@ -498,6 +524,7 @@ See: https://docs.kailash.ai/dataflow/filters
    ```
 
 **Acceptance Criteria**:
+
 - [ ] 100% of errors include suggested fix
 - [ ] 90%+ of errors include code example
 - [ ] All errors link to relevant documentation
@@ -511,6 +538,7 @@ See: https://docs.kailash.ai/dataflow/filters
 **Warning Scenarios**:
 
 1. **Updating all records without confirmation**:
+
    ```python
    workflow.add_node("UserUpdateNode", "update", {
        "filter": {},  # Empty filter = ALL records
@@ -530,6 +558,7 @@ See: https://docs.kailash.ai/dataflow/filters
    ```
 
 2. **Using Update instead of BulkUpdate**:
+
    ```python
    # User calls UpdateNode in a loop for 1000 records
    for record in records:  # 1000 iterations
@@ -578,6 +607,7 @@ See: https://docs.kailash.ai/dataflow/filters
    ```
 
 **Acceptance Criteria**:
+
 - [ ] Warnings don't prevent execution
 - [ ] Warnings logged but not raised as exceptions
 - [ ] Warnings can be suppressed with configuration
@@ -589,6 +619,7 @@ See: https://docs.kailash.ai/dataflow/filters
 **Description**: Every error and warning must link to relevant, specific documentation.
 
 **Documentation Structure**:
+
 ```
 /docs/dataflow/
 ├── api-reference/
@@ -612,6 +643,7 @@ See: https://docs.kailash.ai/dataflow/filters
 ```
 
 **Link Requirements**:
+
 - [ ] Every error links to troubleshooting guide
 - [ ] Every deprecation links to migration guide
 - [ ] Every operator links to operator reference
@@ -619,6 +651,7 @@ See: https://docs.kailash.ai/dataflow/filters
 - [ ] Documentation tested for correctness
 
 **Example Error with Links**:
+
 ```
 NodeValidationError: Invalid filter operator '$invalid'.
 
@@ -661,6 +694,7 @@ Did you mean '$inc' for incrementing? https://docs.kailash.ai/dataflow/guides/op
    - **Required**: Full operator reference in API docs
 
 **Validation Process**:
+
 ```bash
 # Automated documentation validation
 npm run docs:validate
@@ -674,6 +708,7 @@ npm run docs:validate
 ```
 
 **Acceptance Criteria**:
+
 - [ ] Zero contradictions across all documentation
 - [ ] All code examples tested in CI pipeline
 - [ ] Single source of truth for each API pattern
@@ -687,66 +722,77 @@ npm run docs:validate
 **Required Sections**:
 
 1. **Decision Trees**:
+
    ```markdown
    ## When to Use UpdateNode vs BulkUpdateNode
 
    Start here: How many records do you need to update?
 
    ONE record:
-       → Use UpdateNode
-       → Example: Update user profile after form submission
-       → Performance: <1ms
+   → Use UpdateNode
+   → Example: Update user profile after form submission
+   → Performance: <1ms
 
    MULTIPLE records (same fields):
-       → Use BulkUpdateNode
-       → Example: Mark all pending orders as "processed"
-       → Performance: ~5000 updates/sec
+   → Use BulkUpdateNode
+   → Example: Mark all pending orders as "processed"
+   → Performance: ~5000 updates/sec
 
    MULTIPLE records (different fields per record):
-       → Use BulkUpdateNode with data list
-       → Example: Import updated product prices from CSV
-       → Performance: ~3000 updates/sec
+   → Use BulkUpdateNode with data list
+   → Example: Import updated product prices from CSV
+   → Performance: ~3000 updates/sec
 
    See detailed comparison: [Bulk Operations Guide](../development/bulk-operations.md)
    ```
 
 2. **Side-by-Side Comparisons**:
+
    ```markdown
    ## CreateNode vs UpdateNode Parameter Patterns
 
-   | Aspect | CreateNode | UpdateNode |
-   |--------|-----------|------------|
-   | **Structure** | Flat fields | Nested filter + fields |
-   | **Required params** | Model fields | filter, fields |
-   | **Optional params** | options | options |
-   | **Example** | `{"name": "Alice"}` | `{"filter": {"id": 1}, "fields": {"name": "Alice"}}` |
-   | **Use case** | New record | Modify existing |
-   | **Performance** | <1ms | <1ms |
+   | Aspect              | CreateNode          | UpdateNode                                           |
+   | ------------------- | ------------------- | ---------------------------------------------------- |
+   | **Structure**       | Flat fields         | Nested filter + fields                               |
+   | **Required params** | Model fields        | filter, fields                                       |
+   | **Optional params** | options             | options                                              |
+   | **Example**         | `{"name": "Alice"}` | `{"filter": {"id": 1}, "fields": {"name": "Alice"}}` |
+   | **Use case**        | New record          | Modify existing                                      |
+   | **Performance**     | <1ms                | <1ms                                                 |
    ```
 
 3. **Common Mistakes Section**:
-   ```markdown
+
+   ````markdown
    ## Common UpdateNode Mistakes
 
    ### ❌ WRONG: Using CreateNode syntax
+
    ```python
    workflow.add_node("UserUpdateNode", "update", {
        "id": 1,
        "name": "Alice Updated"
    })
    ```
+   ````
+
    Error: "UpdateNode requires 'filter' and 'fields' parameters"
 
    ### ✅ CORRECT: Using nested structure
+
    ```python
    workflow.add_node("UserUpdateNode", "update", {
        "filter": {"id": 1},
        "fields": {"name": "Alice Updated"}
    })
    ```
+
+   ```
+
    ```
 
 **Acceptance Criteria**:
+
 - [ ] Decision tree for every operation choice
 - [ ] Side-by-side comparison for similar operations
 - [ ] Common mistakes section with fixes
@@ -760,7 +806,8 @@ npm run docs:validate
 **Warning Types**:
 
 1. **Critical Safety Warnings**:
-   ```markdown
+
+   ````markdown
    ## ⚠️ CRITICAL: UpdateNode Safety
 
    UpdateNode with empty filter updates ALL records in the table.
@@ -778,12 +825,17 @@ npm run docs:validate
        "fields": {"status": "deleted"}
    })
    ```
+   ````
 
    Always specify filter conditions unless you explicitly want to update all records.
+
+   ```
+
    ```
 
 2. **Performance Warnings**:
-   ```markdown
+
+   ````markdown
    ## ⚡ PERFORMANCE: Use BulkUpdateNode for Multiple Records
 
    Calling UpdateNode in a loop is 100x slower than BulkUpdateNode.
@@ -802,8 +854,12 @@ npm run docs:validate
        "fields": {"status": "verified"}
    })
    ```
+   ````
 
    Use BulkUpdateNode for 10+ records for significant performance improvement.
+
+   ```
+
    ```
 
 3. **Deprecation Warnings**:
@@ -812,16 +868,17 @@ npm run docs:validate
 
    The following parameters are deprecated in v0.6+ and will be removed in v2.0:
 
-   | Deprecated | Replacement | Migration Guide |
-   |------------|------------|-----------------|
-   | `conditions` | `filter` | [Link](migration/v0.6-v2.0.md#conditions-to-filter) |
-   | `updates` | `fields` | [Link](migration/v0.6-v2.0.md#updates-to-fields) |
-   | `record_id` | `filter: {"id": ...}` | [Link](migration/v0.6-v2.0.md#record-id-to-filter) |
+   | Deprecated   | Replacement           | Migration Guide                                     |
+   | ------------ | --------------------- | --------------------------------------------------- |
+   | `conditions` | `filter`              | [Link](migration/v0.6-v2.0.md#conditions-to-filter) |
+   | `updates`    | `fields`              | [Link](migration/v0.6-v2.0.md#updates-to-fields)    |
+   | `record_id`  | `filter: {"id": ...}` | [Link](migration/v0.6-v2.0.md#record-id-to-filter)  |
 
    See full migration guide: [v0.6 → v2.0 Migration](migration/v0.6-v2.0.md)
    ```
 
 **Acceptance Criteria**:
+
 - [ ] Critical warnings use ⚠️ emoji and "CRITICAL" label
 - [ ] Performance warnings use ⚡ emoji and show measurements
 - [ ] Deprecation warnings use 🔄 emoji and link to migration guide
@@ -841,6 +898,7 @@ npm run docs:validate
 **Description**: New developers should successfully execute CRUD operations within defined time limits.
 
 **Baseline Measurement** (Current State):
+
 - Read documentation: 30 minutes
 - Write first CreateNode: 5 minutes → ✅ **Success**
 - Write first UpdateNode: 4+ hours → ❌ **Failure** (root cause of this ADR)
@@ -848,6 +906,7 @@ npm run docs:validate
 - Find correct documentation: 30-60 minutes
 
 **Phase 1 Targets** (Enhanced Validation + Documentation):
+
 - Read documentation: 20 minutes (improved clarity)
 - Write first UpdateNode: 30 minutes (better errors)
 - Debug parameter structure: 5 minutes (actionable errors)
@@ -855,6 +914,7 @@ npm run docs:validate
 - **Total**: <1 hour to CRUD success
 
 **Phase 2 Targets** (Builder API):
+
 - Read documentation: 10 minutes (simpler API)
 - Write first UpdateNode with builder: 5 minutes (obvious API)
 - Debug parameter structure: <1 minute (type hints)
@@ -862,6 +922,7 @@ npm run docs:validate
 - **Total**: <15 minutes to CRUD success
 
 **Phase 3 Targets** (Unified API):
+
 - Read documentation: 5 minutes (consistent patterns)
 - Write first UpdateNode: 2 minutes (same as CreateNode)
 - Debug parameter structure: 0 minutes (pattern known from CreateNode)
@@ -869,6 +930,7 @@ npm run docs:validate
 - **Total**: <5 minutes to CRUD success
 
 **Measurement Method**:
+
 ```python
 # User journey telemetry (opt-in)
 class DeveloperJourneyTracker:
@@ -886,6 +948,7 @@ class DeveloperJourneyTracker:
 ```
 
 **Acceptance Criteria**:
+
 - [ ] 90th percentile time-to-success meets phase targets
 - [ ] <10% of developers abandon after first error
 - [ ] >80% success rate on first attempt (Phase 3)
@@ -896,6 +959,7 @@ class DeveloperJourneyTracker:
 **Description**: API improvements should measurably reduce support ticket volume for API-related issues.
 
 **Current Support Metrics** (Baseline):
+
 ```
 Total monthly tickets: ~200
 API-related tickets: ~80 (40%)
@@ -910,6 +974,7 @@ Average resolution time: 45 minutes
 ```
 
 **Phase 1 Targets**:
+
 ```
 API-related tickets: ~40 (-50%)
 Top issues:
@@ -923,6 +988,7 @@ Average resolution time: 20 minutes (-55%)
 ```
 
 **Phase 2 Targets**:
+
 ```
 API-related tickets: ~25 (-70%)
 Top issues:
@@ -935,6 +1001,7 @@ Average resolution time: 10 minutes (-78%)
 ```
 
 **Phase 3 Targets**:
+
 ```
 API-related tickets: ~8 (-90%)
 Top issues:
@@ -945,12 +1012,14 @@ Average resolution time: 5 minutes (-89%)
 ```
 
 **Tracking Mechanism**:
+
 - Tag all support tickets with category
 - Monthly report generation
 - Quarterly review of trends
 - Correlation analysis with releases
 
 **Acceptance Criteria**:
+
 - [ ] 50% reduction in API tickets by Phase 1
 - [ ] 70% reduction in API tickets by Phase 2
 - [ ] 90% reduction in API tickets by Phase 3
@@ -963,6 +1032,7 @@ Average resolution time: 5 minutes (-89%)
 **Measurement Approach**:
 
 1. **In-Product Survey** (Quarterly):
+
    ```
    Question 1: How satisfied are you with DataFlow's API design?
    Scale: 1-10 (Very Dissatisfied → Very Satisfied)
@@ -990,6 +1060,7 @@ Average resolution time: 5 minutes (-89%)
    ```
 
 **Baseline Metrics** (Current State):
+
 - API Design Satisfaction: Unknown (assumed ~5/10 based on complaints)
 - Learning Ease: Unknown (assumed ~4/10 based on 4-hour debug time)
 - Error Message Clarity: Unknown (assumed ~3/10 based on confusion)
@@ -997,6 +1068,7 @@ Average resolution time: 5 minutes (-89%)
 - NPS: Unknown (assumed ~0 to -10 for API)
 
 **Phase 1 Targets**:
+
 - API Design Satisfaction: >6/10
 - Learning Ease: >6/10
 - Error Message Clarity: >8/10 (major focus area)
@@ -1004,6 +1076,7 @@ Average resolution time: 5 minutes (-89%)
 - NPS: >10
 
 **Phase 2 Targets**:
+
 - API Design Satisfaction: >8/10
 - Learning Ease: >8/10
 - Error Message Clarity: >9/10
@@ -1011,6 +1084,7 @@ Average resolution time: 5 minutes (-89%)
 - NPS: >30
 
 **Phase 3 Targets**:
+
 - API Design Satisfaction: >9/10
 - Learning Ease: >9/10
 - Error Message Clarity: >9/10
@@ -1018,6 +1092,7 @@ Average resolution time: 5 minutes (-89%)
 - NPS: >50
 
 **Acceptance Criteria**:
+
 - [ ] Survey completion rate >30%
 - [ ] Trend improvement each phase
 - [ ] NPS >50 by Phase 3 (world-class)
@@ -1040,6 +1115,7 @@ Average resolution time: 5 minutes (-89%)
 **Compatibility Requirements**:
 
 1. **Old API continues working**:
+
    ```python
    # v0.5 API (old) - must still work in v0.6+
    workflow.add_node("UserUpdateNode", "update", {
@@ -1050,6 +1126,7 @@ Average resolution time: 5 minutes (-89%)
    ```
 
 2. **Adapter layer translates old → new**:
+
    ```python
    class UpdateNodeV1Adapter:
        """Transparent adapter for v0.5 → v0.6+ API."""
@@ -1082,6 +1159,7 @@ Average resolution time: 5 minutes (-89%)
    ```
 
 **Acceptance Criteria**:
+
 - [ ] 100% of v0.5 code works in v0.6+ without modification
 - [ ] Adapter layer tested with 1000+ real-world examples
 - [ ] Performance within 5% of direct implementation
@@ -1089,6 +1167,7 @@ Average resolution time: 5 minutes (-89%)
 - [ ] CI tests both APIs in parallel
 
 **Risk Mitigation**:
+
 - Extensive backward compatibility test suite
 - Canary deployments for early detection
 - Rollback plan if issues discovered
@@ -1101,6 +1180,7 @@ Average resolution time: 5 minutes (-89%)
 **Migration Tools**:
 
 1. **Automated Codemod**:
+
    ```bash
    # AST-based code transformation
    npx dataflow-migrate upgrade --from v0.5 --to v2.0 --path ./src
@@ -1120,6 +1200,7 @@ Average resolution time: 5 minutes (-89%)
    ```
 
 2. **Migration Report**:
+
    ```bash
    $ npx dataflow-migrate analyze --path ./src
 
@@ -1150,15 +1231,18 @@ Average resolution time: 5 minutes (-89%)
    ```
 
 **Migration Guide Structure**:
-```markdown
+
+````markdown
 # DataFlow v0.5 → v2.0 Migration Guide
 
 ## Overview
+
 - Estimated time: 2-4 hours for typical project
 - Automated migration: 90%+ of changes
 - Breaking changes: Parameter naming only
 
 ## Quick Start
+
 ```bash
 # 1. Analyze your codebase
 npx dataflow-migrate analyze
@@ -1172,17 +1256,23 @@ git diff
 # 4. Update tests
 npm test
 ```
+````
 
 ## Change Details
+
 ### UpdateNode Parameter Changes
+
 [Table of all parameter changes]
 
 ### Common Patterns
+
 [Side-by-side examples]
 
 ## Troubleshooting
+
 [Common issues and fixes]
-```
+
+````
 
 **Acceptance Criteria**:
 - [ ] 90%+ of migrations fully automated
@@ -1245,9 +1335,10 @@ def test_bulk_update_performance(benchmark):
     result = benchmark(execute)
     assert result.stats.mean < 2.0  # <2s for 10K records
     assert result.stats.stddev < 0.5  # Consistent
-```
+````
 
 **Acceptance Criteria**:
+
 - [ ] All operations within 5% of baseline
 - [ ] No operation >10% slower than baseline
 - [ ] Benchmark suite runs in CI on every commit
@@ -1259,6 +1350,7 @@ def test_bulk_update_performance(benchmark):
 **Description**: Enhanced validation must add <1ms overhead per operation.
 
 **Validation Performance Budget**:
+
 ```
 Total validation overhead: <1ms
 Breakdown:
@@ -1270,7 +1362,9 @@ Breakdown:
 ```
 
 **Optimization Strategies**:
+
 1. **Lazy error message generation**:
+
    ```python
    # Only generate detailed message if error occurs
    if validation_fails:
@@ -1280,6 +1374,7 @@ Breakdown:
    ```
 
 2. **Cached validation rules**:
+
    ```python
    # Cache compiled validation rules
    @lru_cache(maxsize=1000)
@@ -1296,6 +1391,7 @@ Breakdown:
    ```
 
 **Acceptance Criteria**:
+
 - [ ] Validation overhead <1ms (p99)
 - [ ] Success path <0.5ms (p99)
 - [ ] Error path <1.5ms (p99)
@@ -1343,6 +1439,7 @@ params: UserUpdateNodeParams = {
 ```
 
 **Builder API Type Hints**:
+
 ```python
 from typing import Generic, TypeVar
 
@@ -1371,6 +1468,7 @@ update = (QueryBuilder(User)
 ```
 
 **Acceptance Criteria**:
+
 - [ ] 100% of public APIs have type hints
 - [ ] Type hints pass mypy strict mode
 - [ ] IDE autocomplete works in VSCode, PyCharm, Vim
@@ -1414,6 +1512,7 @@ def validate_update_params(params: Dict[str, Any]) -> None:
 ```
 
 **Acceptance Criteria**:
+
 - [ ] All parameter types validated at runtime
 - [ ] Type errors include expected vs actual type
 - [ ] Type errors include example of correct type
@@ -1460,6 +1559,7 @@ def validate_update_params(params: Dict[str, Any]) -> None:
    - Validation overhead <1ms
 
 **Enforcement**:
+
 ```python
 # Design principle checklist for new operations
 class OperationDesignChecklist:
@@ -1479,6 +1579,7 @@ class OperationDesignChecklist:
 ```
 
 **Acceptance Criteria**:
+
 - [ ] Design principles documented in CONTRIBUTING.md
 - [ ] Automated checks enforce principles in CI
 - [ ] Code review checklist includes principles
@@ -1491,14 +1592,14 @@ class OperationDesignChecklist:
 
 ### Quantitative Metrics
 
-| Metric | Baseline | Phase 1 | Phase 2 | Phase 3 |
-|--------|----------|---------|---------|---------|
-| **Time to First Success** | 4+ hours | <30 min | <15 min | <5 min |
-| **API Pattern Confusion** | Unknown | <20% | <10% | <5% |
-| **Support Tickets (API)** | 80/month | 40/month | 25/month | 8/month |
-| **Documentation Satisfaction** | ~5/10 | >7/10 | >8/10 | >9/10 |
-| **Error Message Clarity** | ~3/10 | >8/10 | >9/10 | >9/10 |
-| **NPS (API Experience)** | ~0 | >10 | >30 | >50 |
+| Metric                         | Baseline | Phase 1  | Phase 2  | Phase 3 |
+| ------------------------------ | -------- | -------- | -------- | ------- |
+| **Time to First Success**      | 4+ hours | <30 min  | <15 min  | <5 min  |
+| **API Pattern Confusion**      | Unknown  | <20%     | <10%     | <5%     |
+| **Support Tickets (API)**      | 80/month | 40/month | 25/month | 8/month |
+| **Documentation Satisfaction** | ~5/10    | >7/10    | >8/10    | >9/10   |
+| **Error Message Clarity**      | ~3/10    | >8/10    | >9/10    | >9/10   |
+| **NPS (API Experience)**       | ~0       | >10      | >30      | >50     |
 
 ### Qualitative Metrics
 
@@ -1523,27 +1624,27 @@ class OperationDesignChecklist:
 
 ### High-Impact Risks
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| **Backward Compatibility Break** | Low | CRITICAL | Extensive testing, adapter layer, staged rollout |
-| **Performance Regression** | Medium | HIGH | Benchmark suite, performance budgets, profiling |
-| **Incomplete Migration** | Medium | MEDIUM | Automated tools, clear timeline, support program |
-| **User Confusion During Transition** | High | MEDIUM | Clear communication, deprecation warnings, docs |
+| Risk                                 | Probability | Impact   | Mitigation                                       |
+| ------------------------------------ | ----------- | -------- | ------------------------------------------------ |
+| **Backward Compatibility Break**     | Low         | CRITICAL | Extensive testing, adapter layer, staged rollout |
+| **Performance Regression**           | Medium      | HIGH     | Benchmark suite, performance budgets, profiling  |
+| **Incomplete Migration**             | Medium      | MEDIUM   | Automated tools, clear timeline, support program |
+| **User Confusion During Transition** | High        | MEDIUM   | Clear communication, deprecation warnings, docs  |
 
 ### Medium-Impact Risks
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| **Documentation Errors** | Medium | MEDIUM | Automated validation, code example testing |
-| **Builder API Complexity** | Low | MEDIUM | User testing, iterative refinement |
-| **Support Burden Spike** | Low | MEDIUM | Phased rollout, office hours, FAQ |
+| Risk                       | Probability | Impact | Mitigation                                 |
+| -------------------------- | ----------- | ------ | ------------------------------------------ |
+| **Documentation Errors**   | Medium      | MEDIUM | Automated validation, code example testing |
+| **Builder API Complexity** | Low         | MEDIUM | User testing, iterative refinement         |
+| **Support Burden Spike**   | Low         | MEDIUM | Phased rollout, office hours, FAQ          |
 
 ### Low-Impact Risks
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| **Type Hint Errors** | Low | LOW | Mypy strict mode, CI validation |
-| **Validation Overhead** | Low | LOW | Performance benchmarks, optimization |
+| Risk                    | Probability | Impact | Mitigation                           |
+| ----------------------- | ----------- | ------ | ------------------------------------ |
+| **Type Hint Errors**    | Low         | LOW    | Mypy strict mode, CI validation      |
+| **Validation Overhead** | Low         | LOW    | Performance benchmarks, optimization |
 
 ---
 
@@ -1569,48 +1670,57 @@ class OperationDesignChecklist:
 ## 6. Implementation Phases
 
 ### Phase 1: Immediate Fixes (v0.6.1 - Week 1)
+
 **Priority**: CRITICAL
 **Dependencies**: None
 
 **Tasks**:
+
 1. Enhanced validation logic (2 days)
 2. Error message improvements (1 day)
 3. Documentation overhaul (2 days)
 4. Parameter naming deprecations (1 day)
 
 **Deliverables**:
+
 - 50% reduction in debugging time
 - Zero documentation contradictions
 - Actionable error messages
 - Deprecation warnings
 
 ### Phase 2: Builder Pattern API (v0.6.5 - Weeks 2-3)
+
 **Priority**: HIGH
 **Dependencies**: Phase 1 complete
 
 **Tasks**:
+
 1. QueryBuilder class implementation (5 days)
 2. Helper functions (2 days)
 3. Type-safe API (2 days)
 4. Migration guide (2 days)
 
 **Deliverables**:
+
 - Builder API for all CRUD operations
 - 60% code reduction for CRUD
 - Type-safe interface
 - Migration guide and tools
 
 ### Phase 3: API v2.0 Design (v0.7.0 - Months 2-3)
+
 **Priority**: MEDIUM
 **Dependencies**: Phase 2 adoption >30%
 
 **Tasks**:
+
 1. Unified node API (3 weeks)
 2. Backward compatibility layer (1 week)
 3. Deprecation strategy (1 week)
 4. Comprehensive testing (2 weeks)
 
 **Deliverables**:
+
 - Unified consistent API
 - Automated migration tools
 - Complete test coverage
@@ -1646,18 +1756,21 @@ class APIUsageTelemetry:
 ### Quality Gates
 
 **Phase 1 Gates**:
+
 - [ ] Zero regressions in test suite
 - [ ] Documentation contradictions = 0
 - [ ] Error message clarity >8/10 (user testing)
 - [ ] Performance within 5% baseline
 
 **Phase 2 Gates**:
+
 - [ ] Builder API test coverage >95%
 - [ ] Type hints pass mypy strict
 - [ ] Migration guide validated by 10+ users
 - [ ] Performance within 5% baseline
 
 **Phase 3 Gates**:
+
 - [ ] Automated migration success >95%
 - [ ] Backward compatibility 100%
 - [ ] All metrics >8/10
@@ -1715,6 +1828,7 @@ class APIUsageTelemetry:
 ## Appendix B: Error Message Templates
 
 ### Template Structure
+
 ```
 {ErrorType}: {Problem Summary}
 
@@ -1763,12 +1877,14 @@ See Phase 2 migration guide for complete manual migration patterns.
 ---
 
 **Next Steps**:
+
 1. Review and approve requirements
 2. Begin Phase 1 implementation
 3. Set up telemetry infrastructure
 4. Create detailed implementation tasks
 
 **Questions for Stakeholders**:
+
 1. Agreement on phased timeline (1 week + 2-3 weeks + 2-3 months)?
 2. Acceptable performance budget (5% overhead)?
 3. Deprecation timeline acceptable (6 months)?

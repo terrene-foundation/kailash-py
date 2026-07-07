@@ -321,7 +321,6 @@ class TestMultiDatabaseSupport:
                     "multi_tenant": True,
                     "soft_delete": True,
                     "audit_log": True,
-                    "versioned": True,
                 }
 
             # Verify enterprise configuration

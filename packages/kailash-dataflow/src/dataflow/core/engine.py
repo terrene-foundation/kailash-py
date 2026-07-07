@@ -22,6 +22,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
@@ -97,6 +98,31 @@ from .type_introspection import (  # issue #772: shared union detection
 
 # Source name validation (used in Redis keys, cache keys, endpoint paths)
 _SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
+
+# Recognized top-level ``__dataflow__`` model-config keys (issue #1599).
+# Every entry is a key DataFlow actually reads at registration / node-generation
+# time; an unknown key silently does nothing, so registration emits a loud (but
+# non-breaking) ``UserWarning`` naming it — the guard that makes a fictional flag
+# like ``versioned`` (removed in 2.14.0, zero backing code) visible instead of a
+# silent no-op. Read-site evidence per key:
+#   soft_delete       -> core/nodes.py, features/bulk.py, engine._model_has_soft_delete
+#   multi_tenant      -> core/engine_production.py (set_tenant_context); adds tenant_id
+#   indexes           -> engine._create_custom_indexes (config.get("indexes"))
+#   retention         -> engine._register_model_internal (RetentionPolicy registration)
+#   use_native_arrays -> features/bulk.py _serialize_params_for_sql
+#   audit_log         -> recognized documented flag retained by 2.14.0 (audit surface)
+# The warning is intentionally a warning, never a raise: an over-tight allowlist
+# must degrade to noise on a valid model, never break it (issue #1599).
+_KNOWN_DATAFLOW_CONFIG_KEYS = frozenset(
+    {
+        "soft_delete",
+        "multi_tenant",
+        "indexes",
+        "retention",
+        "use_native_arrays",
+        "audit_log",
+    }
+)
 
 # ErrorEnhancer for rich error messages
 # Platform ErrorEnhancer for module-level (static) enhancements
@@ -2036,6 +2062,24 @@ class DataFlow(DataFlowEventMixin):
         if hasattr(cls, "__dataflow__"):
             config = getattr(cls, "__dataflow__", {})
 
+        # Issue #1599: warn (loudly, but non-breakingly) on unrecognized
+        # ``__dataflow__`` keys. An unknown key silently does nothing — the
+        # exact failure mode of the removed ``versioned`` flag — so surface it
+        # as a UserWarning naming the key(s) and the model. This is a warning,
+        # never a raise: if the allowlist is missing a valid key, a working
+        # model MUST still register (it just emits noise), never break.
+        if isinstance(config, dict):
+            unknown_keys = sorted(set(config) - _KNOWN_DATAFLOW_CONFIG_KEYS)
+            if unknown_keys:
+                warnings.warn(
+                    f"Model '{model_name}' declares unknown __dataflow__ key(s) "
+                    f"{unknown_keys}: DataFlow does not recognize these and they "
+                    f"have no effect. Recognized keys: "
+                    f"{sorted(_KNOWN_DATAFLOW_CONFIG_KEYS)}.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
         # Determine table name - check for __tablename__ override
         table_name = getattr(cls, "__tablename__", None)
         if not table_name:
@@ -2277,6 +2321,20 @@ class DataFlow(DataFlowEventMixin):
         fields = model_info["fields"]
 
         try:
+            # Issue #1600: ALTER-ADD any model column missing from an already-
+            # existing table BEFORE the schema-management dispatch. CREATE TABLE
+            # IF NOT EXISTS no-ops on an existing table, and the migration
+            # system's full-schema diff refuses an additive migration on a
+            # shared multi-table database (every non-target table reads as a
+            # DROP, tripping the force_downgrade gate — which then raises and is
+            # recovered by the physical-existence path below). Neither adds a
+            # NEW column to a PRE-EXISTING table. Running the additive
+            # reconciliation FIRST means it fires regardless of whether schema
+            # management no-ops OR raises-then-recovers afterwards. It is a
+            # no-op when the table does not yet exist (the CREATE dispatch below
+            # owns creation) or when every target column is already present.
+            await self._reconcile_columns_async(model_name, fields, database_url)
+
             # Detect database type and route appropriately
             if "postgresql" in database_url or "postgres" in database_url:
                 logger.debug(
@@ -2576,6 +2634,418 @@ class DataFlow(DataFlowEventMixin):
                 },
             )
             return None
+
+    # ------------------------------------------------------------------
+    # Issue #1600 — additive column reconciliation (ALTER-ADD new columns
+    # to a PRE-EXISTING table). CREATE TABLE IF NOT EXISTS no-ops on an
+    # existing table; this performs the additive half of a migration so a
+    # model that gains a field (regular field OR the soft_delete deleted_at
+    # tombstone) gets the column added on the next ensure/initialize.
+    # ------------------------------------------------------------------
+
+    async def _reconcile_columns_async(
+        self, model_name: str, fields: Dict[str, Any], database_url: str
+    ) -> None:
+        """ALTER-ADD model columns that are missing from an existing table.
+
+        Diffs the model's TARGET column set (``_convert_fields_to_columns`` —
+        the same generator the CREATE / migration-diff paths use) against the
+        LIVE columns of the table and ALTER-ADDs only the ones the table does
+        not yet have. Dialect-portable (PostgreSQL + SQLite); every dynamic
+        identifier (table + column name) is routed through
+        ``dialect.quote_identifier`` (rules/dataflow-identifier-safety.md).
+
+        Additive ONLY — it never drops or retypes an existing column. A NOT
+        NULL column with no default is added NULLABLE, because existing rows
+        cannot satisfy a NOT NULL constraint on a freshly-added column on
+        EITHER dialect (PostgreSQL rejects it outright; SQLite likewise). No-op
+        when the table does not yet exist (the CREATE path owns creation) or
+        when every target column is already present.
+        """
+        from ..adapters.dialect import DialectManager
+
+        url_lower = database_url.lower()
+        if "postgresql" in url_lower or "postgres" in url_lower:
+            database_type = "postgresql"
+        elif "mysql" in url_lower:
+            database_type = "mysql"
+        elif (
+            "sqlite" in url_lower
+            or database_url == ":memory:"
+            or database_url.endswith(".db")
+        ):
+            database_type = "sqlite"
+        else:
+            # Unknown backend (e.g. MongoDB) — no SQL column concept.
+            return
+
+        model_info = self._models.get(model_name) or {}
+        table_name = model_info.get("table_name") or self._class_name_to_table_name(
+            model_name
+        )
+        target_columns = self._convert_fields_to_columns(
+            fields, soft_delete=self._model_has_soft_delete(model_name)
+        )
+
+        dialect = DialectManager.get_dialect(database_type)
+
+        # Read the LIVE columns of the existing table (None => table absent or
+        # inconclusive; leave creation to the CREATE path).
+        live_columns = await self._get_live_table_columns(
+            table_name, database_url, database_type, dialect
+        )
+        if live_columns is None:
+            return
+
+        missing = [name for name in target_columns if name not in live_columns]
+        if not missing:
+            return
+
+        try:
+            quoted_table = dialect.quote_identifier(table_name)
+            alter_statements: List[str] = []
+            for col_name in missing:
+                meta = target_columns[col_name]
+                if meta.get("primary_key"):
+                    # A primary key is created with the table; never ALTER-ADD one.
+                    continue
+                clause = self._build_add_column_clause(
+                    dialect, col_name, meta, database_type
+                )
+                if clause:
+                    alter_statements.append(
+                        f"ALTER TABLE {quoted_table} ADD COLUMN {clause}"
+                    )
+
+            if not alter_statements:
+                return
+
+            await self._apply_alter_add_statements(
+                alter_statements, database_url, database_type
+            )
+        except Exception as e:
+            # Reconciliation is best-effort: a quote/build/ALTER failure must not
+            # break table setup (the CREATE already succeeded). Skip this pass
+            # with an explicit WARN rather than propagating to the generic
+            # table-ensure handler. observability.md Rule 8: error_type only,
+            # never the (schema-revealing) identifier.
+            logger.warning(
+                "engine.column_reconcile_error",
+                extra={"model_name": model_name, "error_type": type(e).__name__},
+            )
+            return
+        # observability.md Rule 8: count only — never the (schema-revealing)
+        # column names.
+        logger.info(
+            "engine.auto_migrate_alter_added_columns",
+            extra={"model_name": model_name, "added": len(alter_statements)},
+        )
+
+    def _build_add_column_clause(
+        self, dialect: Any, col_name: str, meta: Dict[str, Any], database_type: str
+    ) -> str:
+        """Build one ``<col> <type> [NOT NULL] [DEFAULT ...]`` clause for an
+        additive ALTER TABLE ADD COLUMN, consuming the migration-diff column
+        metadata (``_convert_fields_to_columns``). The column identifier is
+        quoted via the dialect helper. Additive-safe: a NOT NULL column with no
+        default is emitted NULLABLE (existing rows cannot satisfy NOT NULL).
+        """
+        quoted_col = dialect.quote_identifier(col_name)
+        sql_type = meta.get("type") or "TEXT"
+        if database_type == "sqlite":
+            sql_type = self._sql_type_to_sqlite(sql_type)
+        parts = [quoted_col, sql_type]
+
+        default = meta.get("default")
+        nullable = meta.get("nullable", True)
+
+        # A serial/identity default is a CREATE-TABLE-only artifact; such
+        # columns are primary keys (already skipped) — drop the default here.
+        if default == "nextval":
+            default = None
+
+        # Existing-table safety (both dialects): a NOT NULL column with no
+        # default cannot be added to a table that may already hold rows.
+        if default is None and not nullable:
+            nullable = True
+
+        if not nullable:
+            parts.append("NOT NULL")
+
+        if default is not None:
+            if isinstance(default, str) and default.upper() in (
+                "CURRENT_TIMESTAMP",
+                "CURRENT_DATE",
+                "CURRENT_TIME",
+                "NOW()",
+            ):
+                parts.append(f"DEFAULT {default}")
+            elif isinstance(default, bool):
+                if database_type == "postgresql":
+                    parts.append(f"DEFAULT {'TRUE' if default else 'FALSE'}")
+                else:
+                    parts.append(f"DEFAULT {1 if default else 0}")
+            elif isinstance(default, (int, float)):
+                parts.append(f"DEFAULT {default}")
+            else:
+                escaped = str(default).replace("'", "''")
+                parts.append(f"DEFAULT '{escaped}'")
+
+        return " ".join(parts)
+
+    def _sql_type_to_sqlite(self, sql_type: str) -> str:
+        """Map a PostgreSQL-oriented SQL type string (from the migration-diff
+        column metadata) to a SQLite type affinity, reusing the migration
+        system's SQLite mapper so the ALTER-ADD path stays in lockstep with the
+        CREATE path.
+        """
+        from ..migrations.auto_migration_system import SQLiteMigrationGenerator
+
+        base = sql_type.split("(")[0].strip()  # VARCHAR(255) -> VARCHAR
+        return SQLiteMigrationGenerator()._map_type_to_sqlite(base)
+
+    async def _open_pg_connection_async(self, database_url: str):
+        """Open a fresh asyncpg connection reflecting COMMITTED state, rebuilt
+        from the SAME DSN (credentials preserved) — mirrors the connection
+        pattern in ``_verify_table_physically_exists``.
+        """
+        import asyncpg
+
+        from ..adapters.connection_parser import ConnectionParser
+
+        components = ConnectionParser.parse_connection_string(database_url)
+        safe = ConnectionParser.build_connection_string(
+            scheme=components.get("scheme"),
+            host=components.get("host"),
+            database=components.get("database"),
+            username=components.get("username"),
+            password=components.get("password"),
+            port=components.get("port"),
+            **components.get("query_params", {}),
+        )
+        return await asyncpg.connect(safe, timeout=5)
+
+    def _open_sqlite_connection(self, database_url: str):
+        """Open a fresh sqlite3 connection reflecting COMMITTED state. Returns
+        None for a bare in-memory DB with no shared URI (cannot reach committed
+        state without reopening a different empty DB) — mirrors the SQLite
+        branch of ``_verify_table_physically_exists``.
+        """
+        import sqlite3
+
+        if self._memory_db_uri is not None:
+            return sqlite3.connect(
+                self._memory_db_uri, uri=True, check_same_thread=False
+            )
+        if database_url in (":memory:", "sqlite:///:memory:"):
+            return None
+        path = database_url
+        for prefix in ("sqlite:///", "sqlite://"):
+            if path.startswith(prefix):
+                path = path[len(prefix) :]
+                break
+        return sqlite3.connect(path, check_same_thread=False)
+
+    async def _get_live_table_columns(
+        self,
+        table_name: str,
+        database_url: str,
+        database_type: str,
+        dialect: Any,
+    ) -> Optional[Set[str]]:
+        """Return the set of live column names for an existing table, or None
+        when the table does not exist / cannot be inspected conclusively.
+
+        PostgreSQL binds the table name as a VALUE to ``information_schema``
+        (never interpolated). SQLite's ``PRAGMA table_info`` requires the
+        identifier inline, so it is quoted via ``dialect.quote_identifier``.
+        """
+        try:
+            if database_type == "postgresql":
+                conn = await self._open_pg_connection_async(database_url)
+                try:
+                    rows = await conn.fetch(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = $1 "
+                        "AND table_schema = current_schema()",
+                        table_name,
+                    )
+                    if not rows:
+                        return None
+                    return {r["column_name"] for r in rows}
+                finally:
+                    await conn.close()
+
+            elif database_type == "sqlite":
+                conn = self._open_sqlite_connection(database_url)
+                if conn is None:
+                    return None
+                try:
+                    quoted_table = dialect.quote_identifier(table_name)
+                    cur = conn.execute(f"PRAGMA table_info({quoted_table})")
+                    rows = cur.fetchall()
+                    if not rows:
+                        return None
+                    # PRAGMA table_info columns: (cid, name, type, notnull, ...)
+                    return {row[1] for row in rows}
+                finally:
+                    conn.close()
+
+            else:
+                return None
+
+        except Exception as e:
+            # Inconclusive inspection is NOT a definitive "absent"; log at WARN
+            # with the exception type + masked URL only (no raw message —
+            # ConnectionParser errors can echo DSN fragments) and skip the
+            # additive reconciliation for this pass.
+            logger.warning(
+                "engine.column_reconcile_inspect_error",
+                extra={
+                    "model_table": mask_url(str(table_name)),
+                    "error_type": type(e).__name__,
+                    "database": mask_url(database_url),
+                },
+            )
+            return None
+
+    async def _apply_alter_add_statements(
+        self, statements: List[str], database_url: str, database_type: str
+    ) -> None:
+        """Execute the additive ALTER TABLE ADD COLUMN statements on a fresh
+        committed-state connection. Each statement's identifiers were already
+        quoted by ``_build_add_column_clause`` / the caller.
+        """
+        if database_type == "postgresql":
+            conn = await self._open_pg_connection_async(database_url)
+            try:
+                for stmt in statements:
+                    await conn.execute(stmt)
+            finally:
+                await conn.close()
+
+        elif database_type == "sqlite":
+            conn = self._open_sqlite_connection(database_url)
+            if conn is None:
+                return
+            try:
+                for stmt in statements:
+                    conn.execute(stmt)
+                conn.commit()
+            finally:
+                conn.close()
+
+    def _reconcile_columns_sync(
+        self, model_name: str, database_type: str, executor: Any
+    ) -> None:
+        """Synchronous sibling of ``_reconcile_columns_async`` for the eager
+        sync creation path (``_create_table_sync`` / ``_create_tables_batch``).
+
+        ALTER-ADDs model columns missing from an already-existing table using
+        the SAME ``SyncDDLExecutor`` that ran the CREATE, so it shares one
+        connection and runs BEFORE the table is marked ensured — otherwise the
+        eager CREATE-TABLE-IF-NOT-EXISTS marks the table ensured and the later
+        async ``ensure_table_exists`` cache-hits without reconciling.
+
+        Additive only; identifiers quoted via ``dialect.quote_identifier``
+        (rules/dataflow-identifier-safety.md); a NOT NULL column with no default
+        is added NULLABLE (existing rows cannot satisfy NOT NULL on either
+        dialect). No-op when the table is absent or already complete.
+        """
+        from ..adapters.dialect import DialectManager
+
+        model_info = self._models.get(model_name) or {}
+        table_name = model_info.get("table_name") or self._class_name_to_table_name(
+            model_name
+        )
+        fields = self.get_model_fields(model_name)
+        target_columns = self._convert_fields_to_columns(
+            fields, soft_delete=self._model_has_soft_delete(model_name)
+        )
+
+        try:
+            live_columns = {
+                col["name"] for col in executor.get_table_columns(table_name)
+            }
+        except Exception as e:
+            # Inconclusive inspection is NOT a definitive failure — log WARN and
+            # skip reconciliation this pass (the CREATE already succeeded).
+            logger.warning(
+                "engine.column_reconcile_inspect_error",
+                extra={"model_name": model_name, "error_type": type(e).__name__},
+            )
+            return
+        if not live_columns:
+            return  # table absent / inconclusive — the CREATE path owns it
+
+        missing = [name for name in target_columns if name not in live_columns]
+        if not missing:
+            return
+
+        try:
+            dialect = DialectManager.get_dialect(database_type)
+            quoted_table = dialect.quote_identifier(table_name)
+        except Exception as e:
+            # A dialect lookup / identifier-quoting failure is a reconcile-only
+            # problem — the CREATE already succeeded. Skip this pass with an
+            # explicit WARN rather than marking a physically-present table as
+            # failed (mirrors the async path's recover-and-proceed). Rule 8:
+            # error_type only, never the identifier.
+            logger.warning(
+                "engine.column_reconcile_error",
+                extra={"model_name": model_name, "error_type": type(e).__name__},
+            )
+            return
+        added = 0
+        for col_name in missing:
+            meta = target_columns[col_name]
+            if meta.get("primary_key"):
+                continue
+            try:
+                clause = self._build_add_column_clause(
+                    dialect, col_name, meta, database_type
+                )
+            except Exception as e:
+                # A hostile/invalid column identifier is rejected by
+                # quote_identifier here; skip that column, never break setup.
+                logger.warning(
+                    "engine.column_reconcile_error",
+                    extra={"model_name": model_name, "error_type": type(e).__name__},
+                )
+                continue
+            if not clause:
+                continue
+            result = executor.execute_ddl(
+                f"ALTER TABLE {quoted_table} ADD COLUMN {clause}"
+            )
+            if result.get("success"):
+                added += 1
+                continue
+            err = str(result.get("error") or "")
+            err_lower = err.lower()
+            if "already exists" in err_lower or "duplicate column" in err_lower:
+                added += 1  # concurrent/benign — the column is present
+            else:
+                # observability.md Rule 8: the sanitized driver error may name
+                # the column/constraint (schema-revealing) — keep that at DEBUG.
+                # The operational WARN carries only model_name.
+                logger.warning(
+                    "engine.column_reconcile_alter_failed",
+                    extra={"model_name": model_name},
+                )
+                logger.debug(
+                    "engine.column_reconcile_alter_failed_detail",
+                    extra={
+                        "model_name": model_name,
+                        "error": self._sanitize_db_error(err),
+                    },
+                )
+        if added:
+            # observability.md Rule 8: count only — never the column names.
+            logger.info(
+                "engine.auto_migrate_alter_added_columns",
+                extra={"model_name": model_name, "added": added},
+            )
 
     def _get_table_status(self, model_name: str) -> str:
         """
@@ -8812,6 +9282,12 @@ class DataFlow(DataFlowEventMixin):
                                 f"Failed to create index for '{model_name}': {idx_error}"
                             )
 
+                # Issue #1600: additive column reconciliation on the eager sync
+                # creation path — ALTER-ADD any model column missing from a
+                # table that already existed (CREATE IF NOT EXISTS no-ops).
+                # Runs on the SAME executor BEFORE the table is marked ensured.
+                self._reconcile_columns_sync(model_name, db_type, executor)
+
                 # Mark as ensured in cache
                 schema_checksum = None
                 model_info = self._models.get(model_name)
@@ -9026,6 +9502,15 @@ class DataFlow(DataFlowEventMixin):
                     # logged at ERROR above, non-fatal to the table's existence.
 
                 if table_ok:
+                    # Issue #1600: additive column reconciliation on the eager
+                    # sync creation path — ALTER-ADD any model column missing
+                    # from a table that already existed (CREATE IF NOT EXISTS
+                    # no-ops). Runs on the SAME executor/connection BEFORE the
+                    # table is marked ensured, so the later async
+                    # ensure_table_exists cache-hit reflects the reconciled
+                    # schema.
+                    self._reconcile_columns_sync(model_name, db_type, executor)
+
                     schema_checksum = None
                     model_info = self._models.get(model_name)
                     if model_info and self._schema_cache.enable_schema_validation:

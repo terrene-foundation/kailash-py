@@ -54,6 +54,20 @@ def mt_db():
         f"sqlite:///{tmpdir}/mt.db",
         auto_migrate=True,
         multi_tenant=True,
+        # Hermetic read-back (rules/testing.md § State Persistence Verification):
+        # these #1252 regression tests verify the BULK subsystem's tenant
+        # stamping/scoping and read every write back to assert real PERSISTED
+        # state. The Express query cache auto-detects a process-shared Redis
+        # whose keys (dataflow:v2:<tenant>:<model>:<op>:<hash>) carry a tenant
+        # dimension but NO database-instance dimension, so a sibling test's
+        # rows for the same model+tenant in a DIFFERENT tmpdir DB bleed into
+        # this test's read-backs (a stale cached ``list Feat`` returned an id
+        # from another DB, which a later bulk_upsert then targeted — clobbering
+        # a real row). The bulk enforcement path is cache-independent, so
+        # disabling the Express query cache here makes read-backs hit the real
+        # DB without weakening any #1252 assertion. The un-DB-scoped cache-key
+        # gap itself is a separate cross-SDK-keyspace follow-up.
+        cache_enabled=False,
     )
 
     @db.model

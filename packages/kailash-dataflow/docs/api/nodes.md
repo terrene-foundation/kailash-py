@@ -83,7 +83,6 @@ Updates a single record.
 
 - `id` (required): Record ID to update
 - All model fields to update (partial update supported)
-- `version` (optional): For optimistic locking
 - `tenant_id` (optional): For multi-tenant models
 - `return_fields` (optional): Fields to return after update
 

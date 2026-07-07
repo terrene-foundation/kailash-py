@@ -75,7 +75,7 @@ class TestMultiTenancyE2E:
             status: str = "pending"
             order_date: str
 
-            __dataflow__ = {"multi_tenant": True, "audit_log": True, "versioned": True}
+            __dataflow__ = {"multi_tenant": True, "audit_log": True}
 
         # Invoice model with high security
         @db.model
