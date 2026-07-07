@@ -5,6 +5,7 @@ Advanced enterprise features including multi-tenancy, access control, and audit 
 ## Overview
 
 This example demonstrates enterprise-grade features:
+
 - **Multi-tenant architecture** with data isolation
 - **Role-based access control (RBAC)** with fine-grained permissions
 - **Audit logging** for compliance and security
@@ -96,7 +97,6 @@ class Project(MultiTenantModel, AccessControlModel):
     __dataflow__ = {
         'multi_tenant': True,
         'audit': True,
-        'versioned': True,
         'access_control': {
             'create': ['admin', 'manager'],
             'read': ['owner', 'team_member', 'admin'],
@@ -1023,17 +1023,20 @@ CACHE_TTL=3600
 ## Usage
 
 1. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Set up environment:**
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 3. **Run the application:**
+
    ```bash
    python enterprise_app.py
    ```

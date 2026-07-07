@@ -5,6 +5,7 @@ High-performance bulk database operations.
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from kailash.utils.url_credentials import mask_url
@@ -36,7 +37,17 @@ class BulkOperations:
         """True iff the model carries a ``tenant_id`` field (a tenant table)."""
         try:
             return "tenant_id" in self.dataflow.get_model_fields(model_name)
-        except Exception:
+        except Exception as exc:
+            # Fail-closed for tenant *detection* would over-scope non-tenant
+            # models, so we return False — but log it: a genuine tenant model
+            # whose field lookup raised would otherwise skip tenant scoping
+            # SILENTLY (zero-tolerance.md Rule 3). Loud, not silent.
+            logging.getLogger(__name__).warning(
+                "bulk._model_has_tenant_field: field lookup raised for "
+                "model=%s (%s); treating as non-tenant",
+                model_name,
+                type(exc).__name__,
+            )
             return False
 
     def _model_has_soft_delete(self, model_name: str) -> bool:
@@ -375,7 +386,10 @@ class BulkOperations:
 
         logger = logging.getLogger(__name__)
 
-        logger.warning(
+        # DEBUG (not WARN): kwargs may carry connection strings / caller values;
+        # entry traces must not reach log aggregators at WARN+ (observability.md
+        # Rule 8, security.md § No secrets in logs).
+        logger.debug(
             f"BULK_CREATE ENTRY: model={model_name}, data_count={len(data) if data else 0}, kwargs={kwargs}"
         )
 
@@ -447,7 +461,9 @@ class BulkOperations:
             # tail through a "looks truncated, looks safe" log line.
             # See rules/security.md § "No secrets in logs" and
             # rules/observability.md Rule 6.
-            logger.warning(
+            # DEBUG (not WARN): table_name is a schema identifier (observability.md
+            # Rule 8); conn is masked.
+            logger.debug(
                 f"BULK_CREATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
             )
 
@@ -503,7 +519,9 @@ class BulkOperations:
                     f"INSERT INTO {table_name} ({column_names}) VALUES {values_clause}"
                 )
 
-                logger.warning(
+                # DEBUG (not WARN): the query carries schema column names —
+                # observability.md Rule 8.
+                logger.debug(
                     f"BULK_CREATE: Executing batch {batches_processed + 1}, query='{query[:100]}...', param_count={len(params)}"
                 )
 
@@ -521,7 +539,7 @@ class BulkOperations:
                     transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
-                logger.warning("bulk.bulk_create_sql_result", extra={"result": result})
+                logger.debug("bulk.bulk_create_sql_result", extra={"result": result})
 
                 # Use shared result processor for consistent behavior
                 # This applies the Phase 1 fix: fallback to batch_size when rows_affected=0
@@ -606,7 +624,11 @@ class BulkOperations:
 
         logger = logging.getLogger(__name__)
 
-        logger.warning(
+        # DEBUG (not WARN): data / update_values carry raw row VALUES (potential
+        # PII) and kwargs may carry caller values — must not reach log
+        # aggregators at WARN+ (observability.md Rule 8, security.md § No secrets
+        # in logs). Matches the query/params downgrade below.
+        logger.debug(
             f"BULK_UPDATE ENTRY: model={model_name}, data={data}, filter={filter_criteria}, update={update_values}, kwargs={kwargs}"
         )
 
@@ -643,7 +665,7 @@ class BulkOperations:
 
         if is_filter_based:
             # Filter-based bulk update - perform actual database operation
-            logger.warning("BULK_UPDATE: Processing filter-based update")
+            logger.debug("BULK_UPDATE: Processing filter-based update")
 
             # Issue #1252 — resolve the bound tenant up front, OUTSIDE the try so
             # the fail-closed RuntimeError PROPAGATES (raises) rather than being
@@ -692,9 +714,10 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
-                # Round 2 red team fix: route connection_string through mask_url —
-                # NO truncation. See bulk_create above.
-                logger.warning(
+                # DEBUG (not WARN): conn masked via mask_url, but table_name is a
+                # schema identifier — observability.md Rule 8 keeps schema names
+                # off WARN+ aggregators.
+                logger.debug(
                     f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
@@ -781,7 +804,7 @@ class BulkOperations:
                     transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
-                logger.warning("bulk.bulk_update_sql_result", extra={"result": result})
+                logger.debug("bulk.bulk_update_sql_result", extra={"result": result})
 
                 # Extract rows_affected from result
                 # NEW format: {'result': {'data': {'rows_affected': N}, ...}}
@@ -806,7 +829,9 @@ class BulkOperations:
                     "failure_count": 0,
                     "success": True,
                 }
-                logger.warning(
+                # DEBUG (not WARN): success_result carries raw filter/update row
+                # VALUES (potential PII) — observability.md Rule 8, security.md.
+                logger.debug(
                     "bulk.bulk_update_success", extra={"success_result": success_result}
                 )
                 return success_result
@@ -832,7 +857,7 @@ class BulkOperations:
                 return error_result
         elif data is not None:
             # Data-based bulk update - update records by id
-            logger.warning("BULK_UPDATE: Processing data-based update")
+            logger.debug("BULK_UPDATE: Processing data-based update")
 
             # Issue #1252 — resolve the bound tenant; AND-ed into each per-record
             # WHERE id = ? below so tenant A cannot update tenant B's row by
@@ -887,9 +912,10 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
-                # Round 2 red team fix: route connection_string through mask_url —
-                # NO truncation. See bulk_create above.
-                logger.warning(
+                # DEBUG (not WARN): conn masked via mask_url, but table_name is a
+                # schema identifier — observability.md Rule 8 keeps schema names
+                # off WARN+ aggregators.
+                logger.debug(
                     f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
@@ -903,8 +929,11 @@ class BulkOperations:
                     # Execute individual UPDATEs for each record
                     for record in batch:
                         if "id" not in record:
+                            # WARN kept (operator should see skipped rows) but log
+                            # only the key set, never the raw record VALUES
+                            # (observability.md Rule 8, security.md).
                             logger.warning(
-                                f"BULK_UPDATE: Skipping record without id: {record}"
+                                f"BULK_UPDATE: Skipping record without id: keys={sorted(record.keys())}"
                             )
                             continue
 
@@ -927,8 +956,10 @@ class BulkOperations:
                                 params.append(value)
 
                         if not set_parts:
+                            # WARN kept (operator visibility) but log only the id,
+                            # never the raw record VALUES (observability.md Rule 8).
                             logger.warning(
-                                f"BULK_UPDATE: No fields to update for record: {record}"
+                                f"BULK_UPDATE: No fields to update for record: id={record.get('id')!r}"
                             )
                             continue
 
@@ -1009,7 +1040,9 @@ class BulkOperations:
                     "batch_size": batch_size,
                     "success": True,
                 }
-                logger.warning(
+                # DEBUG (not WARN): success_result carries raw filter/update row
+                # VALUES (potential PII) — observability.md Rule 8, security.md.
+                logger.debug(
                     "bulk.bulk_update_success", extra={"success_result": success_result}
                 )
                 return success_result
@@ -1055,7 +1088,10 @@ class BulkOperations:
 
         logger = logging.getLogger(__name__)
 
-        logger.warning(
+        # DEBUG (not WARN): data carries raw id/row VALUES and kwargs may carry
+        # caller values — must not reach log aggregators at WARN+
+        # (observability.md Rule 8, security.md § No secrets in logs).
+        logger.debug(
             f"BULK_DELETE ENTRY: model={model_name}, data={data}, filter={filter_criteria}, kwargs={kwargs}"
         )
 
@@ -1063,7 +1099,7 @@ class BulkOperations:
         safe_mode = kwargs.get("safe_mode", True)
         confirmed = kwargs.get("confirmed", False)
 
-        logger.warning(
+        logger.debug(
             f"BULK_DELETE VALIDATION: safe_mode={safe_mode}, confirmed={confirmed}"
         )
 
@@ -1087,7 +1123,7 @@ class BulkOperations:
 
         if filter_criteria is not None:
             # Filter-based bulk delete - perform actual database operation
-            logger.warning("BULK_DELETE: Processing filter-based delete")
+            logger.debug("BULK_DELETE: Processing filter-based delete")
 
             # Issue #1252 — resolve the bound tenant up front, OUTSIDE the try so
             # the fail-closed RuntimeError PROPAGATES (raises) rather than being
@@ -1110,9 +1146,9 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
-                # Round 2 red team fix: route connection_string through mask_url —
-                # NO truncation. See bulk_create above.
-                logger.warning(
+                # DEBUG (not WARN): conn masked, but table_name is a schema
+                # identifier — observability.md Rule 8.
+                logger.debug(
                     f"BULK_DELETE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
@@ -1141,7 +1177,7 @@ class BulkOperations:
                 # This ensures connection pooling and data visibility across operations
                 sql_node = self.dataflow._get_or_create_async_sql_node(database_type)
 
-                logger.warning(
+                logger.debug(
                     f"BULK_DELETE: Using cached sql_node={id(sql_node)}, "
                     f"cache_size={len(self.dataflow._async_sql_node_cache)}"
                 )
@@ -1158,7 +1194,7 @@ class BulkOperations:
                     transaction_mode="auto",
                     transaction=transaction,  # #1585: read-your-writes inside scope
                 )
-                logger.warning(
+                logger.debug(
                     "bulk.bulk_delete_pre_delete_count_check",
                     extra={"check_result": check_result},
                 )
@@ -1206,7 +1242,7 @@ class BulkOperations:
                     transaction=transaction,  # #1585: join active scope (None = auto-commit)
                 )
 
-                logger.warning("bulk.bulk_delete_sql_result", extra={"result": result})
+                logger.debug("bulk.bulk_delete_sql_result", extra={"result": result})
 
                 # Extract rows_affected from result
                 # NEW format: {'result': {'data': {'rows_affected': N}, ...}}
@@ -1230,7 +1266,9 @@ class BulkOperations:
                     "failure_count": 0,
                     "success": True,
                 }
-                logger.warning(
+                # DEBUG (not WARN): success_result carries raw filter row VALUES
+                # (potential PII) — observability.md Rule 8, security.md.
+                logger.debug(
                     "bulk.bulk_delete_success", extra={"success_result": success_result}
                 )
                 return success_result
@@ -1316,7 +1354,9 @@ class BulkOperations:
 
         logger = logging.getLogger(__name__)
 
-        logger.warning(
+        # DEBUG (not WARN): kwargs may carry caller values — observability.md
+        # Rule 8, security.md § No secrets in logs.
+        logger.debug(
             f"BULK_UPSERT ENTRY: model={model_name}, data_count={len(data) if data else 0}, "
             f"conflict_resolution={conflict_resolution}, batch_size={batch_size}, kwargs={kwargs}"
         )
@@ -1438,7 +1478,9 @@ class BulkOperations:
 
             # Round 2 red team fix: route connection_string through mask_url —
             # NO truncation. See bulk_create above.
-            logger.warning(
+            # DEBUG (not WARN): table_name is a schema identifier (observability.md
+            # Rule 8); conn is masked.
+            logger.debug(
                 f"BULK_UPSERT: conn={mask_url(connection_string)}, db_type={database_type}, "
                 f"table={table_name}, conflict_resolution={conflict_resolution}"
             )
@@ -1616,7 +1658,9 @@ class BulkOperations:
                     "batches_processed": batches_processed,
                 },
             }
-            logger.warning(
+            # DEBUG (not WARN): success_result carries raw row VALUES (potential
+            # PII) — observability.md Rule 8, security.md.
+            logger.debug(
                 "bulk.bulk_upsert_success", extra={"success_result": success_result}
             )
             return success_result

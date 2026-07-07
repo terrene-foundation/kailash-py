@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.14.1] — 2026-07-07 — bulk logging PII/schema hygiene; completed versioned-flag removal
+
+### Fixed
+
+- **Bulk logging hygiene — raw row values and schema identifiers no longer emitted at WARN (`features/bulk.py`).** 2.14.0 downgraded the bulk_update/bulk_delete query+params execution logs to DEBUG (PII hygiene) but left sibling instrumentation logs at WARN across all four bulk verbs. Completed the full sweep — every WARN-level instrumentation trace and every success trace that carried raw row values is now DEBUG: the `BULK_CREATE/UPDATE/DELETE/UPSERT ENTRY` traces (carried raw `data` / `update_values` / `kwargs`), the `bulk_update` / `bulk_delete` / `bulk_upsert` `*_success` result traces (carried raw `filter` / `update` row values), the `conn=…, table=…` execution traces, the per-batch query trace, the `Processing …-based …` / `VALIDATION` traces, and the cached-node / pre-count / `*_sql_result` metadata traces (`observability.md` Rule 8, `security.md` § "No secrets in logs"). (`bulk_create`'s success trace was already at INFO and carries only counts — no raw values — so it was left unchanged.) Only four `logger.warning` sites remain in the four bulk verbs, all intentional: the two `Empty filter detected` dangerous-path signals (empty-filter bulk update/delete), and the two per-record skip signals (`Skipping record without id`, `No fields to update`) — which now log only the record's key-set / id, never raw row values. Genuine error paths keep `logger.error`; no partial-failure signal was downgraded (`observability.md` Rule 7).
+- **`BulkOperations._model_has_tenant_field` no longer swallows lookup exceptions silently (`features/bulk.py`).** A raised field-lookup now logs a WARN before returning `False`, so a genuine tenant model whose lookup errored is visible rather than silently skipping tenant scoping (`zero-tolerance.md` Rule 3).
+
+### Removed
+
+- **Completed the docs/example cleanup that 2.14.0 missed in three files (the `versioned` flag in two, a fictional optimistic-locking API in the third).** 2.14.0 removed the advertised-but-unimplemented `versioned` flag from five docs files, but `examples/03_enterprise_integration.py` (3 model blocks) and `examples/enterprise/README.md` still shipped the flag, and `docs/advanced/database-optimization.md` still documented a fictional `OptimisticUpdateNode` / `optimistic_lock` / `retry_on_conflict` API with zero backing code. All three are now corrected: the `versioned` flags are dropped from the two examples (the inventory example switched to real `soft_delete`), and the fictional "Optimistic Locking" section is removed from the doc. No backing-code references to `versioned` / `optimistic_lock` / `OptimisticUpdateNode` remain in the package.
+
 ## [2.14.0] — 2026-07-07 — soft_delete completed end-to-end; bulk_update read-consistency; versioned docs removed
 
 ### Added
