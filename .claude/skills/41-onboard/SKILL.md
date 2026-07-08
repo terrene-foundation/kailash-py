@@ -1,5 +1,5 @@
 ---
-name: onboard
+name: 41-onboard
 description: "/onboard procedure: read roster + team-memory + posture + claims + codify lease + rules-changed for a new operator joining a multi-operator COC repo."
 ---
 
@@ -18,16 +18,16 @@ This skill is the procedural detail for the `/onboard` command (`.claude/command
 
 `/onboard` writes ZERO state. Every read goes through an existing helper:
 
-| Surface           | Helper                                                                                              | Returned shape                                               |
-| ----------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Operator identity | `operator-id.js::resolveIdentity()`                                                                 | `{display_id, verified_id, posture, blocked_into?}`          |
-| Roster            | `roster-schema-validate.js` + reading `operators.roster.json`                                       | `{operators: [{display_id, ...}]}`                           |
-| Team-memory       | direct `fs.readdir(.claude/team-memory)` + `fs.readFile` per file + `integrity-guard.js` validation | `[{slug, body, frontmatter, integrity_ok}]`                  |
-| Active workspace  | `workspace-utils.js::detectActiveWorkspace()`                                                       | `{workspace, recent_journal[]}`                              |
-| Posture           | `state-io.js::readPosture()`                                                                        | `{posture, since, transition_history, pending_verification}` |
-| Adjacency claims  | `coordination-log.js::foldLog()`                                                                    | active-claim slice                                           |
-| Codify lease      | `codify-lease.js::readActiveLease()`                                                                | `{lease, leasePath}`                                         |
-| Rules-changed     | reuse `multi-operator-sessionstart.js` helper or re-derive via `git log`                            | list of rule files + MUST-clause line refs                   |
+| Surface           | Helper                                                                                              | Returned shape                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Operator identity | `operator-id.js::resolveIdentity()`                                                                 | `{verified_id, person_id, display_id, role, host_role, posture?, blocked_into?}` |
+| Roster            | `roster-schema-validate.js` + reading `operators.roster.json`                                       | `{genesis, persons: {<person_id>: {display_id, role, host_role, keys, ...}}}`    |
+| Team-memory       | direct `fs.readdir(.claude/team-memory)` + `fs.readFile` per file + `integrity-guard.js` validation | `[{slug, body, signed, promoted_by}]`                                            |
+| Active workspace  | `workspace-utils.js::detectActiveWorkspace()`                                                       | `{name, path}`                                                                   |
+| Posture           | `state-io.js::readPosture()`                                                                        | `{posture, since, transition_history, pending_verification}`                     |
+| Adjacency claims  | `coordination-log.js::foldLog()`                                                                    | active-claim slice                                                               |
+| Codify lease      | `codify-lease.js::readActiveLease()`                                                                | `{lease, leasePath}`                                                             |
+| Rules-changed     | reuse `multi-operator-sessionstart.js` helper or re-derive via `git log`                            | list of rule files + MUST-clause line refs                                       |
 
 If a helper returns a typed error (e.g. `readPosture` fail-closes to L1), `/onboard` surfaces the error verbatim per `rules/zero-tolerance.md` Rule 3.
 
@@ -121,7 +121,7 @@ Empty when nothing requires action — the empty list IS the green-light signal.
 
 ## --json mode
 
-Emit a single JSON object with the seven section keys:
+Emit a single JSON object with the eight section keys:
 
 ```json
 {

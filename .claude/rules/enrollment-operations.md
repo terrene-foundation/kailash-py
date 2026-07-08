@@ -246,7 +246,8 @@ installed-but-unenrolled, and standing up the genesis owner surfaced five fail-c
 in sequence (degraded read-only until signing configured; `validate-bash` state-file-mutation
 block on an inline `node -e` roster write; the codify-branch + lease gate; the genesis-anchor
 fold-clean requirement; per-machine self-enroll). The authoritative runbook
-(`guides/co-setup/11-genesis-ceremony.md`) is loom-only and absent from BUILD/USE repos, so the
+(`guides/co-setup/11-genesis-ceremony.md`) is loom-authored and `use_excluded` — NOT distributed to
+USE-template / downstream consumer repos (`sync-manifest.yaml::use_excluded`), so the
 hard-won procedure was reconstructed in-repo as `skills/45-genesis-bootstrap/SKILL.md` + the agent
 `agents/onboarding/coc-onboarding-specialist.md`, with this rule as the MUST-clause backing.
 Verified against `validate-bash-command.js`, `integrity-guard.js`, `signing-mutation-guard.js`,

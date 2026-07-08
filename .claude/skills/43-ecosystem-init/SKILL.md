@@ -119,8 +119,10 @@ interpreter command (`node -e`/`-c`/`-m`, or any command LED by `node`/`python`/
 **command string** contains a protected state-file path — `operators.roster.json`,
 `coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized`. The documented inline
 `node -e '… operators.roster.json …'` form therefore CANNOT run; this is correct — only the canonical
-roster-write path may touch the roster. (`.claude/settings.json::permissions.deny`, where present, is a
-second lexical defense-in-depth layer matching the same paths.)
+roster-write path may touch the roster. (`.claude/settings.json::permissions.deny` additionally hard-denies
+Edit/Write of `posture.json` + `violations.jsonl` + `.initialized` + `.posture-upgrade-nonce` — it does NOT cover
+`operators.roster.json` / `coordination-log.jsonl`; those two rest on this `STATE_PATH_RX` guard (Bash)
+plus `integrity-guard.js`'s codify-branch/lease gate (Edit/Write, coordination-ON).)
 
 Write the ceremony as a **script file invoked by its own path** — the protected path lives INSIDE the
 script body, off the command line. Crucially, the script-WRITE and the script-RUN must be **separate Bash
