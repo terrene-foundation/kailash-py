@@ -651,3 +651,27 @@ changes:
       genesis-migration-n1-org-admin-anchor.md + the skills) → the mandatory
       self-referential-codify.md multi-agent redteam-with-tests round is satisfied by this
       session's 10-round convergence. Receipt: workspaces/mops-onboarding/journal/0028.
+
+      THIRD APPEND 2026-07-08 (later same day — independent re-convergence, journal/0029).
+      A fresh 3-lens redteam (reviewer + security-reviewer + cc-architect, each re-deriving
+      against ground-truth hook source) of the current merged-main state (post PR #1620,
+      HEAD 8e85319b7) independently re-confirmed the SECOND-APPEND convergence AND surfaced
+      2 residual LOW self-contradictions the 10-round pass missed, both inside
+      enrollment-operations.md's own "Length rationale" meta-paragraph (verify-claims-before-write
+      class), now fixed: (1) the self-cited body line-count "266 lines (per wc -l)" was stale —
+      actual wc -l = 268 (the SECOND APPEND corrected 264->266; this corrects 266->268 after that
+      append's own edits shifted the count); (2) "SIX distinct fail-closed boundary guards as MUST
+      clauses" over-claimed all six MUSTs as guards, contradicting the same file's § "Violation
+      scope" (MUST 1/2/3 guard-enforced; MUST 4/5/6 gate-review) + the Severity field; corrected
+      to "SIX MUST clauses — three fail-closed boundary guards (MUST 1/2/3) + three gate-review
+      clauses (MUST 4/5/6)". Convergence: R1 (findings) -> fix -> R2 (cc-architect CLEAN) + R3
+      (reviewer CLEAN) = 2 consecutive fully-clean rounds; 0 CRIT / 0 HIGH every round. Evidence
+      gaps closed this session by direct re-derivation (NOT trusting prior self-reports):
+      scan-synced-disclosure.mjs RAN clean (0 findings / 1558 files); host_role:ci
+      forever-ineligible + 2-of-N owner co-sign re-derived from fold-rule-9c.js; business_roles
+      enum = exactly 3 re-derived from operators.roster.schema.json.
+      CLASSIFICATION: GLOBAL (same GLOBAL artifact as both prior appends; the fix is to the
+      rule's own meta-rationale, CLI-neutral). enrollment-operations.md is on the
+      self-referential-codify.md Rule 2 allowlist → the mandatory multi-agent redteam-with-tests
+      round is satisfied by this session's R1-R3 convergence. Receipt:
+      workspaces/mops-onboarding/journal/0029.
