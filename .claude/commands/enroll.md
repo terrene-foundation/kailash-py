@@ -21,7 +21,7 @@ per-operator gitignored layer. Procedure detail lives in `.claude/skills/44-enro
 1. **B1 roster registration wraps the EXISTING `/whoami --register` path.** Roster registration is the
    2-of-N-quorum PR-gated write described in `multi-operator-coordination.md` §1 — the ONLY roster-write
    path. `/enroll` does NOT re-implement it; it invokes `/whoami --register` (derive `person_id`, cut the
-   `codify/<id>-<date>` branch off `main`, schema-validate, commit, push, open PR). NEVER writes
+   `codify/<display_id>-<date>` branch off `main`, schema-validate, commit, push, open PR). NEVER writes
    `operators.roster.json` directly to `main` (branch protection rejects it).
 2. **B2 local-links is per-operator gitignored — NO disclosure gate.** The NAME→on-disk-path layer
    (`loom-links.local.json`, `loom-links.mjs` precedence `$LOOM_LINKS_CONFIG` > local > fail-loud) is
@@ -62,8 +62,12 @@ layout-agnostic.
 
 ### B3 — hand off
 
-Print: "Enrolled. Run `/onboard` at the start of every session." Does NOT perform the session-entry reads
-(invariant 3).
+Print: "Enrollment PR opened. Once it merges to `main`, run `/onboard` at the start of every session."
+Does NOT perform the session-entry reads (invariant 3). The roster registration is a PR (B1), not a
+direct write, so it is not on `main` until merged: `/onboard` run on `main` before the merge resolves the
+operator as not-yet-rostered (it reads the committed roster); on the operator's own
+`codify/<display_id>-<date>` branch the working-tree roster edit already resolves. Await the merge (or stay
+on the branch) before treating `/onboard` identity as final.
 
 ## Why a separate command (not a `/whoami` flag)
 

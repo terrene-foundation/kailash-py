@@ -102,7 +102,7 @@ else:
 
 The M5 session-start hook (`multi-operator-sessionstart.js`) computes this surface. `/onboard` calls the same helper (extracted into a shared library at M5 time) OR re-derives via `git log --since` against `.claude/rules/`.
 
-For each modified rule file, grep for MUST clauses (`grep -n '^### .*MUST'`) added/changed in the diff window. These are the candidates for `pending_verification` per `rules/trust-posture.md` MUST-7.
+For each modified rule file, grep for MUST clauses (`grep -n '^### .*MUST'`) added/changed in the diff window. These are the candidates for `pending_verification` per `rules/trust-posture.md` MUST-6 § Grace Period Semantics (the clause that puts a freshly-authored rule into `pending_verification` for its 7-day grace window).
 
 ### 7. Action items
 

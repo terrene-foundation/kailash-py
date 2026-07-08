@@ -71,7 +71,7 @@ After the full pass, tally pass/fail per question. If 100% → record pass (Step
 
 ### 5. Emit pass receipt + roster registration nudge
 
-On pass: write a `journal/NNNN-DECISION-certify-<display_id>-<date>.md` entry naming the operator's `display_id` + `verified_id`, the bank version (`specs/_certification.yaml::version`), the per-question pass/fail/attempts tally, and the timestamp. Surface to the operator: "Certification passed. Next: `/whoami --register` (if not already rostered) → `/claim <path>` to start work." Until pass, the operator remains `L2_SUPERVISED` via the existing trust-posture machinery (no command-side change — `posture.json` already enforces L2 for unrostered operators per `rules/multi-operator-coordination.md` §1).
+On pass: write a `journal/NNNN-DECISION-certify-<display_id>-<date>.md` entry naming the operator's `display_id` + `verified_id`, the bank version (`specs/_certification.yaml::bank_version` — the operator-visible dated tag, NOT the schema-version int `::version`), the per-question pass/fail/attempts tally, and the timestamp. Surface to the operator: "Certification passed. Next: `/whoami --register` (if not already rostered) → `/claim <path>` to start work." Until pass, the operator remains `L2_SUPERVISED` via the existing trust-posture machinery (no command-side change — `posture.json` already enforces L2 for unrostered operators per `rules/multi-operator-coordination.md` §1).
 
 ### Failure modes (typed errors — no silent fallbacks per `rules/zero-tolerance.md` Rule 3)
 

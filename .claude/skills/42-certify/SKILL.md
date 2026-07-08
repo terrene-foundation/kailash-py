@@ -67,13 +67,7 @@ For each question:
    - `short_answer`: orchestrator LLM judges the answer against `expected:` (canonical answer) + the `grading_rubric:` bullets (acceptance criteria). Return `{verdict: pass|fail, rationale: <one sentence>}`.
 5. Record the per-question result in orchestrator context: `{id, verdict, attempts: 1}`.
 
-**Step N (probe exit, end of Phase B before transition to Phase C): remove the lockfile:**
-
-```bash
-rm -f ".claude/.certify-in-probe-${VERIFIED_ID}.lock"
-```
-
-Phase C judgement does NOT require retrieval (the bank ships the canonical answer + rubric inline), so the lockfile MUST be removed before Phase C begins — otherwise Phase C's structural identity-write + journal-slot-reserve operations are unaffected (those are Bash + Write, not retrieval tools), but a future iteration of this skill that adds retrieval steps to Phase C would silently break unless this Step is honored.
+**The lockfile PERSISTS through Phase C — do NOT remove it at the Phase B→C transition.** Phase C's gate retry loop RE-RUNS the probe on the failed questions (§ Phase C below, `re-run probe on q`), and those retries MUST stay no-assist exactly as the initial probe does. The structural `probe-phase-guard.js` guard therefore MUST remain active until the gate is fully resolved — removing the lockfile before Phase C would open an un-guarded retrieval window during the exact retry loop the gate exists to protect (an operator asking "what's the answer?" during a retry could then be assisted via an orchestrator Read/Grep). The lockfile is removed at Phase C exit ONLY — see Phase C § Step N. This matches `commands/certify.md` § "Phase B — Probe": `rm` fires at "Probe exit (Phase C complete OR abandoned mid-gate)", never before.
 
 **NO Claude-assistance during the probe.** If the operator asks "can you explain that section again?" or "what's the answer?", the orchestrator MUST refuse with one sentence: "I cannot assist during the gate phase; re-read the cited section and answer when ready." This refusal is now belt-and-suspenders — the structural hook is the primary defense; the prose refusal handles edge cases (operator pasting in a Read tool call directly via the orchestrator's tool surface would be blocked by the hook; operator asking for prose rephrasing is blocked by this refusal). Both layers fire together per `probe-driven-verification.md` MUST-4 (structural hook + prose-discipline gate-review counterpart).
 
@@ -95,6 +89,14 @@ else:
 ```
 
 The gate is 100% strict. There is no partial credit, no "close enough", no "the operator clearly understands the concept but worded it differently." If the answer fails the rubric, it fails the gate. The operator re-reads the cited section and retries.
+
+**Step N (gate exit): remove the lockfile — the SINGLE removal site, on BOTH the pass path AND the abandon path:**
+
+```bash
+rm -f ".claude/.certify-in-probe-${VERIFIED_ID}.lock"
+```
+
+The `probe-phase-guard.js` guard spanned Phase B AND the Phase C retry loop; this is the one place it is torn down — once the gate is fully resolved (100% pass recorded) OR the operator abandons mid-gate (§ Failure modes: the same `rm` runs so the lockfile is never left stale). If the orchestrator crashes mid-gate, the operator removes the stale lockfile manually (`rm .claude/.certify-in-probe-*.lock`) before re-running `/certify`.
 
 ### Pass receipt
 
@@ -240,4 +242,4 @@ Until pass, the operator stays `L2_SUPERVISED` via `posture.json` (no certify-si
 
 ## Origin
 
-2026-05-25 co-owner-directed COC tooling. Receipt: `journal/0158-DECISION-certify-onboarding-mechanism-2026-05-25.md`. Skill body ~140 lines per `rules/cc-artifacts.md` Rule 2 (progressive disclosure — SKILL.md answers 80% of routine questions without sub-file reads).
+2026-05-25 co-owner-directed COC tooling. Receipt: `journal/0158-DECISION-certify-onboarding-mechanism-2026-05-25.md`. Skill body follows `rules/cc-artifacts.md` Rule 2 (progressive disclosure — SKILL.md answers 80% of routine questions without sub-file reads).

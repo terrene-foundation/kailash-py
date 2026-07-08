@@ -9,7 +9,7 @@ The procedure backing `.claude/commands/ecosystem-init.md` (the once-per-fork ec
 command body holds the five load-bearing invariants + the ceremony order; this skill holds the
 step-by-step procedure, the input prompts, the D6 schema field set, and the exact tool-call shapes.
 
-Three onboarding surfaces (the core distinction — `02-plans/02-ga-ecosystem-onboarding.md`):
+Three onboarding surfaces (the core distinction — see (loom-internal reference)):
 
 | Surface           | Moment                     | Writes                                | Frequency       |
 | ----------------- | -------------------------- | ------------------------------------- | --------------- |
@@ -56,7 +56,9 @@ It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis
   `verification.verified == true`, author == declared owner) is the anchor.
 - **Pre-condition**: the genesis-owner's `person_id` MUST already be in `operators.roster.json` with
   `role: owner` and the correct `github_login`. On a truly fresh fork, edit the bootstrap roster or run
-  `/whoami --register` then promote the role on the resulting PR first.
+  `/whoami --register` then promote the role on the resulting PR first. The full first-owner runbook for
+  hand-authoring that owner entry (signing-key-first, the script-by-path roster write, fold-clean verify)
+  is `skills/45-genesis-bootstrap/SKILL.md` — it is the step that PRECEDES this one on a fresh fork.
 
 The signed `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (fold rule 9a accepts the
 first verifying owner-bound anchor as the trust root). The consumer-relevant operational gotchas an
@@ -85,8 +87,11 @@ If the fork's build is NOT Kailash, invoke the EXISTING `/onboard-stack` (detect
 
 ### C5 — hand off (invariant 4)
 
-Print: "Ecosystem configured. Each operator now runs `/enroll`, then `/onboard` at the start of every
-session." Do NOT enroll the initiating operator — that is `/enroll`'s gated job.
+Print: "Ecosystem configured. Each TEAMMATE now runs `/enroll`, then `/onboard` at the start of every
+session." Do NOT enroll the initiating operator — that is `/enroll`'s gated job. The genesis owner is
+ALREADY rostered (their `role: owner` entry was hand-authored in the genesis-bootstrap step that precedes
+C3, per `skills/45-genesis-bootstrap`), so the owner runs `/onboard` directly and does NOT re-run
+`/enroll` (which would open a redundant `contributor` registration over their existing owner identity).
 
 ## Operational runbook
 
