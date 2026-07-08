@@ -80,8 +80,12 @@ detection. Skip for a full-Kailash fork.
 
 ### C5 — hand off
 
-Print: "Ecosystem configured. Each operator now runs `/enroll`, then `/onboard` at the start of every
-session." Does NOT enroll the initiating operator (invariant 4).
+Print: "Ecosystem configured. Each TEAMMATE now runs `/enroll`, then `/onboard` at the start of every
+session." Does NOT enroll the initiating operator (invariant 4) — the genesis owner is ALREADY rostered
+(their `role: owner` entry was hand-authored in the genesis-bootstrap step that precedes C3, per
+`skills/45-genesis-bootstrap`), so the owner runs `/onboard` directly and does NOT re-run `/enroll` (which
+would open a redundant `contributor` registration over their existing owner identity). `/enroll` is the
+join path for teammates who are not yet in the roster.
 
 ## Posture-bound restrictions
 

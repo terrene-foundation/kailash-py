@@ -40,7 +40,7 @@ Read `.claude/learning/posture.json` via `state-io.js::readPosture()`. Surface:
 
 - Current `posture` (L5_DELEGATED through L1_PSEUDO_AGENT)
 - `since` timestamp + the most recent `transition_history` entry's reason
-- `pending_verification[]` — every rule_id awaiting a `[ack: <rule_id>]` receipt (per `rules/trust-posture.md` MUST-7's grace mechanism)
+- `pending_verification[]` — every rule_id awaiting a `[ack: <rule_id>]` receipt (per `rules/trust-posture.md` MUST-6 § Grace Period Semantics, which defines the `pending_verification` + 7-day grace mechanism)
 
 If any rule_id is in `pending_verification`, the onboarding output names it and instructs the operator: their next response in a real session must include the `[ack: <rule_id>]` token to clear the gate.
 

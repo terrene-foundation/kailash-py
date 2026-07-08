@@ -9,7 +9,7 @@ The procedure backing `.claude/commands/enroll.md` (the once-per-operator ceremo
 ecosystem already configured by `/ecosystem-init`). The command body holds the three load-bearing
 invariants; this skill holds the step-by-step procedure and the exact tool-call shapes.
 
-Three onboarding surfaces (`02-plans/02-ga-ecosystem-onboarding.md`): `/onboard` (read, every session),
+Three onboarding surfaces (see (loom-internal reference)): `/onboard` (read, every session),
 `/enroll` (operator, once), `/ecosystem-init` (fork, once). They share ZERO write-authority.
 
 ## Ceremony steps: B1 → B2 → B3
@@ -60,9 +60,13 @@ Pre-existing operators on any other layout (flat `~/repos/<slug>`, nested) proce
 
 ### B3 — hand off (invariant 3)
 
-Print: "Enrolled. Run `/onboard` at the start of every session." `/enroll` does NOT perform the
-session-entry reads (roster + posture + team-memory + claims) — that is `/onboard`'s read-only job
-(`knowledge-convergence.md` MUST-5).
+Print: "Enrollment PR opened. Once it merges to `main`, run `/onboard` at the start of every session."
+`/enroll` does NOT perform the session-entry reads (roster + posture + team-memory + claims) — that is
+`/onboard`'s read-only job (`knowledge-convergence.md` MUST-5). The roster registration (B1) is a PR, not
+a direct write, so it is not on `main` until merged: `/onboard` run on `main` before the merge resolves
+the operator as not-yet-rostered (it reads the committed roster); on the operator's own
+`codify/<display_id>-<date>` branch the working-tree roster edit already resolves. Await the merge (or stay
+on the branch) before treating `/onboard` identity as final.
 
 ## Why a separate command (not a `/whoami` flag)
 
