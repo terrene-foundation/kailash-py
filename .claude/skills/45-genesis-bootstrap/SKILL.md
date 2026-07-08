@@ -58,10 +58,12 @@ for them) and starts each session with `/onboard`.
    (`operators.roster.json`, `operators.roster.schema.json`, `coordination-log.jsonl`,
    `posture.json`, `violations.jsonl`, `observations.jsonl`, `team-memory/**`, `journal/**`)
    ONLY on a branch matching `^codify/<display_id>-YYYY-MM-DD$` (the date-terminal predicate at
-   `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Cut it from
-   `main` (branch protection rejects a direct roster push to `main`):
+   `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Like gate 1,
+   `integrity-guard.js` passes through on a genuinely fresh coordination-OFF bootstrap repo — the
+   codify branch is then required by branch protection for the eventual PR, not by the guard here.
+   Cut it from `origin/main` (branch protection rejects a direct roster push to `main`):
    ```bash
-   git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" main
+   git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" origin/main
    ```
 3. **Ceremony steps run script-by-path, never `node -e` / `python -c`.** See § The
    script-by-path pattern below — this is the trap that most often blocks a first run.
@@ -155,7 +157,8 @@ contestedRevocations, derivedN }`. A healthy genesis: `accepted` includes the an
    `rejected: []`, `forks: []`. Run it script-by-path (it reads the gitignored log).
 2. **Identity resolves to owner** —
    `.claude/hooks/lib/operator-id.js::resolveIdentity(repoDir)` returns
-   `{ verified_id, person_id, display_id, role, host_role, posture, blocked_into }`; confirm
+   `{ verified_id, person_id, display_id, role, host_role }` on the rostered/owner path
+   (`posture` / `blocked_into` appear only on the L2 / unrostered / no-key branch); confirm
    `role: "owner"` and a non-null `person_id`.
 3. **allowed_signers** (optional, for local commit-signature verification): point
    `git config --local gpg.ssh.allowedSignersFile` at a file listing the roster's keys; generate

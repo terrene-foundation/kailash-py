@@ -46,8 +46,8 @@ Ordered per Q4: the registry defines the org, genesis anchors TO that org, the r
 ### C3 — establish the genesis trust-root
 
 Invoke `.claude/hooks/lib/genesis-ceremony.js::runEnrollmentCeremony({roster, repo, signingKeyPath,
-signingKeyFingerprint, ghApi, transportAppend})` (invariant 3). It is fail-CLOSED — any failed gh-api
-verification refuses to emit the genesis-anchor.
+signingKeyFingerprint, ghApi, transportAppend, keyType})` (invariant 3; `keyType` defaults to `ssh`).
+It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis-anchor.
 
 - **Org-owned fork** (`roster.genesis.repo_owner_kind: "org"`): the verified-org-admin attestation
   (`gh api orgs/{org}/memberships/{login}` → `role: "admin"`) is the trust anchor (the issue-#358
