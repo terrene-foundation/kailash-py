@@ -255,8 +255,30 @@ Verified against `validate-bash-command.js`, `integrity-guard.js`, `signing-muta
 `genesis-ceremony.js`, `coordination-log.js`, and `operator-id.js`. Distributes to BUILD + USE
 repos via `/codify` → loom Gate-1 → `/sync`.
 
+## Distributable-Repo Caveat — Public / Fork-Template Repos Ship Un-Enrolled
+
+A repo that is publicly downloadable or forked as a template (this repo IS one) MUST ship
+**un-enrolled**: the committed `operators.roster.json` MUST carry a `PLACEHOLDER-` genesis
+(`repo_owner: "PLACEHOLDER-owner"`, `root_commit: "0000000"`), NOT a live `genesis.root_commit`.
+`coordination-mode.js::isCoordinationEnabled` resolves Tier-4 implicit-ON from the **committed**
+roster's anchored genesis, and `.claude/learning/` (the local genesis-anchor + `.initialized`) is
+gitignored — so a committed LIVE genesis makes every clone resolve coordination **ON** by
+inheritance, while a `PLACEHOLDER-` genesis (`_isGenesisAnchored` → false) keeps clones **OFF**. A
+forker enrolls their OWN clone via `/ecosystem-init` / `/whoami --register`. Committing a live
+genesis to a distributable repo is BLOCKED.
+
+The coordination-ENFORCEMENT PreToolUse hooks (`integrity-guard.js`, `signing-mutation-guard.js`,
+`journal-write-guard.js`, `genesis-anchor-guard.js`, `adjacency-leasecheck.js`, `operator-gate.js`)
+MUST NOT be registered in the **committed** `.claude/settings.json` of a distributable repo: paired
+with a live committed genesis they would fire in every clone, and `signing-mutation-guard.js` would
+drop a fresh forker (no signing key) into degraded read-only — bricking their fork. Operator-local
+enforcement belongs in the gitignored `.claude/settings.local.json` (per-operator, never inherited
+by a clone). A lockfile-gated hook like `probe-phase-guard.js` (fires only during an active
+`/certify` gate) IS clone-safe in the committed `settings.json` and SHOULD ship there so every
+consumer's `/certify` no-assist gate has structural teeth.
+
 **Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** File is
-~270 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
+~290 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
 codifies SIX MUST clauses — three fail-closed boundary guards (MUST 1/2/3) + three gate-review
 clauses (MUST 4/5/6), consistent with § "Violation scope" above — each requiring the
 DO / DO NOT + BLOCKED-corpus + `**Why:**` structure `rule-authoring.md` Rules 2/3/4 mandate, plus
