@@ -256,7 +256,7 @@ Verified against `validate-bash-command.js`, `integrity-guard.js`, `signing-muta
 repos via `/codify` → loom Gate-1 → `/sync`.
 
 **Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** File is
-268 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
+~270 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
 codifies SIX MUST clauses — three fail-closed boundary guards (MUST 1/2/3) + three gate-review
 clauses (MUST 4/5/6), consistent with § "Violation scope" above — each requiring the
 DO / DO NOT + BLOCKED-corpus + `**Why:**` structure `rule-authoring.md` Rules 2/3/4 mandate, plus
