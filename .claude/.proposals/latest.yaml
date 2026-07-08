@@ -779,3 +779,74 @@ changes:
       roster-schema-validate + disclosure-scanner, all orchestrator-run with real output; the R2
       subagent wave remained account-limit-throttled, so verification stayed orchestrator-direct per
       the evidence gate). Receipt: workspaces/mops-onboarding/journal/0031.
+  - type: rule_add
+    artifact: command-skill-parity
+    files:
+      - .claude/rules/command-skill-parity.md
+    classification_suggestion: global
+    context: >
+      NEW path-scoped rule (paths: .claude/commands/** + .claude/skills/**), CLI-neutral.
+      Codifies the command↔skill parity discipline surfaced by kailash-py mops-onboarding
+      re-convergence #5 (journal/0032). Three MUSTs: (1) a shared-step edit (Print/hand-off
+      string, STOP/gate predicate, precondition, ordering, cited field/branch/lockfile/helper
+      name, or a guard's create→teardown lifecycle) MUST update the command↔skill mirror in the
+      SAME shard (security.md Multi-Site-Plumbing one abstraction up); (2) /redteam MUST run a
+      command↔skill parity sweep over the 5 shared-step axes (a same-step contradiction = MED,
+      HIGH if it drops a security guard or sends an operator to a wrong command); (3) a cited
+      security/enforcement guard's lifecycle MUST be verified to span the ENTIRE protected window
+      (retry loops, re-entry, abandon) — "registered" ≠ "covers the whole window".
+
+      Origin evidence (security-relevant, cross-SDK): the /certify no-assist gate
+      (probe-phase-guard.js, PR #355 security HIGH-1 closure, wired into committed settings.json in
+      PR #1623) was INERT on one execution path — the command (certify.md) kept the lockfile
+      through the Phase C gate retry loop; the backing skill (42-certify) removed it before Phase C,
+      whose loop re-runs the probe on failed questions. An orchestrator following the skill could be
+      coached through the certification retries with no structural guard. Invisible to five prior
+      review lenses; surfaced ONLY by the command↔skill parity sweep. Two sibling print-string
+      divergences (enroll B3, ecosystem C5) were also introduced by editing a command without its
+      skill.
+
+      Self-referential-allowlist disposition (R1 cc-architect HIGH, resolved-by-construction): ADDED
+      to self-referential-codify.md Rule 2's allowlist in this same codify. The author's initial
+      "not-allowlisted, like symbol-anchored-citations.md" reasoning was overturned — the decisive
+      distinction is that this rule is path-scoped to .claude/commands/** + .claude/skills/**, the
+      EXACT surfaces the allowlist enumerates (symbol-anchored-citations is scoped to codify INPUTS:
+      specs/journal/plans), its MUSTs fire on /codify OUTPUT (the user-flow-validation /
+      verify-claims-before-write predicate), it keeps ALLOWLISTED codify-governing command↔skill
+      pairs (codify.md/redteam.md/certify.md/onboard.md/sync-*) in sync, and its own Origin is a
+      security-guard drop on the allowlisted certify.md's skill. Rule 2 tiebreaker resolves toward
+      the gate. Covered by the existing .claude/rules/** paths glob (#443 holds, no paths change).
+
+      Classification rationale: GLOBAL — the command/skill split (cc-artifacts Rule 3) and its
+      shared-step drift failure mode are CLI-neutral (every CLI's command+skill equivalents can
+      drift) and cross-SDK (the same paired-artifact structure exists in every repo carrying a COC
+      setup). The DO/DO-NOT examples are onboarding-suite-specific but the discipline is universal.
+      Receipt: workspaces/mops-onboarding/journal/0032 + 0033.
+  - type: artifact_update
+    artifact: onboarding-suite-certify-security-plus-lifecycle
+    files:
+      - .claude/skills/42-certify/SKILL.md
+      - .claude/commands/certify.md
+      - .claude/commands/enroll.md
+      - .claude/skills/44-enroll/SKILL.md
+      - .claude/commands/ecosystem-init.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+    classification_suggestion: global
+    context: >
+      Re-convergence #5 fixes to the onboarding suite (kailash-py PR #1624, merged 445d97bf0),
+      surfaced for cross-SDK + downstream propagation because the same skill/hook pairs exist
+      wherever the suite was synced (Rust SDK + loom). HIGHEST PRIORITY for Gate-1: the /certify
+      no-assist guard-lifecycle fix (MED, security-relevant — see the command-skill-parity entry
+      above) is the one a sibling SDK almost certainly also carries; the skill (42-certify) now keeps
+      the probe-phase-guard lockfile through the Phase C gate retry loop, single removal at Phase C
+      exit (pass OR abandon), matching the command. Other fixes: enroll B3 "Enrolled"→"Enrollment PR
+      opened. Once it merges to main…" (+ skill 44); grace/pending_verification cited as trust-posture
+      MUST-7 → MUST-6 (onboard + skill 41); certify receipt ::version→::bank_version; 43→45
+      genesis-bootstrap cross-link; ecosystem C5 owner-vs-teammate (+ skill 43); <id>→<display_id>.
+      Converged 0 CRIT/0 HIGH/0 MED across 2 consecutive clean rounds (7-round multi-agent redteam,
+      the self-referential-codify.md Rule 1 gate). Distributable invariant re-verified intact after
+      all edits (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure
+      scanner exit 0). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-08-reconvergence5.md
+      + journal/0032.
