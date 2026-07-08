@@ -534,3 +534,60 @@ changes:
       CLASSIFICATION: GLOBAL. Foundation Independence (Directive 0) + the #255/#260
       no-private-identifiers-in-synced-artifacts fence apply to every consumer + every
       public USE template. CLI-neutral prose; no slot partitioning.
+  - type: rule_update
+    artifact: onboarding-suite-accuracy-corrections
+    files:
+      - .claude/commands/onboard.md
+      - .claude/commands/whoami.md
+      - .claude/rules/enrollment-operations.md
+      - .claude/rules/multi-operator-coordination.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+      - .claude/operators.roster.README.md
+    classification_suggestion: global
+    context: |
+      APPENDED 2026-07-08 (onboarding-suite accuracy re-validation). The Phase-1
+      onboarding suite (skill 45-genesis-bootstrap, rule enrollment-operations, agent
+      coc-onboarding-specialist) was redteam-converged 2026-06-24 and distributed back
+      via the 2026-07-04 loom Gate-2 sync. A 4-round multi-agent redteam (reviewer +
+      security-reviewer + cc-architect, each verifying against ground-truth hook source)
+      of the SYNCED-BACK state surfaced behavioral-accuracy drift and fixed it
+      (0 CRIT / 0 HIGH; 2 consecutive clean rounds). Corrections, all verified against
+      integrity-guard.js / validate-bash-command.js::detectStateFileMutation /
+      genesis-ceremony.js / operator-id.js / settings.json:
+
+      - onboard.md: roster failure-check path corrected (was learning/operators.roster.json;
+        real path .claude/operators.roster.json per operator-id.js ROSTER_REL).
+      - enrollment-operations.md AND multi-operator-coordination.md: removed a FALSE
+        "settings.json permissions.deny enforces this" claim for operators.roster.json +
+        coordination-log.jsonl (only posture.json + violations.jsonl are in deny). Correct
+        enforcement: validate-bash-command.js STATE_PATH_RX (Bash) + integrity-guard.js
+        codify-branch/lease gate (Edit/Write, coordination-ON). Same-bug-class pair fixed
+        together per autonomous-execution.md MUST-4.
+      - whoami.md: corrected the "licensed canonical writer" framing (the lexical guard has
+        no writer allowlist; it scans the command STRING; node <file> passes because the
+        watched path is off the scanned line).
+      - NEW data file operators.roster.README.md: created to close a 4-file dangling
+        reference (whoami.md + operators.roster.schema.json + roster-schema-validate.js +
+        fold-genesis-anchor.js). Documents the PLACEHOLDER- convention + isUnenrolled predicate.
+      - LOW: garbled backtick span in enrollment-operations.md Detection field; main ->
+        origin/main codify-branch base consistency; resolveIdentity return-shape (posture /
+        blocked_into are L2-branch only); keyType citation drift in skill 43; phantom
+        /doctor alias in onboard.md; stale self-cited line count (264 -> 266).
+
+      CLASSIFICATION: GLOBAL. These correct the SAME GLOBAL artifacts loom already
+      distributes; the corrected guard mechanics are CLI-neutral and consumer-wide. The
+      enrollment-operations.md + multi-operator-coordination.md edits are on the
+      self-referential-codify.md Rule 2 allowlist, so the mandatory multi-agent
+      redteam-with-tests round ran before merge (satisfied by the 4-round convergence).
+      Receipt: journal/0027.
+
+      LIFECYCLE NOTE for Gate-1: this latest.yaml was pending_review (dated 2026-06-23)
+      while the suite was already synced back 2026-07-04 — a possible un-archived
+      already-distributed proposal. Gate-1 should reconcile: if the 2026-06-24 suite
+      entries were already distributed, process ONLY this accuracy-correction entry and
+      archive the prior entries per artifact-flow.md Archive-Before-Fresh.
+
+      KNOWN-DISPOSITIONED (not a defect): whoami.md is 152 lines (>150 cc-artifacts.md
+      Rule 3 cap) — pre-existing, procedural-exception-eligible (4-ceremony runbook);
+      named rationale recorded in this codify receipt.
