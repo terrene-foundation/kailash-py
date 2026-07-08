@@ -245,7 +245,7 @@ class QueryBuilder:
             raise ValueError(f"Invalid join type: {join_type}")
 
         self.joins.append(
-            f"{join_type.upper()} JOIN {self._quote_identifier(table)} ON {on_condition}"
+            f"{join_type.upper()} JOIN {self._quote_table_name(table)} ON {on_condition}"
         )
         return self
 
@@ -284,7 +284,7 @@ class QueryBuilder:
             select_clause = f"SELECT {', '.join(quoted_fields)}"
 
         # Build FROM clause
-        from_clause = f"FROM {self._quote_identifier(self.table_name)}"
+        from_clause = f"FROM {self._quote_table_name(self.table_name)}"
 
         # Build JOIN clauses
         join_clause = " ".join(self.joins) if self.joins else ""
@@ -356,7 +356,7 @@ class QueryBuilder:
             placeholders.append(self._get_parameter_placeholder())
             values.append(value)
 
-        query = f"INSERT INTO {self._quote_identifier(self.table_name)} ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+        query = f"INSERT INTO {self._quote_table_name(self.table_name)} ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
 
         # Add RETURNING clause for PostgreSQL
         if self.database_type == DatabaseType.POSTGRESQL:
@@ -389,7 +389,7 @@ class QueryBuilder:
         if self.conditions:
             where_clause = f"WHERE {' AND '.join(self.conditions)}"
 
-        query = f"UPDATE {self._quote_identifier(self.table_name)} {set_clause} {where_clause}"
+        query = f"UPDATE {self._quote_table_name(self.table_name)} {set_clause} {where_clause}"
 
         # Add RETURNING clause for PostgreSQL
         if self.database_type == DatabaseType.POSTGRESQL:
@@ -412,7 +412,7 @@ class QueryBuilder:
         if self.conditions:
             where_clause = f"WHERE {' AND '.join(self.conditions)}"
 
-        query = f"DELETE FROM {self._quote_identifier(self.table_name)} {where_clause}"
+        query = f"DELETE FROM {self._quote_table_name(self.table_name)} {where_clause}"
 
         # Add RETURNING clause for PostgreSQL
         if self.database_type == DatabaseType.POSTGRESQL:
@@ -432,7 +432,7 @@ class QueryBuilder:
         if self.conditions:
             where_clause = f"WHERE {' AND '.join(self.conditions)}"
 
-        query = f"SELECT COUNT(*) FROM {self._quote_identifier(self.table_name)} {where_clause}"
+        query = f"SELECT COUNT(*) FROM {self._quote_table_name(self.table_name)} {where_clause}"
 
         return query, self.parameters
 
@@ -447,7 +447,15 @@ class QueryBuilder:
             return "?"
 
     def _quote_identifier(self, identifier: str) -> str:
-        """Quote identifier based on database type."""
+        """Quote a field-list identifier based on database type.
+
+        Used for the SELECT/GROUP BY/ORDER BY/INSERT/SET **field** list, which
+        legitimately carries aggregate and alias EXPRESSIONS (``COUNT(*)``,
+        ``x AS y``) — NOT just plain identifiers — so this path deliberately
+        does NOT allowlist-validate (that would break the accepted expression
+        contract). Table names, which ARE pure identifiers, go through the
+        fail-closed ``_quote_table_name`` instead (issue #1614).
+        """
         # Handle dot notation (e.g., "user.email")
         parts = identifier.split(".")
 
@@ -459,6 +467,35 @@ class QueryBuilder:
             quoted_parts = [f'"{part}"' for part in parts]
 
         return ".".join(quoted_parts)
+
+    def _quote_table_name(self, table_name: str) -> str:
+        """Quote a TABLE identifier, validating each part fail-closed.
+
+        A table name is a pure identifier (never an aggregate/alias
+        expression), so — unlike the field list (see ``_quote_identifier``) —
+        it routes every dot-separated part through the dialect's validating
+        ``quote_identifier`` (allowlist regex ``^[a-zA-Z_][a-zA-Z0-9_]*$`` +
+        length limit + reject-don't-escape), giving the QUERY surface the same
+        fail-closed table-identifier safety as the DDL path
+        (``dataflow-identifier-safety.md`` MUST-1/2/5). This is the issue
+        #1614 surface: the ``query_builder`` binding previously fed only the
+        derived pluralized-default table name here; #1614 routes the raw
+        developer-authored ``__tablename__`` through this path, so an
+        invalid/crafted table identifier MUST raise ``InvalidIdentifierError``
+        rather than break out of the quotes.
+
+        Output is byte-identical to the prior per-dialect quoting for every
+        valid table identifier (PostgreSQL/SQLite double-quote the part, MySQL
+        backtick-quotes it) — the dialect quote characters match exactly.
+        """
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(self.database_type.value)
+        # Preserve dot-notation support (e.g. "schema.table") — validate + quote
+        # each part independently, exactly as the prior implementation split.
+        return ".".join(
+            dialect.quote_identifier(part) for part in table_name.split(".")
+        )
 
     def reset(self) -> "QueryBuilder":
         """Reset the builder to initial state."""

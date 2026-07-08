@@ -2212,7 +2212,12 @@ class DataFlow(DataFlowEventMixin):
             """Create a QueryBuilder instance for this model."""
             from ..database.query_builder import create_query_builder
 
-            table_name = self._class_name_to_table_name(cls.__name__)
+            # issue #1614 (query-surface sibling of #1541/#1573): resolve
+            # ``__tablename__`` via ``_get_table_name`` so query_builder targets
+            # the same table CREATE TABLE / the index/FK generators / the
+            # migration paths use — NOT the pluralized class-name default, which
+            # points at a nonexistent table for a custom-``__tablename__`` model.
+            table_name = self._get_table_name(cls.__name__)
             return create_query_builder(table_name, self.config.database.url)
 
         # Bind the method as a classmethod
