@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.14.4] — 2026-07-08 — `Model.query_builder()` respects `__tablename__` (#1614) + query-surface table-identifier hardening
+
+### Fixed
+
+- **`Model.query_builder()` now respects `__tablename__` (`core/engine.py`, #1614; query-surface sibling of #1541/#1573).** #1541 (CREATE INDEX / FK ALTER) and #1573 (migration trigger/diff/tracking paths) closed the `__tablename__` asymmetry on the DDL/migration surface. The **query** surface was the remaining sibling: the `query_builder` classmethod bound during model registration resolved the table via `_class_name_to_table_name(cls.__name__)` (the pluralized class-name default) instead of the `__tablename__`-respecting `_get_table_name`. For a model with a custom `__tablename__`, `Model.query_builder().build_select(...)` built `SELECT ... FROM <pluralized_default>` against a table that does not exist (the real table is the custom `__tablename__`), so every `query_builder`-built query on such a model targeted the wrong / nonexistent table. The binding now routes through `_get_table_name(cls.__name__)` — the same resolver CREATE TABLE, the index/FK generators (#1541), and the migration paths (#1573) already use. Behavioral regression tests (real PostgreSQL) prove `query_builder().build_select()` targets the custom table and a written row round-trips through the built query (RED→GREEN verified; pre-fix the round-trip raised `UndefinedTableError` against the nonexistent default table). Query-surface audit confirmed no other `_class_name_to_table_name` caller needed the swap (the remaining callers are either already `__tablename__`-respecting via the stored `table_name`, or the intentional pluralized-default `_relationships` FK-detection contract left unchanged per #1541).
+
+### Security
+
+- **Query-builder table identifiers are now fail-closed (`database/query_builder.py`, #1614 hardening).** Because #1614 newly routes the raw developer-authored `__tablename__` into `QueryBuilder`, the table-name quoting path now validates every table identifier through the same dialect helper the DDL path uses (`DialectManager.get_dialect(...).quote_identifier` — allowlist `^[a-zA-Z_][a-zA-Z0-9_]*$` + length limit + reject-don't-escape, raising `InvalidIdentifierError`), giving the query surface the same fail-closed table-identifier safety as CREATE TABLE / the index/FK/migration paths (`dataflow-identifier-safety.md` MUST-1/2/5). Scope is the **table name** only (a pure identifier): the SELECT/INSERT/SET **field list** — which legitimately carries aggregate/alias expressions such as `COUNT(*) AS total` — is deliberately left on the non-validating field quoter, and a regression test pins that field-expression contract so the hardening cannot over-reach. Output is byte-identical to the prior per-dialect quoting for every valid table identifier; only crafted/invalid table names are newly rejected. Regression tests assert injection-shaped table names are rejected across `build_select`/`build_count`/`build_insert`/`build_update`/`build_delete`/`join` on all three dialects.
+
 ## [2.14.3] — 2026-07-08 — AutoMigrationSystem trigger/tracking paths respect `__tablename__` (#1573)
 
 ### Fixed
