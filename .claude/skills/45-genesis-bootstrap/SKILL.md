@@ -123,7 +123,8 @@ person whose `github_login` resolves to that login, bound to the signing key's f
 
 ## The script-by-path pattern (the central trap)
 
-`validate-bash-command.js` runs `detectStateFileMutation(command, STATE_PATH_RX)` on every
+`validate-bash-command.js` runs `detectStateFileMutationSegmentAware(command, STATE_PATH_RX)` (the
+segment-aware wrapper from `violation-patterns.js`) on every
 Bash command — a three-layer detector (its docstring at `validate-bash-command.js`:
 "redirects, file utilities, **interpreter -c/-e/-m bodies**") that BLOCKS (severity: block) any
 command whose body MUTATES a watched state file. `STATE_PATH_RX` matches `posture.json`,
@@ -169,7 +170,7 @@ contestedRevocations, derivedN }`. A healthy genesis: `accepted` includes the an
 | Symptom (what you see)                                   | Cause                                                          | Fix                                                                                   |
 | -------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Every tracked-file write silently refused                | degraded read-only — no signing key (`signing-mutation-guard`) | Configure `gpg.format ssh` + `user.signingkey` (pre-flight gate 1)                    |
-| Bash `node -e`/redirect to a state file → severity:block | `validate-bash-command` `detectStateFileMutation`              | Route the mutation through a bare `node <file>` script (§ script-by-path)             |
+| Bash `node -e`/redirect to a state file → severity:block | `validate-bash-command` `detectStateFileMutationSegmentAware`  | Route the mutation through a bare `node <file>` script (§ script-by-path)             |
 | Roster/journal write blocked off the codify branch       | `integrity-guard` (watched path, wrong branch)                 | Be on `codify/<display_id>-YYYY-MM-DD` (date-terminal) cut from `main`                |
 | Roster/journal write blocked ON the codify branch        | `integrity-guard` — branch matches but no covering lease       | Acquire the codify lease (`codify-lease.js::acquireCodifyLease`) bound to the branch  |
 | Journal write halts "slot unreserved"                    | `journal-write-guard` — slot not reserved per log              | `journal-reserve.js::reserveJournalSlotSigned(repoDir, {dir, identity, type, topic})` |

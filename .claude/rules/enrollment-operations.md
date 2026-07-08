@@ -90,7 +90,8 @@ suffixed branch name silently disagrees with the guard about what a codify branc
 
 Any ceremony step that MUTATES a watched state file MUST run as a bare `node <file>` (a script
 authored to disk, then run by path) — NOT a `node -e` / `python -c` body.
-`validate-bash-command.js::detectStateFileMutation` blocks interpreter (`-c`/`-e`/`-m`), redirect,
+`validate-bash-command.js`'s `detectStateFileMutationSegmentAware` guard (the segment-aware wrapper
+from `violation-patterns.js`) blocks interpreter (`-c`/`-e`/`-m`), redirect,
 and file-utility bodies that write a path matching `STATE_PATH_RX` (the watched state files); a
 `node <file>` keeps that path in the script body, off the scanned command line (mechanics in
 `skills/45-genesis-bootstrap` § The script-by-path pattern). Inlining the mutation is BLOCKED.
@@ -201,7 +202,7 @@ silent substrate corruption.
 
 - **Severity:** `advisory` at the hook layer — structural enforcement already lives in the
   fail-closed boundary guards (`signing-mutation-guard.js`, `integrity-guard.js`,
-  `validate-bash-command.js::detectStateFileMutation`, `journal-write-guard.js`,
+  `validate-bash-command.js`'s `detectStateFileMutationSegmentAware`, `journal-write-guard.js`,
   `genesis-anchor-guard.js`), which carry their own `block` teeth; this rule's non-hook clauses
   (fold-clean verify, self-enroll, org-admin scope) surface `halt-and-report` at gate-review per
   `hook-output-discipline.md` MUST-2.
@@ -223,7 +224,7 @@ silent substrate corruption.
   fires only on new tools). Phase 2 (deferred): a Stop-event detector is unnecessary — the guards
   already block at the tool boundary. **No-check disposition:** this rule ships NO new detector and
   NO new `validate-emit.mjs` structural check — MUST-3 is enforced UNCONDITIONALLY by the
-  `validate-bash-command.js::detectStateFileMutation` `STATE_PATH_RX` block. MUST-1/2's
+  `validate-bash-command.js` `detectStateFileMutationSegmentAware` `STATE_PATH_RX` block. MUST-1/2's
   `signing-mutation-guard.js` / `integrity-guard.js` degraded-read-only + codify-branch/lease fences
   are **coordination-ON-gated** (opt-in per W1 2026-06-25 — they passthrough on a fresh coordination-OFF
   bootstrap repo, per MUST-1's caveat); `genesis-anchor-guard.js` LIKEWISE advisory-passes-through on
@@ -254,7 +255,7 @@ Verified against `validate-bash-command.js`, `integrity-guard.js`, `signing-muta
 `genesis-ceremony.js`, `coordination-log.js`, and `operator-id.js`. Distributes to BUILD + USE
 repos via `/codify` → loom Gate-1 → `/sync`.
 
-**Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Body is
+**Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** File is
 268 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
 codifies SIX MUST clauses — three fail-closed boundary guards (MUST 1/2/3) + three gate-review
 clauses (MUST 4/5/6), consistent with § "Violation scope" above — each requiring the

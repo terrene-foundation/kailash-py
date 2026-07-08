@@ -61,9 +61,10 @@ It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis
 The signed `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (fold rule 9a accepts the
 first verifying owner-bound anchor as the trust root). The consumer-relevant operational gotchas an
 operator hits running the ceremony by hand are inlined below in § Operational runbook (this skill is
-DISTRIBUTED to consumers; the genesis ceremony is self-sufficient without the loom-internal
-`guides/co-setup/11-genesis-ceremony.md`, which carries the architecture / failure-mode reference / ADO
-deep runbook for platform-engineers and is NOT shipped to consumers).
+DISTRIBUTED to consumers; the genesis ceremony is self-sufficient without the loom-authored,
+`use_excluded` `guides/co-setup/11-genesis-ceremony.md`, which carries the architecture / failure-mode
+reference / ADO deep runbook for platform-engineers — present in BUILD repos but NOT distributed to
+USE-template / downstream consumers).
 
 ### C2 — set the four remaining ecosystem-relative params
 
@@ -92,8 +93,9 @@ session." Do NOT enroll the initiating operator — that is `/enroll`'s gated jo
 Operational gotchas an operator hits running the genesis ceremony (`/ecosystem-init` C3, or
 `/whoami --enroll-genesis`) by hand. These are CLI / host-environment facts the consumer needs but cannot
 reverse-engineer from library + hook code; inlined here so the irreversible, fail-CLOSED ceremony is
-self-sufficient WITHOUT the loom-internal `guides/co-setup/11-genesis-ceremony.md` (consumers do not
-receive `guides/`). Origin: F19 genesis-enrollment session (2026-05-27).
+self-sufficient WITHOUT the loom-authored, `use_excluded` `guides/co-setup/11-genesis-ceremony.md`
+(present in BUILD repos; USE / downstream consumers do not receive `guides/`). Origin: F19
+genesis-enrollment session (2026-05-27).
 
 ### 1. Enroll BEFORE the bootstrap commit (ordering)
 
@@ -114,7 +116,7 @@ tool, so it never trips the guard.
 
 ### 2. Roster / coordination-log writes go through a script invoked by its own path
 
-The `validate-bash-command.js` state-file-write guard (`detectStateFileMutation`, Layer 3) BLOCKS any
+The `validate-bash-command.js` state-file-write guard (`detectStateFileMutationSegmentAware`, Layer 3) BLOCKS any
 interpreter command (`node -e`/`-c`/`-m`, or any command LED by `node`/`python`/`ruby`/`perl`) whose
 **command string** contains a protected state-file path — `operators.roster.json`,
 `coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized`. The documented inline
