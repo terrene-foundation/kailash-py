@@ -738,3 +738,44 @@ changes:
       commands/ecosystem-init.md are on the self-referential-codify.md Rule 2 allowlist ->
       the mandatory multi-agent redteam-with-tests round is satisfied by R1's 3 genuinely-run
       independent specialists. Receipt: workspaces/mops-onboarding/journal/0030.
+
+      FIFTH APPEND 2026-07-08 (exhaustive full-cohort executable-surface pass, journal/0031).
+      A user-approved exhaustive pass walked every EXECUTABLE surface (code blocks, function-call
+      signatures, cited hooks/bins, hook REGISTRATIONS) across all 14 cohort files — since the
+      FOURTH-APPEND HIGH lived in a code block, not a prose citation. Findings + a co-owner
+      architecture decision:
+
+      - HOOK-WIRING (settings-governed, NOT synced — recorded for context): probe-phase-guard.js
+        (the PR #355 R1 security HIGH-1 closure — the /certify probe no-assist gate) exists +
+        ships audit fixtures, and certify.md:64 + skills/42-certify:58 both claim it is
+        "registered in .claude/settings.json for matcher Read|Grep|Glob|WebFetch" — but it was
+        registered in NO settings surface, so it never fired (the /certify SOLO gate was
+        prose-only, re-opening the security HIGH). Wired it under that exact matcher; verified
+        live (no lockfile -> {continue:true}; lockfile+Read -> [BLOCK]). Clone-safe (lockfile-gated).
+        settings.json is /settings-governed, outside the self-referential-codify allowlist, so
+        this is a repo-config fix, not a synced-artifact change.
+      - ENROLLMENT-OPERATIONS.MD CAVEAT (GLOBAL synced rule — flows to consumers): added a
+        "Distributable-Repo Caveat" section. Root cause verified this pass: a PUBLIC/fork-template
+        repo whose committed operators.roster.json carries a LIVE genesis makes EVERY clone
+        resolve coordination ON (isCoordinationEnabled reads the committed roster's anchored
+        genesis; .claude/learning/ is gitignored). Paired with committed coordination-ENFORCEMENT
+        hooks, signing-mutation-guard would degraded-read-only-brick a fresh forker. The caveat
+        codifies: distributable repos ship UN-ENROLLED (PLACEHOLDER genesis); the 6 enforcement
+        hooks MUST NOT be in committed settings.json (operator-local -> gitignored
+        settings.local.json); lockfile-gated hooks (probe-phase-guard) ARE clone-safe in committed
+        settings.json. This is the institutional lesson every downstream distributable consumer
+        needs.
+      - REPO-STATE (kailash-py-specific, NOT synced): shipped kailash-py un-enrolled — committed
+        roster reset to the canonical clean-instantiate PLACEHOLDER shape so clones resolve
+        coordination OFF. Repo-specific state, not a synced artifact; noted for Gate-1 context only.
+
+      CLASSIFICATION: GLOBAL for the enrollment-operations.md caveat ONLY (the synced rule; the
+      distributable-repo discipline applies to every consumer that is itself downloadable/forkable).
+      The probe-phase-guard settings.json wiring + the placeholder roster are repo/settings-governed
+      state, NOT synced artifacts — recorded here for Gate-1 transparency, not for distribution.
+      enrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist; the multi-agent
+      gate is satisfied by R1's 3 genuinely-run independent specialists + this pass's mechanical
+      executable-surface verification (per-hook fixture dry-runs + isCoordinationEnabled +
+      roster-schema-validate + disclosure-scanner, all orchestrator-run with real output; the R2
+      subagent wave remained account-limit-throttled, so verification stayed orchestrator-direct per
+      the evidence gate). Receipt: workspaces/mops-onboarding/journal/0031.
