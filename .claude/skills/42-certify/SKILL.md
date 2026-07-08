@@ -114,9 +114,10 @@ the prefix `identity` is `undefined` and the reserve fails closed):
 
 ```bash
 IDENTITY_JSON="$identity_json" node -e '
-const { reserveJournalSlot } = require("./.claude/hooks/lib/journal-reserve.js");
+const { reserveJournalSlotSigned } = require("./.claude/hooks/lib/journal-reserve.js");
 const identity = JSON.parse(process.env.IDENTITY_JSON);
-const r = reserveJournalSlot("journal", {
+const r = reserveJournalSlotSigned(process.cwd(), {
+  dir: "journal",
   identity,
   type: "DECISION",
   topic: "certify-pass-" + identity.display_id
@@ -127,9 +128,9 @@ process.stdout.write(JSON.stringify(r));
 
 (`$identity_json` is the raw JSON captured from Step 1's stdout.)
 
-The helper returns `{ slot: "NNNN", filename: "NNNN-<display_id>-DECISION-certify-pass-<display_id>.md", verified_id, person_id, display_id, type, topic }`. The slot comes from the FOLD-ACCEPTED coordination log (NOT a filesystem scan), so two concurrent `/certify` sessions remain distinguishable on disk.
+The **fold-anchored** helper is `reserveJournalSlotSigned` — NOT the pure `reserveJournalSlot`, which computes off the filesystem only and emits nothing, so the Step-3 Write would halt "slot unreserved" at `journal-write-guard.js`. It returns `{ ok: true, reservation: { slot: "NNNN", filename: "NNNN-<display_id>-DECISION-certify-pass-<display_id>.md", ... }, record }` on success, or `{ ok: false, error, reason, step }` on failure — STOP and surface `reason` when `ok` is false. The slot is `max(disk high-water, fold-accepted reservation high-water)` AND the helper emits the signed `journal-slot-reservation` coordination-log record `journal-write-guard.js` folds — so the Step-3 Write is permitted and two concurrent `/certify` sessions remain distinguishable on disk.
 
-**Step 3 — Write the journal file at the returned filename:**
+**Step 3 — Write the journal file at the returned `r.reservation.filename`:**
 
 ```yaml
 ---

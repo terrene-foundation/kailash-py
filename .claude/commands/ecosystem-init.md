@@ -99,7 +99,7 @@ scanner is `.claude/bin/scan-synced-disclosure.mjs`. The genesis ceremony is
 `.claude/hooks/lib/genesis-ceremony.js`; its consumer-relevant operational runbook (enroll-before-commit
 ordering, the state-file-guard script-by-path constraint, the admin-merge / push fallbacks) is in the
 DISTRIBUTED `.claude/skills/43-ecosystem-init/SKILL.md` § Operational runbook — consumers receive it; the
-loom-internal `guides/co-setup/11-genesis-ceremony.md` (architecture, failure-mode reference, ADO deep
-runbook) is platform-engineer material consumers do not get. Full ceremony procedure — the input prompts,
+`use_excluded` `guides/co-setup/11-genesis-ceremony.md` (architecture, failure-mode reference, ADO deep
+runbook) is platform-engineer material present in BUILD repos but not distributed to consumers. Full ceremony procedure — the input prompts,
 the per-key `remote_links` shape, the scan-then-write ordering, the org-vs-user genesis branch — lives in
 `.claude/skills/43-ecosystem-init/SKILL.md`.
