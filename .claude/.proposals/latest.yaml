@@ -544,6 +544,11 @@ changes:
       - .claude/skills/43-ecosystem-init/SKILL.md
       - .claude/skills/45-genesis-bootstrap/SKILL.md
       - .claude/operators.roster.README.md
+      - .claude/commands/enroll.md
+      - .claude/skills/41-onboard/SKILL.md
+      - .claude/skills/44-enroll/SKILL.md
+      - .claude/skills/30-claude-code-patterns/genesis-migration-n1-org-admin-anchor.md
+      - .claude/skills/30-claude-code-patterns/multi-operator-coordination-substrate.md
     classification_suggestion: global
     context: |
       APPENDED 2026-07-08 (onboarding-suite accuracy re-validation). The Phase-1
@@ -591,3 +596,58 @@ changes:
       KNOWN-DISPOSITIONED (not a defect): whoami.md is 152 lines (>150 cc-artifacts.md
       Rule 3 cap) — pre-existing, procedural-exception-eligible (4-ceremony runbook);
       named rationale recorded in this codify receipt.
+
+      SECOND APPEND 2026-07-08 (merged-main re-validation, journal/0028). The FIRST append
+      above validated the PRE-MERGE working-tree edits; those then merged (PR #1619). This
+      session re-ran a 10-round multi-agent redteam (reviewer + security-reviewer +
+      cc-architect) against the MERGED main state — per the /redteam doctrine "re-derive
+      every check from scratch; a prior round's self-report is an input to verify, not
+      evidence" + user-flow-validation.md MUST-1 (validate the actually-shipped artifact,
+      not the pre-merge draft). Converged 0 CRIT / 0 HIGH (held every round R1-R10) + 2
+      consecutive fully-clean rounds (R9+R10, all three specialists). It surfaced additional
+      pre-existing accuracy drift the pre-merge pass did not catch, all verified against
+      ground-truth source (settings.json / fold-rule-9c.js / operators.roster.schema.json /
+      operator-id.js / workspace-utils.js / validate-bash-command.js) and fixed:
+
+      - permissions.deny FALSE-claim RESIDUAL (same class as the first append's rule-file
+        fix, but MISSED in the depth files): skills/43-ecosystem-init:122 credited
+        settings.json permissions.deny as covering operators.roster.json/coordination-log.jsonl
+        ("matching the same paths"); corrected to the accurate coverage (posture.json +
+        violations.jsonl + .initialized + .posture-upgrade-nonce ONLY; roster/coord-log rest
+        on STATE_PATH_RX + integrity-guard). Same-class sweep (zero-tolerance.md 1a) found +
+        fixed the identical residual in skills/30-claude-code-patterns/
+        genesis-migration-n1-org-admin-anchor.md:137 + multi-operator-coordination-substrate.md:326.
+      - skills/41-onboard read-only-contract table: roster return-shape was {operators:[...]}
+        (roster is a `persons` MAP per operators.roster.schema.json + operator-id.js) →
+        {genesis, persons:{<pid>:{...}}}; resolveIdentity under-specified → full documented
+        shape; team-memory {slug,body,frontmatter,integrity_ok} → runbook-accurate
+        {slug,body,signed,promoted_by}; detectActiveWorkspace {workspace,recent_journal[]} →
+        actual helper return {name,path}; skill `name:` onboard → 41-onboard (sibling
+        convention). --json key-count drift 7→8 ("eight section keys"; onboard.md gains
+        action_items to match the skill block + the markdown Action-Items section).
+      - skills/44-enroll:37 + commands/enroll.md:47: "four business roles" → "three" (the
+        business_roles enum has exactly 3; product-owner explicitly excluded per schema).
+      - stale fold-rule-9c.js LINE citations (shifted by the F122 ADO insertion) re-anchored
+        to grep-stable SYMBOLS (foldGenesisMigration, CO_SIGN_ANCHOR_KIND_ORG_ADMIN) per
+        symbol-anchored-citations.md, at genesis-migration-n1:11 + substrate:303/361. The
+        substrate:378 F86 CLOSED-forest historical closure-receipt line-range is LEFT AS-IS
+        (frozen point-in-time audit record, commit-SHA-anchored, spec-accuracy.md Rule 6 exempt).
+      - skills/45-genesis-bootstrap:14 + enrollment-operations.md:249: "loom-only and absent
+        from BUILD/USE repos" was FALSE (the guide IS present in BUILD repos at
+        .claude/guides/co-setup/11-genesis-ceremony.md; it is use_excluded from USE consumers
+        per sync-flow.md); corrected to accurate `use_excluded` framing, consistent with the
+        suite's own other files (skill 43:95, whoami.md:152 "consumers do not get").
+
+      REFUTED / DISPOSITIONED (NOT fixes, recorded for Gate-1 transparency): a security grep
+      flagged `esperie-enterprise/loom` in validate-bash-command.js:888 — REFUTED by the
+      authoritative scan-synced-disclosure.mjs (0 findings across 1558 files; esperie-enterprise
+      is loom's ALLOWLISTED own-org). skills/42-certify name:certify — out-of-suite-scope +
+      genuinely-mixed repo naming convention (16+ skills use the stripped form); cc-architect
+      below-LOW non-finding, NOT changed.
+
+      CLASSIFICATION: GLOBAL (same rationale as the first append — same GLOBAL synced
+      artifacts, CLI-neutral guard mechanics). Self-referential surfaces touched
+      (enrollment-operations.md + multi-operator-coordination-substrate.md +
+      genesis-migration-n1-org-admin-anchor.md + the skills) → the mandatory
+      self-referential-codify.md multi-agent redteam-with-tests round is satisfied by this
+      session's 10-round convergence. Receipt: workspaces/mops-onboarding/journal/0028.

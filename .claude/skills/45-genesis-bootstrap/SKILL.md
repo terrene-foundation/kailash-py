@@ -11,8 +11,8 @@ genesis owner, no folded `genesis-anchor`. This is the step that PRECEDES `/enro
 `/ecosystem-init`'s genesis step on a truly fresh BUILD/USE repo.
 
 **The gap this fills.** The authoritative end-to-end runbook
-(`guides/co-setup/11-genesis-ceremony.md`) lives at **loom only** and is absent from BUILD/USE
-repos. The shipped commands (`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the
+(`guides/co-setup/11-genesis-ceremony.md`) is loom-authored and `use_excluded` — present in BUILD repos but NOT distributed
+to USE-template / downstream consumer repos (`sync-manifest.yaml::use_excluded`). The shipped commands (`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the
 sibling skills (`41-onboard`, `43-ecosystem-init`, `44-enroll`) reference that loom guide for
 the operational depth. This skill reconstructs that depth IN the repo, plus the five hard-won
 guard traps that block a naive first run.
