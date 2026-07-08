@@ -675,3 +675,66 @@ changes:
       self-referential-codify.md Rule 2 allowlist → the mandatory multi-agent redteam-with-tests
       round is satisfied by this session's R1-R3 convergence. Receipt:
       workspaces/mops-onboarding/journal/0029.
+
+      FOURTH APPEND 2026-07-08 (independent re-convergence, journal/0030). A fresh
+      multi-agent redteam (R1: reviewer + cc-architect + security-reviewer, each
+      re-deriving EVERY factual claim against ground-truth hook/schema/fold-rule source,
+      NOT trusting the prior 10-round + THIRD-APPEND convergence self-reports) surfaced a
+      HIGH the prior rounds MISSED plus a MED and a LOW cluster — all verified against
+      ground-truth source (journal-reserve.js / coordination-log.js / fold-rule-9b.js /
+      violation-patterns.js / validate-bash-command.js / operators.roster.schema.json /
+      sync-flow.md) and fixed:
+
+      - HIGH: skills/42-certify Step 2 called the PURE reserveJournalSlot("journal", {...})
+        (filesystem-only; emits NO signed journal-slot-reservation record) while the prose
+        claimed fold-anchored semantics. journal-write-guard.js READS reservations from the
+        fold and refuses a Write to an unreserved slot — so an operator following /certify
+        would halt "slot unreserved" at Step 3. Corrected to
+        reserveJournalSlotSigned(process.cwd(), {dir:"journal", identity, type, topic}) +
+        the real {ok, reservation:{slot,filename,...}, record} return shape + Step-3 reads
+        r.reservation.filename. Matches the sibling suite usage (skill-45:176,
+        coc-onboarding-specialist:83 already cite the Signed variant).
+      - MED: multi-operator-coordination-substrate.md §6 (both "field presence by fold
+        rules 5 + 9b" sentences) cited coordination-log.js:1125-1128 for the
+        archive_genN_tip_hash presence check — but those lines are the rule-1 signature-verify
+        code; the real check is the rule-5 guard ("rule 5: checkpoint missing required field
+        archive_genN_tip_hash", coordination-log.js:1333). Bare+stale line cites replaced
+        with grep-stable symbol anchors (rule-5 guard string; fold-rule-9b.js::foldGenerationRotation
+        R9-A-01) per symbol-anchored-citations.md. F51/F53/F86-CLOSED historical forest
+        receipts carrying bare :295-343 line cites LEFT AS-IS (commit-SHA-anchored, exempt).
+      - LOW cluster: `validate-bash-command.js::detectStateFileMutation` (7 sites across
+        enrollment-operations.md, coc-onboarding-specialist, skill-45, skill-43)
+        misattributed the symbol's home — validate-bash-command.js INVOKES
+        detectStateFileMutationSegmentAware (the segment-aware wrapper defined in
+        violation-patterns.js). Corrected to the actual invoked symbol.
+      - LOW: enrollment-operations.md length rationale self-cited "268 lines" but the R1
+        SegmentAware rewording added a line (wc -l 268->269); switched to the drift-robust
+        approximate "~270 lines" matching the sibling length-rationale convention.
+      - LOW (same-class, R2): the THIRD-APPEND-era "loom-internal <guide>" mischaracterization
+        (the use_excluded guides/co-setup/11-genesis-ceremony.md is present in BUILD repos,
+        only use_excluded from USE consumers) still lived in commands/whoami.md (x2) +
+        commands/ecosystem-init.md (x1) after the FIRST/SECOND appends fixed skill-45 +
+        skill-43. Aligned all three to the accurate framing (zero-tolerance.md Rule 1a
+        scanner-surface symmetry). The `(loom-internal reference)` redaction markers are a
+        DIFFERENT class (genericized loom-only spec citations) and were correctly untouched.
+
+      CONVERGENCE: R1 (reviewer/cc-architect/security-reviewer, 3 independent agents,
+      genuinely run) -> fixes -> R2 (same-class + self-introduced-count) -> fixes -> R3
+      (mechanical battery: 23 ::symbol citations resolve, all cited files exist, frontmatter
+      parses, 0 residual drift, disclosure scanner exit 0) CLEAN -> R4 (cross-file consistency
+      + semantic validation of the HIGH fix against journal-write-guard's actual fold-read
+      behavior) CLEAN = 2 consecutive clean rounds; 0 CRIT / 0 HIGH. R2-R4 were run
+      orchestrator-direct because the R2 subagent wave died on an account usage limit — an
+      errored agent is ZERO evidence, never a clean round (/redteam evidence gate +
+      evidence-first-claims.md MUST-3), so the verification was re-run correctly by the
+      orchestrator. Disclosure scanner re-run clean this session (exit 0); state files
+      gitignored.
+
+      CLASSIFICATION: GLOBAL (same GLOBAL synced artifacts as all three prior appends; the
+      corrected guard/reservation mechanics are CLI-neutral and consumer-wide — the HIGH
+      cert-helper fix in particular is an operator-breaking bug every downstream consumer of
+      the synced suite would otherwise inherit). enrollment-operations.md +
+      multi-operator-coordination-substrate.md + genesis-migration-n1-org-admin-anchor.md +
+      commands/ecosystem-init.md are on the self-referential-codify.md Rule 2 allowlist ->
+      the mandatory multi-agent redteam-with-tests round is satisfied by R1's 3 genuinely-run
+      independent specialists. Receipt: workspaces/mops-onboarding/journal/0030.
