@@ -93,10 +93,25 @@ class WeftKind(str, Enum):
     """A distribution / mint request is declined (fail-closed refusal)."""
 
     OBSOLETE = "Obsolete"
-    """A subject is retired -- no longer valid for distribution."""
+    """RECORDS a retirement provenance event for a subject.
+
+    This is a provenance record ONLY: emitting ``Obsolete`` does NOT
+    runtime-block a subsequent :meth:`WeftDistributor.distribute` of the same
+    subject. The distributor tracks PROVENANCE and enforces the human-gate
+    precondition; it does not enforce retirement. Runtime revocation
+    ENFORCEMENT -- blocking distribution of a revoked / obsoleted subject, with
+    GRACEFUL / SUSPEND revocation modes -- is EATP v3 #1592's scope, not
+    #1591's.
+    """
 
     HUMAN_GATE = "HumanGate"
-    """A human authorization gate is recorded for a subject (unlocks Distribute)."""
+    """RECORDS a human authorization gate for a subject.
+
+    The gate authorizes the SUBJECT, not a single shipment: once recorded it
+    unlocks ALL subsequent :meth:`WeftDistributor.distribute` calls for that
+    same subject (multi-use), not merely the next one. It does NOT authorize a
+    different subject.
+    """
 
 
 class WeftError(PactError):
@@ -303,8 +318,9 @@ class WeftDistributor:
     ) -> WeftEvent:
         """Emit a ``HumanGate`` event and mark ``subject_ref`` as gated.
 
-        Recording the gate is what unlocks a subsequent :meth:`distribute` of the
-        SAME subject. A gate for one subject does NOT authorize a different one.
+        Recording the gate unlocks ALL subsequent :meth:`distribute` calls of the
+        SAME subject (multi-use, not one-gate-one-distribute). A gate for one
+        subject does NOT authorize a different one.
         """
         event = self._emit(
             WeftKind.HUMAN_GATE, {"subject_ref": subject_ref, **payload_extra}, ts=ts
@@ -342,7 +358,12 @@ class WeftDistributor:
         )
 
     def obsolete(self, subject_ref: str, *, ts: str, **payload_extra: Any) -> WeftEvent:
-        """Emit an ``Obsolete`` event for ``subject_ref``."""
+        """Emit an ``Obsolete`` event for ``subject_ref`` (provenance record only).
+
+        Recording retirement provenance; it does NOT runtime-block a later
+        :meth:`distribute` of the same subject (runtime revocation enforcement is
+        #1592's scope). See :attr:`WeftKind.OBSOLETE`.
+        """
         return self._emit(
             WeftKind.OBSOLETE, {"subject_ref": subject_ref, **payload_extra}, ts=ts
         )
