@@ -64,7 +64,7 @@ The `failed_integrity` section is REQUIRED in the output even when empty — its
 
 ```
 ws = workspaceUtils.detectActiveWorkspace()
-recent = listJournalEntries(ws, limit=5, types=["DECISION","DISCOVERY","DEFER"])
+recent = listJournalEntries(ws, limit=5, types=["DECISION","DISCOVERY"])  # DEFER is NOT canonical (journal-reserve.js::VALID_TYPES); deferrals are DECISION-typed
 emit {workspace: ws, recent_journal: recent}
 ```
 
