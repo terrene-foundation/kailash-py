@@ -213,7 +213,7 @@ class BulkUpsertConflictTargetError(DataFlowError):
 
     def __init__(
         self,
-        conflict_on: Optional[list] = None,
+        conflict_on: Optional[list[str]] = None,
         model_name: Optional[str] = None,
         original_error: Optional[BaseException] = None,
     ) -> None:
@@ -285,7 +285,7 @@ class UpsertConflictTargetError(DataFlowError):
 
     def __init__(
         self,
-        conflict_on: Optional[list] = None,
+        conflict_on: Optional[list[str]] = None,
         model_name: Optional[str] = None,
         original_error: Optional[BaseException] = None,
     ) -> None:
@@ -305,6 +305,125 @@ class UpsertConflictTargetError(DataFlowError):
             f"schema-migration policy; it would also fail on existing duplicate "
             f"values)."
         )
+
+
+class TenantNaturalKeyCollisionError(DataFlowError):
+    """Raised when a ``multi_tenant=True`` write collides on the natural-key
+    primary key with a row another tenant already owns (issue #1526).
+
+    A ``multi_tenant=True`` DataFlow model keeps the DEFAULT single-column
+    primary key ``id`` — the schema is NOT a composite ``(tenant_id, id)``.
+    Under the default row-level tenant strategy (``QueryInterceptor`` appends a
+    ``tenant_id`` filter on reads), the ``id`` column is therefore a GLOBALLY
+    UNIQUE surrogate id: two tenants cannot both write the same natural-key
+    ``id``. When tenant B inserts an ``id`` tenant A already owns, the database
+    rejects it on the PK UNIQUE constraint (SQLite ``UNIQUE constraint failed:
+    <table>.id``; PostgreSQL ``duplicate key value violates unique constraint
+    "<table>_pkey"``; MySQL ``Duplicate entry ... for key 'PRIMARY'``).
+
+    This is fail-closed and SAFE — no cross-tenant data is exposed (the write is
+    rejected, not merged into another tenant's row) — but the raw driver message
+    never explains the surrogate-id design, so DataFlow converts it into this
+    actionable typed error.
+
+    The message names ONLY the CALLER's own values — the active ``tenant_id`` and
+    the ``id`` the caller supplied — never the other tenant's row data, so it
+    does not weaken tenant isolation (``rules/tenant-isolation.md``).
+
+    Attributes:
+        model_name: The multi_tenant model whose write collided.
+        tenant_id: The CALLER's active tenant (the one attempting the write).
+        colliding_id: The natural-key ``id`` the CALLER supplied.
+        original_error: The underlying driver exception / error string, kept for
+            local diagnosability. It is NOT interpolated into ``str(self)`` (it
+            may carry the raw driver value); attach it as ``__cause__`` via
+            ``raise ... from`` only on non-log-aggregator surfaces (see #1550).
+
+    Remediation (two supported paths — both cite real DataFlow API):
+
+    1. Use GLOBALLY-UNIQUE ids (e.g. UUIDs) so each tenant's ids never collide;
+       the surrogate-id contract then holds naturally.
+    2. For tenant-LOCAL natural keys (each tenant reuses the same id space), use
+       the schema-per-tenant isolation strategy —
+       ``dataflow.core.multi_tenancy.IsolationStrategy.SCHEMA`` /
+       ``SchemaIsolationStrategy.create_tenant_table`` — which gives each tenant
+       its own table, so identical natural keys live in separate schemas and do
+       not collide on one shared PK.
+    """
+
+    def __init__(
+        self,
+        model_name: str,
+        tenant_id: str,
+        colliding_id: object,
+        original_error: Optional[BaseException] = None,
+    ) -> None:
+        self.model_name = model_name
+        self.tenant_id = tenant_id
+        self.colliding_id = colliding_id
+        self.original_error = original_error
+
+        super().__init__(
+            f"Cross-tenant natural-key collision on multi_tenant model "
+            f"'{model_name}': tenant '{tenant_id}' cannot write id={colliding_id!r} "
+            f"because that primary-key value is already owned by another tenant. "
+            f"multi_tenant=True models keep the DEFAULT single-column primary key "
+            f"'id' (NOT a composite of (tenant_id, id)), so under the default "
+            f"row-level tenant strategy the 'id' is a GLOBALLY-UNIQUE surrogate — "
+            f"two tenants cannot share the same natural-key id. Remediation: "
+            f"(1) use globally-unique ids (e.g. UUIDs) so tenants never collide; "
+            f"OR (2) for tenant-LOCAL natural keys, use the schema-per-tenant "
+            f"isolation strategy "
+            f"(dataflow.core.multi_tenancy.IsolationStrategy.SCHEMA / "
+            f"SchemaIsolationStrategy.create_tenant_table), which gives each "
+            f"tenant its own table so identical natural keys do not collide."
+        )
+
+
+def is_pk_unique_violation(message: str, table_name: str) -> bool:
+    """True iff a driver error is a UNIQUE violation on the PRIMARY KEY ``id``
+    of ``table_name`` (issue #1526).
+
+    Detection is intentionally narrow — it matches ONLY the primary-key column
+    ``id``, never a sibling UNIQUE column (e.g. ``<table>.idempotency_key``), so
+    the caller does NOT broaden the actionable tenant-collision error onto
+    unrelated unique violations. Returns ``False`` (caller keeps the original
+    error path) for every non-PK unique violation and every other error class.
+
+    Dialect shapes matched (both raw and post-:func:`sanitize_db_error`):
+
+    * **SQLite** — ``UNIQUE constraint failed: <table>.id`` (word-bounded so
+      ``<table>.idempotency_key`` does NOT match; the clause carries no value so
+      it survives sanitization unchanged).
+    * **PostgreSQL** — ``duplicate key value violates unique constraint`` plus
+      the default PK constraint name ``<table>_pkey`` OR the ``Key (id)=`` DETAIL
+      column name (the value is redacted by ``sanitize_db_error`` but the ``id``
+      column name is preserved).
+    * **MySQL/MariaDB** — ``Duplicate entry ... for key 'PRIMARY'`` (or the
+      MySQL 8.0.19+ ``for key '<table>.PRIMARY'`` form); the ``PRIMARY`` key name
+      is preserved by ``sanitize_db_error``.
+    """
+    if not message or not table_name:
+        return False
+    m = message.lower()
+    t = table_name.lower()
+    # SQLite: word-bounded so a sibling unique column (``<table>.id_token``,
+    # ``<table>.idempotency_key``) that contains ``<table>.id`` as a prefix does
+    # NOT match — only the exact ``<table>.id`` PK column.
+    if "unique constraint failed:" in m and re.search(rf"\b{re.escape(t)}\.id\b", m):
+        return True
+    # PostgreSQL: the PK constraint (default name ``<table>_pkey``) or the
+    # ``Key (id)=`` DETAIL naming the ``id`` column.
+    if "duplicate key value violates unique constraint" in m and (
+        f"{t}_pkey" in m or "key (id)=" in m
+    ):
+        return True
+    # MySQL/MariaDB: the auto-named ``PRIMARY`` key.
+    if "duplicate entry" in m and (
+        "for key 'primary'" in m or f"for key '{t}.primary'" in m
+    ):
+        return True
+    return False
 
 
 def is_conflict_target_error(message: str) -> bool:
@@ -464,7 +583,7 @@ _MYSQL_INCORRECT_VALUE_RE = re.compile(
 # benign quoted identifiers elsewhere are untouched; greedy value bounded by a
 # lookahead requiring only closing chars ()/./whitespace) before EOS/newline (so
 # a trailing "\nHINT: …" continuation is preserved). Value redacted, phrase +
-# type name preserved.
+# the type-name preserved.
 _PG_QUOTED_VALUE_RE = re.compile(
     r'((?:invalid input syntax for (?:type )?[^\n:"]*'
     r'|invalid input value for (?:enum )?[^\n:"]*'
@@ -530,7 +649,8 @@ def sanitize_db_error(msg: str) -> str:
     msg = _MYSQL_INCORRECT_VALUE_RE.sub(r"\1: '[REDACTED]'", msg)
     msg = _PG_QUOTED_VALUE_RE.sub(r'\1: "[REDACTED]"', msg)
     # Issue #1569 red-team: PG numeric-overflow ``value "<v>" is out of range for
-    # type <t>`` (value BEFORE the descriptor — the colon-anchored sub above misses it).
+    # <t>`` where ``<t>`` is a type name (value BEFORE the descriptor — the
+    # colon-anchored sub above misses it).
     msg = _PG_VALUE_OUT_OF_RANGE_RE.sub(r'\1 "[REDACTED]"\2', msg)
     return msg
 
@@ -540,6 +660,8 @@ __all__ = [
     "MigrationNotAppliedError",
     "BulkUpsertConflictTargetError",
     "UpsertConflictTargetError",
+    "TenantNaturalKeyCollisionError",
+    "is_pk_unique_violation",
     "is_conflict_target_error",
     "sanitize_db_error",
     "DataFlowError",

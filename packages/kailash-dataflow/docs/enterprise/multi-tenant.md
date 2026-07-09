@@ -60,6 +60,64 @@ workflow.add_node("OrderListNode", "orders", {
 })
 ```
 
+#### Natural keys are globally unique under row-level isolation
+
+With row-level isolation, DataFlow keeps the model's DEFAULT single-column
+primary key `id` — the table is NOT keyed on a composite `(tenant_id, id)`. The
+`tenant_id` column is added for filtering, but `id` alone remains the primary
+key. This is intentional: under row-level isolation the `id` is a
+**globally-unique surrogate id**, so two tenants CANNOT share the same
+natural-key `id`.
+
+```python
+db = DataFlow("postgresql://…", multi_tenant=True)
+
+@db.model
+class Document:
+    id: str          # PRIMARY KEY — globally unique across ALL tenants
+    title: str
+
+db.tenant_context.register_tenant("acme", "Acme Corp")
+db.tenant_context.register_tenant("globex", "Globex Inc")
+
+with db.tenant_context.switch("acme"):
+    await db.express.create("Document", {"id": "doc-1", "title": "Acme's doc"})
+
+# A DIFFERENT tenant reusing the same natural-key id collides on the PK and
+# raises TenantNaturalKeyCollisionError (fail-closed and SAFE — no cross-tenant
+# data is exposed; the write is rejected, not merged into the other tenant's row).
+with db.tenant_context.switch("globex"):
+    await db.express.create("Document", {"id": "doc-1", "title": "Globex's doc"})
+    # dataflow.core.exceptions.TenantNaturalKeyCollisionError:
+    #   Cross-tenant natural-key collision … tenant 'globex' cannot write
+    #   id='doc-1' because that primary-key value is already owned by another
+    #   tenant. … Remediation: (1) use globally-unique ids (e.g. UUIDs); OR
+    #   (2) for tenant-LOCAL natural keys, use the schema-per-tenant strategy …
+```
+
+The error (`dataflow.core.exceptions.TenantNaturalKeyCollisionError`) names only
+your OWN active `tenant_id` and the `id` you supplied — never the other tenant's
+data. A same-tenant duplicate (the same tenant re-inserting its own `id`) is NOT
+affected; it raises the ordinary duplicate-key error.
+
+**When you need tenant-LOCAL natural keys** (each tenant reuses the same id
+space — e.g. every tenant has an invoice `INV-001`), pick one of:
+
+1. **Use globally-unique ids** (e.g. UUIDs). Each tenant's ids never collide, so
+   the surrogate-id contract holds naturally:
+
+   ```python
+   import uuid
+   await db.express.create("Document", {"id": str(uuid.uuid4()), "title": "…"})
+   ```
+
+2. **Use schema-per-tenant isolation** instead of row-level. Each tenant gets
+   its own table, so identical natural keys live in separate schemas and never
+   collide on one shared primary key. The strategy is
+   `dataflow.core.multi_tenancy.IsolationStrategy.SCHEMA`; per-tenant tables are
+   created via `SchemaIsolationStrategy.create_tenant_table`. See
+   [Schema Isolation](#2-schema-isolation) below.
+
 ### 2. Schema Isolation
 
 Each tenant gets a separate schema (PostgreSQL/MySQL):

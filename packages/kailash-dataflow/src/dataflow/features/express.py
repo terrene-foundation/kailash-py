@@ -58,7 +58,12 @@ from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
 from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
-from dataflow.core.exceptions import DDLFailedError, sanitize_db_error
+from dataflow.core.exceptions import (
+    DDLFailedError,
+    TenantNaturalKeyCollisionError,
+    is_pk_unique_violation,
+    sanitize_db_error,
+)
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.protection import ProtectionViolation
 from dataflow.core.tenant_context import get_current_tenant_id
@@ -567,7 +572,97 @@ class DataFlowExpress:
             model, rows, clearance
         )
 
-    def _raise_for_failed_result(self, model: str, operation: str, result: Any) -> None:
+    async def _maybe_tenant_natural_key_collision(
+        self,
+        model: str,
+        id_value: object,
+        error_text: str,
+        original_error: Optional[BaseException] = None,
+    ) -> Optional[TenantNaturalKeyCollisionError]:
+        """Return a :class:`TenantNaturalKeyCollisionError` iff ``error_text`` is
+        a CROSS-TENANT PRIMARY-KEY collision on a ``multi_tenant`` model, else
+        ``None`` (issue #1526).
+
+        A ``multi_tenant=True`` model keeps a single-column ``id`` PK (NOT a
+        composite ``(tenant_id, id)``), so the ``id`` is a globally-unique
+        surrogate: two DIFFERENT tenants writing the same natural key collide on
+        that PK. That is fail-closed and SAFE — no cross-tenant data leaks — but
+        the raw driver message is opaque.
+
+        A same-tenant duplicate (the current tenant re-inserting its OWN ``id``)
+        produces the IDENTICAL PK-unique driver message, so the driver text alone
+        cannot distinguish the two. To avoid over-broadening (converting an
+        ordinary same-tenant duplicate into a misleading cross-tenant claim),
+        this helper disambiguates WITHOUT reading the other tenant's row: a
+        TENANT-SCOPED read for ``id_value`` returns a row IFF the CURRENT tenant
+        already owns it (→ same-tenant duplicate → keep the ordinary path). If
+        the read returns ``None`` while the PK provably exists (we are handling a
+        PK-unique violation), the colliding row belongs to ANOTHER tenant → the
+        actionable cross-tenant error. The disambiguation never reads or exposes
+        the other tenant's data (``rules/tenant-isolation.md``,
+        ``rules/security.md``); the returned error names ONLY the caller's own
+        ``tenant_id`` + supplied ``id``.
+
+        For every non-matching error it returns ``None`` so the caller keeps the
+        original error path (no over-broadening, no silent normalization —
+        zero-tolerance Rule 3). Zero-cost short-circuit for single-tenant models:
+        the multi_tenant guard returns ``None`` before any string inspection.
+        """
+        security = getattr(self._db.config, "security", None)
+        if not (security and getattr(security, "multi_tenant", False) is True):
+            return None
+        tenant_id = get_current_tenant_id()
+        if tenant_id is None:
+            return None
+        # The model must carry the tenant_id column DataFlow injects for
+        # multi_tenant instances (defends against a non-tenant model on a
+        # multi_tenant DataFlow). An introspection failure means we cannot
+        # confirm the multi_tenant shape → classification does not apply and
+        # the caller re-raises the ORIGINAL driver error (no hiding).
+        model_fields: Any = None
+        try:
+            model_fields = self._db.get_model_fields(model)
+        except Exception:
+            model_fields = None
+        if not model_fields or "tenant_id" not in model_fields:
+            return None
+        # Resolve the table name for PK-column matching; if it cannot be
+        # resolved, do not risk a false positive — keep the original path.
+        class_to_table = getattr(self._db, "_class_name_to_table_name", None)
+        table_name: Optional[str] = None
+        if callable(class_to_table):
+            try:
+                table_name = class_to_table(model)
+            except Exception:
+                table_name = None
+        if not table_name:
+            return None
+        if not is_pk_unique_violation(error_text, table_name):
+            return None
+        # Without the caller's id we cannot run the same-tenant disambiguation;
+        # decline to convert rather than assert an unverifiable cross-tenant claim.
+        if id_value is None:
+            return None
+        # Same-tenant duplicate vs cross-tenant collision. A tenant-scoped read
+        # sees ONLY the current tenant's rows (QueryInterceptor), so a hit means
+        # the current tenant already owns this id → ordinary duplicate.
+        existing = await self.read(model, str(id_value), cache_ttl=0)
+        if existing is not None:
+            return None
+        return TenantNaturalKeyCollisionError(
+            model_name=model,
+            tenant_id=tenant_id,
+            colliding_id=id_value,
+            original_error=original_error,
+        )
+
+    async def _raise_for_failed_result(
+        self,
+        model: str,
+        operation: str,
+        result: Any,
+        id_value: object = None,
+    ) -> None:
         """Convert a dict-shaped node failure into a raised typed exception.
 
         Express documents create/update/delete/upsert as raise-on-failure
@@ -603,6 +698,19 @@ class DataFlowExpress:
         if not (isinstance(result, dict) and result.get("success") is False):
             return
         error_msg = result.get("error") or "operation failed"
+        # Issue #1526: a multi_tenant write that collides on the natural-key PK
+        # with another tenant's row surfaces here as a raw ``UNIQUE constraint
+        # failed: <table>.id`` (SQLite) / ``<table>_pkey`` (PG) / ``for key
+        # 'PRIMARY'`` (MySQL). Convert THAT specific case into an actionable,
+        # caller-facing error naming the caller's own tenant_id + id and the
+        # schema-per-tenant / UUID remediation. Narrow by construction (PK-only,
+        # multi_tenant-only); every other failure keeps the DDL/RuntimeError
+        # path below (no over-broadening, no silent normalization).
+        collision = await self._maybe_tenant_natural_key_collision(
+            model, id_value, str(error_msg)
+        )
+        if collision is not None:
+            raise collision
         # Try the typed DDL classification first: the engine already
         # recorded the failed DDL via ``_record_failed_ddl`` upstream.
         # The engine records under TWO key shapes depending on the
@@ -681,6 +789,22 @@ class DataFlowExpress:
                 node._express_protection_precheck_done = True
                 result = await node.async_run(**data)
             except Exception as exc:
+                # Issue #1526: if the CreateNode RAISES a PK-unique violation
+                # (rather than returning a failure dict), convert the same
+                # multi_tenant cross-tenant collision into the actionable typed
+                # error before recording/re-raising. Non-collision errors keep
+                # the raw path unchanged.
+                collision = await self._maybe_tenant_natural_key_collision(
+                    model,
+                    data.get("id") if isinstance(data, dict) else None,
+                    str(exc),
+                    original_error=exc,
+                )
+                if collision is not None:
+                    await self._trust_record_failure(
+                        model, "create", plan, collision, query_params=data
+                    )
+                    raise collision from exc
                 await self._trust_record_failure(
                     model, "create", plan, exc, query_params=data
                 )
@@ -694,7 +818,12 @@ class DataFlowExpress:
             # the user-facing express API. See _raise_for_failed_result.
             if isinstance(result, dict) and result.get("success") is False:
                 try:
-                    self._raise_for_failed_result(model, "create", result)
+                    await self._raise_for_failed_result(
+                        model,
+                        "create",
+                        result,
+                        id_value=data.get("id") if isinstance(data, dict) else None,
+                    )
                 except Exception as exc:
                     await self._trust_record_failure(
                         model, "create", plan, exc, query_params=data
@@ -902,7 +1031,7 @@ class DataFlowExpress:
             # _raise_for_failed_result.
             if isinstance(result, dict) and result.get("success") is False:
                 try:
-                    self._raise_for_failed_result(model, "update", result)
+                    await self._raise_for_failed_result(model, "update", result)
                 except Exception as exc:
                     await self._trust_record_failure(
                         model,
@@ -989,7 +1118,7 @@ class DataFlowExpress:
             # raised typed exception before any side effect.
             if isinstance(result, dict) and result.get("success") is False:
                 try:
-                    self._raise_for_failed_result(model, "delete", result)
+                    await self._raise_for_failed_result(model, "delete", result)
                 except Exception as exc:
                     await self._trust_record_failure(
                         model,
@@ -1367,7 +1496,12 @@ class DataFlowExpress:
             # Issue #759 (DPI-A): convert dict-shaped node failure into a
             # raised typed exception before any side effect.
             if isinstance(result, dict) and result.get("success") is False:
-                self._raise_for_failed_result(model, "upsert", result)
+                await self._raise_for_failed_result(
+                    model,
+                    "upsert",
+                    result,
+                    id_value=data.get("id") if isinstance(data, dict) else None,
+                )
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -1451,7 +1585,14 @@ class DataFlowExpress:
             # Issue #759 (DPI-A): convert dict-shaped node failure into a
             # raised typed exception before any side effect.
             if isinstance(result, dict) and result.get("success") is False:
-                self._raise_for_failed_result(model, "upsert_advanced", result)
+                _adv_id = None
+                if isinstance(create, dict):
+                    _adv_id = create.get("id")
+                if _adv_id is None and isinstance(where, dict):
+                    _adv_id = where.get("id")
+                await self._raise_for_failed_result(
+                    model, "upsert_advanced", result, id_value=_adv_id
+                )
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
