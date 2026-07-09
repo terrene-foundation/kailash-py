@@ -14,10 +14,11 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
-from dataflow.database.query_builder import DatabaseType, QueryBuilder
-
 from kailash.runtime.local import LocalRuntime
+
+from dataflow.database.query_builder import DatabaseType, QueryBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -26,10 +27,12 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
+
 
 # @pytest.mark.tier2
 # @pytest.mark.requires_docker
@@ -154,9 +157,10 @@ class TestQueryBuilderPostgreSQLIntegration:
 
             # Verify pagination SQL generation
             assert 'ORDER BY "created_at" DESC' in sql
-            assert f"LIMIT {page_size}" in sql
-            assert "OFFSET 0" in sql
-            assert params == [True]
+            # LIMIT/OFFSET are parameterized ($2 after WHERE's $1); values in params
+            assert "LIMIT $2" in sql
+            assert "OFFSET $3" in sql
+            assert params == [True, page_size, 0]
 
     def test_transaction_handling_with_query_builder(self):
         """Test transaction handling in QueryBuilder context."""
@@ -229,8 +233,10 @@ class TestQueryBuilderPostgreSQLIntegration:
         for sql, params in queries:
             assert "SELECT" in sql
             assert "WHERE" in sql
-            assert "LIMIT 10" in sql
-            assert len(params) == 2  # active=True and age>=N
+            # LIMIT parameterized as $3 (after the two WHERE params $1, $2)
+            assert "LIMIT $3" in sql
+            assert len(params) == 3  # active=True, age>=N, and limit=10
+
 
 # @pytest.mark.tier2
 # @pytest.mark.requires_docker
@@ -264,9 +270,10 @@ class TestQueryBuilderPostgreSQLEdgeCases:
 
         # Should generate efficient SQL with proper LIMIT/OFFSET
         assert 'SELECT "id", "name", "email" FROM "users"' in sql
-        assert "LIMIT 10000" in sql
-        assert "OFFSET 50000" in sql
-        assert params == [True]
+        # LIMIT/OFFSET parameterized ($2/$3 after WHERE's $1); values in params
+        assert "LIMIT $2" in sql
+        assert "OFFSET $3" in sql
+        assert params == [True, 10000, 50000]
 
     def test_query_timeout_handling(self):
         """Test query timeout handling."""
@@ -282,8 +289,9 @@ class TestQueryBuilderPostgreSQLEdgeCases:
         # Should generate efficient SQL that can be executed with timeouts
         assert 'SELECT * FROM "users"' in sql
         assert 'ORDER BY "created_at" DESC' in sql
-        assert "LIMIT 1000" in sql
-        assert params == [True]
+        # LIMIT parameterized as $2 (after WHERE's $1); value in params
+        assert "LIMIT $2" in sql
+        assert params == [True, 1000]
 
     def test_invalid_sql_generation_handling(self):
         """Test handling of invalid SQL generation scenarios."""
