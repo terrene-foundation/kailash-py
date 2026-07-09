@@ -31,7 +31,7 @@ Files failing `integrity-guard.js` validation (broken frontmatter, body-anchor m
 Run the same workspace-detection logic as `multi-operator-sessionstart.js` (the M5 hook):
 
 - Active workspace = most recently modified `workspaces/<name>/` (filter `instructions` + leading-underscore meta-dirs per `rules/cc-artifacts.md` Rule 8).
-- Recent journal entries: last 5 `DECISION-` / `DISCOVERY-` / `DEFER-` entries from the active workspace's `journal/` (excluding `.pending/`).
+- Recent journal entries: last 5 `DECISION-` / `DISCOVERY-` entries from the active workspace's `journal/` (excluding `.pending/`). Deferrals are `DECISION`-typed (`DEFER` is NOT a canonical journal `type` per `journal-reserve.js::VALID_TYPES` / `rules/journal.md`), so the `DECISION-` filter already surfaces them.
 - Surface each entry's filename + the first H2 / heading line, in date-descending order.
 
 ### 4. Read the active posture + pending verifications
