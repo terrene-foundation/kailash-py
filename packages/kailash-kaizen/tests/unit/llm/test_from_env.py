@@ -6,15 +6,12 @@
 from __future__ import annotations
 
 import logging
+
 import pytest
 
 from kaizen.llm.client import LlmClient
 from kaizen.llm.deployment import LlmDeployment
-from kaizen.llm.errors import (
-    InvalidUri,
-    MissingCredential,
-    NoKeysConfigured,
-)
+from kaizen.llm.errors import InvalidUri, MissingCredential, NoKeysConfigured
 from kaizen.llm.from_env import (
     ENV_DEPLOYMENT_URI,
     ENV_SELECTOR,
@@ -22,7 +19,6 @@ from kaizen.llm.from_env import (
     SUPPORTED_SCHEMES,
     resolve_env_deployment,
 )
-
 
 # ---------------------------------------------------------------------------
 # No-config -> NoKeysConfigured
@@ -219,13 +215,19 @@ def test_env_var_names_stable() -> None:
 
 
 def test_legacy_key_order_matches_autoselect() -> None:
-    """Legacy tier ordering: OpenAI > Azure > Anthropic > Google."""
+    """Legacy tier ordering: OpenAI > Azure > Anthropic > Google > DeepSeek.
+
+    DeepSeek (OpenAI-compatible, #1609) is appended LAST so it never displaces
+    an existing provider's precedence — a bare DEEPSEEK_API_KEY resolves to it
+    only when none of the four canonical keys are set.
+    """
     names = [v for v, _ in LEGACY_KEY_ORDER]
     assert names == [
         "OPENAI_API_KEY",
         "AZURE_OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
         "GOOGLE_API_KEY",
+        "DEEPSEEK_API_KEY",
     ]
 
 
