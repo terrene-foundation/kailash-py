@@ -136,8 +136,10 @@ person whose `github_login` resolves to that login, bound to the signing key's f
 segment-aware wrapper from `violation-patterns.js`) on every
 Bash command — a three-layer detector (its docstring at `validate-bash-command.js`:
 "redirects, file utilities, **interpreter -c/-e/-m bodies**") that BLOCKS (severity: block) any
-command that puts a watched-state-path LITERAL on the scanned command line (read OR write — it is
-path-presence-based, not mutation-aware). `STATE_PATH_RX` matches `posture.json`,
+command that puts a watched-state-path LITERAL on the scanned command line. The interpreter
+`-c`/`-e`/`-m` body layer is path-presence-based (read/write-AGNOSTIC — it fires on a watched-path
+literal in ANY interpreter body, read OR write); the redirect and file-utility layers additionally
+require a write construct. `STATE_PATH_RX` matches `posture.json`,
 `violations.jsonl`, `coordination-log.jsonl`, `.initialized`, the heartbeat/session-end caches,
 and `operators.roster.json` (among others). So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
 roster write is blocked — the state-file path is on the command line the detector scans. (This is
@@ -157,8 +159,10 @@ node /path/to/ceremony-step.js
 node -e 'require("fs").writeFileSync(".claude/operators.roster.json", x)'   # BLOCKED
 ```
 
-Keep `node <file>` a BARE command — bundling it with `gh …` or a heredoc in one compound
-command can re-introduce a scanned mutation token. An inline `node -e` naming NO watched-state
+Keep `node <file>` a BARE command — bundling it with `gh …` can re-introduce a scanned token (if
+the bundled command itself names a watched path), and authoring a heredoc script that names a
+watched path then running it in the SAME command trips the whole-command
+`detectHeredocWriteRunBundle` pass (author + run as two separate commands). An inline `node -e` naming NO watched-state
 path is not blocked; but the guard is read/write-AGNOSTIC — it fires on ANY interpreter body that
 names a watched-state-path LITERAL on the command line, read OR write (so run even a READ of the
 log script-by-path — see Verify below).
