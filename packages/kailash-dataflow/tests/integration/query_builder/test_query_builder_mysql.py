@@ -14,10 +14,11 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
-from dataflow.database.query_builder import DatabaseType, QueryBuilder
-
 from kailash.runtime.local import LocalRuntime
+
+from dataflow.database.query_builder import DatabaseType, QueryBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -26,10 +27,12 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
+
 
 # @pytest.mark.tier2
 # @pytest.mark.requires_docker
@@ -107,11 +110,12 @@ class TestQueryBuilderMySQLIntegration:
         sql, params = builder.build_select(["*"])
 
         # MySQL supports LIMIT count OFFSET offset syntax
+        # LIMIT/OFFSET are parameterized (%s); values carried in params
         assert "LIMIT" in sql
-        assert "LIMIT 10" in sql
-        assert "OFFSET 20" in sql
+        assert "LIMIT %s" in sql
+        assert "OFFSET %s" in sql
         assert "`in_stock` = %s" in sql
-        assert params == [True]
+        assert params == [True, 10, 20]
 
     def test_mysql_regexp_operations(self):
         """Test MySQL REGEXP operations."""
