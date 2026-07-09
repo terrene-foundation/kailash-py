@@ -203,7 +203,7 @@ bank_version: <specs/_certification.yaml::bank_version>
 Body sections (REQUIRED): per-question tally (id, verdict-on-final-attempt, attempts), total wall-clock, scrubbed brief-receipt index, next-step instruction. Also REQUIRED: the `## For Discussion` section per `rules/journal.md` Requirements (3 probing questions about what was learned and what gaps remain — at least one counterfactual, at least one referencing specific tally data).
 
 **Step 4 — Emit the signed `journal-body-anchor` coordination-log record.** `coordination-log.jsonl` is a
-protected state-file owned by the `validate-bash-command.js` state-file-write guard (`detectStateFileMutation`,
+protected state-file owned by the `validate-bash-command.js` state-file-write guard (`detectStateFileMutationSegmentAware`,
 Layer 3): only the canonical emit path may write the log. The anchor ceremony IS that sanctioned canonical
 writer — it keeps the protected path inside the script body (off the run command line) and writes-then-runs
 as two separate Bash commands. This two-step canonical-writer shape is the form the guard sanctions; a single

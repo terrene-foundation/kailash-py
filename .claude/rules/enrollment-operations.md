@@ -31,8 +31,9 @@ so `signing-mutation-guard.js` and `integrity-guard.js` **passthrough** (they ea
 `!isCoordinationEnabled`) — the degraded-read-only trap does NOT fire during the first bootstrap
 run. `genesis-anchor-guard.js` ALSO advisory-passes-through on the genuinely-fresh state (F72
 fresh-substrate-adopter / scaffold-roster branches, so the ceremony can land its first commits);
-its fail-closed BLOCK engages only AFTER a real (non-scaffold) roster exists without a folded
-anchor. The coordination-independent teeth that enforce signing-key-first during bootstrap are
+its fail-closed BLOCK engages once the repo is past the genuinely-fresh state — a real
+(non-scaffold) roster without a folded anchor, OR a roster deleted while prior enrollment records
+remain in the log (the enrolled-then-deleted branch). The coordination-independent teeth that enforce signing-key-first during bootstrap are
 (a) the **unconditional** `validate-bash-command.js` `STATE_PATH_RX` block on Bash state-file
 mutation, and (b) fold-clean verification (MUST-4 / fold rule 9a) — an **unsigned** genesis-anchor
 never folds into a trust root, so enrollment cannot COMPLETE without the key.
@@ -173,7 +174,7 @@ anchor in `accepted` with `rejected: []` AND `forks: []`, AND (b)
 Declaring enrolled on an appended-but-unverified anchor is BLOCKED.
 
 ```text
-# DO — verify fold + identity (script-by-path; both read the gitignored log)
+# DO — verify fold + identity (script-by-path; foldLog folds the gitignored coordination-log's records, resolveIdentity reads the committed roster)
 foldLog(...) → { accepted: [genesis-anchor, …], rejected: [], forks: [] }
 resolveIdentity(repo) → { role: "owner", person_id: "pid-<display_id>-<short-fp>", … }   → say "enrolled"
 
