@@ -56,7 +56,9 @@ for them) and starts each session with `/onboard`.
    never set these during a ceremony.)
 2. **On a codify branch.** `integrity-guard.js` permits writes to watched paths
    (`operators.roster.json`, `operators.roster.schema.json`, `coordination-log.jsonl`,
-   `posture.json`, `violations.jsonl`, `observations.jsonl`, `team-memory/**`, `journal/**`)
+   `posture.json`, `violations.jsonl`, `observations.jsonl`, `coordination-mode.json`,
+   `learning-codified.json`, `team-memory/**`, `journal/**`, `workspaces/<name>/journal/**` —
+   the wired `DIRECT` set + subtree predicates at `.claude/hooks/integrity-guard.js` are authoritative)
    ONLY on a branch matching `^codify/<display_id>-YYYY-MM-DD$` (the date-terminal predicate at
    `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Like gate 1,
    `integrity-guard.js` passes through on a genuinely fresh coordination-OFF bootstrap repo — the
@@ -96,8 +98,8 @@ for them) and starts each session with `/onboard`.
    `{ roster, repo: {owner, name}, signingKeyPath, signingKeyFingerprint, ghApi,
 transportAppend, keyType }`. `signingKeyPath` is the PRIVATE key; `ghApi` is a subprocess
    wrapper around `gh api`; `transportAppend` is a sync append of the signed record to
-   `.claude/learning/coordination-log.jsonl`. Returns `{ ok, error?, reason?, step? }`,
-   fail-CLOSED. (The same path `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
+   `.claude/learning/coordination-log.jsonl`. Returns `{ ok, record?, error?, reason?, step? }`
+   (`record` on the success path), fail-CLOSED. (The same path `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
    **This ceremony IS `/ecosystem-init` C3.** Running `45` to fold-clean completion satisfies
    C3 — the ceremony is idempotent on identical pinned facts (fold rule 9a), so a later
    `/ecosystem-init` re-run does not fork the trust root; C3 verifies the already-folded anchor

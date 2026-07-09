@@ -1173,3 +1173,39 @@ changes:
       user-gated exception (the journal/0038 history-scrub class), NOT included in this mechanical
       proposal. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md
       § R2 out-of-scope (LOW)."
+  - type: skill_update
+    artifact: 45-genesis-bootstrap
+    files:
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #12 (2026-07-09) — positive-allowlist hardening of two illustrative enumerations
+      in the genesis-bootstrap runbook, source-verified against the wired hooks. Applied BUILD-side AND
+      routed GLOBAL (the onboarding suite is loom-synced; every downstream copy carries the same gaps).
+      NOT self-referential-codify (Rule 2 Skills allowlist enumerates spec-compliance/command-authoring/
+      skill-authoring/hook-authoring/sweep/32-trust-posture/30-claude-code-patterns/
+      12-testing-strategies/probe-driven-verification; enrollment-operations.md explicitly OMITS
+      45-genesis-bootstrap as a runbook). CHANGE 1: the codify-branch watched-paths list (§ pre-flight
+      gate 2) listed 8 tokens; the wired `integrity-guard.js::DIRECT` set is 8 files + 3 subtree
+      predicates — completed to `documented == wired` (adds `coordination-mode.json`,
+      `learning-codified.json`, `workspaces/<name>/journal/**`) + an inline 'the wired DIRECT set +
+      subtree predicates at integrity-guard.js are authoritative' anchor so the next editor re-derives.
+      CHANGE 2: `runEnrollmentCeremony` return was cited `{ ok, error?, reason?, step? }` but
+      `genesis-ceremony.js` returns `{ok:true, record} | {ok:false, error, reason, step}` — added
+      `record?` (success path). Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md + journal/0043."
+  - type: skill_update
+    artifact: 43-ecosystem-init
+    files:
+      - .claude/skills/43-ecosystem-init/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #12 (2026-07-09) — positive-allowlist hardening of the `STATE_PATH_RX` illustrative
+      enumeration (§ Operational runbook, Layer-3 state-file guard). The list of 5 protected state-file
+      paths was presented UNHEDGED, while its direct sibling in 45-genesis-bootstrap already hedges the
+      SAME wired set with '(among others)' — a genuine unhedged-vs-hedged-sibling inconsistency. Added
+      '(among others; the wired STATE_PATH_RX at validate-bash-command.js is authoritative)' to match the
+      sibling convention + anchor the next editor to the wired source. Applied BUILD-side AND routed
+      GLOBAL (loom-synced onboarding suite). NOT self-referential-codify (see the 45-genesis-bootstrap
+      entry above for the Rule 2 allowlist rationale). Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md + journal/0043."

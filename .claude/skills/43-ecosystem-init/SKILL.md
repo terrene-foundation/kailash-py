@@ -131,7 +131,8 @@ tool, so it never trips the guard.
 The `validate-bash-command.js` state-file-write guard (`detectStateFileMutationSegmentAware`, Layer 3) BLOCKS any
 interpreter command (`node -e`/`-c`/`-m`, or any command LED by `node`/`python`/`ruby`/`perl`) whose
 **command string** contains a protected state-file path — `operators.roster.json`,
-`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized`. The documented inline
+`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized` (among others; the wired
+`STATE_PATH_RX` at `validate-bash-command.js` is authoritative). The documented inline
 `node -e '… operators.roster.json …'` form therefore CANNOT run; this is correct — only the canonical
 roster-write path may touch the roster. (`.claude/settings.json::permissions.deny` additionally hard-denies
 Edit/Write of `posture.json` + `violations.jsonl` + `.initialized` + `.posture-upgrade-nonce` — it does NOT cover
