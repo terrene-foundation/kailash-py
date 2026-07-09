@@ -9,7 +9,7 @@ The procedure backing `.claude/commands/enroll.md` (the once-per-operator ceremo
 ecosystem already configured by `/ecosystem-init`). The command body holds the three load-bearing
 invariants; this skill holds the step-by-step procedure and the exact tool-call shapes.
 
-Three onboarding surfaces (see (loom-internal reference)): `/onboard` (read, every session),
+Three onboarding surfaces (`02-plans/02-ga-ecosystem-onboarding.md`): `/onboard` (read, every session),
 `/enroll` (operator, once), `/ecosystem-init` (fork, once). They share ZERO write-authority.
 
 ## Ceremony steps: B1 → B2 → B3
@@ -34,7 +34,7 @@ flow:
 New operators default to `role: contributor`. Promotion to `senior`/`owner` is a SEPARATE quorum gate
 (`--owner-add` for owners, a 2-of-N roster edit for senior) — NOT part of `/enroll`.
 
-**Business-role caveat (Q1).** The three business roles are the advisory `business_roles` enum at
+**Business-role caveat (Q1).** The four business roles are the advisory `business_roles` enum at
 `operators.roster.schema.json:94-105` (`platform-engineer` / `capability-engineer` / `business-consultant`),
 ORTHOGONAL to the authority `role` and NEVER quorum-eligible (`multi-operator-coordination.md` §1).
 `/enroll` places the operator into an AUTHORITY role; `business_roles` is an additive field the operator
@@ -60,13 +60,9 @@ Pre-existing operators on any other layout (flat `~/repos/<slug>`, nested) proce
 
 ### B3 — hand off (invariant 3)
 
-Print: "Enrollment PR opened. Once it merges to `main`, run `/onboard` at the start of every session."
-`/enroll` does NOT perform the session-entry reads (roster + posture + team-memory + claims) — that is
-`/onboard`'s read-only job (`knowledge-convergence.md` MUST-5). The roster registration (B1) is a PR, not
-a direct write, so it is not on `main` until merged: `/onboard` run on `main` before the merge resolves
-the operator as not-yet-rostered (it reads the committed roster); on the operator's own
-`codify/<display_id>-<date>` branch the working-tree roster edit already resolves. Await the merge (or stay
-on the branch) before treating `/onboard` identity as final.
+Print: "Enrolled. Run `/onboard` at the start of every session." `/enroll` does NOT perform the
+session-entry reads (roster + posture + team-memory + claims) — that is `/onboard`'s read-only job
+(`knowledge-convergence.md` MUST-5).
 
 ## Why a separate command (not a `/whoami` flag)
 

@@ -44,22 +44,25 @@
  *  "Compliance-currency" = currency vs canon's O1 compliance/methodology
  *  artifact set (`artifact-flow.md` § The Origination Taxonomy — O1; home
  *  `specs/methodology/`). The honest existing signal is the COUNT of O1
- *  methodology artifacts canon has authored. Today that count is ZERO
- *  (`specs/methodology/_index.md`: "there is currently no methodology artifact
- *  authored"), AND there is no per-consumer compliance-class marker to measure
- *  a consumer's compliance-currency against. So per-consumer compliance-currency
- *  is NOT YET A REAL SIGNAL — fabricating one would be the exact false-guarantee
- *  the honest-gap contract forbids.
+ *  methodology artifacts canon has authored. That count is now NON-ZERO: the
+ *  first O1 artifact — `specs/methodology/agentic-runtime-governance.md` (SAFR
+ *  conformance, landed 2026-07-05, `journal/0432`; indexed in
+ *  `specs/methodology/_index.md`) — makes the baseline non-empty, so
+ *  `applicable` is now `true`. A per-consumer compliance-class marker to measure
+ *  a consumer's compliance-currency AGAINST that set does not yet exist, so the
+ *  per-consumer compliance-currency SIGNAL remains the next (honestly
+ *  roadmap-labeled) enhancement — fabricating one would be the exact
+ *  false-guarantee the honest-gap contract forbids.
  *
- *  Instead this probe records the honest fleet BASELINE: the canon authored
- *  count (`canon_authored`, 0 today) + `applicable:false` when the baseline is
- *  empty. T6 renders the compliance column DATA-DRIVEN from this baseline
- *  ("canon authors 0 compliance artifacts — roadmap") instead of a hardcoded
- *  label; the moment canon authors its first O1 artifact the baseline becomes
- *  non-empty without a code change, and a per-consumer compliance-currency
- *  measure becomes the next (honestly roadmap-labeled) enhancement. The
- *  buyer-facing FRAMING of this column is the co-owner's at T6 (mirrors T4's
- *  cve-vs-deps-currency framing deferral; journal/0313).
+ *  This probe records the honest fleet BASELINE: the canon authored count
+ *  (`canon_authored`) + `applicable:true` once the baseline is non-empty
+ *  (`applicable:false` only if the dir is unreadable or empty). T6 renders the
+ *  compliance column DATA-DRIVEN from this baseline (e.g. "canon authors N
+ *  compliance artifact(s)") instead of a hardcoded label — the count and
+ *  applicability track the live `specs/methodology/` dir with no code change as
+ *  further O1 artifacts land. The buyer-facing FRAMING of this column is the
+ *  co-owner's at T6 (mirrors T4's cve-vs-deps-currency framing deferral;
+ *  journal/0313).
  *
  *  ──────────────────────────────────────────────────────────────────────────
  *  Read-only + resolver-driven, mirroring fleet-deps.mjs: enumerates consumers

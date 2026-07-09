@@ -74,13 +74,13 @@ their OWN machine** (`rules/enrollment-operations.md` MUST-5) — never bootstra
 
 ## The five guard traps (recognize → fix; depth in skill 45 § Troubleshooting)
 
-| What you see                                             | Guard / cause                                         | Fix                                                               |
-| -------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- |
-| Every tracked-file write silently refused                | `signing-mutation-guard` degraded read-only           | Configure signing (pre-flight 1)                                  |
-| Bash `node -e`/redirect to a state file → severity:block | `validate-bash` `detectStateFileMutationSegmentAware` | Route via a bare `node <file>` script (state path in the body)    |
-| Roster/journal write blocked off the codify branch       | `integrity-guard` (watched path, wrong branch)        | Be on `codify/<display_id>-YYYY-MM-DD` from `main`                |
-| Same write blocked ON the codify branch                  | `integrity-guard` — no covering lease                 | `acquireCodifyLease({displayId, repoDir, scopeFiles})`            |
-| Journal write halts "slot unreserved"                    | `journal-write-guard`                                 | `reserveJournalSlotSigned(repoDir, {dir, identity, type, topic})` |
+| What you see                                             | Guard / cause                                  | Fix                                                               |
+| -------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| Every tracked-file write silently refused                | `signing-mutation-guard` degraded read-only    | Configure signing (pre-flight 1)                                  |
+| Bash `node -e`/redirect to a state file → severity:block | `validate-bash` `detectStateFileMutation`      | Route via a bare `node <file>` script (state path in the body)    |
+| Roster/journal write blocked off the codify branch       | `integrity-guard` (watched path, wrong branch) | Be on `codify/<display_id>-YYYY-MM-DD` from `main`                |
+| Same write blocked ON the codify branch                  | `integrity-guard` — no covering lease          | `acquireCodifyLease({displayId, repoDir, scopeFiles})`            |
+| Journal write halts "slot unreserved"                    | `journal-write-guard`                          | `reserveJournalSlotSigned(repoDir, {dir, identity, type, topic})` |
 
 The recurring lesson: a guard refusal is a LOUD, fixable gate, not a broken substrate. Never
 disable a guard or force degraded mode off to push a step through (`rules/enrollment-operations.md`

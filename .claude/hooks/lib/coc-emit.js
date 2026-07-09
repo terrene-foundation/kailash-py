@@ -365,7 +365,7 @@ function emitSignedRecord(opts) {
     return {
       ok: false,
       error: "unknown record type",
-      reason: `type '${o.type}' has no registered fold predicate in the default engine; register it in coordination-log.js::_registerDefaults before emitting (unregistered records are dispatch-rejected at fold and rule-2-poison the emitter's subsequent chain)`,
+      reason: `type '${o.type}' has no registered fold predicate in the default engine; register it in coordination-log.js::_registerM0Defaults before emitting (unregistered records are dispatch-rejected at fold and rule-2-poison the emitter's subsequent chain)`,
       step: "type-check",
     };
   }

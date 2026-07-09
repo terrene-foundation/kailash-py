@@ -49,7 +49,7 @@ Origin: 2026-04-25 Rust SDK session — PR #602 (release-prep for v3.23.0) was o
 # (See language-specific build-speed.md for the full command set)
 # Rust: cargo +nightly fmt --all --check; cargo +1.95 clippy --workspace --all-targets -- -D warnings;
 #       cargo nextest run --workspace; RUSTDOCFLAGS="-Dwarnings" cargo doc ...
-# Python: pre-commit run --all-files; pytest tests/; mypy --strict src/
+# Python: pre-commit run --all-files (ONLY if .pre-commit-config.yaml exists — else SKIP, not a failure); pytest tests/; mypy --strict src/
 # All MUST exit 0 → push
 git push -u origin feat/<branch>
 
