@@ -1,0 +1,32 @@
+{
+  "description": "EATP v3 AuditAnchor with a unicode subject; JCS sorts keys by UTF-16 code unit and emits raw UTF-8 (issue #1590).",
+  "pact_type": "AuditAnchor",
+  "conformance_requirement": "N4-v3",
+  "schema_version": "v3",
+  "rfc8785_reference": "RFC 8785 Appendix B locale example: keys {peach, péché, pêche, sin} sort by UTF-16 code unit to [peach, péché, pêche, sin] with é/ê emitted as raw UTF-8. expected_subject_jcs is that INDEPENDENT published canonical string.",
+  "input": {
+    "anchor_id": "anc-v3-unicode-001",
+    "sequence": 0,
+    "previous_hash": null,
+    "agent_id": "agent-conformance-001",
+    "action": "envelope_created",
+    "verification_level": "AUTO_APPROVED",
+    "envelope_id": "env-001",
+    "result": "success",
+    "metadata": {
+      "pact_action": "envelope_created",
+      "role_address": "D1-R1"
+    },
+    "timestamp": "2026-01-15T10:30:00+00:00",
+    "subject": {
+      "peach": "This sorting order",
+      "péché": "is wrong according to French",
+      "pêche": "but canonicalization MUST",
+      "sin": "ignore locale"
+    }
+  },
+  "expected_subject_jcs": "{\"peach\":\"This sorting order\",\"péché\":\"is wrong according to French\",\"pêche\":\"but canonicalization MUST\",\"sin\":\"ignore locale\"}",
+  "expected_subject_hash": "sha256:d99d0ebdcb0033cb858cfa830ae46bc0fb3309413b271f1da828c89901a27ed5",
+  "expected_content_hash": "39f44e3f62d9b179814da3e2d82c7f22d3956ce337ba732f65210812cf211a49",
+  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-v3-unicode-001\", \"content_hash\": \"39f44e3f62d9b179814da3e2d82c7f22d3956ce337ba732f65210812cf211a49\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"schema_version\": \"v3\", \"sequence\": 0, \"subject\": {\"peach\": \"This sorting order\", \"p\\u00e9ch\\u00e9\": \"is wrong according to French\", \"p\\u00eache\": \"but canonicalization MUST\", \"sin\": \"ignore locale\"}, \"subject_hash\": \"sha256:d99d0ebdcb0033cb858cfa830ae46bc0fb3309413b271f1da828c89901a27ed5\", \"timestamp\": \"2026-01-15T10:30:00.000000+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
+}

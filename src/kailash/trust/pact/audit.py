@@ -27,10 +27,30 @@ from typing import Any
 from uuid import uuid4
 
 from kailash.trust._canonical import canonical_scalars
+from kailash.trust._jcs import jcs_subject_hash
 from kailash.trust.pact.config import VerificationLevel
 from kailash.trust.pact.exceptions import PactError
 
 logger = logging.getLogger(__name__)
+
+SCHEMA_VERSION_V2 = "v2.2"
+"""Grandfathered audit-anchor pre-image schema — no ``subject_hash`` segment.
+
+The default for every anchor that does NOT bind an external subject. Its
+signing pre-image is byte-identical to the pre-2026-07 anchor form, so existing
+chains verify unchanged (issue #1590).
+"""
+
+SCHEMA_VERSION_V3 = "v3"
+"""EATP v3 audit-anchor schema — binds an external subject via ``subject_hash``.
+
+Set automatically when a ``subject`` is anchored. A true RFC 8785 (JCS) digest
+of the subject (``sha256:<hex>``) is appended to the signing pre-image; the
+``schema_version`` discriminator itself is EXCLUDED from the pre-image and is
+fail-closed — stripping it on a with-subject anchor forces v2.2-shape
+reconstruction, so the recomputed hash diverges and verification rejects the
+record (issue #1590 — the EATP v3 keystone).
+"""
 
 GENESIS_HASH = "0" * 64
 """Canonical genesis sentinel for audit-chain fingerprints.
@@ -49,6 +69,8 @@ Change history:
 
 __all__ = [
     "GENESIS_HASH",
+    "SCHEMA_VERSION_V2",
+    "SCHEMA_VERSION_V3",
     "PactAuditAction",
     "create_pact_audit_details",
     "AuditAnchor",
@@ -165,6 +187,8 @@ class AuditAnchor:
         "metadata",
         "timestamp",
         "content_hash",
+        "subject",
+        "schema_version",
     )
 
     def __init__(
@@ -181,6 +205,8 @@ class AuditAnchor:
         metadata: dict[str, Any] | None = None,
         timestamp: datetime | None = None,
         content_hash: str = "",
+        subject: Any | None = None,
+        schema_version: str | None = None,
     ) -> None:
         self.anchor_id = anchor_id or f"anc-{uuid4().hex[:8]}"
         self.sequence = sequence
@@ -210,6 +236,37 @@ class AuditAnchor:
         else:
             self.timestamp = timestamp.astimezone(UTC)
         self.content_hash = content_hash
+
+        # EATP v3 (issue #1590): an external subject anchored on this record.
+        # ``subject`` is any JSON-native / typed-scalar value; when present the
+        # anchor is v3 and its RFC-8785 (JCS) ``subject_hash`` is bound into the
+        # signing pre-image. ``schema_version`` is the DISCRIMINATOR that drives
+        # pre-image reconstruction; it is EXCLUDED from the pre-image itself.
+        #
+        # Derivation: an explicit ``schema_version`` (from ``from_dict``) is
+        # honored verbatim so a DOWNGRADED record — subject present, but
+        # ``schema_version`` stripped to v2.2 — reconstructs the v2.2 pre-image
+        # (no ``subject_hash``) and fails hash verification (fail-closed). When
+        # not explicit, a subject implies v3; its absence implies v2.2. No
+        # combination raises here: verification, not construction, is the gate,
+        # so every anomalous (subject, schema_version) pairing fails CLOSED via
+        # a hash mismatch rather than an exception inside the verify ladder.
+        self.subject = subject
+        if schema_version is not None:
+            self.schema_version = schema_version
+        elif subject is not None:
+            self.schema_version = SCHEMA_VERSION_V3
+        else:
+            self.schema_version = SCHEMA_VERSION_V2
+
+    def _subject_hash(self) -> str:
+        """Return the RFC 8785 (JCS) ``subject_hash`` for this anchor's subject.
+
+        ``sha256:<hex>`` of the JCS canonicalization of ``self.subject``. Only
+        meaningful for a v3 anchor (``schema_version == SCHEMA_VERSION_V3``); a
+        ``None`` subject canonicalizes to ``"null"`` deterministically.
+        """
+        return jcs_subject_hash(self.subject)
 
     def _canonical_input(self) -> str:
         """Build the canonical pre-image string that ``compute_hash`` hashes.
@@ -270,6 +327,18 @@ class AuditAnchor:
                 allow_nan=False,
             )
             content += f":{meta_str}"
+        # EATP v3 (issue #1590): the subject binding is appended ONLY for a v3
+        # anchor, keyed on the ``schema_version`` DISCRIMINATOR (NOT on
+        # ``self.subject is not None``). This is the fail-closed hinge: stripping
+        # ``schema_version`` (v3 → v2.2) on a with-subject record drops this
+        # segment, so the recomputed hash diverges from the stored one and
+        # verification rejects the record. A v2.2 anchor never appends the
+        # segment, so its pre-image is BYTE-IDENTICAL to the pre-EATP-v3 form.
+        # The ``subject_hash`` uses the true RFC 8785 (JCS) encoder — distinct
+        # from the v2.2 ``json.dumps(sort_keys=True)`` metadata form above, which
+        # is grandfathered cross-SDK byte-pinned and untouched here.
+        if self.schema_version == SCHEMA_VERSION_V3:
+            content += f":subject_hash={self._subject_hash()}"
         return content
 
     def compute_hash(self) -> str:
@@ -370,8 +439,31 @@ class AuditAnchor:
         return hashlib.sha256(content.encode()).hexdigest()
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize to a JSON-compatible dictionary."""
-        return {
+        """Serialize to a JSON-compatible dictionary.
+
+        The EATP v3 fields (``schema_version``, ``subject``, ``subject_hash``)
+        are emitted ONLY for a v3 anchor (issue #1590). A v2.2 anchor omits them
+        entirely, so its serialized form is BYTE-IDENTICAL to the pre-EATP-v3
+        shape — every existing conformance vector and on-disk record round-trips
+        unchanged. ``subject_hash`` is informational transparency for external
+        verifiers; on verify it is RE-DERIVED from ``subject`` (never trusted
+        from the stored value), so a tampered ``subject`` fails the hash check.
+
+        The stored ``subject`` is normalized through ``canonical_scalars`` — the
+        SAME normalizer ``jcs_subject_hash`` already applies before hashing — so
+        a typed-scalar subject (``datetime`` / ``UUID`` / ``Decimal`` / ``bytes``
+        / ``Enum`` / dataclass) serializes cleanly through ``json.dumps`` instead
+        of raising ``TypeError: Object of type X is not JSON serializable``. This
+        is BYTE-SAFE for ``subject_hash``: ``canonical_scalars`` is idempotent
+        and ``subject_hash`` is derived from ``canonical_scalars(subject)`` on
+        BOTH sides, so normalizing the STORED form changes NEITHER the emitted
+        ``subject_hash`` NOR the ``content_hash`` (the pre-image is untouched),
+        and a ``from_dict`` round-trip re-derives the identical ``subject_hash``
+        (``verify_integrity`` still passes). For a JSON-native subject the
+        normalization is a value-preserving no-op, so every existing golden
+        vector's ``expected_canonical_json`` is unchanged.
+        """
+        result: dict[str, Any] = {
             "anchor_id": self.anchor_id,
             "sequence": self.sequence,
             "previous_hash": self.previous_hash,
@@ -384,10 +476,27 @@ class AuditAnchor:
             "timestamp": self.timestamp.isoformat(timespec="microseconds"),
             "content_hash": self.content_hash,
         }
+        if self.schema_version == SCHEMA_VERSION_V3:
+            result["schema_version"] = self.schema_version
+            result["subject"] = canonical_scalars(self.subject)
+            result["subject_hash"] = self._subject_hash()
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditAnchor:
-        """Deserialize from a dictionary."""
+        """Deserialize from a dictionary.
+
+        ``schema_version`` and ``subject`` are read verbatim (issue #1590). A
+        record MISSING ``schema_version`` defaults EXPLICITLY to v2.2 — passed
+        as a concrete value, NOT ``None`` — so a with-subject record whose
+        ``schema_version`` was STRIPPED reconstructs as v2.2 (dropping the
+        ``subject_hash`` segment) and fails hash verification (fail-closed).
+        This EXPLICIT default is load-bearing: passing ``None`` would let
+        ``__init__``'s "a subject implies v3" convenience RE-DERIVE v3 from the
+        still-present ``subject``, silently undoing the downgrade the stripped
+        discriminator is supposed to force. The stored ``subject_hash`` is NOT
+        consumed: the pre-image re-derives it from ``subject`` on demand.
+        """
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
@@ -413,6 +522,11 @@ class AuditAnchor:
             metadata=data.get("metadata", {}),
             timestamp=ts,
             content_hash=data.get("content_hash", ""),
+            subject=data.get("subject"),
+            # EXPLICIT v2.2 default on an absent key (NOT None) — see docstring:
+            # a stripped discriminator MUST force v2.2 reconstruction, and a
+            # None here would let __init__ re-derive v3 from the subject.
+            schema_version=data.get("schema_version", SCHEMA_VERSION_V2),
         )
 
 
@@ -456,6 +570,7 @@ class AuditChain:
         envelope_id: str | None = None,
         result: str = "",
         metadata: dict[str, Any] | None = None,
+        subject: Any | None = None,
     ) -> AuditAnchor:
         """Create and append a new sealed anchor.
 
@@ -469,6 +584,12 @@ class AuditChain:
             envelope_id: Optional constraint envelope ID.
             result: Action outcome.
             metadata: Additional details.
+            subject: Optional external governed subject (issue #1590). When
+                provided, the anchor is sealed as an EATP v3 record: a true
+                RFC 8785 (JCS) ``subject_hash`` of ``subject`` is bound into the
+                signing pre-image. When ``None`` (the default), the anchor is a
+                v2.2 record whose pre-image is byte-identical to the historical
+                form.
 
         Returns:
             The newly created and sealed AuditAnchor.
@@ -487,6 +608,7 @@ class AuditChain:
                 envelope_id=envelope_id,
                 result=result,
                 metadata=metadata or {},
+                subject=subject,
             )
             anchor.seal()
             self.anchors.append(anchor)
@@ -512,13 +634,23 @@ class AuditChain:
 
             if not anchor.verify_integrity():
                 # The stored content_hash does not match the CURRENT canonical
-                # format. Before calling it tampering, try the two historical
+                # format. The current-format rung (``compute_hash`` →
+                # ``_canonical_input``) is SCHEMA_VERSION-AWARE (issue #1590): it
+                # reconstructs the v2.2 pre-image for a v2.2 anchor AND the
+                # v3-with-``subject_hash`` pre-image for a v3 anchor, so a
+                # LEGITIMATE v3 anchor verifies on this rung and never falls
+                # through to the historical reproducers below (it does NOT read
+                # as tampered). A v3 record whose ``schema_version`` was STRIPPED
+                # reconstructs as v2.2 here, mismatches, and is correctly
+                # REJECTED (fail-closed) — it matches none of the ladder rungs.
+                # Before calling any mismatch tampering, try the two historical
                 # format recomputes — a match means the chain pre-dates a
                 # canonical-format migration and needs re-sealing, NOT a
                 # forensic incident. Ladder (newest → oldest): current
-                # (already failed above) → pre-2026-06-20 prefix format
-                # (whole-second timestamp and/or default=str typed-scalar
-                # metadata) → pre-2026-04-20 legacy genesis sentinel → tampered.
+                # (schema-aware v2.2/v3; already failed above) → pre-2026-06-20
+                # prefix format (whole-second timestamp and/or a default=str
+                # scalar in metadata) → pre-2026-04-20 legacy genesis
+                # sentinel → tampered.
                 if anchor.is_sealed and hmac_mod.compare_digest(
                     anchor.content_hash, anchor._compute_hash_prefix_format()
                 ):

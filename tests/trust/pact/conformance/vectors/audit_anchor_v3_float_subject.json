@@ -1,0 +1,35 @@
+{
+  "description": "EATP v3 AuditAnchor with a float subject; subject_hash uses the true RFC 8785 (JCS) encoder (issue #1590).",
+  "pact_type": "AuditAnchor",
+  "conformance_requirement": "N4-v3",
+  "schema_version": "v3",
+  "rfc8785_reference": "RFC 8785 §3.2.2 'numbers' canonical example: [333333333.33333329,1E30,4.5,2E-3,1E-27] canonicalizes to [333333333.3333333,1e+30,4.5,0.002,1e-27]. expected_subject_jcs is that INDEPENDENT published value; subject_hash = 'sha256:'+sha256(that).",
+  "input": {
+    "anchor_id": "anc-v3-float-001",
+    "sequence": 0,
+    "previous_hash": null,
+    "agent_id": "agent-conformance-001",
+    "action": "envelope_created",
+    "verification_level": "AUTO_APPROVED",
+    "envelope_id": "env-001",
+    "result": "success",
+    "metadata": {
+      "pact_action": "envelope_created",
+      "role_address": "D1-R1"
+    },
+    "timestamp": "2026-01-15T10:30:00+00:00",
+    "subject": {
+      "numbers": [
+        333333333.3333333,
+        1e+30,
+        4.5,
+        0.002,
+        1e-27
+      ]
+    }
+  },
+  "expected_subject_jcs": "{\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27]}",
+  "expected_subject_hash": "sha256:7c892d3452ad85ad65857a43e8dcac93b79475d2334fc3e85bac5c599142c158",
+  "expected_content_hash": "9b56b2fd36167d5eb3ef5f2ba813b84d67378f3df71da43e7e6764f9a7340aee",
+  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-v3-float-001\", \"content_hash\": \"9b56b2fd36167d5eb3ef5f2ba813b84d67378f3df71da43e7e6764f9a7340aee\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"schema_version\": \"v3\", \"sequence\": 0, \"subject\": {\"numbers\": [333333333.3333333, 1e+30, 4.5, 0.002, 1e-27]}, \"subject_hash\": \"sha256:7c892d3452ad85ad65857a43e8dcac93b79475d2334fc3e85bac5c599142c158\", \"timestamp\": \"2026-01-15T10:30:00.000000+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
+}

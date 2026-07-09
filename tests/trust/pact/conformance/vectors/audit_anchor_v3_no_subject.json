@@ -1,0 +1,24 @@
+{
+  "description": "EATP v3 code path with NO subject: schema_version defaults to v2.2 and the signed pre-image + serialization are BYTE-IDENTICAL to a pre-EATP-v3 anchor (issue #1590 regression guard).",
+  "pact_type": "AuditAnchor",
+  "conformance_requirement": "N4-v3",
+  "schema_version": "v2.2",
+  "byte_identity_note": "Constructed via the v3-aware constructor with subject=None. schema_version=v2.2; no subject/subject_hash in the pre-image or serialization. expected_content_hash equals a plain v2.2 anchor's hash for the same fields.",
+  "input": {
+    "anchor_id": "anc-v3-nosubject-001",
+    "sequence": 0,
+    "previous_hash": null,
+    "agent_id": "agent-conformance-001",
+    "action": "envelope_created",
+    "verification_level": "AUTO_APPROVED",
+    "envelope_id": "env-001",
+    "result": "success",
+    "metadata": {
+      "pact_action": "envelope_created",
+      "role_address": "D1-R1"
+    },
+    "timestamp": "2026-01-15T10:30:00+00:00"
+  },
+  "expected_content_hash": "7d89539505a7a391bf6a496843ee3e26ef9d45c0b6ae4310848292b51d41d485",
+  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-v3-nosubject-001\", \"content_hash\": \"7d89539505a7a391bf6a496843ee3e26ef9d45c0b6ae4310848292b51d41d485\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"sequence\": 0, \"timestamp\": \"2026-01-15T10:30:00.000000+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
+}
