@@ -1134,3 +1134,42 @@ changes:
       CLASSIFICATION: GLOBAL (the coordination/onboarding suite is synced cross-SDK + downstream; a
       downstream consumer inherits the `axis-3` phantom + the `glob`/`phase` omissions otherwise).
       Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md.'
+  - type: skill_update
+    artifact: todo-github-sync
+    files:
+      - .claude/skills/10-deployment-git/todo-github-sync.md
+    classification_suggestion: global
+    proposal_only: true
+    context:
+      "Re-convergence #11 out-of-scope dangling-ref (D3), user-approved to route. PROPOSAL-ONLY (no
+      local BUILD edit — a BUILD-side edit to this synced skill would be overwritten by /sync).
+      `skills/10-deployment-git/todo-github-sync.md` line 484 carries a stale self-reference:
+      `**This Guide**: .claude/guides/todo-github-sync-guide.md`. That path does not exist (the guide
+      content IS this skill file now). PROPOSED FIX: change the self-reference target to
+      `.claude/skills/10-deployment-git/todo-github-sync.md` (the skill's own current location).
+      Genuine loom-side stale self-ref (the file moved guides/ -> skills/ and the self-ref was not
+      updated); low value, mechanical. Surfaced by the #11 repo-wide dangling-ref sweep. Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md § R2 out-of-scope."
+  - type: skill_update
+    artifact: user-flow-validation-walk-discipline
+    files:
+      - .claude/skills/30-claude-code-patterns/user-flow-validation-walk-discipline.md
+    classification_suggestion: global
+    proposal_only: true
+    context:
+      "Re-convergence #11 out-of-scope disclosure-hygiene LOW, user-approved to route. PROPOSAL-ONLY
+      (no local BUILD edit — this file is on the self-referential-codify.md Rule 2 allowlist
+      [`30-claude-code-patterns/**`], so a local edit would trigger the multi-agent redteam gate for a
+      trivial placeholder scrub; loom Gate-1 applies it with the proper review). A real operator
+      display-name string appears in this PUBLIC-shipped skill's EXAMPLE dialogue at lines 33, 40, 82,
+      114 (illustrating the `/onboard` / `/whoami` output). It is a display-name only (NOT a secret /
+      credential / roster person_id), but a real-operator identifier should not ship in a distributed
+      example. PROPOSED FIX (scrub to the placeholder the rule's own MUST-6 uses): the operator
+      display-name -> `<operator-display-id>`; `.proposals/register-<name>.yaml` ->
+      `register-<operator-display-id>.yaml`; `verified:gh-<name>` -> `verified:gh-<operator>`;
+      `disp:<name>` -> `disp:<operator-display-id>`. IMMUTABLE-HISTORICAL note: the same string also
+      appears once in `workspaces/cross-sdk-audit/journal/0018:6` — that is an immutable journal entry
+      (journal.md MUST-NOT-overwrite) in a DIFFERENT workspace; a journal scrub is a standing
+      user-gated exception (the journal/0038 history-scrub class), NOT included in this mechanical
+      proposal. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md
+      § R2 out-of-scope (LOW)."
