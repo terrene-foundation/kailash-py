@@ -177,6 +177,11 @@ class RiskFactorEvaluation:
             ``combined_level`` (and is more restrictive than ``auto_approved``)
             -- i.e. the factor(s) that actually shifted the verdict.
         factor_values: The raw input tokens per factor, preserved for audit.
+        error: On the fail-closed path (a malformed / unparseable factor set),
+            the STRUCTURED error detail (offending factor name, raw token,
+            registered-factor list) recorded for audit. None on the normal
+            path. The raw token / registry list live here ONLY -- never in the
+            human-facing verdict reason or the WARN log line.
     """
 
     present: bool
@@ -184,6 +189,7 @@ class RiskFactorEvaluation:
     per_factor: dict[str, str] = field(default_factory=dict)
     driving_factors: list[str] = field(default_factory=list)
     factor_values: dict[str, Any] = field(default_factory=dict)
+    error: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for audit anchoring."""
@@ -193,6 +199,7 @@ class RiskFactorEvaluation:
             "per_factor": dict(self.per_factor),
             "driving_factors": list(self.driving_factors),
             "factor_values": dict(self.factor_values),
+            "error": self.error,
         }
 
 

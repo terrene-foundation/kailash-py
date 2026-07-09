@@ -442,3 +442,155 @@ class TestInvariant6_BackwardCompat:
         _set_envelope(engine, max_spend=1000.0)
         verdict = engine.verify_action(_ROLE, "read", {"cost": 10.0})
         assert "risk factor" not in verdict.reason.lower()
+
+
+# ---------------------------------------------------------------------------
+# Security regression (MEDIUM) — a risk escalation to `held` MUST NOT skip the
+# ancestor multi-level verify. Fix: the ancestor-walk gate is `level != "blocked"`
+# (not `level in {auto_approved, flagged}`), so an ancestor `blocked` still wins.
+# ---------------------------------------------------------------------------
+
+
+class TestMediumAncestorVerifyOrdering:
+    """The ancestor multi-level verify runs whenever the leaf verdict is not
+    already ``blocked`` -- including when a risk factor escalated the leaf to
+    ``held``. Before the fix the gate was ``level in {auto_approved, flagged}``,
+    so a risk escalation to ``held`` short-circuited the ancestor walk and an
+    ancestor ``blocked`` was silently dropped (verdict ``held`` where the
+    most-restrictive verdict is ``blocked``, ancestor reason lost from audit).
+
+    ``_multi_level_verify`` is stubbed to return ``blocked`` to isolate the GATE
+    ordering (the property under test) from envelope-folding mechanics: this
+    test fails on the pre-fix gate and passes on the fixed gate.
+    """
+
+    @pytest.mark.regression
+    def test_risk_held_does_not_skip_ancestor_block(
+        self, engine: GovernanceEngine
+    ) -> None:
+        _set_envelope(engine, max_spend=1000.0)
+        ancestor_reason = "Ancestor envelope at 'D1-R1' restricts: deploy blocked"
+        engine._multi_level_verify = (  # type: ignore[method-assign]
+            lambda role_address, action, ctx: ("blocked", ancestor_reason)
+        )
+        verdict = engine.verify_action(
+            _ROLE,
+            "deploy",
+            # cost 0 -> leaf limit-proximity is auto_approved; the risk factor
+            # escalates the leaf verdict to `held` BEFORE the ancestor gate.
+            {"cost": 0.0, "risk_factors": {"reversibility": "irreversible"}},
+        )
+        # Most-restrictive across (limit-proximity, risk-factor, ancestor) wins.
+        assert verdict.level == "blocked"
+        # The ancestor block reason reaches the verdict (this is the string the
+        # engine emits to the audit anchor for the "verify_action" event) --
+        # i.e. the ancestor block is NOT silently dropped from the audit trail.
+        assert verdict.reason == ancestor_reason
+        # The risk-factor set is still recorded (it drove the leaf to held).
+        assert verdict.risk_factors is not None
+        assert verdict.risk_factors["combined_level"] == "held"
+
+    @pytest.mark.regression
+    def test_ancestor_walk_still_skipped_when_leaf_already_blocked(
+        self, engine: GovernanceEngine
+    ) -> None:
+        # When the leaf is ALREADY blocked, the ancestor walk is skipped (a
+        # valid optimization -- blocked is max-severity). The stub would flip a
+        # non-blocked verdict; here it must never run, so a stub that returns a
+        # DIFFERENT reason must not appear in the verdict.
+        _set_envelope(engine, max_spend=100.0)
+        engine._multi_level_verify = (  # type: ignore[method-assign]
+            lambda role_address, action, ctx: ("blocked", "STUB-SHOULD-NOT-RUN")
+        )
+        verdict = engine.verify_action(_ROLE, "deploy", {"cost": 9999.0})
+        assert verdict.level == "blocked"
+        assert "STUB-SHOULD-NOT-RUN" not in verdict.reason
+
+
+# ---------------------------------------------------------------------------
+# LOW-1 — a NON-Malformed exception raised inside evaluate_risk_factors (e.g. a
+# pathological Mapping whose items() raises) MUST fail closed to BLOCKED and
+# never escape verify_action (pact-governance.md Rule 4).
+# ---------------------------------------------------------------------------
+
+
+class TestLow1NonMalformedFailClosed:
+    @pytest.mark.regression
+    def test_mapping_items_raising_is_fail_closed(
+        self, engine: GovernanceEngine
+    ) -> None:
+        from collections.abc import Mapping
+
+        class _ExplodingMapping(Mapping):
+            """A Mapping whose items() raises a NON-Malformed exception. It
+            passes the isinstance(raw, Mapping) guard, then blows up on
+            iteration -- the exact ingress LOW-1 hardens."""
+
+            def __getitem__(self, key: object) -> object:
+                raise KeyError(key)
+
+            def __iter__(self):  # type: ignore[no-untyped-def]
+                return iter(())
+
+            def __len__(self) -> int:
+                return 0
+
+            def items(self):  # type: ignore[no-untyped-def, override]
+                raise RuntimeError("boom -- items() explodes mid-iteration")
+
+        _set_envelope(engine, max_spend=1000.0)
+        # MUST NOT raise -- verify_action wraps everything fail-closed.
+        verdict = engine.verify_action(
+            _ROLE, "read", {"cost": 1.0, "risk_factors": _ExplodingMapping()}
+        )
+        assert verdict.level == "blocked"
+        assert verdict.is_blocked is True
+
+
+# ---------------------------------------------------------------------------
+# LOW-2 — the fail-closed human-facing reason + WARN stay generic; the raw
+# token / registry list live in the STRUCTURED audit detail only.
+# ---------------------------------------------------------------------------
+
+
+class TestLow2GenericReasonStructuredDetail:
+    @pytest.mark.regression
+    def test_unknown_token_reason_omits_raw_token_but_records_it(
+        self, engine: GovernanceEngine
+    ) -> None:
+        _set_envelope(engine, max_spend=1000.0)
+        secret_token = "zzz-super-secret-token-value"
+        verdict = engine.verify_action(
+            _ROLE,
+            "read",
+            {"cost": 1.0, "risk_factors": {"reversibility": secret_token}},
+        )
+        assert verdict.level == "blocked"
+        # Human-facing reason is generic -- the raw token does NOT appear.
+        assert secret_token not in verdict.reason
+        assert "malformed" in verdict.reason.lower()
+        # ... but the structured audit detail preserves it (recorded for audit).
+        assert verdict.risk_factors is not None
+        err = verdict.risk_factors["error"]
+        assert err is not None
+        assert err["value"] == secret_token
+
+    @pytest.mark.regression
+    def test_unknown_factor_reason_omits_registry_but_records_it(
+        self, engine: GovernanceEngine
+    ) -> None:
+        _set_envelope(engine, max_spend=1000.0)
+        verdict = engine.verify_action(
+            _ROLE,
+            "read",
+            {"cost": 1.0, "risk_factors": {"totally_unknown_factor": "yes"}},
+        )
+        assert verdict.level == "blocked"
+        # Reason does not enumerate the registered-factor list.
+        assert "reversibility" not in verdict.reason
+        assert "materiality" not in verdict.reason
+        # The registry list is preserved in the structured audit detail.
+        assert verdict.risk_factors is not None
+        err = verdict.risk_factors["error"]
+        assert err is not None
+        assert "reversibility" in err["registered"]

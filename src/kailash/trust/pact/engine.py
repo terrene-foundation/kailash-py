@@ -815,7 +815,15 @@ class GovernanceEngine:
         # effective envelope. Most restrictive verdict wins. This prevents a role
         # from executing an action that is allowed at the leaf but blocked by
         # an ancestor's envelope.
-        if level in ("auto_approved", "flagged"):
+        #
+        # Gate on `level != "blocked"` (NOT `level in {auto_approved, flagged}`):
+        # `blocked` is already max-severity, so skipping the ancestor walk there
+        # is a valid optimization. But `held` -- whether from limit-proximity OR
+        # from risk-factor escalation -- MUST still run the ancestor verify so an
+        # ancestor `blocked` wins via the level_order comparison below. Gating on
+        # only {auto_approved, flagged} would let a risk escalation to `held`
+        # skip the ancestor block (security: ancestor-verify bypass).
+        if level != "blocked":
             ancestor_level, ancestor_reason = self._multi_level_verify(
                 role_address, action, ctx
             )
@@ -996,14 +1004,45 @@ class GovernanceEngine:
         try:
             risk_eval = evaluate_risk_factors(ctx, self._risk_factor_registry)
         except MalformedRiskFactorError as exc:
-            # Fail-closed: a malformed risk-factor set is maximal risk.
+            # Fail-closed: a malformed risk-factor set is maximal risk. The raw
+            # token / registry list stay in the STRUCTURED audit detail
+            # (exc.details, recorded on the returned RiskFactorEvaluation.error)
+            # ONLY -- the human-facing reason + WARN line stay generic so no raw
+            # factor value or registry enumeration leaks into the verdict reason,
+            # the audit anchor, or the log (observability.md Rule 8).
             logger.warning(
-                "Malformed risk_factors for action=%s -- fail-closed to BLOCKED: %s",
+                "Malformed risk_factors for action=%s -- fail-closed to BLOCKED",
                 action,
-                exc,
             )
-            reason = f"Risk-factor set is malformed ({exc}) -- fail-closed to BLOCKED"
-            return (combine_levels(base_level, "blocked"), reason, None)
+            err_eval = RiskFactorEvaluation(
+                present=True,
+                combined_level="blocked",
+                error={"kind": "malformed", **exc.details},
+            )
+            return (
+                combine_levels(base_level, "blocked"),
+                "Malformed risk_factors -- fail-closed to BLOCKED",
+                err_eval,
+            )
+        except Exception:
+            # pact-governance.md Rule 4: ALL verify_action paths return BLOCKED,
+            # never raise. A pathological Mapping subclass whose items() /
+            # __iter__ raises a NON-Malformed exception (uncaught inside
+            # evaluate_risk_factors) must not escape verify_action -- fail-closed.
+            logger.warning(
+                "Error evaluating risk_factors for action=%s -- fail-closed to BLOCKED",
+                action,
+            )
+            err_eval = RiskFactorEvaluation(
+                present=True,
+                combined_level="blocked",
+                error={"kind": "evaluation_error"},
+            )
+            return (
+                combine_levels(base_level, "blocked"),
+                "risk_factors evaluation failed -- fail-closed to BLOCKED",
+                err_eval,
+            )
 
         if not risk_eval.present:
             # No risk factors -> behave EXACTLY as the base verdict alone.
