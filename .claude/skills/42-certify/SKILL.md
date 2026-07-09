@@ -19,22 +19,55 @@ This skill is the procedural detail for the `/certify` command (`.claude/command
 
 `/certify` writes state, but a narrow set:
 
-| Surface                                      | Phase                    | Write?                                                                          |
-| -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------- |
-| `workspaces/_certify/journal/.pending/*`     | Brief                    | Yes — per-section read receipts (scrubbed per `user-flow-validation.md` MUST-6) |
-| In-session probe state                       | Probe                    | No persisted file; tally lives in orchestrator context                          |
-| `journal/NNNN-DECISION-certify-*.md`         | Pass (gate met)          | Yes — committed pass receipt                                                    |
-| `journal/NNNN-DEFER-certify-*-incomplete.md` | Abandon mid-gate         | Yes — deferral receipt; operator stays L2_SUPERVISED                            |
-| `posture.json`                               | (n/a — no posture write) | No — trust-posture machinery already enforces L2 for unrostered operators       |
-| `operators.roster.json`                      | (n/a — no roster write)  | No — pass nudges operator to `/whoami --register`                               |
+| Surface                                                 | Phase                        | Write?                                                                                                                                                                            |
+| ------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaces/_certify/.pending/*`                        | Brief                        | Yes — ephemeral read receipts, OUTSIDE any `journal/` subtree (dodges integrity-guard's `workspaces/<name>/journal/` watch); scrubbed per `user-flow-validation.md` MUST-6        |
+| In-session probe state                                  | Probe                        | No persisted file; tally lives in orchestrator context                                                                                                                            |
+| `journal/NNNN-<display_id>-DECISION-certify-pass-*.md`  | Pass (gate met)              | Yes — committed pass receipt (name from `reserveJournalSlotSigned`)                                                                                                               |
+| `journal/NNNN-<display_id>-DECISION-certify-defer-*.md` | Abandon mid-gate             | Yes — deferral receipt (`type: "DECISION"`, `topic: "certify-defer-<display_id>"` — `DEFER` is NOT a canonical journal type per `rules/journal.md`); operator stays L2_SUPERVISED |
+| `posture.json`                                          | (n/a — no posture write)     | No — trust-posture machinery already enforces L2 for unrostered operators                                                                                                         |
+| `operators.roster.json`                                 | (n/a — no roster write)      | No — certify never writes the roster; registration is a PREREQUISITE authored before the entry gate                                                                               |
+| `.claude/learning/codify-lease.json` (on-disk mutex)    | Pass + Abandon (Steps 1.5/5) | Yes — a covering codify-lease acquired around the pass OR DEFER write, released at Step 5                                                                                         |
+| `.claude/learning/coordination-log.jsonl`               | Pass + Abandon (Steps 1.5–5) | Yes (coordination-ON) — signed `codify-lease` / `journal-slot-reservation` / `journal-body-anchor` / `codify-lease-release` records via canonical emit helpers                    |
 
-Pass is captured in the journal entry, NOT in a roster row. The roster row is the separate operator-registration step; certification is the prerequisite recorded in `journal/`.
+Pass is captured in the journal entry, NOT in a roster row. The roster row is authored by the separate registration step (a PREREQUISITE the entry gate requires present); certification is recorded in `journal/` and gates the operator's first `/claim`.
 
 ## Section-by-section runbook
 
+### Phase 0 — Prerequisites (identity + bank validation + consent)
+
+Runs BEFORE Phase A. Three structural STOP gates — mirror of `commands/certify.md` Step 1; all three are structural (exit code + file existence + explicit user input), not LLM-judgment, so a session that skims this prose still fails on the wire.
+
+**Step 0.a — Resolve identity structurally** (NOT by prose-claim):
+
+```bash
+node -e 'const r = require("./.claude/hooks/lib/operator-id.js").resolveIdentity(process.cwd()); process.stdout.write(JSON.stringify(r));'
+```
+
+STOP (do NOT fall through to Phase A) when the parsed JSON has ANY of: `verified_id == null`, `person_id == null`, `posture == "L2_SUPERVISED"` AND no roster row, OR a non-zero exit code. On STOP surface — **branched on the just-enrolled case**: if the operator just ran `/enroll` or `/whoami --register`, their roster row is on their `codify/<display_id>-<date>` branch but not yet merged to `main` → "Run `/certify` FROM your `codify/<display_id>-<date>` branch — `resolveIdentity` reads the WORKING-TREE roster (`operator-id.js` `_readJsonSafe(rosterPath)`), so your row is visible there and the pass entry lands on the same branch (riding your enrollment PR); OR await the PR merge and run it on `main`. On `main` before the merge you resolve as not-yet-rostered."; otherwise → "Identity check failed: you are not rostered (`/whoami --register` first) — `/certify` needs a roster row to record the pass against."
+
+**Step 0.b — Validate the bank file structurally** (the security scan — NOT the schema-shape-only check):
+
+```bash
+node .claude/bin/validate-cert-bank.mjs specs/_certification.yaml
+```
+
+STOP on non-zero exit (any CRIT/HIGH finding). The validator covers: bank existence + YAML validity, schema shape (version, sections, per-question id/kind/expected), **citation-path allowlist (`{specs,rules,.claude}/**` only — no `..` traversal, no absolute paths), length caps (advisory/MED — flagged, non-blocking) on prompt/options/rubric/expected, prompt-injection signal scan, and secret-shaped-token rejection.** A bank that fails any CRIT/HIGH check (citation/injection/secret) is institutionally untrusted; do NOT proceed to brief. This binary validator IS the authoritative bank-trust gate — the § Question bank schema check at probe start is a re-confirmation of shape, NOT a substitute for this security scan.
+
+**Step 0.c — Consent gate** (the bank's `bank_version` + record-of-pass-tied-to-`verified_id` implications):
+
+```
+Surface to operator:
+  "/certify will record a per-question pass/fail tally tied to your
+   verified_id in a committed journal entry. The bank version is
+   <bank_version>. Proceed? (y/N)"
+```
+
+STOP unless the operator answers `y` — explicit per-operator consent is required before institutional knowledge about the operator's competency lands in the audit trail.
+
 ### Phase A — Brief
 
-Walk these surfaces in fixed order; for each, summarize in plain language (per `rules/communication.md`), then write a read receipt to `workspaces/_certify/journal/.pending/certify-brief-<display_id>-<YYYY-MM-DD>.md`:
+Walk these surfaces in fixed order; for each, summarize in plain language (per `rules/communication.md`), then write a read receipt to `workspaces/_certify/.pending/certify-brief-<display_id>-<YYYY-MM-DD>.md` (ephemeral scratch, deliberately OUTSIDE any `journal/` subtree — `integrity-guard` watches `workspaces/<name>/journal/`, so a Phase-A receipt under `journal/` would halt un-leased under coordination-ON; these receipts are NOT codify-class journal entries):
 
 1. `specs/_index.md` if present (domain truth surface). If absent, surface "this repo has no specs index; brief covers rules + journal only."
 2. Repo `CLAUDE.md` — the always-loaded directives and navigation.
@@ -110,6 +143,21 @@ node -e 'const r = require("./.claude/hooks/lib/operator-id.js").resolveIdentity
 
 Parse and bind `verified_id`, `person_id`, `display_id` from the JSON result. STOP if any are null.
 
+**Step 1.5 — Get on a codify branch + acquire a covering codify-lease (the pass entry is a codify-class `journal/` write).** Under coordination-ON, `integrity-guard.js` requires a `journal/` Write to be BOTH on a `codify/<display_id>-<date>` branch (`isCodifyBranch` — a write on `main` is `severity: block` BEFORE the lease is even consulted) AND under a covering `codify-lease` record (`findCoveringLease` → `halt-and-report` otherwise). So, before the Step-3 Write:
+
+- **(a) Ensure HEAD is your `codify/<display_id>-<date>` branch** — the enrollment branch if certifying same-day pre-merge, ELSE cut one: `git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" origin/main`. `acquireCodifyLease` only COMPUTES the branch NAME (it does NOT `git switch`), so YOU must be on the branch first.
+- **(b) Acquire the lease** via a script-by-path `node <file>` (state-mutating ceremony step per `enrollment-operations.md` MUST-3 — author the script with the same `cat > "${TMPDIR:-/tmp}/…cjs" <<'CEREMONY'` … `CEREMONY` write-then-run wrapper Step 4 uses) calling:
+
+```js
+acquireCodifyLease({
+  displayId,
+  scopeFiles: ["journal/"],
+  repoDir: process.cwd(),
+});
+```
+
+`scopeFiles: ["journal/"]` (trailing-slash DIRECTORY scope) is load-bearing: `findCoveringLease` matches a scope entry against the `journal/`-prefixed rel-path only by exact-equality, trailing-slash-dir-prefix, or bare-dir-prefix — a bare filename (`NNNN-…md`) would NOT match, and `MANDATORY_SCOPE` (`learning-codified.json` + `latest.yaml`) does not cover `journal/`. `acquireCodifyLease` (`.claude/hooks/lib/codify-lease.js`) returns `{ ok, lease, branch, record_emit }`. On `{ ok: true }` proceed to Step 2; if `record_emit.ok` is false surface its `reason` (a lease invisible to siblings per `knowledge-convergence.md` MUST-3 — the lease still holds). On `{ ok: false }` STOP and surface the conflicting holder + `reason`. **Note:** `acquireCodifyLease` also fail-closes on a dirty SCOPE working tree (the lease scope is `MANDATORY_SCOPE ∪ ["journal/"]`, so an unrelated uncommitted `journal/` entry ALSO triggers the `scope-dirty` STOP) or a git error EVEN under coordination-OFF (only the record-emit + integrity-guard enforcement are OFF no-ops) — surface and resolve rather than assume a no-op.
+
 **Step 2 — Reserve the slot via the fold-anchored helper.** Supply the Step-1 JSON
 as `IDENTITY_JSON` ON the invocation (the helper reads it from `process.env`; without
 the prefix `identity` is `undefined` and the reserve fails closed):
@@ -129,6 +177,8 @@ process.stdout.write(JSON.stringify(r));
 ```
 
 (`$identity_json` is the raw JSON captured from Step 1's stdout.)
+
+Inline `node -e` is safe HERE (unlike Step 4's `appendStamped`, which MUST be script-by-path per `enrollment-operations.md` MUST-3): `validate-bash-command.js`'s `detectStateFileMutationSegmentAware` scans the COMMAND LINE for a `STATE_PATH_RX` literal, and this invocation passes only `process.cwd()` — the `coordination-log.jsonl` path the helper emits to is internal to `journal-reserve.js`, never on the command line. Step 4's `appendStamped(cwd, COORD_LOG, …)` puts the state path in an argument, so it MUST be hidden in a `node <file>` script.
 
 The **fold-anchored** helper is `reserveJournalSlotSigned` — NOT the pure `reserveJournalSlot`, which computes off the filesystem only and emits nothing, so the Step-3 Write would halt "slot unreserved" at `journal-write-guard.js`. It returns `{ ok: true, reservation: { slot: "NNNN", filename: "NNNN-<display_id>-DECISION-certify-pass-<display_id>.md", ... }, record }` on success, or `{ ok: false, error, reason, step }` on failure — STOP and surface `reason` when `ok` is false. The slot is `max(disk high-water, fold-accepted reservation high-water)` AND the helper emits the signed `journal-slot-reservation` coordination-log record `journal-write-guard.js` folds — so the Step-3 Write is permitted and two concurrent `/certify` sessions remain distinguishable on disk.
 
@@ -192,9 +242,11 @@ The `appendStamped()` helper stamps `verified_id`+`person_id`+`seq`+`prev_hash`+
 
 **Why this matters:** at fold time, `foldAnchorPredicate` re-hashes the journal body and compares against `sha256_of_content_bytes` in the signed anchor. Tamper post-write fails verification AND names the anchor's SIGNER per `knowledge-convergence.md` MUST NOT clause "Treat a body-anchor finding as accusing the journal's frontmatter author when the anchor predicate names a DIFFERENT signer." The pass receipt's cryptographic integrity is what distinguishes /certify from theater.
 
+**Step 5 — Release the covering codify-lease** (paired with Step 1.5). After the pass entry + body-anchor land, release via a script-by-path `node <file>` (same `cat > …cjs <<'CEREMONY'` write-then-run wrapper as Step 4) calling `releaseCodifyLease({ repoDir: process.cwd(), displayId })` (`.claude/hooks/lib/codify-lease.js` — the helper derives the `leasePath` from `repoDir` internally per Sec-MED-3; callers MUST NOT supply `leasePath`). This emits the paired `codify-lease-release` coordination-log record under coordination-ON. In a coordination-OFF repo it releases the on-disk mutex with no record.
+
 ## Question bank schema
 
-`specs/_certification.yaml` (consumer repo's curated bank). The orchestrator validates this schema at probe start; missing required fields → STOP with the offending question id.
+`specs/_certification.yaml` (consumer repo's curated bank). The authoritative bank-trust gate is the Phase-0 `validate-cert-bank.mjs` binary (schema shape + citation-path allowlist + injection scan + secret-token rejection); the probe-start re-confirmation of this schema shape is a defence-in-depth re-check, NOT a substitute — missing required fields → STOP with the offending question id.
 
 ```yaml
 version: 1 # schema version (currently 1)
@@ -225,19 +277,19 @@ Ordering convention: easy questions first, hard last. The bank's curator owns or
 
 - **Empty bank** (`questions: []` after expansion): STOP, surface "bank is empty — seed it from `.claude/templates/specs/_certification.yaml` before running /certify."
 - **Schema invalid** (missing `expected:`, missing `grading_rubric:` on a `short_answer`, unknown `kind:`): STOP, name the offending question id.
-- **Operator abandons mid-gate**: write `journal/NNNN-DEFER-certify-<display_id>-incomplete.md`; operator stays `L2_SUPERVISED`. Re-running `/certify` restarts from question 1 — the gate is full-bank; partial-bank carry-forward is intentionally NOT supported (the bank is the unit of certification, not individual questions).
+- **Operator abandons mid-gate**: write a deferral entry via the same `reserveJournalSlotSigned` helper with `type: "DECISION"`, `topic: "certify-defer-<display_id>"` (→ `NNNN-<display_id>-DECISION-certify-defer-<display_id>.md` at its returned `r.reservation.filename`). The entry carries the SAME frontmatter shape as the pass receipt (Step 3) — `type: DECISION`, `author: co-authored`, `verified_id`/`person_id`/`display_id` from Step 1, `bank_version` — with `topic: "certify-defer: <display_id>"` and the attempts-so-far tally in the body; the same Step-4 body-anchor applies. **`DEFER` is NOT a canonical journal `type`** (`journal-reserve.js::VALID_TYPES` = DECISION/DISCOVERY/TRADE-OFF/RISK/CONNECTION/GAP/AMENDMENT per `rules/journal.md`); passing `type: "DEFER"` fails the reservation closed. Operator stays `L2_SUPERVISED`. Re-running `/certify` restarts from question 1 — the gate is full-bank; partial-bank carry-forward is intentionally NOT supported (the bank is the unit of certification, not individual questions). **The deferral write is a codify-class `journal/` write too** — under coordination-ON it MUST follow the SAME ceremony as the pass receipt (Step 1.5: ensure the `codify/<display_id>-<date>` branch + `acquireCodifyLease({ scopeFiles: ["journal/"], displayId, repoDir })`; Step 5: `releaseCodifyLease`). Without it, `integrity-guard` hard-blocks the deferral write on `main` (off-codify-branch) or halts it un-leased on a codify branch — the same gate the pass path clears. Under coordination-OFF `integrity-guard` passes through and the ceremony is a no-op.
 - **Bank's cited spec section missing on disk**: warn in the brief receipt; the question is still asked (the operator is being tested on the rule's content as the bank's curator captured it; the missing spec is a separate fix-the-bank task).
 
 ## Next steps after certify
 
-Pass → `/whoami --register` (if unrostered) → `/onboard` (re-read team state with verified identity) → `/claim <path>` (start work).
+Pass → `/onboard` (re-read team state with verified identity) → `/claim <path>` (start work). No registration nudge — the entry gate already required the roster row present, so the operator is rostered by construction.
 
 Until pass, the operator stays `L2_SUPERVISED` via `posture.json` (no certify-side write needed — `multi-operator-coordination.md` §1 already enforces L2 default for unrostered operators).
 
 ## Composition with other commands
 
 - **`/onboard`** answers "who am I + what's the team state" (read-only). `/certify` adds the knowledge-gate. Run `/onboard` first.
-- **`/whoami --register`** is the roster-write. `/certify` does NOT register; the pass journal entry is the prerequisite the next session points at when reviewing the roster-PR.
+- **`/whoami --register`** is the roster-write and a PREREQUISITE — the entry gate requires the roster row present (`resolveIdentity` reads the working-tree roster, so it is visible on the enrollment `codify/<display_id>-<date>` branch or on `main` after merge). `/certify` does NOT register. Run on the enrollment branch (the pass entry rides the roster PR) or after merge; the pass gates the operator's first `/claim`.
 - **`/codify`** authors rules; `/certify` tests knowledge of rules. When a `/codify` lands a load-bearing rule, the consumer repo's bank curator should add a question covering it; without that, the bank goes stale relative to the live rule corpus.
 
 ## Origin

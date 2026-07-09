@@ -850,3 +850,50 @@ changes:
       all edits (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure
       scanner exit 0). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-08-reconvergence5.md
       + journal/0032.
+
+  - type: rule_update
+    artifact: onboarding-suite-certify-coordination-on-conformance
+    files:
+      - .claude/skills/42-certify/SKILL.md
+      - .claude/commands/certify.md
+      - .claude/commands/claim.md
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+      - .claude/commands/ecosystem-init.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+      - .claude/commands/posture.md
+    classification_suggestion: global
+    context: >
+      Re-convergence #6 fixes to the onboarding suite (kailash-py, 10-round multi-agent redteam,
+      ~30 adversarial agents, the self-referential-codify.md Rule 1 gate; converged 0 CRIT/0 HIGH/0 MED
+      across 2 consecutive clean rounds). SECURITY/CORRECTNESS-RELEVANT + HIGHEST cross-SDK priority —
+      the headline is a PRE-EXISTING gap every prior convergence (#1-#5) missed because kailash-py
+      ships coordination-OFF (integrity-guard / journal-write-guard / codify-lease all passthrough):
+      /certify's write surface was NEVER reconciled with the coordination-ON (enrolled) substrate it
+      ships into. A sibling SDK's synced /certify almost certainly carries the identical gap. Fixes,
+      all source-verified against the actual hooks (integrity-guard.js findCoveringLease/watched-subtrees,
+      codify-lease.js acquire/release/MANDATORY_SCOPE, journal-reserve.js VALID_TYPES,
+      operator-id.js resolveIdentity working-tree roster read): (1) certify pass + deferral journal
+      entries now acquire/release a covering codify-lease on a codify/<display_id>-<date> branch
+      (skill Steps 1.5/5), scope ["journal/"] (DIRECTORY scope load-bearing — findCoveringLease matches
+      trailing-slash-dir prefix, a bare filename does not, MANDATORY_SCOPE excludes journal/);
+      (2) deferral entry type DEFER->DECISION + topic certify-defer-<id> (DEFER is NOT in
+      journal-reserve.js::VALID_TYPES -> old contract failed the reservation closed); (3) brief
+      .pending/ receipts moved OUT of the journal/ subtree -> workspaces/_certify/.pending/
+      (integrity-guard watches ^workspaces/<name>/journal/); (4) entry gate corrected to the
+      code-accurate model — resolveIdentity reads the WORKING-TREE roster, so certify runs on the
+      enrollment branch (row visible) OR after merge; registration precedes certification; certification
+      gates /claim. Plus command<->skill + lifecycle fixes: certify Phase-0 (validate-cert-bank.mjs
+      security scan + consent STOP) added to the skill (was command-only — a security-scan drop on the
+      skill-followed path); claim.md SAME-conflict dead-end (nonexistent /lease-override + a
+      /release-claim invocation its own bind-check rejects) -> sibling-self-release/reap; onboard +
+      certify just-enrolled PR-pending branch; genesis double-run idempotency boundary (45 <->
+      ecosystem-init C3); posture.md self-contradiction; claim.md phantom test-path citation genericized.
+      Distributable invariant re-verified intact after all edits (roster PLACEHOLDER, 0/6 enforcement
+      hooks committed, probe-phase-guard=1, disclosure scanner exit 0, 1559 files). TWO items
+      deliberately NOT fixed (out of scope, flagged for loom/rule-owner): enrollment-operations.md
+      MUST-3 categorical wording vs certify Step-2 safe-inline node -e (tighten to "…on the command
+      line…"); claim/release-claim/claims M1-era coordination-log writes cite coc-sign+transport not
+      coc-append/coc-emit (helper-naming drift, substantively MUST-1-compliant). Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence6.md.
