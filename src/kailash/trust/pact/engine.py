@@ -76,6 +76,7 @@ from kailash.trust.pact.knowledge import (
     KnowledgeQuery,
 )
 from kailash.trust.pact.observation import Observation, ObservationSink
+from kailash.trust.pact.rate_limit_enforcer import RateLimitEnforcer
 from kailash.trust.pact.risk_factors import (
     MalformedRiskFactorError,
     RiskFactorEvaluation,
@@ -248,6 +249,12 @@ class GovernanceEngine:
         # None -> use the process-wide GLOBAL_RISK_FACTOR_REGISTRY so factors
         # registered anywhere are picked up without editing the engine core.
         self._risk_factor_registry: RiskFactorRegistry | None = risk_factor_registry
+
+        # Stateful sliding-window rate-limit enforcer (#1516 leg a). Tallies
+        # REAL verify_action calls per (role, action, window) and blocks on
+        # breach -- the declared envelope limit (max_actions_per_day/hour) is
+        # otherwise never tallied. Thread-safe + fail-closed + bounded.
+        self._rate_enforcer = RateLimitEnforcer()
 
         # N2 Effective Envelope Cache -- bounded dict keyed by
         # (role_address, task_id) -> _CachedEnvelope.
@@ -811,6 +818,36 @@ class GovernanceEngine:
                 level, reason, action, ctx
             )
 
+        # Step 3.5: Live stateful sliding-window rate enforcement (#1516 leg a).
+        # The envelope's max_actions_per_day/hour are DECLARED limits that were
+        # only ever compared against a caller-supplied count nothing tallied.
+        # Tally REAL calls per (role, action, window) and compose the verdict
+        # MONOTONICALLY via combine_levels: a breach can only TIGHTEN the level,
+        # never loosen an already-held/blocked base. This runs on the SAME
+        # self._lock the whole _verify_action_locked path holds, and the
+        # enforcer's own atomic check-then-record adds no TOCTOU window.
+        #
+        # Gate on `level != "blocked"`: an already-BLOCKED action (allowlist
+        # rejected, cost exceeded, vacancy/plan suspended) must NOT mint a
+        # rate-tracker key. Tallying already-blocked attempts over-counts an
+        # action the caller never performed AND is the enabler for a key-flood
+        # DoS -- any junk action string would otherwise create a key (#1516a
+        # security review). Tally only admitted/flagged/held attempts, matching
+        # the "tally REAL calls" intent.
+        if (
+            level != "blocked"
+            and effective is not None
+            and effective.operational is not None
+        ):
+            rate_level, rate_reason = self._evaluate_rate_limits(
+                effective, action, role_address, now
+            )
+            if rate_level != "auto_approved":
+                combined = combine_levels(level, rate_level)
+                if combined != level:
+                    level = combined
+                    reason = rate_reason
+
         # Multi-level VERIFY: walk accountability chain and check each ancestor's
         # effective envelope. Most restrictive verdict wins. This prevents a role
         # from executing an action that is allowed at the leaf but blocked by
@@ -1063,6 +1100,99 @@ class GovernanceEngine:
         )
         return (combined, reason, risk_eval)
 
+    def _evaluate_rate_limits(
+        self,
+        envelope: ConstraintEnvelopeConfig,
+        action: str,
+        role_address: str,
+        now: datetime,
+    ) -> tuple[str, str]:
+        """Tally this call against the envelope's live sliding-window rate limits.
+
+        The envelope's ``operational.max_actions_per_day`` /
+        ``max_actions_per_hour`` are DECLARED limits. Until #1516 leg a they were
+        only ever compared against a caller-supplied count
+        (``ctx["daily_calls"]`` / ``ctx["hourly_calls"]``) that *nothing
+        tallied*. This method feeds the stateful :class:`RateLimitEnforcer` so
+        the limits are enforced against a REAL tally of ``verify_action`` calls
+        per ``(role, action, window)``.
+
+        The call is recorded in every configured window unless it breaches one;
+        a breach returns ``blocked`` so the caller composes it monotonically via
+        :func:`combine_levels` (a breach can only TIGHTEN the verdict, never
+        loosen it).
+
+        Fail-closed: a counter/backend error returns ``blocked`` (never
+        fail-open), matching ``pact-governance.md`` Rule 4. Numeric limits are
+        finite-guarded (Rule 6) so a ``NaN``/``Inf`` limit cannot bypass the
+        comparison.
+
+        Returns:
+            ``("auto_approved", "")`` when within every limit (call recorded),
+            or ``("blocked", <reason>)`` on breach or counter error.
+        """
+        op = envelope.operational
+        if op is None:
+            return ("auto_approved", "")
+
+        specs: list[tuple[str, int, float]] = []
+        day_limit = op.max_actions_per_day
+        if day_limit is not None:
+            if not math.isfinite(float(day_limit)):
+                return (
+                    "blocked",
+                    "max_actions_per_day is not finite -- fail-closed to BLOCKED",
+                )
+            specs.append(
+                (f"{role_address}\x1f{action}\x1fday", int(day_limit), 86400.0)
+            )
+        hour_limit = op.max_actions_per_hour
+        if hour_limit is not None:
+            if not math.isfinite(float(hour_limit)):
+                return (
+                    "blocked",
+                    "max_actions_per_hour is not finite -- fail-closed to BLOCKED",
+                )
+            specs.append(
+                (f"{role_address}\x1f{action}\x1fhour", int(hour_limit), 3600.0)
+            )
+
+        if not specs:
+            return ("auto_approved", "")
+
+        try:
+            breach = self._rate_enforcer.check_and_record(specs, now)
+        except Exception:
+            # pact-governance.md Rule 4: a counter/backend error MUST fail
+            # CLOSED to BLOCKED, never fail-open. The generic reason avoids
+            # leaking the raw limit/window into the verdict (observability Rule 8).
+            logger.warning(
+                "Rate-limit counter error for action=%s -- fail-closed to BLOCKED",
+                action,
+            )
+            return ("blocked", "Rate-limit counter error -- fail-closed to BLOCKED")
+
+        if breach is not None:
+            if breach.kind == "capacity":
+                # Fail-closed capacity refusal: the tracker is at its hard cap
+                # and admitting a new (role, action) key would require evicting
+                # an active tally. Refusing is the correct DoS bound; NOTHING
+                # was recorded (pact-governance.md Rule 4 -- never fail-open).
+                return (
+                    "blocked",
+                    "Rate-limiter at capacity; refusing new (role, action) tracker "
+                    "to protect existing tallies -- fail-closed to BLOCKED",
+                )
+            window_label = "day" if breach.window_seconds >= 86400.0 else "hour"
+            return (
+                "blocked",
+                f"Live rate limit exceeded: {breach.limit} actions already recorded "
+                f"in the last {window_label} for action '{action}' "
+                f"(stateful sliding-window counter)",
+            )
+
+        return ("auto_approved", "")
+
     def _evaluate_limit_proximity(
         self,
         envelope: ConstraintEnvelopeConfig,
@@ -1174,8 +1304,10 @@ class GovernanceEngine:
         if envelope.temporal is not None:
             from datetime import datetime as _dt
             from datetime import timezone as _tz
+            from datetime import tzinfo as _TzInfo
 
             _tz_name = envelope.temporal.timezone or "UTC"
+            _tzinfo: _TzInfo
             try:
                 import zoneinfo as _zi
 
@@ -3222,7 +3354,9 @@ class GovernanceEngine:
         """
         if self._sqlite_audit_log is None:
             return (True, None)
-        return self._sqlite_audit_log.verify_integrity()
+        # _sqlite_audit_log is typed Any | None; pin the return shape.
+        result: tuple[bool, str | None] = self._sqlite_audit_log.verify_integrity()
+        return result
 
     def _emit_audit_unlocked(
         self,
