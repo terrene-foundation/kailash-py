@@ -225,6 +225,10 @@ dist/
 # Operator-local repo-linkage resolver config (gitignored at loom; never synced — disclosure class).
 .claude/bin/loom-links.local.json
 
+# Operator-local runbook value files (real deployment hostnames/labels; never committed —
+# disclosure class #260/#252). The committed *.example.md schema sibling stays tracked.
+.claude/rules/*.operator.local.md
+
 # >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
 !.claude/bin/lib/
 !.claude/hooks/lib/
