@@ -1,0 +1,30 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT event with a nested dict/list payload; pins recursive JCS canonicalization (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"Distribute\",\"payload\":{\"meta\":{\"priority\":\"high\",\"tags\":[\"fx\",\"risk\"]},\"recipients\":[\"Sales-VP\",\"Ops-Lead\"],\"subject_ref\":\"kb-7\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-003\",\"ts\":\"2026-01-15T10:07:00+00:00\"}",
+  "expected_content_hash": "sha256:d195319ea5ec417718fed53aac05b4e72c9ae7743352b422e2289cf32457908e",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Distribute",
+    "payload": {
+      "meta": {
+        "priority": "high",
+        "tags": [
+          "fx",
+          "risk"
+        ]
+      },
+      "recipients": [
+        "Sales-VP",
+        "Ops-Lead"
+      ],
+      "subject_ref": "kb-7"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-003",
+    "ts": "2026-01-15T10:07:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

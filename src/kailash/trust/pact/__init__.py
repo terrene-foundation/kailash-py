@@ -100,6 +100,15 @@ from kailash.trust.pact.store import (
     OrgStore,
 )
 from kailash.trust.pact.verdict import GovernanceVerdict
+from kailash.trust.pact.weft import (
+    MissingGateError,
+    UnknownWeftKindError,
+    WeftDistributor,
+    WeftError,
+    WeftEvent,
+    WeftKind,
+    read_weft_events,
+)
 from kailash.trust.pact.yaml_loader import (
     BridgeSpec,
     ClearanceSpec,
@@ -166,6 +175,14 @@ __all__ = [
     "InMemoryObservationSink",
     "Observation",
     "ObservationSink",
+    # WEFT provenance event schema (EATP v3, #1591)
+    "WeftKind",
+    "WeftError",
+    "UnknownWeftKindError",
+    "MissingGateError",
+    "WeftEvent",
+    "WeftDistributor",
+    "read_weft_events",
     # Store protocols and implementations (Ref-4001, 4002)
     "MAX_STORE_SIZE",
     "AccessPolicyStore",

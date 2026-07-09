@@ -1,0 +1,22 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT event pinning JCS scalar emission for bool / null / float payload values (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"Mint\",\"payload\":{\"active\":true,\"prior\":null,\"ratio\":0.5,\"subject_ref\":\"kb-8\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-004\",\"ts\":\"2026-01-15T10:09:00+00:00\"}",
+  "expected_content_hash": "sha256:68860264a720d2c447a87e891650f8c90a9f02fd1ca1f26b5727de7de67d8729",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Mint",
+    "payload": {
+      "active": true,
+      "prior": null,
+      "ratio": 0.5,
+      "subject_ref": "kb-8"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-004",
+    "ts": "2026-01-15T10:09:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

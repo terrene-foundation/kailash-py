@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT Distribute event chained after its HumanGate; the provenance edge from gated subject to recipient (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO-Backend-Lead-DevTeam-SeniorDev\",\"kind\":\"Distribute\",\"payload\":{\"recipient\":\"Sales-VP\",\"subject_ref\":\"kb-42\"},\"prev_link\":\"sha256:75763d7d0bb700a22dbe6eafcc558fb320a8b9e5d6afa5da6e1893bdea20925b\",\"schema_version\":\"v3\",\"session\":\"weft-sess-001\",\"ts\":\"2026-01-15T10:02:00+00:00\"}",
+  "expected_content_hash": "sha256:70b672af623e191e5109ca1fce40512887558cbd73009823470d7f80e6ffaaba",
+  "input": {
+    "identity_ref": "Eng-CTO-Backend-Lead-DevTeam-SeniorDev",
+    "kind": "Distribute",
+    "payload": {
+      "recipient": "Sales-VP",
+      "subject_ref": "kb-42"
+    },
+    "prev_link": "sha256:75763d7d0bb700a22dbe6eafcc558fb320a8b9e5d6afa5da6e1893bdea20925b",
+    "schema_version": "v3",
+    "session": "weft-sess-001",
+    "ts": "2026-01-15T10:02:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

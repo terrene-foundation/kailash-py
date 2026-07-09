@@ -1,0 +1,17 @@
+{
+  "conformance_requirement": "WEFT-forward-compat",
+  "description": "WEFT forward-compat vector: an event whose kind is not one of the five known kinds. A reader MUST ignore it gracefully (never crash), preserving cross-schema_version continuity (#1591).",
+  "expected_reader_disposition": "ignore",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Provenance",
+    "payload": {
+      "subject_ref": "kb-42"
+    },
+    "prev_link": null,
+    "schema_version": "v4",
+    "session": "weft-sess-005",
+    "ts": "2026-01-15T10:10:00+00:00"
+  },
+  "pact_type": "WeftEvent"
+}

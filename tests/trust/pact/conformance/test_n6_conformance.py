@@ -748,8 +748,18 @@ class TestVectorIntegrity:
         assert "pact_type" in vector, f"{vector_file} missing 'pact_type'"
 
     def test_all_expected_vectors_present(self) -> None:
-        """Verify the vectors directory contains exactly the expected files."""
-        actual_files = sorted(p.name for p in VECTORS_DIR.glob("*.json"))
+        """Verify the N6 vector family contains exactly the expected files.
+
+        The WEFT-family vectors (``weft_*.json`` / ``jcs_*.json``, issue #1591)
+        live in the same directory but are guarded by
+        ``test_weft_conformance.py::TestWeftVectorIntegrity`` — filtered out here
+        so each family owns its own exact-set orphan check.
+        """
+        actual_files = sorted(
+            p.name
+            for p in VECTORS_DIR.glob("*.json")
+            if not p.name.startswith(("weft_", "jcs_"))
+        )
         assert actual_files == sorted(self.EXPECTED_VECTORS), (
             f"Vector files mismatch.\n"
             f"Expected: {sorted(self.EXPECTED_VECTORS)}\n"
