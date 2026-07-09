@@ -86,32 +86,76 @@ editing on main first is harmless."
 (branch + signer + scope); a write off it bypasses the concurrency + provenance substrate, and a
 suffixed branch name silently disagrees with the guard about what a codify branch IS.
 
-### 3. Ceremony State-Mutations Run Script-By-Path, Never An Inline Interpreter Body
+### 3. Ceremony State-Mutations Keep The Watched-State Path Off The Mutating Command Line
 
-Any ceremony step that MUTATES a watched state file MUST run as a bare `node <file>` (a script
-authored to disk, then run by path) — NOT a `node -e` / `python -c` body.
-`validate-bash-command.js`'s `detectStateFileMutationSegmentAware` guard (the segment-aware wrapper
-from `violation-patterns.js`) blocks interpreter (`-c`/`-e`/`-m`), redirect,
-and file-utility bodies that write a path matching `STATE_PATH_RX` (the watched state files); a
-`node <file>` keeps that path in the script body, off the scanned command line (mechanics in
-`skills/45-genesis-bootstrap` § The script-by-path pattern). Inlining the mutation is BLOCKED.
+Any ceremony step that RAW-MUTATES a watched state file — an inline `node -e` / `python -c`
+body, a redirect, or a file-utility (`cp`/`mv`/`tee`/`sed -i`) — MUST NOT put the
+`STATE_PATH_RX` write on the bash command line. The satisfying pattern for an AUTHORED mutation
+is script-by-path: a bare `node <file>` (a script authored to disk, then run by path) keeps the
+watched path in the script body, off the scanned command line (mechanics in
+`skills/45-genesis-bootstrap` § The script-by-path pattern).
+`validate-bash-command.js`'s `detectStateFileMutationSegmentAware` guard (the segment-aware
+wrapper from `violation-patterns.js`) fires on EXACTLY this — it blocks an interpreter
+(`-c`/`-e`/`-m`), redirect, or file-utility body ONLY when a path matching `STATE_PATH_RX` (the
+watched state files) appears as a literal on the command line (each layer requires a
+`STATE_PATH_RX` match on the command line — or a redirect target — before it fires). A raw
+inline mutation that puts the watched-state path on the command line is BLOCKED — including a path
+assembled by string concatenation to dodge the literal match (a raw inline write of a watched
+state file is BLOCKED regardless of how its path is spelled; the guard's literal-match is
+defense-in-depth, not the whole contract).
+
+**SAFE — a signed-emit helper call is NOT a raw inline mutation, but only a specific shape
+qualifies.** An inline `node -e` is PERMITTED only when BOTH hold: (a) no `STATE_PATH_RX` literal
+appears in the call's command-line arguments, AND (b) the write is DELEGATED to a signed-emit
+helper that routes its watched-path write through `coc-emit.js::emitSignedRecord`, enforcing the
+stamp / chain / sign contract (`multi-operator-coordination.md` MUST-1). Two of the ceremony's
+signed-emit helpers satisfy both (condition (b) is the governing test, not this list):
+`reserveJournalSlotSigned` (builds the coordination-log path INTERNALLY, routes through
+`emitSignedRecord`) and `emitSignedRecord` itself (opts-only; the path is derived from
+`opts.repoDir`) — this is how `/certify` Step 2 reserves its journal slot inline
+(`reserveJournalSlotSigned(process.cwd(), {...})`). "Owns the write internally" is NECESSARY BUT
+NOT SUFFICIENT: a function hiding a raw `fs.writeFileSync` of a watched path is NOT a signed-emit
+helper (it does not enforce MUST-1) and is BLOCKED exactly like the concat-evasion above; and a
+helper whose SIGNATURE takes the watched path as an ARGUMENT — e.g.
+`appendStamped(repoDir, filePath, …)` (`coc-append.js`, the observations/violations stamped-append
+helper) — puts the literal on the command line, DOES trip the guard, and MUST be script-by-path
+(`skills/42-certify/SKILL.md` Step 4). The MUST targets a RAW inline write OR an arg-supplied
+watched path; it does NOT license every helper call — while a categorical "no inline interpreter
+body" would over-block the safe `reserveJournalSlotSigned` case.
 
 ```bash
 # DO — author the script, run it bare; the watched path is in the file body
 node /tmp/scratch/ceremony-step.js
 
-# DO NOT — inline interpreter body that writes a watched state file
+# DO — inline SIGNED-EMIT helper; the watched path is INTERNAL to the helper (guard passes)
+node -e 'require("./.claude/hooks/lib/journal-reserve.js").reserveJournalSlotSigned(process.cwd(), {dir, identity, type, topic})'
+
+# DO NOT — raw inline body writing a watched-state-path LITERAL on the command line
 node -e 'require("fs").writeFileSync(".claude/operators.roster.json", x)'    # severity: block
 python3 -c 'open(".claude/learning/coordination-log.jsonl","a").write(rec)'  # severity: block
+
+# DO NOT — helper whose signature carries the watched path as an ARGUMENT (literal reaches the line)
+node -e 'require("./.claude/hooks/lib/coc-append.js").appendStamped(cwd, ".claude/learning/violations.jsonl", rec, {})'  # severity: block → use script-by-path
 ```
 
-**BLOCKED rationalizations:** "one-liner is faster" / "the guard flags read-only node too" (it
-does not — only state-file mutation) / "I'll disable the bash guard for the ceremony" / "bundling
-node with the gh call in one command is tidier" (re-introduces a scanned token).
+**BLOCKED rationalizations:** "one-liner is faster" / "my read of the log is fine inline" (WRONG —
+the guard is read/write-AGNOSTIC: it fires on ANY interpreter `-c`/`-e`/`-m` body that names a
+watched-state-path LITERAL on the command line, read OR write; run even READS script-by-path, as
+MUST-4 does) / "I'll disable the bash
+guard for the ceremony" / "bundling node with the gh call in one command is tidier" (re-introduces
+a scanned token) / "I'll build the watched path by string concat so the literal never matches" (a
+raw inline write of a watched state file is BLOCKED regardless — use script-by-path or a
+signed-emit helper) / "it's a helper call, so it's blessed" (only a signed-emit helper that keeps
+the watched path off the command line qualifies — a helper taking the path as an argument, or one
+hiding a raw `fs` write, does not).
 
 **Why:** The guard closes the bypass where `permissions.deny` on Edit/Write does not cover
-bash-mediated mutations; script-by-path satisfies it WITHOUT weakening it, and keeping
-`node <file>` a bare command keeps the scanned command line clean.
+bash-mediated mutations; the guard-enforced invariant is "no watched-state-path LITERAL on the
+command line (read OR write)." Script-by-path (authored mutation, or even a read of the log) and a
+signed-emit helper that keeps the path internal (delegated mutation) both satisfy it; a categorical
+"no inline interpreter body" over-claims and
+falsely flags `/certify`'s safe `reserveJournalSlotSigned` call, while an unqualified "any helper
+is fine" under-claims and licenses an arg-supplied `appendStamped` the guard blocks.
 
 ### 4. Verify The Genesis Folds Clean Before Declaring "Enrolled"
 
@@ -278,7 +322,7 @@ by a clone). A lockfile-gated hook like `probe-phase-guard.js` (fires only durin
 consumer's `/certify` no-assist gate has structural teeth.
 
 **Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** File is
-~290 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
+~335 lines (per `wc -l`), over the 200 guidance. Named rationale: **guard-trap scope** — the rule
 codifies SIX MUST clauses — three fail-closed boundary guards (MUST 1/2/3) + three gate-review
 clauses (MUST 4/5/6), consistent with § "Violation scope" above — each requiring the
 DO / DO NOT + BLOCKED-corpus + `**Why:**` structure `rule-authoring.md` Rules 2/3/4 mandate, plus

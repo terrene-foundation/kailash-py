@@ -897,3 +897,47 @@ changes:
       line…"); claim/release-claim/claims M1-era coordination-log writes cite coc-sign+transport not
       coc-append/coc-emit (helper-naming drift, substantively MUST-1-compliant). Receipt:
       workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence6.md.
+  - type: rule_update
+    artifact: enrollment-operations
+    files:
+      - .claude/rules/enrollment-operations.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      'Follow-on to the onboarding-suite proposal above: closes the TWO items the 2026-07-09
+      re-convergence #6 flagged as deferred-for-loom (see this codify_session tail).
+
+
+      F1 (FIXED — enrollment-operations.md MUST-3 + genesis-bootstrap skill): the categorical wording
+      ("no inline node -e for watched-state mutation") over-claimed against the actual guard and
+      falsely flagged /certify Step 2''s SAFE inline reserveJournalSlotSigned(...) call. Ground-truth
+      verification of detectStateFileMutation (violation-patterns.js) + STATE_PATH_RX
+      (validate-bash-command.js:456) established the real enforced invariant: the guard fires ONLY on
+      a STATE_PATH_RX literal on the command line, and it is READ/WRITE-AGNOSTIC (a path-presence
+      detector, not mutation-aware — an inline READ naming a watched path is blocked too). MUST-3
+      rewritten to state that precisely: script-by-path for authored mutations; a delegated
+      signed-emit helper (reserveJournalSlotSigned / emitSignedRecord routing through
+      coc-emit.js::emitSignedRecord per multi-operator-coordination.md MUST-1, path internal)
+      PERMITTED inline; a raw-fs wrapper / concat-path / arg-supplied appendStamped all BLOCKED or
+      script-by-path (the last matching 42-certify Step 4). "Owns the write internally" made
+      NECESSARY-BUT-NOT-SUFFICIENT (a wrapper hiding a raw fs.writeFileSync is not a signed-emit
+      helper). Same read/write-agnostic accuracy propagated to the cross-referenced depth-file
+      45-genesis-bootstrap/SKILL.md (4 write-only-framing instances corrected) + a phantom whoami.md
+      cross-reference fixed.
+
+
+      F2 (REFUTED — no edit): the proposed "align claim/release-claim/claims coordination-log write
+      citations to coc-emit/coc-append" is refuted by the runtime — emitSignedRecord serves NO
+      claim/release/reap record; the actual claim-writer adjacency-leasecheck.js::autoClaim +
+      reap-ceremony.js still use coc-sign.js::sign + transport-filesystem.js; coc-append.js is the
+      observations/violations helper. The commands are ACCURATE to the code; editing them would
+      introduce a NEW command<->code divergence (spec-accuracy per journal/0035 §3). Left unchanged.
+
+
+      Converged via 7-round multi-agent redteam-with-tests (reviewer + security-reviewer +
+      cc-architect; self-referential-codify.md MUST-1 gate — enrollment-operations.md is
+      allowlisted). Distributable invariant re-verified GREEN after every edit (roster PLACEHOLDER,
+      0/6 enforcement hooks committed, probe-phase-guard=1, disclosure scanner exit 0). Accepted
+      non-blocking: the MUST-3 SAFE-helper paragraph over-density — candidate for extraction to
+      45-genesis-bootstrap in the canonical loom pass. Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence7.md.'
