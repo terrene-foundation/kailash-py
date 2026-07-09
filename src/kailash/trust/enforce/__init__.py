@@ -25,6 +25,18 @@ from kailash.trust.enforce.challenge import (
     ChallengeResponse,
 )
 from kailash.trust.enforce.decorators import audited, shadow, verified
+from kailash.trust.enforce.held import (
+    DEFAULT_EXPIRY_DISPOSITION,
+    ExpiryDisposition,
+    HeldAction,
+    HeldActionStore,
+    MemoryHeldActionStore,
+    SqliteHeldActionStore,
+    new_hold_id,
+    resolve_expiry_verdict,
+    resolve_timeout_seconds,
+    verdict_rank,
+)
 from kailash.trust.enforce.proximity import (
     CONSERVATIVE_PROXIMITY,
     ProximityAlert,
@@ -61,6 +73,17 @@ __all__ = [
     "ShadowStore",
     "MemoryShadowStore",
     "SqliteShadowStore",
+    # Held-action timeout + fail-safe expiry (HITL)
+    "ExpiryDisposition",
+    "DEFAULT_EXPIRY_DISPOSITION",
+    "HeldAction",
+    "HeldActionStore",
+    "MemoryHeldActionStore",
+    "SqliteHeldActionStore",
+    "new_hold_id",
+    "resolve_expiry_verdict",
+    "resolve_timeout_seconds",
+    "verdict_rank",
     # Challenge-response
     "ChallengeProtocol",
     "ChallengeRequest",

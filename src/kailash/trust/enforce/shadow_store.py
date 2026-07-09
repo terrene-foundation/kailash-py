@@ -20,12 +20,12 @@ import json
 import logging
 import os
 import sqlite3
-import stat
 import threading
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
+from kailash.trust._locking import secure_sqlite_files
 from kailash.trust.enforce.strict import EnforcementRecord, Verdict
 
 logger = logging.getLogger(__name__)
@@ -215,17 +215,8 @@ class SqliteShadowStore:
         self._max_records = max_records
         self._lock = threading.Lock()
 
-        # Set file permissions on POSIX (trust-plane-security.md rule 6)
-        if not db_path.startswith(":memory:"):
-            if not os.path.exists(db_path):
-                # Create with restrictive permissions
-                open(db_path, "a").close()
-            try:
-                os.chmod(db_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                logger.warning(
-                    "Could not set permissions on %s (non-POSIX system?)", db_path
-                )
+        if not db_path.startswith(":memory:") and not os.path.exists(db_path):
+            open(db_path, "a").close()
 
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -241,6 +232,11 @@ class SqliteShadowStore:
             "CREATE INDEX IF NOT EXISTS idx_shadow_agent " "ON shadow_records(agent_id)"
         )
         self._conn.commit()
+        # Harden the main DB + the WAL/SHM sidecars (created by the commit above
+        # under WAL mode) to owner-only per trust-plane-security.md rule 6 — the
+        # sidecars carry the same enforcement-record data. Runs AFTER the first
+        # write so the sidecars exist.
+        secure_sqlite_files(db_path)
 
     def append_record(self, record: EnforcementRecord) -> None:
         """Persist a record to SQLite."""
