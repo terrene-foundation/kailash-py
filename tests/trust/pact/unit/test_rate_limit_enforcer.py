@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from kailash.trust.pact.rate_limit_enforcer import RateLimitEnforcer
+from kailash.trust.pact.rate_limit_enforcer import RateBreach, RateLimitEnforcer
 
 _T0 = datetime(2026, 7, 10, 12, 0, 0, tzinfo=UTC)
 
@@ -46,7 +46,7 @@ class TestInvariant1_StatefulTally:
         assert enf.check_and_record(specs, _at(2)) is None
         # The 4th call within the window breaches -- a LIVE tally, no caller count.
         breach = enf.check_and_record(specs, _at(3))
-        assert breach == (3, 3600.0)
+        assert breach == RateBreach(3, 3600.0, "window")
 
     def test_breaching_call_is_not_recorded(self) -> None:
         # A breach must not consume budget: once the window rolls, the same
@@ -56,7 +56,7 @@ class TestInvariant1_StatefulTally:
         assert enf.check_and_record(specs, _at(0)) is None
         assert enf.check_and_record(specs, _at(1)) is None
         # Breach at t=2 (window holds [0,1]); NOT recorded.
-        assert enf.check_and_record(specs, _at(2)) == (2, 100.0)
+        assert enf.check_and_record(specs, _at(2)) == RateBreach(2, 100.0, "window")
         # At t=101 the t=0 entry expired -> one slot free -> admitted; the t=2
         # breach never added a phantom entry.
         assert enf.check_and_record(specs, _at(101)) is None
@@ -64,7 +64,7 @@ class TestInvariant1_StatefulTally:
     def test_limit_zero_blocks_every_call(self) -> None:
         enf = RateLimitEnforcer()
         specs = [("k", 0, 60.0)]
-        assert enf.check_and_record(specs, _at(0)) == (0, 60.0)
+        assert enf.check_and_record(specs, _at(0)) == RateBreach(0, 60.0, "window")
 
 
 # ---------------------------------------------------------------------------
@@ -79,11 +79,11 @@ class TestSlidingWindow:
         assert enf.check_and_record(specs, _at(0)) is None
         assert enf.check_and_record(specs, _at(10)) is None
         # At t=20 the window [t-100, t] still holds both -> breach.
-        assert enf.check_and_record(specs, _at(20)) == (2, 100.0)
+        assert enf.check_and_record(specs, _at(20)) == RateBreach(2, 100.0, "window")
         # At t=111 the t=0 and t=10 entries are both older than 100s -> pruned.
         assert enf.check_and_record(specs, _at(111)) is None
         assert enf.check_and_record(specs, _at(112)) is None
-        assert enf.check_and_record(specs, _at(113)) == (2, 100.0)
+        assert enf.check_and_record(specs, _at(113)) == RateBreach(2, 100.0, "window")
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ class TestMultiWindowAtomic:
         # 3rd call: hour breaches at limit 2. Day (limit 100) MUST NOT be
         # recorded -- atomic all-or-nothing.
         breach = enf.check_and_record(specs, _at(2))
-        assert breach == (2, 3600.0)
+        assert breach == RateBreach(2, 3600.0, "window")
         # Inspect the live deques: day still holds exactly 2 (no phantom 3rd).
         _, day_dq = enf._tracker[day_key]
         _, hour_dq = enf._tracker[hour_key]
@@ -114,7 +114,7 @@ class TestMultiWindowAtomic:
         for i in range(5):
             assert enf.check_and_record(specs, _at(i)) is None
         # 6th breaches -- the FIRST window in spec order (day) is named.
-        assert enf.check_and_record(specs, _at(5)) == (5, 86400.0)
+        assert enf.check_and_record(specs, _at(5)) == RateBreach(5, 86400.0, "window")
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,9 @@ class TestBoundedMemory:
         assert enf.check_and_record(wide, _at(2)) is None  # 3
         assert enf.check_and_record(wide, _at(3)) is None  # 4
         assert enf.check_and_record(wide, _at(4)) is None  # 5
-        assert enf.check_and_record(wide, _at(5)) == (5, 3600.0)  # 6 -> breach
+        assert enf.check_and_record(wide, _at(5)) == RateBreach(
+            5, 3600.0, "window"
+        )  # 6 -> breach
         _, dq = enf._tracker["k"]
         assert dq.maxlen == 6
 
@@ -193,14 +195,21 @@ class TestBoundedMemory:
         assert "stale" not in enf._tracker
         assert "fresh" in enf._tracker
 
-    def test_hard_cap_bounds_tracker_under_key_churn(self) -> None:
+    def test_hard_cap_bounds_tracker_by_refusing_new_keys(self) -> None:
         enf = RateLimitEnforcer()
         enf._MAX_TRACKER_ENTRIES = 50  # shrink the cap for the test
         # Insert many distinct ACTIVE keys within one window at the same instant
-        # (no GC reclaim possible) -> LRU hard-cap keeps the map bounded.
-        for i in range(500):
-            enf.check_and_record([(f"key-{i}", 5, 3600.0)], _at(0))
+        # (no expired key to reclaim) -> the fail-CLOSED cap REFUSES new keys
+        # (it never evicts an active one) so the map stays bounded.
+        results = [
+            enf.check_and_record([(f"key-{i}", 5, 3600.0)], _at(0)) for i in range(500)
+        ]
         assert len(enf._tracker) <= enf._MAX_TRACKER_ENTRIES
+        # The over-cap calls were REFUSED (capacity breach), not silently admitted.
+        capacity_refusals = [
+            r for r in results if r is not None and r.kind == "capacity"
+        ]
+        assert len(capacity_refusals) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -236,3 +245,67 @@ class TestThreadSafety:
         assert admitted == limit
         _, dq = enf._tracker["shared"]
         assert len(dq) == limit
+
+
+# ---------------------------------------------------------------------------
+# Security regression (#1516a HIGH) — eviction MUST be fail-CLOSED
+# ---------------------------------------------------------------------------
+
+
+class TestFailClosedEviction:
+    """The hard-cap MUST NOT reset an active tally to admit a new key.
+
+    The original design evicted the least-recently-active key at the cap. A
+    throttled agent could then flood distinct junk keys to evict its OWN active
+    ``(role, action)`` key -- resetting its tally to 0 = a repeatable rate-limit
+    RESET bypass. The fix: at the cap, reclaim only EXPIRED keys and REFUSE the
+    new key (fail-closed); an active tally is never evicted.
+    """
+
+    def test_over_cap_refuses_new_key_and_preserves_active_tally(self) -> None:
+        enf = RateLimitEnforcer()
+        enf._MAX_TRACKER_ENTRIES = 10  # tiny cap so the flood is cheap
+        now = _at(0)
+
+        # A throttled victim key: limit 1, one call recorded -> now at its limit.
+        victim = [("victim", 1, 3600.0)]
+        assert enf.check_and_record(victim, now) is None
+        # Confirm the victim is throttled (its live tally == its limit).
+        assert enf.check_and_record(victim, now) == RateBreach(1, 3600.0, "window")
+
+        # Flood 200 distinct ACTIVE junk keys at the SAME instant (no expired key
+        # to reclaim). The exploit WANTS one of these to evict "victim".
+        for i in range(200):
+            enf.check_and_record([(f"flood-{i}", 5, 3600.0)], now)
+
+        # HIGH assertion 1: the victim key was NOT evicted (its tally survives).
+        assert "victim" in enf._tracker
+        _, victim_dq = enf._tracker["victim"]
+        assert len(victim_dq) == 1  # tally intact, NOT reset to 0
+
+        # HIGH assertion 2: the victim is STILL throttled -- the flood did not
+        # buy it a fresh budget (the reset-bypass is closed).
+        assert enf.check_and_record(victim, now) == RateBreach(1, 3600.0, "window")
+
+        # HIGH assertion 3: a brand-new over-cap key is REFUSED (capacity breach),
+        # not admitted by evicting an active key.
+        newcomer = enf.check_and_record([("newcomer", 5, 3600.0)], now)
+        assert newcomer is not None and newcomer.kind == "capacity"
+        assert "newcomer" not in enf._tracker
+
+        # Memory stayed bounded throughout (refuse, never grow past the cap).
+        assert len(enf._tracker) <= enf._MAX_TRACKER_ENTRIES
+
+    def test_expired_keys_are_still_reclaimed_at_the_cap(self) -> None:
+        # Fail-closed refusal must NOT block admission when EXPIRED keys can be
+        # reclaimed to make room (the safe half of the bound still works).
+        enf = RateLimitEnforcer()
+        enf._MAX_TRACKER_ENTRIES = 10
+        # Fill the cap with keys in a SHORT window.
+        for i in range(10):
+            enf.check_and_record([(f"old-{i}", 5, 60.0)], _at(0))
+        assert len(enf._tracker) == 10
+        # Long after the 60s window expires, a new key is admitted because the
+        # expired keys are reclaimed (room freed without evicting an active key).
+        assert enf.check_and_record([("fresh", 5, 60.0)], _at(10_000.0)) is None
+        assert "fresh" in enf._tracker

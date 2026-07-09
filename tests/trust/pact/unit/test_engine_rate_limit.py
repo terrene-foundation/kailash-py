@@ -322,3 +322,41 @@ class TestInvariant5_BackwardCompat:
         # A role with no envelope in the fixture -> rate enforcement never runs.
         verdict = engine.verify_action("D1-R1-D2-R1-T1-R1", "read", {})
         assert verdict.level == "auto_approved"
+
+
+# ---------------------------------------------------------------------------
+# Security regression (#1516a MED) — already-blocked actions do NOT mint keys
+# ---------------------------------------------------------------------------
+
+
+class TestAlreadyBlockedDoesNotMintKey:
+    """An action blocked BEFORE the rate step must NOT create a tracker key.
+
+    Tallying already-blocked attempts both over-counts (the caller never
+    performed the action) AND is the enabler for the fail-closed-eviction
+    key-flood: any junk allowlist-rejected action string would otherwise mint a
+    key. The engine gates the rate step on ``level != 'blocked'``.
+    """
+
+    def test_allowlist_rejected_action_creates_no_tracker_key(
+        self, engine: GovernanceEngine
+    ) -> None:
+        # "read" is the ONLY allowed action; anything else is blocked pre-rate.
+        _set_rate_envelope(engine, max_per_hour=5, allowed=["read"])
+
+        # Flood junk action strings -- each is allowlist-rejected (blocked).
+        for i in range(20):
+            verdict = engine.verify_action(_ROLE, f"junk_action_{i}", {})
+            assert verdict.level == "blocked"
+
+        # NOT ONE junk action minted a rate-tracker key (the key-flood enabler
+        # is closed): the tracker holds no key for any junk action.
+        tracker = engine._rate_enforcer._tracker
+        assert not any("junk_action_" in key for key in tracker)
+
+        # An ALLOWED action still tallies normally (the gate did not break the
+        # happy path): 5 admitted, 6th blocked by the live counter.
+        for _ in range(5):
+            assert engine.verify_action(_ROLE, "read", {}).level == "auto_approved"
+        assert engine.verify_action(_ROLE, "read", {}).level == "blocked"
+        assert any("\x1fread\x1f" in key for key in engine._rate_enforcer._tracker)

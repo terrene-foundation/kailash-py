@@ -28,9 +28,15 @@ Security invariants (each pinned by a test):
 3. **Thread-safe, atomic tally.** The whole check-then-record is one critical
    section under ``self._lock`` (``pact-governance.md`` Rule 8) -- no
    check/record TOCTOU. Multi-window admission is all-or-nothing.
-4. **Bounded memory.** Each key is a ``deque(maxlen=limit+1)``; an amortized
-   window-expiry GC reclaims silent keys and an LRU hard-cap bounds the map
-   under adversarial key churn (``trust-plane-security.md`` Rule 4).
+4. **Bounded memory, fail-CLOSED at the cap.** Each key is a
+   ``deque(maxlen=limit+1)``; an amortized window-expiry GC reclaims silent
+   keys (``trust-plane-security.md`` Rule 4). At the hard cap the enforcer
+   reclaims only EXPIRED keys and, if that does not free room, REFUSES the new
+   key (a ``"capacity"`` breach) -- it NEVER evicts an ACTIVE-window key,
+   because doing so would reset that key's live tally to 0, a fail-OPEN
+   rate-limit bypass (a throttled agent could flood junk keys to evict its own
+   active tally). Refusing new keys bounds memory without ever resetting a live
+   count.
 5. **Finite guards.** Window seconds and limits are validated with
    ``math.isfinite`` (``pact-governance.md`` Rule 6) so a ``NaN``/``Inf`` limit
    cannot silently bypass the comparison.
@@ -43,6 +49,7 @@ import math
 import threading
 from collections import deque
 from datetime import datetime
+from typing import Literal, NamedTuple
 
 __all__ = ["RateLimitEnforcer", "RateLimitSpec", "RateBreach"]
 
@@ -53,8 +60,23 @@ logger = logging.getLogger(__name__)
 # the enforcer -- the engine composes it from ``(role, action, window-label)``.
 RateLimitSpec = tuple[str, int, float]
 
-# Returned on breach: (limit, window_seconds) of the FIRST window that tripped.
-RateBreach = tuple[int, float]
+
+class RateBreach(NamedTuple):
+    """A rate-limit breach, returned by :meth:`RateLimitEnforcer.check_and_record`.
+
+    ``kind`` discriminates the two breach causes so the engine can render a
+    precise, non-misleading audit reason:
+
+    * ``"window"`` -- a window's LIVE tally reached its declared limit.
+    * ``"capacity"`` -- the tracker is at its hard cap and admitting a NEW key
+      would require evicting an ACTIVE-window key (which would reset that key's
+      live tally to 0 = a fail-OPEN rate-limit bypass). The enforcer instead
+      REFUSES the new call (fail-CLOSED); nothing is recorded.
+    """
+
+    limit: int
+    window_seconds: float
+    kind: Literal["window", "capacity"]
 
 
 class RateLimitEnforcer:
@@ -106,9 +128,15 @@ class RateLimitEnforcer:
                 An empty list admits unconditionally (returns ``None``).
             now: The call's timestamp. All windows share this instant.
 
+        If admitting the call would require creating NEW keys beyond the hard
+        cap AND expired-key reclamation cannot free room, the call is REFUSED
+        with a ``"capacity"`` breach (fail-closed) -- no active tally is ever
+        evicted to make room.
+
         Returns:
             ``None`` when the call is admitted (recorded in every window), or a
-            ``(limit, window_seconds)`` naming the FIRST breached window.
+            :class:`RateBreach` naming the FIRST breached window
+            (``kind="window"``) or a capacity refusal (``kind="capacity"``).
 
         Raises:
             ValueError: If ``now`` or any spec's ``limit`` / ``window_seconds``
@@ -150,19 +178,32 @@ class RateLimitEnforcer:
                     count = len(dq)
                 if count >= limit:
                     # Breach: budget already exhausted in this window.
-                    return (limit, window_seconds)
+                    return RateBreach(limit, window_seconds, "window")
 
-            # --- Record phase: no window breached -> tally in EVERY window. ---
+            # --- Capacity guard (fail-CLOSED): admitting NEW keys MUST NOT
+            # evict an ACTIVE-window key. Reclaim EXPIRED keys only (safe -- no
+            # live tally); if the new keys STILL do not fit, REFUSE the whole
+            # call (record nothing) so no active tally is ever reset to 0.
+            new_specs = [s for s in specs if s[0] not in self._tracker]
+            if new_specs and (
+                len(self._tracker) + len(new_specs) > self._MAX_TRACKER_ENTRIES
+            ):
+                self._reclaim_expired(now_ts)
+                new_specs = [s for s in specs if s[0] not in self._tracker]
+                if new_specs and (
+                    len(self._tracker) + len(new_specs) > self._MAX_TRACKER_ENTRIES
+                ):
+                    first = new_specs[0]
+                    return RateBreach(first[1], first[2], "capacity")
+
+            # --- Record phase: no breach, capacity OK -> tally EVERY window. ---
             for key, limit, window_seconds in specs:
                 entry = self._tracker.get(key)
                 if entry is None:
-                    # New key: enforce the hard-cap backstop before inserting.
-                    if len(self._tracker) >= self._MAX_TRACKER_ENTRIES:
-                        self._evict_oldest(now_ts)
                     dq = deque((), maxlen=max(2, limit + 1))
                     self._tracker[key] = (window_seconds, dq)
                 else:
-                    stored_window, dq = entry
+                    _stored_window, dq = entry
                     # If the declared limit GREW since this deque was created,
                     # its maxlen would cap storage below the new limit and the
                     # count could never reach it (fail-OPEN). Recreate wider,
@@ -170,7 +211,7 @@ class RateLimitEnforcer:
                     needed = max(2, limit + 1)
                     if dq.maxlen is not None and dq.maxlen < needed:
                         dq = deque(dq, maxlen=needed)
-                    self._tracker[key] = (window_seconds, dq)
+                        self._tracker[key] = (window_seconds, dq)
                 dq.append(now_ts)
 
         return None
@@ -213,24 +254,24 @@ class RateLimitEnforcer:
                 len(self._tracker),
             )
 
-    def _evict_oldest(self, now_ts: float) -> None:
-        """Hard-cap backstop: bound the tracker at :data:`_MAX_TRACKER_ENTRIES`.
+    def _reclaim_expired(self, now_ts: float) -> None:
+        """Capacity-pressure backstop: reclaim ONLY fully-expired-window keys.
 
-        Frees ~10% of keys. Evicts fully-expired-window keys FIRST (safe -- they
-        hold no active state); only if that does not free enough does it fall
-        back to evicting the least-recently-active keys. Reaching the LRU
-        fallback means more than the cap of keys are simultaneously ACTIVE
-        within one window -- an overload in which memory protection takes
-        precedence over per-key enforcement fidelity (a deliberate DoS bound).
+        Unlike the amortized :meth:`_gc_expired`, this runs UNCONDITIONALLY (it
+        is called from the capacity guard, not the hot path). It evicts a key
+        only when that key's sliding window has fully expired -- i.e. it holds
+        NO live tally. It NEVER evicts an ACTIVE-window key.
+
+        This is the fail-CLOSED half of the memory bound: evicting an active key
+        would reset its live rate tally to 0, a rate-limit RESET bypass (a
+        throttled agent floods junk keys to evict its own active ``(role,
+        action)`` key, then calls again with a fresh full budget). When expired
+        keys alone cannot free room, :meth:`check_and_record` REFUSES the new
+        key instead (a ``"capacity"`` breach), so memory stays bounded without
+        ever resetting an active count.
 
         Must be called while holding ``self._lock``.
         """
-        if not self._tracker:
-            return
-
-        target = max(1, len(self._tracker) // 10)
-
-        # 1) Expired-window keys first -- safe, they hold no active state.
         expired = [
             key
             for key, (window_seconds, dq) in self._tracker.items()
@@ -238,15 +279,11 @@ class RateLimitEnforcer:
         ]
         for key in expired:
             del self._tracker[key]
-        if len(expired) >= target:
-            return
-
-        # 2) Still over budget -> evict least-recently-active as a last resort.
-        # Empty deques sort first (-inf).
-        def _last_ts(key: str) -> float:
-            _, dq = self._tracker[key]
-            return dq[-1] if dq else float("-inf")
-
-        remaining = target - len(expired)
-        for key in sorted(self._tracker.keys(), key=_last_ts)[:remaining]:
-            del self._tracker[key]
+        if expired:
+            # Schema-safe: COUNT only -- never the (role, action) keys.
+            logger.debug(
+                "RateLimitEnforcer: reclaimed %d expired key(s) under capacity "
+                "pressure; %d active key(s) remain (new keys refused, not evicted)",
+                len(expired),
+                len(self._tracker),
+            )

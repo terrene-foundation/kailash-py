@@ -826,7 +826,19 @@ class GovernanceEngine:
         # never loosen an already-held/blocked base. This runs on the SAME
         # self._lock the whole _verify_action_locked path holds, and the
         # enforcer's own atomic check-then-record adds no TOCTOU window.
-        if effective is not None and effective.operational is not None:
+        #
+        # Gate on `level != "blocked"`: an already-BLOCKED action (allowlist
+        # rejected, cost exceeded, vacancy/plan suspended) must NOT mint a
+        # rate-tracker key. Tallying already-blocked attempts over-counts an
+        # action the caller never performed AND is the enabler for a key-flood
+        # DoS -- any junk action string would otherwise create a key (#1516a
+        # security review). Tally only admitted/flagged/held attempts, matching
+        # the "tally REAL calls" intent.
+        if (
+            level != "blocked"
+            and effective is not None
+            and effective.operational is not None
+        ):
             rate_level, rate_reason = self._evaluate_rate_limits(
                 effective, action, role_address, now
             )
@@ -1161,12 +1173,21 @@ class GovernanceEngine:
             return ("blocked", "Rate-limit counter error -- fail-closed to BLOCKED")
 
         if breach is not None:
-            limit, window_seconds = breach
-            window_label = "day" if window_seconds >= 86400.0 else "hour"
+            if breach.kind == "capacity":
+                # Fail-closed capacity refusal: the tracker is at its hard cap
+                # and admitting a new (role, action) key would require evicting
+                # an active tally. Refusing is the correct DoS bound; NOTHING
+                # was recorded (pact-governance.md Rule 4 -- never fail-open).
+                return (
+                    "blocked",
+                    "Rate-limiter at capacity; refusing new (role, action) tracker "
+                    "to protect existing tallies -- fail-closed to BLOCKED",
+                )
+            window_label = "day" if breach.window_seconds >= 86400.0 else "hour"
             return (
                 "blocked",
-                f"Live rate limit exceeded: {limit} actions already recorded in the "
-                f"last {window_label} for action '{action}' "
+                f"Live rate limit exceeded: {breach.limit} actions already recorded "
+                f"in the last {window_label} for action '{action}' "
                 f"(stateful sliding-window counter)",
             )
 
