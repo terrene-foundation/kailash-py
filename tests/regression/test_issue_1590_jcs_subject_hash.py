@@ -12,7 +12,10 @@ encoder's own emission.
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID
 
 import pytest
 
@@ -236,3 +239,65 @@ class TestV3AuditAnchor:
         )
         assert anchor.schema_version == SCHEMA_VERSION_V2
         assert "subject_hash" not in anchor.to_dict()
+
+
+class TestTypedScalarSubjectSerialization:
+    """A typed-scalar subject (datetime / UUID / Decimal) MUST round-trip through
+    the JSON audit flow — seal → to_dict → json.dumps → from_dict → verify —
+    without raising TypeError, AND its subject_hash MUST be byte-stable
+    (normalizing the stored subject through canonical_scalars is idempotent, so
+    it changes neither subject_hash nor content_hash). Regression for the MED
+    found in PR #1641 review: to_dict stored the RAW subject, so a datetime
+    subject sealed + verified in memory but raised
+    'Object of type datetime is not JSON serializable' at json.dumps time —
+    the anchor could not persist through the on-disk audit flow every record and
+    conformance vector uses."""
+
+    def _typed_subject(self):
+        return {
+            "issued": datetime(2026, 1, 1, tzinfo=UTC),
+            "id": UUID("12345678-1234-5678-1234-567812345678"),
+            "amount": Decimal("1.50"),
+            "did": "did:example:1",
+        }
+
+    def test_datetime_subject_serializes_through_json_dumps(self) -> None:
+        subject = self._typed_subject()
+        anchor = _anchor(subject=subject)
+        anchor.seal()
+        assert anchor.verify_integrity()  # in-memory verify already worked pre-fix
+        data = anchor.to_dict()
+        # The failing operation pre-fix: json.dumps over to_dict() raised
+        # TypeError on the datetime/UUID/Decimal values. It MUST now succeed.
+        serialized = json.dumps(data, sort_keys=True)
+        assert isinstance(serialized, str)
+        # The stored subject is normalized to JSON-native forms.
+        assert data["subject"]["issued"] == "2026-01-01T00:00:00+00:00"
+        assert data["subject"]["amount"] == "1.50"
+
+    def test_typed_subject_round_trips_and_verifies(self) -> None:
+        subject = self._typed_subject()
+        anchor = _anchor(subject=subject)
+        anchor.seal()
+        # Full on-disk audit flow: to_dict -> json.dumps -> json.loads -> from_dict.
+        restored = AuditAnchor.from_dict(json.loads(json.dumps(anchor.to_dict())))
+        assert restored.verify_integrity()
+        assert restored.content_hash == anchor.content_hash
+
+    def test_typed_subject_hash_is_byte_stable_across_normalization(self) -> None:
+        """subject_hash is derived from canonical_scalars(subject) on both the raw
+        and the stored (normalized) form; canonical_scalars is idempotent, so the
+        stored-form fix does NOT change the hash byte-for-byte."""
+        from kailash.trust._canonical import canonical_scalars
+
+        subject = self._typed_subject()
+        raw_hash = jcs_subject_hash(subject)
+        normalized_hash = jcs_subject_hash(canonical_scalars(subject))
+        assert raw_hash == normalized_hash  # idempotency → byte-stable
+
+        anchor = _anchor(subject=subject)
+        anchor.seal()
+        # The anchor's emitted + round-tripped subject_hash equals the raw-derived one.
+        assert anchor._subject_hash() == raw_hash
+        restored = AuditAnchor.from_dict(json.loads(json.dumps(anchor.to_dict())))
+        assert restored._subject_hash() == raw_hash

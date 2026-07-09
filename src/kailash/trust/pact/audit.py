@@ -448,6 +448,20 @@ class AuditAnchor:
         unchanged. ``subject_hash`` is informational transparency for external
         verifiers; on verify it is RE-DERIVED from ``subject`` (never trusted
         from the stored value), so a tampered ``subject`` fails the hash check.
+
+        The stored ``subject`` is normalized through ``canonical_scalars`` — the
+        SAME normalizer ``jcs_subject_hash`` already applies before hashing — so
+        a typed-scalar subject (``datetime`` / ``UUID`` / ``Decimal`` / ``bytes``
+        / ``Enum`` / dataclass) serializes cleanly through ``json.dumps`` instead
+        of raising ``TypeError: Object of type X is not JSON serializable``. This
+        is BYTE-SAFE for ``subject_hash``: ``canonical_scalars`` is idempotent
+        and ``subject_hash`` is derived from ``canonical_scalars(subject)`` on
+        BOTH sides, so normalizing the STORED form changes NEITHER the emitted
+        ``subject_hash`` NOR the ``content_hash`` (the pre-image is untouched),
+        and a ``from_dict`` round-trip re-derives the identical ``subject_hash``
+        (``verify_integrity`` still passes). For a JSON-native subject the
+        normalization is a value-preserving no-op, so every existing golden
+        vector's ``expected_canonical_json`` is unchanged.
         """
         result: dict[str, Any] = {
             "anchor_id": self.anchor_id,
@@ -464,7 +478,7 @@ class AuditAnchor:
         }
         if self.schema_version == SCHEMA_VERSION_V3:
             result["schema_version"] = self.schema_version
-            result["subject"] = self.subject
+            result["subject"] = canonical_scalars(self.subject)
             result["subject_hash"] = self._subject_hash()
         return result
 
