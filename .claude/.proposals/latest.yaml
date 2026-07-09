@@ -1051,3 +1051,43 @@ changes:
       (the tool is on self-referential-codify''s allowlist). Receipt:
       workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence9.md +
       workspaces/mops-onboarding/journal/0038-RISK-committed-operator-local-ci-values-public-repo.md.'
+  - type: rule_update
+    artifact: onboard
+    files:
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+    classification_suggestion: global
+    context:
+      'Re-convergence #10 (2026-07-09) — fresh 2-agent adversarial audit of the #9 state MERGED on
+      main (PR #1629) + the #9 close-out (PR #1630). Extends the #9 "a citation must match the wired
+      mechanism" class from a guard-symbol to a canonical VOCABULARY: the /onboard read-path cited
+      `DEFER` as a journal `type`, a token that is NOT in `journal-reserve.js::VALID_TYPES`
+      ({DECISION, DISCOVERY, TRADE-OFF, RISK, CONNECTION, GAP, AMENDMENT}), NOT in `rules/journal.md`''s
+      enum, and explicitly disclaimed by the sibling /certify artifacts ("DEFER is NOT a canonical
+      journal type"). Two mirror sites: onboard.md filtered `DECISION-`/`DISCOVERY-`/`DEFER-` entries;
+      41-onboard/SKILL.md `types=["DECISION","DISCOVERY","DEFER"]`. The `DEFER-` branch was dead code
+      (real deferrals are DECISION-typed with "defer" in the topic slot; zero DEFER-typed files exist),
+      so no operator-visible data loss -> MED. It survived 9 rounds because the token resolves (passes
+      grep/dangling-ref sweeps) yet contradicts the wired vocabulary; only cross-artifact verification
+      against the sibling /certify pair surfaced it.
+
+
+      FIX (source-verified): dropped `DEFER` from both filters (same-shard command<->skill mirror edit
+      per command-skill-parity.md MUST-1); added a ground-truth-cited note
+      (`journal-reserve.js::VALID_TYPES` / `rules/journal.md`) that deferrals are DECISION-typed and
+      already surfaced by the `DECISION-` filter. onboard.md stays 92 lines (<=150). No DEFER-typed
+      journal file exists tree-wide (verified).
+
+
+      CONVERGENCE: 4 rounds (R1 mechanical; R2 2 parallel adversarial agents [1 MED found]; R3 3-agent
+      self-referential-codify gate [reviewer + security-reviewer + cc-architect, parallel — onboard.md
+      is on the self-referential-codify.md Rule 2 allowlist]; R4 mechanical). 0 CRIT / 0 HIGH, 2
+      consecutive clean rounds (R3 + R4). The #9 guard-symbol fixes + disclosure closure all
+      re-verified holding on merged main; the #9 close-out receipts verified accurate against ground
+      truth.
+
+
+      CLASSIFICATION: GLOBAL (the onboarding suite is synced cross-SDK + downstream; a downstream
+      consumer inherits the DEFER phantom-type citation otherwise). Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence10.md +
+      workspaces/mops-onboarding/journal/0041-AMENDMENT-reconvergence10-onboard-defer-phantom-journal-type.md.'
