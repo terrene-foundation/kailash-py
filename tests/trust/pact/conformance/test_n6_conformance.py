@@ -22,9 +22,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from kailash.trust import ConfidentialityLevel, TrustPosture
+from kailash.trust._jcs import jcs_encode, jcs_subject_hash
 from kailash.trust.pact.access import AccessDecision
-from kailash.trust.pact.audit import AuditAnchor
+from kailash.trust.pact.audit import SCHEMA_VERSION_V2, SCHEMA_VERSION_V3, AuditAnchor
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
@@ -460,6 +462,87 @@ class TestN4AuditAnchor:
 
 
 # ---------------------------------------------------------------------------
+# N4-v3: EATP v3 AuditAnchor subject_hash (RFC 8785 / JCS) conformance
+# ---------------------------------------------------------------------------
+
+
+def _build_anchor_from_vector(inp: dict[str, Any]) -> AuditAnchor:
+    """Reconstruct an AuditAnchor from a vector's ``input`` block.
+
+    ``subject`` is passed only when present so the v2.2 vs v3 discriminator is
+    derived exactly as production callers derive it.
+    """
+    return AuditAnchor(
+        anchor_id=inp["anchor_id"],
+        sequence=inp["sequence"],
+        previous_hash=inp["previous_hash"],
+        agent_id=inp["agent_id"],
+        action=inp["action"],
+        verification_level=VerificationLevel(inp["verification_level"]),
+        envelope_id=inp["envelope_id"],
+        result=inp["result"],
+        metadata=inp["metadata"],
+        timestamp=datetime.fromisoformat(inp["timestamp"]),
+        subject=inp["subject"] if "subject" in inp else None,
+    )
+
+
+class TestN4V3AuditAnchorSubjectHash:
+    """Verify EATP v3 AuditAnchor subject_hash (RFC 8785 / JCS) conformance."""
+
+    def test_float_subject_vector(self) -> None:
+        vector = _load_vector("audit_anchor_v3_float_subject.json")
+        inp = vector["input"]
+        subject = inp["subject"]
+
+        # INDEPENDENT reference: the JCS canonicalization MUST equal the
+        # RFC 8785 §3.2.2 published "numbers" canonical string. This is the
+        # non-self-referential assertion — the expected value is the RFC's
+        # published output, not the encoder's own emission.
+        assert jcs_encode(subject) == vector["expected_subject_jcs"]
+        assert jcs_subject_hash(subject) == vector["expected_subject_hash"]
+
+        anchor = _build_anchor_from_vector(inp)
+        assert anchor.schema_version == SCHEMA_VERSION_V3
+        anchor.seal()
+        assert anchor.content_hash == vector["expected_content_hash"]
+        assert _canonical_json(anchor.to_dict()) == vector["expected_canonical_json"]
+        assert anchor.verify_integrity()
+
+    def test_unicode_subject_vector(self) -> None:
+        vector = _load_vector("audit_anchor_v3_unicode_subject.json")
+        inp = vector["input"]
+        subject = inp["subject"]
+
+        # INDEPENDENT reference: RFC 8785 Appendix B locale example — keys
+        # sorted by UTF-16 code unit, non-ASCII emitted as raw UTF-8.
+        assert jcs_encode(subject) == vector["expected_subject_jcs"]
+        assert jcs_subject_hash(subject) == vector["expected_subject_hash"]
+
+        anchor = _build_anchor_from_vector(inp)
+        assert anchor.schema_version == SCHEMA_VERSION_V3
+        anchor.seal()
+        assert anchor.content_hash == vector["expected_content_hash"]
+        assert _canonical_json(anchor.to_dict()) == vector["expected_canonical_json"]
+        assert anchor.verify_integrity()
+
+    def test_no_subject_vector_is_byte_identical_to_v2(self) -> None:
+        vector = _load_vector("audit_anchor_v3_no_subject.json")
+        inp = vector["input"]
+        assert "subject" not in inp
+
+        anchor = _build_anchor_from_vector(inp)
+        # The v3-aware constructor with no subject yields a v2.2 anchor whose
+        # signed pre-image + serialization are byte-identical to the pre-v3 form.
+        assert anchor.schema_version == SCHEMA_VERSION_V2
+        anchor.seal()
+        assert anchor.content_hash == vector["expected_content_hash"]
+        assert _canonical_json(anchor.to_dict()) == vector["expected_canonical_json"]
+        assert "subject_hash" not in anchor.to_dict()
+        assert "schema_version" not in anchor.to_dict()
+
+
+# ---------------------------------------------------------------------------
 # N5: Observation roundtrip and vector match
 # ---------------------------------------------------------------------------
 
@@ -639,6 +722,9 @@ class TestVectorIntegrity:
     EXPECTED_VECTORS = [
         "access_decision.json",
         "audit_anchor.json",
+        "audit_anchor_v3_float_subject.json",
+        "audit_anchor_v3_no_subject.json",
+        "audit_anchor_v3_unicode_subject.json",
         "constraint_envelope.json",
         "filter_decision.json",
         "governance_verdict.json",
