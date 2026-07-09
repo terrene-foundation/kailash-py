@@ -1091,3 +1091,46 @@ changes:
       consumer inherits the DEFER phantom-type citation otherwise). Receipt:
       workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence10.md +
       workspaces/mops-onboarding/journal/0041-AMENDMENT-reconvergence10-onboard-defer-phantom-journal-type.md.'
+  - type: rule_update
+    artifact: claim
+    files:
+      - .claude/commands/claim.md
+    classification_suggestion: global
+    context:
+      'Re-convergence #11 (2026-07-09) — fresh 3-agent adversarial audit of the #10 state MERGED on
+      main (PRs #1630/#1631). Extends the SAME "a citation must match the wired mechanism" class the
+      #9 (guard-symbol) and #10 (canonical journal-type vocabulary) rounds surfaced — this time a
+      SAME-predicate display-token set in the `/claim` command. `commands/claim.md` Step 6 SAME-dispatch
+      printed the matched predicate as `(exact / dir-contains / workspace / commit-cohort / axis-3)`.
+      Ground truth `.claude/hooks/lib/adjacency.js::sameReason` returns `predicate: pred` where pred is
+      one of the `_matchX` helper literals: `exact` (172), `glob` (173), `dir-contains` (183),
+      `workspace` (186), `commit-cohort` (202), `phase` (217-218), `composed-axis-3` (235). Three
+      defects vs that wired set: (a) `axis-3` is a PHANTOM — the code emits `composed-axis-3`, never
+      bare `axis-3` (the exact #10 DEFER class: a token that resolves as text but is absent from the
+      wired return set); (b) `glob` OMITTED; (c) `phase` OMITTED. Both omissions are genuine
+      `sameReason` return literals a SAME halt would print, undocumented. MED — teaches
+      false/incomplete vocabulary; resolution paths are predicate-agnostic so no guard dropped / no
+      misroute (not HIGH). Single-command drift: `claim.md` has NO backing skill, so no command<->skill
+      parity pair to mirror (unlike the #10 onboard command<->skill pair).
+
+
+      FIX (source-verified): replaced the enumeration with the full wired set
+      `(exact / glob / dir-contains / workspace / commit-cohort / phase / composed-axis-3)` + an inline
+      "the full wired `adjacency.js::sameReason` `predicate` return set" anchor so future edits
+      re-derive from the wired source, not re-enumerate. Verified each literal against adjacency.js by
+      grep (line numbers above).
+
+
+      CONVERGENCE: R1 mechanical (DEFER #10 fix holds; 0 disclosure leaks in tracked files; markers
+      clean) + R2 3 parallel adversarial agents (parity/phantom-vocab [this MED]; guard-symbol
+      ownership [91/92 clean + 1 by-design loom-canonical matcher divergence, NOT a defect];
+      dangling-refs/disclosure [disclosure CLEAN; 4 MED dangling refs = pre-existing loom->BUILD-subset
+      artifacts OUTSIDE the onboarding suite, targets resolve in loom-canonical]) -> this MED fixed ->
+      R3/R4 mechanical clean = 2 consecutive clean rounds, 0 CRIT / 0 HIGH. claim.md is NOT on the
+      self-referential-codify.md Rule 2 allowlist, so no mandatory multi-agent gate (the fix is a
+      2-token-class citation correction verified against wired source).
+
+
+      CLASSIFICATION: GLOBAL (the coordination/onboarding suite is synced cross-SDK + downstream; a
+      downstream consumer inherits the `axis-3` phantom + the `glob`/`phase` omissions otherwise).
+      Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md.'
