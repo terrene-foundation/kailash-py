@@ -98,7 +98,10 @@ watched path in the script body, off the scanned command line (mechanics in
 wrapper from `violation-patterns.js`) fires on EXACTLY this — it blocks an interpreter
 (`-c`/`-e`/`-m`), redirect, or file-utility body ONLY when a path matching `STATE_PATH_RX` (the
 watched state files) appears as a literal on the command line (each layer requires a
-`STATE_PATH_RX` match on the command line — or a redirect target — before it fires). A raw
+`STATE_PATH_RX` match on the command line — or a redirect target — before it fires). A FOURTH
+whole-command pass (`detectHeredocWriteRunBundle`) additionally fires when ONE command BOTH
+authors a heredoc script whose body carries a `STATE_PATH_RX` literal AND then runs that same
+script — so author the script in a SEPARATE command from its bare `node <file>` run. A raw
 inline mutation that puts the watched-state path on the command line is BLOCKED — including a path
 assembled by string concatenation to dodge the literal match (a raw inline write of a watched
 state file is BLOCKED regardless of how its path is spelled; the guard's literal-match is
@@ -136,6 +139,9 @@ python3 -c 'open(".claude/learning/coordination-log.jsonl","a").write(rec)'  # s
 
 # DO NOT — helper whose signature carries the watched path as an ARGUMENT (literal reaches the line)
 node -e 'require("./.claude/hooks/lib/coc-append.js").appendStamped(cwd, ".claude/learning/violations.jsonl", rec, {})'  # severity: block → use script-by-path
+
+# DO NOT — author-and-run a heredoc bundle in ONE command (the whole-command bundle pass fires)
+cat > /tmp/s.cjs <<'EOF' … coordination-log.jsonl … EOF && node /tmp/s.cjs  # severity: block → author + run as TWO separate commands
 ```
 
 **BLOCKED rationalizations:** "one-liner is faster" / "my read of the log is fine inline" (WRONG —
@@ -150,8 +156,9 @@ the watched path off the command line qualifies — a helper taking the path as 
 hiding a raw `fs` write, does not).
 
 **Why:** The guard closes the bypass where `permissions.deny` on Edit/Write does not cover
-bash-mediated mutations; the guard-enforced invariant is "no watched-state-path LITERAL on the
-command line (read OR write)." Script-by-path (authored mutation, or even a read of the log) and a
+bash-mediated mutations; the guard-enforced invariant is "no watched-state-path LITERAL in an
+interpreter / redirect / file-utility body on the command line (interpreter bodies fire on a read
+too)." Script-by-path (authored mutation, or even a read of the log) and a
 signed-emit helper that keeps the path internal (delegated mutation) both satisfy it; a categorical
 "no inline interpreter body" over-claims and
 falsely flags `/certify`'s safe `reserveJournalSlotSigned` call, while an unqualified "any helper
