@@ -34,14 +34,16 @@ class User:
     locked_until: datetime
     last_login: datetime
 
-    __dataflow__ = {
-        'security': {
-            'sensitive_fields': ['password_hash', 'totp_secret'],
-            'audit_fields': ['email', 'last_login'],
-            'encrypt_fields': ['totp_secret']
-        }
-    }
+    # Field-level sensitivity is NOT a `__dataflow__` model key. Classify
+    # sensitive fields with the `@classify` decorator (see the classification
+    # guide) and enable field encryption via the DataFlow() ENCRYPTION
+    # progressive-disclosure feature — not a per-model config dict.
 ```
+
+Field encryption is enabled at the `DataFlow()` level via the ENCRYPTION
+feature flag (progressive disclosure), and per-field sensitivity is declared
+with `@classify(field, DataClassification.SECRET)` — there is no
+`__dataflow__['security']` / `encrypt_fields` model key.
 
 ### OAuth2 Integration
 
@@ -162,13 +164,9 @@ class Order:
     total: float
     status: str
 
-    __dataflow__ = {
-        'row_security': {
-            'read': 'user_id = current_user_id() OR has_role("admin")',
-            'write': 'user_id = current_user_id() AND status != "completed"',
-            'delete': 'has_role("admin")'
-        }
-    }
+    # Row-level authorization (who may read/write/delete which rows) is NOT a
+    # DataFlow model key — it is the domain of PACT governance (`kailash-pact`).
+    # Define read/write/delete policies through PACT, not `__dataflow__`.
 
 # Apply security in workflows
 workflow.add_node("SecureQueryNode", "get_orders", {
@@ -198,15 +196,12 @@ db = DataFlow(encryption_config=encryption_config)
 class Customer:
     id: int
     name: str
-    ssn: str  # Automatically encrypted
-    credit_card: str  # Automatically encrypted
+    ssn: str  # sensitive — classify with @classify
+    credit_card: str  # sensitive — classify with @classify
 
-    __dataflow__ = {
-        'encryption': {
-            'fields': ['ssn', 'credit_card'],
-            'search_enabled': ['ssn']  # Enable searching on encrypted field
-        }
-    }
+    # Field encryption is NOT a `__dataflow__` model key. Enable the ENCRYPTION
+    # feature at the DataFlow() level (progressive disclosure) and declare
+    # sensitive fields with @classify(field, DataClassification.SECRET).
 ```
 
 ### Data in Transit
@@ -286,9 +281,12 @@ class AuditLog:
             ['resource_type', 'resource_id'],
             ['action', 'timestamp']
         ],
-        'retention': '7 years',
-        'immutable': True  # Prevent modifications
+        # `retention` takes a config dict, not a string. ~7 years = 2555 days.
+        'retention': {'policy': 'delete', 'after_days': 2555},
     }
+    # NOTE: append-only / immutability is not a `__dataflow__` key. Enforce
+    # immutability at the database layer (e.g. a migration adding an
+    # update/delete-blocking trigger), not via a model config flag.
 ```
 
 ### Workflow Audit

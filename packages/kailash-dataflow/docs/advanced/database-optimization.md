@@ -195,24 +195,12 @@ class Event:
     event_type: str
     data: dict
 
-    __dataflow__ = {
-        'partitioning': {
-            'strategy': 'range',
-            'key': 'timestamp',
-            'interval': 'monthly',
-            'retention': {
-                'keep_months': 12,
-                'archive_months': 24,
-                'delete_after': 36
-            },
-            'automatic': {
-                'create_ahead': 3,  # Create 3 months ahead
-                'maintenance_schedule': 'daily'
-            }
-        }
-    }
+    # NOTE: Table partitioning is NOT a `@db.model` config key. Partitioning is
+    # applied at the database/DDL layer through a numbered migration (see the
+    # schema-migration guide), not via `__dataflow__`. The only performance knob
+    # exposed on the model is `indexes`.
 
-# Partition maintenance
+# Partition maintenance (partition DDL is created/managed by migrations)
 workflow.add_node("PartitionMaintenanceNode", "maintain_partitions", {
     "operations": [
         {
@@ -246,17 +234,8 @@ class Customer:
     region: str
     name: str
 
-    __dataflow__ = {
-        'partitioning': {
-            'strategy': 'list',
-            'key': 'region',
-            'partitions': {
-                'us_customers': ['us-east', 'us-west'],
-                'eu_customers': ['eu-west', 'eu-central'],
-                'asia_customers': ['asia-pacific', 'asia-south']
-            }
-        }
-    }
+    # NOTE: List/range partitioning is applied at the database/DDL layer via a
+    # numbered migration, not through a `@db.model` config key.
 ```
 
 ## Materialized Views

@@ -26,6 +26,7 @@ class Document:
 ```
 
 This automatically:
+
 - Adds `tenant_id` field to the model
 - Filters all queries by current tenant
 - Validates tenant access on all operations
@@ -241,9 +242,10 @@ class Event:
     ]
 
     __dataflow__ = {
-        'multi_tenant': True,
-        'partition_by': 'tenant_id'  # PostgreSQL partitioning
+        'multi_tenant': True
     }
+    # Table partitioning (e.g. PostgreSQL declarative partitioning on tenant_id)
+    # is a database/migration-layer concern, not a `__dataflow__` model config key.
 ```
 
 ### Connection Pooling
@@ -271,10 +273,10 @@ class Product:
     price: float
 
     __dataflow__ = {
-        'multi_tenant': True,
-        'tenant_shard_key': 'tenant_id',  # For sharding
-        'cache_by_tenant': True
+        'multi_tenant': True
     }
+    # Sharding by tenant is a database/migration-layer concern, not a
+    # `__dataflow__` model config key.
 ```
 
 ## Security
@@ -302,9 +304,10 @@ class SensitiveData:
 
     __dataflow__ = {
         'multi_tenant': True,
-        'audit_log': True,
-        'audit_include_tenant': True  # Log tenant in audit
+        'audit_log': True
     }
+    # With multi_tenant enabled, tenant_id is part of every row, so audit_log
+    # already captures the tenant on each audited operation.
 
 # Query audit log for tenant
 workflow.add_node("AuditLogNode", "tenant_audit", {
@@ -420,11 +423,11 @@ class TenantUsage:
 
 ### 1. Choose the Right Strategy
 
-| Strategy | Use When | Pros | Cons |
-|----------|----------|------|------|
-| Row-level | <1000 tenants | Simple, low overhead | Careful index design needed |
-| Schema | 100-10K tenants | Good isolation, easy backup | Schema management complexity |
-| Database | <100 tenants | Complete isolation | Higher resource usage |
+| Strategy  | Use When        | Pros                        | Cons                         |
+| --------- | --------------- | --------------------------- | ---------------------------- |
+| Row-level | <1000 tenants   | Simple, low overhead        | Careful index design needed  |
+| Schema    | 100-10K tenants | Good isolation, easy backup | Schema management complexity |
+| Database  | <100 tenants    | Complete isolation          | Higher resource usage        |
 
 ### 2. Design for Tenant Scale
 
@@ -486,8 +489,7 @@ class Account:
     storage_gb: int = 1
 
     __dataflow__ = {
-        'multi_tenant': True,
-        'tenant_root': True  # This is the tenant definition
+        'multi_tenant': True
     }
 ```
 
@@ -511,10 +513,11 @@ class ComplianceRecord:
     retention_days: int
 
     __dataflow__ = {
-        'multi_tenant': True,
-        'encrypt_fields': ['content'],
-        'audit_all_access': True
+        'multi_tenant': True
     }
+    # Field encryption is enabled at the `DataFlow()` level via the ENCRYPTION
+    # feature (progressive disclosure); sensitive fields are declared with
+    # `@classify(field, DataClassification.SECRET)` — NOT a `__dataflow__` model key.
 ```
 
 ---

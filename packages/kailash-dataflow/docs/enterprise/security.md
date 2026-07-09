@@ -5,6 +5,7 @@ DataFlow provides comprehensive security features including encryption, access c
 ## Overview
 
 Security in DataFlow is implemented at multiple layers:
+
 - **Data Encryption**: At-rest and in-transit encryption
 - **Access Control**: Role-based and attribute-based access
 - **Threat Protection**: SQL injection prevention, rate limiting
@@ -105,14 +106,10 @@ class Document:
     content: str
     classification: str  # public, internal, confidential, restricted
 
-    __dataflow__ = {
-        'access_control': {
-            'read': ['user', 'admin'],
-            'create': ['editor', 'admin'],
-            'update': ['editor', 'admin'],
-            'delete': ['admin']
-        }
-    }
+    # Row/field authorization (read/create/update/delete role rules) is the
+    # domain of PACT governance (`kailash-pact`), NOT a DataFlow model key.
+    # A `@db.model` config block only backs: soft_delete, multi_tenant,
+    # indexes, retention, use_native_arrays, audit_log.
 
 # Enforce permissions in workflows
 @require_role(['admin', 'editor'])
@@ -137,23 +134,10 @@ class Project:
     department: str
     budget: float
 
-    __dataflow__ = {
-        'access_control': {
-            'type': 'abac',
-            'policies': [
-                {
-                    'name': 'department_access',
-                    'condition': 'user.department == record.department',
-                    'permissions': ['read', 'update']
-                },
-                {
-                    'name': 'budget_visibility',
-                    'condition': 'user.role in ["manager", "director"]',
-                    'fields': ['budget']
-                }
-            ]
-        }
-    }
+    # Attribute-based access control (ABAC policies, field-level visibility)
+    # is the domain of PACT governance (`kailash-pact`), NOT a DataFlow model
+    # key. A `@db.model` config block only backs: soft_delete, multi_tenant,
+    # indexes, retention, use_native_arrays, audit_log.
 ```
 
 ### Row-Level Security
@@ -164,13 +148,11 @@ class CustomerData:
     customer_id: int
     data: dict
 
-    __dataflow__ = {
-        'row_level_security': {
-            'enabled': True,
-            'policy': 'user.customer_id == record.customer_id',
-            'bypass_roles': ['admin', 'support']
-        }
-    }
+    # Row-level security (per-user filtering, bypass roles) is the domain of
+    # PACT governance (`kailash-pact`), NOT a DataFlow model key. For simple
+    # tenant partitioning, DataFlow's backed `multi_tenant` key applies a
+    # tenant_id scope automatically. A `@db.model` config block only backs:
+    # soft_delete, multi_tenant, indexes, retention, use_native_arrays, audit_log.
 
 # Automatic filtering based on user context
 workflow.add_node("CustomerDataListNode", "my_data", {
@@ -233,13 +215,10 @@ class SecureOperation:
     operation_type: str
     requires_mfa: bool = True
 
-    __dataflow__ = {
-        'mfa_required': {
-            'operations': ['delete', 'bulk_update'],
-            'verification_method': 'totp',  # or 'sms', 'email'
-            'timeout': 300  # 5 minutes
-        }
-    }
+    # Multi-factor authentication is an application/gateway concern enforced
+    # by Nexus (`kailash-nexus`) on the request path, NOT a `@db.model` config
+    # key. A `@db.model` config block only backs: soft_delete, multi_tenant,
+    # indexes, retention, use_native_arrays, audit_log.
 ```
 
 ## SQL Injection Prevention
@@ -310,13 +289,10 @@ db = DataFlow(
 class RateLimitedResource:
     name: str
 
-    __dataflow__ = {
-        'rate_limits': {
-            'create': {'limit': 10, 'window': 3600},
-            'bulk_create': {'limit': 1, 'window': 86400},
-            'delete': {'limit': 5, 'window': 3600}
-        }
-    }
+    # Per-operation rate limiting is an application/gateway concern enforced
+    # by Nexus (`kailash-nexus`) on the request path, NOT a `@db.model` config
+    # key. A `@db.model` config block only backs: soft_delete, multi_tenant,
+    # indexes, retention, use_native_arrays, audit_log.
 ```
 
 ### Connection Limits
@@ -617,15 +593,10 @@ db = DataFlow(
 class SecureResource:
     data: str
 
-    __dataflow__ = {
-        'access_control': {
-            'default': 'deny',  # Deny by default
-            'rules': [
-                {'role': 'owner', 'permissions': ['all']},
-                {'role': 'viewer', 'permissions': ['read']}
-            ]
-        }
-    }
+    # Deny-by-default access control and per-role permission rules are the
+    # domain of PACT governance (`kailash-pact`), NOT a DataFlow model key.
+    # A `@db.model` config block only backs: soft_delete, multi_tenant,
+    # indexes, retention, use_native_arrays, audit_log.
 ```
 
 ### 3. Regular Security Audits
@@ -702,13 +673,19 @@ class PatientRecord:
     patient_id: int
     medical_data: dict = Field(encrypted=True)
 
+    # Compliance postures (HIPAA/PHI handling) are composed from real building
+    # blocks, NOT a single `@db.model` compliance key: field-level encryption
+    # via `Field(encrypted=True)`, access logging via the backed `audit_log`
+    # key, data lifecycle via the backed `retention` key, and role/PHI-access
+    # governance via PACT (`kailash-pact`). A `@db.model` config block only
+    # backs: soft_delete, multi_tenant, indexes, retention, use_native_arrays,
+    # audit_log.
     __dataflow__ = {
-        'compliance': {
-            'hipaa': True,
-            'phi_fields': ['medical_data'],
-            'access_logging': 'detailed',
-            'encryption_required': True,
-            'retention_years': 6
+        'audit_log': {
+            'enabled': True,
+            'log_reads': True,
+            'log_writes': True,
+            'retention_days': 2190  # 6 years
         }
     }
 ```

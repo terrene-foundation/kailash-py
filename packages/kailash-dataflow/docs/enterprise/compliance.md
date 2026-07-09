@@ -5,6 +5,7 @@ DataFlow provides comprehensive compliance features for GDPR, HIPAA, SOC2, and o
 ## Overview
 
 Compliance features in DataFlow include:
+
 - **Data Privacy**: GDPR right to be forgotten, data portability
 - **Healthcare**: HIPAA PHI protection and audit trails
 - **Financial**: PCI DSS compliance for payment data
@@ -79,8 +80,9 @@ class UserConsent:
 
     __dataflow__ = {
         'audit_log': True,
-        'immutable_fields': ['granted_at', 'ip_address']
     }
+    # Append-only / immutable columns are a database/migration-layer concern
+    # (DDL constraints or triggers), not a __dataflow__ model key.
 
 # Check consent before processing
 workflow.add_node("ConsentCheckNode", "check", {
@@ -101,11 +103,9 @@ class MinimalUser:
     email: str = Field(required=True)
     name: str = Field(required=False)  # Optional
 
-    # Auto-delete after purpose fulfilled
-    __dataflow__ = {
-        'auto_delete_after': 'purpose_fulfilled',
-        'purpose_tracking': True
-    }
+    # Data minimization: DataFlow's backed retention key expresses time-based
+    # deletion, e.g. __dataflow__ = {'retention': {'policy': 'delete', 'after_days': 365}}.
+    # Purpose-based auto-deletion is a workflow concern, not a model config key.
 
 # Configure field-level retention
 @db.model
@@ -137,15 +137,13 @@ class PatientRecord:
     record_number: str
     created_by: str
 
+    # HIPAA/PHI handling is not a single __dataflow__ model key. Field-level
+    # encryption is enabled at the DataFlow() level (the ENCRYPTION feature,
+    # progressive disclosure); sensitive fields are declared with
+    # @classify(field, DataClassification.SECRET) (from dataflow.classification);
+    # access logging uses the backed audit_log key. There is no 'compliance' key.
     __dataflow__ = {
-        'compliance': {
-            'hipaa': True,
-            'phi_fields': ['name', 'ssn', 'diagnosis'],
-            'encryption_required': True,
-            'access_logging': 'detailed',
-            'minimum_password_strength': 'strong',
-            'session_timeout': 900  # 15 minutes
-        }
+        'audit_log': True,
     }
 ```
 
@@ -230,14 +228,11 @@ class PaymentCard:
     # cvv: NEVER STORE
     # pin: NEVER STORE
 
+    # PCI DSS is not a __dataflow__ model key. Card tokenization is an
+    # application-level concern; field encryption is enabled at the DataFlow()
+    # level (the ENCRYPTION feature); access logging uses the backed audit_log key.
     __dataflow__ = {
-        'pci_dss': {
-            'level': 1,  # Highest security
-            'tokenization': True,
-            'encryption': 'AES-256',
-            'key_rotation': 90,  # days
-            'access_logging': True
-        }
+        'audit_log': True,
     }
 
 # Use tokenization service
@@ -287,15 +282,11 @@ class SystemAccess:
     timestamp: datetime
     ip_address: str
 
+    # SOC 2 controls are not a __dataflow__ model key. DataFlow contributes the
+    # backed audit_log key for tamper-evident access logging; the remaining SOC 2
+    # controls (change management, risk assessment) are organizational processes.
     __dataflow__ = {
-        'soc2': {
-            'trust_principle': 'security',
-            'controls': [
-                'access_monitoring',
-                'change_management',
-                'risk_assessment'
-            ]
-        }
+        'audit_log': True,
     }
 
 # Continuous monitoring
@@ -365,11 +356,11 @@ class AuditLog:
     previous_hash: str
 
     __dataflow__ = {
-        'immutable': True,  # No updates allowed
-        'retention_years': 7,
-        'backup_required': True,
-        'hash_algorithm': 'sha256'
+        'retention': {'policy': 'delete', 'after_days': 2555},  # 7 years
     }
+    # Append-only / immutable audit tables and integrity hashing are
+    # database/migration-layer concerns (DDL constraints, triggers), not
+    # __dataflow__ model keys. Backups are an infrastructure concern.
 ```
 
 ### Audit Query Interface
@@ -443,17 +434,8 @@ class Document:
         classifier="auto"
     )
 
-    __dataflow__ = {
-        'classification': {
-            'rules': [
-                {"pattern": r"\b\d{3}-\d{2}-\d{4}\b", "label": "pii_ssn"},
-                {"pattern": r"\b\d{16}\b", "label": "pci_card"},
-                {"keywords": ["diagnosis", "treatment"], "label": "phi"}
-            ],
-            'default_classification': 'public',
-            'reclassification_allowed': True
-        }
-    }
+    # Field classification uses the @classify(field, DataClassification.X)
+    # decorator (from dataflow.classification), not a 'classification' model key.
 
 # Manual classification override
 workflow.add_node("ClassificationNode", "classify", {
@@ -477,9 +459,9 @@ class RetentionPolicy:
     legal_hold: bool = False
     deletion_method: str  # "soft", "hard", "secure_wipe"
 
-    __dataflow__ = {
-        'system_table': True
-    }
+    # 'system_table' is not a DataFlow model key; this model needs no
+    # __dataflow__ config. Retention enforcement is expressed via the backed
+    # retention key or a workflow node (see below).
 
 # Apply retention policies
 workflow.add_node("RetentionEnforcementNode", "enforce", {
@@ -643,10 +625,9 @@ class RegionalData:
     user_id: int
     data: dict
 
-    __dataflow__ = {
-        'region_locked': True,
-        'region_field': 'user_region'
-    }
+    # Region locking / data residency is a database/migration-layer and
+    # infrastructure concern (per-region databases, DDL constraints), not a
+    # __dataflow__ model key.
 ```
 
 ### Transfer Mechanisms
@@ -714,21 +695,20 @@ class SensitiveData:
     content: str
 
     __dataflow__ = {
-        # Layer 1: Classification
-        'classification': 'confidential',
-
-        # Layer 2: Encryption
-        'encryption': True,
-
-        # Layer 3: Access Control
-        'access_control': 'role_based',
-
-        # Layer 4: Audit
+        # Audit trail (backed key)
         'audit_log': True,
 
-        # Layer 5: Retention
-        'retention_days': 365
+        # Retention (backed key) — auto-delete after 365 days
+        'retention': {'policy': 'delete', 'after_days': 365},
     }
+    # Defense in depth beyond the two backed keys above:
+    # - Classification: declare sensitive fields with
+    #   @classify(field, DataClassification.SECRET) (from dataflow.classification),
+    #   not a 'classification' model key.
+    # - Encryption: enabled at the DataFlow() level via the ENCRYPTION feature
+    #   (progressive disclosure); sensitive fields declared with @classify(... SECRET).
+    # - Access control: row/field authorization is PACT governance (kailash-pact),
+    #   not a __dataflow__ model key.
 ```
 
 ### 2. Automate Compliance

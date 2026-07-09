@@ -81,9 +81,13 @@ class Product:
             {'fields': ['tenant_id', 'id']},  # Composite index
             {'fields': ['tenant_id', 'name']}
         ],
-        'row_level_security': True  # Enable RLS
     }
 ```
+
+> **Row-level security / authorization is not a DataFlow model key.** Access
+> control (who may read/write which rows) is the domain of PACT governance
+> (`kailash-pact`), not DataFlow. Use DataFlow's `multi_tenant=True` for tenant
+> scoping of data; enforce row-level authorization policies through PACT.
 
 ## Tenant Provisioning
 
