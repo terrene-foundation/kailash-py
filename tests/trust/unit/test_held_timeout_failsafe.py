@@ -358,6 +358,62 @@ def test_held_action_validates_hold_id():
         )
 
 
+def test_held_action_normalizes_naive_held_at_to_utc():
+    """LOW-3: a tz-naive held_at is normalized to UTC (no naive/aware mismatch)."""
+    naive = datetime(2026, 7, 9, 12, 0, 0)  # no tzinfo
+    assert naive.tzinfo is None
+    rec = EnforcementRecord(
+        agent_id="a",
+        action="x",
+        verdict=Verdict.HELD,
+        verification_result=_held_result(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    hold = HeldAction(
+        hold_id=new_hold_id(),
+        agent_id="a",
+        action="x",
+        held_at=naive,
+        timeout_seconds=10.0,
+        on_expiry=ExpiryDisposition.DENY,
+        record=rec,
+    )
+    # Normalized to UTC — held_at + expires_at are both aware.
+    assert hold.held_at.tzinfo is timezone.utc
+    assert hold.expires_at.tzinfo is timezone.utc
+    # is_expired() against an aware now does not raise (naive-vs-aware TypeError).
+    aware_now = datetime(2026, 7, 9, 12, 0, 30, tzinfo=timezone.utc)
+    assert hold.is_expired(aware_now) is True
+
+
+def test_naive_held_at_expires_through_enforcer():
+    """A naive-datetime-held action still expires deterministically (no TypeError)."""
+    enforcer = StrictEnforcer(on_held=HeldBehavior.QUEUE)
+    naive_held_at = datetime(2026, 7, 9, 12, 0, 0)  # no tzinfo
+    enforcer.held_store.add(
+        HeldAction(
+            hold_id=new_hold_id(),
+            agent_id="agent-naive",
+            action="x",
+            held_at=naive_held_at,
+            timeout_seconds=5.0,
+            on_expiry=ExpiryDisposition.DENY,
+            record=EnforcementRecord(
+                agent_id="agent-naive",
+                action="x",
+                verdict=Verdict.HELD,
+                verification_result=_held_result(),
+                timestamp=datetime.now(timezone.utc),
+            ),
+        )
+    )
+    expired = enforcer.expire_holds(
+        now=datetime(2026, 7, 9, 12, 0, 10, tzinfo=timezone.utc)
+    )
+    assert len(expired) == 1
+    assert expired[0].verdict is Verdict.BLOCKED
+
+
 def test_new_hold_id_is_finite_and_safe():
     hid = new_hold_id()
     assert hid.startswith("hold-")

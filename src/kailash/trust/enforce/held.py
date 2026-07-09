@@ -35,16 +35,15 @@ import logging
 import math
 import os
 import sqlite3
-import stat
 import threading
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Protocol, runtime_checkable
 
-from kailash.trust._locking import validate_id
+from kailash.trust._locking import secure_sqlite_files, validate_id
 from kailash.trust.enforce.strict import EnforcementRecord, Verdict
 
 if TYPE_CHECKING:
@@ -190,6 +189,16 @@ class HeldAction:
             raise ValueError(
                 f"timeout_seconds must be non-negative, got {self.timeout_seconds!r}"
             )
+        # Normalize a tz-naive held_at to UTC (frozen dataclass -> setattr via
+        # object). A naive held_at would make expires_at naive too, and the
+        # SQLite store compares expires_at.isoformat() lexicographically against
+        # an aware now.isoformat() (which carries a +00:00 offset) — the two
+        # forms sort differently, and is_expired() would raise TypeError on a
+        # naive-vs-aware comparison. Assume UTC for a naive caller.
+        if self.held_at.tzinfo is None:
+            object.__setattr__(
+                self, "held_at", self.held_at.replace(tzinfo=timezone.utc)
+            )
 
     @property
     def expires_at(self) -> datetime:
@@ -291,15 +300,8 @@ class SqliteHeldActionStore:
         self._max_records = max_records
         self._lock = threading.Lock()
 
-        if not db_path.startswith(":memory:"):
-            if not os.path.exists(db_path):
-                open(db_path, "a").close()
-            try:
-                os.chmod(db_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                logger.warning(
-                    "Could not set permissions on %s (non-POSIX system?)", db_path
-                )
+        if not db_path.startswith(":memory:") and not os.path.exists(db_path):
+            open(db_path, "a").close()
 
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -311,6 +313,10 @@ class SqliteHeldActionStore:
             "CREATE INDEX IF NOT EXISTS idx_held_expires ON held_actions(expires_at)"
         )
         self._conn.commit()
+        # Harden the main DB + the WAL/SHM sidecars (created by the commit
+        # above under WAL mode) to owner-only — the sidecars hold the same
+        # governance data. Runs AFTER the first write so the sidecars exist.
+        secure_sqlite_files(db_path)
 
     def add(self, held: HeldAction) -> None:
         validate_id(held.hold_id)
@@ -364,7 +370,27 @@ class SqliteHeldActionStore:
                     "DELETE FROM held_actions WHERE expires_at <= ?", (now_iso,)
                 )
                 self._conn.commit()
-        return [self._row_to_held(row) for row in rows]
+        # Per-row fail-closed conversion. A single corrupt/tampered row (bad
+        # on_expiry string, non-finite timeout, unsafe hold_id, malformed
+        # timestamp) must NOT abort the whole batch — the rows are already
+        # deleted+committed above, so an exception here would silently drop
+        # every expired hold (including well-formed siblings) with NO BLOCKED
+        # audit record emitted. Instead, a corrupt row yields a fail-closed
+        # DENY sentinel (resolves to BLOCKED at expiry) and processing
+        # continues (user-flow-validation.md MUST-7 class (c): corrupt state).
+        result: List[HeldAction] = []
+        for row in rows:
+            try:
+                result.append(self._row_to_held(row))
+            except Exception:
+                logger.warning(
+                    "[HELD] corrupt held-action row — fail-closed BLOCKED "
+                    "(hold_id=%r)",
+                    row[0] if row else None,
+                    exc_info=True,
+                )
+                result.append(self._corrupt_sentinel(row, now))
+        return result
 
     def pending(self) -> List[HeldAction]:
         with self._lock:
@@ -419,4 +445,51 @@ class SqliteHeldActionStore:
             on_expiry=ExpiryDisposition(on_expiry_str),
             record=record,
             metadata=dict(metadata),
+        )
+
+    @staticmethod
+    def _corrupt_sentinel(row: Any, now: datetime) -> HeldAction:
+        """Build a fail-closed DENY hold for a corrupt/tampered persisted row.
+
+        Any value in the row may be garbage, so nothing from it is trusted for
+        control flow: the sentinel always denies on expiry (``DENY`` -> BLOCKED)
+        with a zero timeout (already expired). Best-effort recoverable fields
+        (agent_id / action / the original hold_id string) are surfaced in the
+        record metadata for forensics but never used to relax the disposition.
+        """
+        from kailash.trust.chain import VerificationResult
+
+        def _safe_str(index: int) -> str:
+            try:
+                value = row[index]
+            except Exception:
+                return "unknown"
+            return str(value) if value else "unknown"
+
+        agent_id = _safe_str(1)
+        action = _safe_str(2)
+        original_hold_id = repr(row[0])[:200] if row else "unknown"
+
+        vr = VerificationResult(
+            valid=False,
+            reason="corrupt held-action row — fail-closed BLOCKED",
+            violations=[],
+        )
+        record = EnforcementRecord(
+            agent_id=agent_id,
+            action=action,
+            verdict=Verdict.HELD,
+            verification_result=vr,
+            timestamp=now,
+            metadata={"corrupt_row": True, "original_hold_id": original_hold_id},
+        )
+        return HeldAction(
+            hold_id=new_hold_id(),
+            agent_id=agent_id,
+            action=action,
+            held_at=now,
+            timeout_seconds=0.0,
+            on_expiry=ExpiryDisposition.DENY,
+            record=record,
+            metadata={"corrupt_row": True, "original_hold_id": original_hold_id},
         )

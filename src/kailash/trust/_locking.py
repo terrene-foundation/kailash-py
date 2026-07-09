@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+import stat
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -155,6 +156,34 @@ def validate_id(identifier: str, prefix: str = "") -> None:
         )
     if prefix and not identifier.startswith(prefix):
         raise ValueError(f"Invalid identifier: must start with '{prefix}'")
+
+
+def secure_sqlite_files(db_path: str) -> None:
+    """Restrict a SQLite DB and its WAL/SHM sidecars to owner-only (0o600).
+
+    WAL journal mode creates ``<db>-wal`` and ``<db>-shm`` sidecar files on
+    first write; these hold the SAME governance data as the main DB (agent
+    ids, actions, reasons, metadata) but are created under the process umask
+    (typically 0o644 = world-readable). trust-plane-security.md Rule 6 requires
+    the whole set to be owner-only.
+
+    Best-effort per file: a missing sidecar (not yet created by a write) or a
+    non-POSIX filesystem is tolerated silently — the guard hardens whatever
+    exists. In-memory databases (``:memory:``) are skipped.
+
+    Args:
+        db_path: Path to the main SQLite database file.
+    """
+    if db_path.startswith(":memory:"):
+        return
+    for suffix in ("", "-wal", "-shm"):
+        target = db_path + suffix
+        try:
+            os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            # Sidecar may not exist yet (created on first write) or the
+            # filesystem is non-POSIX; harden what exists, skip the rest.
+            continue
 
 
 # Maximum length for tenant IDs

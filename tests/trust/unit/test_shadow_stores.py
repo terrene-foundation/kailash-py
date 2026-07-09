@@ -29,7 +29,6 @@ from kailash.trust.enforce.shadow_store import (
 )
 from kailash.trust.enforce.strict import EnforcementRecord, Verdict
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -333,6 +332,28 @@ class TestSqliteShadowStore:
         if os.name == "posix":
             mode = os.stat(db_path).st_mode & 0o777
             assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
+
+    def test_wal_shm_sidecar_permissions(self, db_path: str) -> None:
+        """WAL/SHM sidecars (created on first write) are also 0o600 on POSIX.
+
+        trust-plane-security.md rule 6: the sidecars carry the same
+        enforcement-record data as the main DB; a world-readable sidecar leaks
+        it. A write forces the sidecars into existence.
+        """
+        if os.name != "posix":
+            pytest.skip("POSIX-only permission check")
+        store = SqliteShadowStore(db_path)
+        store.append_record(_make_record())  # forces -wal / -shm into existence
+
+        checked_any = False
+        for suffix in ("-wal", "-shm"):
+            sidecar = db_path + suffix
+            if os.path.exists(sidecar):
+                checked_any = True
+                mode = os.stat(sidecar).st_mode & 0o777
+                assert mode == 0o600, f"{suffix} expected 0o600, got {oct(mode)}"
+        assert checked_any, "no WAL/SHM sidecar was created — cannot verify perms"
+        store.close()
 
 
 # ---------------------------------------------------------------------------
