@@ -140,7 +140,7 @@ class PatientRecord:
     # HIPAA/PHI handling is not a single __dataflow__ model key. Field-level
     # encryption is enabled at the DataFlow() level (the ENCRYPTION feature,
     # progressive disclosure); sensitive fields are declared with
-    # @classify(field, DataClassification.SECRET) (from dataflow.classification);
+    # @classify(field, DataClassification.HIGHLY_CONFIDENTIAL) (from dataflow.classification);
     # access logging uses the backed audit_log key. There is no 'compliance' key.
     __dataflow__ = {
         'audit_log': True,
@@ -703,7 +703,7 @@ class SensitiveData:
     }
     # Defense in depth beyond the two backed keys above:
     # - Classification: declare sensitive fields with
-    #   @classify(field, DataClassification.SECRET) (from dataflow.classification),
+    #   @classify(field, DataClassification.HIGHLY_CONFIDENTIAL) (from dataflow.classification),
     #   not a 'classification' model key.
     # - Encryption: enabled at the DataFlow() level via the ENCRYPTION feature
     #   (progressive disclosure); sensitive fields declared with @classify(... SECRET).

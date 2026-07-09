@@ -42,7 +42,7 @@ class User:
 
 Field encryption is enabled at the `DataFlow()` level via the ENCRYPTION
 feature flag (progressive disclosure), and per-field sensitivity is declared
-with `@classify(field, DataClassification.SECRET)` — there is no
+with `@classify(field, DataClassification.HIGHLY_CONFIDENTIAL)` — there is no
 `__dataflow__['security']` / `encrypt_fields` model key.
 
 ### OAuth2 Integration
@@ -201,7 +201,7 @@ class Customer:
 
     # Field encryption is NOT a `__dataflow__` model key. Enable the ENCRYPTION
     # feature at the DataFlow() level (progressive disclosure) and declare
-    # sensitive fields with @classify(field, DataClassification.SECRET).
+    # sensitive fields with @classify(field, DataClassification.HIGHLY_CONFIDENTIAL).
 ```
 
 ### Data in Transit

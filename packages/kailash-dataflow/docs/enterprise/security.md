@@ -674,8 +674,9 @@ class PatientRecord:
     medical_data: dict = Field(encrypted=True)
 
     # Compliance postures (HIPAA/PHI handling) are composed from real building
-    # blocks, NOT a single `@db.model` compliance key: field-level encryption
-    # via `Field(encrypted=True)`, access logging via the backed `audit_log`
+    # blocks, NOT a single `@db.model` compliance key: encryption via the
+    # DataFlow() ENCRYPTION feature (a constructor-level feature, not a model
+    # key), access logging via the backed `audit_log`
     # key, data lifecycle via the backed `retention` key, and role/PHI-access
     # governance via PACT (`kailash-pact`). A `@db.model` config block only
     # backs: soft_delete, multi_tenant, indexes, retention, use_native_arrays,

@@ -517,7 +517,7 @@ class ComplianceRecord:
     }
     # Field encryption is enabled at the `DataFlow()` level via the ENCRYPTION
     # feature (progressive disclosure); sensitive fields are declared with
-    # `@classify(field, DataClassification.SECRET)` — NOT a `__dataflow__` model key.
+    # `@classify(field, DataClassification.HIGHLY_CONFIDENTIAL)` — NOT a `__dataflow__` model key.
 ```
 
 ---
