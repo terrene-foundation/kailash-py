@@ -995,3 +995,59 @@ changes:
       available but was not taken (would reset the converged clean-round bracket). (b) MUST-3
       over-density (carried from #7) — extraction to 45-genesis is the loom F5 structural pass.
       Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence8.md.'
+  - type: rule_update
+    artifact: enrollment-operations
+    files:
+      - .claude/commands/whoami.md
+      - .claude/rules/enrollment-operations.md
+      - .claude/skills/42-certify/SKILL.md
+    classification_suggestion: global
+    context:
+      'Re-convergence #9 (2026-07-09) — fresh 3-agent adversarial audit of the #8 state MERGED on
+      main (PR #1628). Surfaced a NEW finding-class extension: the recurring "a guard''s DESCRIPTION
+      must match its DETECTION mechanism" class extends to guard-symbol OWNERSHIP, not just name.
+      whoami.md cited `detectStateFileMutation` (the internal per-segment PRIMITIVE in
+      violation-patterns.js) where the actually-WIRED guard in validate-bash-command.js is
+      `detectStateFileMutationSegmentAware` (the segment-aware wrapper) — a citation that RESOLVES to
+      a real-but-wrong symbol, invisible to grep/dangling-ref sweeps; only cross-artifact + source
+      verification catches it. 42-certify/SKILL.md:206 carried the IDENTICAL imprecision (same-class
+      gap surfaced by the self-ref gate reviewer; fixed in-shard per autonomous-execution MUST-4).
+
+
+      FIXES (source-verified): (1) whoami.md:47 + 42-certify/SKILL.md:206 — bare-primitive
+      `detectStateFileMutation` -> wired-wrapper `detectStateFileMutationSegmentAware` (now 0
+      bare-primitive citations across the onboarding+certify suite; whoami re-synced with the 4
+      siblings that already named the wrapper); (2) enrollment-operations.md MUST-1 — the genesis-guard
+      fail-closed BLOCK sentence now names BOTH block branches (real-non-scaffold-roster-without-anchor
+      AND roster-deleted-while-records-remain / enrolled-then-deleted), matching the two
+      severity:block branches in genesis-anchor-guard.js; (3) enrollment-operations.md MUST-4
+      DO-example — corrected "both read the gitignored log" to "foldLog folds the gitignored
+      coordination-log''s records, resolveIdentity reads the committed roster" (resolveIdentity reads
+      operators.roster.json, a COMMITTED file, per operator-id.js).
+
+
+      CONVERGENCE: 3 rounds (R1 = 3 parallel adversarial agents; R2 cc-architect confirmation + fresh
+      sweep; R3 mechanical). Onboarding-artifact surface 0 CRIT / 0 HIGH, 2 consecutive clean rounds.
+      enrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist -> the mandatory
+      multi-agent redteam-with-tests gate (reviewer + security-reviewer + cc-architect, parallel) ran
+      on the final diff: 3/3 APPROVE. Distributable invariant re-verified GREEN (roster PLACEHOLDER,
+      0/6 enforcement hooks committed, probe-phase-guard present).
+
+
+      CLASSIFICATION: GLOBAL (the onboarding+certify suite is synced cross-SDK; the wired-symbol
+      correction + block-branch accuracy are CLI-neutral and consumer-wide — a downstream consumer
+      inherits the wrong-symbol citation otherwise).
+
+
+      LOOM-TOOL FOLLOW-UP FLAG (NOT in this proposal''s artifact set — flagged for loom''s attention):
+      re-convergence #9 also surfaced a HIGH disclosure-hygiene finding in kailash-py (an operator-local
+      runbook value file was committed to the public repo; forward-fixed locally via .gitignore +
+      git rm --cached, history-purge held as owner-gated). The ROOT CAUSE is a LOOM-DISTRIBUTED tool:
+      `.claude/bin/scan-synced-disclosure.mjs` UNCONDITIONALLY skips `*.operator.local.md` (the skip
+      that blinded the scanner), whereas the sibling `*.local.json` skip one line below was made
+      destination-conditional by issue #352. loom SHOULD apply the same #352 parity to the
+      `.operator.local.md` skip (ideally: do not skip a *tracked* operator-local file) so every
+      downstream consumer''s scanner catches a committed operator-local file. This is a loom codify
+      (the tool is on self-referential-codify''s allowlist). Receipt:
+      workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence9.md +
+      workspaces/mops-onboarding/journal/0038-RISK-committed-operator-local-ci-values-public-repo.md.'
