@@ -56,9 +56,16 @@ VECTORS_DIR = Path(__file__).parent / "vectors"
 
 
 def _load_vector(filename: str) -> dict[str, Any]:
-    """Load a test vector JSON file from the vectors directory."""
+    """Load a test vector JSON file from the vectors directory.
+
+    ``encoding="utf-8"`` is LOAD-BEARING (issue #1590 Windows-CI fix): a bare
+    ``open()`` decodes with the platform locale default (cp1252 on Windows),
+    which mangles the unicode subject in ``audit_anchor_v3_unicode_subject.json``
+    into a different string and thus a different RFC 8785 (JCS) ``subject_hash``.
+    Pinning utf-8 makes the vector decode identically on every platform.
+    """
     path = VECTORS_DIR / filename
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
