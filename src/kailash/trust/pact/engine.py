@@ -76,6 +76,13 @@ from kailash.trust.pact.knowledge import (
     KnowledgeQuery,
 )
 from kailash.trust.pact.observation import Observation, ObservationSink
+from kailash.trust.pact.risk_factors import (
+    MalformedRiskFactorError,
+    RiskFactorEvaluation,
+    RiskFactorRegistry,
+    combine_levels,
+    evaluate_risk_factors,
+)
 from kailash.trust.pact.store import (
     AccessPolicyStore,
     ClearanceStore,
@@ -233,8 +240,14 @@ class GovernanceEngine:
         observation_sink: ObservationSink | None = None,  # N5 monitoring events
         vacancy_deadline_hours: int = 24,  # Section 5.5 configurable deadline
         require_bilateral_consent: bool = False,  # Section 4.4 bilateral consent
+        risk_factor_registry: RiskFactorRegistry | None = None,  # risk-factor seam
     ) -> None:
         self._lock = threading.Lock()
+
+        # Risk-factor calibration registry (extensible disposition seam).
+        # None -> use the process-wide GLOBAL_RISK_FACTOR_REGISTRY so factors
+        # registered anywhere are picked up without editing the engine core.
+        self._risk_factor_registry: RiskFactorRegistry | None = risk_factor_registry
 
         # N2 Effective Envelope Cache -- bounded dict keyed by
         # (role_address, task_id) -> _CachedEnvelope.
@@ -780,14 +793,23 @@ class GovernanceEngine:
             else:
                 effective = vacancy_result.interim_envelope
 
-        # Step 2+3: Evaluate action against envelope
+        # Step 2+3: Evaluate action against envelope + risk-factor calibration
         level = "auto_approved"
         reason = "No envelope constraints -- action permitted"
         envelope_snapshot: dict[str, Any] | None = None
+        risk_eval: RiskFactorEvaluation | None = None
 
         if effective is not None:
             envelope_snapshot = effective.model_dump(mode="json")
-            level, reason = self._evaluate_against_envelope(effective, action, ctx)
+            level, reason, risk_eval = self._evaluate_against_envelope(
+                effective, action, ctx
+            )
+        else:
+            # No envelope -> risk factors still apply (intrinsic to the action,
+            # independent of any spend/limit proximity).
+            level, reason, risk_eval = self._apply_risk_factors(
+                level, reason, action, ctx
+            )
 
         # Multi-level VERIFY: walk accountability chain and check each ancestor's
         # effective envelope. Most restrictive verdict wins. This prevents a role
@@ -854,6 +876,10 @@ class GovernanceEngine:
                     else None
                 ),
             }
+        # Record the structured risk-factor set + which factor(s) shifted the
+        # verdict, for audit. Present only when the action carried risk_factors.
+        if risk_eval is not None and risk_eval.present:
+            audit_details["risk_factors"] = risk_eval.to_dict()
 
         verdict = GovernanceVerdict(
             level=level,
@@ -865,6 +891,11 @@ class GovernanceEngine:
             access_decision=access_decision,
             timestamp=now,
             envelope_version=envelope_version,
+            risk_factors=(
+                risk_eval.to_dict()
+                if risk_eval is not None and risk_eval.present
+                else None
+            ),
         )
 
         # Step 6: Emit audit anchor (release lock before audit to avoid deadlock)
@@ -907,8 +938,105 @@ class GovernanceEngine:
         envelope: ConstraintEnvelopeConfig,
         action: str,
         ctx: dict[str, Any],
+    ) -> tuple[str, str, RiskFactorEvaluation | None]:
+        """Evaluate an action against an effective envelope + risk factors.
+
+        The disposition is calibrated by TWO composed inputs:
+
+        1. **Limit proximity** (:meth:`_evaluate_limit_proximity`) -- the
+           original envelope-dimension checks (spend ceiling, allow/block
+           lists, rate limits, active hours, data paths, channels).
+        2. **Risk factors** (``ctx["risk_factors"]``) -- an extensible,
+           structured set of intrinsic-risk factors (reversibility,
+           materiality, blast-radius, novelty, sensitivity, plus any factor
+           registered on the risk-factor registry).
+
+        The two are combined with a **monotonic** max-severity rule
+        (:func:`combine_levels`): a risk factor can only TIGHTEN the verdict,
+        never loosen it. A near-zero-limit-proximity action that is
+        irreversible / high-materiality is therefore escalated (``held``) or
+        denied (``blocked``) independently of spend proximity.
+
+        Fail-closed: a malformed / unparseable ``risk_factors`` set is treated
+        as maximal risk (``blocked``) with an explicit audit reason -- never
+        silently ignored.
+
+        Returns:
+            A tuple of ``(level, reason, risk_eval)`` where ``risk_eval`` is
+            the :class:`RiskFactorEvaluation` describing which factors were
+            present and which shifted the verdict (``None`` only when the
+            malformed-fail-closed path could not construct one -- the audit
+            reason still names the failure).
+        """
+        base_level, base_reason = self._evaluate_limit_proximity(envelope, action, ctx)
+        return self._apply_risk_factors(base_level, base_reason, action, ctx)
+
+    def _apply_risk_factors(
+        self,
+        base_level: str,
+        base_reason: str,
+        action: str,
+        ctx: dict[str, Any],
+    ) -> tuple[str, str, RiskFactorEvaluation | None]:
+        """Compose a base verdict with the extensible risk-factor set.
+
+        Monotonic: the returned level is ``max_severity(base_level,
+        worst_factor_level)`` (:func:`combine_levels`) -- factors can only
+        TIGHTEN. Fail-closed: a malformed factor set returns ``blocked`` with
+        an explicit audit reason and ``risk_eval=None``.
+
+        Shared by the envelope path (:meth:`_evaluate_against_envelope`) and
+        the no-envelope path in :meth:`_verify_action_locked`, so an
+        irreversible / high-materiality action is escalated even when no
+        envelope constraints exist.
+
+        Returns:
+            ``(level, reason, risk_eval)``.
+        """
+        try:
+            risk_eval = evaluate_risk_factors(ctx, self._risk_factor_registry)
+        except MalformedRiskFactorError as exc:
+            # Fail-closed: a malformed risk-factor set is maximal risk.
+            logger.warning(
+                "Malformed risk_factors for action=%s -- fail-closed to BLOCKED: %s",
+                action,
+                exc,
+            )
+            reason = f"Risk-factor set is malformed ({exc}) -- fail-closed to BLOCKED"
+            return (combine_levels(base_level, "blocked"), reason, None)
+
+        if not risk_eval.present:
+            # No risk factors -> behave EXACTLY as the base verdict alone.
+            return (base_level, base_reason, risk_eval)
+
+        combined = combine_levels(base_level, risk_eval.combined_level)
+        if combined == base_level:
+            # Factors did not tighten the verdict; keep the base reason.
+            return (base_level, base_reason, risk_eval)
+
+        # Factors escalated the verdict -- name the driving factor(s).
+        driving = ", ".join(
+            f"{name}={risk_eval.per_factor[name]}" for name in risk_eval.driving_factors
+        )
+        reason = (
+            f"Risk factors escalated verdict from '{base_level}' to "
+            f"'{combined}' (driving: {driving})"
+        )
+        return (combined, reason, risk_eval)
+
+    def _evaluate_limit_proximity(
+        self,
+        envelope: ConstraintEnvelopeConfig,
+        action: str,
+        ctx: dict[str, Any],
     ) -> tuple[str, str]:
-        """Evaluate an action against an effective envelope.
+        """Evaluate an action against an effective envelope's limit proximity.
+
+        This is the original limit-proximity disposition: the verdict is the
+        FIRST triggering envelope-dimension check, in a fixed dimension order.
+        It carries NO risk-factor input, so with no ``risk_factors`` in the
+        context the composed verdict is byte-for-byte identical to before the
+        risk-factor seam was added.
 
         Returns:
             A tuple of (level, reason).
@@ -3167,8 +3295,11 @@ class GovernanceEngine:
             if ancestor_envelope is None:
                 continue  # Ancestor has no envelope -- not a constraint violation
 
-            # Evaluate the action against this ancestor's envelope
-            anc_level, anc_reason = self._evaluate_against_envelope(
+            # Evaluate the action against this ancestor's envelope. Risk
+            # factors are intrinsic to the action, so they compose here too;
+            # the 3rd tuple element (risk_eval) is captured on the leaf path
+            # for audit and is not needed for the ancestor most-restrictive walk.
+            anc_level, anc_reason, _anc_risk_eval = self._evaluate_against_envelope(
                 ancestor_envelope, action, ctx
             )
 

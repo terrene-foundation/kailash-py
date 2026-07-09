@@ -42,6 +42,11 @@ class GovernanceVerdict:
         access_decision: If a knowledge resource was checked, the AccessDecision
             from the 5-step algorithm. None if no resource was involved.
         timestamp: When the verdict was issued (UTC).
+        risk_factors: Structured record of the risk-factor calibration that ran
+            during disposition -- the per-factor proposed levels, which
+            factor(s) shifted the verdict, and the raw factor values. None when
+            the action carried no ``risk_factors`` context (backward-compatible
+            limit-proximity-only path). Mirrors ``audit_details["risk_factors"]``.
     """
 
     level: str
@@ -53,6 +58,7 @@ class GovernanceVerdict:
     access_decision: AccessDecision | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     envelope_version: str = ""
+    risk_factors: dict[str, Any] | None = None
 
     @property
     def allowed(self) -> bool:
@@ -90,6 +96,12 @@ class GovernanceVerdict:
             "timestamp": self.timestamp.isoformat(),
             "envelope_version": self.envelope_version,
         }
+        # Emit the risk-factor record ONLY when present, so a verdict with no
+        # risk_factors serializes byte-for-byte identically to before the
+        # risk-factor seam existed (preserves the cross-SDK N6 conformance
+        # vector; the structured record also rides in ``audit_details``).
+        if self.risk_factors is not None:
+            result["risk_factors"] = self.risk_factors
         if self.access_decision is not None:
             result["access_decision"] = {
                 "allowed": self.access_decision.allowed,

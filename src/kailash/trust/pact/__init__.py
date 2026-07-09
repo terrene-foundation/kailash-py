@@ -77,6 +77,17 @@ from kailash.trust.pact.observation import (
     Observation,
     ObservationSink,
 )
+from kailash.trust.pact.risk_factors import (
+    GLOBAL_RISK_FACTOR_REGISTRY,
+    RISK_LEVEL_ORDER,
+    MalformedRiskFactorError,
+    RiskFactor,
+    RiskFactorEvaluation,
+    RiskFactorRegistry,
+    combine_levels,
+    evaluate_risk_factors,
+    register_risk_factor,
+)
 from kailash.trust.pact.store import (
     MAX_STORE_SIZE,
     AccessPolicyStore,
@@ -175,6 +186,16 @@ __all__ = [
     "GovernanceEnvelopeAdapter",
     # Verdict (Ref-7010)
     "GovernanceVerdict",
+    # Risk-factor calibration seam (extensible disposition)
+    "GLOBAL_RISK_FACTOR_REGISTRY",
+    "RISK_LEVEL_ORDER",
+    "MalformedRiskFactorError",
+    "RiskFactor",
+    "RiskFactorEvaluation",
+    "RiskFactorRegistry",
+    "combine_levels",
+    "evaluate_risk_factors",
+    "register_risk_factor",
     # YAML loader (Ref-7011)
     "ConfigurationError",
     "ClearanceSpec",
