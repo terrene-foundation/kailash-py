@@ -108,7 +108,7 @@ For Steps 1/2 nonce flow, write nonce to file with mode 0600. Hooks read the fil
 ## Posture-bound restrictions on this command
 
 - `/posture init`, `show`, `history`, `violations` work at any posture (read or single-write fresh init).
-- `/posture upgrade`, `/posture override` are NEVER usable below L1 (always available regardless of posture — humans must always have escape hatch).
+- `/posture upgrade`, `/posture override` are NEVER disabled — always available regardless of posture, even at L1 (humans must always have the escape hatch).
 - Agent invoking `/posture upgrade` autonomously without user instruction = `acknowledgement_failure` violation logged.
 
 ## Output canonical format

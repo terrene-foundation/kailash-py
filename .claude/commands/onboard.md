@@ -14,7 +14,7 @@ Onboard the operator into the current repo's multi-operator COC state. Read-only
 
 ### 1. Identify the operator
 
-Resolve identity via `.claude/hooks/lib/operator-id.js::resolveIdentity()`. The result includes `display_id`, `verified_id`, and the operator's roster status. If the operator is not registered, surface the `/whoami --register` instruction and stop — onboarding past identity is not safe.
+Resolve identity via `.claude/hooks/lib/operator-id.js::resolveIdentity()`. The result includes `display_id`, `verified_id`, and the operator's roster status. If the operator is not registered, stop — onboarding past identity is not safe — and surface the message **branched on the just-enrolled case**: "if you just ran `/enroll` or `/whoami --register`, your roster row is an unmerged PR, not yet on `main` — await the merge (or stay on your `codify/<display_id>-<date>` branch) before treating `/onboard` identity as final; otherwise run `/whoami --register`."
 
 ### 2. Read the team-memory surface
 
@@ -64,7 +64,7 @@ In `--json` mode, emit a structured object: `{operator, team_memory, workspace, 
 
 ### Failure modes (typed errors — no silent fallbacks per `rules/zero-tolerance.md` Rule 3)
 
-- Unregistered operator → STOP, instruct `/whoami --register`.
+- Unregistered operator → STOP; branch the message: just ran `/enroll`/`/whoami --register` → "roster PR not yet merged to `main` — await the merge or stay on your `codify/<display_id>-<date>` branch"; otherwise → instruct `/whoami --register`.
 - Missing `.claude/team-memory/` directory → empty section (not an error; fresh repo).
 - Corrupt `posture.json` (state-io.js returns fail-closed L1) → surface verbatim; do NOT proceed.
 - Missing roster (`.claude/operators.roster.json`) → STOP, instruct genesis ceremony.
@@ -78,7 +78,7 @@ Action Items is the actionable footer: every gate the operator must clear (pendi
 ## Next steps after onboarding
 
 ```
-Next: /whoami (verify identity) → /claims (see what's locked) → /analyze or /implement (start work)
+Next: /whoami (verify identity) → /claims (see what's locked) → /certify (knowledge gate — required before claiming non-trivial work) → /claim <path> → /analyze or /implement (start work)
 ```
 
 ## Notes

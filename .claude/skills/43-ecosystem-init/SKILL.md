@@ -59,6 +59,13 @@ It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis
   `/whoami --register` then promote the role on the resulting PR first. The full first-owner runbook for
   hand-authoring that owner entry (signing-key-first, the script-by-path roster write, fold-clean verify)
   is `skills/45-genesis-bootstrap/SKILL.md` — it is the step that PRECEDES this one on a fresh fork.
+- **Idempotency boundary with `45`**: `skills/45-genesis-bootstrap` runs THIS SAME `runEnrollmentCeremony`
+  plus fold-clean verify as its own final step — it is NOT merely roster-prep. If you followed `45` to
+  fold-clean completion, C3 is already satisfied: re-running the ceremony on identical pinned facts does
+  NOT fork the trust root (fold rule 9a). Verify the anchor already folded
+  (`foldLog(...) → accepted:[anchor], rejected:[], forks:[]`) and skip to C2/C4/C5. Run C3's ceremony here
+  ONLY if `45` was not run to completion (e.g. the owner roster entry was hand-authored without the
+  ceremony step). Exactly one of {`45`, C3} owns the ceremony run per fresh fork.
 
 The signed `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (fold rule 9a accepts the
 first verifying owner-bound anchor as the trust root). The consumer-relevant operational gotchas an

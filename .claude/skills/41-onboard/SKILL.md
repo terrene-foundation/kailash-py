@@ -40,7 +40,7 @@ identity = operatorId.resolveIdentity()
 if (identity.blocked_into) → emit "/whoami --register" + stop
 ```
 
-The blocked_into value (`UNROSTERED_BLOCKED_INTO` or `NO_KEY_BLOCKED_INTO`) is the action the operator must take. Do NOT proceed to subsequent sections if blocked — the rest of the briefing assumes a registered identity.
+The blocked_into value (`UNROSTERED_BLOCKED_INTO` or `NO_KEY_BLOCKED_INTO`) is the action the operator must take. Do NOT proceed to subsequent sections if blocked — the rest of the briefing assumes a registered identity. **Branch the emitted message on the just-enrolled case:** if the operator just ran `/enroll` or `/whoami --register`, their roster row is an unmerged PR not yet on `main` — surface "await the roster PR merge (or stay on your `codify/<display_id>-<date>` branch) before treating `/onboard` identity as final"; otherwise emit `/whoami --register`. (An `UNROSTERED_BLOCKED_INTO` on `main` right after `/enroll` is the PR-pending state, NOT a never-registered operator — do not bounce them into a redundant re-registration.)
 
 ### 2. Team-memory surface
 

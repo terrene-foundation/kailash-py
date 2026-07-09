@@ -56,14 +56,21 @@ Collect the NAME→remote bindings for this ecosystem's logical keys (the EXACT 
 `artifact-flow.md` § "Repo Classes Map 1:1 To Resolver Logical Keys": `build.{py,rs,prism}`,
 `use-template.{…}`, `loom`, `atelier`, `downstream.<slug>`). Run the disclosure scan (invariant 1).
 Human-confirm the org slugs (invariant 2). Write the `remote_links` block of `.claude/bin/ecosystem.json`
-per the D6 schema (`ecosystem-config.mjs` is the reader; `getRemoteLink(key)` / `resolveRemote(key)` are
-the accessors). NEVER edit a synced artifact to carry the registry inline (`cross-repo.md` MUST NOT).
+per the D6 schema (`ecosystem-config.mjs::getRemoteLink(key)` reads it; `bin/lib/loom-links.mjs::resolveRemote(key)`
+is the local⊕remote join accessor). NEVER edit a synced artifact to carry the registry inline (`cross-repo.md` MUST NOT).
 
 ### C3 — establish the genesis trust-root
 
 Invoke `runEnrollmentCeremony` (invariant 3). For an org-owned fork the verified-org-admin attestation
 is the trust anchor (issue #358 org-owned bootstrap); for a user-owned fork the signed root commit is.
 Owner-class gate; the signed `genesis-anchor` record lands in the coordination log.
+
+**Idempotency boundary with `45-genesis-bootstrap`:** the first-owner runbook `skills/45-genesis-bootstrap`
+runs THIS SAME ceremony (`runEnrollmentCeremony` + fold-clean verify) as its own step. If you followed
+`45` to fold-clean completion, C3 is already satisfied — re-running `runEnrollmentCeremony` on identical
+pinned facts does NOT fork the trust root (fold rule 9a); verify the anchor already folded
+(`foldLog(...) → accepted:[anchor], rejected:[], forks:[]`) and skip to C2/C4/C5. Run the ceremony here
+ONLY if `45` was not run (e.g. the roster owner entry was hand-authored without the ceremony step).
 
 ### C2 — set the four remaining ecosystem-relative params
 

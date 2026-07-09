@@ -76,7 +76,9 @@ for them) and starts each session with `/onboard`.
 
 ## The bootstrap sequence
 
-1. **Hand-author the bootstrap roster** on the codify branch. The `/whoami --register` path
+1. **Hand-author the bootstrap roster** on the codify branch — signing key ALREADY configured
+   (pre-flight gate 1 precedes this whole sequence; this tracked-file write is permitted only
+   because signing is set). The `/whoami --register` path
    assumes an EXISTING roster; on a fresh repo the first roster is authored by hand. The genesis
    owner's entry MUST carry `role: owner`, the correct `github_login` (the verified external
    repo owner), and the signing key's `{type, fingerprint, pubkey}`. `person_id` is
@@ -86,7 +88,9 @@ for them) and starts each session with `/onboard`.
    `{ provider, repo_owner, repo_owner_kind: "user"|"org", root_commit }`.
 2. **Schema-validate** the roster BEFORE committing — `valid: false` is a hard stop:
    `.claude/hooks/lib/roster-schema-validate.js::validate(roster)` returns `{valid, errors[]}`.
-3. **Configure signing** (pre-flight gate 1) if not already done.
+3. **Re-confirm signing** is configured (pre-flight gate 1 checkpoint) — signing MUST already be
+   set from pre-flight before step 1's roster write; this is the verification checkpoint, NOT the
+   first configuration.
 4. **Run the ceremony** via `.claude/hooks/lib/genesis-ceremony.js::runEnrollmentCeremony(opts)`
    (signature at `genesis-ceremony.js`). `opts` keys:
    `{ roster, repo: {owner, name}, signingKeyPath, signingKeyFingerprint, ghApi,
@@ -94,6 +98,11 @@ transportAppend, keyType }`. `signingKeyPath` is the PRIVATE key; `ghApi` is a s
    wrapper around `gh api`; `transportAppend` is a sync append of the signed record to
    `.claude/learning/coordination-log.jsonl`. Returns `{ ok, error?, reason?, step? }`,
    fail-CLOSED. (The same path `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
+   **This ceremony IS `/ecosystem-init` C3.** Running `45` to fold-clean completion satisfies
+   C3 — the ceremony is idempotent on identical pinned facts (fold rule 9a), so a later
+   `/ecosystem-init` re-run does not fork the trust root; C3 verifies the already-folded anchor
+   and proceeds to the remaining config params. Exactly one of {`45`, `/ecosystem-init` C3} owns
+   the ceremony run per fresh fork.
 5. **Verify** (next section).
 
 The `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (gitignored, per-clone
