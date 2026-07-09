@@ -17,14 +17,27 @@ concrete backend ships here -- ``FileSystemDIDRegistry`` -- which reads DID
 documents an external authority has published into a directory, genuinely
 distinct from the in-process agent registry.
 
-Fail-closed: an absent DID, a malformed DID, an unreachable authority, or a
-corrupt document all resolve to ``None`` (DENY). An unresolvable counterparty
-is untrusted.
+Fail-closed: an absent DID, a malformed DID, an unreachable authority, a
+corrupt document, or a document with no verification key all resolve to
+``None`` (DENY). An unresolvable counterparty is untrusted.
+
+Trust boundary:
+    A ``DIDResolutionBackend`` authority (including ``FileSystemDIDRegistry``)
+    is treated as FULLY TRUSTED; the documents it serves are UNAUTHENTICATED.
+    For a ``did:eatp`` DID the resolved keys are only as trustworthy as the
+    authority's write ACL (e.g. the ``base_dir`` filesystem permissions) --
+    an attacker who can write into the authority can publish arbitrary keys.
+    ``did:key`` is the EXCEPTION: it is SELF-CERTIFYING (the public key is
+    embedded in the identifier), so this resolver verifies each published
+    verification-method key against the identifier-embedded key and REJECTS a
+    document whose keys do not match -- an authority cannot spoof a
+    ``did:key`` counterparty's key even with write access.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
@@ -36,9 +49,11 @@ from kailash.trust.identity.resolver import (
     ResolvedIdentity,
 )
 from kailash.trust.interop.did import (
+    DID_METHOD_KEY,
     DIDDocument,
     DIDResolutionError,
     DIDValidationError,
+    _multibase_to_public_key_b64,
     did_document_from_dict,
     resolve_did,
 )
@@ -146,14 +161,27 @@ class FileSystemDIDRegistry:
             # not valid JSON. Treat as a corrupt document, fail closed.
             raise IdentityResolutionError(did, f"corrupt DID document: {e}") from e
         try:
-            return did_document_from_dict(data)
+            doc = did_document_from_dict(data)
         except (KeyError, ValueError, TypeError) as e:
             raise IdentityResolutionError(did, f"corrupt DID document: {e}") from e
+        # A non-str id is unhashable / cannot key the resolve_did registry and
+        # is not a valid DID -- reject as corrupt rather than let a TypeError
+        # escape downstream.
+        if not isinstance(doc.id, str):
+            raise IdentityResolutionError(did, "DID document id is not a string")
+        return doc
 
 
 class DIDResolver(IdentityResolver):
     """
     Resolve a counterparty's identity via an external DID authority.
+
+    The backend authority is FULLY TRUSTED and its documents are
+    UNAUTHENTICATED (see the module trust-boundary note): for a ``did:eatp``
+    DID the resolved keys are only as trustworthy as the authority's write
+    ACL. ``did:key`` is the exception -- it is self-certifying, and this
+    resolver verifies each verification-method key against the
+    identifier-embedded key, rejecting any mismatch.
 
     Args:
         backend: The external authority supplying DID documents.
@@ -176,19 +204,29 @@ class DIDResolver(IdentityResolver):
         Resolve a DID to the identity its external authority publishes.
 
         Returns ``None`` (DENY) for an empty / malformed DID, an absent DID, an
-        unreachable authority, or a corrupt document -- never a permissive
-        default.
+        unreachable authority, a corrupt document, a document with no
+        verification key, or a ``did:key`` whose published keys do not match the
+        identifier-embedded key -- never a permissive default.
         """
         if not counterparty_ref:
             return None
-
-        # Fetch the document from the external authority (fail-closed on error).
         try:
-            doc = self._backend.fetch(counterparty_ref)
+            return await self._resolve(counterparty_ref)
         except IdentityResolutionError as e:
             logger.warning("external identity resolution denied: %s", e.reason)
             return None
+        except Exception as e:
+            # Fail-closed at the trust boundary: ANY malformed-document or
+            # unexpected backend anomaly (e.g. a RecursionError from deeply
+            # nested JSON, an unhashable id) denies rather than escaping
+            # (pact-governance Rule 4). Logged by exception type only -- never
+            # the DID value (observability.md Rule 8).
+            logger.warning("external identity resolution denied: %s", type(e).__name__)
+            return None
 
+    async def _resolve(self, counterparty_ref: str) -> Optional[ResolvedIdentity]:
+        """Resolution body; the public method contains its fail-closed guard."""
+        doc = self._backend.fetch(counterparty_ref)
         if doc is None:
             logger.debug("external identity resolution: DID not published by authority")
             return None
@@ -198,8 +236,24 @@ class DIDResolver(IdentityResolver):
         # published id fails DID grammar even if the authority served it.
         try:
             resolved_doc = resolve_did(counterparty_ref, registry={doc.id: doc})
-        except (DIDValidationError, DIDResolutionError) as e:
-            logger.warning("external identity resolution denied: invalid DID: %s", e)
+        except (DIDValidationError, DIDResolutionError):
+            logger.debug("external identity resolution denied: DID failed validation")
+            return None
+
+        # Fail-closed: an identity with no verifiable key is not a usable trust
+        # anchor -- a caller treating "resolved" as "verified" would be exposed.
+        if not resolved_doc.verification_method:
+            logger.debug("external identity resolution denied: no verification methods")
+            return None
+
+        # did:key self-certification: the identifier embeds the public key, so
+        # every verification-method key MUST equal it. This is the sole defense
+        # against a hostile authority publishing an attacker's key under a
+        # victim's did:key identifier.
+        if not self._self_certifies(counterparty_ref, resolved_doc):
+            logger.debug(
+                "external identity resolution denied: did:key self-certification failed"
+            )
             return None
 
         public_keys = tuple(
@@ -216,3 +270,31 @@ class DIDResolver(IdentityResolver):
                 "assertion_method": list(resolved_doc.assertion_method),
             },
         )
+
+    @staticmethod
+    def _self_certifies(did: str, doc: DIDDocument) -> bool:
+        """
+        Verify a ``did:key`` document self-certifies; pass through others.
+
+        For a ``did:key`` DID the method-specific identifier IS the
+        multibase-encoded public key. Every verification method in the document
+        MUST carry exactly that key (constant-time compared). Returns:
+
+        - ``True`` for a non-``did:key`` DID (nothing to self-certify -- the
+          authority-trust boundary governs those, per the module note).
+        - ``True`` for a ``did:key`` whose verification methods all match the
+          identifier-embedded key.
+        - ``False`` if any verification-method key differs from the embedded key.
+
+        Raises ``DIDValidationError`` (via the multibase decoder) on a malformed
+        key encoding; the caller's fail-closed boundary converts that to DENY.
+        """
+        prefix = f"did:{DID_METHOD_KEY}:"
+        if not did.startswith(prefix):
+            return True
+        embedded_key = _multibase_to_public_key_b64(did[len(prefix) :])
+        for vm in doc.verification_method:
+            vm_key = _multibase_to_public_key_b64(vm.public_key_multibase)
+            if not hmac.compare_digest(vm_key, embedded_key):
+                return False
+        return True

@@ -17,9 +17,9 @@ than a parallel copy -- see ``rules/facade-manager-detection.md`` Rule 3.
 from __future__ import annotations
 
 import logging
+import unicodedata
 from typing import Optional
 
-from kailash.trust._locking import validate_id
 from kailash.trust.identity.resolver import IdentityResolver, ResolvedIdentity
 from kailash.trust.registry.store import AgentRegistryStore
 
@@ -31,6 +31,18 @@ __all__ = ["LocalRegistryResolver"]
 # reference longer than any legitimate registered agent id is treated as
 # unresolvable rather than passed to the store.
 _MAX_REF_LENGTH = 512
+
+
+def _has_control_chars(ref: str) -> bool:
+    """True if the reference contains any control character (Unicode ``Cc``).
+
+    Agent ids in this system are DID-style / colon-bearing and the store
+    accepts them unconstrained (a dict / DB key, never a filesystem path), so
+    ``validate_id``'s strict ``[A-Za-z0-9_-]`` charset would false-DENY a
+    legitimately-registered ``did:eatp:x`` id. Dict-key hygiene only requires
+    rejecting null bytes and control characters -- ``.``, ``:``, ``/`` are safe.
+    """
+    return any(unicodedata.category(c) == "Cc" for c in ref)
 
 
 class LocalRegistryResolver(IdentityResolver):
@@ -69,24 +81,24 @@ class LocalRegistryResolver(IdentityResolver):
             )
             return None
 
-        # Externally-sourced id: reject path-traversal / unsafe characters
-        # before it reaches the store. An unsafe reference cannot name a
-        # legitimately-registered agent, so treat it as unresolvable (DENY).
-        try:
-            validate_id(counterparty_ref)
-        except ValueError:
+        # Externally-sourced id hygiene: reject null bytes / control characters
+        # before the ref reaches the store. Charset is otherwise unconstrained
+        # (colon/dot/slash-bearing DID-style ids are legitimate) -- see
+        # _has_control_chars.
+        if _has_control_chars(counterparty_ref):
             logger.warning(
-                "local identity resolution denied: reference is not a safe id"
+                "local identity resolution denied: reference contains control characters"
             )
             return None
 
         try:
             metadata = await self._store.get_agent(counterparty_ref)
         except Exception as e:  # store/backend error -> fail closed (logged)
+            # Log the error type only -- never the reference value
+            # (observability.md Rule 8: identity-revealing values stay out of WARN).
             logger.warning(
-                "local identity resolution denied: store error for '%s': %s",
-                counterparty_ref,
-                e,
+                "local identity resolution denied: store error (%s)",
+                type(e).__name__,
             )
             return None
 

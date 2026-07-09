@@ -15,6 +15,7 @@ Real Ed25519 key material (``generate_keypair``) and real DID documents
 (``create_did_document``) are used throughout.
 """
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -25,8 +26,45 @@ from kailash.trust.identity import (
     IdentityResolutionError,
     ResolvedIdentity,
 )
-from kailash.trust.interop.did import create_did_document, generate_did
+from kailash.trust.interop.did import (
+    DIDDocument,
+    VerificationMethod,
+    create_did_document,
+    generate_did,
+    generate_did_key,
+)
 from kailash.trust.signing.crypto import generate_keypair
+
+
+def _write_raw(authority_dir: Path, did: str, content: str) -> None:
+    """Write raw bytes at the exact path the backend reads for ``did``."""
+    name = hashlib.sha256(did.encode("utf-8")).hexdigest()
+    (authority_dir / f"{name}.json").write_text(content)
+
+
+def _did_key_doc(multibase: str, key_multibase: str) -> DIDDocument:
+    """Build a did:key document whose single verification method carries
+    ``key_multibase`` (which may or may not match the identifier-embedded key).
+    """
+    did = f"did:key:{multibase}"
+    key_id = f"{did}#{multibase}"
+    vm = VerificationMethod(
+        id=key_id,
+        type="Ed25519VerificationKey2020",
+        controller=did,
+        public_key_multibase=key_multibase,
+    )
+    return DIDDocument(
+        id=did,
+        verification_method=[vm],
+        authentication=[key_id],
+        assertion_method=[key_id],
+    )
+
+
+def _multibase_of(public_key: str) -> str:
+    """The z-prefixed multibase key embedded in this key's did:key identifier."""
+    return generate_did_key(public_key)[len("did:key:") :]
 
 
 @pytest.fixture
@@ -149,3 +187,86 @@ class TestCrossOrgHandoff:
         identity = await external.resolve_identity(published_did)
         assert identity is not None
         assert identity.is_external is True
+
+
+# ---------------------------------------------------------------------------
+# did:key self-certification -- a hostile authority cannot spoof a key
+# ---------------------------------------------------------------------------
+
+
+class TestDIDKeySelfCertification:
+    async def test_self_consistent_did_key_resolves(self, authority_dir):
+        # A did:key whose verification method carries exactly the
+        # identifier-embedded key resolves normally.
+        _, public_key = generate_keypair()
+        multibase = _multibase_of(public_key)
+        doc = _did_key_doc(multibase, multibase)
+        FileSystemDIDRegistry(authority_dir).publish(doc)
+
+        resolver = DIDResolver(FileSystemDIDRegistry(authority_dir))
+        identity = await resolver.resolve_identity(doc.id)
+
+        assert identity is not None
+        assert identity.public_keys == (multibase,)
+
+    async def test_spoofed_did_key_rejected(self, authority_dir):
+        # The authority publishes a document under the VICTIM's did:key
+        # identifier but carries the ATTACKER's key in the verification method.
+        # The identifier embeds the victim's key (did:key is self-certifying),
+        # so the resolver MUST detect the mismatch and DENY.
+        _, victim_key = generate_keypair()
+        _, attacker_key = generate_keypair()
+        victim_mb = _multibase_of(victim_key)
+        attacker_mb = _multibase_of(attacker_key)
+        assert victim_mb != attacker_mb
+
+        spoof = _did_key_doc(victim_mb, attacker_mb)  # id=victim, vm=attacker
+        FileSystemDIDRegistry(authority_dir).publish(spoof)
+
+        resolver = DIDResolver(FileSystemDIDRegistry(authority_dir))
+        result = await resolver.resolve_identity(spoof.id)
+        assert result is None  # spoof rejected -- no bootstrap from attacker key
+        assert not isinstance(result, ResolvedIdentity)
+
+
+# ---------------------------------------------------------------------------
+# Malformed-document containment -- no exception escapes the None contract
+# ---------------------------------------------------------------------------
+
+
+class TestMalformedDocumentContainment:
+    async def test_non_string_document_id_denies(self, authority_dir):
+        # A document whose id is not a string cannot key the resolve_did
+        # registry; the resolver must contain it, not raise.
+        did = "did:eatp:nonhashable"
+        _write_raw(
+            authority_dir,
+            did,
+            '{"id": {"nested": 1}, "verificationMethod": [], '
+            '"authentication": [], "assertionMethod": []}',
+        )
+        resolver = DIDResolver(FileSystemDIDRegistry(authority_dir))
+        assert await resolver.resolve_identity(did) is None
+
+    async def test_deeply_nested_json_denies(self, authority_dir):
+        # Deeply nested JSON raises RecursionError inside json.load (a
+        # RuntimeError, not a ValueError); the resolver's fail-closed boundary
+        # MUST contain it -> None, never an escaping exception.
+        did = "did:eatp:nested"
+        _write_raw(authority_dir, did, "[" * 20_000 + "]" * 20_000)
+        resolver = DIDResolver(FileSystemDIDRegistry(authority_dir))
+        assert await resolver.resolve_identity(did) is None
+
+    async def test_zero_verification_methods_denies(self, authority_dir):
+        # A document with no verification method is not a usable trust anchor.
+        did = generate_did("empty-vm-agent")
+        doc = DIDDocument(
+            id=did,
+            verification_method=[],
+            authentication=[],
+            assertion_method=[],
+        )
+        FileSystemDIDRegistry(authority_dir).publish(doc)
+
+        resolver = DIDResolver(FileSystemDIDRegistry(authority_dir))
+        assert await resolver.resolve_identity(did) is None

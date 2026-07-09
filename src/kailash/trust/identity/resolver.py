@@ -33,7 +33,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from kailash.trust.exceptions import TrustError
 
@@ -88,13 +89,21 @@ class ResolvedIdentity:
             identities. Empty tuple when the authority published no key.
         metadata: Additional non-authoritative context (agent type, status,
             controller DID, ...). MUST NOT be relied on for a trust decision.
+            Stored as an immutable mapping so a resolved record cannot be
+            mutated in place after resolution.
     """
 
     counterparty_ref: str
     resolver: str
     is_external: bool
     public_keys: Tuple[str, ...] = ()
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Freeze metadata into a read-only view: `frozen=True` prevents
+        # rebinding the attribute but not mutation of a plain dict's contents.
+        if not isinstance(self.metadata, MappingProxyType):
+            object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""

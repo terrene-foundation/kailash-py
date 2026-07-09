@@ -118,6 +118,23 @@ class TestLocalRegistryResolver:
         assert identity is not None
         assert identity.public_keys == ()
 
+    async def test_resolves_colon_and_slash_bearing_agent_id(self):
+        # DID-style / colon- and slash-bearing ids are legitimate registry keys
+        # (dict/DB keys, never filesystem paths); the resolver MUST NOT
+        # false-DENY them (it did under the over-strict validate_id charset).
+        store = InMemoryAgentRegistryStore()
+        await store.register_agent(_metadata("did:eatp:partner-x"))
+        await store.register_agent(_metadata("org/team/agent.7"))
+        resolver = LocalRegistryResolver(store)
+
+        did_identity = await resolver.resolve_identity("did:eatp:partner-x")
+        assert did_identity is not None
+        assert did_identity.counterparty_ref == "did:eatp:partner-x"
+
+        dotted = await resolver.resolve_identity("org/team/agent.7")
+        assert dotted is not None
+        assert dotted.counterparty_ref == "org/team/agent.7"
+
     async def test_requires_a_store(self):
         with pytest.raises(ValueError):
             LocalRegistryResolver(None)  # type: ignore[arg-type]
@@ -140,8 +157,17 @@ class TestLocalResolverFailsClosed:
     async def test_path_traversal_reference_denies(self):
         store = InMemoryAgentRegistryStore()
         resolver = LocalRegistryResolver(store)
-        # An unsafe id can never name a legitimately-registered agent.
+        # A traversal-shaped ref is not a registered agent -> unresolvable.
+        # (It is not a filesystem path here, but it names no registered agent.)
         assert await resolver.resolve_identity("../../etc/shadow") is None
+
+    async def test_control_char_reference_denies(self):
+        # Null bytes / control characters are rejected as dict-key hygiene
+        # before the reference reaches the store.
+        store = InMemoryAgentRegistryStore()
+        resolver = LocalRegistryResolver(store)
+        assert await resolver.resolve_identity("agent\x00id") is None
+        assert await resolver.resolve_identity("agent\x1fid") is None
 
     async def test_over_long_reference_denies(self):
         resolver = LocalRegistryResolver(InMemoryAgentRegistryStore())
@@ -170,6 +196,19 @@ class TestResolvedIdentityRecord:
         )
         with pytest.raises(Exception):
             identity.resolver = "tampered"  # type: ignore[misc]
+
+    def test_metadata_is_immutable(self):
+        # metadata is a read-only view (MappingProxyType) -- a resolved record
+        # cannot be mutated in place, not even its metadata contents.
+        identity = ResolvedIdentity(
+            counterparty_ref="agent-x",
+            resolver="did",
+            is_external=True,
+            metadata={"controller": "did:eatp:org"},
+        )
+        with pytest.raises(TypeError):
+            identity.metadata["controller"] = "tampered"  # type: ignore[index]
+        assert identity.metadata["controller"] == "did:eatp:org"
 
     def test_round_trips_through_dict(self):
         identity = ResolvedIdentity(
