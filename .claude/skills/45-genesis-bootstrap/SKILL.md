@@ -136,12 +136,14 @@ person whose `github_login` resolves to that login, bound to the signing key's f
 segment-aware wrapper from `violation-patterns.js`) on every
 Bash command — a three-layer detector (its docstring at `validate-bash-command.js`:
 "redirects, file utilities, **interpreter -c/-e/-m bodies**") that BLOCKS (severity: block) any
-command whose body MUTATES a watched state file. `STATE_PATH_RX` matches `posture.json`,
+command that puts a watched-state-path LITERAL on the scanned command line (read OR write — it is
+path-presence-based, not mutation-aware). `STATE_PATH_RX` matches `posture.json`,
 `violations.jsonl`, `coordination-log.jsonl`, `.initialized`, the heartbeat/session-end caches,
-and `operators.roster.json`. So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
-roster write is blocked — the state-file path is on the command line the detector scans. (This
-is why the illustrative `node -e` in `commands/whoami.md` § `--register` is blocked in practice;
-that command's "Implementation notes" name the "ceremony-script-by-path constraint.")
+and `operators.roster.json` (among others). So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
+roster write is blocked — the state-file path is on the command line the detector scans. (This is
+why `commands/whoami.md` § `--register` uses the script-by-path `cat > …cjs` + `node <file>` form
+rather than an inline `node -e`; that command's "Implementation notes" name the
+"ceremony-script-by-path constraint.")
 
 The fix is NOT to weaken the guard. Route every state-mutating ceremony step through a script:
 
@@ -156,8 +158,10 @@ node -e 'require("fs").writeFileSync(".claude/operators.roster.json", x)'   # BL
 ```
 
 Keep `node <file>` a BARE command — bundling it with `gh …` or a heredoc in one compound
-command can re-introduce a scanned mutation token. Read-only `node -e` (no watched-state path)
-is NOT blocked; only state-file mutation is.
+command can re-introduce a scanned mutation token. An inline `node -e` naming NO watched-state
+path is not blocked; but the guard is read/write-AGNOSTIC — it fires on ANY interpreter body that
+names a watched-state-path LITERAL on the command line, read OR write (so run even a READ of the
+log script-by-path — see Verify below).
 
 ## Verify (before declaring "enrolled")
 
