@@ -9,7 +9,7 @@ The procedure backing `.claude/commands/ecosystem-init.md` (the once-per-fork ec
 command body holds the five load-bearing invariants + the ceremony order; this skill holds the
 step-by-step procedure, the input prompts, the D6 schema field set, and the exact tool-call shapes.
 
-Three onboarding surfaces (the core distinction — see (loom-internal reference)):
+Three onboarding surfaces (the core distinction — `02-plans/02-ga-ecosystem-onboarding.md`):
 
 | Surface           | Moment                     | Writes                                | Frequency       |
 | ----------------- | -------------------------- | ------------------------------------- | --------------- |
@@ -46,8 +46,8 @@ Ordered per Q4: the registry defines the org, genesis anchors TO that org, the r
 ### C3 — establish the genesis trust-root
 
 Invoke `.claude/hooks/lib/genesis-ceremony.js::runEnrollmentCeremony({roster, repo, signingKeyPath,
-signingKeyFingerprint, ghApi, transportAppend, keyType})` (invariant 3; `keyType` defaults to `ssh`).
-It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis-anchor.
+signingKeyFingerprint, ghApi, transportAppend})` (invariant 3). It is fail-CLOSED — any failed gh-api
+verification refuses to emit the genesis-anchor.
 
 - **Org-owned fork** (`roster.genesis.repo_owner_kind: "org"`): the verified-org-admin attestation
   (`gh api orgs/{org}/memberships/{login}` → `role: "admin"`) is the trust anchor (the issue-#358
@@ -56,24 +56,14 @@ It is fail-CLOSED — any failed gh-api verification refuses to emit the genesis
   `verification.verified == true`, author == declared owner) is the anchor.
 - **Pre-condition**: the genesis-owner's `person_id` MUST already be in `operators.roster.json` with
   `role: owner` and the correct `github_login`. On a truly fresh fork, edit the bootstrap roster or run
-  `/whoami --register` then promote the role on the resulting PR first. The full first-owner runbook for
-  hand-authoring that owner entry (signing-key-first, the script-by-path roster write, fold-clean verify)
-  is `skills/45-genesis-bootstrap/SKILL.md` — it is the step that PRECEDES this one on a fresh fork.
-- **Idempotency boundary with `45`**: `skills/45-genesis-bootstrap` runs THIS SAME `runEnrollmentCeremony`
-  plus fold-clean verify as its own final step — it is NOT merely roster-prep. If you followed `45` to
-  fold-clean completion, C3 is already satisfied: re-running the ceremony on identical pinned facts does
-  NOT fork the trust root (fold rule 9a). Verify the anchor already folded
-  (`foldLog(...) → accepted:[anchor], rejected:[], forks:[]`) and skip to C2/C4/C5. Run C3's ceremony here
-  ONLY if `45` was not run to completion (e.g. the owner roster entry was hand-authored without the
-  ceremony step). Exactly one of {`45`, C3} owns the ceremony run per fresh fork.
+  `/whoami --register` then promote the role on the resulting PR first.
 
 The signed `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (fold rule 9a accepts the
 first verifying owner-bound anchor as the trust root). The consumer-relevant operational gotchas an
 operator hits running the ceremony by hand are inlined below in § Operational runbook (this skill is
-DISTRIBUTED to consumers; the genesis ceremony is self-sufficient without the loom-authored,
-`use_excluded` `guides/co-setup/11-genesis-ceremony.md`, which carries the architecture / failure-mode
-reference / ADO deep runbook for platform-engineers — present in BUILD repos but NOT distributed to
-USE-template / downstream consumers).
+DISTRIBUTED to consumers; the genesis ceremony is self-sufficient without the loom-internal
+`guides/co-setup/11-genesis-ceremony.md`, which carries the architecture / failure-mode reference / ADO
+deep runbook for platform-engineers and is NOT shipped to consumers).
 
 ### C2 — set the four remaining ecosystem-relative params
 
@@ -94,20 +84,16 @@ If the fork's build is NOT Kailash, invoke the EXISTING `/onboard-stack` (detect
 
 ### C5 — hand off (invariant 4)
 
-Print: "Ecosystem configured. Each TEAMMATE now runs `/enroll`, then `/onboard` at the start of every
-session." Do NOT enroll the initiating operator — that is `/enroll`'s gated job. The genesis owner is
-ALREADY rostered (their `role: owner` entry was hand-authored in the genesis-bootstrap step that precedes
-C3, per `skills/45-genesis-bootstrap`), so the owner runs `/onboard` directly and does NOT re-run
-`/enroll` (which would open a redundant `contributor` registration over their existing owner identity).
+Print: "Ecosystem configured. Each operator now runs `/enroll`, then `/onboard` at the start of every
+session." Do NOT enroll the initiating operator — that is `/enroll`'s gated job.
 
 ## Operational runbook
 
 Operational gotchas an operator hits running the genesis ceremony (`/ecosystem-init` C3, or
 `/whoami --enroll-genesis`) by hand. These are CLI / host-environment facts the consumer needs but cannot
 reverse-engineer from library + hook code; inlined here so the irreversible, fail-CLOSED ceremony is
-self-sufficient WITHOUT the loom-authored, `use_excluded` `guides/co-setup/11-genesis-ceremony.md`
-(present in BUILD repos; USE / downstream consumers do not receive `guides/`). Origin: F19
-genesis-enrollment session (2026-05-27).
+self-sufficient WITHOUT the loom-internal `guides/co-setup/11-genesis-ceremony.md` (consumers do not
+receive `guides/`). Origin: F19 genesis-enrollment session (2026-05-27).
 
 ### 1. Enroll BEFORE the bootstrap commit (ordering)
 
@@ -128,16 +114,13 @@ tool, so it never trips the guard.
 
 ### 2. Roster / coordination-log writes go through a script invoked by its own path
 
-The `validate-bash-command.js` state-file-write guard (`detectStateFileMutationSegmentAware`, Layer 3) BLOCKS any
+The `validate-bash-command.js` state-file-write guard (`detectStateFileMutation`, Layer 3) BLOCKS any
 interpreter command (`node -e`/`-c`/`-m`, or any command LED by `node`/`python`/`ruby`/`perl`) whose
 **command string** contains a protected state-file path — `operators.roster.json`,
-`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized` (among others; the wired
-`STATE_PATH_RX` at `validate-bash-command.js` is authoritative). The documented inline
+`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized`. The documented inline
 `node -e '… operators.roster.json …'` form therefore CANNOT run; this is correct — only the canonical
-roster-write path may touch the roster. (`.claude/settings.json::permissions.deny` additionally hard-denies
-Edit/Write of `posture.json` + `violations.jsonl` + `.initialized` + `.posture-upgrade-nonce` — it does NOT cover
-`operators.roster.json` / `coordination-log.jsonl`; those two rest on this `STATE_PATH_RX` guard (Bash)
-plus `integrity-guard.js`'s codify-branch/lease gate (Edit/Write, coordination-ON).)
+roster-write path may touch the roster. (`.claude/settings.json::permissions.deny`, where present, is a
+second lexical defense-in-depth layer matching the same paths.)
 
 Write the ceremony as a **script file invoked by its own path** — the protected path lives INSIDE the
 script body, off the command line. Crucially, the script-WRITE and the script-RUN must be **separate Bash

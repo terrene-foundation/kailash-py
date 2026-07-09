@@ -11,8 +11,8 @@ genesis owner, no folded `genesis-anchor`. This is the step that PRECEDES `/enro
 `/ecosystem-init`'s genesis step on a truly fresh BUILD/USE repo.
 
 **The gap this fills.** The authoritative end-to-end runbook
-(`guides/co-setup/11-genesis-ceremony.md`) is loom-authored and `use_excluded` — present in BUILD repos but NOT distributed
-to USE-template / downstream consumer repos (`sync-manifest.yaml::use_excluded`). The shipped commands (`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the
+(`guides/co-setup/11-genesis-ceremony.md`) lives at **loom only** and is absent from BUILD/USE
+repos. The shipped commands (`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the
 sibling skills (`41-onboard`, `43-ecosystem-init`, `44-enroll`) reference that loom guide for
 the operational depth. This skill reconstructs that depth IN the repo, plus the five hard-won
 guard traps that block a naive first run.
@@ -56,16 +56,12 @@ for them) and starts each session with `/onboard`.
    never set these during a ceremony.)
 2. **On a codify branch.** `integrity-guard.js` permits writes to watched paths
    (`operators.roster.json`, `operators.roster.schema.json`, `coordination-log.jsonl`,
-   `posture.json`, `violations.jsonl`, `observations.jsonl`, `coordination-mode.json`,
-   `learning-codified.json`, `team-memory/**`, `journal/**`, `workspaces/<name>/journal/**` —
-   the wired `DIRECT` set + subtree predicates at `.claude/hooks/integrity-guard.js` are authoritative)
+   `posture.json`, `violations.jsonl`, `observations.jsonl`, `team-memory/**`, `journal/**`)
    ONLY on a branch matching `^codify/<display_id>-YYYY-MM-DD$` (the date-terminal predicate at
-   `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Like gate 1,
-   `integrity-guard.js` passes through on a genuinely fresh coordination-OFF bootstrap repo — the
-   codify branch is then required by branch protection for the eventual PR, not by the guard here.
-   Cut it from `origin/main` (branch protection rejects a direct roster push to `main`):
+   `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Cut it from
+   `main` (branch protection rejects a direct roster push to `main`):
    ```bash
-   git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" origin/main
+   git checkout -b "codify/<display_id>-$(date -u +%Y-%m-%d)" main
    ```
 3. **Ceremony steps run script-by-path, never `node -e` / `python -c`.** See § The
    script-by-path pattern below — this is the trap that most often blocks a first run.
@@ -78,9 +74,7 @@ for them) and starts each session with `/onboard`.
 
 ## The bootstrap sequence
 
-1. **Hand-author the bootstrap roster** on the codify branch — signing key ALREADY configured
-   (pre-flight gate 1 precedes this whole sequence; this tracked-file write is permitted only
-   because signing is set). The `/whoami --register` path
+1. **Hand-author the bootstrap roster** on the codify branch. The `/whoami --register` path
    assumes an EXISTING roster; on a fresh repo the first roster is authored by hand. The genesis
    owner's entry MUST carry `role: owner`, the correct `github_login` (the verified external
    repo owner), and the signing key's `{type, fingerprint, pubkey}`. `person_id` is
@@ -90,25 +84,33 @@ for them) and starts each session with `/onboard`.
    `{ provider, repo_owner, repo_owner_kind: "user"|"org", root_commit }`.
 2. **Schema-validate** the roster BEFORE committing — `valid: false` is a hard stop:
    `.claude/hooks/lib/roster-schema-validate.js::validate(roster)` returns `{valid, errors[]}`.
-3. **Re-confirm signing** is configured (pre-flight gate 1 checkpoint) — signing MUST already be
-   set from pre-flight before step 1's roster write; this is the verification checkpoint, NOT the
-   first configuration.
+3. **Configure signing** (pre-flight gate 1) if not already done.
 4. **Run the ceremony** via `.claude/hooks/lib/genesis-ceremony.js::runEnrollmentCeremony(opts)`
    (signature at `genesis-ceremony.js`). `opts` keys:
    `{ roster, repo: {owner, name}, signingKeyPath, signingKeyFingerprint, ghApi,
 transportAppend, keyType }`. `signingKeyPath` is the PRIVATE key; `ghApi` is a subprocess
-   wrapper around `gh api`; `transportAppend` is a sync append of the signed record to
-   `.claude/learning/coordination-log.jsonl`. Returns `{ ok, record?, error?, reason?, step? }`
-   (`record` on the success path), fail-CLOSED. (The same path `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
-   **This ceremony IS `/ecosystem-init` C3.** Running `45` to fold-clean completion satisfies
-   C3 — the ceremony is idempotent on identical pinned facts (fold rule 9a), so a later
-   `/ecosystem-init` re-run does not fork the trust root; C3 verifies the already-folded anchor
-   and proceeds to the remaining config params. Exactly one of {`45`, `/ecosystem-init` C3} owns
-   the ceremony run per fresh fork.
+   wrapper around `gh api`; `transportAppend` is the **`.transportAppend` FUNCTION destructured
+   from** the composed enrollment-seed transport — the factory
+   `.claude/hooks/lib/enrollment-seed-transport.js::createEnrollmentSeedTransport(
+{ repoDir, remote, localAppend })` RETURNS `{ transportAppend, refName, refSource }`, so
+   destructure and pass its `.transportAppend` (a function) as the ceremony opt:
+   `const { transportAppend } = createEnrollmentSeedTransport({ repoDir, remote, localAppend });
+runEnrollmentCeremony({ ..., transportAppend })`. Passing the factory-return OBJECT itself
+   trips the ceremony's fail-CLOSED `transportAppend callable missing` guard. It seeds the signed record to the canonical FETCHABLE
+   git ref FIRST (`transport-git-ref.js`, uncapped; the ref name resolves via
+   `log-ref-name.js::resolveLogRefName`, network-permitted at enrollment), THEN to the local
+   `.claude/learning/coordination-log.jsonl` cache (`localAppend`). Seeding the ref is what lets
+   a FRESH CLONE fetch-then-fold its trust root instead of fail-CLOSED-blocking at its first
+   commit (loom#879). A ref-append failure returns a typed error and does NOT write the local
+   surface (no half-write). Returns `{ ok, error?, reason?, step? }`, fail-CLOSED. (The same path
+   `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
 5. **Verify** (next section).
 
-The `genesis-anchor` lands in `.claude/learning/coordination-log.jsonl` (gitignored, per-clone
-local state — NO commit, NO PR for the anchor itself). Appending it through a `node <file>`
+The `genesis-anchor` lands on BOTH surfaces (via the composed enrollment-seed transport, step 4):
+the canonical fetchable git ref `refs/coc/coordination-gen<N>` (durable, uncapped — the
+recovery surface a fresh clone fetch-then-folds, loom#879) AND the local
+`.claude/learning/coordination-log.jsonl` cache (gitignored, per-clone local state — NO commit,
+NO PR for the local anchor itself). Appending it through a `node <file>`
 script does NOT trip `genesis-anchor-guard.js` (that guard fires on Bash `git commit` /
 `git push` and on edit-tool mutations of the roster, not on a plain `node` subprocess). The
 ceremony writes its OWN signed enrollment marker (`COC_GENESIS_GUARD_ENROLLMENT_MARKER`) that
@@ -134,20 +136,15 @@ person whose `github_login` resolves to that login, bound to the signing key's f
 
 ## The script-by-path pattern (the central trap)
 
-`validate-bash-command.js` runs `detectStateFileMutationSegmentAware(command, STATE_PATH_RX)` (the
-segment-aware wrapper from `violation-patterns.js`) on every
+`validate-bash-command.js` runs `detectStateFileMutation(command, STATE_PATH_RX)` on every
 Bash command — a three-layer detector (its docstring at `validate-bash-command.js`:
 "redirects, file utilities, **interpreter -c/-e/-m bodies**") that BLOCKS (severity: block) any
-command that puts a watched-state-path LITERAL on the scanned command line. The interpreter
-`-c`/`-e`/`-m` body layer is path-presence-based (read/write-AGNOSTIC — it fires on a watched-path
-literal in ANY interpreter body, read OR write); the redirect and file-utility layers additionally
-require a write construct. `STATE_PATH_RX` matches `posture.json`,
+command whose body MUTATES a watched state file. `STATE_PATH_RX` matches `posture.json`,
 `violations.jsonl`, `coordination-log.jsonl`, `.initialized`, the heartbeat/session-end caches,
-and `operators.roster.json` (among others). So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
-roster write is blocked — the state-file path is on the command line the detector scans. (This is
-why `commands/whoami.md` § `--register` uses the script-by-path `cat > …cjs` + `node <file>` form
-rather than an inline `node -e`; that command's "Implementation notes" name the
-"ceremony-script-by-path constraint.")
+and `operators.roster.json`. So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
+roster write is blocked — the state-file path is on the command line the detector scans. (This
+is why the illustrative `node -e` in `commands/whoami.md` § `--register` is blocked in practice;
+that command's "Implementation notes" name the "ceremony-script-by-path constraint.")
 
 The fix is NOT to weaken the guard. Route every state-mutating ceremony step through a script:
 
@@ -161,13 +158,9 @@ node /path/to/ceremony-step.js
 node -e 'require("fs").writeFileSync(".claude/operators.roster.json", x)'   # BLOCKED
 ```
 
-Keep `node <file>` a BARE command — bundling it with `gh …` can re-introduce a scanned token (if
-the bundled command itself names a watched path), and authoring a heredoc script that names a
-watched path then running it in the SAME command trips the whole-command
-`detectHeredocWriteRunBundle` pass (author + run as two separate commands). An inline `node -e` naming NO watched-state
-path is not blocked; but the guard is read/write-AGNOSTIC — it fires on ANY interpreter body that
-names a watched-state-path LITERAL on the command line, read OR write (so run even a READ of the
-log script-by-path — see Verify below).
+Keep `node <file>` a BARE command — bundling it with `gh …` or a heredoc in one compound
+command can re-introduce a scanned mutation token. Read-only `node -e` (no watched-state path)
+is NOT blocked; only state-file mutation is.
 
 ## Verify (before declaring "enrolled")
 
@@ -177,8 +170,7 @@ contestedRevocations, derivedN }`. A healthy genesis: `accepted` includes the an
    `rejected: []`, `forks: []`. Run it script-by-path (it reads the gitignored log).
 2. **Identity resolves to owner** —
    `.claude/hooks/lib/operator-id.js::resolveIdentity(repoDir)` returns
-   `{ verified_id, person_id, display_id, role, host_role }` on the rostered/owner path
-   (`posture` / `blocked_into` appear only on the L2 / unrostered / no-key branch); confirm
+   `{ verified_id, person_id, display_id, role, host_role, posture, blocked_into }`; confirm
    `role: "owner"` and a non-null `person_id`.
 3. **allowed_signers** (optional, for local commit-signature verification): point
    `git config --local gpg.ssh.allowedSignersFile` at a file listing the roster's keys; generate
@@ -189,7 +181,7 @@ contestedRevocations, derivedN }`. A healthy genesis: `accepted` includes the an
 | Symptom (what you see)                                   | Cause                                                          | Fix                                                                                   |
 | -------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Every tracked-file write silently refused                | degraded read-only — no signing key (`signing-mutation-guard`) | Configure `gpg.format ssh` + `user.signingkey` (pre-flight gate 1)                    |
-| Bash `node -e`/redirect to a state file → severity:block | `validate-bash-command` `detectStateFileMutationSegmentAware`  | Route the mutation through a bare `node <file>` script (§ script-by-path)             |
+| Bash `node -e`/redirect to a state file → severity:block | `validate-bash-command` `detectStateFileMutation`              | Route the mutation through a bare `node <file>` script (§ script-by-path)             |
 | Roster/journal write blocked off the codify branch       | `integrity-guard` (watched path, wrong branch)                 | Be on `codify/<display_id>-YYYY-MM-DD` (date-terminal) cut from `main`                |
 | Roster/journal write blocked ON the codify branch        | `integrity-guard` — branch matches but no covering lease       | Acquire the codify lease (`codify-lease.js::acquireCodifyLease`) bound to the branch  |
 | Journal write halts "slot unreserved"                    | `journal-write-guard` — slot not reserved per log              | `journal-reserve.js::reserveJournalSlotSigned(repoDir, {dir, identity, type, topic})` |

@@ -56,21 +56,17 @@ Collect the NAME→remote bindings for this ecosystem's logical keys (the EXACT 
 `artifact-flow.md` § "Repo Classes Map 1:1 To Resolver Logical Keys": `build.{py,rs,prism}`,
 `use-template.{…}`, `loom`, `atelier`, `downstream.<slug>`). Run the disclosure scan (invariant 1).
 Human-confirm the org slugs (invariant 2). Write the `remote_links` block of `.claude/bin/ecosystem.json`
-per the D6 schema (`ecosystem-config.mjs::getRemoteLink(key)` reads it; `bin/lib/loom-links.mjs::resolveRemote(key)`
-is the local⊕remote join accessor). NEVER edit a synced artifact to carry the registry inline (`cross-repo.md` MUST NOT).
+per the D6 schema (`ecosystem-config.mjs` is the reader; `getRemoteLink(key)` / `resolveRemote(key)` are
+the accessors). NEVER edit a synced artifact to carry the registry inline (`cross-repo.md` MUST NOT).
 
 ### C3 — establish the genesis trust-root
 
 Invoke `runEnrollmentCeremony` (invariant 3). For an org-owned fork the verified-org-admin attestation
 is the trust anchor (issue #358 org-owned bootstrap); for a user-owned fork the signed root commit is.
-Owner-class gate; the signed `genesis-anchor` record lands in the coordination log.
-
-**Idempotency boundary with `45-genesis-bootstrap`:** the first-owner runbook `skills/45-genesis-bootstrap`
-runs THIS SAME ceremony (`runEnrollmentCeremony` + fold-clean verify) as its own step. If you followed
-`45` to fold-clean completion, C3 is already satisfied — re-running `runEnrollmentCeremony` on identical
-pinned facts does NOT fork the trust root (fold rule 9a); verify the anchor already folded
-(`foldLog(...) → accepted:[anchor], rejected:[], forks:[]`) and skip to C2/C4/C5. Run the ceremony here
-ONLY if `45` was not run (e.g. the roster owner entry was hand-authored without the ceremony step).
+Owner-class gate; the signed `genesis-anchor` record lands on BOTH surfaces via the composed
+enrollment-seed transport (`enrollment-seed-transport.js::createEnrollmentSeedTransport`) — the
+canonical FETCHABLE git ref `refs/coc/coordination-gen<N>` (uncapped; the fresh-clone recovery
+surface, loom#879) FIRST, then the local coordination-log cache.
 
 ### C2 — set the four remaining ecosystem-relative params
 
@@ -87,12 +83,8 @@ detection. Skip for a full-Kailash fork.
 
 ### C5 — hand off
 
-Print: "Ecosystem configured. Each TEAMMATE now runs `/enroll`, then `/onboard` at the start of every
-session." Does NOT enroll the initiating operator (invariant 4) — the genesis owner is ALREADY rostered
-(their `role: owner` entry was hand-authored in the genesis-bootstrap step that precedes C3, per
-`skills/45-genesis-bootstrap`), so the owner runs `/onboard` directly and does NOT re-run `/enroll` (which
-would open a redundant `contributor` registration over their existing owner identity). `/enroll` is the
-join path for teammates who are not yet in the roster.
+Print: "Ecosystem configured. Each operator now runs `/enroll`, then `/onboard` at the start of every
+session." Does NOT enroll the initiating operator (invariant 4).
 
 ## Posture-bound restrictions
 
@@ -110,7 +102,7 @@ scanner is `.claude/bin/scan-synced-disclosure.mjs`. The genesis ceremony is
 `.claude/hooks/lib/genesis-ceremony.js`; its consumer-relevant operational runbook (enroll-before-commit
 ordering, the state-file-guard script-by-path constraint, the admin-merge / push fallbacks) is in the
 DISTRIBUTED `.claude/skills/43-ecosystem-init/SKILL.md` § Operational runbook — consumers receive it; the
-`use_excluded` `guides/co-setup/11-genesis-ceremony.md` (architecture, failure-mode reference, ADO deep
-runbook) is platform-engineer material present in BUILD repos but not distributed to consumers. Full ceremony procedure — the input prompts,
+loom-internal `guides/co-setup/11-genesis-ceremony.md` (architecture, failure-mode reference, ADO deep
+runbook) is platform-engineer material consumers do not get. Full ceremony procedure — the input prompts,
 the per-key `remote_links` shape, the scan-then-write ordering, the org-vs-user genesis branch — lives in
 `.claude/skills/43-ecosystem-init/SKILL.md`.

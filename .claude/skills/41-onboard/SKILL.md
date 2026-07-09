@@ -1,5 +1,5 @@
 ---
-name: 41-onboard
+name: onboard
 description: "/onboard procedure: read roster + team-memory + posture + claims + codify lease + rules-changed for a new operator joining a multi-operator COC repo."
 ---
 
@@ -18,16 +18,16 @@ This skill is the procedural detail for the `/onboard` command (`.claude/command
 
 `/onboard` writes ZERO state. Every read goes through an existing helper:
 
-| Surface           | Helper                                                                                              | Returned shape                                                                   |
-| ----------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Operator identity | `operator-id.js::resolveIdentity()`                                                                 | `{verified_id, person_id, display_id, role, host_role, posture?, blocked_into?}` |
-| Roster            | `roster-schema-validate.js` + reading `operators.roster.json`                                       | `{genesis, persons: {<person_id>: {display_id, role, host_role, keys, ...}}}`    |
-| Team-memory       | direct `fs.readdir(.claude/team-memory)` + `fs.readFile` per file + `integrity-guard.js` validation | `[{slug, body, signed, promoted_by}]`                                            |
-| Active workspace  | `workspace-utils.js::detectActiveWorkspace()`                                                       | `{name, path}`                                                                   |
-| Posture           | `state-io.js::readPosture()`                                                                        | `{posture, since, transition_history, pending_verification}`                     |
-| Adjacency claims  | `coordination-log.js::foldLog()`                                                                    | active-claim slice                                                               |
-| Codify lease      | `codify-lease.js::readActiveLease()`                                                                | `{lease, leasePath}`                                                             |
-| Rules-changed     | reuse `multi-operator-sessionstart.js` helper or re-derive via `git log`                            | list of rule files + MUST-clause line refs                                       |
+| Surface           | Helper                                                                                              | Returned shape                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Operator identity | `operator-id.js::resolveIdentity()`                                                                 | `{display_id, verified_id, posture, blocked_into?}`          |
+| Roster            | `roster-schema-validate.js` + reading `operators.roster.json`                                       | `{operators: [{display_id, ...}]}`                           |
+| Team-memory       | direct `fs.readdir(.claude/team-memory)` + `fs.readFile` per file + `integrity-guard.js` validation | `[{slug, body, frontmatter, integrity_ok}]`                  |
+| Active workspace  | `workspace-utils.js::detectActiveWorkspace()`                                                       | `{workspace, recent_journal[]}`                              |
+| Posture           | `state-io.js::readPosture()`                                                                        | `{posture, since, transition_history, pending_verification}` |
+| Adjacency claims  | `coordination-log.js::foldLog()`                                                                    | active-claim slice                                           |
+| Codify lease      | `codify-lease.js::readActiveLease()`                                                                | `{lease, leasePath}`                                         |
+| Rules-changed     | reuse `multi-operator-sessionstart.js` helper or re-derive via `git log`                            | list of rule files + MUST-clause line refs                   |
 
 If a helper returns a typed error (e.g. `readPosture` fail-closes to L1), `/onboard` surfaces the error verbatim per `rules/zero-tolerance.md` Rule 3.
 
@@ -40,7 +40,7 @@ identity = operatorId.resolveIdentity()
 if (identity.blocked_into) → emit "/whoami --register" + stop
 ```
 
-The blocked_into value (`UNROSTERED_BLOCKED_INTO` or `NO_KEY_BLOCKED_INTO`) is the action the operator must take. Do NOT proceed to subsequent sections if blocked — the rest of the briefing assumes a registered identity. **Branch the emitted message on the just-enrolled case:** if the operator just ran `/enroll` or `/whoami --register`, their roster row is an unmerged PR not yet on `main` — surface "await the roster PR merge (or stay on your `codify/<display_id>-<date>` branch) before treating `/onboard` identity as final"; otherwise emit `/whoami --register`. (An `UNROSTERED_BLOCKED_INTO` on `main` right after `/enroll` is the PR-pending state, NOT a never-registered operator — do not bounce them into a redundant re-registration.)
+The blocked_into value (`UNROSTERED_BLOCKED_INTO` or `NO_KEY_BLOCKED_INTO`) is the action the operator must take. Do NOT proceed to subsequent sections if blocked — the rest of the briefing assumes a registered identity.
 
 ### 2. Team-memory surface
 
@@ -64,7 +64,7 @@ The `failed_integrity` section is REQUIRED in the output even when empty — its
 
 ```
 ws = workspaceUtils.detectActiveWorkspace()
-recent = listJournalEntries(ws, limit=5, types=["DECISION","DISCOVERY"])  # DEFER is NOT canonical (journal-reserve.js::VALID_TYPES); deferrals are DECISION-typed
+recent = listJournalEntries(ws, limit=5, types=["DECISION","DISCOVERY","DEFER"])
 emit {workspace: ws, recent_journal: recent}
 ```
 
@@ -102,7 +102,7 @@ else:
 
 The M5 session-start hook (`multi-operator-sessionstart.js`) computes this surface. `/onboard` calls the same helper (extracted into a shared library at M5 time) OR re-derives via `git log --since` against `.claude/rules/`.
 
-For each modified rule file, grep for MUST clauses (`grep -n '^### .*MUST'`) added/changed in the diff window. These are the candidates for `pending_verification` per `rules/trust-posture.md` MUST-6 § Grace Period Semantics (the clause that puts a freshly-authored rule into `pending_verification` for its 7-day grace window).
+For each modified rule file, grep for MUST clauses (`grep -n '^### .*MUST'`) added/changed in the diff window. These are the candidates for `pending_verification` per `rules/trust-posture.md` MUST-7.
 
 ### 7. Action items
 
@@ -121,7 +121,7 @@ Empty when nothing requires action — the empty list IS the green-light signal.
 
 ## --json mode
 
-Emit a single JSON object with the eight section keys:
+Emit a single JSON object with the seven section keys:
 
 ```json
 {

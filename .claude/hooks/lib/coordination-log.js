@@ -114,7 +114,7 @@ const { foldPostureEvent } = require("./fold-posture-event.js");
 const { foldGenerationRotation } = require("./fold-rule-9b.js");
 const { foldGenesisMigration } = require("./fold-rule-9c.js");
 // FSUB (2026-06-11): journal-body-anchor fold predicate — registered in
-// _registerDefaults so emitted anchors fold in EVERY default-engine
+// _registerM0Defaults so emitted anchors fold in EVERY default-engine
 // consumer (an unregistered type is dispatch-rejected and rule-2-poisons
 // the emitter's subsequent chain). journal-body-anchor.js requires only
 // node builtins — no require cycle.
@@ -554,6 +554,61 @@ function _registerM0Defaults(registry) {
         evidence: v.evidence,
       };
     },
+    meta: {
+      checkpoint_exempt: true,
+      authoritative_for_record: true,
+      authoritative_for_aggregate: false,
+    },
+  });
+
+  // #47 (backlog-actionable-7): gate-op-receipt — the exact-tracking
+  // receipt `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking" MUST-2
+  // mandates for every Gate-1 ingest AND Gate-2 distribution (emitted by
+  // `sync-gate2-worktree.mjs` via coc-emit.js::emitSignedRecord). A signed
+  // accountability/witness record — NOT an actuation (absent from
+  // actuation-types.js ACTUATION_RECORD_TYPES, so it bypasses the A+
+  // presence gate) and single-signer (no owner co-sig): the distributing
+  // operator's own signature IS the accountability trail. checkpoint_exempt:
+  // true per rule 6 (signed witness/accountability records survive
+  // compaction) — same no-op-accept shape as journal-slot-reservation above.
+  // Pre-#47 the type was UNregistered, so emitSignedRecord refused it at the
+  // type-check and sync-gate2 emitted no record at all — the MUST-2 gap
+  // (a rule mandating a record no code emitted and no fold type accepted)
+  // this closes.
+  registry.set("gate-op-receipt", {
+    fn: (record, ctx) => ({ accepted: true, foldState: ctx.foldState }),
+    meta: {
+      checkpoint_exempt: true,
+      authoritative_for_record: true,
+      authoritative_for_aggregate: false,
+    },
+  });
+
+  // CHFAPP (#868 reviewer R1 MED): checkpoint-skipped + session-notes-layout-
+  // error — the two SessionEnd teardown witness records emitted by
+  // multi-operator-sessionend.js. Pre-CHFAPP they were hand-appended (no seq /
+  // prev_hash) so `_validateRecordShape` SHAPE-rejected them at every fold (seq
+  // is a required field) — written to disk yet invisible to every fold consumer
+  // (dead writes). Routing them through coc-emit.js::emitSignedRecord requires
+  // them to be registered here (an UNregistered type is refused at emit's
+  // type-check — the exact gap #47 closed for gate-op-receipt above). Same
+  // no-op-accept signed-witness/accountability class as gate-op-receipt
+  // (single-signer, NOT an actuation, checkpoint_exempt so the forensic trail
+  // survives compaction).
+  //   - checkpoint-skipped: records that a compaction-checkpoint was skipped
+  //     because 2-of-N cosigner coordination is required (R8-LOW-1 audit trail).
+  //   - session-notes-layout-error: records a per-operator fragment / forest-
+  //     ledger write failure (observability.md forensic trail).
+  registry.set("checkpoint-skipped", {
+    fn: (record, ctx) => ({ accepted: true, foldState: ctx.foldState }),
+    meta: {
+      checkpoint_exempt: true,
+      authoritative_for_record: true,
+      authoritative_for_aggregate: false,
+    },
+  });
+  registry.set("session-notes-layout-error", {
+    fn: (record, ctx) => ({ accepted: true, foldState: ctx.foldState }),
     meta: {
       checkpoint_exempt: true,
       authoritative_for_record: true,

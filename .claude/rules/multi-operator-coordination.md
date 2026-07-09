@@ -75,7 +75,7 @@ Any edit to a path matching an active SAME-class claim OR adjacency relation (sk
 
 ## MUST NOT (always-on)
 
-- **Edit `.claude/learning/coordination-log.jsonl`, `posture.json`, or `operators.roster.json` directly via the file-edit/shell tools.** These are guarded fail-closed — `settings.json permissions.deny` covers `posture.json` + `violations.jsonl`; the coordination log and roster are enforced by `validate-bash-command.js`'s `STATE_PATH_RX` block (Bash mutations) plus `integrity-guard.js`'s codify-branch/lease gate (roster + coordination-log Edit/Write, coordination-ON). The only legitimate writers are the canonical helpers (`coc-append.js` / `coc-emit.js`, the posture hook, the roster ceremony).
+- **Edit `.claude/learning/coordination-log.jsonl`, `posture.json`, or `operators.roster.json` directly via the file-edit/shell tools.** Settings `permissions.deny` enforces this; the only legitimate writers are the canonical helpers (`coc-append.js`, the posture hook, the roster ceremony).
 
   **Why:** State self-modification is the rationalization loophole that defeats the substrate — a hand-edit can append unsigned records, downgrade posture without a signed event, or bind an arbitrary key to an owner `person_id`.
 

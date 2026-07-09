@@ -140,6 +140,10 @@ const { canonicalSerialize } = _require("../hooks/lib/coc-sign.js");
 // the check SKIPs when validate-emit is pointed at a different root.
 import { emitCoc } from "./emit-coc.mjs";
 import { REPO as EMIT_REPO } from "./emit-cli-artifacts.mjs";
+// #825 Wave-2 Shard-03 — the community-completeness gate reads the positive
+// reference-primitive floor and re-verifies each is IN the community projection.
+import { inCommunityEdition } from "./lib/in-community-edition.mjs";
+import { REFERENCE_PRIMITIVES } from "./lib/community-reference-primitives.mjs";
 
 // --- Repo root resolution -----------------------------------------------
 
@@ -179,6 +183,32 @@ const READONLY_FORBIDDEN_TOOLS = new Set(["Edit", "Write"]);
 
 const COMMAND_LINE_CAP = 150; // cc-artifacts.md Rule 3 + command-authoring SKILL
 
+// cc-artifacts.md Rule 3 named-rationale procedural-command exception (added
+// 2026-07-04, journal/0429): a genuinely-procedural command MAY exceed the base
+// cap ONLY when a named length-rationale is recorded in the landing receipt.
+// This allowlist is the machine-readable half — each entry pins the RATIFIED
+// ceiling and points at the receipt that carries the rationale.
+//
+// FAIL-CLOSED: the ceiling is the EXACT ratified body-line count (not a margin),
+// so any future growth re-FAILS and forces a NEW rationale in a NEW receipt —
+// "each overage needs its OWN named rationale" (Rule 3). A command trimmed back
+// ≤ COMMAND_LINE_CAP never consults the allowlist (its entry goes dormant).
+//
+// Counting unit: this check ENFORCES on BODY lines (after the `---` frontmatter);
+// journal/0429 ratifies via `wc -l` (TOTAL lines). The enforced ceiling is the
+// body-line count; the `wc -l` figure is illustrative provenance and the two
+// differ by exactly the frontmatter line count (4 for both entries below):
+// sweep 166 wc -l = 162 body, wrapup 164 wc -l = 160 body. A later frontmatter
+// change shifts `wc -l` but NOT the enforced body-line ceiling.
+//
+// Keyed on the REPO-RELATIVE path (not basename) so a same-named command in any
+// subdirectory does NOT inherit the exemption — matches how the rest of this
+// file addresses artifacts by `rel`.
+const COMMAND_LINE_CAP_EXCEPTIONS = Object.freeze({
+  ".claude/commands/sweep.md": { maxBodyLines: 162, receipt: "journal/0429" }, // 166 wc -l
+  ".claude/commands/wrapup.md": { maxBodyLines: 160, receipt: "journal/0429" }, // 164 wc -l
+});
+
 // Commands intentionally exempt from the `---` frontmatter requirement.
 // Empty by default; any entry MUST be documented in command-authoring/SKILL.md.
 const COMMAND_FRONTMATTER_EXEMPT = new Set([]);
@@ -188,6 +218,7 @@ const DETECTOR_RE = /^detect[A-Z]/;
 
 const CHECK_IDS = [
   "command-frontmatter",
+  "settings-hook-registration",
   "command-line-cap",
   "readonly-specialist-tools",
   "tool-canonicality",
@@ -195,6 +226,8 @@ const CHECK_IDS = [
   "paths-annotation-consistency",
   "audit-fixture-coverage",
   "loom-only-mutual-exclusion",
+  "edition-community-completeness",
+  "edition-no-runtime-license",
   "provenance-parity",
   "provenance-subagent-hooks",
   "hook-delivery",
@@ -410,13 +443,30 @@ function checkCommandLineCap(root) {
     const bodyLines = body.replace(/\n+$/, "").split(/\r?\n/).length;
     if (bodyLines <= COMMAND_LINE_CAP) {
       results.push({ artifact: rel, status: STATUS.PASS, detail: `${bodyLines} body lines` });
-    } else {
+      continue;
+    }
+    // Over the base cap — consult the Rule-3 named-rationale allowlist.
+    // Keyed on `rel` (repo-relative path) so a same-named command in a
+    // subdirectory does not inherit the exemption.
+    const exempt = COMMAND_LINE_CAP_EXCEPTIONS[rel];
+    if (exempt && bodyLines <= exempt.maxBodyLines) {
       results.push({
         artifact: rel,
-        status: STATUS.FAIL,
-        detail: `${bodyLines} body lines > ${COMMAND_LINE_CAP} (cc-artifacts.md Rule 3)`,
+        status: STATUS.PASS,
+        detail: `${bodyLines} body lines > ${COMMAND_LINE_CAP}; ratified procedural overage ≤ ${exempt.maxBodyLines} per ${exempt.receipt} (cc-artifacts.md Rule 3 exception)`,
       });
+      continue;
     }
+    // No entry, OR grew past the ratified ceiling (fail-closed: needs a NEW
+    // named rationale in a NEW receipt per Rule 3 condition (c)).
+    const overCeiling = exempt
+      ? `${bodyLines} body lines > ratified ${exempt.maxBodyLines} per ${exempt.receipt} — new overage needs a new named rationale`
+      : `${bodyLines} body lines > ${COMMAND_LINE_CAP} (cc-artifacts.md Rule 3)`;
+    results.push({
+      artifact: rel,
+      status: STATUS.FAIL,
+      detail: overCeiling,
+    });
   }
   return { id, source_rule: "cc-artifacts.md Rule 3", results };
 }
@@ -1271,6 +1321,45 @@ const LOOM_ONLY_TIER_CARVEOUTS = new Set([
   "bin/sync-from-canon-changeset.mjs",
   "bin/sync-from-canon.mjs",
   "bin/lib/canon-rollin-baseline.mjs",
+  // #825 Wave-1 Shard-01 — the shared community-membership definition
+  // (INCLUDE/EXCLUDE_WITHIN/KILL_BASENAMES) imported by scripts/publish-to-public.mjs
+  // and the inCommunityEdition predicate. Sits under the synced `bin/**` tier but is
+  // loom-only edition machinery (shipping loom's community/enterprise membership to a
+  // consumer is the leak the whole #825 workstream prevents), so loom_only is
+  // LOAD-BEARING here exactly as for the sync-from-canon engine above.
+  "bin/lib/community-membership.mjs",
+  // #825 Wave-1 Shard-02 — the inCommunityEdition(path) predicate. Same loom-only
+  // edition-machinery class as community-membership.mjs above; under the synced `bin/**`
+  // tier so this carve-out makes the loom_only entry a load-bearing check-8 BLOCK.
+  "bin/lib/in-community-edition.mjs",
+  // #825 Wave-2 Shard-03 — the community-completeness manifest (reference-primitive
+  // floor) consumed by the edition-community-completeness check. Same loom-only
+  // edition-machinery class under the synced `bin/**` tier; carve-out = load-bearing
+  // check-8 BLOCK on its loom_only entry.
+  "bin/lib/community-reference-primitives.mjs",
+  // #825 Wave-2 Shard-04 — the output-disclosure gate (coordination-OFF + scan) shared
+  // by publish-to-public.mjs and the Wave-3 driver. Same loom-only edition-machinery
+  // class under the synced `bin/**` tier; carve-out = load-bearing check-8 BLOCK.
+  "bin/lib/edition-output-gate.mjs",
+  // #825 Wave-3 Shard-05 — the edition-emit DRIVER (loom's community/enterprise emit
+  // machinery). Same loom-only edition-machinery class under the synced `bin/**` tier;
+  // carve-out = load-bearing check-8 BLOCK on its loom_only entry.
+  "bin/edition-emit.mjs",
+  // #825 Wave-3 Shard-05b — the per-edition summary lib (classify + render). Same loom-only
+  // edition-machinery class under the synced `bin/**` tier; carve-out = load-bearing check-8 BLOCK.
+  "bin/lib/edition-summary.mjs",
+  // loom#830/#834 — the WEFT conformance adapter (RFC-8785 JCS canonicalizer,
+  // envelope validator, standalone must-ignore chain verifier). loom is the WEFT
+  // REFERENCE implementation (mint F7); the modules are consumed only by the
+  // loom-only WEFT conformance suite (test-harness), so shipping them via the
+  // synced `hooks/**` tier would orphan them on every consumer. loom_only is
+  // LOAD-BEARING here (same class as the sync-from-canon bins above).
+  "hooks/lib/weft-jcs.js",
+  "hooks/lib/weft-envelope.js",
+  "hooks/lib/weft-chain.js",
+  "hooks/lib/weft-emit.js",
+  "hooks/lib/weft-distributor.js",
+  "hooks/lib/weft-dataprotection.js",
 ]);
 
 // Check 8 — loom-only mutual exclusion (F104).
@@ -1347,6 +1436,169 @@ function checkLoomOnlyMutualExclusion(root) {
       detail: isCarveout
         ? `load-bearing carve-out (declared in LOOM_ONLY_TIER_CARVEOUTS): concrete loom_only file under synced tier(s) ${collisions.map((c) => `${c.tier}:${c.glob}`).join(", ")} — emit suppresses at classifyFile loom_only step (2b) before tier inclusion; the rest of the tier still syncs`
         : "never-sync, in no synced tier, matches on-disk file",
+    });
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK — community-edition completeness (#825 Wave-2 Shard-03)
+// =======================================================================
+// The POSITIVE completeness floor (spec `edition-separation.md` §fences.2). The
+// Shard-02 `inCommunityEdition` predicate is a fail-SAFE allowlist — an UNLISTED
+// path defaults to enterprise-only. That direction blocks LEAKING enterprise-private
+// files into community but says NOTHING about a community primitive going MISSING
+// (the opposite failure). This check is the fail-CLOSED complement: every enumerated
+// REFERENCE_PRIMITIVE MUST resolve inCommunityEdition===true AND exist on disk, else
+// emit BLOCKS naming the missing/excluded file — the anti-bait contract (community is
+// the COMPLETE reference impl, never a stale subset; #825 HIGH-3/HIGH-4).
+//
+//   FAIL  an enumerated primitive is ABSENT from disk (stripped/deleted) OR is NOT
+//         inCommunityEdition (fenced OUT by loom_only / EXCLUDE_WITHIN drift) — either
+//         way community would ship incomplete. Blocks /sync, named (invariant 3).
+//   PASS  the primitive exists on disk AND is in the community projection.
+function checkEditionCommunityCompleteness(root, opts = {}) {
+  const id = "edition-community-completeness";
+  const source_rule =
+    "edition-separation.md §fences.2 (#825 Wave-2 Shard-03) / community-reference-primitives.mjs";
+  // `primitives` + `loomOnly` are injectable for hermetic tests (the CLI never
+  // passes them). Inject loom_only from validate-emit's OWN root-relative manifest
+  // parse so the predicate resolves the community projection against `root`, not a
+  // second manifest-resolution path (no-drift with check-8's parseLoomOnly).
+  const primitives = opts.primitives ?? REFERENCE_PRIMITIVES;
+  const loomOnly = opts.loomOnly ?? parseLoomOnly(root);
+  if (loomOnly === null) {
+    return {
+      id,
+      source_rule,
+      results: [{ artifact: "sync-manifest.yaml", status: STATUS.SKIP, detail: "manifest unreadable — cannot resolve loom_only for the community projection" }],
+    };
+  }
+  const results = [];
+  for (const rel of primitives) {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is ABSENT from disk (stripped/deleted) — the community edition would ship incomplete (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    // A reference PRIMITIVE is a concrete file, not a directory: existsSync +
+    // inCommunityEdition both resolve true for a directory path, so without this guard a
+    // primitive silently degraded to a directory (or an entry pointing at a dir) would PASS
+    // vacuously — the anti-bait floor MUST pin real files.
+    if (!statSync(abs).isFile()) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is NOT a file (directory or non-regular) — a reference primitive MUST be a concrete file (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    if (!inCommunityEdition(rel, { loomOnly })) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is FENCED OUT of the community projection (inCommunityEdition===false — loom_only / EXCLUDE_WITHIN drift) — community would ship crippled (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    results.push({ artifact: rel, status: STATUS.PASS, detail: "present on disk AND in the community projection" });
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK — no runtime license/entitlement surface in loom code (#825 06a)
+// =======================================================================
+// The HONESTY-LEDGER negative complement of the edition machinery (spec
+// `edition-separation.md` §"Protection model"; brief §"Protection model"):
+//   "loom has NO runtime license check and MUST NOT gain one. … Any optional
+//    soft entitlement check lives in the enterprise loom-command edition, NEVER
+//    in loom. `coordination.enabled` is a plain behavioral boolean with zero
+//    license/billing semantics — it is NOT the enforcement point."
+// Enterprise is gated by ACCESS + LICENSE (BSL-1.1) + BUNDLING — NOT by a runtime
+// DRM/entitlement check baked into loom (futile in open JS, and off-model). This
+// check is the fail-CLOSED guardrail that BLOCKS emit if a future edit introduces
+// such a runtime-enforcement surface into loom's executable code.
+//
+// SCOPE: loom's own runtime CODE only — `.claude/bin/**/*.mjs` + `.claude/hooks/**/*.{js,mjs}`
+//   + `scripts/**/*.mjs`. `scripts/` is included because `scripts/publish-to-public.mjs` (the
+//   disclosure fence itself) IS loom runtime code — the honesty-ledger invariant ("no runtime
+//   license check") must cover the fence file too (two-reviewer R1 finding). NOT markdown
+//   (rules/specs/briefs discuss "license" freely — BSL, this very spec, the honesty-ledger todo);
+//   the pattern is identifier-shaped (no space) so prose "source-available license" cannot match,
+//   but scoping to code keeps intent aligned with "into loom code" AND avoids the whole prose surface.
+// SELF-EXCLUSION: `validate-emit.mjs` (this file — carries the pattern + message as
+//   string literals) and `*.test.*` files (fixtures deliberately carry the pattern).
+// PATTERN: a license/entitlement/drm identifier ADJACENT to an enforcement verb/noun
+//   (key|token|check|guard|gate|verify|validate|enforce), either order, identifier form.
+//   Verified CLEAN on the current loom surface AND non-matching on `coordination.enabled`
+//   / `licensed` / the BSL `LICENSE` file (#825 06a authoring).
+//   FAIL  a runtime license/entitlement enforcement surface appears in loom code
+//         (file:line + matched token) — blocks /sync (the invariant loom MUST NOT gain one).
+//   PASS  no such surface — loom stays DRM-free (protection = ACCESS + LICENSE + BUNDLING).
+const RUNTIME_LICENSE_RE =
+  /\b(?:license|entitlement|drm)[-_]?(?:key|token|check|guard|gate|verify|validate|enforce)|\b(?:check|verify|validate|enforce|require)[-_]?(?:license|entitlement)\b/i;
+
+// Recursively enumerate files under `dir` matching `extRe`, skipping `*.test.*`.
+function walkCodeFiles(dir, extRe, out = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) { walkCodeFiles(full, extRe, out); continue; }
+    if (!e.isFile()) continue;
+    if (/\.test\.[cm]?js$/.test(e.name)) continue; // fixtures carry the pattern by design
+    if (extRe.test(e.name)) out.push(full);
+  }
+  return out;
+}
+
+function checkEditionNoRuntimeLicense(root, opts = {}) {
+  const id = "edition-no-runtime-license";
+  const source_rule =
+    "edition-separation.md §Protection model (#825 06a) / briefs/00-brief.md §Protection model";
+  // Injectable scan dirs for hermetic tests; the CLI never passes them.
+  const scanDirs = opts.scanDirs ?? [
+    { dir: join(root, ".claude", "bin"), extRe: /\.mjs$/ },
+    { dir: join(root, ".claude", "hooks"), extRe: /\.[cm]?js$/ },
+    { dir: join(root, "scripts"), extRe: /\.mjs$/ }, // publish-to-public.mjs (the fence) is runtime code
+  ];
+  const results = [];
+  for (const { dir, extRe } of scanDirs) {
+    for (const file of walkCodeFiles(dir, extRe)) {
+      // SELF-EXCLUSION: this validator file carries the pattern + message as string
+      // literals — scanning it would self-flag. It is not a plausible home for a
+      // runtime license gate (it is the validator).
+      if (basename(file) === "validate-emit.mjs") continue;
+      const text = safeRead(file);
+      if (text === null) continue;
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const m = RUNTIME_LICENSE_RE.exec(lines[i]); // non-global → always starts at 0
+        if (m) {
+          results.push({
+            artifact: `${relative(root, file)}:${i + 1}`,
+            status: STATUS.FAIL,
+            detail:
+              `runtime license/entitlement enforcement surface in loom code (matched \`${m[0]}\`) — ` +
+              "loom MUST NOT gain a runtime license/DRM check (§Protection model; protection = " +
+              "ACCESS + BSL-1.1 LICENSE + kailash-rs BUNDLING). Any soft entitlement check belongs " +
+              "in the enterprise loom-command edition, NEVER in loom. If this is a false match, the " +
+              "token is not an enforcement point — rename it (e.g. `coordination.enabled` is fine).",
+          });
+        }
+      }
+    }
+  }
+  if (!results.length) {
+    results.push({
+      artifact: ".claude/bin + .claude/hooks + scripts",
+      status: STATUS.PASS,
+      detail: "no runtime license/entitlement enforcement surface — loom stays DRM-free (§Protection model)",
     });
   }
   return { id, source_rule, results };
@@ -3712,8 +3964,94 @@ function checkGeminiSettingsSchema(root) {
   return { id, source_rule, results: [{ artifact: tag, status: STATUS.PASS, detail: "no `$`-prefixed keys" }] };
 }
 
+// #771: every top-level .claude/hooks/*.js MUST be either registered in
+// .claude/settings.json OR carry an `@settings-registration:` header marker
+// documenting how it is invoked OUTSIDE settings.json (git-hook, optional
+// consumer-registered deploy gate, etc.). Closes the class the #771
+// template-stale bug surfaced: a rule-mandated guard (analyze-completeness-guard,
+// PreToolUse:Skill) shipped INERT because its settings.json registration was
+// never propagated to the template. A top-level hook that is NEITHER registered
+// NOR documented is a silent fail-open — flagged FAIL (blocks /sync).
+//
+// Scope: loom's OWN top-level .claude/hooks/*.js only (NOT lib/, NOT variant
+// hooks under variants/<lang>/hooks/ — the per-variant settings overlay is a
+// deliberately-deferred net-new mechanism; build-cache-* variant hooks are
+// documented as a residual in sync-manifest.yaml). The check reads the marker
+// from the hook header; it does NOT parse settings.json structure, only the set
+// of *.js basenames any command string references (robust to nesting/matcher shape).
+function checkSettingsRegistration(root) {
+  const id = "settings-hook-registration";
+  const source_rule =
+    "analyze-output-completeness.md Trust Posture Wiring (settings.json registers the guard under a Skill matcher) + #771";
+  const hooksDir = join(root, ".claude", "hooks");
+  let diskHooks;
+  try {
+    diskHooks = readdirSync(hooksDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".js"))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".claude/hooks",
+          status: STATUS.SKIP,
+          detail: "hooks dir absent (consumer emitted tree — no source hooks)",
+        },
+      ],
+    };
+  }
+  const settingsText = safeRead(join(root, ".claude", "settings.json"));
+  if (settingsText == null) {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".claude/settings.json",
+          status: STATUS.SKIP,
+          detail: "settings.json unreadable — skipping registration cross-check",
+        },
+      ],
+    };
+  }
+  // Registered = any *.js basename referenced by ANY settings.json command string.
+  const registered = new Set(settingsText.match(/[a-zA-Z0-9._-]+\.js/g) || []);
+  const MARKER = /@settings-registration:/;
+  const results = [];
+  for (const h of diskHooks) {
+    if (registered.has(h)) {
+      results.push({
+        artifact: `hooks/${h}`,
+        status: STATUS.PASS,
+        detail: "registered in settings.json",
+      });
+      continue;
+    }
+    const header = (safeRead(join(hooksDir, h)) || "").slice(0, 2500);
+    if (MARKER.test(header)) {
+      results.push({
+        artifact: `hooks/${h}`,
+        status: STATUS.PASS,
+        detail: "documented @settings-registration (invoked outside settings.json)",
+      });
+      continue;
+    }
+    results.push({
+      artifact: `hooks/${h}`,
+      status: STATUS.FAIL,
+      detail:
+        "top-level hook is NEITHER registered in settings.json NOR documented via an `@settings-registration:` header marker — a rule-mandated guard shipped this way is inert (fails open, #771). Register it in settings.json, or add `@settings-registration: <how-it-is-invoked>` to the header.",
+    });
+  }
+  return { id, source_rule, results };
+}
+
 const CHECK_FNS = {
   "command-frontmatter": checkCommandFrontmatter,
+  "settings-hook-registration": checkSettingsRegistration,
   "command-line-cap": checkCommandLineCap,
   "readonly-specialist-tools": checkReadonlySpecialistTools,
   "tool-canonicality": checkToolCanonicality,
@@ -3721,6 +4059,8 @@ const CHECK_FNS = {
   "paths-annotation-consistency": checkPathsAnnotationConsistency,
   "audit-fixture-coverage": checkAuditFixtureCoverage,
   "loom-only-mutual-exclusion": checkLoomOnlyMutualExclusion,
+  "edition-community-completeness": checkEditionCommunityCompleteness,
+  "edition-no-runtime-license": checkEditionNoRuntimeLicense,
   "provenance-parity": checkProvenanceParity,
   "provenance-subagent-hooks": checkProvenanceSubagentHooks,
   "hook-delivery": checkHookDelivery,
@@ -3879,10 +4219,33 @@ function main() {
 
 // Export internals for the audit-fixture harness.
 const __filename = fileURLToPath(import.meta.url);
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(__filename);
+
+// Symlink-robust "was this module invoked directly?" test. `filename` (from
+// import.meta.url) is already realpath-resolved by the module loader, while
+// `argv1` is the path exactly as the user invoked it — which may traverse a
+// symlink (e.g. macOS `/tmp` → `/private/tmp`, or a symlinked checkout prefix).
+// A plain resolve() does NOT dereference symlinks, so the two can differ for the
+// same file, making main-detection silently false → main() never runs → the
+// validator no-ops and reports a false-clean (an audit-integrity defect).
+// realpathSync canonicalizes BOTH sides so the comparison holds through symlinks.
+function isInvokedAsMain(argv1, filename) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(filename);
+  } catch {
+    // realpathSync throws when argv1 does not resolve on disk (e.g. a virtual
+    // entrypoint). Fall back to the resolve()-comparison — the non-symlink path,
+    // correct whenever no symlink is in play (the only case reachable here).
+    return resolve(argv1) === resolve(filename);
+  }
+}
+
+const isMain = isInvokedAsMain(process.argv[1], __filename);
 
 export {
   parseFrontmatter,
+  COMMAND_LINE_CAP,
+  COMMAND_LINE_CAP_EXCEPTIONS,
   parseToolList,
   matchesGlob,
   emitFresh,
@@ -3892,6 +4255,7 @@ export {
   enumerateDetectors,
   classifyFixtures,
   checkCommandFrontmatter,
+  checkSettingsRegistration,
   checkCommandLineCap,
   checkReadonlySpecialistTools,
   checkToolCanonicality,
@@ -3899,6 +4263,8 @@ export {
   checkPathsAnnotationConsistency,
   checkAuditFixtureCoverage,
   checkLoomOnlyMutualExclusion,
+  checkEditionCommunityCompleteness,
+  checkEditionNoRuntimeLicense,
   checkProvenanceParity,
   parseProvenanceParity,
   checkProvenanceSubagentHooks,
@@ -3958,6 +4324,7 @@ export {
   scanOperatorRefBypassSites,
   listJsFiles,
   OPERATOR_REF_IDENTITY_FIELDS,
+  isInvokedAsMain,
 };
 
 if (isMain) main();

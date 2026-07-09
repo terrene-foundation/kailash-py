@@ -8,7 +8,7 @@ The MUST-7 structural assertion is load-bearing baseline content — it MUST sta
 
 ## Enforcement state (F86 — LIVE 2026-05-29)
 
-`fold-rule-9c.js` dispatches on `content.co_sign_anchor_kind === "gh_api_org_membership_capture"` (per the `CO_SIGN_ANCHOR_KIND_ORG_ADMIN` export in `fold-rule-9c.js`) and routes canonical N=1 records through the org-admin verification branch of `foldGenesisMigration` (the `F86 / MUST-7 dispatch`); malformed variants (discriminator + populated co_signers, user-owned kind under discriminator, stale capture, mismatched login, non-admin role, suspended state) are rejected with the corresponding MUST-7 sub-clause citation. The 2-of-N path under `else` in `foldGenesisMigration` is unchanged. The paired-landing hook `fold-amendment-paired-with-helper.js` enforces SAME-COMMIT discipline structurally (PostToolUse Bash on `git commit`; flags F86-touch on either side without the sibling). Closure receipts: commits `6bbeb44` + `758ad13`; F86 forest entry CLOSED. The mechanical sweep query below remains a defensive gate-review cross-check for malformed records that bypass the helper.
+`fold-rule-9c.js` dispatches on `content.co_sign_anchor_kind === "gh_api_org_membership_capture"` (per the `CO_SIGN_ANCHOR_KIND_ORG_ADMIN` export at `fold-rule-9c.js:63`) and routes canonical N=1 records through the org-admin verification branch (lines 240-481); malformed variants (discriminator + populated co_signers, user-owned kind under discriminator, stale capture, mismatched login, non-admin role, suspended state) are rejected with the corresponding MUST-7 sub-clause citation. The 2-of-N path under `else` (`fold-rule-9c.js:483-519`) is unchanged. The paired-landing hook `fold-amendment-paired-with-helper.js` enforces SAME-COMMIT discipline structurally (PostToolUse Bash on `git commit`; flags F86-touch on either side without the sibling). Closure receipts: commits `6bbeb44` + `758ad13`; F86 forest entry CLOSED. The mechanical sweep query below remains a defensive gate-review cross-check for malformed records that bypass the helper.
 
 ## The two N=1 paths
 
@@ -38,6 +38,35 @@ The org-owned relaxation is the migration-ceremony counterpart to the `multi-ope
 ## Threat-model assumption (GitHub-instance scope)
 
 The structural-equivalence claim assumes (i) the GitHub instance's admin-role mutation API is restricted to OTHER current admins (true on GitHub.com where role changes require an existing admin's action), AND (ii) admin role at ceremony wall-clock instant is not under the migrating operator's control via channels other than the gh-api surface. On self-hosted GitHub Enterprise Server (GHES) with privileged appliance access, a single operator with shell access to the appliance can mutate admin role via `ghe-config` / `ghe-set-password` / direct DB manipulation — the gh-api capture at ceremony time returns `role: admin, state: active` structurally identical to the legitimate case, with no external check to disambiguate. Deployments running GHES with shared-appliance-admin posture MUST treat MUST-7's org-owned relaxation as carrying an additional bounded-trust residual (the operator's appliance-admin role as an out-of-band mutation channel); the conservative disposition for GHES is to refuse the org-owned-N=1 path AS IF user-owned and require enrolling a second `person_id` first. F86 implementation MAY surface a `host: "ghes-shared-appliance"` config flag forcing the user-owned-style refusal; the assumption is named explicitly so deployments can make the trade-off consciously.
+
+## Transport wiring — the migration record MUST reach the fetchable log ref (loom#879)
+
+`performMigration` emits the `genesis-migration` record via its injected `transportAppend`
+(`genesis-ceremony.js::performMigration`, fail-CLOSED `transportAppend callable missing`) — the
+SAME DI seam `runEnrollmentCeremony` uses for the `genesis-anchor`. On a MIGRATED repo the trust
+root is the WHOLE chain (anchor **+** migration); the guard folds both and the migration
+SUPERSEDES the anchor (`fold-rule-9c.js`). So the migration record MUST be seeded to the canonical
+FETCHABLE log ref exactly as the anchor is — otherwise a fresh clone of this repo fetch-then-folds
+only the anchor and MISSES the superseding gen-1 migration, re-opening loom#879 for migrated repos.
+
+Therefore, when invoking `performMigration`, its `transportAppend` MUST be the **composed
+enrollment-seed transport** (the SAME one enrollment uses — `whoami.md` step 6 /
+`skills/45-genesis-bootstrap/SKILL.md` step 4):
+
+```text
+const { transportAppend } =
+  createEnrollmentSeedTransport({ repoDir, remote, localAppend });   // enrollment-seed-transport.js
+performMigration({ ..., transportAppend });   // ref-FIRST (uncapped git ref) then local cache
+```
+
+This seeds the >2KB migration record (2104 B — over the 2KB `MAX_LINE_BYTES` local cap) to the
+uncapped git ref (`transport-git-ref.js`; ref name via `log-ref-name.js::resolveLogRefName`) FIRST,
+then the local `.claude/learning/coordination-log.jsonl` cache — a ref-append failure returns a
+typed error and writes NO local surface (no half-write). Passing a local-only `transportAppend`
+(the bare cache writer) is BLOCKED: it leaves the migration record un-fetchable and re-opens the
+loom#879 fresh-clone-cannot-recover class for the whole chain. (loom's OWN already-migrated root —
+enrolled before this seeding existed — is recovered by the Wave-3 authority-gated backfill, not by
+this ceremony-time seeding, which covers FUTURE migrations.)
 
 ## Canonical-shape examples
 
@@ -134,7 +163,7 @@ The structural-equivalence claim assumes (i) the GitHub instance's admin-role mu
 
 ## Re-anchor sub-case
 
-When an existing `genesis.root_commit` pointer is being corrected (e.g., the roster carries SHA `398076d...` but the actual repo root per `git rev-list --max-parents=0 HEAD` is `d98da8b...` — typically the artifact of a prior `git filter-repo` / `git rebase --root` rewrite), the correction MUST be performed AS a `genesis-migration` ceremony with `genesis_generation` increment (NOT a silent roster JSON edit, which the roster-write guards block at the pre-tool-use boundary anyway — `validate-bash-command.js`'s `STATE_PATH_RX` for Bash mutations + `integrity-guard.js`'s codify-branch/lease gate for Edit/Write; the roster is NOT in `permissions.deny`). Re-anchor is migration's strictest sub-case:
+When an existing `genesis.root_commit` pointer is being corrected (e.g., the roster carries SHA `398076d...` but the actual repo root per `git rev-list --max-parents=0 HEAD` is `d98da8b...` — typically the artifact of a prior `git filter-repo` / `git rebase --root` rewrite), the correction MUST be performed AS a `genesis-migration` ceremony with `genesis_generation` increment (NOT a silent roster JSON edit, which `permissions.deny` blocks at the pre-tool-use boundary anyway). Re-anchor is migration's strictest sub-case:
 
 - **(i)** the new `root_commit` MUST verify via `gh api repos/{owner}/{repo}/commits/{root_commit}` at ceremony time;
 - **(ii)** MUST match `git rev-list --max-parents=0 HEAD` locally;

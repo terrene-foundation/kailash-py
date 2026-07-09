@@ -32,10 +32,14 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { resolveRepo } from "./lib/loom-links.mjs";
+// coc-emit.js is CommonJS; ESM default-import yields its module.exports object.
+import cocEmit from "../hooks/lib/coc-emit.js";
+const { emitSignedRecord } = cocEmit;
 
 const SELF = "sync-gate2-worktree";
 
@@ -258,7 +262,160 @@ export function buildReceipt({
   };
 }
 
+/**
+ * Fingerprint a receipt's manifest for the signed coordination-log RECORD content
+ * (#862). Replaces the inline `manifest.{added,modified,deleted}` path ARRAYS — the
+ * overflow that trips `coc-emit.js::_defaultAppend`'s MAX_LINE_BYTES (2KB) guard for
+ * broad Gate-2 syncs (100+ files), so the append is refused and NO forensic record
+ * lands — with a compact FINGERPRINT: per-bucket counts + a `sha256` over a
+ * bucket-structured canonical form (each bucket sorted, `JSON.stringify({added,
+ * modified, deleted})`). The digest binds bucket MEMBERSHIP, not just the path-set
+ * union. Pure — returns `{added_count, modified_count, deleted_count, sha256}`.
+ *
+ * The digest is recomputable from the full manifest by ANY reader: sort each of the
+ * three buckets, `JSON.stringify({added, modified, deleted})`, `sha256`. The FULL manifest arrays survive
+ * uncapped on BOTH the STDOUT receipt AND the journal `DECISION` embed (the forensic-
+ * recoverability surface — `.claude/`-relative file paths, not disclosure tokens, so
+ * they are NOT scrubbed by scrubReceiptForJournal); this fingerprint is ONLY the
+ * shrink applied to the size-capped coordination-log line.
+ */
+export function fingerprintManifest(manifest) {
+  const added = [...((manifest && manifest.added) || [])].sort();
+  const modified = [...((manifest && manifest.modified) || [])].sort();
+  const deleted = [...((manifest && manifest.deleted) || [])].sort();
+  return {
+    added_count: added.length,
+    modified_count: modified.length,
+    deleted_count: deleted.length,
+    // #862 MED-1: bucket-structured canonical form binds bucket MEMBERSHIP, not
+    // just the path-set union — a compensating cross-bucket swap (add x/del y ↔
+    // add y/del x) no longer collides. JSON.stringify escapes the path bytes, so
+    // no in-band separator can forge a collision; fixed key order + pre-sorted
+    // buckets make the form deterministic. Output stays fixed-width (64 hex)
+    // regardless of manifest size, so the record stays under MAX_LINE_BYTES.
+    sha256: createHash("sha256")
+      .update(JSON.stringify({ added, modified, deleted }), "utf8")
+      .digest("hex"),
+  };
+}
+
+/**
+ * Shrink a Gate-2 receipt to the signed coordination-log RECORD content (#862): keep
+ * EVERY scalar provenance field (gate, lane, target, loom_sha, base_sha, worktree,
+ * branch, changed_count, pr_url, merge_sha, timestamp) and REPLACE the inline
+ * `manifest` arrays with `manifest_fingerprint` (fingerprintManifest above). Pure —
+ * returns a NEW object; the caller's receipt (and its FULL manifest) is untouched, so
+ * the STDOUT receipt + the journal `DECISION` embed keep the uncapped forensic manifest.
+ */
+export function fingerprintReceiptForRecord(receipt) {
+  const { manifest, ...scalars } = receipt;
+  return { ...scalars, manifest_fingerprint: fingerprintManifest(manifest) };
+}
+
+/**
+ * Scrub a Gate-2 receipt for embedding in the committed journal DECISION
+ * (`artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking" MUST-2 + `user-flow-validation.md`
+ * MUST-6). Three scrub tokens: (1) the absolute `worktree` operator-home path; (2) the
+ * `pr_url` org/repo slug (private on a Rust BUILD lane) — the PR *number* is preserved (it
+ * carries no disclosure and is the useful cross-reference); (3) any absolute path in
+ * `record_emit.reason` (a filesystem-error message can embed the operator-home coordination-
+ * log path). Pure — returns a new object.
+ *
+ * The signed coordination-log RECORD keeps every scalar provenance field UNSCRUBBED but
+ * carries a manifest FINGERPRINT (per-bucket counts + sha256), NOT the inline manifest
+ * arrays (fingerprintReceiptForRecord, #862 — the full arrays overflow the 2KB
+ * coordination-log line cap for broad syncs). The coordination log is per-repo state that
+ * is NEVER synced/published (`trust-posture.md` MUST NOT), so the scalar provenance stays
+ * unscrubbed there; the FULL manifest survives uncapped on THIS journal embed (the forensic
+ * source of truth the fingerprint recomputes from). ONLY the journal embed — a committed,
+ * sync/publish-reachable surface — is scrubbed (worktree path + pr_url slug + record_emit
+ * reason paths), and the manifest arrays it keeps are `.claude/`-relative paths, not
+ * disclosure tokens, so they are preserved.
+ */
+export function scrubReceiptForJournal(receipt) {
+  const scrubbed = { ...receipt };
+  if (scrubbed.worktree) scrubbed.worktree = "<scrubbed:worktree-path>";
+  if (scrubbed.pr_url) {
+    const m = String(scrubbed.pr_url).match(/\/pull\/(\d+)(?:\D|$)/);
+    scrubbed.pr_url = m ? `<scrubbed:org/repo>/pull/${m[1]}` : "<scrubbed:pr-url>";
+  }
+  // A non-fatal emit failure surfaces `record_emit.reason` = "emitSignedRecord
+  // threw: <e.message>"; a filesystem error (ENOENT/EACCES) embeds the absolute
+  // coordination-log path — i.e. the operator-home path (`/Users/<op>/…`, or a
+  // CI `/builds/<org>/…`, `/root/…`, Windows `C:\Users\<name>\…`). That is the
+  // SAME `security.md` § "No secrets in logs" / user-flow-validation.md MUST-6
+  // class as the worktree token, so genericize ANY absolute path in the reason
+  // before the committed journal embed. Closing the class beats enumerating
+  // known roots (cc-artifacts.md Rule 10). Two strategies across the three
+  // regex alternatives (Alt-1 quoted; Alt-2 unquoted Windows/UNC; Alt-3
+  // unquoted POSIX):
+  //
+  //   Alt-1 (QUOTED) — a Node `fs` error ALWAYS quotes the offending path
+  //   (`… open '/Users/…'`), so an absolute path (UNC `\\…`, Windows drive
+  //   `C:\…`, or POSIX `/…`) that opens right after a `'`/`"` and closes at
+  //   the matching quote is scrubbed WHOLE. This closes every interior-
+  //   whitespace shape — consecutive spaces, tabs, AND an identity in the
+  //   FINAL segment (`mkdir '/Users/Alice Smith'`) — because the quote, not a
+  //   space, is the terminator.
+  //
+  //   Alt-2/3 (UNQUOTED) — a hand-built / non-standard reason may carry an
+  //   unquoted path; the whitespace-generic (`\s+`) separator-bounded fallback
+  //   scrubs it. A space is path-material only when its segment ends in a
+  //   separator; the FINAL segment stops at the first whitespace, so trailing
+  //   prose is preserved. Two consequences: (1) if the trailing prose itself
+  //   contains a `/` within one whitespace run (`…/x done and/or retry`), the
+  //   fallback over-scrubs the bridging words — the safe direction, never a
+  //   leak; (2) conversely, an UNQUOTED path whose TERMINAL segment is itself a
+  //   space-bearing identity with no trailing separator (`EACCES /Users/Alice
+  //   Smith`) preserves the post-space token — a residual that does NOT reach a
+  //   real leak: a Node fs error quotes the path (Alt-1 closes it), and a
+  //   coordination-log path always carries the operator segment INTERIOR
+  //   (`…/<op>/…/coordination-log.jsonl`), scrubbed whole by Alt-2/3. The POSIX
+  //   alternative requires ≥2 separators, so a lone `and/or` is NOT scrubbed.
+  //
+  // Deep-copy record_emit so the shallow spread above does not mutate the
+  // caller's original (local) receipt.
+  if (scrubbed.record_emit && typeof scrubbed.record_emit.reason === "string") {
+    scrubbed.record_emit = {
+      ...scrubbed.record_emit,
+      reason: scrubbed.record_emit.reason.replace(
+        /(?<=['"])(?:\\\\|[A-Za-z]:[\\/]|\/)[^'"\n]*(?=['"])|(?:\\\\|[A-Za-z]:[\\/])(?:[^\s"'\n\\/]+(?:\s+[^\s"'\n\\/]+)*[\\/])*[^\s"'\n\\/]*|\/(?:[^\s"'\n/]+(?:\s+[^\s"'\n/]+)*\/)+[^\s"'\n/]*/g,
+        "<scrubbed:path>",
+      ),
+    };
+  }
+  return scrubbed;
+}
+
 // ───────────────────────── impure orchestration ─────────────────────────
+
+/**
+ * Emit the signed coordination-log tracking record for a COMPLETED Gate-2 distribution
+ * (`artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking" MUST-2), through the canonical
+ * `coc-emit.js::emitSignedRecord` under the registered `gate-op-receipt` fold type.
+ *
+ * Non-fatal by construction: the PR has already landed when this runs, so an emission
+ * failure (missing signing key, degraded chain) MUST NOT fail the sync — it is surfaced
+ * verbatim on the returned object and attached to the stdout receipt's `record_emit` field
+ * (the `knowledge-convergence.md` MUST-3 "emission failure surfaced, not swallowed" shape).
+ * `repoDir` is the loom main checkout (where the coordination log lives) — the same
+ * `process.cwd()` this script already trusts for `loomSha`.
+ */
+function emitTrackingRecord(repoDir, receipt) {
+  try {
+    // #862: the coordination-log line is size-capped (coc-emit.js MAX_LINE_BYTES = 2KB);
+    // a broad Gate-2 sync's inline manifest arrays overflow it → _defaultAppend refuses
+    // the append and NO forensic record lands. Emit a manifest FINGERPRINT (per-bucket
+    // counts + sha256) in place of the arrays; the FULL manifest stays on the stdout
+    // receipt + the journal DECISION embed (uncapped forensic surface).
+    const content = fingerprintReceiptForRecord(receipt);
+    const res = emitSignedRecord({ repoDir, type: "gate-op-receipt", content });
+    if (res && res.ok) return { ok: true, seq: res.record && res.record.seq };
+    return { ok: false, reason: (res && (res.reason || res.error)) || "emit failed" };
+  } catch (e) {
+    return { ok: false, reason: `emitSignedRecord threw: ${e.message}` };
+  }
+}
 
 function git(cwd, gitArgs) {
   return execFileSync("git", ["-C", cwd, ...gitArgs], {
@@ -423,6 +580,8 @@ function main() {
         lane: args.lane, target: args.target, baseSha, worktree: scratch,
         branch, manifest, prUrl, mergeSha, loomSha, timestamp: stamp,
       });
+      // MUST-2: emit the signed coord-log tracking record for the completed Gate-2 op.
+      receipt.record_emit = emitTrackingRecord(process.cwd(), receipt);
       emit(args.json, receipt,
         args.merge ? `Distributed + merged: ${prUrl}` : gatedMergeHint(prUrl));
     } catch (e) {
@@ -515,6 +674,9 @@ function main() {
       lane: args.lane, target: args.target, baseSha, worktree: scratch,
       branch, manifest, prUrl, mergeSha, loomSha, timestamp: stamp,
     });
+    // MUST-2: emit the signed coord-log tracking record for the completed Gate-2 op.
+    // (RHS runs BEFORE the assignment, so the record's content is the pure receipt.)
+    receipt.record_emit = emitTrackingRecord(process.cwd(), receipt);
     emit(args.json, receipt,
       args.merge ? `Distributed + merged: ${prUrl}` : gatedMergeHint(prUrl));
   } catch (e) {

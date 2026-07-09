@@ -4,7 +4,7 @@ description: "Onboard a new operator to a multi-operator COC repo. Deterministic
 
 Onboard the operator into the current repo's multi-operator COC state. Read-only command — no commits, no state writes. Output is a structured briefing the operator (and the next session) can act on.
 
-**Run `loom doctor` FIRST.** On a fresh / Windows / ADO clone, run `node .claude/bin/loom-doctor.mjs` before `/onboard` — it surfaces role/env/line-ending/VCS-host/resolver issues with remediations (and `--fix` repairs the safe subset). `/onboard` assumes a healthy clone; the doctor is what makes it one.
+**Run `loom doctor` FIRST.** On a fresh / Windows / ADO clone, run `node .claude/bin/loom-doctor.mjs` (the `/doctor` command) before `/onboard` — it surfaces role/env/line-ending/VCS-host/resolver issues with remediations (and `--fix` repairs the safe subset). `/onboard` assumes a healthy clone; the doctor is what makes it one.
 
 **Usage**: `/onboard` (no args; runs in current repo) — `/onboard --json` for machine-readable output
 
@@ -14,7 +14,7 @@ Onboard the operator into the current repo's multi-operator COC state. Read-only
 
 ### 1. Identify the operator
 
-Resolve identity via `.claude/hooks/lib/operator-id.js::resolveIdentity()`. The result includes `display_id`, `verified_id`, and the operator's roster status. If the operator is not registered, stop — onboarding past identity is not safe — and surface the message **branched on the just-enrolled case**: "if you just ran `/enroll` or `/whoami --register`, your roster row is an unmerged PR, not yet on `main` — await the merge (or stay on your `codify/<display_id>-<date>` branch) before treating `/onboard` identity as final; otherwise run `/whoami --register`."
+Resolve identity via `.claude/hooks/lib/operator-id.js::resolveIdentity()`. The result includes `display_id`, `verified_id`, and the operator's roster status. If the operator is not registered, surface the `/whoami --register` instruction and stop — onboarding past identity is not safe.
 
 ### 2. Read the team-memory surface
 
@@ -31,7 +31,7 @@ Files failing `integrity-guard.js` validation (broken frontmatter, body-anchor m
 Run the same workspace-detection logic as `multi-operator-sessionstart.js` (the M5 hook):
 
 - Active workspace = most recently modified `workspaces/<name>/` (filter `instructions` + leading-underscore meta-dirs per `rules/cc-artifacts.md` Rule 8).
-- Recent journal entries: last 5 `DECISION-` / `DISCOVERY-` entries from the active workspace's `journal/` (excluding `.pending/`). Deferrals are `DECISION`-typed (`DEFER` is NOT a canonical journal `type` per `journal-reserve.js::VALID_TYPES` / `rules/journal.md`), so the `DECISION-` filter already surfaces them.
+- Recent journal entries: last 5 `DECISION-` / `DISCOVERY-` / `DEFER-` entries from the active workspace's `journal/` (excluding `.pending/`).
 - Surface each entry's filename + the first H2 / heading line, in date-descending order.
 
 ### 4. Read the active posture + pending verifications
@@ -40,7 +40,7 @@ Read `.claude/learning/posture.json` via `state-io.js::readPosture()`. Surface:
 
 - Current `posture` (L5_DELEGATED through L1_PSEUDO_AGENT)
 - `since` timestamp + the most recent `transition_history` entry's reason
-- `pending_verification[]` — every rule_id awaiting a `[ack: <rule_id>]` receipt (per `rules/trust-posture.md` MUST-6 § Grace Period Semantics, which defines the `pending_verification` + 7-day grace mechanism)
+- `pending_verification[]` — every rule_id awaiting a `[ack: <rule_id>]` receipt (per `rules/trust-posture.md` MUST-7's grace mechanism)
 
 If any rule_id is in `pending_verification`, the onboarding output names it and instructs the operator: their next response in a real session must include the `[ack: <rule_id>]` token to clear the gate.
 
@@ -60,14 +60,14 @@ The M5 `multi-operator-sessionstart.js` hook already renders a "rules changed si
 
 ### 7. Emit the briefing
 
-In `--json` mode, emit a structured object: `{operator, team_memory, workspace, posture, claims, codify_lease, rules_changed, action_items}`. In default markdown mode, render each section under a `##` heading in the order above. The operator (and any agent reading the briefing) can act from this single read.
+In `--json` mode, emit a structured object: `{operator, team_memory, workspace, posture, claims, codify_lease, rules_changed}`. In default markdown mode, render each section under a `##` heading in the order above. The operator (and any agent reading the briefing) can act from this single read.
 
 ### Failure modes (typed errors — no silent fallbacks per `rules/zero-tolerance.md` Rule 3)
 
-- Unregistered operator → STOP; branch the message: just ran `/enroll`/`/whoami --register` → "roster PR not yet merged to `main` — await the merge or stay on your `codify/<display_id>-<date>` branch"; otherwise → instruct `/whoami --register`.
+- Unregistered operator → STOP, instruct `/whoami --register`.
 - Missing `.claude/team-memory/` directory → empty section (not an error; fresh repo).
 - Corrupt `posture.json` (state-io.js returns fail-closed L1) → surface verbatim; do NOT proceed.
-- Missing roster (`.claude/operators.roster.json`) → STOP, instruct genesis ceremony.
+- Missing roster (`.claude/learning/operators.roster.json`) → STOP, instruct genesis ceremony.
 
 ## Output format
 
@@ -78,7 +78,7 @@ Action Items is the actionable footer: every gate the operator must clear (pendi
 ## Next steps after onboarding
 
 ```
-Next: /whoami (verify identity) → /claims (see what's locked) → /certify (knowledge gate — required before claiming non-trivial work) → /claim <path> → /analyze or /implement (start work)
+Next: /whoami (verify identity) → /claims (see what's locked) → /analyze or /implement (start work)
 ```
 
 ## Notes
