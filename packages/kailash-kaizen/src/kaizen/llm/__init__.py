@@ -45,6 +45,7 @@ from kaizen.llm.grammar.bedrock import (
     BedrockTitanGrammar,
 )
 from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver
+from kaizen.llm.provider import LlmProvider, UnknownModelProvider
 from kaizen.llm.reasoning import (
     CapabilityMatchAgent,
     CapabilityMatchSignature,
@@ -84,6 +85,9 @@ __all__ = [
     "StreamingConfig",
     "RetryConfig",
     "LlmClient",
+    # Model-identifier → provider resolution (#1609)
+    "LlmProvider",
+    "UnknownModelProvider",
     # Auth strategies
     "AuthStrategy",
     "Custom",

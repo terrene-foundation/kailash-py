@@ -55,6 +55,10 @@ LEGACY_KEY_ORDER = [
     ("AZURE_OPENAI_API_KEY", "azure_openai"),
     ("ANTHROPIC_API_KEY", "anthropic"),
     ("GOOGLE_API_KEY", "google"),
+    # DeepSeek (OpenAI-compatible) — placed last so it never displaces an
+    # existing provider's precedence; a bare DEEPSEEK_API_KEY (no URI/selector)
+    # resolves to the deepseek preset. (#1609)
+    ("DEEPSEEK_API_KEY", "deepseek"),
 ]
 
 # Strict per-field regexes for URI parsing -- defense-in-depth before
@@ -261,6 +265,13 @@ def _call_preset_from_env(selector: str, factory: Any) -> LlmDeployment:
         api_key = _require_env("GOOGLE_API_KEY", "GEMINI_API_KEY")
         model = _require_env("GOOGLE_MODEL", "GEMINI_MODEL")
         return factory(api_key, model=model)
+    if selector == "deepseek":
+        # DeepSeek (OpenAI-compatible). The preset carries the DeepSeek
+        # base_url intrinsically, so no base_url override is needed here
+        # (#1609). Model env precedence matches `_FROM_ENV_PROVIDERS`.
+        api_key = _require_env("DEEPSEEK_API_KEY")
+        model = _require_env("DEEPSEEK_PROD_MODEL", "DEEPSEEK_MODEL")
+        return factory(api_key, model=model)
     if selector == "bedrock_claude":
         token = _require_env("AWS_BEARER_TOKEN_BEDROCK")
         region = _require_env("AWS_REGION")
@@ -287,6 +298,7 @@ def _build_from_legacy(legacy_key: str) -> LlmDeployment:
     from kaizen.llm.presets import (
         anthropic_preset,
         azure_openai_preset,
+        deepseek_preset,
         google_preset,
         openai_preset,
     )
@@ -311,6 +323,13 @@ def _build_from_legacy(legacy_key: str) -> LlmDeployment:
         api_key = os.environ["GOOGLE_API_KEY"]
         model = _require_env("GOOGLE_MODEL", "GEMINI_MODEL")
         return google_preset(api_key, model=model)
+    if legacy_key == "DEEPSEEK_API_KEY":
+        # DeepSeek (OpenAI-compatible) — the preset carries the DeepSeek
+        # base_url; from_env selects it when only DEEPSEEK_API_KEY is set
+        # (no URI / selector tier). (#1609)
+        api_key = os.environ["DEEPSEEK_API_KEY"]
+        model = _require_env("DEEPSEEK_PROD_MODEL", "DEEPSEEK_MODEL")
+        return deepseek_preset(api_key, model=model)
     raise LlmClientError(f"Unhandled legacy key: {legacy_key}")
 
 
