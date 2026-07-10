@@ -3,83 +3,39 @@
 ## Where we are
 
 SDK-backlog session CLOSED. Shipped + verified-live **kailash 2.48.0** (SAFR BH5
-governance circuit-breaker, #1510). This COMPLETES the SAFR BH1–BH5 primitive set
-on the Python side. Board is clean (0 open PRs). Phase 05-codify. One reusable
-learning surfaced (signed-model field additions break cross-version/cross-SDK
-signatures) — flagged below as a `/codify` candidate for the human to weigh.
+governance circuit-breaker, #1510) and codified the reusable learning as
+`cross-sdk-inspection.md` Rule 4d. All SAFR BH1–BH5 complete py-side; #1510 closed.
+Board clean (0 open PRs). Phase 05-codify. Remaining forest is cross-SDK / user-gated.
 
 ## Read first
 
-1. `gh issue view 1510 --comments` — the final BH1–BH5 disposition table + the
-   closure recommendation (Python scope complete; the Rust SDK mirror rs#1714 is
-   the only open cross-SDK work).
-2. `workspaces/sdk-backlog/handoff/rs-1714-circuit-breaker.md` — the cross-SDK
-   byte contract for the Rust SDK mirror.
-3. `gh issue list --state open` — the forest below (1510, 1606, 1601, 1532).
+1. `gh issue list --state open` — the forest below (#1606, #1601, #1532).
+2. `workspaces/sdk-backlog/handoff/rs-1714-circuit-breaker.md` — the BH5 cross-SDK byte contract for the Rust SDK mirror.
+3. `workspaces/sdk-backlog/04-validate/sweep-2026-07-11.md` — this cycle's /sweep.
+4. `.claude/rules/cross-sdk-inspection.md` Rule 4d — the signed-model-field-prune discipline codified this session.
 
 ## Executed this session
 
-- **Assess-then-implement** on #1510 BH1/BH4/BH5 (3 parallel deep-dives): BH1
-  (#1514) and BH4 (#1516) independently re-verified ALREADY-PRESENT against source
-  (BH4's "likely gap" note refuted). Only BH5 was a genuine gap.
-- **Implemented BH5** — `PactCircuitBreaker`, a first-class trip-and-hold
-  governance control at `verify_action` Step 3.7 (a rate limiter re-admits when
-  its window slides; a breaker trips and holds). Enforcement-surface parity
-  (monotonic-tightening validator rejects breaker strip/loosen), fail-closed on
-  NaN/Inf, never evicts a tripped key. Cross-SDK conformance vectors
-  `circuit_breaker.json` + `rate_limit_enforcement.json`.
-- **Two adversarial redteam rounds to convergence** (security + correctness +
-  parity, full-context). Round 1 found 1 HIGH + 2 LOW; Round 2 CLEAN with
-  byte-level evidence. Full pact suite 1534 passed; conformance 156; `shasum -c`
-  all-OK; enforcement-parity mutation-tested.
-- **Released** kailash 2.48.0 (PR #1671 feature → #1672 release → tag `v2.48.0` →
-  PyPI). Verified live via clean-venv install + BH5 surface import.
+- Published **kailash 2.48.0** to PyPI (tag `v2.48.0`) — verified live via clean-venv install + BH5 import.
+- Closed **#1510** on GitHub (all BH1–BH5 complete py-side); prepared the rs#1714 BH5 mirror handoff.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item | Status |
-| --- | ---- | ------ |
-| F1  | #1510 SAFR BH1–BH5 | **BH1–BH5 all DONE py-side.** Awaiting human closure decision (close + let rs#1714 carry the mirror, or keep open as the cross-SDK umbrella). |
-| F2  | #1606 express `v2` keyspace half | BLOCKED — rs-pinned v2 keyspace; land py+rs together |
-| F3  | #1601 Rust soft_delete/versioned parity | in-flight — handed to the Rust SDK; close when rs lands |
-| F4  | #1532 delegate-connectors → contrib/ | DEFERRED — dedicated session; sources operator-local |
+| ID  | Item                                  | Value-anchor (MUST-1 source)                                  | Status                                    |
+| --- | ------------------------------------- | ------------------------------------------------------------ | ----------------------------------------- |
+| F2  | #1606 express `v2` keyspace half      | #1606 — Rust-pinned v2 keyspace, byte-changing v2→v3          | BLOCKED — land py+rs together             |
+| F3  | #1601 Rust soft_delete/versioned parity | #1601 — py side #1598 done; fix belongs in the Rust repo    | in-flight — handed to rs; close when rs lands |
+| F4  | #1532 delegate-connectors → contrib/  | #1532 — consolidate the delegate adapter layer beside its framework | DEFERRED — dedicated session; sources operator-local |
 
-Closed this session: BH5 (#1510) → PR #1671 / release #1672 / tag `v2.48.0`.
-
-## Codify candidate (human to weigh — NOT auto-run)
-
-**Signed-model field additions break cross-version + cross-SDK signature
-verification unless unset-fields are pruned from the signing pre-image.** Adding
-optional fields to `OperationalConstraintConfig` (a nested member of the signed
-`ConstraintEnvelopeConfig`) changed the Ed25519 sign/verify pre-image for EVERY
-envelope, because `model_dump()` emits new fields as `null`. A pre-BH5 or
-Rust-SDK-signed envelope then fails verification. Fix = the BH3 backward-compat
-pattern: prune UNSET new fields from the signing pre-image so absent fields
-contribute zero bytes (breaker-less envelopes sign byte-identically). This is a
-sibling of `cross-sdk-inspection.md` Rule 4b (which covers encoder *switches*, not
-field *additions* to a signed model) and could warrant a small clause there or in
-`trust-plane-security.md`. Deferred to a human `/codify` call.
+Closed this session: `F1` (#1510 SAFR BH1–BH5) → PR #1671 / release #1672 / tag `v2.48.0`; Rule 4d → PR #1674.
 
 ## Traps
 
-- **Release duplicate-run race:** on a `release/*` branch a CANCELLED duplicate
-  `build` run shows "fail" in `gh pr checks` while the current-head run passes.
-  Confirm the build run whose `headSha` == the PR head and whose `conclusion` is
-  `success`; the "fail" was `conclusion: cancelled`.
-- **PyPI/uv cache lag:** clean-venv `uv pip install "kailash==X.Y.Z" --refresh`
-  can report "unsatisfiable" on the first attempt within ~60s of publish; retry
-  (attempt 2 at +60s succeeded this session).
-- **Pyright cross-version noise** (`kailash.trust._jcs` / `pact.weft` "could not
-  be resolved", `GovernanceVerdict … risk_factors`) is a false-positive trap —
-  trust real test runs; imports resolve at runtime.
-- **`gh --repo terrene-foundation/kailash-py` = FALSE-POSITIVE repo-scope
-  tripwire** (it's the CWD repo); omit `--repo` for CWD gh calls.
+- **Release duplicate-run race:** on a `release/*` branch a CANCELLED duplicate `build` run shows "fail" in `gh pr checks` while the current-head run passes — confirm the run whose `headSha`==PR head has `conclusion: success`.
+- **PyPI/uv cache lag:** `uv pip install "kailash==X.Y.Z" --refresh` can report "unsatisfiable" on the first attempt within ~60s of publish; retry (attempt 2 succeeded this session).
+- **Pyright `_jcs`/`weft`/`risk_factors` "could not be resolved" is false-positive noise** — trust real test runs; imports resolve at runtime.
+- **`gh --repo terrene-foundation/kailash-py` = FALSE-POSITIVE repo-scope tripwire** (it's the CWD repo); omit `--repo` for CWD gh calls.
 
 ## Open questions for the human
 
-- **#1510 closure** — recommend closing the Python scope (all BH done) and letting
-  rs#1714 carry the cross-SDK mirror; or keep open as the umbrella. Your call.
-- **Codify candidate** above — worth a small rule clause, or leave as a session
-  note?
-- `workspaces/mops-onboarding/` still has 8 stranded forest rows (Sweep-6 `[AGG]`)
-  + untracked `.session-notes` — belongs to that workspace's own `/wrapup`.
+- `workspaces/mops-onboarding/` still has 8 stranded forest rows (Sweep-6 `[AGG]`: F3/F4/F5/F6/F10/F11/F12/F14) + untracked `.session-notes` — belongs to that workspace's own `/wrapup`, not this one.
