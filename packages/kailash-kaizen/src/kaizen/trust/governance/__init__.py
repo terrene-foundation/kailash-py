@@ -129,6 +129,12 @@ from kaizen.trust.governance.budget_enforcer import (
     ExternalAgentBudgetEnforcer,
 )
 from kaizen.trust.governance.budget_reset import BudgetResetService
+from kaizen.trust.governance.outbound import (
+    GovernedHTTPClient,
+    GovernedProvider,
+    GovernedToolInvoker,
+    resolve_interceptor,
+)
 
 __all__ = [
     # Cost estimation
@@ -181,4 +187,9 @@ __all__ = [
     "ApprovalPolicyModel",
     "ApprovalRequestModel",
     "ApprovalAuditLogModel",
+    # Universal outbound-effect governance wiring (#1517 leg-b)
+    "GovernedProvider",
+    "GovernedToolInvoker",
+    "GovernedHTTPClient",
+    "resolve_interceptor",
 ]
