@@ -205,6 +205,49 @@ $ edit tests/trust/.../audit_anchor.json && git commit           # manifest unch
 - **Violation scope:** this clause (conformance-vector integrity-manifest re-pin). Every violation row names the vector file + its stale manifest.
 - **Origin:** PR #1411 Gap 1 (2026-06-20) — the `PACT_VECTORS.sha256` re-pin omission a "converged" redteam missed because no round ran `shasum -c`; closed by commit `b4929d924` + a new integrity-manifest-sweep lens.
 
+### 4d. New Fields On A Cross-SDK Signed Model MUST Prune-When-Unset From The Signing Pre-Image
+
+When a commit ADDS a new optional field to a data model whose serialization feeds a cross-SDK signing OR hash pre-image (an Ed25519-signed envelope, a signed trace, an audit-chain record), the field MUST NOT change the pre-image of instances that do NOT set it. `model_dump(mode="json")` / `to_dict()` emits a `None`-default field as a `null` key, so a naive addition changes the signed bytes for EVERY existing instance — a pre-existing or sibling-SDK-signed artifact then fails verification even though nothing about it changed. The signing pre-image builder MUST PRUNE the UNSET (`None`/absent) new field so a not-configured instance signs BYTE-IDENTICALLY to the pre-addition form; a CONFIGURED value stays in the pre-image (cryptographically bound). Classify empirically (byte-diff a not-configured instance against the pre-addition bytes — reason is not a byte-diff) and pin a regression test asserting the not-configured instance's signed bytes carry NO new key AND a configured instance's DO. The not-configured case is byte-NEUTRAL (no cross-SDK lockstep); ONLY the configured case is a coordinated lockstep (the sibling SDK adds the same field + the same prune-when-unset rule + matching key-order/number-typing).
+
+```python
+# DO — a shared signing-pre-image builder prunes the UNSET new field
+_NEW_OPTIONAL_FIELDS = ("circuit_failure_threshold", "circuit_window_seconds", "circuit_cooldown_seconds")
+def _signing_dict(model) -> dict:
+    payload = model.model_dump(mode="json")
+    nested = payload.get("operational")
+    if isinstance(nested, dict):
+        for f in _NEW_OPTIONAL_FIELDS:
+            if nested.get(f) is None:
+                nested.pop(f, None)          # unset → zero bytes → byte-identical to pre-addition
+    return payload
+# both sign AND verify call _signing_dict(...) (a mismatch breaks within-version signatures)
+
+# DO NOT — add the field, sign the raw model_dump (null key changes EVERY signature)
+payload = serialize_for_signing(model.model_dump(mode="json"))   # emits "circuit_*":null for a breaker-less
+# → every pre-existing / cross-SDK-signed instance now fails verify(); a backward-compat + cross-SDK break
+```
+
+**BLOCKED rationalizations:**
+
+- "The field is optional, adding it is backward-compatible"
+- "`exclude_none=True` on the dump fixes it" (it drops OTHER pre-existing nulls too — a wider break)
+- "I reasoned the bytes; a not-set field can't matter" (reason is not a byte-diff)
+- "The within-version sign/verify round-trip passes" (it can't catch cross-VERSION — both halves use the new code)
+- "It's a new SDK version; existing signatures re-issuing is fine"
+
+**Why:** A signed model's pre-image is a byte-for-byte cross-SDK + cross-version contract (Rule 4); a new null key on every instance invalidates every signature the sibling SDK or a prior version produced, and the within-version test suite cannot see it because sign and verify share the new code. Prune-when-unset makes the addition byte-neutral for the not-configured case (the BH3 unbound/bound pattern applied to field additions), confining the lockstep to instances that actually opt into the new field.
+
+**Trust Posture Wiring (cross-SDK signed-model field additions):**
+
+- **Severity:** `halt-and-report` at gate-review (reviewer + security-reviewer at `/implement` confirm any new field on a signing/hash-pre-image model prunes-when-unset AND ships a byte-identity regression pin); `advisory` at the hook layer (per `hook-output-discipline.md` MUST-2 a lexical model-field-addition scan cannot carry `block`).
+- **Grace period:** 7 days from clause landing (2026-07-11 → 2026-07-18).
+- **Cumulative posture impact:** same-class violations (a new field on a cross-SDK signed model that changes the not-configured pre-image) contribute to `trust-posture.md` MUST-4 cumulative-window math (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** trigger key `cross_sdk_signed_field_addition` fires emergency downgrade (1 step) per `trust-posture.md` MUST-4.
+- **Receipt requirement:** SessionStart `[ack: cross-sdk-inspection]` IFF `posture.json::pending_verification` includes this rule_id (soft-gate; shared with Rules 4b/4c/6).
+- **Detection mechanism:** Phase 1 — gate-level reviewer at `/implement`: for any diff adding a field to a model reachable from a `serialize_for_signing` / signing / hash pre-image, demand the prune-when-unset builder + the byte-identity regression pin (not-configured → no new key; configured → new key present). Phase 2 (deferred): a regression-suite invariant enumerating signed-model fields and asserting each new one prunes-when-unset.
+- **Violation scope:** this clause (new-field additions to cross-SDK signing/hash pre-image models). Every violation row names the model + the un-pruned field.
+- **Origin:** kailash-py #1510 BH5 (PR #1671 → release #1672, kailash 2.48.0, 2026-07-11) — adding `circuit_*` fields to `OperationalConstraintConfig` (nested in the signed `ConstraintEnvelopeConfig`) changed the Ed25519 pre-image for every envelope; a two-round `/redteam` caught the HIGH, fixed via `_envelope_signing_dict` prune-when-unset (the BH3 unbound-form backward-compat pattern).
+
 ### 5. Inspection Checklist
 
 When closing any issue, verify:
