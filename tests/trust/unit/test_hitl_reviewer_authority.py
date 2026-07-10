@@ -23,6 +23,7 @@ The five governance invariants (each asserted below):
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -397,4 +398,148 @@ def test_reviewer_id_with_control_char_is_rejected(tmp_path):
     # reviewer_id is validated before any state mutation — the hold survives.
     assert [h.hold_id for h in store.pending()] == [hold_id]
     assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
+    store.close()
+
+
+# ---------------------------------------------------------------------------
+# Cross-surface /redteam findings (BH2 legs 2-3 lifecycle)
+# ---------------------------------------------------------------------------
+
+
+def test_expired_hold_reconciled_and_cannot_be_reapproved(tmp_path):
+    """Finding 1 (CRITICAL): an expired hold is removed from BOTH the store AND
+    the review queue, so a late APPROVE fails closed instead of resurrecting an
+    already-timed-out-and-BLOCKED action to AUTO_APPROVED.
+
+    This is the CRITICAL RED->GREEN: against pre-fix code (expire_holds did NOT
+    reconcile the queue) the late APPROVE returns AUTO_APPROVED — a
+    BLOCKED->AUTO_APPROVED monotonic downgrade.
+    """
+    enforcer, store = _enforcer(tmp_path)
+    # timeout=0.0 -> the hold is already past its deadline; it lands in BOTH the
+    # store (timeout-bearing) and the review queue.
+    hold_id = _queue_one(enforcer, agent_id="agent-expire", timeout=0.0)
+    assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
+    assert [h.hold_id for h in store.pending()] == [hold_id]
+
+    later = datetime.now(timezone.utc) + timedelta(seconds=1)
+    expiry_records = enforcer.expire_holds(now=later)
+
+    # (i) the hold is GONE from BOTH surfaces (atomic reconcile).
+    assert store.pending() == []
+    assert enforcer.review_queue == []
+    assert all(r.metadata.get("hold_id") != hold_id for r in enforcer.review_queue)
+
+    # (ii) a late reviewer decision on the expired hold fails CLOSED.
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(hold_id, ReviewerDecision.APPROVE, "rev-late")
+
+    # (iii) the only TERMINAL record for that hold_id is the BLOCKED expiry —
+    # no AUTO_APPROVED resurrection anywhere in the audit trail.
+    for_hold = [r for r in enforcer.records if r.metadata.get("hold_id") == hold_id]
+    assert not any(r.verdict is Verdict.AUTO_APPROVED for r in for_hold)
+    expiry = [r for r in for_hold if r.metadata.get("hold_expiry")]
+    assert len(expiry) == 1
+    assert expiry[0].verdict is Verdict.BLOCKED
+    assert len(expiry_records) == 1
+    store.close()
+
+
+def test_concurrent_resolution_single_winner(tmp_path):
+    """Finding 2 (MED): two threads resolving the SAME queue-only hold —
+    exactly one succeeds, the other fails closed. A DECLINE + APPROVE race
+    never yields AUTO_APPROVED after a BLOCKED (single-winner under the lock).
+    """
+    enforcer, store = _enforcer(tmp_path)
+
+    # Repeat to widen the race window a missing lock would fall through.
+    for i in range(25):
+        # A queue-only hold (no timeout) — never in the store, so the queue
+        # scan is the sole arbiter and the lock is the only thing serializing.
+        hold_id = _queue_one(enforcer, agent_id=f"agent-race-{i}", timeout=None)
+
+        barrier = threading.Barrier(2)
+        outcomes: list = []
+        lock = threading.Lock()
+
+        def _resolve(decision):
+            barrier.wait()
+            try:
+                rec = enforcer.apply_review_decision(hold_id, decision, "rev-race")
+                with lock:
+                    outcomes.append(("ok", rec.verdict))
+            except ReviewDecisionError:
+                with lock:
+                    outcomes.append(("closed", None))
+
+        t1 = threading.Thread(target=_resolve, args=(ReviewerDecision.APPROVE,))
+        t2 = threading.Thread(target=_resolve, args=(ReviewerDecision.DECLINE,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # Exactly one winner; the other failed closed.
+        successes = [o for o in outcomes if o[0] == "ok"]
+        closed = [o for o in outcomes if o[0] == "closed"]
+        assert len(successes) == 1, f"iter {i}: {outcomes}"
+        assert len(closed) == 1, f"iter {i}: {outcomes}"
+
+        # The hold resolved exactly once — never a BLOCKED followed by an
+        # AUTO_APPROVED (no double-resolve).
+        decided = [
+            r
+            for r in enforcer.records
+            if r.metadata.get("hold_id") == hold_id
+            and r.metadata.get("reviewer_id") == "rev-race"
+        ]
+        assert len(decided) == 1, f"iter {i}: {[r.verdict for r in decided]}"
+        # And the review queue no longer holds it.
+        assert all(r.metadata.get("hold_id") != hold_id for r in enforcer.review_queue)
+    store.close()
+
+
+def test_reviewer_id_over_length_rejected(tmp_path):
+    """Finding 3a: a reviewer_id past the length cap fails closed (audit/log
+    flood defense) and the hold survives for a corrected retry."""
+    enforcer, store = _enforcer(tmp_path)
+    hold_id = _queue_one(enforcer, agent_id="agent-longid", timeout=300.0)
+
+    over_length = "a" * 300  # valid charset, but past the 256-char cap
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(hold_id, ReviewerDecision.APPROVE, over_length)
+
+    # Hold survives — nothing was consumed before the length check.
+    assert [h.hold_id for h in store.pending()] == [hold_id]
+    assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
+    store.close()
+
+
+def test_approve_with_modified_verdict_rejected(tmp_path):
+    """Finding 3b: APPROVE/DECLINE carrying a modified_verdict is ambiguous
+    input and fails closed rather than silently dropping the argument. MODIFY
+    still REQUIRES modified_verdict."""
+    enforcer, store = _enforcer(tmp_path)
+    hold_a = _queue_one(enforcer, agent_id="agent-amb-a", timeout=300.0)
+
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(
+            hold_a,
+            ReviewerDecision.APPROVE,
+            "rev-amb",
+            modified_verdict=Verdict.HELD,
+        )
+
+    hold_b = _queue_one(enforcer, agent_id="agent-amb-b", timeout=300.0)
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(
+            hold_b,
+            ReviewerDecision.DECLINE,
+            "rev-amb",
+            modified_verdict=Verdict.BLOCKED,
+        )
+
+    # Both holds survive the ambiguous requests.
+    pending = {h.hold_id for h in store.pending()}
+    assert pending == {hold_a, hold_b}
     store.close()
