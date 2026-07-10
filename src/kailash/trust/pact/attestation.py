@@ -91,7 +91,7 @@ def posture_can_reidentify(
     return ceiling >= required_clearance
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClearanceAttestation:
     """A posture-gated re-identification attestation with a citable JCS hash.
 

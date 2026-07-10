@@ -29,6 +29,7 @@ from __future__ import annotations
 import inspect
 import logging
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 from kailash.trust.pact.outbound import (
     EffectKind,
@@ -46,7 +47,47 @@ __all__ = [
     "GovernedToolInvoker",
     "GovernedHTTPClient",
     "resolve_interceptor",
+    "redact_http_target",
 ]
+
+# Grep-safe sentinel returned when a request URL cannot be parsed -- distinct
+# from any successful redaction so it is never mistaken for a real target and a
+# malformed credential-bearing string never reaches the audit record.
+_REDACTED_URL_SENTINEL = "<redacted url>"
+
+
+def redact_http_target(url: str) -> str:
+    """Strip credentials from a request URL before it becomes an audit target.
+
+    The raw request URL flows verbatim from :class:`GovernedHTTPClient` into
+    :class:`~kailash.trust.pact.outbound.OutboundEffect`'s ``target`` field, and
+    from there into the :class:`~kailash.trust.pact.outbound.OutboundVerdict`,
+    the bounded audit deque, any ``audit_sink``, and
+    :class:`~kailash.trust.pact.outbound.OutboundEffectRefused`'s ``details``.
+    A URL carrying userinfo (``https://user:pass@host``) or a secret query
+    parameter (``?api_key=...``) would therefore write a credential into the
+    audit trail -- the ``rules/security.md`` § "No secrets in logs" failure mode.
+
+    This keeps ONLY ``scheme://host[:port]/path`` -- everything the audit trail
+    needs for observability -- and drops BOTH credential vectors: the userinfo
+    component AND the entire query string (and fragment). Fail-closed: a value
+    that cannot be parsed as a URL is reduced to :data:`_REDACTED_URL_SENTINEL`
+    rather than echoed verbatim.
+    """
+    if not isinstance(url, str) or not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        if ":" in host:  # IPv6 literal -- re-bracket it
+            host = f"[{host}]"
+        netloc = host
+        if parts.port:
+            netloc = f"{netloc}:{parts.port}"
+        # Drop userinfo, query, and fragment; keep scheme://host[:port]/path.
+        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+    except (ValueError, AttributeError):
+        return _REDACTED_URL_SENTINEL
 
 
 def resolve_interceptor(
@@ -255,7 +296,9 @@ class GovernedHTTPClient:
         return OutboundEffect(
             kind=EffectKind.HTTP,
             operation=f"http.{str(method).upper()}",
-            target=str(url),
+            # Redact credentials (userinfo + query) before the URL becomes the
+            # audit target -- it flows verbatim into the audit trail otherwise.
+            target=redact_http_target(str(url)),
             cost_estimate=cost,
             caller=self._caller,
         )

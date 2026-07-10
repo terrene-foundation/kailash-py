@@ -149,7 +149,7 @@ def _root_of(role_address: str) -> str:
     return role_address.split("-", 1)[0]
 
 
-@dataclass
+@dataclass(frozen=True)
 class PartyAnchor:
     """A citable reference to one party's audit anchor in a bilateral delegation.
 
@@ -216,7 +216,7 @@ class PartyAnchor:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class BilateralDelegation:
     """An atomic two-party delegation with a citable, JCS-hashed envelope.
 

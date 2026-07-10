@@ -65,7 +65,7 @@ class ChainVerdict(str, Enum):
     DENY = "deny"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChainLink:
     """One link in a verification chain.
 
@@ -119,7 +119,7 @@ class ChainLink:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChainResult:
     """The composed verdict of a :func:`verify_chain` evaluation.
 
