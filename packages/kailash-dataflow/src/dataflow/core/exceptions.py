@@ -19,7 +19,7 @@ loop into a single, loud, fail-fast error at the next access.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Optional, Sequence
 
 # Re-export the public DataFlow base error so callers can `except
 # DataFlowError` to catch both legacy and new exception types without
@@ -307,6 +307,56 @@ class UpsertConflictTargetError(DataFlowError):
         )
 
 
+def format_tenant_natural_key_collision_message(
+    model_name: str,
+    tenant_id: str,
+    colliding_ids: Sequence[object],
+) -> str:
+    """Build the actionable cross-tenant natural-key collision message (#1526).
+
+    Single source of truth shared by BOTH the single-record raise path
+    (:class:`TenantNaturalKeyCollisionError`, which passes a one-element
+    sequence so its message is byte-identical to the original literal) AND
+    the bulk partial-failure-dict path (``ExpressDataFlow`` bulk_create /
+    bulk_upsert, which passes the caller's own candidate ids). Sharing the
+    builder guarantees the two surfaces never drift and there is no parallel
+    error hierarchy (``framework-first.md``).
+
+    The message names ONLY the CALLER's own ``tenant_id`` + the CALLER's own
+    supplied ``id``(s) — never another tenant's id or row data — so tenant
+    isolation is preserved (``rules/tenant-isolation.md``, ``security.md``).
+    A single id renders the exact-attribution singular form; multiple
+    candidate ids render an at-least-one plural form (the bulk path cannot
+    pinpoint which of the caller's supplied ids collided without a
+    cross-tenant read, which is forbidden).
+    """
+    ids = list(colliding_ids)
+    if len(ids) == 1:
+        subject = (
+            f"cannot write id={ids[0]!r} because that primary-key value is "
+            f"already owned by another tenant."
+        )
+    else:
+        subject = (
+            f"cannot write ids {ids!r} because one or more of those "
+            f"primary-key values are already owned by another tenant."
+        )
+    return (
+        f"Cross-tenant natural-key collision on multi_tenant model "
+        f"'{model_name}': tenant '{tenant_id}' {subject} "
+        f"multi_tenant=True models keep the DEFAULT single-column primary key "
+        f"'id' (NOT a composite of (tenant_id, id)), so under the default "
+        f"row-level tenant strategy the 'id' is a GLOBALLY-UNIQUE surrogate — "
+        f"two tenants cannot share the same natural-key id. Remediation: "
+        f"(1) use globally-unique ids (e.g. UUIDs) so tenants never collide; "
+        f"OR (2) for tenant-LOCAL natural keys, use the schema-per-tenant "
+        f"isolation strategy "
+        f"(dataflow.core.multi_tenancy.IsolationStrategy.SCHEMA / "
+        f"SchemaIsolationStrategy.create_tenant_table), which gives each "
+        f"tenant its own table so identical natural keys do not collide."
+    )
+
+
 class TenantNaturalKeyCollisionError(DataFlowError):
     """Raised when a ``multi_tenant=True`` write collides on the natural-key
     primary key with a row another tenant already owns (issue #1526).
@@ -363,20 +413,13 @@ class TenantNaturalKeyCollisionError(DataFlowError):
         self.colliding_id = colliding_id
         self.original_error = original_error
 
+        # Single source of truth for the actionable message (shared with the
+        # bulk partial-failure-dict path). A one-element sequence renders the
+        # exact-attribution singular form, byte-identical to the original.
         super().__init__(
-            f"Cross-tenant natural-key collision on multi_tenant model "
-            f"'{model_name}': tenant '{tenant_id}' cannot write id={colliding_id!r} "
-            f"because that primary-key value is already owned by another tenant. "
-            f"multi_tenant=True models keep the DEFAULT single-column primary key "
-            f"'id' (NOT a composite of (tenant_id, id)), so under the default "
-            f"row-level tenant strategy the 'id' is a GLOBALLY-UNIQUE surrogate — "
-            f"two tenants cannot share the same natural-key id. Remediation: "
-            f"(1) use globally-unique ids (e.g. UUIDs) so tenants never collide; "
-            f"OR (2) for tenant-LOCAL natural keys, use the schema-per-tenant "
-            f"isolation strategy "
-            f"(dataflow.core.multi_tenancy.IsolationStrategy.SCHEMA / "
-            f"SchemaIsolationStrategy.create_tenant_table), which gives each "
-            f"tenant its own table so identical natural keys do not collide."
+            format_tenant_natural_key_collision_message(
+                model_name, tenant_id, [colliding_id]
+            )
         )
 
 
@@ -661,6 +704,7 @@ __all__ = [
     "BulkUpsertConflictTargetError",
     "UpsertConflictTargetError",
     "TenantNaturalKeyCollisionError",
+    "format_tenant_natural_key_collision_message",
     "is_pk_unique_violation",
     "is_conflict_target_error",
     "sanitize_db_error",
