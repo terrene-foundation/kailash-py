@@ -1,0 +1,31 @@
+{
+  "conformance_requirement": "EATP-v3-bilateral",
+  "description": "BilateralDelegation whose delegator anchor is DISPATCHER-signed: provenance-only, RECORDED_BY_INTERMEDIARY tier, MUST NOT support non-repudiation (dispatcher signature is provenance-only) (#1592).",
+  "expected_atomic_valid": true,
+  "expected_canonical_json": "{\"delegate\":{\"anchor_ref\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"role_address\":\"Eng-CTO-Backend-Lead\",\"signer_kind\":\"party\"},\"delegation_id\":\"del-1592-003\",\"delegator\":{\"anchor_ref\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"role_address\":\"Eng-CTO\",\"signer_kind\":\"dispatcher\"},\"payload\":{\"scope\":\"deploy\"},\"root\":\"Eng\",\"schema_version\":\"v3\",\"ts\":\"2026-01-15T10:02:00+00:00\",\"witness_ref\":null}",
+  "expected_content_hash": "sha256:2e0270484b65edd1be2fadd103a5abcece9841fb7c9a3981b9eab7b87324f370",
+  "expected_guarantee_tier": "recorded_by_intermediary",
+  "expected_supports_non_repudiation": false,
+  "input": {
+    "delegate": {
+      "anchor_ref": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "role_address": "Eng-CTO-Backend-Lead",
+      "signer_kind": "party"
+    },
+    "delegation_id": "del-1592-003",
+    "delegator": {
+      "anchor_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "role_address": "Eng-CTO",
+      "signer_kind": "dispatcher"
+    },
+    "payload": {
+      "scope": "deploy"
+    },
+    "root": "Eng",
+    "schema_version": "v3",
+    "ts": "2026-01-15T10:02:00+00:00",
+    "witness_ref": null
+  },
+  "pact_type": "BilateralDelegation",
+  "schema_version": "v3"
+}

@@ -1,0 +1,22 @@
+{
+  "conformance_requirement": "EATP-v3-clearance-ordinal",
+  "description": "The ConfidentialityLevel C0..C4 ordinal reused by ClearanceAttestation. Pins the inverted-pair wire tokens: 'restricted' is C1 and 'confidential' is C2 (restricted < confidential), NOT the intuitive reverse (#1592).",
+  "expected_confidential_rank": 2,
+  "expected_ordinal": {
+    "confidential": 2,
+    "public": 0,
+    "restricted": 1,
+    "secret": 3,
+    "top_secret": 4
+  },
+  "expected_restricted_lt_confidential": true,
+  "expected_restricted_rank": 1,
+  "expected_wire_tokens_ordered": [
+    "public",
+    "restricted",
+    "confidential",
+    "secret",
+    "top_secret"
+  ],
+  "pact_type": "ConfidentialityLevelOrdinal"
+}

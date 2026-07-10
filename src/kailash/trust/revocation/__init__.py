@@ -67,8 +67,11 @@ from kailash.trust.revocation.broadcaster import (
     DelegationRegistry,
     InMemoryDelegationRegistry,
     InMemoryRevocationBroadcaster,
+    IrreversibleRevocationError,
     RevocationBroadcaster,
+    RevocationError,
     RevocationEvent,
+    RevocationMode,
     RevocationType,
     TrustRevocationList,
 )
@@ -77,6 +80,10 @@ from kailash.trust.revocation.cascade import RevocationResult, cascade_revoke
 __all__ = [
     # Enums
     "RevocationType",
+    "RevocationMode",
+    # Errors
+    "RevocationError",
+    "IrreversibleRevocationError",
     # Data structures
     "RevocationEvent",
     "RevocationResult",

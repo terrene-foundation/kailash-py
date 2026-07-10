@@ -1,0 +1,34 @@
+{
+  "composition_mode": "VERIFY_CHAIN",
+  "conformance_requirement": "EATP-v3-verify-chain",
+  "description": "VERIFY_CHAIN with every link ALLOW: the composed verdict is allowed; deny-overrides never fires (#1592).",
+  "expected_allowed": true,
+  "expected_denied_by": null,
+  "expected_evaluated": 3,
+  "expected_result": {
+    "allowed": true,
+    "denied_by": null,
+    "evaluated": 3,
+    "reason": "all 3 link(s) allowed"
+  },
+  "input": {
+    "links": [
+      {
+        "link_id": "link-a",
+        "reason": "delegator anchor verified",
+        "verdict": "allow"
+      },
+      {
+        "link_id": "link-b",
+        "reason": "delegate clearance ok",
+        "verdict": "allow"
+      },
+      {
+        "link_id": "link-c",
+        "reason": "temporal window ok",
+        "verdict": "allow"
+      }
+    ]
+  },
+  "pact_type": "VerifyChain"
+}

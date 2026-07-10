@@ -751,14 +751,16 @@ class TestVectorIntegrity:
         """Verify the N6 vector family contains exactly the expected files.
 
         The WEFT-family vectors (``weft_*.json`` / ``jcs_*.json``, issue #1591)
-        live in the same directory but are guarded by
-        ``test_weft_conformance.py::TestWeftVectorIntegrity`` — filtered out here
-        so each family owns its own exact-set orphan check.
+        and the EATP-v3 additive-element vectors (``eatp3_*.json``, issue #1592)
+        live in the same directory but are guarded by their own family suites
+        (``test_weft_conformance.py::TestWeftVectorIntegrity`` and
+        ``test_eatp_v3_conformance.py::TestEatpV3VectorIntegrity``) — filtered
+        out here so each family owns its own exact-set orphan check.
         """
         actual_files = sorted(
             p.name
             for p in VECTORS_DIR.glob("*.json")
-            if not p.name.startswith(("weft_", "jcs_"))
+            if not p.name.startswith(("weft_", "jcs_", "eatp3_"))
         )
         assert actual_files == sorted(self.EXPECTED_VECTORS), (
             f"Vector files mismatch.\n"

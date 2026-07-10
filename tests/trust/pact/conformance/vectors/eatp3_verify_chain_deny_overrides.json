@@ -1,0 +1,34 @@
+{
+  "composition_mode": "VERIFY_CHAIN",
+  "conformance_requirement": "EATP-v3-verify-chain",
+  "description": "VERIFY_CHAIN deny-overrides: a chain with one DENY link (between two ALLOW links) denies the WHOLE chain; the first denying link is cited and evaluation short-circuits there (#1592).",
+  "expected_allowed": false,
+  "expected_denied_by": "link-b",
+  "expected_evaluated": 2,
+  "expected_result": {
+    "allowed": false,
+    "denied_by": "link-b",
+    "evaluated": 2,
+    "reason": "deny-overrides: link 'link-b' denied (delegate clearance insufficient)"
+  },
+  "input": {
+    "links": [
+      {
+        "link_id": "link-a",
+        "reason": "delegator anchor verified",
+        "verdict": "allow"
+      },
+      {
+        "link_id": "link-b",
+        "reason": "delegate clearance insufficient",
+        "verdict": "deny"
+      },
+      {
+        "link_id": "link-c",
+        "reason": "temporal window ok",
+        "verdict": "allow"
+      }
+    ]
+  },
+  "pact_type": "VerifyChain"
+}

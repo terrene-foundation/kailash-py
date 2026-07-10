@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "EATP-v3-revocation-mode",
+  "description": "SUSPEND revocation: a REVERSIBLE hold. The target is inactive while suspended and MAY be reinstated (SUSPENDED -> ACTIVE). A terminal IMMEDIATE/GRACEFUL revocation can NEVER be reinstated (trust state never relaxes) (#1592).",
+  "expected_effective_at": null,
+  "expected_mode": "suspend",
+  "expected_reversible": true,
+  "input": {
+    "affected_agents": [],
+    "cascade_from": null,
+    "effective_at": null,
+    "event_id": "rev-1592-suspend",
+    "mode": "suspend",
+    "reason": "temporary hold pending review",
+    "revocation_type": "agent_revoked",
+    "revoked_by": "admin",
+    "target_id": "agent-suspend",
+    "timestamp": "2026-01-15T10:06:00+00:00"
+  },
+  "pact_type": "RevocationEvent"
+}
