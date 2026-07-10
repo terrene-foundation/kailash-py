@@ -811,10 +811,16 @@ class FabricRuntime:
     async def _prewarm_products_serial(self) -> None:
         """Pre-warm all materialized products one at a time (dev mode).
 
-        Identical to ``_prewarm_products`` but executes products serially
-        to reduce resource usage during development. This avoids parallel
+        Mirrors ``_prewarm_products`` but executes products serially to
+        reduce resource usage during development. This avoids parallel
         database connections and CPU spikes that are unnecessary in a
         single-developer environment.
+
+        Like ``_prewarm_products`` it SKIPS ``multi_tenant`` products
+        (issue #1654 finding 5): a multi-tenant product cannot be
+        pre-warmed without a bound tenant, and executing it here would run
+        an unscoped all-tenant query and cache the result under no tenant.
+        The first per-tenant request populates its cache lazily instead.
         """
         pipeline = self._pipeline
         if pipeline is None:
@@ -837,6 +843,17 @@ class FabricRuntime:
         )
 
         for name, product in materialized:
+            # Multi-tenant products cannot be pre-warmed without a tenant.
+            # Skip them (parity with _prewarm_products) — the first
+            # per-tenant request populates the cache lazily (issue #1654
+            # finding 5).
+            if product.multi_tenant:
+                logger.debug(
+                    "fabric.prewarm.serial_multi_tenant_skipped",
+                    extra={"product": name, "reason": "no_system_tenant"},
+                )
+                continue
+
             try:
                 source_adapters = {
                     n: info["adapter"]

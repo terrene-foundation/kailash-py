@@ -32,6 +32,7 @@ from dataflow.adapters.source_adapter import (
     CircuitBreakerConfig,
     SourceState,
 )
+from dataflow.fabric.cache import FabricTenantRequiredError, FabricTenantScopeError
 from dataflow.fabric.config import (
     ApiKeyAuth,
     BasicAuth,
@@ -68,6 +69,9 @@ __all__ = [
     # Consumer adapters
     "ConsumerFn",
     "ConsumerRegistry",
+    # Tenant-scope enforcement (issue #1654)
+    "FabricTenantRequiredError",
+    "FabricTenantScopeError",
     # Adapter base
     "BaseSourceAdapter",
     "SourceState",

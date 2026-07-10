@@ -128,7 +128,16 @@ class FabricServingLayer:
             return None
         if tenant is None:
             return None
-        return str(tenant)
+        # Fail closed on a blank tenant (issue #1654 finding 2): a header
+        # extractor like ``req.headers.get("X-Tenant-Id", "")`` yields ""
+        # (or whitespace) when the header is absent. An empty tenant is NOT
+        # a valid scope — normalize it to None so the multi_tenant guard
+        # rejects it exactly as a missing tenant, never letting it flow
+        # through as a shared pseudo-tenant (cache key ``:product``).
+        tenant_str = str(tenant)
+        if not tenant_str.strip():
+            return None
+        return tenant_str
 
     def get_routes(self) -> List[Dict[str, Any]]:
         """Generate route definitions for all products.
@@ -298,6 +307,8 @@ class FabricServingLayer:
                         express=self._express,
                         sources=source_adapters,
                         products_cache={},
+                        tenant_id=tenant_id,
+                        enforce_tenant_scope=product.multi_tenant,
                     )
                     result = await self._pipeline.execute_product(
                         product_name=name,
@@ -401,6 +412,8 @@ class FabricServingLayer:
                     express=self._express,
                     sources=source_adapters,
                     products_cache={},
+                    tenant_id=tenant_id,
+                    enforce_tenant_scope=product.multi_tenant,
                 )
                 result = await self._pipeline.execute_product(
                     name, product.fn, ctx, tenant_id=tenant_id
@@ -539,6 +552,8 @@ class FabricServingLayer:
                         express=self._express,
                         sources=source_adapters,
                         products_cache={},
+                        tenant_id=effective_tenant,
+                        enforce_tenant_scope=product.multi_tenant,
                     )
                     pipe_result = await self._pipeline.execute_product(
                         name, product.fn, ctx, tenant_id=effective_tenant
