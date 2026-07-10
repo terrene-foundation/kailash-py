@@ -77,6 +77,21 @@ from kailash.trust.pact.observation import (
     Observation,
     ObservationSink,
 )
+from kailash.trust.pact.outbound import (
+    DEFAULT_MAX_AUDIT_ENTRIES,
+    EffectGovernor,
+    EffectKind,
+    EngineEffectGovernor,
+    OutboundEffect,
+    OutboundEffectInterceptor,
+    OutboundEffectRefused,
+    OutboundVerdict,
+    active_interceptor,
+    clear_interceptor,
+    install_interceptor,
+    wrap_transport,
+    wrap_transport_async,
+)
 from kailash.trust.pact.risk_factors import (
     GLOBAL_RISK_FACTOR_REGISTRY,
     RISK_LEVEL_ORDER,
@@ -201,6 +216,20 @@ __all__ = [
     "InMemoryObservationSink",
     "Observation",
     "ObservationSink",
+    # Universal outbound-effect governance interceptor (#1517 leg-b)
+    "DEFAULT_MAX_AUDIT_ENTRIES",
+    "EffectGovernor",
+    "EffectKind",
+    "EngineEffectGovernor",
+    "OutboundEffect",
+    "OutboundEffectInterceptor",
+    "OutboundEffectRefused",
+    "OutboundVerdict",
+    "active_interceptor",
+    "clear_interceptor",
+    "install_interceptor",
+    "wrap_transport",
+    "wrap_transport_async",
     # WEFT provenance event schema (EATP v3, #1591)
     "WeftKind",
     "WeftError",
