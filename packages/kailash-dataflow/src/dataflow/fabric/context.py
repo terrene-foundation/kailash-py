@@ -336,6 +336,9 @@ class PipelineScopedExpress:
         self,
         express: Any,
         read_cache: Optional[Dict[str, Any]] = None,
+        *,
+        enforce_tenant: Optional[str] = None,
+        tenant_field: str = "tenant_id",
     ) -> None:
         """Initialise the scoped wrapper.
 
@@ -345,9 +348,63 @@ class PipelineScopedExpress:
                 fresh dict is created.  Passing an explicit dict allows
                 the ``PipelineContext`` to inspect or clear the cache
                 externally.
+            enforce_tenant: When set (a resolved tenant scope), every
+                set-returning read (``list`` / ``count``) MUST carry the
+                tenant predicate on the executed query filter or the read
+                is refused with :class:`FabricTenantScopeError` BEFORE it
+                runs (issue #1654 fail-closed tenant scoping). ``None``
+                disables enforcement (single-tenant products — no change).
+            tenant_field: The filter key that carries the tenant predicate
+                (canonically ``"tenant_id"`` per the tenant-isolation
+                contract).
         """
         self._express = express
         self._read_cache: Dict[str, Any] = read_cache if read_cache is not None else {}
+        self._enforce_tenant = enforce_tenant
+        self._tenant_field = tenant_field
+
+    # -- Tenant-scope proof (issue #1654) -----------------------------------
+
+    def _require_tenant_predicate(
+        self,
+        operation: str,
+        model: str,
+        filter: Optional[Dict[str, Any]],
+    ) -> None:
+        """Prove the tenant predicate is present on the query about to run.
+
+        Deterministic, structural inspection of the bound filter — NOT a
+        declaration check. Fail-closed: refuse BEFORE executing an
+        unscoped or cross-tenant query so unscoped rows are never
+        returned. This is config/structural logic, never an agent
+        decision path.
+
+        Raises:
+            FabricTenantScopeError: When enforcement is active and the
+                filter omits the tenant predicate (unscoped) or carries a
+                predicate for a different tenant (cross-tenant).
+        """
+        if self._enforce_tenant is None:
+            return
+        # Local import avoids any import-order coupling with the cache
+        # module and keeps the enforcement co-located with its error type.
+        from dataflow.fabric.cache import FabricTenantScopeError
+
+        tf = self._tenant_field
+        if not filter or tf not in filter:
+            raise FabricTenantScopeError(
+                f"multi-tenant fabric {operation} of '{model}' did not carry "
+                f"the '{tf}' predicate; refusing to return unscoped rows "
+                f"(tenant scope {self._enforce_tenant!r} required, but the "
+                f"executed query filter was {filter!r}). Add "
+                f"filter={{'{tf}': ctx.tenant_id}} to the product read."
+            )
+        if filter[tf] != self._enforce_tenant:
+            raise FabricTenantScopeError(
+                f"cross-tenant fabric {operation} of '{model}': the executed "
+                f"query filter '{tf}'={filter[tf]!r} does not match the bound "
+                f"tenant scope {self._enforce_tenant!r}; refused."
+            )
 
     # -- Read operations (cached) -------------------------------------------
 
@@ -367,6 +424,7 @@ class PipelineScopedExpress:
         Returns:
             List of matching records.
         """
+        self._require_tenant_predicate("list", model, filter)
         key = _cache_key("list", model, filter)
         if key not in self._read_cache:
             self._read_cache[key] = await self._express.list(
@@ -411,6 +469,7 @@ class PipelineScopedExpress:
         Returns:
             Number of matching records.
         """
+        self._require_tenant_predicate("count", model, filter)
         key = _cache_key("count", model, filter)
         if key not in self._read_cache:
             self._read_cache[key] = await self._express.count(
@@ -468,6 +527,15 @@ class PipelineContext(FabricContext):
         sources: Mapping of source name to ``BaseSourceAdapter``.
         products_cache: Mapping of product name to its cached result.
         tenant_id: Optional tenant identifier.
+        enforce_tenant_scope: When ``True`` (set by the fabric read path
+            for a ``multi_tenant=True`` product), every set-returning read
+            the product function issues via ``ctx.express`` MUST carry the
+            tenant predicate or the read is refused fail-closed with
+            :class:`FabricTenantScopeError` (issue #1654). Requires a
+            non-``None`` ``tenant_id``; building an enforcing context with
+            no bound tenant is itself refused fail-closed.
+        tenant_field: The filter key carrying the tenant predicate
+            (canonically ``"tenant_id"``).
     """
 
     def __init__(
@@ -476,9 +544,30 @@ class PipelineContext(FabricContext):
         sources: Mapping[str, BaseSourceAdapter],
         products_cache: Dict[str, Any],
         tenant_id: Optional[str] = None,
+        *,
+        enforce_tenant_scope: bool = False,
+        tenant_field: str = "tenant_id",
     ) -> None:
+        enforce_tenant: Optional[str] = None
+        if enforce_tenant_scope:
+            if tenant_id is None:
+                # Fail closed: an enforcing multi-tenant context with no
+                # resolved tenant scope must never be constructed — it
+                # would otherwise silently disable the proof.
+                from dataflow.fabric.cache import FabricTenantScopeError
+
+                raise FabricTenantScopeError(
+                    "enforce_tenant_scope=True requires a resolved tenant_id; "
+                    "refusing to build an unscoped multi-tenant fabric context."
+                )
+            enforce_tenant = tenant_id
         self._pipeline_read_cache: Dict[str, Any] = {}
-        self._scoped_express = PipelineScopedExpress(express, self._pipeline_read_cache)
+        self._scoped_express = PipelineScopedExpress(
+            express,
+            self._pipeline_read_cache,
+            enforce_tenant=enforce_tenant,
+            tenant_field=tenant_field,
+        )
         super().__init__(
             express=self._scoped_express,
             sources=sources,

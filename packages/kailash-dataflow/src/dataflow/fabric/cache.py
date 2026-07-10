@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "FabricCacheBackend",
     "FabricTenantRequiredError",
+    "FabricTenantScopeError",
     "InMemoryFabricCacheBackend",
     "RedisFabricCacheBackend",
     "_FabricCacheEntry",
@@ -63,6 +64,28 @@ class FabricTenantRequiredError(Exception):
     amendment A, the absence of ``tenant_id`` on a multi-tenant product is
     an invariant violation, not an operational failure. Callers must
     propagate the tenant identifier explicitly.
+    """
+
+
+class FabricTenantScopeError(FabricTenantRequiredError):
+    """Raised when a multi-tenant fabric read cannot PROVE the tenant
+    predicate was applied to the executed query (issue #1654).
+
+    Distinct from :class:`FabricTenantRequiredError` (tenant scope *absent*):
+    this fires when a tenant scope IS resolved but a set-returning read on
+    the fabric product path either
+
+    * omitted the tenant predicate entirely (an *unscoped* query that would
+      materialize every tenant's rows into the caller's tenant slot), or
+    * carried a predicate for a DIFFERENT tenant (a *cross-tenant* attempt).
+
+    The fabric read path inspects the executed query's bound filter and
+    refuses BEFORE the query runs, so unscoped or cross-tenant rows are
+    never returned — the tenant filter is proven present on the executed
+    query, not merely declared on the product. It subclasses
+    ``FabricTenantRequiredError`` so existing ``except
+    FabricTenantRequiredError`` handlers keep catching the whole
+    tenant-isolation family while callers may catch this narrower case.
     """
 
 

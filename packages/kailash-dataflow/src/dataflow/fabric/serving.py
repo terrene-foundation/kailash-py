@@ -298,6 +298,8 @@ class FabricServingLayer:
                         express=self._express,
                         sources=source_adapters,
                         products_cache={},
+                        tenant_id=tenant_id,
+                        enforce_tenant_scope=product.multi_tenant,
                     )
                     result = await self._pipeline.execute_product(
                         product_name=name,
@@ -401,6 +403,8 @@ class FabricServingLayer:
                     express=self._express,
                     sources=source_adapters,
                     products_cache={},
+                    tenant_id=tenant_id,
+                    enforce_tenant_scope=product.multi_tenant,
                 )
                 result = await self._pipeline.execute_product(
                     name, product.fn, ctx, tenant_id=tenant_id
@@ -539,6 +543,8 @@ class FabricServingLayer:
                         express=self._express,
                         sources=source_adapters,
                         products_cache={},
+                        tenant_id=effective_tenant,
+                        enforce_tenant_scope=product.multi_tenant,
                     )
                     pipe_result = await self._pipeline.execute_product(
                         name, product.fn, ctx, tenant_id=effective_tenant
