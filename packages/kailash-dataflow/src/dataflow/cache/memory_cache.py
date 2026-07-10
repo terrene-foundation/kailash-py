@@ -191,13 +191,16 @@ class InMemoryCache:
 
         - Express keys: ``dataflow:v*:{model}:{op}:...``
         - Express keys with tenant: ``dataflow:v*:{tenant}:{model}:{op}:...``
-        - SQL query keys: ``dataflow:{model}:v*:...``
+        - SQL query keys: ``dataflow:{model}:v*:...`` or, since issue #1606,
+          ``dataflow:{model}:{db_identity}:v*:...`` (the DB-instance
+          identity segment sits directly after the model name).
 
-        The ``v*`` wildcard covers legacy v1 keys (pre-BP-049) and current v2
-        keys produced by the default ``CacheKeyGenerator``. Matching is
-        version-agnostic via segment-based string search — ``:{model}:`` as
-        an exact delimiter — so the implementation survives future keyspace
-        bumps without edit (``tenant-isolation.md §3a``).
+        The ``:{model}:`` segment matcher is agnostic to BOTH the version
+        segment AND the #1606 DB-identity segment (they follow the matched
+        ``:{model}:`` delimiter), so it sweeps legacy v1 keys, pre-#1606 v2
+        keys (no db_identity), AND post-#1606 v2 keys (with db_identity) in
+        one call — the implementation survives future keyspace bumps and the
+        DB-identity addition without edit (``tenant-isolation.md §3a``).
 
         Matching strategy:
 

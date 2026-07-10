@@ -1583,6 +1583,7 @@ class DataFlow(DataFlowEventMixin):
                 CacheInvalidator,
                 CacheKeyGenerator,
                 create_cache_integration,
+                hash_database_identity,
             )
 
             # Get cache configuration
@@ -1608,10 +1609,21 @@ class DataFlow(DataFlowEventMixin):
             # Create key generator. BP-049 (#520): plumb the classification
             # policy so classified PKs are hashed before serialisation into
             # cache keys.
+            #
+            # Issue #1606: plumb a credential-free DB-instance fingerprint so
+            # the QUERY keyspace is segmented per database — two DataFlow
+            # instances at different DBs never collide on the same query
+            # cache key (cross-DB cache bleed). Sourced from the configured
+            # database URL and hashed through mask_url first, so no
+            # credential byte can enter the key. The Express v2 keyspace is
+            # Rust-pinned and does NOT receive this segment.
+            db_url = getattr(getattr(self.config, "database", None), "url", None)
+            db_identity = hash_database_identity(db_url)
             key_generator = CacheKeyGenerator(
                 prefix=cache_key_prefix,
                 namespace=getattr(self.config, "cache_namespace", None),
                 classification_policy=getattr(self, "_classification_policy", None),
+                db_identity=db_identity,
             )
 
             # Create cache invalidator

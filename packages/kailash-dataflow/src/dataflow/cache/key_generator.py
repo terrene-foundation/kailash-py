@@ -8,8 +8,42 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
+from kailash.utils.url_credentials import mask_url
+
 if TYPE_CHECKING:
     from dataflow.classification.policy import ClassificationPolicy
+
+
+def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
+    """Return a short, credential-free fingerprint of a database URL.
+
+    Used as the DB-instance identity segment in the QUERY cache keyspace
+    (issue #1606) so two DataFlow instances pointed at *different* databases
+    never collide on the same query cache key. The query keyspace hashes a
+    normalized SQL string + params, which is identical for the same
+    model+filter regardless of which database the instance targets — so
+    without this segment two instances at different DBs read each other's
+    cached query rows (cross-DB cache bleed).
+
+    The URL is FIRST routed through ``mask_url`` (credential-stripped:
+    scheme + ``***`` placeholder + host+port+dbname, NEVER user/password
+    bytes) BEFORE hashing, so no credential can ever enter the key. Redis
+    keys are an observable surface — treat like logs (``rules/security.md``
+    § "No secrets in logs"). Returns ``None`` for a falsy URL so the
+    generator falls back to the pre-#1606 keyspace shape.
+
+    NOTE: this segments the QUERY keyspace only. The Express ``v2``
+    keyspace (``generate_express_key``) is a byte-for-byte cross-SDK
+    contract pinned to kailash-rs and MUST NOT carry this segment.
+    """
+    if not database_url:
+        return None
+    # mask_url is the single credential-masking helper; its output never
+    # contains user/password bytes (only a constant ``***`` placeholder),
+    # so hashing it yields a stable per-DB fingerprint with zero credential
+    # exposure even if the digest were ever reversed.
+    masked = mask_url(database_url)
+    return hashlib.sha256(masked.encode("utf-8")).hexdigest()[:8]
 
 
 class CacheKeyGenerator:
@@ -21,6 +55,7 @@ class CacheKeyGenerator:
         namespace: Optional[str] = None,
         version: str = "v2",
         classification_policy: Optional["ClassificationPolicy"] = None,
+        db_identity: Optional[str] = None,
     ):
         """
         Initialize key generator.
@@ -38,11 +73,22 @@ class CacheKeyGenerator:
                 routed through ``format_record_id_for_event`` before
                 serialization so the raw value never appears in the JSON
                 that feeds the MD5/SHA-256 digest. See issue #520.
+            db_identity: Optional credential-free fingerprint of the
+                database this generator serves, produced by
+                ``hash_database_identity``. When set, it is inserted into
+                the QUERY keyspace (``generate_key``) — directly after the
+                model name — so two DataFlow instances at *different*
+                databases never collide on the same query cache key
+                (issue #1606: cross-DB cache bleed). It is DELIBERATELY
+                absent from ``generate_express_key``: the Express ``v2``
+                keyspace is a byte-for-byte cross-SDK contract pinned to
+                ``kailash-rs`` and MUST NOT change unilaterally.
         """
         self.prefix = prefix
         self.namespace = namespace
         self.version = version
         self._classification_policy = classification_policy
+        self.db_identity = db_identity
 
     def _safe_params(self, model_name: str, params: Any) -> Any:
         """Return a copy of ``params`` with classified PK values hashed.
@@ -111,9 +157,24 @@ class CacheKeyGenerator:
         if self.namespace:
             components.append(self.namespace)
 
-        components.extend(
-            [model_name, self.version, self._hash_query(normalized_sql, params)]
-        )
+        components.append(model_name)
+
+        # Issue #1606: DB-instance identity segment. The query keyspace
+        # hashes a normalized SQL string + params — identical for the same
+        # model+filter across every database — so without this segment two
+        # DataFlow instances at different DBs collide on one key and read
+        # each other's cached rows (cross-DB cache bleed). Placed AFTER the
+        # model name so the existing model-anchored invalidation sweeps
+        # (``{prefix}:{model}:*`` and the ``:{model}:`` substring matcher)
+        # still match BOTH old-shape (no db_identity) and new-shape keys.
+        # The query keyspace is NOT the Rust-pinned Express v2 keyspace — it
+        # diverges cross-SDK by construction (py vs rs emit different SQL),
+        # so adding this segment is a py-local change, not a cross-SDK
+        # lockstep. See ``generate_express_key`` (Rust-pinned, untouched).
+        if self.db_identity:
+            components.append(self.db_identity)
+
+        components.extend([self.version, self._hash_query(normalized_sql, params)])
 
         # Join with colons
         key = ":".join(components)

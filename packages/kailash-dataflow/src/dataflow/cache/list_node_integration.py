@@ -214,12 +214,18 @@ class ListNodeCacheIntegration:
 
         Issue #750 — patterns MUST match the actual cache key format produced
         by ``self.key_generator.generate_key()``: ``{prefix}:{model}:{version}:{hash}``
-        where ``{prefix}`` defaults to ``"dataflow:query"``. The previous
+        (or, since issue #1606, ``{prefix}:{model}:{db_identity}:{version}:{hash}``
+        — the DB-instance identity segment sits directly after the model
+        name). ``{prefix}`` defaults to ``"dataflow:query"``. The previous
         ``{model}:list:*`` shape never matched any real key and silently
         no-op'd every invalidation, leaving stale list/count entries served
         forever. Per ``rules/tenant-isolation.md`` Rule 3a, patterns use a
-        version-wildcard sweep (``{prefix}:{model}:*``) so v1, v2, and any
-        future keyspace bump are all swept in one call.
+        trailing wildcard sweep anchored at the model (``{prefix}:{model}:*``)
+        so v1, v2, ANY future keyspace bump, AND the #1606 DB-identity
+        segment (all of which follow the matched ``{prefix}:{model}:``
+        anchor) are swept in one call — this matches both pre-#1606
+        old-shape keys and post-#1606 new-shape keys, so no stale query-cache
+        entry survives under the old shape.
         """
         # Anchor patterns at the producer-side prefix so InMemoryCache /
         # AsyncRedisCacheAdapter substring-matchers find the real keys.
