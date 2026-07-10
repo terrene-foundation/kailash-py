@@ -80,6 +80,12 @@ class ExpiryDisposition(Enum):
     """
 
     DENY = "deny"  # -> BLOCKED (fail-safe default)
+    # RESIDUAL (known feature-completeness gap, out of BH2 legs-2-3 scope): on
+    # expiry ESCALATE_TO_SENIOR emits a HELD expiry record but does NOT
+    # re-register a fresh reviewable hold — a functional dead-end (the action
+    # stays parked with no new review window). It is fail-CLOSED (HELD >= HELD;
+    # never proceeds / never auto-approves), so it is safe as-is; wiring the
+    # re-registration is future work.
     ESCALATE_TO_SENIOR = "escalate_to_senior"  # -> HELD (re-held for senior review)
 
 
@@ -347,6 +353,16 @@ class MemoryHeldActionStore:
         self._holds: "OrderedDict[str, HeldAction]" = OrderedDict()
         self._maxlen = maxlen
 
+    @property
+    def capacity(self) -> int:
+        """Max holds retained before FIFO eviction (admission-control bound).
+
+        Consumed by ``StrictEnforcer`` to verify the store can retain every
+        timeout-bearing queued hold so none is evicted-while-still-queued and
+        silently escapes expiry (BH2 leg 2, Finding 2).
+        """
+        return self._maxlen
+
     def add(self, held: HeldAction) -> None:
         with self._lock:
             self._holds[held.hold_id] = held
@@ -403,6 +419,21 @@ class SqliteHeldActionStore:
         self._max_records = max_records
         self._lock = threading.Lock()
 
+        self._init_connection()
+
+    @property
+    def capacity(self) -> int:
+        """Max rows retained before oldest-by-expiry eviction (admission bound).
+
+        Consumed by ``StrictEnforcer`` to verify the store can retain every
+        timeout-bearing queued hold so none is evicted-while-still-queued and
+        silently escapes expiry (BH2 leg 2, Finding 2).
+        """
+        return self._max_records
+
+    def _init_connection(self) -> None:
+        """Open the connection, apply PRAGMAs, create the table, harden perms."""
+        db_path = self._db_path
         if not db_path.startswith(":memory:") and not os.path.exists(db_path):
             open(db_path, "a").close()
 

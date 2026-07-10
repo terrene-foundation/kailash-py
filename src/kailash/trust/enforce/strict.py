@@ -11,6 +11,7 @@ unauthorized actions must be blocked.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -189,6 +190,31 @@ class StrictEnforcer:
             default_expiry if default_expiry is not None else DEFAULT_EXPIRY_DISPOSITION
         )
         self._max_pending_holds = max_pending_holds
+
+        # Admission-control vs store-capacity invariant (BH2 leg 2, Finding 2):
+        # a timeout-bearing hold in the review queue MUST stay tracked in the
+        # store, else expire_holds never fires for it and it sits reviewer-
+        # APPROVABLE past its deadline (defeating deterministic expiry). The max
+        # number of holds simultaneously queued is min(max_pending_holds [the
+        # capacity gate], max_records [the FIFO trim]); the store MUST hold at
+        # least that many without evicting. A store exposing `capacity` is
+        # checked; a custom store that does not expose it is documented as
+        # responsible for its own sizing and skipped (fail-loud only where we
+        # can prove the misconfiguration). The internally-created default store
+        # always satisfies this (its capacity == maxlen == self._max_records).
+        store_capacity = getattr(self._held_store, "capacity", None)
+        if store_capacity is not None:
+            required = min(max_pending_holds, self._max_records)
+            if store_capacity < required:
+                raise ValueError(
+                    f"held_store capacity ({store_capacity}) is below the "
+                    f"effective pending-hold bound ({required} = "
+                    f"min(max_pending_holds={max_pending_holds}, "
+                    f"maxlen={self._max_records})); a timeout-bearing queued "
+                    f"hold could be evicted from the store and never expire. "
+                    f"Increase the store's capacity to >= {required}."
+                )
+
         # Serializes every _review_queue / _records mutation so the review-queue
         # lifecycle is single-winner: the capacity-gate read+append, the
         # apply_review_decision scan→pop→reassign, the expire_holds
@@ -423,6 +449,12 @@ class StrictEnforcer:
         if self._on_held == HeldBehavior.QUEUE:
             from kailash.trust.enforce.held import new_hold_id
 
+            # Resolve + VALIDATE the timeout BEFORE any queue mutation (Finding
+            # 3): a negative / non-finite timeout must raise here, not after the
+            # queue append — otherwise enforce(timeout=-5) leaves an orphan queue
+            # entry before HeldAction.__post_init__ would have raised.
+            resolved_timeout = self._resolve_hold_timeout(timeout, approval_policy)
+
             # The capacity-gate READ and the queue append MUST be one atomic
             # critical section (Finding 2): otherwise two concurrent escalations
             # both read len < capacity and both enqueue, overrunning the bound.
@@ -486,19 +518,24 @@ class StrictEnforcer:
                 if len(self._review_queue) > self._max_records:
                     trim_count = self._max_records // 10
                     self._review_queue = self._review_queue[trim_count:]
-                # Register a timeout-tracked hold when a response window is set,
-                # either explicitly (timeout) or from the approval policy
-                # (approval_timeout_seconds). The unset on_expiry disposition is
-                # fail-safe DENY (never auto-approves) per self._default_expiry.
-                self._register_hold(
+                # Register a timeout-tracked hold when a response window is set.
+                # The unset on_expiry disposition is fail-safe DENY (never
+                # auto-approves) per self._default_expiry. A hold that IS
+                # registered (timeout-bearing) is stamped `timeout_bearing` on
+                # its queue record so expire_holds can reconcile ONLY store-
+                # backed entries — a no-timeout queue hold (never in the store,
+                # its PK free) MUST NOT be evictable by a forged corrupt store
+                # row bearing its id (Finding 1a).
+                timeout_bearing = self._register_hold(
                     agent_id,
                     action,
                     record,
                     hold_id=hold_id,
-                    timeout=timeout,
+                    resolved_timeout=resolved_timeout,
                     on_expiry=on_expiry,
-                    approval_policy=approval_policy,
                 )
+                if timeout_bearing:
+                    record.metadata["timeout_bearing"] = True
             raise EATPHeldError(
                 agent_id=agent_id,
                 action=action,
@@ -522,6 +559,37 @@ class StrictEnforcer:
             violations=result.violations,
         )
 
+    def _resolve_hold_timeout(
+        self,
+        timeout: Optional[float],
+        approval_policy: Optional[ApprovalPolicyModel],
+    ) -> Optional[float]:
+        """Resolve + validate a hold's response window, fail-closed and early.
+
+        The window comes from ``timeout`` when given, else from
+        ``approval_policy.approval_timeout_seconds`` (per-capability). When
+        neither is set the hold has no bounded window and ``None`` is returned
+        (no store tracking; expire_holds never fires for it). A resolved window
+        MUST be finite and non-negative — validated HERE so a bad timeout raises
+        BEFORE any queue mutation (Finding 3), not later inside HeldAction.
+
+        Raises:
+            ValueError: If the resolved timeout is non-finite or negative.
+        """
+        from kailash.trust.enforce.held import resolve_timeout_seconds
+
+        resolved = timeout
+        if resolved is None and approval_policy is not None:
+            resolved = resolve_timeout_seconds(approval_policy)  # validates
+        if resolved is None:
+            return None
+        resolved = float(resolved)
+        if not math.isfinite(resolved):
+            raise ValueError(f"hold timeout must be finite, got {resolved!r}")
+        if resolved < 0:
+            raise ValueError(f"hold timeout must be non-negative, got {resolved!r}")
+        return resolved
+
     def _register_hold(
         self,
         agent_id: str,
@@ -529,28 +597,24 @@ class StrictEnforcer:
         record: EnforcementRecord,
         *,
         hold_id: str,
-        timeout: Optional[float],
+        resolved_timeout: Optional[float],
         on_expiry: Optional[ExpiryDisposition],
-        approval_policy: Optional[ApprovalPolicyModel],
-    ) -> None:
+    ) -> bool:
         """Track a QUEUE hold for timeout expiry when a response window is set.
 
-        The timeout comes from ``timeout`` when given, else from
-        ``approval_policy.approval_timeout_seconds`` (per-capability window).
-        When neither is set, no hold is tracked (the hold has no bounded
-        response window and expire_holds() will never fire for it). The
-        ``on_expiry`` disposition defaults to the enforcer's fail-safe default.
-        """
-        from kailash.trust.enforce.held import (
-            HeldAction,
-            resolve_timeout_seconds,
-        )
+        ``resolved_timeout`` is the already-resolved-and-validated window from
+        :meth:`_resolve_hold_timeout` (``None`` = no bounded window → not
+        tracked). The ``on_expiry`` disposition defaults to the enforcer's
+        fail-safe default.
 
-        resolved_timeout = timeout
-        if resolved_timeout is None and approval_policy is not None:
-            resolved_timeout = resolve_timeout_seconds(approval_policy)
+        Returns:
+            ``True`` if the hold was registered in the store (timeout-bearing),
+            ``False`` if it has no bounded window and was not tracked.
+        """
+        from kailash.trust.enforce.held import HeldAction
+
         if resolved_timeout is None:
-            return
+            return False
 
         disposition = on_expiry if on_expiry is not None else self._default_expiry
         hold = HeldAction(
@@ -564,6 +628,7 @@ class StrictEnforcer:
             metadata=dict(record.metadata),
         )
         self._held_store.add(hold)
+        return True
 
     def expire_holds(self, now: Optional[datetime] = None) -> List[EnforcementRecord]:
         """Fire the configured disposition for every hold past its deadline.
@@ -622,6 +687,16 @@ class StrictEnforcer:
                 if verdict_rank(verdict) < verdict_rank(Verdict.HELD):
                     verdict = Verdict.BLOCKED
 
+                # Finding 1b: a corrupt sentinel's agent_id/action are recovered
+                # from the attacker-controllable tampered row. Do NOT propagate
+                # them verbatim into the emitted audit record — redact to a
+                # sentinel so a forged row cannot poison the audit trail with
+                # attacker-chosen identifiers. corrupt_row + original_hold_id
+                # survive in the metadata (via the spread below) for forensics.
+                is_corrupt = bool(hold.metadata.get("corrupt_row"))
+                audit_agent_id = "<corrupt>" if is_corrupt else hold.agent_id
+                audit_action = "<corrupt>" if is_corrupt else hold.action
+
                 expiry_metadata = {
                     **dict(hold.metadata),
                     "hold_expiry": True,
@@ -633,8 +708,8 @@ class StrictEnforcer:
                     "expires_at": hold.expires_at.isoformat(),
                 }
                 expiry_record = EnforcementRecord(
-                    agent_id=hold.agent_id,
-                    action=hold.action,
+                    agent_id=audit_agent_id,
+                    action=audit_action,
                     verdict=verdict,
                     verification_result=hold.record.verification_result,
                     timestamp=evaluated_at,
@@ -650,8 +725,8 @@ class StrictEnforcer:
                 logger.warning(
                     "[ENFORCE] HELD EXPIRED: agent=%s action=%s hold_id=%s "
                     "on_expiry=%s -> %s",
-                    hold.agent_id,
-                    hold.action,
+                    audit_agent_id,
+                    audit_action,
                     hold.hold_id,
                     hold.on_expiry.value,
                     verdict.value,
@@ -663,11 +738,30 @@ class StrictEnforcer:
             # sink that raises can never leave a rebound queue with a hole in the
             # audit chain. (The store deletion inside pop_expired is unavoidably
             # first; the queue rebind is the state advance ordered to follow.)
+            #
+            # RESIDUAL (latent audit-reorder): self._records is an in-memory list
+            # today, so append() cannot fail and the store-delete-before-audit-
+            # append ordering is harmless. If _records is ever upgraded to a
+            # fallible signing / persisting sink, the audit emit MUST move BEFORE
+            # the pop_expired store deletion (emit-then-delete), or an emit
+            # failure leaves the store row deleted with no audit row.
+            #
+            # Finding 1a: reconcile ONLY entries that were TIMEOUT-BEARING (had a
+            # real store presence). A no-timeout queue hold (never registered in
+            # the store, its PK slot free) MUST NOT be evictable by an expire
+            # event — an attacker who forges a corrupt store row bearing that
+            # hold's id would otherwise get the sentinel's original_hold_id into
+            # expired_ids and drop the victim's legit queue entry (fail-closed
+            # denial-of-review). Genuinely timeout-bearing holds still reconcile
+            # (R2 corrupt-row behavior preserved) — only they carry the flag.
             if expired_ids:
                 self._review_queue = [
                     queued
                     for queued in self._review_queue
-                    if queued.metadata.get("hold_id") not in expired_ids
+                    if not (
+                        queued.metadata.get("timeout_bearing")
+                        and queued.metadata.get("hold_id") in expired_ids
+                    )
                 ]
 
         return expiry_records
