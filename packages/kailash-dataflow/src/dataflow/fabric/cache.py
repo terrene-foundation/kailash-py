@@ -87,10 +87,16 @@ class FabricTenantScopeError(FabricTenantRequiredError):
     * ``ctx.express.read`` (single-record PK lookup) is tenant-verified
       *post-fetch*: a fetched row whose ``tenant_id`` does not match the
       bound tenant is refused and NO row is returned.
-    * ``ctx.source(...)`` (external adapters) and the write path
-      (``create`` / ``update`` / ``delete`` / ``upsert``) are NOT covered
-      by this guard — external-source tenant scoping and write-path tenant
-      enforcement are tracked as separate follow-ups.
+    * The write path (``create`` / ``update`` / ``delete`` / ``upsert`` on
+      ``ctx.express``) is tenant-guarded (issue #1659): ``create`` / ``upsert``
+      force-or-validate the payload's ``tenant_id`` (a foreign tenant is
+      refused); ``update`` / ``delete`` (and the UPDATE half of ``upsert``)
+      tenant-verify the PK-addressed target row BEFORE mutating, so a
+      cross-tenant PK write is refused and no row is touched.
+    * ``ctx.source(...)`` (external adapters) is refused fail-closed for a
+      ``multi_tenant`` product (issue #1658): the fabric cannot prove an
+      arbitrary external adapter honored a tenant predicate, so its data
+      methods raise rather than return unscoped cross-tenant rows.
 
     ``tenant_extractor`` (configured on ``db.start()``) is an
     AUTHORIZATION boundary owned by the caller / Nexus, NOT this guard: a
