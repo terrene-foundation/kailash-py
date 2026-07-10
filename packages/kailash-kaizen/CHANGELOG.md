@@ -2,6 +2,17 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.29.0] — 2026-07-10 — outbound governance transport wiring + DeepSeek provider
+
+### Added
+
+- **Outbound governance seam wired to LLM/tool/HTTP transports** (#1517 leg-b). `GovernedProvider`, `GovernedToolInvoker`, and `GovernedHTTPClient` are transparent proxies that route every outbound call through core's outbound-effect governance interceptor, with a fail-closed `resolve_interceptor` — an unresolved interceptor refuses the call rather than passing it through ungoverned.
+- **DeepSeek is now a first-class `LlmProvider`** (#1609) — `from_model` / `from_name` resolution, plus `from_env` legacy and selector tiers.
+
+### Security
+
+- **`GovernedHTTPClient` redacts credentials from HTTP audit targets** (redteam L1). `redact_http_target` strips userinfo and query/fragment components before the URL is recorded as an audit target, so a credential-bearing outbound URL never lands in the audit trail verbatim.
+
 ## [2.28.0] — 2026-06-19 — LlmClient lifecycle: aclose() + async context manager + opt-in HTTP pooling
 
 ### Added
