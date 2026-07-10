@@ -22,10 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from kailash.trust.pact.circuit_breaker import (
-    CircuitBreakerConfig,
-    PactCircuitBreaker,
-)
+from kailash.trust.pact.circuit_breaker import CircuitBreakerConfig, PactCircuitBreaker
 from kailash.trust.pact.rate_limit_enforcer import RateLimitEnforcer
 
 UTC = timezone.utc

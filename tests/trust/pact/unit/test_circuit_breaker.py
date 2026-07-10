@@ -15,10 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from kailash.trust.pact.circuit_breaker import (
-    CircuitBreakerConfig,
-    PactCircuitBreaker,
-)
+from kailash.trust.pact.circuit_breaker import CircuitBreakerConfig, PactCircuitBreaker
 
 UTC = timezone.utc
 _KEY = "role\x1faction"

@@ -39,6 +39,11 @@ from kailash.trust.pact.audit import (
     TieredAuditDispatcher,
     create_pact_audit_details,
 )
+from kailash.trust.pact.circuit_breaker import (
+    CircuitBreakerConfig,
+    CircuitDecision,
+    PactCircuitBreaker,
+)
 from kailash.trust.pact.clearance import (
     RoleClearance,
     VettingStatus,
@@ -75,11 +80,6 @@ from kailash.trust.pact.knowledge import (
     KnowledgeFilter,
     KnowledgeItem,
     KnowledgeQuery,
-)
-from kailash.trust.pact.circuit_breaker import (
-    CircuitBreakerConfig,
-    CircuitDecision,
-    PactCircuitBreaker,
 )
 from kailash.trust.pact.observation import Observation, ObservationSink
 from kailash.trust.pact.rate_limit_enforcer import RateLimitEnforcer
