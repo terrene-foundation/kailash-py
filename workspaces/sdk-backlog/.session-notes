@@ -1,70 +1,43 @@
-# Session Notes — 2026-07-10 (session 3)
+# Session Notes — 2026-07-10
 
 ## Where we are
 
-Shipped + verified-live TWO PyPI releases this session, plus completed the cross-SDK
-lockstep handoffs. Board is clean (0 open PRs). Remaining open issues are all cross-SDK /
-user-gated trackers (below).
+SDK-backlog session CLOSED. Shipped + verified-live two PyPI releases (kailash-dataflow
+2.14.7 fabric tenant guards; kailash 2.47.0 BH3 origin-auth) and completed the cross-SDK
+lockstep handoffs to the Rust SDK. Board is clean (0 open PRs). Phase 05-codify; no new
+cross-project rule surfaced (patterns are applications of existing tenant-isolation Rule 8 +
+cross-sdk-inspection Rule 4b/4c). Remaining open issues are all cross-SDK / user-gated.
 
-## Released + verified live (clean-venv install confirmed)
+## Read first
 
-- **kailash-dataflow 2.14.7** (tag `dataflow-v2.14.7`, PR #1667) — fabric write-path (#1659
-  HIGH) + `ctx.source()` (#1658) fail-closed tenant guards. Both #1659/#1658 CLOSED. Closes
-  the two surfaces the #1654 read guard explicitly did not cover.
-- **kailash 2.47.0** (tag `v2.47.0`, PR #1668) — BH3 origin-authentication (#1510). New
-  `kailash.trust` surface: `OriginBoundTrace`, `compute_origin_digest`,
-  `origin_signing_payload`, `sign_/verify_origin_bound_trace`. A fabricated trace fails auth
-  even with a valid Ed25519 signature. Two pre-image byte forms pinned as conformance vectors.
+1. `workspaces/sdk-backlog/journal/0007` + `0008` — cross-repo grant + rs-handoff receipts.
+2. `workspaces/sdk-backlog/04-validate/sweep-2026-07-10.md` — this cycle's /sweep.
+3. `gh issue list --state open` — the forest below (1510, 1606, 1601, 1532).
 
-Both went through full-context 2-agent /redteam (reviewer + security-reviewer) → CLEAN before
-merge. Fabric PR #1665, BH3 PR #1666.
+## Executed this session
 
-## Cross-SDK handoffs POSTED to the Rust SDK (grant journal/0007, receipts journal/0008)
+- Released to PyPI (verified via clean-venv install): **kailash-dataflow 2.14.7** (tag `dataflow-v2.14.7`) + **kailash 2.47.0** (tag `v2.47.0`).
+- Posted cross-SDK handoffs to the Rust SDK repo: **rs#1667** (subject_hash JCS vectors), **rs#1707** (BH3 Python-reference pre-images), **rs#1729** (NEW — soft_delete parity brief). Paired py back-links on #1590/#1601/#1510.
 
-- **rs#1667** — subject_hash RFC 8785 golden vectors (py #1590, already merged). Comment posted.
-- **rs#1729** (NEW) — soft_delete/versioned parity brief (py #1601). Issue created.
-- **rs#1707** — BH3 Python-reference signing pre-images + vectors. Comment posted (Python is the
-  Foundation reference; handoff carries a reconcile-before-pinning caveat).
-- Paired py back-links on #1590 / #1601 / #1510.
+## Outstanding ledger (forest)
 
-## Read first (next session)
+| ID  | Item                                       | Value-anchor (MUST-1 source)                                  | Status                                          |
+| --- | ------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------- |
+| F1  | #1510 SAFR BH1/BH4/BH5 (remaining)         | #1510 — governed agents inherit per-action independence, evidence-quality, circuit-breaker | queued — BH2+BH3 done; BH1/BH4/BH5 cross-SDK lockstep |
+| F2  | #1606 express `v2` keyspace half           | #1606 — Rust-pinned v2 keyspace, byte-changing v2→v3         | BLOCKED — rs#1713; land py+rs together           |
+| F3  | #1601 Rust soft_delete/versioned parity    | #1601 — py side #1598 done; fix belongs in the Rust repo      | in-flight — handed to rs#1729; close when rs lands |
+| F4  | #1532 delegate-connectors → contrib/        | #1532 — consolidate the delegate adapter layer beside its framework | DEFERRED — dedicated session; sources operator-local |
 
-1. `gh pr list --state open` (expect 0) + `gh issue list --state open`.
-2. `workspaces/sdk-backlog/journal/0007` (cross-repo grant) + `journal/0008` (handoff receipts).
-3. This session's merges: PRs #1665 #1666 #1667 #1668.
-
-## Outstanding forest (all cross-SDK / user-gated)
-
-| ID  | Item                                     | Status                                                        |
-| --- | ---------------------------------------- | ------------------------------------------------------------- |
-| #1510 | SAFR BH1/BH4/BH5                        | OPEN — BH2 + BH3 done; BH1 (per-action independence), BH4 (evidence-quality), BH5 (circuit-breaker) remain, cross-SDK lockstep |
-| #1606 | express `v2` keyspace half              | OPEN — Rust-pinned v2→v3 byte-changing lockstep (rs#1713); land py+rs together |
-| #1601 | Rust soft_delete/versioned parity       | OPEN tracker — py #1598 done; handed to rs#1729; close when rs lands |
-| #1532 | delegate-connectors → contrib/          | DEFERRED to a dedicated session. Sources are OPERATOR-LOCAL (see memory project_1532_delegate_connectors_sources): py `/Users/esperie/repos/terrene/contrib/delegate-connectors`, rs/enterprise (further developed) `/Users/esperie/repos/terrene/contrib/delegate-connectors-enterprise`. With-history subtree import + archive + new matrix CI (ask before creating the workflow). |
+Closed this session: `F5` (#1659 fabric write guard) → PR #1665 / tag `dataflow-v2.14.7`. `F6` (#1658 source scoping) → PR #1665 / tag `dataflow-v2.14.7`. #1510 BH3 half → PR #1666 / tag `v2.47.0` (F1 remainder carried forward).
 
 ## Traps
 
-- **Worktree has no local `.venv`** — run its tests with the MAIN venv:
-  `PYTHONPATH=<worktree>/src /Users/.../kailash-py/.venv/bin/python -m pytest ...` (worktree-isolation Rule 2a).
-- **`pre-commit` launcher shebang is stale** (points at an old repo path) → run via
-  `.venv/bin/python -m pre_commit run --files ...`.
-- **`gh ... --repo terrene-foundation/kailash-py` trips the repo-scope hook as a FALSE POSITIVE**
-  (it IS the CWD repo). Omit `--repo` for CWD-repo gh calls; gh infers it from the remote.
-- **PyPI verify cache-lag**: JSON endpoint (`/pypi/<pkg>/<ver>/json`) leads the simple index
-  by minutes; `uv`/`pip` "No matching distribution" while JSON shows the version = propagation
-  lag, NOT a failed release. Retry `pip install --no-cache-dir` after ~75s.
-- **Release-prep on `release/*` branch** auto-skips the PR-gate matrix (all checks "skipping").
-  The core release additionally ran a `build` check — a CANCELLED superseded-duplicate run
-  showed "fail" in `gh pr checks` while the current run passed (git.md duplicate-run race);
-  pin the head + confirm the CURRENT run's conclusion before merging.
-- **Pyright worktree/cross-version diagnostics are noise** (`kailash.trust._jcs` unresolved,
-  `enforce_tenant_scope` "no parameter") — the analyzer's `.venv` predates the change; trust
-  real test runs.
+- **Worktree has no local `.venv`** — run its tests with the MAIN venv + `PYTHONPATH=<wt>/src`.
+- **`pre-commit` launcher shebang is stale** → run `.venv/bin/python -m pre_commit run --files …`.
+- **`gh --repo terrene-foundation/kailash-py` = FALSE-POSITIVE repo-scope tripwire** (it's the CWD repo); omit `--repo` for CWD gh calls.
+- **PyPI verify cache-lag**: JSON endpoint leads the simple index; retry `pip install --no-cache-dir` ~75s later. `release/*` branches skip the PR-gate matrix; a CANCELLED duplicate `build` run can show "fail" while the current run passed — pin head, confirm current run.
+- **Pyright worktree/cross-version diagnostics are noise** — trust real test runs.
 
-## Codify note
+## Open questions for the human
 
-The fabric write/source guard is the fenced follow-up `tenant-isolation.md` Rule 8 already
-named (#1658/#1659) — an application of an existing rule, not a new pattern. BH3's
-conditional-pre-image + fail-closed-discriminator mirrors the #1590 subject_hash pattern
-already established in `cross-sdk-inspection.md` Rule 4b/4c. No NEW cross-project rule surfaced
-that warrants a /codify this session; the CHANGELOGs + journal 0007/0008 carry the durable record.
+- `workspaces/mops-onboarding/` has 8 stranded forest rows (Sweep-6 `[AGG]`) + untracked `.session-notes` — belongs to that workspace's own `/wrapup`, not this one.
