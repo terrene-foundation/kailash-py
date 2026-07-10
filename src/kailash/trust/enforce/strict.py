@@ -19,7 +19,11 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from kailash.trust.chain import VerificationLevel, VerificationResult
 
 if TYPE_CHECKING:
-    from kailash.trust.enforce.held import ExpiryDisposition, HeldActionStore
+    from kailash.trust.enforce.held import (
+        ExpiryDisposition,
+        HeldActionStore,
+        ReviewerDecision,
+    )
     from kailash.trust.governance.models import ApprovalPolicyModel
     from kailash.trust.hooks import HookRegistry
 
@@ -117,6 +121,7 @@ class StrictEnforcer:
         hook_registry: Optional[HookRegistry] = None,
         held_store: Optional[HeldActionStore] = None,
         default_expiry: Optional[ExpiryDisposition] = None,
+        max_pending_holds: int = 1000,
     ):
         """Initialize strict enforcer.
 
@@ -137,11 +142,29 @@ class StrictEnforcer:
                 timeout but no explicit ``on_expiry``. Defaults to the fail-safe
                 ``ExpiryDisposition.DENY`` (a hold with no configured expiry
                 disposition denies on timeout — it NEVER auto-approves).
+            max_pending_holds: Reviewer-capacity admission-control bound (BH2
+                leg 2). When the pending review queue is saturated to this
+                many holds, a NEW QUEUE-behavior escalation FAILS CLOSED —
+                it is DENIED (``BLOCKED``, ``EATPBlockedError``), never
+                silently dropped. The default is a safe, finite bound; it is
+                distinct from ``maxlen`` (a memory-only FIFO backstop). MUST
+                be a positive integer.
         """
         from kailash.trust.enforce.held import (
             DEFAULT_EXPIRY_DISPOSITION,
             MemoryHeldActionStore,
         )
+
+        if not isinstance(max_pending_holds, int) or isinstance(
+            max_pending_holds, bool
+        ):
+            raise ValueError(
+                f"max_pending_holds must be an int, got {type(max_pending_holds).__name__}"
+            )
+        if max_pending_holds < 1:
+            raise ValueError(
+                f"max_pending_holds must be >= 1, got {max_pending_holds!r}"
+            )
 
         self._on_held = on_held
         self._held_callback = held_callback
@@ -158,6 +181,7 @@ class StrictEnforcer:
         self._default_expiry: ExpiryDisposition = (
             default_expiry if default_expiry is not None else DEFAULT_EXPIRY_DISPOSITION
         )
+        self._max_pending_holds = max_pending_holds
 
         if on_held == HeldBehavior.CALLBACK and held_callback is None:
             raise ValueError("held_callback required when on_held is CALLBACK")
@@ -379,8 +403,59 @@ class StrictEnforcer:
             )
 
         if self._on_held == HeldBehavior.QUEUE:
+            # Capacity gate (BH2 leg 2): fail-closed admission control. When the
+            # pending review queue is saturated to reviewer capacity, a NEW
+            # escalation is DENIED (BLOCKED) — never silently dropped and never
+            # unbounded-queued. This is distinct from the ``maxlen`` FIFO trim
+            # below (a memory-only backstop that silently evicts oldest holds);
+            # the capacity gate is real admission control that fails closed.
+            if len(self._review_queue) >= self._max_pending_holds:
+                denial_record = EnforcementRecord(
+                    agent_id=agent_id,
+                    action=action,
+                    verdict=Verdict.BLOCKED,
+                    verification_result=result,
+                    metadata={
+                        **dict(record.metadata),
+                        "admission_denied": True,
+                        "pending_holds": len(self._review_queue),
+                        "max_pending_holds": self._max_pending_holds,
+                    },
+                )
+                self._records.append(denial_record)
+                if len(self._records) > self._max_records:
+                    trim_count = self._max_records // 10
+                    self._records = self._records[trim_count:]
+                logger.warning(
+                    "[ENFORCE] HELD escalation DENIED — review queue saturated "
+                    "(pending=%d capacity=%d): agent=%s action=%s",
+                    len(self._review_queue),
+                    self._max_pending_holds,
+                    agent_id,
+                    action,
+                )
+                raise EATPBlockedError(
+                    agent_id=agent_id,
+                    action=action,
+                    reason=(
+                        f"Review queue saturated "
+                        f"({len(self._review_queue)}/{self._max_pending_holds}) "
+                        f"— escalation denied (fail-closed)"
+                    ),
+                    violations=result.violations,
+                )
+
+            from kailash.trust.enforce.held import new_hold_id
+
+            hold_id = new_hold_id()
+            # Correlate the passive review-queue entry with its store hold so a
+            # reviewer can address the exact hold by id (apply_review_decision).
+            # record.metadata is a mutable dict; the dataclass freeze only
+            # blocks field reassignment, not mutation of the dict's contents.
+            record.metadata["hold_id"] = hold_id
             logger.info(
-                f"[ENFORCE] HELD: agent={agent_id} action={action} — queued for review"
+                f"[ENFORCE] HELD: agent={agent_id} action={action} "
+                f"hold_id={hold_id} — queued for review"
             )
             self._review_queue.append(record)
             # Bounded memory for review queue
@@ -395,6 +470,7 @@ class StrictEnforcer:
                 agent_id,
                 action,
                 record,
+                hold_id=hold_id,
                 timeout=timeout,
                 on_expiry=on_expiry,
                 approval_policy=approval_policy,
@@ -428,6 +504,7 @@ class StrictEnforcer:
         action: str,
         record: EnforcementRecord,
         *,
+        hold_id: str,
         timeout: Optional[float],
         on_expiry: Optional[ExpiryDisposition],
         approval_policy: Optional[ApprovalPolicyModel],
@@ -442,7 +519,6 @@ class StrictEnforcer:
         """
         from kailash.trust.enforce.held import (
             HeldAction,
-            new_hold_id,
             resolve_timeout_seconds,
         )
 
@@ -454,7 +530,7 @@ class StrictEnforcer:
 
         disposition = on_expiry if on_expiry is not None else self._default_expiry
         hold = HeldAction(
-            hold_id=new_hold_id(),
+            hold_id=hold_id,
             agent_id=agent_id,
             action=action,
             held_at=record.timestamp,
@@ -531,6 +607,118 @@ class StrictEnforcer:
             )
 
         return expiry_records
+
+    def apply_review_decision(
+        self,
+        hold_id: str,
+        decision: "ReviewerDecision",
+        reviewer_id: str,
+        *,
+        modified_verdict: Optional[Verdict] = None,
+    ) -> EnforcementRecord:
+        """Apply a human reviewer's decision to a pending HITL hold (BH2 leg 3).
+
+        Resolves a held action addressed by ``hold_id`` to a concrete verdict
+        under the reviewer's authority, binding ``reviewer_id`` into the
+        resulting audit record. Monotonic-guarded and fail-closed:
+
+        - ``DECLINE`` -> ``BLOCKED``.
+        - ``APPROVE`` -> ``AUTO_APPROVED`` — sanctions the originally-held
+          action to proceed, WITHOUT escalating authority beyond the original
+          request.
+        - ``MODIFY`` -> the supplied ``modified_verdict``, clamped to
+          monotonic-tightening only; a verdict less restrictive than ``HELD``
+          (a widening) is clamped fail-closed to ``BLOCKED``. ``MODIFY``
+          without a ``modified_verdict`` raises ``ReviewDecisionError``.
+
+        The reviewed hold is removed from BOTH the passive review queue and the
+        timeout-tracking store, so it can neither be re-reviewed nor expire.
+
+        Args:
+            hold_id: Identifier of the pending hold to resolve.
+            decision: The reviewer's disposition (APPROVE / MODIFY / DECLINE).
+            reviewer_id: Identifier of the reviewer, bound into the audit
+                record's metadata. An identifier, NOT a credential.
+            modified_verdict: Required for ``MODIFY`` — the reviewer's target
+                verdict, subject to the monotonic-tightening clamp.
+
+        Returns:
+            The ``EnforcementRecord`` for the reviewer decision (verdict +
+            ``reviewer_id`` bound), also appended to the enforcer's audit sink.
+
+        Raises:
+            ReviewDecisionError: If ``hold_id`` is unknown/missing, or a
+                ``MODIFY`` omits ``modified_verdict`` (both fail-closed).
+            ValueError: If ``hold_id`` is not a safe identifier.
+        """
+        from kailash.trust._locking import validate_id
+        from kailash.trust.enforce.held import (
+            ReviewDecisionError,
+            resolve_review_verdict,
+        )
+
+        validate_id(hold_id)
+
+        # The passive review queue is the source of truth for pending holds
+        # (every QUEUE escalation lands here with its hold_id); the store only
+        # tracks the timeout-bearing subset. Claim from both, fail closed if
+        # the hold is in neither (unknown/missing hold_id).
+        matched: Optional[EnforcementRecord] = None
+        remaining: List[EnforcementRecord] = []
+        for queued in self._review_queue:
+            if matched is None and queued.metadata.get("hold_id") == hold_id:
+                matched = queued
+            else:
+                remaining.append(queued)
+
+        stored = self._held_store.pop(hold_id)
+
+        if matched is None and stored is None:
+            raise ReviewDecisionError(
+                f"apply_review_decision: unknown or already-resolved hold_id "
+                f"{hold_id!r} — fail-closed"
+            )
+
+        self._review_queue = remaining
+
+        verdict = resolve_review_verdict(decision, modified_verdict=modified_verdict)
+
+        base = matched if matched is not None else stored.record
+        decision_metadata: Dict[str, Any] = {
+            **dict(base.metadata),
+            "hold_id": hold_id,
+            "reviewer_id": reviewer_id,
+            "reviewer_decision": decision.value,
+            "review_of_verdict": Verdict.HELD.value,
+        }
+        if modified_verdict is not None:
+            decision_metadata["modified_verdict_requested"] = modified_verdict.value
+
+        decision_record = EnforcementRecord(
+            agent_id=base.agent_id,
+            action=base.action,
+            verdict=verdict,
+            verification_result=base.verification_result,
+            metadata=decision_metadata,
+        )
+        self._records.append(decision_record)
+        if len(self._records) > self._max_records:
+            trim_count = self._max_records // 10
+            self._records = self._records[trim_count:]
+
+        logger.info(
+            "[ENFORCE] REVIEW %s by reviewer=%s hold_id=%s -> %s",
+            decision.value,
+            reviewer_id,
+            hold_id,
+            verdict.value,
+        )
+        return decision_record
+
+    @property
+    def max_pending_holds(self) -> int:
+        """Reviewer-capacity admission-control bound (BH2 leg 2)."""
+        return self._max_pending_holds
 
     @property
     def held_store(self) -> "HeldActionStore":

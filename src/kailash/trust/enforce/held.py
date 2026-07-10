@@ -41,7 +41,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from kailash.trust._locking import secure_sqlite_files, validate_id
 from kailash.trust.enforce.strict import EnforcementRecord, Verdict
@@ -57,9 +57,12 @@ __all__ = [
     "HeldAction",
     "HeldActionStore",
     "MemoryHeldActionStore",
+    "ReviewDecisionError",
+    "ReviewerDecision",
     "SqliteHeldActionStore",
     "new_hold_id",
     "resolve_expiry_verdict",
+    "resolve_review_verdict",
     "resolve_timeout_seconds",
     "verdict_rank",
 ]
@@ -131,6 +134,80 @@ def resolve_expiry_verdict(disposition: ExpiryDisposition) -> Verdict:
         # than the hold it replaces. Clamp to BLOCKED (never auto-approve).
         return Verdict.BLOCKED
     return verdict
+
+
+class ReviewerDecision(Enum):
+    """A human reviewer's disposition of a pending HITL hold (BH2 leg 3).
+
+    A held action parks pending human review; this enum is the authority a
+    reviewer exercises over it. The three members resolve — via the single
+    monotonic :func:`resolve_review_verdict` — to concrete verdicts:
+
+    - ``APPROVE`` sanctions the *originally-held* action to proceed
+      (``AUTO_APPROVED``). This is the reviewer's authorized resolution of the
+      hold; it grants exactly the held action and NEVER escalates authority
+      beyond the original request.
+    - ``DECLINE`` denies the action (``BLOCKED``).
+    - ``MODIFY`` substitutes a reviewer-chosen verdict, constrained to
+      *monotonic-tightening only* — a MODIFY may never WIDEN authority below
+      ``HELD`` (see :func:`resolve_review_verdict`).
+    """
+
+    APPROVE = "approve"  # -> AUTO_APPROVED (sanction the originally-held action)
+    MODIFY = "modify"  # -> monotonic-tightening only (never widens below HELD)
+    DECLINE = "decline"  # -> BLOCKED
+
+
+class ReviewDecisionError(ValueError):
+    """Raised when a reviewer decision cannot be applied (fail-closed).
+
+    Covers a missing/unknown ``hold_id``, a ``MODIFY`` without an explicit
+    modified verdict, and an unrecognized decision — every path fails closed
+    with a typed error rather than silently permitting an action.
+    """
+
+
+def resolve_review_verdict(
+    decision: ReviewerDecision,
+    *,
+    modified_verdict: Optional[Verdict] = None,
+) -> Verdict:
+    """Resolve a reviewer decision to a concrete, monotonic-guarded verdict.
+
+    Fail-closed on every axis (pact-governance.md Rule 4/6):
+
+    - ``DECLINE`` -> ``BLOCKED``.
+    - ``APPROVE`` -> ``AUTO_APPROVED`` (the authorized resolution of the hold;
+      grants the originally-held action, no more — no authority escalation).
+    - ``MODIFY`` requires an explicit ``modified_verdict`` (else
+      :class:`ReviewDecisionError`) and is *monotonic-tightening only*: a
+      modified verdict less restrictive than ``HELD`` (i.e. ``AUTO_APPROVED`` /
+      ``FLAGGED`` — a WIDENING of authority) is clamped fail-closed to
+      ``BLOCKED``. This reuses the single ``_VERDICT_RANK`` ordering that
+      :func:`resolve_expiry_verdict` uses — the restrictiveness function is not
+      reinvented.
+    - An unrecognized ``decision`` raises :class:`ReviewDecisionError`.
+
+    Only ``APPROVE`` may resolve below ``HELD``; it is the reviewer's explicit,
+    authorized sanction of the hold, NOT an automatic widening.
+    """
+    if decision is ReviewerDecision.DECLINE:
+        return Verdict.BLOCKED
+    if decision is ReviewerDecision.APPROVE:
+        return Verdict.AUTO_APPROVED
+    if decision is ReviewerDecision.MODIFY:
+        if modified_verdict is None:
+            raise ReviewDecisionError(
+                "MODIFY requires an explicit modified_verdict (fail-closed)"
+            )
+        rank = _VERDICT_RANK.get(modified_verdict)
+        if rank is None or rank < _VERDICT_RANK[Verdict.HELD]:
+            # Monotonic-tightening guard: a MODIFY may not widen authority
+            # below HELD. An unknown verdict OR a sub-HELD verdict is clamped
+            # fail-closed to BLOCKED (never AUTO_APPROVED/FLAGGED).
+            return Verdict.BLOCKED
+        return modified_verdict
+    raise ReviewDecisionError(f"unknown reviewer decision: {decision!r}")
 
 
 def resolve_timeout_seconds(policy: "ApprovalPolicyModel") -> float:
@@ -232,6 +309,14 @@ class HeldActionStore(Protocol):
         """Atomically remove and return every hold expired as of ``now``."""
         ...
 
+    def pop(self, hold_id: str) -> Optional[HeldAction]:
+        """Atomically remove and return the hold with ``hold_id``, else None.
+
+        Used by reviewer-decision resolution (BH2 leg 3) to claim a specific
+        pending hold. Returns ``None`` when no such hold is tracked.
+        """
+        ...
+
     def pending(self) -> List[HeldAction]:
         """Return all currently-pending holds."""
         ...
@@ -262,6 +347,11 @@ class MemoryHeldActionStore:
             for h in expired:
                 del self._holds[h.hold_id]
             return expired
+
+    def pop(self, hold_id: str) -> Optional[HeldAction]:
+        validate_id(hold_id)
+        with self._lock:
+            return self._holds.pop(hold_id, None)
 
     def pending(self) -> List[HeldAction]:
         with self._lock:
@@ -391,6 +481,34 @@ class SqliteHeldActionStore:
                 )
                 result.append(self._corrupt_sentinel(row, now))
         return result
+
+    def pop(self, hold_id: str) -> Optional[HeldAction]:
+        validate_id(hold_id)
+        with self._lock:
+            cursor = self._conn.execute(
+                "SELECT hold_id, agent_id, action, held_at, timeout_seconds, "
+                "on_expiry, reason, violations_json, metadata_json "
+                "FROM held_actions WHERE hold_id = ?",
+                (hold_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            self._conn.execute("DELETE FROM held_actions WHERE hold_id = ?", (hold_id,))
+            self._conn.commit()
+        # Fail-closed conversion for a corrupt/tampered row: the row is already
+        # deleted+committed above, so a raw exception would silently drop the
+        # hold with no verdict; instead yield the DENY sentinel (-> BLOCKED).
+        try:
+            return self._row_to_held(row)
+        except Exception:
+            logger.warning(
+                "[HELD] corrupt held-action row on pop — fail-closed BLOCKED "
+                "(hold_id=%r)",
+                hold_id,
+                exc_info=True,
+            )
+            return self._corrupt_sentinel(row, datetime.now(timezone.utc))
 
     def pending(self) -> List[HeldAction]:
         with self._lock:

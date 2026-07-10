@@ -31,9 +31,12 @@ from kailash.trust.enforce.held import (
     HeldAction,
     HeldActionStore,
     MemoryHeldActionStore,
+    ReviewDecisionError,
+    ReviewerDecision,
     SqliteHeldActionStore,
     new_hold_id,
     resolve_expiry_verdict,
+    resolve_review_verdict,
     resolve_timeout_seconds,
     verdict_rank,
 )
@@ -84,6 +87,10 @@ __all__ = [
     "resolve_expiry_verdict",
     "resolve_timeout_seconds",
     "verdict_rank",
+    # Reviewer decision authority (HITL, BH2 leg 3)
+    "ReviewerDecision",
+    "ReviewDecisionError",
+    "resolve_review_verdict",
     # Challenge-response
     "ChallengeProtocol",
     "ChallengeRequest",
