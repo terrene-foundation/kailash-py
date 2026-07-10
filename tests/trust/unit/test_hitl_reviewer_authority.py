@@ -624,3 +624,134 @@ def test_corrupt_row_expiry_reconciles_queue_and_blocks_reapprove(tmp_path):
     assert corrupt_expiry[0].metadata.get("original_hold_id") == hold_id
     assert len(expiry_records) == 1
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# Redteam round 3 findings (non-fail-open: DoS-of-review, audit poisoning,
+# store-bound misconfig, timeout-orphan)
+# ---------------------------------------------------------------------------
+
+
+def _forge_expired_corrupt_row(
+    db_path: str,
+    hold_id: str,
+    *,
+    agent_id: str = "agent-forged",
+    action: str = "deploy",
+) -> None:
+    """Forge an already-EXPIRED corrupt held-action row on disk (bad on_expiry,
+    PAST expires_at) bearing an attacker-chosen hold_id / agent_id / action."""
+    now = datetime.now(timezone.utc)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO held_actions "
+            "(hold_id, agent_id, action, held_at, timeout_seconds, expires_at, "
+            "on_expiry, reason, violations_json, metadata_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                hold_id,
+                agent_id,
+                action,
+                (now - timedelta(seconds=120)).isoformat(),
+                60.0,
+                (now - timedelta(seconds=60)).isoformat(),  # already expired
+                "not_a_valid_disposition",  # ExpiryDisposition(...) will raise
+                "",
+                "[]",
+                "{}",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_no_timeout_hold_survives_forged_corrupt_store_row(tmp_path):
+    """Finding 1a: a NO-TIMEOUT queue hold (never in the store, its PK free)
+    cannot be evicted by a forged corrupt store row bearing its id — the hold
+    survives in the queue and stays resolvable (no attacker denial-of-review)."""
+    enforcer, store = _enforcer(tmp_path)
+    # A queue-only hold (timeout=None) — never registered in the store.
+    victim_id = _queue_one(enforcer, agent_id="agent-victim", timeout=None)
+    assert store.pending() == []  # confirm: not in the store
+    assert enforcer.review_queue[-1].metadata["hold_id"] == victim_id
+
+    # Attacker forges an already-expired corrupt store row bearing the victim id.
+    _forge_expired_corrupt_row(str(tmp_path / "held.db"), victim_id)
+
+    enforcer.expire_holds(now=datetime.now(timezone.utc))
+
+    # The victim's queue entry SURVIVES (it was never timeout-bearing, so the
+    # forged row cannot reconcile it away).
+    assert any(r.metadata.get("hold_id") == victim_id for r in enforcer.review_queue)
+    # ...and it stays resolvable by a real reviewer.
+    record = enforcer.apply_review_decision(
+        victim_id, ReviewerDecision.APPROVE, "rev-victim"
+    )
+    assert record.verdict is Verdict.AUTO_APPROVED
+    store.close()
+
+
+def test_corrupt_expiry_audit_redacts_agent_and_action(tmp_path):
+    """Finding 1b: a corrupt-row expiry audit record carries redacted
+    agent_id/action (`<corrupt>`), never the attacker-forged identifiers."""
+    enforcer, store = _enforcer(tmp_path)
+    _forge_expired_corrupt_row(
+        str(tmp_path / "held.db"),
+        "hold-forged-audit",
+        agent_id="ATTACKER-AGENT",
+        action="ATTACKER-ACTION",
+    )
+
+    expiry_records = enforcer.expire_holds(now=datetime.now(timezone.utc))
+    assert len(expiry_records) == 1
+    rec = expiry_records[0]
+    assert rec.verdict is Verdict.BLOCKED
+    # The forged identifiers are NOT propagated into the audit record.
+    assert rec.agent_id == "<corrupt>"
+    assert rec.action == "<corrupt>"
+    assert rec.agent_id != "ATTACKER-AGENT" and rec.action != "ATTACKER-ACTION"
+    # corrupt_row survives for forensics.
+    assert rec.metadata.get("corrupt_row") is True
+    store.close()
+
+
+def test_store_bound_below_max_pending_holds_rejected(tmp_path):
+    """Finding 2: constructing StrictEnforcer with a store whose capacity is
+    below the effective pending-hold bound fails closed (typed ValueError); a
+    normal config constructs fine."""
+    db_path = str(tmp_path / "small.db")
+    small_store = SqliteHeldActionStore(db_path, max_records=50)
+    with pytest.raises(ValueError):
+        StrictEnforcer(
+            on_held=HeldBehavior.QUEUE,
+            held_store=small_store,
+            max_pending_holds=1000,
+        )
+    small_store.close()
+
+    # Normal config: store capacity >= max_pending_holds → constructs fine.
+    ok_store = SqliteHeldActionStore(str(tmp_path / "ok.db"), max_records=100_000)
+    enforcer = StrictEnforcer(
+        on_held=HeldBehavior.QUEUE, held_store=ok_store, max_pending_holds=1000
+    )
+    assert enforcer.max_pending_holds == 1000
+    ok_store.close()
+
+
+def test_negative_timeout_raises_with_no_orphan_queue_entry(tmp_path):
+    """Finding 3: enforce(timeout=-5) raises BEFORE the queue append — no orphan
+    queue entry and no store row are left behind."""
+    enforcer, store = _enforcer(tmp_path)
+    with pytest.raises(ValueError):
+        enforcer.enforce(
+            agent_id="agent-neg",
+            action="deploy",
+            result=_held_result(),
+            timeout=-5.0,
+        )
+    # No orphan on EITHER surface.
+    assert enforcer.review_queue == []
+    assert store.pending() == []
+    store.close()
