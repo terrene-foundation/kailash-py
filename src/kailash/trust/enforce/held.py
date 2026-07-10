@@ -161,9 +161,11 @@ class ReviewerDecision(Enum):
 class ReviewDecisionError(ValueError):
     """Raised when a reviewer decision cannot be applied (fail-closed).
 
-    Covers a missing/unknown ``hold_id``, a ``MODIFY`` without an explicit
-    modified verdict, and an unrecognized decision — every path fails closed
-    with a typed error rather than silently permitting an action.
+    Covers a missing/unknown ``hold_id``, an over-length ``reviewer_id``, a
+    ``MODIFY`` without an explicit modified verdict, an ``APPROVE``/``DECLINE``
+    carrying a (contradictory) modified verdict, and an unrecognized decision —
+    every path fails closed with a typed error rather than silently permitting
+    an action or silently dropping an argument.
     """
 
 
@@ -186,11 +188,22 @@ def resolve_review_verdict(
       ``BLOCKED``. This reuses the single ``_VERDICT_RANK`` ordering that
       :func:`resolve_expiry_verdict` uses — the restrictiveness function is not
       reinvented.
+    - ``APPROVE`` / ``DECLINE`` with ``modified_verdict`` set is AMBIGUOUS input
+      (a modified verdict is meaningful only for ``MODIFY``); it raises
+      :class:`ReviewDecisionError` rather than silently ignoring the argument.
     - An unrecognized ``decision`` raises :class:`ReviewDecisionError`.
 
     Only ``APPROVE`` may resolve below ``HELD``; it is the reviewer's explicit,
     authorized sanction of the hold, NOT an automatic widening.
     """
+    # Ambiguous-input guard (Finding 3b): modified_verdict is meaningful ONLY
+    # for MODIFY. Passing it with APPROVE/DECLINE is a contradictory request
+    # (approve-but-also-change-to-X); fail closed rather than silently drop it.
+    if modified_verdict is not None and decision is not ReviewerDecision.MODIFY:
+        raise ReviewDecisionError(
+            f"modified_verdict is only valid with MODIFY, not "
+            f"{decision.value!r} — fail-closed on ambiguous input"
+        )
     if decision is ReviewerDecision.DECLINE:
         return Verdict.BLOCKED
     if decision is ReviewerDecision.APPROVE:

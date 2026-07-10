@@ -11,12 +11,19 @@ unauthorized actions must be blocked.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from kailash.trust.chain import VerificationLevel, VerificationResult
+
+# Reviewer identifiers are bound into audit records and logged; cap the length
+# so a multi-megabyte reviewer_id cannot flood the log/audit sink (BH2 leg 3,
+# Finding 3a). validate_id() guards the charset (no newline/control/traversal);
+# this floor guards the size. 256 chars is generous for any real identifier.
+_MAX_REVIEWER_ID_LEN = 256
 
 if TYPE_CHECKING:
     from kailash.trust.enforce.held import (
@@ -182,6 +189,14 @@ class StrictEnforcer:
             default_expiry if default_expiry is not None else DEFAULT_EXPIRY_DISPOSITION
         )
         self._max_pending_holds = max_pending_holds
+        # Serializes every _review_queue / _records mutation so the review-queue
+        # lifecycle is single-winner: the capacity-gate read+append, the
+        # apply_review_decision scan→pop→reassign, and the expire_holds
+        # pop+queue-reconcile are each atomic and mutually exclusive. Reentrant
+        # (RLock) because enforce() holds it across the _handle_held call which
+        # re-acquires it. Lock ordering is always enforcer-lock THEN store-lock
+        # (never the reverse) so no deadlock with the store's own lock.
+        self._lock = threading.RLock()
 
         if on_held == HeldBehavior.CALLBACK and held_callback is None:
             raise ValueError("held_callback required when on_held is CALLBACK")
@@ -329,12 +344,12 @@ class StrictEnforcer:
             verification_result=result,
             metadata=record_metadata,
         )
-        self._records.append(record)
-
-        # Bounded memory: trim oldest 10% when exceeding maxlen
-        if len(self._records) > self._max_records:
-            trim_count = self._max_records // 10
-            self._records = self._records[trim_count:]
+        with self._lock:
+            self._records.append(record)
+            # Bounded memory: trim oldest 10% when exceeding maxlen
+            if len(self._records) > self._max_records:
+                trim_count = self._max_records // 10
+                self._records = self._records[trim_count:]
 
         if verdict == Verdict.BLOCKED:
             reason = result.reason or "Verification failed"
@@ -403,78 +418,84 @@ class StrictEnforcer:
             )
 
         if self._on_held == HeldBehavior.QUEUE:
-            # Capacity gate (BH2 leg 2): fail-closed admission control. When the
-            # pending review queue is saturated to reviewer capacity, a NEW
-            # escalation is DENIED (BLOCKED) — never silently dropped and never
-            # unbounded-queued. This is distinct from the ``maxlen`` FIFO trim
-            # below (a memory-only backstop that silently evicts oldest holds);
-            # the capacity gate is real admission control that fails closed.
-            if len(self._review_queue) >= self._max_pending_holds:
-                denial_record = EnforcementRecord(
-                    agent_id=agent_id,
-                    action=action,
-                    verdict=Verdict.BLOCKED,
-                    verification_result=result,
-                    metadata={
-                        **dict(record.metadata),
-                        "admission_denied": True,
-                        "pending_holds": len(self._review_queue),
-                        "max_pending_holds": self._max_pending_holds,
-                    },
-                )
-                self._records.append(denial_record)
-                if len(self._records) > self._max_records:
-                    trim_count = self._max_records // 10
-                    self._records = self._records[trim_count:]
-                logger.warning(
-                    "[ENFORCE] HELD escalation DENIED — review queue saturated "
-                    "(pending=%d capacity=%d): agent=%s action=%s",
-                    len(self._review_queue),
-                    self._max_pending_holds,
-                    agent_id,
-                    action,
-                )
-                raise EATPBlockedError(
-                    agent_id=agent_id,
-                    action=action,
-                    reason=(
-                        f"Review queue saturated "
-                        f"({len(self._review_queue)}/{self._max_pending_holds}) "
-                        f"— escalation denied (fail-closed)"
-                    ),
-                    violations=result.violations,
-                )
-
             from kailash.trust.enforce.held import new_hold_id
 
-            hold_id = new_hold_id()
-            # Correlate the passive review-queue entry with its store hold so a
-            # reviewer can address the exact hold by id (apply_review_decision).
-            # record.metadata is a mutable dict; the dataclass freeze only
-            # blocks field reassignment, not mutation of the dict's contents.
-            record.metadata["hold_id"] = hold_id
-            logger.info(
-                f"[ENFORCE] HELD: agent={agent_id} action={action} "
-                f"hold_id={hold_id} — queued for review"
-            )
-            self._review_queue.append(record)
-            # Bounded memory for review queue
-            if len(self._review_queue) > self._max_records:
-                trim_count = self._max_records // 10
-                self._review_queue = self._review_queue[trim_count:]
-            # Register a timeout-tracked hold when a response window is set,
-            # either explicitly (timeout) or from the approval policy
-            # (approval_timeout_seconds). The unset on_expiry disposition is
-            # fail-safe DENY (never auto-approves) per self._default_expiry.
-            self._register_hold(
-                agent_id,
-                action,
-                record,
-                hold_id=hold_id,
-                timeout=timeout,
-                on_expiry=on_expiry,
-                approval_policy=approval_policy,
-            )
+            # The capacity-gate READ and the queue append MUST be one atomic
+            # critical section (Finding 2): otherwise two concurrent escalations
+            # both read len < capacity and both enqueue, overrunning the bound.
+            # The lock also serializes admission vs expire_holds vs
+            # apply_review_decision on _review_queue / _records.
+            with self._lock:
+                # Capacity gate (BH2 leg 2): fail-closed admission control. When
+                # the pending review queue is saturated to reviewer capacity, a
+                # NEW escalation is DENIED (BLOCKED) — never silently dropped and
+                # never unbounded-queued. This is distinct from the ``maxlen``
+                # FIFO trim below (a memory-only backstop that silently evicts
+                # oldest holds); the capacity gate is real admission control.
+                if len(self._review_queue) >= self._max_pending_holds:
+                    denial_record = EnforcementRecord(
+                        agent_id=agent_id,
+                        action=action,
+                        verdict=Verdict.BLOCKED,
+                        verification_result=result,
+                        metadata={
+                            **dict(record.metadata),
+                            "admission_denied": True,
+                            "pending_holds": len(self._review_queue),
+                            "max_pending_holds": self._max_pending_holds,
+                        },
+                    )
+                    self._records.append(denial_record)
+                    if len(self._records) > self._max_records:
+                        trim_count = self._max_records // 10
+                        self._records = self._records[trim_count:]
+                    logger.warning(
+                        "[ENFORCE] HELD escalation DENIED — review queue "
+                        "saturated (pending=%d capacity=%d): agent=%s action=%s",
+                        len(self._review_queue),
+                        self._max_pending_holds,
+                        agent_id,
+                        action,
+                    )
+                    raise EATPBlockedError(
+                        agent_id=agent_id,
+                        action=action,
+                        reason=(
+                            f"Review queue saturated "
+                            f"({len(self._review_queue)}/{self._max_pending_holds}) "
+                            f"— escalation denied (fail-closed)"
+                        ),
+                        violations=result.violations,
+                    )
+
+                hold_id = new_hold_id()
+                # Correlate the passive review-queue entry with its store hold so
+                # a reviewer can address the exact hold by id
+                # (apply_review_decision). record.metadata is a mutable dict; the
+                # dataclass freeze blocks field reassignment, not dict mutation.
+                record.metadata["hold_id"] = hold_id
+                logger.info(
+                    f"[ENFORCE] HELD: agent={agent_id} action={action} "
+                    f"hold_id={hold_id} — queued for review"
+                )
+                self._review_queue.append(record)
+                # Bounded memory for review queue
+                if len(self._review_queue) > self._max_records:
+                    trim_count = self._max_records // 10
+                    self._review_queue = self._review_queue[trim_count:]
+                # Register a timeout-tracked hold when a response window is set,
+                # either explicitly (timeout) or from the approval policy
+                # (approval_timeout_seconds). The unset on_expiry disposition is
+                # fail-safe DENY (never auto-approves) per self._default_expiry.
+                self._register_hold(
+                    agent_id,
+                    action,
+                    record,
+                    hold_id=hold_id,
+                    timeout=timeout,
+                    on_expiry=on_expiry,
+                    approval_policy=approval_policy,
+                )
             raise EATPHeldError(
                 agent_id=agent_id,
                 action=action,
@@ -560,51 +581,75 @@ class StrictEnforcer:
         from kailash.trust.enforce.held import resolve_expiry_verdict, verdict_rank
 
         evaluated_at = now if now is not None else datetime.now(timezone.utc)
-        expired = self._held_store.pop_expired(evaluated_at)
         expiry_records: List[EnforcementRecord] = []
 
-        for hold in expired:
-            verdict = resolve_expiry_verdict(hold.on_expiry)
-            # Monotonic invariant: an expiry outcome is never less restrictive
-            # than the hold it replaces. resolve_expiry_verdict guarantees
-            # rank >= HELD; this is the defense-in-depth fail-closed backstop.
-            if verdict_rank(verdict) < verdict_rank(Verdict.HELD):
-                verdict = Verdict.BLOCKED
+        # Pop the expired holds from the store AND reconcile the passive review
+        # queue in ONE atomic critical section (Finding 1, CRITICAL). An expired
+        # hold must vanish from BOTH surfaces together: if only the store row is
+        # popped, the lingering _review_queue entry (still valid=True HELD, its
+        # hold_id intact) lets a late apply_review_decision(hold_id, APPROVE)
+        # find `matched`, skip the both-None fail-closed guard, and resurrect an
+        # already-timed-out-and-BLOCKED action to AUTO_APPROVED — a
+        # BLOCKED->AUTO_APPROVED monotonic downgrade invariant 5 forbids. The
+        # lock also serializes expire vs admission vs apply_review_decision.
+        with self._lock:
+            expired = self._held_store.pop_expired(evaluated_at)
 
-            expiry_metadata = {
-                **dict(hold.metadata),
-                "hold_expiry": True,
-                "hold_id": hold.hold_id,
-                "on_expiry": hold.on_expiry.value,
-                "original_verdict": Verdict.HELD.value,
-                "held_at": hold.held_at.isoformat(),
-                "timeout_seconds": hold.timeout_seconds,
-                "expires_at": hold.expires_at.isoformat(),
-            }
-            expiry_record = EnforcementRecord(
-                agent_id=hold.agent_id,
-                action=hold.action,
-                verdict=verdict,
-                verification_result=hold.record.verification_result,
-                timestamp=evaluated_at,
-                metadata=expiry_metadata,
-            )
-            self._records.append(expiry_record)
-            # Bounded memory: trim oldest 10% when exceeding maxlen
-            if len(self._records) > self._max_records:
-                trim_count = self._max_records // 10
-                self._records = self._records[trim_count:]
+            # Reconcile the review queue: drop every entry whose hold_id was
+            # just expired, so an expired hold is absent from both surfaces and
+            # a late apply_review_decision hits the both-None guard (fail-closed
+            # ReviewDecisionError). Matched by the record's metadata["hold_id"],
+            # the same id _handle_held stamped and _register_hold shared.
+            expired_ids = {hold.hold_id for hold in expired}
+            if expired_ids:
+                self._review_queue = [
+                    queued
+                    for queued in self._review_queue
+                    if queued.metadata.get("hold_id") not in expired_ids
+                ]
 
-            expiry_records.append(expiry_record)
-            logger.warning(
-                "[ENFORCE] HELD EXPIRED: agent=%s action=%s hold_id=%s "
-                "on_expiry=%s -> %s",
-                hold.agent_id,
-                hold.action,
-                hold.hold_id,
-                hold.on_expiry.value,
-                verdict.value,
-            )
+            for hold in expired:
+                verdict = resolve_expiry_verdict(hold.on_expiry)
+                # Monotonic invariant: an expiry outcome is never less
+                # restrictive than the hold it replaces. resolve_expiry_verdict
+                # guarantees rank >= HELD; this is the fail-closed backstop.
+                if verdict_rank(verdict) < verdict_rank(Verdict.HELD):
+                    verdict = Verdict.BLOCKED
+
+                expiry_metadata = {
+                    **dict(hold.metadata),
+                    "hold_expiry": True,
+                    "hold_id": hold.hold_id,
+                    "on_expiry": hold.on_expiry.value,
+                    "original_verdict": Verdict.HELD.value,
+                    "held_at": hold.held_at.isoformat(),
+                    "timeout_seconds": hold.timeout_seconds,
+                    "expires_at": hold.expires_at.isoformat(),
+                }
+                expiry_record = EnforcementRecord(
+                    agent_id=hold.agent_id,
+                    action=hold.action,
+                    verdict=verdict,
+                    verification_result=hold.record.verification_result,
+                    timestamp=evaluated_at,
+                    metadata=expiry_metadata,
+                )
+                self._records.append(expiry_record)
+                # Bounded memory: trim oldest 10% when exceeding maxlen
+                if len(self._records) > self._max_records:
+                    trim_count = self._max_records // 10
+                    self._records = self._records[trim_count:]
+
+                expiry_records.append(expiry_record)
+                logger.warning(
+                    "[ENFORCE] HELD EXPIRED: agent=%s action=%s hold_id=%s "
+                    "on_expiry=%s -> %s",
+                    hold.agent_id,
+                    hold.action,
+                    hold.hold_id,
+                    hold.on_expiry.value,
+                    verdict.value,
+                )
 
         return expiry_records
 
@@ -651,12 +696,17 @@ class StrictEnforcer:
             ``reviewer_id`` bound), also appended to the enforcer's audit sink.
 
         Raises:
-            ReviewDecisionError: If ``hold_id`` is unknown/missing, or a
-                ``MODIFY`` omits ``modified_verdict`` (both fail-closed). A bad
-                decision raises BEFORE the hold is consumed, so the hold
-                survives for a corrected retry.
+            ReviewDecisionError: If ``hold_id`` is unknown/missing/expired, a
+                ``MODIFY`` omits ``modified_verdict``, an ``APPROVE``/``DECLINE``
+                carries a modified_verdict (ambiguous), or ``reviewer_id``
+                exceeds the length cap — all fail-closed. A bad decision raises
+                BEFORE the hold is consumed, so the hold survives for a
+                corrected retry.
             ValueError: If ``hold_id`` or ``reviewer_id`` is not a safe
                 identifier.
+
+        Thread-safe: the scan → pop → reassign is single-winner under a lock;
+        concurrent calls on the same hold resolve exactly once.
         """
         from kailash.trust._locking import validate_id
         from kailash.trust.enforce.held import (
@@ -671,6 +721,13 @@ class StrictEnforcer:
         # hold_id (symmetric charset floor).
         validate_id(hold_id)
         validate_id(reviewer_id)
+        # Length floor (Finding 3a): validate_id caps the charset but not the
+        # size; a multi-megabyte reviewer_id would flood the audit sink + logs.
+        if len(reviewer_id) > _MAX_REVIEWER_ID_LEN:
+            raise ReviewDecisionError(
+                f"apply_review_decision: reviewer_id length {len(reviewer_id)} "
+                f"exceeds cap {_MAX_REVIEWER_ID_LEN} — fail-closed"
+            )
 
         # Resolve the decision FIRST. resolve_review_verdict is pure and
         # side-effect-free but VALIDATES the decision — a MODIFY without a
@@ -680,69 +737,78 @@ class StrictEnforcer:
         # validating step, per eatp.md § Signed-Audit-Emits-BEFORE-State-Advance).
         verdict = resolve_review_verdict(decision, modified_verdict=modified_verdict)
 
-        # The passive review queue is the source of truth for pending holds
-        # (every QUEUE escalation lands here with its hold_id); the store only
-        # tracks the timeout-bearing subset. Compute the surviving queue WITHOUT
-        # reassigning it yet, then claim the timeout-tracked hold from the store.
-        matched: Optional[EnforcementRecord] = None
-        remaining: List[EnforcementRecord] = []
-        for queued in self._review_queue:
-            if matched is None and queued.metadata.get("hold_id") == hold_id:
-                matched = queued
-            else:
-                remaining.append(queued)
+        # Scan → pop → reassign is a read-modify-write on shared state; it MUST
+        # be atomic (Finding 2) so two concurrent apply_review_decision calls on
+        # the SAME queue-only hold cannot both find `matched` and both resolve
+        # (a DECLINE + APPROVE race could otherwise emit AUTO_APPROVED after a
+        # BLOCKED). The lock makes review resolution single-winner: the first
+        # caller claims the hold, the second finds it in neither surface and
+        # fails closed. Also serializes review vs expire_holds vs admission.
+        with self._lock:
+            # The passive review queue is the source of truth for pending holds
+            # (every QUEUE escalation lands here with its hold_id); the store
+            # only tracks the timeout-bearing subset. Compute the surviving
+            # queue WITHOUT reassigning it yet, then claim the store hold.
+            matched: Optional[EnforcementRecord] = None
+            remaining: List[EnforcementRecord] = []
+            for queued in self._review_queue:
+                if matched is None and queued.metadata.get("hold_id") == hold_id:
+                    matched = queued
+                else:
+                    remaining.append(queued)
 
-        stored = self._held_store.pop(hold_id)
+            stored = self._held_store.pop(hold_id)
 
-        if matched is None and stored is None:
-            # Unknown / already-resolved hold_id — fail closed. The pop above
-            # was a no-op (the id is in neither surface), so nothing was
-            # consumed and the reviewer can retry.
-            raise ReviewDecisionError(
-                f"apply_review_decision: unknown or already-resolved hold_id "
-                f"{hold_id!r} — fail-closed"
+            if matched is None and stored is None:
+                # Unknown / already-resolved / already-expired hold_id — fail
+                # closed. The pop above was a no-op (the id is in neither
+                # surface), so nothing was consumed and the reviewer can retry.
+                raise ReviewDecisionError(
+                    f"apply_review_decision: unknown or already-resolved hold_id "
+                    f"{hold_id!r} — fail-closed"
+                )
+
+            # Commit the queue mutation only now that the decision is valid AND
+            # the hold exists.
+            self._review_queue = remaining
+
+            base = matched if matched is not None else stored.record
+
+            # A hold recovered from the store as a CORRUPT sentinel carries
+            # verification_result.valid == False (the fail-closed DENY sentinel
+            # from SqliteHeldActionStore.pop). An APPROVE/MODIFY over corrupt
+            # state MUST NOT resolve to a permissive verdict — force BLOCKED,
+            # symmetric with the expiry path's corrupt-row handling. A
+            # well-formed HELD record is always valid=True (classify() only
+            # yields HELD for valid results), so this never false-positives on a
+            # genuine hold (invariant 5).
+            corrupt_hold = base.verification_result.valid is False
+            if corrupt_hold:
+                verdict = Verdict.BLOCKED
+
+            decision_metadata: Dict[str, Any] = {
+                **dict(base.metadata),
+                "hold_id": hold_id,
+                "reviewer_id": reviewer_id,
+                "reviewer_decision": decision.value,
+                "review_of_verdict": Verdict.HELD.value,
+            }
+            if modified_verdict is not None:
+                decision_metadata["modified_verdict_requested"] = modified_verdict.value
+            if corrupt_hold:
+                decision_metadata["corrupt_hold"] = True
+
+            decision_record = EnforcementRecord(
+                agent_id=base.agent_id,
+                action=base.action,
+                verdict=verdict,
+                verification_result=base.verification_result,
+                metadata=decision_metadata,
             )
-
-        # Commit the queue mutation only now that the decision is valid AND the
-        # hold exists.
-        self._review_queue = remaining
-
-        base = matched if matched is not None else stored.record
-
-        # A hold recovered from the store as a CORRUPT sentinel carries
-        # verification_result.valid == False (the fail-closed DENY sentinel from
-        # SqliteHeldActionStore.pop). An APPROVE/MODIFY over corrupt state MUST
-        # NOT resolve to a permissive verdict — force BLOCKED, symmetric with
-        # the expiry path's corrupt-row handling. A well-formed HELD record is
-        # always valid=True (classify() only yields HELD for valid results), so
-        # this never false-positives on a genuine hold (invariant 5).
-        corrupt_hold = base.verification_result.valid is False
-        if corrupt_hold:
-            verdict = Verdict.BLOCKED
-
-        decision_metadata: Dict[str, Any] = {
-            **dict(base.metadata),
-            "hold_id": hold_id,
-            "reviewer_id": reviewer_id,
-            "reviewer_decision": decision.value,
-            "review_of_verdict": Verdict.HELD.value,
-        }
-        if modified_verdict is not None:
-            decision_metadata["modified_verdict_requested"] = modified_verdict.value
-        if corrupt_hold:
-            decision_metadata["corrupt_hold"] = True
-
-        decision_record = EnforcementRecord(
-            agent_id=base.agent_id,
-            action=base.action,
-            verdict=verdict,
-            verification_result=base.verification_result,
-            metadata=decision_metadata,
-        )
-        self._records.append(decision_record)
-        if len(self._records) > self._max_records:
-            trim_count = self._max_records // 10
-            self._records = self._records[trim_count:]
+            self._records.append(decision_record)
+            if len(self._records) > self._max_records:
+                trim_count = self._max_records // 10
+                self._records = self._records[trim_count:]
 
         logger.info(
             "[ENFORCE] REVIEW %s by reviewer=%s hold_id=%s -> %s",
