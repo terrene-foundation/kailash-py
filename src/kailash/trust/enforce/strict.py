@@ -191,11 +191,14 @@ class StrictEnforcer:
         self._max_pending_holds = max_pending_holds
         # Serializes every _review_queue / _records mutation so the review-queue
         # lifecycle is single-winner: the capacity-gate read+append, the
-        # apply_review_decision scan→pop→reassign, and the expire_holds
-        # pop+queue-reconcile are each atomic and mutually exclusive. Reentrant
-        # (RLock) because enforce() holds it across the _handle_held call which
-        # re-acquires it. Lock ordering is always enforcer-lock THEN store-lock
-        # (never the reverse) so no deadlock with the store's own lock.
+        # apply_review_decision scan→pop→reassign, the expire_holds
+        # pop+audit-emit+queue-reconcile, and the clear_* resets are each atomic
+        # and mutually exclusive. Reentrant (RLock) DEFENSIVELY — no current path
+        # re-acquires it on the same thread (enforce() releases it before calling
+        # _handle_held, which re-acquires fresh), but RLock keeps a future
+        # guarded-method-calling-a-guarded-method refactor from self-deadlocking.
+        # Lock ordering is always enforcer-lock THEN store-lock (never the
+        # reverse) so no deadlock with the store's own lock.
         self._lock = threading.RLock()
 
         if on_held == HeldBehavior.CALLBACK and held_callback is None:
@@ -595,18 +598,21 @@ class StrictEnforcer:
         with self._lock:
             expired = self._held_store.pop_expired(evaluated_at)
 
-            # Reconcile the review queue: drop every entry whose hold_id was
-            # just expired, so an expired hold is absent from both surfaces and
-            # a late apply_review_decision hits the both-None guard (fail-closed
-            # ReviewDecisionError). Matched by the record's metadata["hold_id"],
-            # the same id _handle_held stamped and _register_hold shared.
+            # The set of ids to drop from the passive review queue on expiry.
+            # For a NORMAL expired hold this is hold.hold_id (== the id
+            # _handle_held stamped + _register_hold shared). For a CORRUPT row
+            # recovered as the fail-closed sentinel, hold.hold_id is a FRESH id
+            # that matches no queue entry — so the ORIGINAL id (preserved by
+            # _corrupt_sentinel as metadata["original_hold_id"]) is unioned in.
+            # Without this union a corrupt-row expiry leaves the original queue
+            # entry (valid=True HELD) live, and a late apply_review_decision(H,
+            # APPROVE) resurrects an already-BLOCKED action to AUTO_APPROVED.
             expired_ids = {hold.hold_id for hold in expired}
-            if expired_ids:
-                self._review_queue = [
-                    queued
-                    for queued in self._review_queue
-                    if queued.metadata.get("hold_id") not in expired_ids
-                ]
+            expired_ids |= {
+                hold.metadata.get("original_hold_id")
+                for hold in expired
+                if hold.metadata.get("original_hold_id")
+            }
 
             for hold in expired:
                 verdict = resolve_expiry_verdict(hold.on_expiry)
@@ -650,6 +656,19 @@ class StrictEnforcer:
                     hold.on_expiry.value,
                     verdict.value,
                 )
+
+            # State advance AFTER the audit emit (eatp.md § Signed-Audit-Emits-
+            # BEFORE-State-Advance): every BLOCKED expiry record is appended to
+            # the audit sink above BEFORE the review-queue is rebound here, so a
+            # sink that raises can never leave a rebound queue with a hole in the
+            # audit chain. (The store deletion inside pop_expired is unavoidably
+            # first; the queue rebind is the state advance ordered to follow.)
+            if expired_ids:
+                self._review_queue = [
+                    queued
+                    for queued in self._review_queue
+                    if queued.metadata.get("hold_id") not in expired_ids
+                ]
 
         return expiry_records
 
@@ -841,11 +860,13 @@ class StrictEnforcer:
 
     def clear_records(self) -> None:
         """Clear enforcement records."""
-        self._records.clear()
+        with self._lock:
+            self._records.clear()
 
     def clear_review_queue(self) -> None:
         """Clear the review queue."""
-        self._review_queue.clear()
+        with self._lock:
+            self._review_queue.clear()
 
 
 __all__ = [

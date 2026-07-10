@@ -599,8 +599,25 @@ class SqliteHeldActionStore:
 
         agent_id = _safe_str(1)
         action = _safe_str(2)
-        original_hold_id = repr(row[0])[:200] if row else "unknown"
+        # The sentinel is minted with a FRESH hold_id (below), but the ORIGINAL
+        # hold_id column is needed to reconcile the passive review queue on
+        # expiry (StrictEnforcer.expire_holds): a corrupt row is typically
+        # corrupt in a NON-hold_id column (e.g. on_expiry), so row[0] is a
+        # clean, matchable id. Trust it ONLY as a plain str reconcile KEY —
+        # never for control flow (the disposition is always DENY -> BLOCKED). A
+        # garbage / non-str value yields None (no queue match; still fail-safe).
+        try:
+            raw_hold_id: Any = row[0] if row else None
+        except Exception:
+            raw_hold_id = None
+        original_hold_id = raw_hold_id if isinstance(raw_hold_id, str) else None
+        original_hold_id_repr = repr(raw_hold_id)[:200] if row else "unknown"
 
+        metadata: Dict[str, Any] = {
+            "corrupt_row": True,
+            "original_hold_id": original_hold_id,
+            "original_hold_id_repr": original_hold_id_repr,
+        }
         vr = VerificationResult(
             valid=False,
             reason="corrupt held-action row — fail-closed BLOCKED",
@@ -612,7 +629,7 @@ class SqliteHeldActionStore:
             verdict=Verdict.HELD,
             verification_result=vr,
             timestamp=now,
-            metadata={"corrupt_row": True, "original_hold_id": original_hold_id},
+            metadata=dict(metadata),
         )
         return HeldAction(
             hold_id=new_hold_id(),
@@ -622,5 +639,5 @@ class SqliteHeldActionStore:
             timeout_seconds=0.0,
             on_expiry=ExpiryDisposition.DENY,
             record=record,
-            metadata={"corrupt_row": True, "original_hold_id": original_hold_id},
+            metadata=dict(metadata),
         )
