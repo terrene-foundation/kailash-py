@@ -69,26 +69,6 @@ from kailash.trust.authority import (
     OrganizationalAuthority,
 )
 
-# Consent attestation (issue #1481 — affirmative human-acceptance record)
-from kailash.trust.consent import (
-    ConsentAttestation,
-    ConsentChainError,
-    ConsentError,
-    ConsentLedger,
-    hash_document,
-    verify_consent_attestation,
-)
-
-# Disclosure tracing (issue #1482 — per-recipient leak-attribution tokens)
-from kailash.trust.disclosure import (
-    DisclosureError,
-    DisclosureRecord,
-    DisclosureStoreProtocol,
-    DisclosureTracer,
-    InMemoryDisclosureStore,
-)
-from kailash.trust.signing.derivation import derive_trace_token
-
 # Chain data structures
 from kailash.trust.chain import (
     ALL_DIMENSIONS,
@@ -117,12 +97,31 @@ from kailash.trust.chain import (
 from kailash.trust.chain_store import TrustStore
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 
+# Consent attestation (issue #1481 — affirmative human-acceptance record)
+from kailash.trust.consent import (
+    ConsentAttestation,
+    ConsentChainError,
+    ConsentError,
+    ConsentLedger,
+    hash_document,
+    verify_consent_attestation,
+)
+
 # Cost Event (SPEC-08 cost tracking with deduplication)
 from kailash.trust.cost_event import (
     CostDeduplicator,
     CostEvent,
     CostEventError,
     DuplicateCostError,
+)
+
+# Disclosure tracing (issue #1482 — per-recipient leak-attribution tokens)
+from kailash.trust.disclosure import (
+    DisclosureError,
+    DisclosureRecord,
+    DisclosureStoreProtocol,
+    DisclosureTracer,
+    InMemoryDisclosureStore,
 )
 
 # Canonical envelope (SPEC-07 unification)
@@ -195,6 +194,18 @@ from kailash.trust.posture.postures import (
     map_verification_to_posture,
 )
 
+# BH3 origin-authentication (issue #1510). The pure parts (OriginBoundTrace,
+# compute_origin_digest, origin_signing_payload) carry no pynacl dependency;
+# sign_/verify_origin_bound_trace late-import the Ed25519 signer at call time,
+# so this eager import stays pynacl-free.
+from kailash.trust.reasoning.origin import (
+    OriginBoundTrace,
+    compute_origin_digest,
+    origin_signing_payload,
+    sign_origin_bound_trace,
+    verify_origin_bound_trace,
+)
+
 # Reasoning traces (no pynacl dependency)
 from kailash.trust.reasoning.traces import (
     ConfidentialityLevel,
@@ -210,6 +221,7 @@ from kailash.trust.roles import (
     check_permission,
     require_permission,
 )
+from kailash.trust.signing.derivation import derive_trace_token
 
 # Vocabulary
 from kailash.trust.vocabulary import (
@@ -423,6 +435,12 @@ __all__ = [
     "ReasoningTrace",
     "EvidenceReference",
     "reasoning_completeness_score",
+    # --- BH3 origin-authentication (issue #1510) ---
+    "OriginBoundTrace",
+    "compute_origin_digest",
+    "origin_signing_payload",
+    "sign_origin_bound_trace",
+    "verify_origin_bound_trace",
     # --- Hooks ---
     "HookType",
     "HookContext",

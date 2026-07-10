@@ -1,0 +1,32 @@
+{
+  "description": "BH3 origin-auth (#1510) \u2014 WITH origin binding. The signed pre-image is the current trace pre-image PLUS a bound 'origin' digest = sha256:<hex> over the RFC 8785 (JCS) canonicalization of the originating instruction (reusing #1590's jcs_subject_hash). A trace whose declared origin digest != the digest of its TRUE originating instruction MUST fail authentication even with a valid Ed25519 signature.",
+  "pact_type": "OriginBoundTrace",
+  "conformance_requirement": "BH3-bound",
+  "origin_bound": true,
+  "input": {
+    "trace": {
+      "decision": "approve deploy",
+      "rationale": "cost within envelope",
+      "confidentiality": "restricted",
+      "timestamp": "2026-01-15T10:30:00+00:00",
+      "alternatives_considered": [
+        "defer"
+      ],
+      "evidence": [
+        {
+          "cost": 500
+        }
+      ],
+      "methodology": "cost_benefit",
+      "confidence": 0.9
+    },
+    "originating_instruction": {
+      "instruction": "deploy service X to staging",
+      "issued_by": "D1-R1",
+      "nonce": "abc123"
+    }
+  },
+  "expected_origin_digest": "sha256:be309592b937446a1e63c99921f72d200a44096a5e8cd73a4e450271371276fc",
+  "expected_signing_preimage": "{\"alternatives_considered\":[\"defer\"],\"confidence\":0.9,\"confidentiality\":\"restricted\",\"decision\":\"approve deploy\",\"evidence\":[{\"cost\":500}],\"methodology\":\"cost_benefit\",\"origin\":\"sha256:be309592b937446a1e63c99921f72d200a44096a5e8cd73a4e450271371276fc\",\"rationale\":\"cost within envelope\",\"timestamp\":\"2026-01-15T10:30:00+00:00\"}",
+  "expected_preimage_sha256": "7f14605527f68692f0133f737eabb89c7474a82f90672ec617fcd818099c05de"
+}

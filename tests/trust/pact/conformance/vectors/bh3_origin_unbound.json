@@ -1,0 +1,26 @@
+{
+  "description": "BH3 origin-auth (#1510) \u2014 WITHOUT origin binding. The signed pre-image is BYTE-IDENTICAL to the current (pre-BH3) ReasoningTrace signing pre-image; no 'origin' key in the signed bytes. An unbound trace's signature verifies exactly as pre-BH3.",
+  "pact_type": "OriginBoundTrace",
+  "conformance_requirement": "BH3-unbound",
+  "origin_bound": false,
+  "input": {
+    "trace": {
+      "decision": "approve deploy",
+      "rationale": "cost within envelope",
+      "confidentiality": "restricted",
+      "timestamp": "2026-01-15T10:30:00+00:00",
+      "alternatives_considered": [
+        "defer"
+      ],
+      "evidence": [
+        {
+          "cost": 500
+        }
+      ],
+      "methodology": "cost_benefit",
+      "confidence": 0.9
+    }
+  },
+  "expected_signing_preimage": "{\"alternatives_considered\":[\"defer\"],\"confidence\":0.9,\"confidentiality\":\"restricted\",\"decision\":\"approve deploy\",\"evidence\":[{\"cost\":500}],\"methodology\":\"cost_benefit\",\"rationale\":\"cost within envelope\",\"timestamp\":\"2026-01-15T10:30:00+00:00\"}",
+  "expected_preimage_sha256": "0d2a1d1cc71e316b6f3fe334a4c24a8d523d7d95e0bbfc9d73a6cbe8015cae94"
+}

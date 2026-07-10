@@ -15,6 +15,13 @@ Captures WHY a decision was made during trust delegation and audit operations:
 
 from __future__ import annotations
 
+from kailash.trust.reasoning.origin import (
+    OriginBoundTrace,
+    compute_origin_digest,
+    origin_signing_payload,
+    sign_origin_bound_trace,
+    verify_origin_bound_trace,
+)
 from kailash.trust.reasoning.traces import (
     ConfidentialityLevel,
     EvidenceReference,
@@ -27,4 +34,10 @@ __all__ = [
     "ReasoningTrace",
     "EvidenceReference",
     "reasoning_completeness_score",
+    # BH3 origin-authentication (issue #1510)
+    "OriginBoundTrace",
+    "compute_origin_digest",
+    "origin_signing_payload",
+    "sign_origin_bound_trace",
+    "verify_origin_bound_trace",
 ]
