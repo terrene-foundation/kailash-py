@@ -108,20 +108,18 @@ class RedisBackend(RateLimitBackend):
         try:
             from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+            from kailash.utils.url_credentials import is_sensitive_query_key
+
             parsed = urlparse(url)
-            sensitive = {
-                "password",
-                "sslpassword",
-                "sslkey",
-                "token",
-                "authtoken",
-                "apikey",
-            }
+            # Credential-bearing query keys are matched via the SINGLE
+            # canonical helper — the same set ``mask_url``,
+            # ``DatabaseConfig.get_masked_connection_string``, and
+            # ``SecureLogger`` use. No local copy.
             has_userinfo = bool(parsed.username or parsed.password)
             query_has_secret = False
             if parsed.query:
                 query_has_secret = any(
-                    k.lower() in sensitive
+                    is_sensitive_query_key(k)
                     for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
                 )
             if not has_userinfo and not query_has_secret:
@@ -134,7 +132,9 @@ class RedisBackend(RateLimitBackend):
                 parsed = parsed._replace(netloc=new_netloc)
             if query_has_secret:
                 pairs = parse_qsl(parsed.query, keep_blank_values=True)
-                masked = [(k, "***" if k.lower() in sensitive else v) for k, v in pairs]
+                masked = [
+                    (k, "***" if is_sensitive_query_key(k) else v) for k, v in pairs
+                ]
                 parsed = parsed._replace(query=urlencode(masked))
             return urlunparse(parsed)
         except Exception:

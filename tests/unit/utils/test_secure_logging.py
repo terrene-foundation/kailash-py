@@ -130,17 +130,31 @@ class TestSecureLoggingPatterns:
         """Test PII field name set."""
         pii_fields = SecureLoggingPatterns.PII_FIELD_NAMES
 
-        # Check common fields are included
+        # Check common (non-credential) PII fields are included
         assert "ssn" in pii_fields
         assert "credit_card" in pii_fields
-        assert "password" in pii_fields
         assert "email" in pii_fields
         assert "phone_number" in pii_fields
         assert "date_of_birth" in pii_fields
 
+        # Credential query-key names (password / token / api_key / secret /
+        # ...) are NOT in PII_FIELD_NAMES anymore — they moved to the single
+        # canonical set kailash.utils.url_credentials._SENSITIVE_QUERY_KEYS,
+        # matched via is_sensitive_query_key in SecureLogger._mask_dict. The
+        # coverage is verified behaviorally below, not by set membership.
+        assert "password" not in pii_fields
+
         # Check case sensitivity (should be lowercase)
         assert "SSN" not in pii_fields
-        assert "Password" not in pii_fields
+
+    def test_credential_field_names_masked_via_canonical_set(self):
+        """Credential keys relocated to the canonical set are still masked."""
+        masked = SecureLogger("t")._mask_dict(
+            {"password": "hunter2", "access_token": "tok-abc", "api_key": "k-123"}
+        )
+        assert masked["password"] != "hunter2"
+        assert masked["access_token"] != "tok-abc"
+        assert masked["api_key"] != "k-123"
 
 
 class TestSecureLogger:
