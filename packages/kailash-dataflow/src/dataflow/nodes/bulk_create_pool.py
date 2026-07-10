@@ -514,15 +514,34 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                         conflict_clause = "ON DUPLICATE KEY UPDATE id = id"
                     query = f"INSERT INTO {self.table_name} ({column_names}) VALUES {values_clause} {conflict_clause}"
                 elif self.conflict_resolution == "update":
+                    # SECURITY (#1526 sibling — cross-tenant write): for a
+                    # multi_tenant model the ``id`` PK is global, so a cross-tenant
+                    # ``id`` collision must NOT let tenant B's upsert overwrite or
+                    # steal tenant A's row. Exclude ``tenant_id`` from the SET (no
+                    # ownership flip) and gate the update by the row's own tenant —
+                    # PG/SQLite via ``WHERE table.tenant_id = EXCLUDED.tenant_id``,
+                    # MySQL ODKU (no WHERE) via a per-column ``IF(tenant_id=...)``.
+                    tenant_guarded = self.multi_tenant and "tenant_id" in columns
                     # Use ON CONFLICT DO UPDATE for PostgreSQL/SQLite
                     if self.database_type.lower() in ["postgresql", "sqlite"]:
-                        update_columns = [col for col in columns if col != "id"]
+                        update_columns = [
+                            col
+                            for col in columns
+                            if col != "id"
+                            and not (tenant_guarded and col == "tenant_id")
+                        ]
                         if update_columns:
                             set_parts = [
                                 f"{col} = EXCLUDED.{col}" for col in update_columns
                             ]
+                            tenant_where = (
+                                f" WHERE {self.table_name}.tenant_id = EXCLUDED.tenant_id"
+                                if tenant_guarded
+                                else ""
+                            )
                             conflict_clause = (
-                                f"ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)}"
+                                f"ON CONFLICT (id) DO UPDATE SET "
+                                f"{', '.join(set_parts)}{tenant_where}"
                             )
                         else:
                             conflict_clause = "ON CONFLICT (id) DO NOTHING"
@@ -531,15 +550,33 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                         # (``VALUES(col)`` deprecated on 8.0.20+); the INSERT-side
                         # ``AS new_row`` alias and the ODKU ``new_row.col`` references
                         # are built from the same flag so they cannot drift.
-                        update_columns = [col for col in columns if col != "id"]
+                        update_columns = [
+                            col
+                            for col in columns
+                            if col != "id"
+                            and not (tenant_guarded and col == "tenant_id")
+                        ]
                         if update_columns:
-                            if mysql_use_row_alias:
+
+                            def _new_ref(c: str) -> str:
+                                return (
+                                    f"new_row.{c}"
+                                    if mysql_use_row_alias
+                                    else f"VALUES({c})"
+                                )
+
+                            if tenant_guarded:
+                                # ODKU has no WHERE — guard each SET with the tenant
+                                # IF() so a cross-tenant collision keeps the victim's
+                                # existing value (no theft, no version/timestamp bump).
                                 set_parts = [
-                                    f"{col} = new_row.{col}" for col in update_columns
+                                    f"{col} = IF(tenant_id = {_new_ref('tenant_id')}, "
+                                    f"{_new_ref(col)}, {col})"
+                                    for col in update_columns
                                 ]
                             else:
                                 set_parts = [
-                                    f"{col} = VALUES({col})" for col in update_columns
+                                    f"{col} = {_new_ref(col)}" for col in update_columns
                                 ]
                             conflict_clause = (
                                 f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"

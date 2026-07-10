@@ -643,3 +643,187 @@ async def test_issue_same_tenant_upsert_still_updates_postgres():
         await _run_same_tenant_positive_scenario(db)
     finally:
         db.close()
+
+
+# ===========================================================================
+# H1 (redteam) — BulkCreatePoolNode.async_run(conflict_resolution="update").
+#
+# ``BulkCreatePoolNode`` is a SEPARATE builder from the express bulk_upsert /
+# bulk_create paths exercised above. It is ``@register_node("BulkCreatePoolNode")``
+# and reachable via ``workflow.add_node("BulkCreatePoolNode", ...)`` (or a direct
+# instantiate + ``async_run``). Its ``conflict_resolution == "update"`` block
+# emitted ``ON CONFLICT (id) DO UPDATE SET {col}=EXCLUDED.{col}`` (PG/SQLite) and
+# the MySQL ODKU equivalent with NO tenant guard AND without excluding
+# ``tenant_id`` — the SAME cross-tenant write/theft breach the C1 fix closed in
+# the sibling builders (features/bulk.py, sql/dialects.py, nodes/bulk_upsert.py).
+#
+# The fix (for ``tenant_guarded = self.multi_tenant and "tenant_id" in columns``):
+#   * excludes ``tenant_id`` from the SET (no ownership flip);
+#   * PG/SQLite: appends ``WHERE {table}.tenant_id = EXCLUDED.tenant_id``;
+#   * MySQL ODKU (no WHERE): wraps each SET in ``IF(tenant_id = new_row.tenant_id
+#     / VALUES(tenant_id), <new>, <col>)``.
+# ``tenant_id`` reaches ``columns`` because ``_process_direct`` injects it into
+# every record for a ``multi_tenant`` node before deriving column names, so the
+# guard activates. These tests drive the node DIRECTLY and assert via a RAW
+# cross-tenant read (never a tenant-scoped read, which would mask the theft).
+# ===========================================================================
+
+
+def _sqlite_db_with_url():
+    """A multi_tenant SQLite DataFlow plus the connection_string the direct
+    ``BulkCreatePoolNode`` needs (it writes to the SAME backend file)."""
+    tmpdir = tempfile.mkdtemp()
+    path = f"{tmpdir}/mt1526bcpool_{int(time.time() * 1_000_000)}.db"
+    url = f"sqlite:///{path}"
+    return DataFlow(url, auto_migrate=True, multi_tenant=True), url
+
+
+async def _run_bcpool_cross_tenant_scenario(db: DataFlow, url: str) -> None:
+    from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
+
+    @db.model
+    class Doc:
+        id: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+    db.tenant_context.register_tenant("tenant-b", "B")
+
+    shared_id = _uid("doc")
+    with db.tenant_context.switch("tenant-a"):
+        await db.express.create(
+            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+        )
+
+    # THE BREACH: tenant B drives BulkCreatePoolNode directly with
+    # conflict_resolution="update" on tenant A's GLOBAL id PK. Pre-fix, the
+    # unguarded ON CONFLICT DO UPDATE / ODKU overwrote tenant A's title and
+    # flipped tenant_id to "tenant-b" (data theft). The guard makes it a no-op.
+    dbt = db._detect_database_type()
+    node = BulkCreatePoolNode(
+        table_name="docs",
+        database_type=dbt,
+        connection_string=url,
+        multi_tenant=True,
+        conflict_resolution="update",
+        tenant_id="tenant-b",
+    )
+    result = await node.async_run(data=[{"id": shared_id, "title": "B-STOLEN"}])
+    # The guarded no-op does not raise; the node returns its ordinary result dict.
+    assert isinstance(result, dict)
+
+    # LOAD-BEARING (raw cross-tenant read): tenant A's row is UNCHANGED — secret
+    # title intact (i.e. NOT "B-STOLEN"), tenant_id NOT flipped — and, because id
+    # is the global PK, exactly one row exists for shared_id, so tenant B did NOT
+    # gain/overwrite it. Assertions are id-scoped: the shared PostgreSQL `docs`
+    # table accumulates rows across regression runs, so a global repr scan would
+    # be polluted by residue (including the without-fix proof run's stolen row).
+    await _assert_tenant_a_row_intact(db, "docs", shared_id)
+    rows = await _raw_read_all(db, "docs")
+    this_id = [r for r in rows if str(r["id"]) == shared_id]
+    assert len(this_id) == 1, f"expected one row for id={shared_id}: {this_id!r}"
+    assert this_id[0]["tenant_id"] == "tenant-a", f"ownership flipped: {this_id[0]!r}"
+    assert this_id[0]["title"] != "B-STOLEN", f"tenant-b's write landed: {this_id[0]!r}"
+
+
+async def _run_bcpool_same_tenant_positive(db: DataFlow, url: str) -> None:
+    """The tenant guard MUST NOT lock out a legitimate SAME-tenant upsert: when
+    the incoming tenant matches the row's own tenant, the update DOES apply."""
+    from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
+
+    @db.model
+    class Doc:
+        id: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+
+    doc_id = _uid("doc")
+    with db.tenant_context.switch("tenant-a"):
+        await db.express.create("Doc", {"id": doc_id, "title": "v1"})
+
+    dbt = db._detect_database_type()
+    node = BulkCreatePoolNode(
+        table_name="docs",
+        database_type=dbt,
+        connection_string=url,
+        multi_tenant=True,
+        conflict_resolution="update",
+        tenant_id="tenant-a",
+    )
+    result = await node.async_run(data=[{"id": doc_id, "title": "v2-legit-update"}])
+    assert isinstance(result, dict)
+
+    # Same-tenant → WHERE tenant_id = EXCLUDED.tenant_id (/ IF()) is TRUE → the
+    # update applies. No false lockout.
+    rows = await _raw_read_all(db, "docs")
+    matches = [r for r in rows if str(r["id"]) == doc_id]
+    assert len(matches) == 1, f"expected one row for id={doc_id}: {rows!r}"
+    assert matches[0]["tenant_id"] == "tenant-a"
+    assert (
+        matches[0]["title"] == "v2-legit-update"
+    ), f"same-tenant update did NOT apply (false lockout): {matches[0]!r}"
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.sqlite
+async def test_issue_bulk_create_pool_node_id_conflict_no_cross_tenant_theft_sqlite():
+    """SQLite: tenant B ``BulkCreatePoolNode(conflict_resolution='update')`` on
+    tenant A's id does NOT overwrite/steal A's row (the H1 breach, fail-closed)."""
+    db, url = _sqlite_db_with_url()
+    try:
+        await _run_bcpool_cross_tenant_scenario(db, url)
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.sqlite
+async def test_issue_bulk_create_pool_node_same_tenant_update_still_applies_sqlite():
+    """SQLite: the cross-tenant guard does NOT regress a legitimate same-tenant
+    BulkCreatePoolNode upsert (the update still applies)."""
+    db, url = _sqlite_db_with_url()
+    try:
+        await _run_bcpool_same_tenant_positive(db, url)
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.postgresql
+@pytest.mark.requires_postgres
+async def test_issue_bulk_create_pool_node_id_conflict_no_cross_tenant_theft_postgres():
+    """PostgreSQL: the same fail-closed contract holds against the native
+    ON CONFLICT (id) DO UPDATE ... WHERE path (the real-DB breach shape)."""
+    if not _pg_available():
+        pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
+    db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    try:
+        await _run_bcpool_cross_tenant_scenario(db, TEST_DATABASE_URL)
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.postgresql
+@pytest.mark.requires_postgres
+async def test_issue_bulk_create_pool_node_same_tenant_update_still_applies_postgres():
+    """PostgreSQL: the guard does NOT regress a same-tenant BulkCreatePoolNode
+    upsert through the native guarded path."""
+    if not _pg_available():
+        pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
+    db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    try:
+        await _run_bcpool_same_tenant_positive(db, TEST_DATABASE_URL)
+    finally:
+        db.close()
