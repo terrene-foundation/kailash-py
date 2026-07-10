@@ -81,6 +81,19 @@ def _envelope_to_canonical_dict(envelope: ConstraintEnvelopeConfig) -> dict[str,
     convert them to their string values for JSON-safe canonical output.
     """
     d = envelope.model_dump(mode="python")
+    # BH5 (#1510): prune UNSET breaker fields so a breaker-less envelope's
+    # canonical is byte-identical to the pre-BH5 form -- matching the signing
+    # pre-image (envelopes.py::_envelope_signing_dict). A configured breaker
+    # keeps its fields.
+    _op = d.get("operational")
+    if isinstance(_op, dict):
+        for _f in (
+            "circuit_failure_threshold",
+            "circuit_window_seconds",
+            "circuit_cooldown_seconds",
+        ):
+            if _op.get(_f) is None:
+                _op.pop(_f, None)
 
     def _enum_to_value(obj: Any) -> Any:
         if isinstance(obj, ConfidentialityLevel):

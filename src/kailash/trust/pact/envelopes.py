@@ -1302,7 +1302,7 @@ class SignedEnvelope:
                 verify_signature,
             )
 
-            payload = serialize_for_signing(self.envelope.model_dump(mode="json"))
+            payload = serialize_for_signing(_envelope_signing_dict(self.envelope))
             return verify_signature(payload, self.signature, public_key)
         except ImportError:
             raise
@@ -1437,6 +1437,38 @@ class SignedEnvelope:
         )
 
 
+# BH5 (#1510): the circuit-breaker fields are NEW to OperationalConstraintConfig.
+# To preserve the SignedEnvelope pre-image for every pre-BH5 / breaker-less /
+# cross-SDK envelope (the same backward-compat contract BH3 used for the trace
+# unbound form), an UNSET (None) breaker field contributes ZERO bytes to the
+# signing pre-image -- a breaker-less envelope signs byte-identically to the
+# pre-BH5 form. A CONFIGURED breaker keeps its fields, so they are then
+# cryptographically bound. The Rust SDK (rs#1714) applies the same conditional
+# exclusion, so breaker-less envelopes cross-verify unchanged.
+_BH5_OPTIONAL_OPERATIONAL_FIELDS = (
+    "circuit_failure_threshold",
+    "circuit_window_seconds",
+    "circuit_cooldown_seconds",
+)
+
+
+def _envelope_signing_dict(envelope: ConstraintEnvelopeConfig) -> dict[str, Any]:
+    """Canonical signing pre-image dict for a constraint envelope.
+
+    Prunes UNSET (None) BH5 breaker fields from the operational block so a
+    breaker-less envelope's signed bytes are byte-identical to the pre-BH5
+    form (backward compat + cross-SDK parity). A configured breaker keeps its
+    fields (signed = cryptographically bound).
+    """
+    payload = envelope.model_dump(mode="json")
+    operational = payload.get("operational")
+    if isinstance(operational, dict):
+        for field_name in _BH5_OPTIONAL_OPERATIONAL_FIELDS:
+            if operational.get(field_name) is None:
+                operational.pop(field_name, None)
+    return payload
+
+
 def sign_envelope(
     envelope: ConstraintEnvelopeConfig,
     private_key: str,
@@ -1471,7 +1503,7 @@ def sign_envelope(
     from kailash.trust.signing.crypto import serialize_for_signing, sign
 
     now = datetime.now(UTC)
-    payload = serialize_for_signing(envelope.model_dump(mode="json"))
+    payload = serialize_for_signing(_envelope_signing_dict(envelope))
     signature = sign(payload, private_key)
 
     return SignedEnvelope(

@@ -148,3 +148,52 @@ def test_re_registration_cannot_silently_strip_the_breaker() -> None:
                 ),
             )
         )
+
+
+def test_breakerless_envelope_signing_preimage_is_byte_identical_to_pre_bh5() -> None:
+    """The HIGH regression (signed-envelope backward compat).
+
+    The breaker fields are NEW on OperationalConstraintConfig. If they entered
+    the SignedEnvelope pre-image as ``null`` for a breaker-less envelope, EVERY
+    pre-BH5 / cross-SDK (rs-signed) constraint envelope would fail verification
+    under post-BH5 code. Unset breaker fields are pruned from the signing dict,
+    so a breaker-less envelope's signed BYTES carry no ``circuit_*`` key --
+    byte-identical to the pre-BH5 form (the same backward-compat contract BH3
+    used for its trace unbound form).
+    """
+    from kailash.trust.pact.envelopes import _envelope_signing_dict
+    from kailash.trust.signing.crypto import serialize_for_signing
+
+    env = ConstraintEnvelopeConfig(
+        id="env-bc",
+        operational=OperationalConstraintConfig(
+            allowed_actions=["deploy"], max_actions_per_day=100
+        ),
+    )
+    payload = serialize_for_signing(_envelope_signing_dict(env))
+    # Behavioral assertion on the SIGNED bytes, not the source: no breaker key.
+    assert "circuit_" not in payload
+    # The pre-existing operational fields are still signed (not over-pruned).
+    assert "max_actions_per_day" in payload
+
+
+def test_configured_breaker_is_bound_into_the_signed_preimage() -> None:
+    """A CONFIGURED breaker keeps its fields in the signed pre-image, so a
+    tripped/held breaker cannot be silently stripped from a signed envelope
+    without invalidating the signature."""
+    from kailash.trust.pact.envelopes import _envelope_signing_dict
+    from kailash.trust.signing.crypto import serialize_for_signing
+
+    env = ConstraintEnvelopeConfig(
+        id="env-cb",
+        operational=OperationalConstraintConfig(
+            allowed_actions=["deploy"],
+            circuit_failure_threshold=3,
+            circuit_window_seconds=3600.0,
+            circuit_cooldown_seconds=300.0,
+        ),
+    )
+    payload = serialize_for_signing(_envelope_signing_dict(env))
+    assert "circuit_failure_threshold" in payload
+    assert "circuit_window_seconds" in payload
+    assert "circuit_cooldown_seconds" in payload

@@ -997,6 +997,13 @@ class GovernanceEngine:
         if breaker_token is not None:
             b_key, b_config, b_decision = breaker_token
             if b_decision.record:
+                # Leaf-scoped breach signal: level_before_breaker is the Steps
+                # 2-3.6 outcome, so it also excludes the later ancestor-verify
+                # and knowledge-access tightening. An action denied SOLELY by an
+                # ancestor envelope / knowledge gate does not accumulate toward a
+                # trip -- no exposure, since such actions are already blocked on
+                # every call by that gate; the breaker adds a hold only for
+                # leaf-envelope breaches.
                 breached = level_before_breaker in ("held", "blocked")
                 try:
                     self._circuit_breaker.record(
@@ -1007,10 +1014,11 @@ class GovernanceEngine:
                         was_probe=b_decision.was_probe,
                     )
                 except Exception:
+                    # Schema-safe (observability Rule 8): no raw action name at
+                    # WARN. The fail-closed-to-BLOCKED verdict + audit carry the
+                    # signal; the raw (role, action) stays out of the log line.
                     logger.warning(
-                        "Circuit-breaker record error for action=%s -- "
-                        "fail-closed to BLOCKED",
-                        action,
+                        "Circuit-breaker record error -- fail-closed to BLOCKED"
                     )
                     level = combine_levels(level, "blocked")
                     reason = "Circuit-breaker record error -- fail-closed to BLOCKED"
@@ -1471,10 +1479,7 @@ class GovernanceEngine:
             # CLOSED to BLOCKED (Rule 4). The generic reason avoids leaking the
             # raw window/cooldown into the verdict (observability Rule 8). Nothing
             # is recorded -- an errored check is not a real governance outcome.
-            logger.warning(
-                "Circuit-breaker check error for action=%s -- fail-closed to BLOCKED",
-                action,
-            )
+            logger.warning("Circuit-breaker check error -- fail-closed to BLOCKED")
             return (
                 "blocked",
                 "Circuit-breaker check error -- fail-closed to BLOCKED",
