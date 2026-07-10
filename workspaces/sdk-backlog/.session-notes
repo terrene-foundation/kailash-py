@@ -1,43 +1,85 @@
-# Session Notes — 2026-07-10
+# Session Notes — 2026-07-11
 
 ## Where we are
 
-SDK-backlog session CLOSED. Shipped + verified-live two PyPI releases (kailash-dataflow
-2.14.7 fabric tenant guards; kailash 2.47.0 BH3 origin-auth) and completed the cross-SDK
-lockstep handoffs to the Rust SDK. Board is clean (0 open PRs). Phase 05-codify; no new
-cross-project rule surfaced (patterns are applications of existing tenant-isolation Rule 8 +
-cross-sdk-inspection Rule 4b/4c). Remaining open issues are all cross-SDK / user-gated.
+SDK-backlog session CLOSED. Shipped + verified-live **kailash 2.48.0** (SAFR BH5
+governance circuit-breaker, #1510). This COMPLETES the SAFR BH1–BH5 primitive set
+on the Python side. Board is clean (0 open PRs). Phase 05-codify. One reusable
+learning surfaced (signed-model field additions break cross-version/cross-SDK
+signatures) — flagged below as a `/codify` candidate for the human to weigh.
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0007` + `0008` — cross-repo grant + rs-handoff receipts.
-2. `workspaces/sdk-backlog/04-validate/sweep-2026-07-10.md` — this cycle's /sweep.
+1. `gh issue view 1510 --comments` — the final BH1–BH5 disposition table + the
+   closure recommendation (Python scope complete; the Rust SDK mirror rs#1714 is
+   the only open cross-SDK work).
+2. `workspaces/sdk-backlog/handoff/rs-1714-circuit-breaker.md` — the cross-SDK
+   byte contract for the Rust SDK mirror.
 3. `gh issue list --state open` — the forest below (1510, 1606, 1601, 1532).
 
 ## Executed this session
 
-- Released to PyPI (verified via clean-venv install): **kailash-dataflow 2.14.7** (tag `dataflow-v2.14.7`) + **kailash 2.47.0** (tag `v2.47.0`).
-- Posted cross-SDK handoffs to the Rust SDK repo: **rs#1667** (subject_hash JCS vectors), **rs#1707** (BH3 Python-reference pre-images), **rs#1729** (NEW — soft_delete parity brief). Paired py back-links on #1590/#1601/#1510.
+- **Assess-then-implement** on #1510 BH1/BH4/BH5 (3 parallel deep-dives): BH1
+  (#1514) and BH4 (#1516) independently re-verified ALREADY-PRESENT against source
+  (BH4's "likely gap" note refuted). Only BH5 was a genuine gap.
+- **Implemented BH5** — `PactCircuitBreaker`, a first-class trip-and-hold
+  governance control at `verify_action` Step 3.7 (a rate limiter re-admits when
+  its window slides; a breaker trips and holds). Enforcement-surface parity
+  (monotonic-tightening validator rejects breaker strip/loosen), fail-closed on
+  NaN/Inf, never evicts a tripped key. Cross-SDK conformance vectors
+  `circuit_breaker.json` + `rate_limit_enforcement.json`.
+- **Two adversarial redteam rounds to convergence** (security + correctness +
+  parity, full-context). Round 1 found 1 HIGH + 2 LOW; Round 2 CLEAN with
+  byte-level evidence. Full pact suite 1534 passed; conformance 156; `shasum -c`
+  all-OK; enforcement-parity mutation-tested.
+- **Released** kailash 2.48.0 (PR #1671 feature → #1672 release → tag `v2.48.0` →
+  PyPI). Verified live via clean-venv install + BH5 surface import.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                       | Value-anchor (MUST-1 source)                                  | Status                                          |
-| --- | ------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------- |
-| F1  | #1510 SAFR BH1/BH4/BH5 (remaining)         | #1510 — governed agents inherit per-action independence, evidence-quality, circuit-breaker | queued — BH2+BH3 done; BH1/BH4/BH5 cross-SDK lockstep |
-| F2  | #1606 express `v2` keyspace half           | #1606 — Rust-pinned v2 keyspace, byte-changing v2→v3         | BLOCKED — rs#1713; land py+rs together           |
-| F3  | #1601 Rust soft_delete/versioned parity    | #1601 — py side #1598 done; fix belongs in the Rust repo      | in-flight — handed to rs#1729; close when rs lands |
-| F4  | #1532 delegate-connectors → contrib/        | #1532 — consolidate the delegate adapter layer beside its framework | DEFERRED — dedicated session; sources operator-local |
+| ID  | Item | Status |
+| --- | ---- | ------ |
+| F1  | #1510 SAFR BH1–BH5 | **BH1–BH5 all DONE py-side.** Awaiting human closure decision (close + let rs#1714 carry the mirror, or keep open as the cross-SDK umbrella). |
+| F2  | #1606 express `v2` keyspace half | BLOCKED — rs-pinned v2 keyspace; land py+rs together |
+| F3  | #1601 Rust soft_delete/versioned parity | in-flight — handed to the Rust SDK; close when rs lands |
+| F4  | #1532 delegate-connectors → contrib/ | DEFERRED — dedicated session; sources operator-local |
 
-Closed this session: `F5` (#1659 fabric write guard) → PR #1665 / tag `dataflow-v2.14.7`. `F6` (#1658 source scoping) → PR #1665 / tag `dataflow-v2.14.7`. #1510 BH3 half → PR #1666 / tag `v2.47.0` (F1 remainder carried forward).
+Closed this session: BH5 (#1510) → PR #1671 / release #1672 / tag `v2.48.0`.
+
+## Codify candidate (human to weigh — NOT auto-run)
+
+**Signed-model field additions break cross-version + cross-SDK signature
+verification unless unset-fields are pruned from the signing pre-image.** Adding
+optional fields to `OperationalConstraintConfig` (a nested member of the signed
+`ConstraintEnvelopeConfig`) changed the Ed25519 sign/verify pre-image for EVERY
+envelope, because `model_dump()` emits new fields as `null`. A pre-BH5 or
+Rust-SDK-signed envelope then fails verification. Fix = the BH3 backward-compat
+pattern: prune UNSET new fields from the signing pre-image so absent fields
+contribute zero bytes (breaker-less envelopes sign byte-identically). This is a
+sibling of `cross-sdk-inspection.md` Rule 4b (which covers encoder *switches*, not
+field *additions* to a signed model) and could warrant a small clause there or in
+`trust-plane-security.md`. Deferred to a human `/codify` call.
 
 ## Traps
 
-- **Worktree has no local `.venv`** — run its tests with the MAIN venv + `PYTHONPATH=<wt>/src`.
-- **`pre-commit` launcher shebang is stale** → run `.venv/bin/python -m pre_commit run --files …`.
-- **`gh --repo terrene-foundation/kailash-py` = FALSE-POSITIVE repo-scope tripwire** (it's the CWD repo); omit `--repo` for CWD gh calls.
-- **PyPI verify cache-lag**: JSON endpoint leads the simple index; retry `pip install --no-cache-dir` ~75s later. `release/*` branches skip the PR-gate matrix; a CANCELLED duplicate `build` run can show "fail" while the current run passed — pin head, confirm current run.
-- **Pyright worktree/cross-version diagnostics are noise** — trust real test runs.
+- **Release duplicate-run race:** on a `release/*` branch a CANCELLED duplicate
+  `build` run shows "fail" in `gh pr checks` while the current-head run passes.
+  Confirm the build run whose `headSha` == the PR head and whose `conclusion` is
+  `success`; the "fail" was `conclusion: cancelled`.
+- **PyPI/uv cache lag:** clean-venv `uv pip install "kailash==X.Y.Z" --refresh`
+  can report "unsatisfiable" on the first attempt within ~60s of publish; retry
+  (attempt 2 at +60s succeeded this session).
+- **Pyright cross-version noise** (`kailash.trust._jcs` / `pact.weft` "could not
+  be resolved", `GovernanceVerdict … risk_factors`) is a false-positive trap —
+  trust real test runs; imports resolve at runtime.
+- **`gh --repo terrene-foundation/kailash-py` = FALSE-POSITIVE repo-scope
+  tripwire** (it's the CWD repo); omit `--repo` for CWD gh calls.
 
 ## Open questions for the human
 
-- `workspaces/mops-onboarding/` has 8 stranded forest rows (Sweep-6 `[AGG]`) + untracked `.session-notes` — belongs to that workspace's own `/wrapup`, not this one.
+- **#1510 closure** — recommend closing the Python scope (all BH done) and letting
+  rs#1714 carry the cross-SDK mirror; or keep open as the umbrella. Your call.
+- **Codify candidate** above — worth a small rule clause, or leave as a session
+  note?
+- `workspaces/mops-onboarding/` still has 8 stranded forest rows (Sweep-6 `[AGG]`)
+  + untracked `.session-notes` — belongs to that workspace's own `/wrapup`.
