@@ -33,6 +33,8 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
     TrustPostureLevel,
+    circuit_breaker_tightening_violation,
+    tighter_circuit_breaker,
 )
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pathutils import normalize_resource_path
@@ -240,6 +242,13 @@ def _intersect_operational(
     # Deny-overrides: remove any blocked action from allowed
     allowed -= blocked
 
+    # Circuit-breaker (BH5 #1510): carry the TIGHTER breaker into the effective
+    # envelope so Step 3.7 sees it. Without this the intersection would DROP the
+    # breaker fields entirely (they are not listed below), silently disabling a
+    # declared breaker at the effective-envelope surface -- the same
+    # enforcement-surface-parity failure the tightening validator guards.
+    cb_threshold, cb_window, cb_cooldown = tighter_circuit_breaker(a, b)
+
     return OperationalConstraintConfig(
         allowed_actions=sorted(allowed),
         blocked_actions=sorted(blocked),
@@ -255,6 +264,9 @@ def _intersect_operational(
             or b.rate_limit_window_type == "rolling"
             else "fixed"
         ),
+        circuit_failure_threshold=cb_threshold,
+        circuit_window_seconds=cb_window,
+        circuit_cooldown_seconds=cb_cooldown,
         reasoning_required=a.reasoning_required or b.reasoning_required,
     )
 
@@ -552,6 +564,18 @@ class RoleEnvelope:
             violations.append(
                 f"Operational: child allowed_actions {extra} not in parent allowed set"
             )
+
+        # Operational: circuit-breaker (BH5 #1510). A re-registration/tightening
+        # that STRIPS or LOOSENS a parent breaker is a widening -- a privilege
+        # escalation the breaker fix would itself introduce if this independent
+        # tightening surface stayed blind to the new dimension (security.md
+        # § Enforcement-Surface Parity). Uses the SAME shared restrictiveness
+        # model the eval-time intersection consumes.
+        cb_violation = circuit_breaker_tightening_violation(
+            parent_envelope.operational, child_envelope.operational
+        )
+        if cb_violation is not None:
+            violations.append(f"Operational: {cb_violation}")
 
         # max_delegation_depth: child must not exceed parent
         if (

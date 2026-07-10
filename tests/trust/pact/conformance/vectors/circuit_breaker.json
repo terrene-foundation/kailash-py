@@ -1,0 +1,148 @@
+{
+  "conformance_family": "bh5",
+  "description": "BH5 (#1510) governance circuit-breaker state-machine conformance. Each vector drives PactCircuitBreaker (py) / its Rust sibling with an explicit-time event sequence and pins the check-decision level + state after each event, so py<->rs semantics match byte-for-behaviour (EATP D6). Time is passed explicitly; all floats are finite (trust-plane-security MUST-8). A fail-closed case is expressed via `inject_nonfinite` so the JSON itself carries no NaN/Inf literal.",
+  "state_model": "CLOSED (normal) -> OPEN (tripped, blocks through cooldown) -> HALF_OPEN (one probe) -> CLOSED (probe clean) | OPEN (probe breached). Tighter breaker = LOWER threshold OR LONGER window OR LONGER cooldown; None = no breaker (widest).",
+  "vectors": [
+    {
+      "name": "trip_after_threshold_then_open_blocks",
+      "config": {
+        "failure_threshold": 3,
+        "window_seconds": 60.0,
+        "cooldown_seconds": 30.0
+      },
+      "key": "svc:deploy",
+      "events": [
+        {
+          "t": 0.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 1.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 2.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        { "t": 3.0, "expect_level": "blocked", "expect_state": "open" },
+        { "t": 10.0, "expect_level": "blocked", "expect_state": "open" },
+        { "t": 25.0, "expect_level": "blocked", "expect_state": "open" }
+      ]
+    },
+    {
+      "name": "cooldown_expiry_half_open_probe_success_recovers",
+      "config": {
+        "failure_threshold": 2,
+        "window_seconds": 60.0,
+        "cooldown_seconds": 30.0
+      },
+      "key": "svc:write",
+      "events": [
+        {
+          "t": 0.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 1.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        { "t": 2.0, "expect_level": "blocked", "expect_state": "open" },
+        {
+          "t": 31.0,
+          "breached": false,
+          "expect_level": "auto_approved",
+          "expect_state": "half_open",
+          "expect_probe": true
+        },
+        { "t": 32.0, "expect_level": "auto_approved", "expect_state": "closed" }
+      ]
+    },
+    {
+      "name": "probe_failure_reopens_with_fresh_cooldown",
+      "config": {
+        "failure_threshold": 2,
+        "window_seconds": 60.0,
+        "cooldown_seconds": 30.0
+      },
+      "key": "svc:delete",
+      "events": [
+        {
+          "t": 0.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 1.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 31.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "half_open",
+          "expect_probe": true
+        },
+        { "t": 32.0, "expect_level": "blocked", "expect_state": "open" },
+        { "t": 60.0, "expect_level": "blocked", "expect_state": "open" },
+        {
+          "t": 61.0,
+          "expect_level": "auto_approved",
+          "expect_state": "half_open",
+          "expect_probe": true
+        }
+      ]
+    },
+    {
+      "name": "one_probe_at_a_time_second_concurrent_call_blocked",
+      "config": {
+        "failure_threshold": 1,
+        "window_seconds": 60.0,
+        "cooldown_seconds": 30.0
+      },
+      "key": "svc:probe-race",
+      "events": [
+        {
+          "t": 0.0,
+          "breached": true,
+          "expect_level": "auto_approved",
+          "expect_state": "closed"
+        },
+        {
+          "t": 31.0,
+          "do_record": false,
+          "expect_level": "auto_approved",
+          "expect_state": "half_open",
+          "expect_probe": true
+        },
+        { "t": 31.5, "expect_level": "blocked", "expect_state": "half_open" }
+      ]
+    },
+    {
+      "name": "fail_closed_on_nonfinite_config",
+      "config": {
+        "failure_threshold": 3,
+        "window_seconds": 60.0,
+        "cooldown_seconds": 30.0
+      },
+      "key": "svc:fail-closed",
+      "events": [
+        { "t": 0.0, "inject_nonfinite": "window", "expect_error": true },
+        { "t": 0.0, "inject_nonfinite": "cooldown", "expect_error": true },
+        { "t": 0.0, "inject_nonfinite": "threshold", "expect_error": true }
+      ]
+    }
+  ]
+}

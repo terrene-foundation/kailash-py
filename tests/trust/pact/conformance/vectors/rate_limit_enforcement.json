@@ -1,0 +1,110 @@
+{
+  "conformance_family": "bh5",
+  "description": "Sliding-window rate-limit enforcement (#1516 leg a) conformance for RateLimitEnforcer. Locks the py<->rs parity of the stateful tally: N calls admitted within window W, the (N+1)-th breaches (kind=window); expired entries decay; a hard-cap new key is refused fail-closed (kind=capacity) rather than evicting a live tally. Companion to circuit_breaker.json so BOTH the rate half and the breaker half of BH5 are vector-pinned. All floats finite (trust-plane-security MUST-8).",
+  "vectors": [
+    {
+      "name": "tally_then_window_breach",
+      "events": [
+        {
+          "t": 0.0,
+          "specs": [
+            { "key": "r:read:hour", "limit": 3, "window_seconds": 3600.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 1.0,
+          "specs": [
+            { "key": "r:read:hour", "limit": 3, "window_seconds": 3600.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 2.0,
+          "specs": [
+            { "key": "r:read:hour", "limit": 3, "window_seconds": 3600.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 3.0,
+          "specs": [
+            { "key": "r:read:hour", "limit": 3, "window_seconds": 3600.0 }
+          ],
+          "expect_breach": { "kind": "window", "limit": 3 }
+        }
+      ]
+    },
+    {
+      "name": "sliding_window_recovery_after_expiry",
+      "events": [
+        {
+          "t": 0.0,
+          "specs": [
+            { "key": "r:write:short", "limit": 1, "window_seconds": 10.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 1.0,
+          "specs": [
+            { "key": "r:write:short", "limit": 1, "window_seconds": 10.0 }
+          ],
+          "expect_breach": { "kind": "window", "limit": 1 }
+        },
+        {
+          "t": 20.0,
+          "specs": [
+            { "key": "r:write:short", "limit": 1, "window_seconds": 10.0 }
+          ],
+          "expect_breach": null
+        }
+      ]
+    },
+    {
+      "name": "multi_window_day_trips_before_hour",
+      "events": [
+        {
+          "t": 0.0,
+          "specs": [
+            { "key": "r:deploy:hour", "limit": 100, "window_seconds": 3600.0 },
+            { "key": "r:deploy:day", "limit": 2, "window_seconds": 86400.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 1.0,
+          "specs": [
+            { "key": "r:deploy:hour", "limit": 100, "window_seconds": 3600.0 },
+            { "key": "r:deploy:day", "limit": 2, "window_seconds": 86400.0 }
+          ],
+          "expect_breach": null
+        },
+        {
+          "t": 2.0,
+          "specs": [
+            { "key": "r:deploy:hour", "limit": 100, "window_seconds": 3600.0 },
+            { "key": "r:deploy:day", "limit": 2, "window_seconds": 86400.0 }
+          ],
+          "expect_breach": { "kind": "window", "limit": 2 }
+        }
+      ]
+    },
+    {
+      "name": "capacity_refusal_never_evicts_active_tally",
+      "max_entries": 1,
+      "events": [
+        {
+          "t": 0.0,
+          "specs": [{ "key": "r:keyA", "limit": 5, "window_seconds": 3600.0 }],
+          "expect_breach": null
+        },
+        {
+          "t": 0.0,
+          "specs": [{ "key": "r:keyB", "limit": 5, "window_seconds": 3600.0 }],
+          "expect_breach": { "kind": "capacity", "limit": 5 }
+        }
+      ]
+    }
+  ]
+}

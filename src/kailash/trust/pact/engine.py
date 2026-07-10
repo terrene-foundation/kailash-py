@@ -76,6 +76,11 @@ from kailash.trust.pact.knowledge import (
     KnowledgeItem,
     KnowledgeQuery,
 )
+from kailash.trust.pact.circuit_breaker import (
+    CircuitBreakerConfig,
+    CircuitDecision,
+    PactCircuitBreaker,
+)
 from kailash.trust.pact.observation import Observation, ObservationSink
 from kailash.trust.pact.rate_limit_enforcer import RateLimitEnforcer
 from kailash.trust.pact.risk_factors import (
@@ -269,6 +274,16 @@ class GovernanceEngine:
         # breach -- the declared envelope limit (max_actions_per_day/hour) is
         # otherwise never tallied. Thread-safe + fail-closed + bounded.
         self._rate_enforcer = RateLimitEnforcer()
+
+        # Trip-and-hold governance circuit-breaker (BH5 #1510). A first-class
+        # peer control in the verdict path (Step 3.7): TRIPS a (role, action)
+        # after N breached calls in window W, HOLDS blocked for cooldown C, then
+        # admits one probe. Distinct from the orchestration-only
+        # PostureCircuitBreaker (never in the verdict path). Thread-safe,
+        # fail-closed, bounded with fail-CLOSED eviction (never resets a tripped
+        # key). Inactive (verdict byte-unchanged) unless the effective envelope
+        # declares circuit_* fields.
+        self._circuit_breaker = PactCircuitBreaker()
 
         # N2 Effective Envelope Cache -- bounded dict keyed by
         # (role_address, task_id) -> _CachedEnvelope.
@@ -881,6 +896,44 @@ class GovernanceEngine:
                 level = combined
                 reason = conf_reason
 
+        # Step 3.7: Governance circuit-breaker (BH5 #1510). A first-class
+        # trip-and-hold peer control: a (role, action) that repeatedly breaches
+        # (held/blocked underlying outcome) TRIPS the breaker, which then HOLDS
+        # the key blocked for a cooldown before admitting one probe. Composed
+        # MONOTONICALLY via combine_levels (tighten-only): the breaker can only
+        # ESCALATE a verdict, never de-escalate a held/blocked base.
+        #
+        # `level_before_breaker` snapshots the UNDERLYING governance outcome
+        # (Steps 2-3.6) BEFORE the breaker composes its own contribution, so the
+        # breach signal fed to record() EXCLUDES the breaker's own block -- no
+        # self-reinforcing feedback loop. Gated (like Steps 3.5/3.6) on
+        # `level != "blocked"`: an already-blocked action neither runs the
+        # breaker nor mints a key (matching the rate-limiter's key-flood defense).
+        level_before_breaker = level
+        breaker_token: tuple[str, CircuitBreakerConfig, CircuitDecision] | None = None
+        breaker_detail: dict[str, Any] | None = None
+        if (
+            level != "blocked"
+            and effective is not None
+            and effective.operational is not None
+            and effective.operational.circuit_failure_threshold is not None
+        ):
+            br_level, br_reason, breaker_token = self._evaluate_circuit_breaker(
+                effective, action, role_address, now
+            )
+            if br_level != "auto_approved":
+                combined = combine_levels(level, br_level)
+                if combined != level:
+                    level = combined
+                    reason = br_reason
+            if breaker_token is not None:
+                _decision = breaker_token[2]
+                breaker_detail = {
+                    "state": _decision.state,
+                    "tripped": br_level == "blocked",
+                    "probe": _decision.was_probe,
+                }
+
         # Multi-level VERIFY: walk accountability chain and check each ancestor's
         # effective envelope. Most restrictive verdict wins. This prevents a role
         # from executing an action that is allowed at the leaf but blocked by
@@ -934,6 +987,37 @@ class GovernanceEngine:
                 level = "blocked"
                 reason = f"Knowledge access denied: {access_decision.reason}"
 
+        # BH5 (#1510): record the breaker outcome AFTER the FINAL level is
+        # computed (post ancestor-verify + knowledge-access). `breached` reflects
+        # the UNDERLYING governance outcome EXCLUDING the breaker's own
+        # contribution (the pre-Step-3.7 snapshot) so the breaker never counts
+        # its own block as a breach. A breaker-blocked call (token.record False)
+        # is NOT recorded -- it is not a real governance outcome. Fail-closed
+        # (pact-governance.md Rule 4): a record() error TIGHTENS to BLOCKED.
+        if breaker_token is not None:
+            b_key, b_config, b_decision = breaker_token
+            if b_decision.record:
+                breached = level_before_breaker in ("held", "blocked")
+                try:
+                    self._circuit_breaker.record(
+                        b_key,
+                        b_config,
+                        now,
+                        breached=breached,
+                        was_probe=b_decision.was_probe,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Circuit-breaker record error for action=%s -- "
+                        "fail-closed to BLOCKED",
+                        action,
+                    )
+                    level = combine_levels(level, "blocked")
+                    reason = "Circuit-breaker record error -- fail-closed to BLOCKED"
+                    if breaker_detail is not None:
+                        breaker_detail["tripped"] = True
+                        breaker_detail["state"] = "error"
+
         # Build audit details with envelope version (TOCTOU defense)
         audit_details: dict[str, Any] = {
             "role_address": role_address,
@@ -965,6 +1049,12 @@ class GovernanceEngine:
         if conf_detail is not None:
             conf_detail["escalated"] = conf_level != "auto_approved"
             audit_details["confidence"] = conf_detail
+        # BH5 (#1510): record the breaker's state + whether it tripped this
+        # action. Present ONLY when the breaker governs this action
+        # (breaker_detail is None otherwise) so an un-configured engine's audit
+        # trail is byte-unchanged, exactly like the confidence-gate pattern above.
+        if breaker_detail is not None:
+            audit_details["circuit_breaker"] = breaker_detail
 
         verdict = GovernanceVerdict(
             level=level,
@@ -1335,6 +1425,76 @@ class GovernanceEngine:
             )
 
         return ("auto_approved", "")
+
+    def _evaluate_circuit_breaker(
+        self,
+        envelope: ConstraintEnvelopeConfig,
+        action: str,
+        role_address: str,
+        now: datetime,
+    ) -> tuple[str, str, tuple[str, CircuitBreakerConfig, CircuitDecision] | None]:
+        """Consult the trip-and-hold governance circuit-breaker (BH5 #1510).
+
+        Mirrors :meth:`_evaluate_rate_limits`: reads the breaker config off the
+        effective envelope's ``operational.circuit_*`` fields, composes the
+        opaque ``(role, action)`` key, and asks :class:`PactCircuitBreaker` for
+        an admit/block decision. The returned token carries the key + config +
+        decision so the caller can feed the breach signal back via
+        :meth:`PactCircuitBreaker.record` AFTER the final verdict.
+
+        Fail-closed (``pact-governance.md`` Rule 4): a malformed config / breaker
+        error returns ``blocked`` with a token whose ``record`` is False (nothing
+        to record on an errored check) -- never fail-open.
+
+        Returns:
+            ``(level, reason, token)``. ``level`` is ``"auto_approved"`` or
+            ``"blocked"``; ``token`` is ``None`` when no breaker governs this
+            action (gate inactive -> audit byte-unchanged), else
+            ``(key, config, decision)``.
+        """
+        op = envelope.operational
+        if op is None or op.circuit_failure_threshold is None:
+            return ("auto_approved", "", None)  # gate inactive
+
+        # All-or-nothing is enforced at config-validation time, so a set
+        # threshold implies a set window + cooldown.
+        key = f"{role_address}\x1f{action}"
+        config = CircuitBreakerConfig(
+            int(op.circuit_failure_threshold),
+            float(op.circuit_window_seconds),  # type: ignore[arg-type]
+            float(op.circuit_cooldown_seconds),  # type: ignore[arg-type]
+        )
+        try:
+            decision = self._circuit_breaker.check(key, config, now)
+        except Exception:
+            # A malformed config / non-finite now surfaced as ValueError. Fail
+            # CLOSED to BLOCKED (Rule 4). The generic reason avoids leaking the
+            # raw window/cooldown into the verdict (observability Rule 8). Nothing
+            # is recorded -- an errored check is not a real governance outcome.
+            logger.warning(
+                "Circuit-breaker check error for action=%s -- fail-closed to BLOCKED",
+                action,
+            )
+            return (
+                "blocked",
+                "Circuit-breaker check error -- fail-closed to BLOCKED",
+                (key, config, CircuitDecision("blocked", False, False, "error")),
+            )
+
+        if decision.level == "blocked":
+            if decision.state == "capacity":
+                reason = (
+                    "Circuit-breaker at capacity; refusing new (role, action) "
+                    "tracker to protect tripped breakers -- fail-closed to BLOCKED"
+                )
+            else:
+                reason = (
+                    f"Circuit-breaker OPEN for action '{action}' -- tripped after "
+                    f"repeated breaches; holding blocked through the cooldown"
+                )
+            return ("blocked", reason, (key, config, decision))
+
+        return ("auto_approved", "", (key, config, decision))
 
     def _evaluate_limit_proximity(
         self,
