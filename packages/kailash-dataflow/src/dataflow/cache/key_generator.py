@@ -6,10 +6,176 @@ Generates deterministic cache keys from queries and parameters.
 
 import hashlib
 import json
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Union
+
+from kailash.utils.url_credentials import UNPARSEABLE_URL_SENTINEL, mask_url
 
 if TYPE_CHECKING:
     from dataflow.classification.policy import ClassificationPolicy
+
+
+def _hash8(material: str) -> str:
+    """Return the first 8 hex chars of sha256(material)."""
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
+
+
+def _sanitize_component_host(host: str) -> str:
+    """Strip any credential-carrying userinfo from a component-config host.
+
+    Defense-in-depth parity (#1606): the URL identity path routes through
+    ``mask_url`` (userinfo stripped to ``***``) BEFORE hashing, so no
+    credential byte reaches the hash pre-image. The component-fallback path
+    hashes ``host:port/dbname`` directly — so if an operator mis-sets
+    ``config.database.host`` to a full DSN-with-creds (e.g.
+    ``postgres://u:pw@h/db``) AND leaves ``url`` absent, those credential
+    bytes would otherwise enter the pre-image. When ``host`` is DSN-shaped
+    (contains ``@`` or ``://``), strip the scheme and the userinfo so only a
+    credential-free host substring survives; a normal bare hostname is
+    returned BYTE-IDENTICALLY (the guard triggers ONLY on the DSN-shaped
+    case, so it never changes the identity of a correctly-configured host).
+
+    NOTE: ``host`` and ``dbname`` are assumed delimiter-free for the
+    ``host:port/dbname`` join; a literal ``:`` / ``/`` inside a component
+    field is not disambiguated (no realistic cross-DB collision is
+    constructible — the fields come from structured config, not free text).
+    """
+    if "@" not in host and "://" not in host:
+        return host
+    stripped = host
+    if "://" in stripped:
+        stripped = stripped.split("://", 1)[1]
+    if "@" in stripped:
+        # userinfo (user[:password]) precedes the last '@'; keep only the host side.
+        stripped = stripped.rsplit("@", 1)[1]
+    return stripped
+
+
+def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
+    """Return a short, credential-free fingerprint of a database URL.
+
+    Used as the DB-instance identity segment in the QUERY cache keyspace
+    (issue #1606) so two DataFlow instances pointed at *different* databases
+    never collide on the same query cache key. The query keyspace hashes a
+    normalized SQL string + params, which is identical for the same
+    model+filter regardless of which database the instance targets — so
+    without this segment two instances at different DBs read each other's
+    cached query rows (cross-DB cache bleed).
+
+    The URL is FIRST routed through ``mask_url`` (credential-stripped:
+    scheme + ``***`` placeholder + host+port+dbname, NEVER user/password
+    bytes) BEFORE hashing, so no credential can ever enter the key. Redis
+    keys are an observable surface — treat like logs (``rules/security.md``
+    § "No secrets in logs").
+
+    Returns ``None`` when the URL is falsy OR unparseable (``mask_url``
+    yields ``UNPARSEABLE_URL_SENTINEL`` — e.g. a libpq keyword/value DSN
+    ``"host=a dbname=x"`` with no ``://``). Hashing the sentinel is
+    DELIBERATELY refused: every unparseable-DSN instance would otherwise
+    share one CONSTANT identity, silently collapsing cross-DB isolation
+    (``rules/zero-tolerance.md`` Rule 3, silent fallback). Callers that
+    need the URL-vs-components-vs-none disposition (to warn the operator)
+    use ``resolve_db_identity`` instead.
+
+    SCOPE (issue #1606) — the identity keys on database LOCATION
+    (host/port/dbname), NOT on the connecting principal: ``mask_url``
+    strips userinfo to ``***``, so ``postgres://alice:pw1@h:5432/db`` and
+    ``postgres://bob:pw2@h:5432/db`` produce the SAME identity. Two
+    instances at the same database with different DB credentials share a
+    cache namespace BY DESIGN. Deployments relying on per-principal
+    DB-level row visibility (RLS / per-user GRANTs) MUST NOT share a cache
+    backend across principals.
+
+    NOTE: this segments the QUERY keyspace only. The Express ``v2``
+    keyspace (``generate_express_key``) is a byte-for-byte cross-SDK
+    contract pinned to kailash-rs and MUST NOT carry this segment.
+    """
+    if not database_url:
+        return None
+    # mask_url is the single credential-masking helper; its output never
+    # contains user/password bytes (only a constant ``***`` placeholder),
+    # so hashing it yields a stable per-DB fingerprint with zero credential
+    # exposure even if the digest were ever reversed.
+    masked = mask_url(database_url)
+    if masked == UNPARSEABLE_URL_SENTINEL:
+        # A non-URL DSN (or garbage) masks to a CONSTANT sentinel; hashing it
+        # would give every such instance the same identity — refuse.
+        return None
+    return _hash8(masked)
+
+
+class DbIdentityResolution(NamedTuple):
+    """Outcome of :func:`resolve_db_identity`.
+
+    Attributes:
+        identity: The credential-free DB-identity segment, or ``None`` when
+            no usable identity could be derived (the query keyspace then
+            falls back to the pre-#1606 shape and cross-DB isolation is
+            INACTIVE — the caller MUST warn).
+        source: ``"url"`` (derived from the connection URL), ``"components"``
+            (derived from host/port/dbname structured config after the URL
+            was absent or unparseable), or ``"none"`` (no usable identity).
+        url_unparseable: ``True`` when a URL string was supplied but
+            ``mask_url`` could not parse it (a keyword/value DSN or garbage).
+            The caller warns on this even when the component fallback
+            succeeds, because the supplied URL could not be used.
+    """
+
+    identity: Optional[str]
+    source: str
+    url_unparseable: bool
+
+
+def resolve_db_identity(
+    url: Optional[str] = None,
+    host: Optional[str] = None,
+    port: Optional[Union[int, str]] = None,
+    dbname: Optional[str] = None,
+) -> DbIdentityResolution:
+    """Resolve a credential-free DB-instance identity (issue #1606).
+
+    Tries the connection URL first; when the URL is absent OR unparseable,
+    falls back to the structured component config (``host``/``port``/
+    ``dbname``) so cross-DB isolation still HOLDS for URL-less DataFlow
+    instances (component/params config, or a lazily-populated URL). The
+    component identity is a hash of a normalized ``host:port/dbname``
+    string — host+port+dbname ONLY, NEVER any user/password field — so the
+    same credential-free contract as the URL path holds.
+
+    Returns a :class:`DbIdentityResolution`; when ``identity is None`` the
+    caller MUST emit a loud warning (cross-DB cache isolation is INACTIVE
+    on a shared cache backend). See ``rules/zero-tolerance.md`` Rule 3 —
+    silent-unprotected is the failure mode this resolution + the caller's
+    warning close.
+
+    The identity is captured ONCE at cache-integration construction; a URL
+    set on the config AFTER construction does not retroactively change it
+    (acceptable — DataFlow database URLs are set at init).
+    """
+    # 1. URL path.
+    if url:
+        masked = mask_url(url)
+        if masked != UNPARSEABLE_URL_SENTINEL:
+            return DbIdentityResolution(_hash8(masked), "url", False)
+        url_unparseable = True
+    else:
+        url_unparseable = False
+
+    # 2. Component fallback — credential-free host:port/dbname. Never hash
+    #    the unparseable sentinel (that constant would collapse isolation);
+    #    derive from structured fields instead so URL-less configs stay
+    #    isolated. host + dbname are the minimum; port is optional.
+    if host and dbname:
+        # Defense-in-depth (#1606): strip any credential-carrying userinfo if
+        # host was mis-set to a DSN, so no credential byte enters the hash
+        # pre-image (parity with the URL path's mask_url step). A bare
+        # hostname is unchanged, so a correctly-configured host's identity is
+        # byte-identical to the pre-sanitize behavior.
+        safe_host = _sanitize_component_host(host)
+        normalized = f"{safe_host}:{port if port is not None else ''}/{dbname}"
+        return DbIdentityResolution(_hash8(normalized), "components", url_unparseable)
+
+    # 3. No usable identity — segmentation is DISABLED; the caller warns.
+    return DbIdentityResolution(None, "none", url_unparseable)
 
 
 class CacheKeyGenerator:
@@ -21,6 +187,7 @@ class CacheKeyGenerator:
         namespace: Optional[str] = None,
         version: str = "v2",
         classification_policy: Optional["ClassificationPolicy"] = None,
+        db_identity: Optional[str] = None,
     ):
         """
         Initialize key generator.
@@ -38,11 +205,22 @@ class CacheKeyGenerator:
                 routed through ``format_record_id_for_event`` before
                 serialization so the raw value never appears in the JSON
                 that feeds the MD5/SHA-256 digest. See issue #520.
+            db_identity: Optional credential-free fingerprint of the
+                database this generator serves, produced by
+                ``hash_database_identity``. When set, it is inserted into
+                the QUERY keyspace (``generate_key``) — directly after the
+                model name — so two DataFlow instances at *different*
+                databases never collide on the same query cache key
+                (issue #1606: cross-DB cache bleed). It is DELIBERATELY
+                absent from ``generate_express_key``: the Express ``v2``
+                keyspace is a byte-for-byte cross-SDK contract pinned to
+                ``kailash-rs`` and MUST NOT change unilaterally.
         """
         self.prefix = prefix
         self.namespace = namespace
         self.version = version
         self._classification_policy = classification_policy
+        self.db_identity = db_identity
 
     def _safe_params(self, model_name: str, params: Any) -> Any:
         """Return a copy of ``params`` with classified PK values hashed.
@@ -111,9 +289,24 @@ class CacheKeyGenerator:
         if self.namespace:
             components.append(self.namespace)
 
-        components.extend(
-            [model_name, self.version, self._hash_query(normalized_sql, params)]
-        )
+        components.append(model_name)
+
+        # Issue #1606: DB-instance identity segment. The query keyspace
+        # hashes a normalized SQL string + params — identical for the same
+        # model+filter across every database — so without this segment two
+        # DataFlow instances at different DBs collide on one key and read
+        # each other's cached rows (cross-DB cache bleed). Placed AFTER the
+        # model name so the existing model-anchored invalidation sweeps
+        # (``{prefix}:{model}:*`` and the ``:{model}:`` substring matcher)
+        # still match BOTH old-shape (no db_identity) and new-shape keys.
+        # The query keyspace is NOT the Rust-pinned Express v2 keyspace — it
+        # diverges cross-SDK by construction (py vs rs emit different SQL),
+        # so adding this segment is a py-local change, not a cross-SDK
+        # lockstep. See ``generate_express_key`` (Rust-pinned, untouched).
+        if self.db_identity:
+            components.append(self.db_identity)
+
+        components.extend([self.version, self._hash_query(normalized_sql, params)])
 
         # Join with colons
         key = ":".join(components)

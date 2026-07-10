@@ -1583,6 +1583,7 @@ class DataFlow(DataFlowEventMixin):
                 CacheInvalidator,
                 CacheKeyGenerator,
                 create_cache_integration,
+                resolve_db_identity,
             )
 
             # Get cache configuration
@@ -1608,10 +1609,53 @@ class DataFlow(DataFlowEventMixin):
             # Create key generator. BP-049 (#520): plumb the classification
             # policy so classified PKs are hashed before serialisation into
             # cache keys.
+            #
+            # Issue #1606: plumb a credential-free DB-instance fingerprint so
+            # the QUERY keyspace is segmented per database — two DataFlow
+            # instances at different DBs never collide on the same query
+            # cache key (cross-DB cache bleed). Prefer the configured
+            # database URL; when it is absent or unparseable, fall back to
+            # the structured component config (host/port/dbname) so isolation
+            # HOLDS for URL-less instances. The identity is always a hash of
+            # a credential-free string (mask_url output, or host:port/dbname)
+            # — no user/password byte can enter the key. The Express v2
+            # keyspace is Rust-pinned and does NOT receive this segment.
+            #
+            # The identity is captured ONCE here at cache-integration
+            # construction; a URL set on the config after construction does
+            # not retroactively change it (DataFlow URLs are set at init).
+            db_conf = getattr(self.config, "database", None)
+            db_res = resolve_db_identity(
+                url=getattr(db_conf, "url", None),
+                host=getattr(db_conf, "host", None),
+                port=getattr(db_conf, "port", None),
+                dbname=getattr(db_conf, "database", None),
+            )
+            # Loud operator signal when the query keyspace cannot be
+            # segmented — silent-unprotected is the exact zero-tolerance
+            # Rule 3 failure mode this warning closes.
+            if db_res.url_unparseable:
+                logger.warning(
+                    "engine.cache.db_identity_url_unparseable: the configured "
+                    "database URL is not a parseable connection URL, so a "
+                    "per-DB cache identity could not be derived from it; "
+                    "cross-DB cache isolation relies on component config or is "
+                    "INACTIVE (#1606)"
+                )
+            if db_res.identity is None:
+                logger.warning(
+                    "engine.cache.db_identity_disabled: DB-identity segmentation "
+                    "is DISABLED (no usable database identity from URL or "
+                    "host/port/dbname component config) — cross-DB cache "
+                    "isolation is INACTIVE on a shared cache backend; two "
+                    "DataFlow instances at different databases may read each "
+                    "other's cached query rows (#1606)"
+                )
             key_generator = CacheKeyGenerator(
                 prefix=cache_key_prefix,
                 namespace=getattr(self.config, "cache_namespace", None),
                 classification_policy=getattr(self, "_classification_policy", None),
+                db_identity=db_res.identity,
             )
 
             # Create cache invalidator

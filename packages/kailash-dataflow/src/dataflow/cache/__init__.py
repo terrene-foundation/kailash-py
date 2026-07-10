@@ -15,7 +15,12 @@ Features:
 from .async_redis_adapter import AsyncRedisCacheAdapter
 from .auto_detection import CacheBackend
 from .invalidation import CacheBackendProtocol, CacheInvalidator, InvalidationPattern
-from .key_generator import CacheKeyGenerator
+from .key_generator import (
+    CacheKeyGenerator,
+    DbIdentityResolution,
+    hash_database_identity,
+    resolve_db_identity,
+)
 from .list_node_integration import (
     CacheableListNode,
     ListNodeCacheIntegration,
@@ -37,6 +42,9 @@ __all__ = [
     "CacheConfig",
     # Key generation
     "CacheKeyGenerator",
+    "hash_database_identity",
+    "resolve_db_identity",
+    "DbIdentityResolution",
     # Invalidation
     "CacheInvalidator",
     "InvalidationPattern",
