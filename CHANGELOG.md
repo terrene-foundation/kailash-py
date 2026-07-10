@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.46.0] - 2026-07-10
+
+EATP v3 + SAFR governance-hardening epic.
+
+### Added
+
+- **Extensible risk-factor disposition calibration** (#1514 BH1).
+- **Stateful sliding-window rate-limit enforcer** in `verify_action` (#1516 leg a).
+- **Confidence/evidence-quality threshold routing** (#1516 leg b).
+- **Configurable HITL timeout** with a fail-safe DENY-on-expiry disposition.
+- **Pluggable identity resolver** — local + external DID (#1517 leg a).
+- **RFC 8785 JCS canonical encoder** + conditional `subject_hash` audit anchor (#1590).
+- **Citable WEFT provenance event schema** + conformance vectors (#1591).
+- **EATP v3 additive elements** — bilateral delegation, clearance attestation, verify-chain, revocation modes, guarantee tiers (#1592).
+- **Universal outbound-effect governance interceptor core** (#1517 leg-b).
+- **Fail-closed HITL reviewer authority + capacity gate** (#1510 BH2 legs 2-3) — `ReviewerDecision` (APPROVE/MODIFY/DECLINE, monotonic-tightening), `apply_review_decision`, `max_pending_holds` admission control, cross-surface expire/review lifecycle under a lock.
+
+### Fixed
+
+- **Ancestor-verify bypass + risk-factor fail-closed hardening** (#1514 review).
+
+### Security
+
+- **Rate-limit eviction now fails CLOSED** (rate-limit reset bypass, #1516).
+- **WAL/SHM sidecar permission hardening** + fail-closed corrupt-row expiry (#1515).
+- **`did:key` self-certification hardening** (#1517 leg a).
+- **EATP/outbound trust dataclasses frozen** + HTTP audit-target credential redaction + governance-verdict immutability (redteam M1/L1/L2).
+- **Consolidated + expanded credential-bearing URL query-key masking across 4 sites** (#1655) — single canonical `is_sensitive_query_key`, plus presigned/SAS/STS signature keys.
+- **HITL reviewer-authority multi-round redteam hardening** (#1510 BH2) — closed a CRITICAL expire/queue-desync resurrection, a HIGH corrupt-sentinel reconcile miss, and forged-row-denial/audit-poisoning/`reviewer_id`-validation gaps.
+
 ## [2.45.6] - 2026-07-07
 
 ### Fixed
