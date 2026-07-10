@@ -145,6 +145,34 @@ class OperationalConstraintConfig(BaseModel):
         default="fixed",
         description="Rate limit window type: 'fixed' (calendar-based) or 'rolling' (sliding window)",
     )
+    # Governance circuit-breaker (BH5 #1510). All three are all-or-nothing: a
+    # breaker is either fully configured (all three set = ACTIVE) or absent (all
+    # None = no breaker). Evaluated at verify_action Step 3.7 by
+    # PactCircuitBreaker; None = gate inactive (audit byte-unchanged).
+    circuit_failure_threshold: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Circuit-breaker trip threshold (N): in-window breached calls that "
+            "TRIP the breaker OPEN. None = no breaker (widest)."
+        ),
+    )
+    circuit_window_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Circuit-breaker sliding window (W, seconds) over which breaches "
+            "accumulate. None = no breaker."
+        ),
+    )
+    circuit_cooldown_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Circuit-breaker cooldown (C, seconds): how long an OPEN breaker "
+            "HOLDS before admitting one probe. None = no breaker."
+        ),
+    )
     reasoning_required: bool = Field(
         default=False,
         description="When True, any action touching this dimension must include a reasoning trace",
@@ -157,6 +185,155 @@ class OperationalConstraintConfig(BaseModel):
             msg = f"rate_limit_window_type must be 'fixed' or 'rolling', got '{v}'"
             raise ValueError(msg)
         return v
+
+    @field_validator("circuit_window_seconds", "circuit_cooldown_seconds")
+    @classmethod
+    def _reject_non_finite_circuit(cls, v: float | None, info: Any) -> float | None:
+        """Reject NaN/Inf on circuit-breaker seconds (pact-governance.md Rule 6).
+
+        A NaN cooldown/window makes the breaker's ``<`` cooldown comparison
+        vacuously False and silently releases a tripped breaker (fail-open).
+        """
+        if v is not None and not math.isfinite(v):
+            raise ValueError(
+                f"{info.field_name} must be finite, got {v!r}. "
+                f"NaN/Inf values bypass governance checks."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _validate_circuit_breaker_all_or_nothing(self) -> Self:
+        """A breaker is all-or-nothing: all three circuit_* set, or all None.
+
+        A partially-configured breaker (e.g. a threshold with no window) is
+        meaningless and fail-closed-ambiguous; rejecting it keeps the
+        None=widest / active=tighter restrictiveness model unambiguous across
+        every enforcement surface (security.md § Enforcement-Surface Parity).
+        """
+        set_count = sum(
+            f is not None
+            for f in (
+                self.circuit_failure_threshold,
+                self.circuit_window_seconds,
+                self.circuit_cooldown_seconds,
+            )
+        )
+        if set_count not in (0, 3):
+            raise ValueError(
+                "circuit-breaker config is all-or-nothing: set ALL of "
+                "circuit_failure_threshold, circuit_window_seconds, "
+                "circuit_cooldown_seconds (an active breaker) or NONE of them "
+                f"(no breaker), got {set_count} of 3 set"
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Circuit-breaker restrictiveness (BH5 #1510) -- the SINGLE shared model
+# consumed by EVERY enforcement surface (security.md § Enforcement-Surface
+# Parity): the eval-time intersection (envelope_adapter / envelopes intersect),
+# the runtime re-registration/tightening validator (RoleEnvelope.validate_
+# tightening), AND the org-load tightening validators (OrgDefinition). One
+# restrictiveness function so a breaker cannot be silently stripped at any
+# surface a grep of the eval call-site cannot reach.
+# ---------------------------------------------------------------------------
+
+
+def circuit_breaker_active(op: OperationalConstraintConfig) -> bool:
+    """True when ``op`` carries a fully-configured (ACTIVE) circuit-breaker.
+
+    All-or-nothing is guaranteed by ``OperationalConstraintConfig``'s validator,
+    so any one field being set implies all three are.
+    """
+    return op.circuit_failure_threshold is not None
+
+
+def circuit_breaker_tightening_violation(
+    parent_op: OperationalConstraintConfig,
+    child_op: OperationalConstraintConfig,
+) -> str | None:
+    """Return a WIDENING message if ``child_op``'s breaker is looser than
+    ``parent_op``'s, else ``None`` (child is tighter-or-equal).
+
+    Restrictiveness model (shared by every enforcement surface):
+
+    * No breaker (all-None) = WIDEST. Adding a breaker a parent lacked is a
+      tightening (always allowed).
+    * A configured breaker is TIGHTER than none -- so parent-has-breaker +
+      child-drops-it is a WIDENING and MUST be rejected (a re-registration that
+      strips the breaker is a privilege escalation the fix itself would
+      introduce; ``pact-governance.md`` Rule 2).
+    * Between two active breakers, a tighter child means LOWER threshold AND/OR
+      LONGER window AND/OR LONGER cooldown. The child MUST be tighter-or-equal on
+      EVERY axis; widening on ANY axis (higher threshold, shorter window, shorter
+      cooldown) is a violation (fail-closed: the conservative direction).
+    """
+    if not circuit_breaker_active(parent_op):
+        return None  # parent has no breaker -> anything (breaker or none) tightens
+    if not circuit_breaker_active(child_op):
+        return (
+            "circuit-breaker widened: parent defines a breaker "
+            f"(threshold={parent_op.circuit_failure_threshold}, "
+            f"window={parent_op.circuit_window_seconds}s, "
+            f"cooldown={parent_op.circuit_cooldown_seconds}s) but child removes it"
+        )
+    msgs: list[str] = []
+    # threshold: LOWER is tighter -> child must not exceed parent.
+    if child_op.circuit_failure_threshold > parent_op.circuit_failure_threshold:  # type: ignore[operator]
+        msgs.append(
+            f"circuit_failure_threshold widened from "
+            f"{parent_op.circuit_failure_threshold} to "
+            f"{child_op.circuit_failure_threshold} (higher = trips less often)"
+        )
+    # window: LONGER is tighter -> child must not be shorter than parent.
+    if child_op.circuit_window_seconds < parent_op.circuit_window_seconds:  # type: ignore[operator]
+        msgs.append(
+            f"circuit_window_seconds shortened from "
+            f"{parent_op.circuit_window_seconds} to "
+            f"{child_op.circuit_window_seconds} (shorter = trips less often)"
+        )
+    # cooldown: LONGER is tighter -> child must not be shorter than parent.
+    if child_op.circuit_cooldown_seconds < parent_op.circuit_cooldown_seconds:  # type: ignore[operator]
+        msgs.append(
+            f"circuit_cooldown_seconds shortened from "
+            f"{parent_op.circuit_cooldown_seconds} to "
+            f"{child_op.circuit_cooldown_seconds} (shorter = holds less time)"
+        )
+    return "; ".join(msgs) if msgs else None
+
+
+def tighter_circuit_breaker(
+    a_op: OperationalConstraintConfig,
+    b_op: OperationalConstraintConfig,
+) -> tuple[int | None, float | None, float | None]:
+    """Return the ``(threshold, window, cooldown)`` of the TIGHTER composed
+    breaker for envelope intersection -- the same restrictiveness model as
+    :func:`circuit_breaker_tightening_violation`.
+
+    An active breaker beats None (adding a breaker tightens); between two active
+    breakers the tightest is ``min(threshold)``, ``max(window)``, ``max(cooldown)``.
+    """
+    a_active = circuit_breaker_active(a_op)
+    b_active = circuit_breaker_active(b_op)
+    if not a_active and not b_active:
+        return (None, None, None)
+    if a_active and not b_active:
+        return (
+            a_op.circuit_failure_threshold,
+            a_op.circuit_window_seconds,
+            a_op.circuit_cooldown_seconds,
+        )
+    if b_active and not a_active:
+        return (
+            b_op.circuit_failure_threshold,
+            b_op.circuit_window_seconds,
+            b_op.circuit_cooldown_seconds,
+        )
+    return (
+        min(a_op.circuit_failure_threshold, b_op.circuit_failure_threshold),  # type: ignore[type-var]
+        max(a_op.circuit_window_seconds, b_op.circuit_window_seconds),  # type: ignore[type-var]
+        max(a_op.circuit_cooldown_seconds, b_op.circuit_cooldown_seconds),  # type: ignore[type-var]
+    )
 
 
 class TemporalConstraintConfig(BaseModel):
@@ -1238,6 +1415,23 @@ class OrgDefinition(BaseModel):
                             )
                         )
 
+                    # Operational tightening -- circuit-breaker (BH5 #1510).
+                    # Same shared restrictiveness model as the runtime validator.
+                    cb_violation = circuit_breaker_tightening_violation(
+                        lead_env.operational, sub_env.operational
+                    )
+                    if cb_violation is not None:
+                        results.append(
+                            ValidationResult(
+                                severity=ValidationSeverity.ERROR,
+                                message=(
+                                    f"Agent '{member_id}' {cb_violation} "
+                                    f"vs lead '{lead_id}'"
+                                ),
+                                code="OPERATIONAL_TIGHTENING",
+                            )
+                        )
+
                 # Communication tightening
                 if lead_env.communication and sub_env.communication:
                     if (
@@ -1401,6 +1595,19 @@ class OrgDefinition(BaseModel):
                                 f"{child_label} rate limit ({child_rate}/day) "
                                 f"exceeds {parent_label} ({parent_rate}/day)"
                             ),
+                            code=code,
+                        )
+                    )
+
+                # Operational tightening -- circuit-breaker (BH5 #1510).
+                cb_violation = circuit_breaker_tightening_violation(
+                    parent_env.operational, child_env.operational
+                )
+                if cb_violation is not None:
+                    results.append(
+                        ValidationResult(
+                            severity=ValidationSeverity.ERROR,
+                            message=f"{child_label} {cb_violation} vs {parent_label}",
                             code=code,
                         )
                     )
@@ -1592,6 +1799,10 @@ __all__ = [
     "DataAccessConstraintConfig",
     "CommunicationConstraintConfig",
     "ConstraintEnvelopeConfig",
+    # Circuit-breaker restrictiveness (BH5 #1510) -- shared enforcement-surface model
+    "circuit_breaker_active",
+    "circuit_breaker_tightening_violation",
+    "tighter_circuit_breaker",
     # Confidence / evidence-quality disposition gate (#1516 leg b)
     "ConfidenceThresholdConfig",
     # Verification gradient

@@ -81,6 +81,19 @@ def _envelope_to_canonical_dict(envelope: ConstraintEnvelopeConfig) -> dict[str,
     convert them to their string values for JSON-safe canonical output.
     """
     d = envelope.model_dump(mode="python")
+    # BH5 (#1510): prune UNSET breaker fields so a breaker-less envelope's
+    # canonical is byte-identical to the pre-BH5 form -- matching the signing
+    # pre-image (envelopes.py::_envelope_signing_dict). A configured breaker
+    # keeps its fields.
+    _op = d.get("operational")
+    if isinstance(_op, dict):
+        for _f in (
+            "circuit_failure_threshold",
+            "circuit_window_seconds",
+            "circuit_cooldown_seconds",
+        ):
+            if _op.get(_f) is None:
+                _op.pop(_f, None)
 
     def _enum_to_value(obj: Any) -> Any:
         if isinstance(obj, ConfidentialityLevel):
@@ -752,17 +765,22 @@ class TestVectorIntegrity:
 
         The WEFT-family vectors (``weft_*.json`` / ``jcs_*.json``, issue #1591),
         the EATP-v3 additive-element vectors (``eatp3_*.json``, issue #1592), and
-        the BH3 origin-authentication vectors (``bh3_*.json``, issue #1510) live
-        in the same directory but are guarded by their own family suites
+        the BH3 origin-authentication vectors (``bh3_*.json``, issue #1510), and
+        the BH5 circuit-breaker / rate-limit vectors (tagged
+        ``conformance_family == "bh5"``, issue #1510) live in the same directory
+        but are guarded by their own family suites
         (``test_weft_conformance.py::TestWeftVectorIntegrity``,
-        ``test_eatp_v3_conformance.py::TestEatpV3VectorIntegrity``, and
-        ``test_bh3_origin_conformance.py::TestBh3OriginVectorIntegrity``) —
+        ``test_eatp_v3_conformance.py::TestEatpV3VectorIntegrity``,
+        ``test_bh3_origin_conformance.py::TestBh3OriginVectorIntegrity``, and
+        ``test_bh5_circuit_breaker_conformance.py::TestBh5VectorIntegrity``) —
         filtered out here so each family owns its own exact-set orphan check.
         """
         actual_files = sorted(
             p.name
             for p in VECTORS_DIR.glob("*.json")
             if not p.name.startswith(("weft_", "jcs_", "eatp3_", "bh3_"))
+            and json.loads(p.read_text(encoding="utf-8")).get("conformance_family")
+            != "bh5"
         )
         assert actual_files == sorted(self.EXPECTED_VECTORS), (
             f"Vector files mismatch.\n"
