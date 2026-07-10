@@ -1209,3 +1209,31 @@ changes:
       GLOBAL (loom-synced onboarding suite). NOT self-referential-codify (see the 45-genesis-bootstrap
       entry above for the Rule 2 allowlist rationale). Receipt:
       workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md + journal/0043."
+  - type: rule_update
+    artifact: tenant-isolation
+    files:
+      - .claude/rules/tenant-isolation.md
+    classification_suggestion: global
+    context: >
+      ADDS Rule 7 ("Upsert ON CONFLICT DO UPDATE Is Tenant-Guarded And Excludes
+      tenant_id From SET") + extends the Audit Protocol grep.
+
+      Lesson: on a multi_tenant model with a global single-column id PK, every
+      upsert builder emitting `INSERT ... ON CONFLICT (id) DO UPDATE SET ...`
+      (PG/SQLite) or `ON DUPLICATE KEY UPDATE` (MySQL) MUST (a) exclude tenant_id
+      from the SET clause and (b) tenant-guard the update — PG/SQLite via
+      `WHERE {table}.tenant_id = EXCLUDED.tenant_id`, MySQL via per-column
+      `IF(tenant_id = VALUES(tenant_id), <new>, <col>)` (incl. version/timestamp).
+      A guard-suppressed cross-tenant collision routes to the actionable
+      tenant-scoped diagnostic, never a silent success/skip. ALL upsert builders
+      audited, not just the primary. DISTINCT from Rule 6 (canonical tenant source,
+      #1252): a correctly-tenant-scoped write STILL overwrites another tenant's row
+      via the un-guarded conflict path.
+
+      Evidence: PR #1650 + kailash-dataflow 2.14.5 (tag dataflow-v2.14.5, publish
+      run 29074366000 success) — holistic /redteam CONFIRMED on real SQLite +
+      PostgreSQL that bulk_upsert / single upsert / BulkCreatePoolNode overwrote
+      and reassigned another tenant's row; fixed across all 5 builders. Cross-SDK:
+      the Rust SDK's #1712 filed (shared DataFlow architecture). Canonical 8-field
+      Trust Posture Wiring present; cc-architect APPROVE. Receipts:
+      workspaces/sdk-backlog/journal/0003 (DECISION) + 0004 (DISCOVERY).
