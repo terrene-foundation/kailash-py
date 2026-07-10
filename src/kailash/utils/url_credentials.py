@@ -109,6 +109,15 @@ _SENSITIVE_QUERY_KEYS = frozenset(
         "accesskey",  # access_key
         "sslkey",
         "sslcert",  # ssl_cert (client cert material); NOT sslrootcert
+        "privatekey",  # private_key (asymmetric private key IS secret; NOT public_key)
+        # cloud object-storage / presigned-URL credentials & signatures
+        # (mask_url accepts http/https, so presigned URLs can flow through it)
+        "sig",  # Azure SAS signature
+        "signature",  # generic; NOT signature_version / sig_alg (algorithm selectors)
+        "sessiontoken",  # session_token (AWS STS)
+        "xamzsignature",  # X-Amz-Signature (AWS SigV4 presigned)
+        "xamzsecuritytoken",  # X-Amz-Security-Token
+        "xamzcredential",  # X-Amz-Credential
         # generic auth
         "auth",
     }

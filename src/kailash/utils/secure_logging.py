@@ -55,13 +55,13 @@ class SecureLoggingPatterns:
     # Common PII field names.
     #
     # Credential query-key names (password / pwd / passwd / token /
-    # api_key / apikey / secret / access_token / client_secret / ...) are
-    # NOT listed here — they are owned by the SINGLE canonical set
-    # ``kailash.utils.url_credentials._SENSITIVE_QUERY_KEYS`` and matched
-    # via ``is_sensitive_query_key`` in :meth:`SecureLogger._mask_dict`,
-    # so there is no local copy to drift. This set holds only the broader
-    # PII field names (SSN, email, address, ...) plus credential-shaped
-    # field names outside the URL-query set (``pass``, ``private_key``).
+    # api_key / apikey / secret / access_token / client_secret /
+    # private_key / ...) are NOT listed here — they are owned by the SINGLE
+    # canonical set ``kailash.utils.url_credentials._SENSITIVE_QUERY_KEYS``
+    # and matched via ``is_sensitive_query_key`` in
+    # :meth:`SecureLogger._mask_dict`, so there is no local copy to drift.
+    # This set holds only the broader PII field names (SSN, email,
+    # address, ...) plus ``pass`` (ambiguous; outside the URL-query set).
     PII_FIELD_NAMES = {
         "ssn",
         "social_security",
@@ -70,7 +70,6 @@ class SecureLoggingPatterns:
         "card_number",
         "cc_number",
         "pass",
-        "private_key",
         "email",
         "email_address",
         "phone",

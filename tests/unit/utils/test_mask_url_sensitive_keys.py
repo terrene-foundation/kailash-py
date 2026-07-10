@@ -67,6 +67,20 @@ SENSITIVE_KEYS = [
     "sslcert",
     "ssl_cert",
     "auth",
+    # private key (asymmetric private key IS secret; public_key is NOT — pinned below)
+    "private_key",
+    "privatekey",
+    # cloud object-storage / presigned-URL credentials & signatures
+    # (mask_url accepts http/https, so presigned URLs can flow through it)
+    "sig",  # Azure SAS signature
+    "signature",
+    "session_token",  # AWS STS
+    "session-token",
+    "sessiontoken",
+    "X-Amz-Signature",  # AWS SigV4 presigned
+    "X-Amz-Security-Token",
+    "X-Amz-Credential",
+    "x_amz_signature",  # underscore spelling normalizes identically
     # mixed-case to prove case-insensitivity
     "Access_Token",
     "API_KEY",
@@ -88,6 +102,12 @@ NON_SENSITIVE_KEYS = [
     "host",
     "port",
     "dbname",
+    # signature-algorithm selectors are NOT the signature itself — must stay clear
+    "signature_version",  # normalizes to signatureversion ≠ signature
+    "signatureversion",
+    "sig_alg",  # normalizes to sigalg ≠ sig
+    "sigalg",
+    "token_type",  # normalizes to tokentype ≠ sessiontoken / token
 ]
 
 
@@ -212,9 +232,7 @@ def test_all_four_sites_mask_the_same_new_variant(key):
     assert LEAK not in str(masked_dict[key])
 
     # Site 4 — Redis rate-limit backend _sanitize_url
-    sanitized = RedisBackend._sanitize_url(
-        f"redis://cache:6379/0?{key}={LEAK}"
-    )
+    sanitized = RedisBackend._sanitize_url(f"redis://cache:6379/0?{key}={LEAK}")
     assert LEAK not in sanitized
 
 
