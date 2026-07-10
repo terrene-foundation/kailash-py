@@ -13,12 +13,18 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from kailash.trust.chain import VerificationLevel, VerificationResult
+
+# Verdict + EnforcementRecord live in the leaf ``_types`` module so ``held`` can
+# import them WITHOUT importing ``strict`` (breaking the strict<->held
+# module-level cycle CodeQL py/unsafe-cyclic-import flagged). Re-exported here
+# (import + ``__all__``) so every ``from kailash.trust.enforce.strict import
+# Verdict / EnforcementRecord`` caller keeps resolving unchanged.
+from kailash.trust.enforce._types import EnforcementRecord, Verdict
 
 # Reviewer identifiers are bound into audit records and logged; cap the length
 # so a multi-megabyte reviewer_id cannot flood the log/audit sink (BH2 leg 3,
@@ -36,15 +42,6 @@ if TYPE_CHECKING:
     from kailash.trust.hooks import HookRegistry
 
 logger = logging.getLogger(__name__)
-
-
-class Verdict(Enum):
-    """Enforcement verdict for a verification result."""
-
-    AUTO_APPROVED = "auto_approved"  # Valid, no issues
-    FLAGGED = "flagged"  # Valid but has warnings (constraint near limits)
-    HELD = "held"  # Requires human review before proceeding
-    BLOCKED = "blocked"  # Denied, action must not proceed
 
 
 class HeldBehavior(Enum):
@@ -91,21 +88,6 @@ class EATPHeldError(PermissionError):
         super().__init__(
             f"EATP HELD: Agent '{agent_id}' action '{action}' requires review: {reason}"
         )
-
-
-@dataclass(frozen=True)
-class EnforcementRecord:
-    """Record of an enforcement decision.
-
-    Frozen to prevent post-creation tampering of audit records.
-    """
-
-    agent_id: str
-    action: str
-    verdict: Verdict
-    verification_result: VerificationResult
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class StrictEnforcer:

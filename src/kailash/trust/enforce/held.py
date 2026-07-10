@@ -44,7 +44,12 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from kailash.trust._locking import secure_sqlite_files, validate_id
-from kailash.trust.enforce.strict import EnforcementRecord, Verdict
+
+# Import the shared value types from the leaf ``_types`` module, NOT from
+# ``strict`` — importing ``strict`` here would recreate the strict<->held
+# module-level cycle CodeQL py/unsafe-cyclic-import flagged. ``_types`` imports
+# neither module, so this edge is one-way (held -> _types).
+from kailash.trust.enforce._types import EnforcementRecord, Verdict
 
 if TYPE_CHECKING:
     from kailash.trust.governance.models import ApprovalPolicyModel
@@ -318,15 +323,19 @@ def new_hold_id() -> str:
 
 @runtime_checkable
 class HeldActionStore(Protocol):
-    """Persistence protocol for pending human-review holds with timeouts."""
+    """Persistence protocol for pending human-review holds with timeouts.
+
+    The method bodies are the docstring alone (no ``...`` placeholder): a bare
+    ``...`` expression statement is an ineffectual statement CodeQL
+    py/ineffectual-statement flags, and the docstring is a complete, valid
+    body for a Protocol method (which is never executed).
+    """
 
     def add(self, held: HeldAction) -> None:
         """Register a pending hold for timeout tracking."""
-        ...
 
     def pop_expired(self, now: datetime) -> List[HeldAction]:
         """Atomically remove and return every hold expired as of ``now``."""
-        ...
 
     def pop(self, hold_id: str) -> Optional[HeldAction]:
         """Atomically remove and return the hold with ``hold_id``, else None.
@@ -334,15 +343,12 @@ class HeldActionStore(Protocol):
         Used by reviewer-decision resolution (BH2 leg 3) to claim a specific
         pending hold. Returns ``None`` when no such hold is tracked.
         """
-        ...
 
     def pending(self) -> List[HeldAction]:
         """Return all currently-pending holds."""
-        ...
 
     def clear(self) -> None:
         """Remove all pending holds."""
-        ...
 
 
 class MemoryHeldActionStore:
