@@ -543,3 +543,84 @@ def test_approve_with_modified_verdict_rejected(tmp_path):
     pending = {h.hold_id for h in store.pending()}
     assert pending == {hold_a, hold_b}
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# Redteam round 2 (HIGH) — corrupt-sentinel expiry must reconcile the queue
+# ---------------------------------------------------------------------------
+
+
+def _corrupt_row_on_disk(db_path: str, hold_id: str) -> None:
+    """Tamper an EXISTING held-action row so pop_expired returns the corrupt
+    fail-closed sentinel (bad on_expiry -> ExpiryDisposition(...) raises).
+
+    The hold_id column is left intact — the corruption is in a non-hold_id
+    column, mirroring the real tamper shape the sentinel machinery guards.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE held_actions SET on_expiry = ? WHERE hold_id = ?",
+            ("not_a_valid_disposition", hold_id),
+        )
+        assert (
+            cur.rowcount == 1
+        ), f"expected to corrupt exactly one row, got {cur.rowcount}"
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_corrupt_row_expiry_reconciles_queue_and_blocks_reapprove(tmp_path):
+    """Finding (HIGH): when an expired hold is recovered as the corrupt sentinel
+    (a FRESH hold_id), expire_holds still reconciles the passive review queue via
+    the sentinel's preserved ORIGINAL id — so a late APPROVE on the original id
+    fails closed instead of resurrecting an already-BLOCKED action.
+
+    CRITICAL RED->GREEN: against pre-fix code the reconcile keyed only on the
+    fresh sentinel id, the original queue entry survived, and the late APPROVE
+    returned AUTO_APPROVED.
+    """
+    enforcer, store = _enforcer(tmp_path)
+    # timeout=0.0 -> the hold is already past its deadline; it lands in BOTH the
+    # store (under its original id H) and the review queue.
+    hold_id = _queue_one(enforcer, agent_id="agent-corrupt-expire", timeout=0.0)
+    assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
+    assert [h.hold_id for h in store.pending()] == [hold_id]
+
+    # Tamper the row so pop_expired must fall back to the fresh-id corrupt sentinel.
+    _corrupt_row_on_disk(str(tmp_path / "held.db"), hold_id)
+
+    later = datetime.now(timezone.utc) + timedelta(seconds=1)
+    expiry_records = enforcer.expire_holds(now=later)
+
+    # (i) the ORIGINAL hold_id is GONE from BOTH surfaces (reconcile matched on
+    # the sentinel's preserved original_hold_id, not its fresh id).
+    assert store.pending() == []
+    assert enforcer.review_queue == []
+    assert all(r.metadata.get("hold_id") != hold_id for r in enforcer.review_queue)
+
+    # (ii) a late reviewer decision on the original id fails CLOSED.
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(
+            hold_id, ReviewerDecision.APPROVE, "rev-corrupt-late"
+        )
+
+    # (iii) never AUTO_APPROVED — the only terminal record referencing the
+    # original id is the fail-closed BLOCKED corrupt expiry.
+    for_hold = [
+        r
+        for r in enforcer.records
+        if hold_id in (r.metadata.get("hold_id"), r.metadata.get("original_hold_id"))
+    ]
+    assert not any(r.verdict is Verdict.AUTO_APPROVED for r in for_hold)
+    corrupt_expiry = [
+        r
+        for r in for_hold
+        if r.metadata.get("hold_expiry") and r.metadata.get("corrupt_row")
+    ]
+    assert len(corrupt_expiry) == 1
+    assert corrupt_expiry[0].verdict is Verdict.BLOCKED
+    assert corrupt_expiry[0].metadata.get("original_hold_id") == hold_id
+    assert len(expiry_records) == 1
+    store.close()
