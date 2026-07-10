@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.14.5] — 2026-07-10 — cross-tenant upsert write-breach fix (#1650/#1526)
+
+### Security
+
+- **Upsert on a `multi_tenant` model with the default `conflict_on=["id"]` no longer lets one tenant overwrite and steal another tenant's row (`features/bulk.py`, `sql/dialects.py`, `nodes/bulk_upsert.py`, `core/nodes.py`, `nodes/bulk_create_pool.py`, #1650; natural-key-collision diagnostic #1526).** On a `multi_tenant` model the `id` primary key is global, so `bulk_upsert` / single `upsert` / `BulkCreatePoolNode` emitted an `ON CONFLICT (id) DO UPDATE` (PostgreSQL/SQLite) or `ON DUPLICATE KEY UPDATE` (MySQL) clause that carried **no tenant predicate** and did **not** exclude `tenant_id` from the SET list. As a result, tenant B upserting a row whose `id` was already owned by tenant A overwrote tenant A's row **and flipped its `tenant_id` to B** (full row theft), and the operation returned success — a confirmed cross-tenant WRITE breach. The fix, applied across all five upsert builders:
+  - **`tenant_id` is excluded from the SET clause** on every dialect, so a conflicting upsert can never flip an existing row's owner.
+  - **PostgreSQL/SQLite** DO-UPDATE now carries `WHERE {table}.tenant_id = EXCLUDED.tenant_id`, so the update only applies when the existing row belongs to the same tenant as the incoming row — a cross-tenant `id` collision leaves the stored row untouched.
+  - **MySQL** `ON DUPLICATE KEY UPDATE` (which admits no WHERE) guards each column with `IF(tenant_id = VALUES(tenant_id), <new_value>, <existing_col>)`, including the version/timestamp columns (`updated_at`), so a cross-tenant collision preserves every existing column value.
+  - **Guard-suppressed cross-tenant collisions route to the actionable `TenantNaturalKeyCollisionError` diagnostic** on the bulk paths (#1526): when the tenant-scoped guard suppresses a write because the only conflicting row belongs to a different tenant, the caller receives a tenant-scoped collision error instead of a silent no-op.
+  - Regression tests exercise the breach and the fix against real databases (PostgreSQL + SQLite), including a `BulkCreatePoolNode` cross-tenant theft regression (#1526 H1). Verified via holistic `/redteam` (two rounds plus a completeness sweep).
+
 ## [2.14.4] — 2026-07-08 — `Model.query_builder()` respects `__tablename__` (#1614) + query-surface table-identifier hardening
 
 ### Fixed
