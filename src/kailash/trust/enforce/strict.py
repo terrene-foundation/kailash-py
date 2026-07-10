@@ -632,13 +632,17 @@ class StrictEnforcer:
           without a ``modified_verdict`` raises ``ReviewDecisionError``.
 
         The reviewed hold is removed from BOTH the passive review queue and the
-        timeout-tracking store, so it can neither be re-reviewed nor expire.
+        timeout-tracking store, so it can neither be re-reviewed nor expire. A
+        hold recovered from the store as a corrupt fail-closed sentinel forces
+        ``BLOCKED`` regardless of the decision (invariant 5).
 
         Args:
             hold_id: Identifier of the pending hold to resolve.
             decision: The reviewer's disposition (APPROVE / MODIFY / DECLINE).
             reviewer_id: Identifier of the reviewer, bound into the audit
-                record's metadata. An identifier, NOT a credential.
+                record's metadata. An identifier, NOT a credential. Validated
+                through ``validate_id`` (rejects newline / control-char /
+                path-traversal injection) before it is bound or logged.
             modified_verdict: Required for ``MODIFY`` — the reviewer's target
                 verdict, subject to the monotonic-tightening clamp.
 
@@ -648,8 +652,11 @@ class StrictEnforcer:
 
         Raises:
             ReviewDecisionError: If ``hold_id`` is unknown/missing, or a
-                ``MODIFY`` omits ``modified_verdict`` (both fail-closed).
-            ValueError: If ``hold_id`` is not a safe identifier.
+                ``MODIFY`` omits ``modified_verdict`` (both fail-closed). A bad
+                decision raises BEFORE the hold is consumed, so the hold
+                survives for a corrected retry.
+            ValueError: If ``hold_id`` or ``reviewer_id`` is not a safe
+                identifier.
         """
         from kailash.trust._locking import validate_id
         from kailash.trust.enforce.held import (
@@ -657,12 +664,26 @@ class StrictEnforcer:
             resolve_review_verdict,
         )
 
+        # Validate BOTH identifiers before any state mutation. hold_id gates
+        # path-traversal; reviewer_id is bound into the audit record AND logged,
+        # so a newline / control-char / null-byte reviewer_id is an audit-log
+        # line-injection vector — route it through the same validate_id as
+        # hold_id (symmetric charset floor).
         validate_id(hold_id)
+        validate_id(reviewer_id)
+
+        # Resolve the decision FIRST. resolve_review_verdict is pure and
+        # side-effect-free but VALIDATES the decision — a MODIFY without a
+        # modified_verdict, or a malformed decision, raises HERE. It MUST run
+        # BEFORE any hold is consumed so a bad decision leaves the hold intact
+        # and re-resolvable on a corrected retry (no state advance before the
+        # validating step, per eatp.md § Signed-Audit-Emits-BEFORE-State-Advance).
+        verdict = resolve_review_verdict(decision, modified_verdict=modified_verdict)
 
         # The passive review queue is the source of truth for pending holds
         # (every QUEUE escalation lands here with its hold_id); the store only
-        # tracks the timeout-bearing subset. Claim from both, fail closed if
-        # the hold is in neither (unknown/missing hold_id).
+        # tracks the timeout-bearing subset. Compute the surviving queue WITHOUT
+        # reassigning it yet, then claim the timeout-tracked hold from the store.
         matched: Optional[EnforcementRecord] = None
         remaining: List[EnforcementRecord] = []
         for queued in self._review_queue:
@@ -674,16 +695,31 @@ class StrictEnforcer:
         stored = self._held_store.pop(hold_id)
 
         if matched is None and stored is None:
+            # Unknown / already-resolved hold_id — fail closed. The pop above
+            # was a no-op (the id is in neither surface), so nothing was
+            # consumed and the reviewer can retry.
             raise ReviewDecisionError(
                 f"apply_review_decision: unknown or already-resolved hold_id "
                 f"{hold_id!r} — fail-closed"
             )
 
+        # Commit the queue mutation only now that the decision is valid AND the
+        # hold exists.
         self._review_queue = remaining
 
-        verdict = resolve_review_verdict(decision, modified_verdict=modified_verdict)
-
         base = matched if matched is not None else stored.record
+
+        # A hold recovered from the store as a CORRUPT sentinel carries
+        # verification_result.valid == False (the fail-closed DENY sentinel from
+        # SqliteHeldActionStore.pop). An APPROVE/MODIFY over corrupt state MUST
+        # NOT resolve to a permissive verdict — force BLOCKED, symmetric with
+        # the expiry path's corrupt-row handling. A well-formed HELD record is
+        # always valid=True (classify() only yields HELD for valid results), so
+        # this never false-positives on a genuine hold (invariant 5).
+        corrupt_hold = base.verification_result.valid is False
+        if corrupt_hold:
+            verdict = Verdict.BLOCKED
+
         decision_metadata: Dict[str, Any] = {
             **dict(base.metadata),
             "hold_id": hold_id,
@@ -693,6 +729,8 @@ class StrictEnforcer:
         }
         if modified_verdict is not None:
             decision_metadata["modified_verdict_requested"] = modified_verdict.value
+        if corrupt_hold:
+            decision_metadata["corrupt_hold"] = True
 
         decision_record = EnforcementRecord(
             agent_id=base.agent_id,

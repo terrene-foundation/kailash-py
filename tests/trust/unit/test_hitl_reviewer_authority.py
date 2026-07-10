@@ -22,6 +22,7 @@ The five governance invariants (each asserted below):
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -288,4 +289,112 @@ def test_expiry_unset_still_defaults_to_deny_blocked(tmp_path):
     assert len(expiry_records) == 1
     assert expiry_records[0].verdict is Verdict.BLOCKED
     assert store.pending() == []
+    store.close()
+
+
+# ---------------------------------------------------------------------------
+# Merge-gate regression coverage (BH2 legs 2-3 review findings)
+# ---------------------------------------------------------------------------
+
+
+def test_bad_decision_raises_before_hold_is_consumed(tmp_path):
+    """Finding 1: a MODIFY without modified_verdict raises BEFORE the hold is
+    popped, so the hold SURVIVES and is resolvable on a corrected retry.
+
+    Guards against state-advance-before-validation: the pure resolver runs
+    first, so a bad decision cannot destroy the hold (leaving the action stuck
+    blocked forever with no audit trail).
+    """
+    enforcer, store = _enforcer(tmp_path)
+    hold_id = _queue_one(enforcer, agent_id="agent-survive", timeout=300.0)
+
+    # MODIFY with no modified_verdict fails closed...
+    with pytest.raises(ReviewDecisionError):
+        enforcer.apply_review_decision(hold_id, ReviewerDecision.MODIFY, "rev-1")
+
+    # ...and the hold was NOT consumed: still in the store AND the review queue.
+    assert [h.hold_id for h in store.pending()] == [hold_id]
+    assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
+
+    # A corrected retry resolves the SAME hold — proving it survived intact.
+    record = enforcer.apply_review_decision(
+        hold_id,
+        ReviewerDecision.MODIFY,
+        "rev-1",
+        modified_verdict=Verdict.HELD,
+    )
+    assert record.verdict is Verdict.HELD
+    assert store.pending() == []
+    store.close()
+
+
+def _insert_corrupt_row(db_path: str, hold_id: str) -> None:
+    """Write a corrupt held-action row (bad on_expiry) straight into SQLite so
+    the store's pop() must fall back to its fail-closed DENY sentinel."""
+    now = datetime.now(timezone.utc)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO held_actions "
+            "(hold_id, agent_id, action, held_at, timeout_seconds, expires_at, "
+            "on_expiry, reason, violations_json, metadata_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                hold_id,
+                "agent-corrupt",
+                "deploy",
+                now.isoformat(),
+                300.0,
+                (now + timedelta(seconds=300)).isoformat(),
+                "not_a_valid_disposition",  # ExpiryDisposition(...) will raise
+                "",
+                "[]",
+                "{}",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_approve_over_corrupt_sentinel_fails_closed_to_blocked(tmp_path):
+    """Finding 2: an APPROVE addressed to a hold that pop() recovers as the
+    corrupt DENY sentinel resolves to BLOCKED, never AUTO_APPROVED."""
+    db_path = str(tmp_path / "held.db")
+    store = SqliteHeldActionStore(db_path)
+    enforcer = StrictEnforcer(on_held=HeldBehavior.QUEUE, held_store=store)
+
+    hold_id = "hold-corrupt-sentinel"
+    _insert_corrupt_row(db_path, hold_id)
+
+    # Real SQLite round-trip: apply_review_decision pops the row, which converts
+    # to the fail-closed DENY sentinel (valid=False) inside the store.
+    record = enforcer.apply_review_decision(
+        hold_id, ReviewerDecision.APPROVE, "reviewer-corrupt"
+    )
+    # APPROVE must NOT honor a corrupt hold — forced fail-closed to BLOCKED.
+    assert record.verdict is Verdict.BLOCKED
+    assert record.metadata["corrupt_hold"] is True
+    assert record.metadata["reviewer_id"] == "reviewer-corrupt"
+    # The corrupt row was consumed by the pop (real round-trip).
+    assert store.pop(hold_id) is None
+    store.close()
+
+
+def test_reviewer_id_with_control_char_is_rejected(tmp_path):
+    """Finding 3: a newline/control-char reviewer_id (audit-log injection
+    vector) is rejected before it is bound or logged — and the hold survives."""
+    enforcer, store = _enforcer(tmp_path)
+    hold_id = _queue_one(enforcer, agent_id="agent-inject", timeout=300.0)
+
+    with pytest.raises(ValueError):
+        enforcer.apply_review_decision(
+            hold_id,
+            ReviewerDecision.DECLINE,
+            "reviewer\ninjected-audit-log-line",
+        )
+
+    # reviewer_id is validated before any state mutation — the hold survives.
+    assert [h.hold_id for h in store.pending()] == [hold_id]
+    assert enforcer.review_queue[-1].metadata["hold_id"] == hold_id
     store.close()
