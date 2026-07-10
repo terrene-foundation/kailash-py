@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT HumanGate event chained to a Mint (prev_link set); recording the gate is the fail-closed precondition for Distribute (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"HumanGate\",\"payload\":{\"approver\":\"Eng-CTO\",\"subject_ref\":\"kb-42\"},\"prev_link\":\"sha256:989efe77aef08ac25d79b3b260b6534a9b66294082f3c7e1c3ef183a8fb85bb4\",\"schema_version\":\"v3\",\"session\":\"weft-sess-001\",\"ts\":\"2026-01-15T10:01:00+00:00\"}",
+  "expected_content_hash": "sha256:75763d7d0bb700a22dbe6eafcc558fb320a8b9e5d6afa5da6e1893bdea20925b",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "HumanGate",
+    "payload": {
+      "approver": "Eng-CTO",
+      "subject_ref": "kb-42"
+    },
+    "prev_link": "sha256:989efe77aef08ac25d79b3b260b6534a9b66294082f3c7e1c3ef183a8fb85bb4",
+    "schema_version": "v3",
+    "session": "weft-sess-001",
+    "ts": "2026-01-15T10:01:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

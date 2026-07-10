@@ -1,0 +1,15 @@
+{
+  "conformance_requirement": "JCS-bigint",
+  "description": "JCS subject with integer values >= 10**21. The py encoder emits exact-decimal str() for ints (a deliberate documented choice); pinned here as the cross-SDK contract so the eventual Rust alignment is byte-verified (#1590 security review, #1591).",
+  "expected_subject_hash": "sha256:dfbb34b885c62738510f91cf8ccfae6e31d6196a645bdc3cf9957c7c39518457",
+  "expected_subject_jcs": "{\"account\":\"acct-9\",\"amount\":1000000000000000000000,\"huge\":123456789012345678901234567890}",
+  "input": {
+    "subject": {
+      "account": "acct-9",
+      "amount": 1000000000000000000000,
+      "huge": 123456789012345678901234567890
+    }
+  },
+  "pact_type": "JcsSubject",
+  "rfc8785_reference": "RFC 8785 numbers apply to JSON NUMBER tokens; a Python int is serialized as its exact decimal integer token (str(int)), NOT the ECMAScript double form — 10**21 -> '1000000000000000000000', not '1e+21'. This is the documented py int-path; the vector pins those bytes."
+}

@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT Decline event (fail-closed refusal of a distribution request), carrying a human-readable reason (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"Decline\",\"payload\":{\"reason\":\"insufficient clearance\",\"subject_ref\":\"kb-99\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-002\",\"ts\":\"2026-01-15T10:03:00+00:00\"}",
+  "expected_content_hash": "sha256:cc815c0584dda07f6544d97236c44ed25da77344a24d5e2eb93c5cd6fa76cf87",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Decline",
+    "payload": {
+      "reason": "insufficient clearance",
+      "subject_ref": "kb-99"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-002",
+    "ts": "2026-01-15T10:03:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

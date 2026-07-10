@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT Mint event at chain genesis (prev_link null); citable content_hash is sha256 of the RFC 8785 (JCS) canonical envelope (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO-Backend-Lead\",\"kind\":\"Mint\",\"payload\":{\"origin\":\"authored\",\"subject_ref\":\"kb-42\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-001\",\"ts\":\"2026-01-15T10:00:00+00:00\"}",
+  "expected_content_hash": "sha256:989efe77aef08ac25d79b3b260b6534a9b66294082f3c7e1c3ef183a8fb85bb4",
+  "input": {
+    "identity_ref": "Eng-CTO-Backend-Lead",
+    "kind": "Mint",
+    "payload": {
+      "origin": "authored",
+      "subject_ref": "kb-42"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-001",
+    "ts": "2026-01-15T10:00:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT Obsolete event retiring a subject from the fabric (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"Obsolete\",\"payload\":{\"subject_ref\":\"kb-42\",\"superseded_by\":\"kb-43\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-002\",\"ts\":\"2026-01-15T10:04:00+00:00\"}",
+  "expected_content_hash": "sha256:7cd7b4c7f63c54026f7054acd8bba23bdb2f198cb854809dacb924f034bc45bb",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Obsolete",
+    "payload": {
+      "subject_ref": "kb-42",
+      "superseded_by": "kb-43"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-002",
+    "ts": "2026-01-15T10:04:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

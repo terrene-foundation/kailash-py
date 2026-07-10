@@ -1,0 +1,21 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT event whose payload carries an integer >= 10**21; pins the py-side exact-decimal int serialization inside a WEFT envelope (the deliberate documented JCS int-path choice — #1590 security review, #1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO\",\"kind\":\"Mint\",\"payload\":{\"balance\":1000000000000000000000,\"seq\":9,\"subject_ref\":\"ledger-1\"},\"prev_link\":null,\"schema_version\":\"v3\",\"session\":\"weft-sess-004\",\"ts\":\"2026-01-15T10:08:00+00:00\"}",
+  "expected_content_hash": "sha256:c490d61214587ad4e2d1aae09acd99cb074266eb8d53343391ae702ae2a7f128",
+  "input": {
+    "identity_ref": "Eng-CTO",
+    "kind": "Mint",
+    "payload": {
+      "balance": 1000000000000000000000,
+      "seq": 9,
+      "subject_ref": "ledger-1"
+    },
+    "prev_link": null,
+    "schema_version": "v3",
+    "session": "weft-sess-004",
+    "ts": "2026-01-15T10:08:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}

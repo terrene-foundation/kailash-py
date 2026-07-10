@@ -1,0 +1,20 @@
+{
+  "conformance_requirement": "WEFT",
+  "description": "WEFT Distribute event deeper in a chain, referencing a non-genesis prev_link content_hash (chain continuity) (#1591).",
+  "expected_canonical_json": "{\"identity_ref\":\"Eng-CTO-Backend-Lead\",\"kind\":\"Distribute\",\"payload\":{\"recipient\":\"Ops-Lead\",\"subject_ref\":\"kb-42\"},\"prev_link\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"schema_version\":\"v3\",\"session\":\"weft-sess-001\",\"ts\":\"2026-01-15T10:05:00+00:00\"}",
+  "expected_content_hash": "sha256:375640c6fd992c2781001222b38f9a76fb4584fb49cfcc04d401df692eb072fa",
+  "input": {
+    "identity_ref": "Eng-CTO-Backend-Lead",
+    "kind": "Distribute",
+    "payload": {
+      "recipient": "Ops-Lead",
+      "subject_ref": "kb-42"
+    },
+    "prev_link": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "schema_version": "v3",
+    "session": "weft-sess-001",
+    "ts": "2026-01-15T10:05:00+00:00"
+  },
+  "pact_type": "WeftEvent",
+  "schema_version": "v3"
+}
