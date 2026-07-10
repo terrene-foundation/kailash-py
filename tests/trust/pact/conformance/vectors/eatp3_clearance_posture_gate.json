@@ -1,0 +1,27 @@
+{
+  "conformance_requirement": "EATP-v3-clearance-attestation",
+  "description": "ClearanceAttestation requiring SECRET clearance to re-identify a pseudonymous subject. Posture-gated: only postures whose POSTURE_CEILING reaches SECRET (DELEGATING, AUTONOMOUS) may re-identify (#1592).",
+  "expected_canonical_json": "{\"attestation_id\":\"att-1592-001\",\"attested_by_role_address\":\"Eng-CTO\",\"payload\":{\"purpose\":\"fraud_investigation\"},\"required_clearance\":\"secret\",\"schema_version\":\"v3\",\"subject_ref\":\"subject-pseudonym-0001\",\"ts\":\"2026-01-15T10:04:00+00:00\"}",
+  "expected_content_hash": "sha256:23fff7c801de75bf4854b38a7c25becb815c41d92349ed0bf3abdf2628175a07",
+  "expected_reidentify_by_posture": {
+    "autonomous": true,
+    "delegating": true,
+    "pseudo": false,
+    "supervised": false,
+    "tool": false
+  },
+  "expected_required_clearance": "secret",
+  "input": {
+    "attestation_id": "att-1592-001",
+    "attested_by_role_address": "Eng-CTO",
+    "payload": {
+      "purpose": "fraud_investigation"
+    },
+    "required_clearance": "secret",
+    "schema_version": "v3",
+    "subject_ref": "subject-pseudonym-0001",
+    "ts": "2026-01-15T10:04:00+00:00"
+  },
+  "pact_type": "ClearanceAttestation",
+  "schema_version": "v3"
+}

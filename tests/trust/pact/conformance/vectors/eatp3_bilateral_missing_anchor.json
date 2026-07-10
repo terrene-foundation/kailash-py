@@ -1,0 +1,31 @@
+{
+  "conformance_requirement": "EATP-v3-bilateral",
+  "description": "BilateralDelegation missing the delegate's anchor: NOT atomically valid (one party's anchor never half-authorizes), degraded to RECORDED_BY_INTERMEDIARY, no non-repudiation (#1592).",
+  "expected_atomic_valid": false,
+  "expected_canonical_json": "{\"delegate\":{\"anchor_ref\":\"\",\"role_address\":\"Eng-CTO-Backend-Lead\",\"signer_kind\":\"party\"},\"delegation_id\":\"del-1592-002\",\"delegator\":{\"anchor_ref\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"role_address\":\"Eng-CTO\",\"signer_kind\":\"party\"},\"payload\":{\"scope\":\"deploy\"},\"root\":\"Eng\",\"schema_version\":\"v3\",\"ts\":\"2026-01-15T10:01:00+00:00\",\"witness_ref\":null}",
+  "expected_content_hash": "sha256:e7ef02b7cb030be6f00bad3d61af7c7c7202d5553c06c85104e41c7576f8cee3",
+  "expected_guarantee_tier": "recorded_by_intermediary",
+  "expected_supports_non_repudiation": false,
+  "input": {
+    "delegate": {
+      "anchor_ref": "",
+      "role_address": "Eng-CTO-Backend-Lead",
+      "signer_kind": "party"
+    },
+    "delegation_id": "del-1592-002",
+    "delegator": {
+      "anchor_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "role_address": "Eng-CTO",
+      "signer_kind": "party"
+    },
+    "payload": {
+      "scope": "deploy"
+    },
+    "root": "Eng",
+    "schema_version": "v3",
+    "ts": "2026-01-15T10:01:00+00:00",
+    "witness_ref": null
+  },
+  "pact_type": "BilateralDelegation",
+  "schema_version": "v3"
+}

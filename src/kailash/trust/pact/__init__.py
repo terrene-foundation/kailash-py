@@ -99,7 +99,33 @@ from kailash.trust.pact.store import (
     MemoryOrgStore,
     OrgStore,
 )
+from kailash.trust.pact.attestation import (
+    ClearanceAttestation,
+    ClearanceAttestationError,
+    ReidentificationDeniedError,
+    new_clearance_attestation,
+    posture_can_reidentify,
+)
+from kailash.trust.pact.bilateral import (
+    AtomicValidityError,
+    BilateralDelegation,
+    BilateralDelegationError,
+    CrossRootFederationError,
+    GuaranteeTier,
+    NonRepudiationClaimError,
+    PartyAnchor,
+    SignerKind,
+    new_bilateral_delegation,
+)
 from kailash.trust.pact.verdict import GovernanceVerdict
+from kailash.trust.pact.verify_chain import (
+    COMPOSITION_MODE,
+    ChainLink,
+    ChainResult,
+    ChainVerdict,
+    VerifyChainError,
+    verify_chain,
+)
 from kailash.trust.pact.weft import (
     MissingGateError,
     UnknownWeftKindError,
@@ -183,6 +209,29 @@ __all__ = [
     "WeftEvent",
     "WeftDistributor",
     "read_weft_events",
+    # BilateralDelegation + guarantee-tier taxonomy (EATP v3, #1592)
+    "SignerKind",
+    "GuaranteeTier",
+    "PartyAnchor",
+    "BilateralDelegation",
+    "BilateralDelegationError",
+    "AtomicValidityError",
+    "CrossRootFederationError",
+    "NonRepudiationClaimError",
+    "new_bilateral_delegation",
+    # ClearanceAttestation -- posture-gated re-identification (EATP v3, #1592)
+    "ClearanceAttestation",
+    "ClearanceAttestationError",
+    "ReidentificationDeniedError",
+    "posture_can_reidentify",
+    "new_clearance_attestation",
+    # VERIFY_CHAIN -- deny-overrides chain composition (EATP v3, #1592)
+    "COMPOSITION_MODE",
+    "ChainVerdict",
+    "ChainLink",
+    "ChainResult",
+    "VerifyChainError",
+    "verify_chain",
     # Store protocols and implementations (Ref-4001, 4002)
     "MAX_STORE_SIZE",
     "AccessPolicyStore",

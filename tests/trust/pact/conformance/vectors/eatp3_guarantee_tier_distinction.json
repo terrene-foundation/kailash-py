@@ -1,0 +1,16 @@
+{
+  "conformance_requirement": "EATP-v3-guarantee-tier",
+  "description": "The three EATP v3 guarantee tiers, their wire values, and which BilateralDelegation shape yields each. Ordered weakest -> strongest (#1592).",
+  "expected_dispatcher_is_recorded_by_intermediary": "recorded_by_intermediary",
+  "expected_shape_to_tier": {
+    "both_party_signed_present": "conformant",
+    "conformant_plus_witness": "complete_witnessed",
+    "dispatcher_or_missing_anchor": "recorded_by_intermediary"
+  },
+  "expected_tiers_ordered": [
+    "recorded_by_intermediary",
+    "conformant",
+    "complete_witnessed"
+  ],
+  "pact_type": "GuaranteeTier"
+}

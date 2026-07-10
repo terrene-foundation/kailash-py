@@ -1,0 +1,22 @@
+{
+  "conformance_requirement": "EATP-v3-revocation-mode",
+  "description": "GRACEFUL revocation: revoked, but an effective_at grace deadline lets in-flight work drain before the revocation takes HARD effect. is_effective is False inside the window, True once the deadline passes. Irreversible (#1592).",
+  "expected_effective_at": "2026-01-15T11:00:00+00:00",
+  "expected_is_effective_after_deadline": true,
+  "expected_is_effective_before_deadline": false,
+  "expected_mode": "graceful",
+  "expected_reversible": false,
+  "input": {
+    "affected_agents": [],
+    "cascade_from": null,
+    "effective_at": "2026-01-15T11:00:00+00:00",
+    "event_id": "rev-1592-graceful",
+    "mode": "graceful",
+    "reason": "scheduled key rotation with drain window",
+    "revocation_type": "agent_revoked",
+    "revoked_by": "admin",
+    "target_id": "agent-graceful",
+    "timestamp": "2026-01-15T10:05:00+00:00"
+  },
+  "pact_type": "RevocationEvent"
+}

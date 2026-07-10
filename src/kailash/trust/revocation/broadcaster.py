@@ -13,7 +13,6 @@ Part of CARE-007: Revocation Event Broadcasting.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import threading
 import uuid
@@ -59,6 +58,41 @@ class RevocationType(str, Enum):
     CASCADE_REVOCATION = "cascade_revocation"
 
 
+class RevocationMode(str, Enum):
+    """How a revocation takes effect over time (EATP v3, #1592).
+
+    Distinct from :class:`RevocationType` (WHAT is revoked); this governs HOW/WHEN
+    the revocation becomes effective.
+
+    - IMMEDIATE: effective at once (the historical default). Irreversible.
+    - GRACEFUL: revoked, but an ``effective_at`` grace deadline lets in-flight
+      work drain before the revocation takes HARD effect. Irreversible.
+    - SUSPEND: a REVERSIBLE hold. The target is inactive while suspended and MAY
+      be reinstated (the ``SUSPENDED -> ACTIVE`` transition, precedented by
+      :data:`kailash.trust.pact.clearance._VALID_TRANSITIONS`). A fully-revoked
+      (IMMEDIATE / GRACEFUL) target is terminal and can NEVER be reinstated --
+      the monotonic no-downgrade invariant (``trust-plane-security.md``
+      MUST-NOT-2) is preserved.
+    """
+
+    IMMEDIATE = "immediate"
+    GRACEFUL = "graceful"
+    SUSPEND = "suspend"
+
+
+class RevocationError(Exception):
+    """Base class for revocation-mode errors."""
+
+
+class IrreversibleRevocationError(RevocationError):
+    """Raised when reinstatement is attempted on a non-SUSPEND revocation.
+
+    Fail-closed: only a :attr:`RevocationMode.SUSPEND` target is reversible.
+    Reinstating an IMMEDIATE / GRACEFUL (terminal) revocation is BLOCKED --
+    trust state never relaxes (``trust-plane-security.md`` MUST-NOT-2).
+    """
+
+
 @dataclass
 class RevocationEvent:
     """Record of a revocation event.
@@ -75,6 +109,11 @@ class RevocationEvent:
         affected_agents: List of agent IDs affected by this revocation
         timestamp: When the revocation occurred
         cascade_from: For CASCADE_REVOCATION, the parent event that caused this
+        mode: How the revocation takes effect (:class:`RevocationMode`).
+            Defaults to IMMEDIATE for backward compatibility.
+        effective_at: For GRACEFUL mode, the deadline after which the revocation
+            takes HARD effect (the grace window ends). ``None`` for IMMEDIATE /
+            SUSPEND.
     """
 
     event_id: str
@@ -85,6 +124,8 @@ class RevocationEvent:
     affected_agents: List[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     cascade_from: Optional[str] = None
+    mode: RevocationMode = RevocationMode.IMMEDIATE
+    effective_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary for storage or transmission.
@@ -101,11 +142,18 @@ class RevocationEvent:
             "affected_agents": self.affected_agents,
             "timestamp": self.timestamp.isoformat(),
             "cascade_from": self.cascade_from,
+            "mode": self.mode.value,
+            "effective_at": (
+                self.effective_at.isoformat() if self.effective_at is not None else None
+            ),
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RevocationEvent":
         """Deserialize from dictionary.
+
+        ``mode`` defaults to IMMEDIATE when absent so records written before the
+        EATP v3 (#1592) mode extension deserialize unchanged.
 
         Args:
             data: Dictionary with RevocationEvent fields
@@ -113,6 +161,7 @@ class RevocationEvent:
         Returns:
             RevocationEvent instance
         """
+        effective_at_raw = data.get("effective_at")
         return cls(
             event_id=data["event_id"],
             revocation_type=RevocationType(data["revocation_type"]),
@@ -122,6 +171,12 @@ class RevocationEvent:
             affected_agents=data.get("affected_agents", []),
             timestamp=datetime.fromisoformat(data["timestamp"]),
             cascade_from=data.get("cascade_from"),
+            mode=RevocationMode(data.get("mode", RevocationMode.IMMEDIATE.value)),
+            effective_at=(
+                datetime.fromisoformat(effective_at_raw)
+                if effective_at_raw is not None
+                else None
+            ),
         )
 
 
@@ -524,6 +579,8 @@ class CascadeRevocationManager:
         reason: str,
         revocation_type: RevocationType = RevocationType.AGENT_REVOKED,
         max_depth: int = MAX_CASCADE_DEPTH,
+        mode: RevocationMode = RevocationMode.IMMEDIATE,
+        effective_at: Optional[datetime] = None,
     ) -> List[RevocationEvent]:
         """Revoke an agent and cascade to all its delegates.
 
@@ -539,6 +596,12 @@ class CascadeRevocationManager:
             max_depth: Maximum BFS depth for cascade traversal.
                 Defaults to MAX_CASCADE_DEPTH (100). Set to 0 to
                 revoke only the target with no cascade.
+            mode: How the revocation takes effect (:class:`RevocationMode`).
+                Cascaded events INHERIT the initial event's mode + grace
+                deadline, so a GRACEFUL revocation drains the whole subtree
+                together and a SUSPEND holds (reversibly) the whole subtree.
+            effective_at: For GRACEFUL mode, the grace-window deadline stamped on
+                every event (initial + cascades).
 
         Returns:
             List of all RevocationEvents created (initial + cascades)
@@ -553,6 +616,8 @@ class CascadeRevocationManager:
             target_id=target_id,
             revoked_by=revoked_by,
             reason=reason,
+            mode=mode,
+            effective_at=effective_at,
         )
 
         # Find all affected agents (delegates in the tree)
@@ -597,6 +662,8 @@ class CascadeRevocationManager:
                     revoked_by=revoked_by,
                     reason=f"Cascade revocation from {parent_id}: {reason}",
                     cascade_from=parent_event_id,
+                    mode=mode,
+                    effective_at=effective_at,
                 )
 
                 # Find this delegate's affected agents
@@ -771,6 +838,88 @@ class TrustRevocationList:
         """
         return self._revoked.copy()
 
+    def revocation_mode(self, agent_id: str) -> Optional[RevocationMode]:
+        """Return the :class:`RevocationMode` of a currently-revoked agent.
+
+        Args:
+            agent_id: The agent ID to inspect.
+
+        Returns:
+            The mode of the revocation currently in effect for ``agent_id``, or
+            ``None`` if the agent is not currently revoked (e.g. never revoked,
+            or a SUSPEND that has been reinstated).
+        """
+        if agent_id not in self._revoked:
+            return None
+        event = self._events.get(agent_id)
+        return event.mode if event is not None else RevocationMode.IMMEDIATE
+
+    def is_effective(self, agent_id: str, at: datetime) -> bool:
+        """Return whether the agent's revocation has taken HARD effect at ``at``.
+
+        Distinct from :meth:`is_revoked` (whether a revocation is RECORDED):
+
+        - IMMEDIATE / SUSPEND: effective as soon as recorded (a suspended agent
+          is inactive) -- returns ``True`` while revoked.
+        - GRACEFUL: effective only once ``at`` reaches the ``effective_at`` grace
+          deadline. Before the deadline the agent is still draining in-flight
+          work -- returns ``False``; on/after the deadline -- returns ``True``.
+
+        A non-revoked agent is never effective -- returns ``False`` (fail-closed
+        query: absence of a revocation is not a positive effect).
+
+        Args:
+            agent_id: The agent ID to query.
+            at: The instant to evaluate effectiveness at (timezone-aware UTC
+                recommended, to match the event timestamps).
+
+        Returns:
+            ``True`` iff a revocation for ``agent_id`` has taken hard effect at
+            ``at``.
+        """
+        if agent_id not in self._revoked:
+            return False
+        event = self._events.get(agent_id)
+        if event is None:
+            return True
+        if event.mode is RevocationMode.GRACEFUL and event.effective_at is not None:
+            return at >= event.effective_at
+        return True
+
+    def reinstate(self, agent_id: str) -> None:
+        """Reverse a :attr:`RevocationMode.SUSPEND` hold on ``agent_id``.
+
+        Only a SUSPEND revocation is reversible. Reinstating an IMMEDIATE /
+        GRACEFUL (terminal) revocation is BLOCKED with
+        :class:`IrreversibleRevocationError` -- trust state never relaxes
+        (``trust-plane-security.md`` MUST-NOT-2). Reinstating an agent that is
+        not currently revoked raises :class:`RevocationError`.
+
+        The event history is retained for audit; only the active-revocation
+        membership is cleared, so :meth:`is_revoked` returns ``False`` afterward.
+
+        Args:
+            agent_id: The suspended agent to reinstate.
+
+        Raises:
+            RevocationError: if ``agent_id`` is not currently revoked.
+            IrreversibleRevocationError: if the agent's revocation is not a
+                SUSPEND.
+        """
+        if agent_id not in self._revoked:
+            raise RevocationError(
+                f"Cannot reinstate {agent_id!r}: no active revocation recorded."
+            )
+        mode = self.revocation_mode(agent_id)
+        if mode is not RevocationMode.SUSPEND:
+            raise IrreversibleRevocationError(
+                f"Cannot reinstate {agent_id!r}: revocation mode "
+                f"{getattr(mode, 'value', mode)!r} is terminal. Only SUSPEND is "
+                f"reversible (trust state never relaxes)."
+            )
+        self._revoked.discard(agent_id)
+        logger.info("TRL reinstated suspended agent %s", agent_id)
+
     def close(self) -> None:
         """Stop listening for revocation events.
 
@@ -784,6 +933,9 @@ class TrustRevocationList:
 
 __all__ = [
     "RevocationType",
+    "RevocationMode",
+    "RevocationError",
+    "IrreversibleRevocationError",
     "RevocationEvent",
     "RevocationBroadcaster",
     "InMemoryRevocationBroadcaster",

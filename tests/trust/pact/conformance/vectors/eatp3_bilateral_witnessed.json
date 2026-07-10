@@ -1,0 +1,31 @@
+{
+  "conformance_requirement": "EATP-v3-bilateral",
+  "description": "BilateralDelegation conformant PLUS an independent witness anchor: COMPLETE_WITNESSED (the strongest guarantee tier) (#1592).",
+  "expected_atomic_valid": true,
+  "expected_canonical_json": "{\"delegate\":{\"anchor_ref\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"role_address\":\"Eng-CTO-Backend-Lead\",\"signer_kind\":\"party\"},\"delegation_id\":\"del-1592-004\",\"delegator\":{\"anchor_ref\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"role_address\":\"Eng-CTO\",\"signer_kind\":\"party\"},\"payload\":{\"scope\":\"deploy\"},\"root\":\"Eng\",\"schema_version\":\"v3\",\"ts\":\"2026-01-15T10:03:00+00:00\",\"witness_ref\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+  "expected_content_hash": "sha256:8919829942fbff2c7146cef2522ad8a2de207fa34f31ec4c918920c4c3779084",
+  "expected_guarantee_tier": "complete_witnessed",
+  "expected_supports_non_repudiation": true,
+  "input": {
+    "delegate": {
+      "anchor_ref": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "role_address": "Eng-CTO-Backend-Lead",
+      "signer_kind": "party"
+    },
+    "delegation_id": "del-1592-004",
+    "delegator": {
+      "anchor_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "role_address": "Eng-CTO",
+      "signer_kind": "party"
+    },
+    "payload": {
+      "scope": "deploy"
+    },
+    "root": "Eng",
+    "schema_version": "v3",
+    "ts": "2026-01-15T10:03:00+00:00",
+    "witness_ref": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "pact_type": "BilateralDelegation",
+  "schema_version": "v3"
+}
