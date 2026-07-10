@@ -17,6 +17,7 @@ pre-loaded data for unit tests.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import datetime
@@ -436,7 +437,12 @@ class PipelineScopedExpress:
                 f"predicate (e.g. {{'$in': [...]}}) can span tenants and is "
                 f"refused. Bind '{tf}' to the single scalar ctx.tenant_id."
             )
-        if tenant_value != self._enforce_tenant:
+        # Normalize both sides before comparing: serving coerces the bound
+        # tenant to str, but an INT-typed tenant_id column returns an int
+        # from the DB. A same-tenant read (row 42 vs bound "42") MUST match,
+        # not fail closed (issue #1654 RT2 finding 1). tenant_value is the
+        # caller's OWN filter input, so echoing it in the message is safe.
+        if str(tenant_value) != str(self._enforce_tenant):
             raise FabricTenantScopeError(
                 f"cross-tenant fabric {operation} of '{model}': the executed "
                 f"query filter '{tf}'={tenant_value!r} does not match the bound "
@@ -497,17 +503,33 @@ class PipelineScopedExpress:
             return
         tf = self._tenant_field
         row_tenant = row.get(tf) if isinstance(row, dict) else None
+        # Normalize both sides before comparing so an INT-typed tenant_id
+        # column (row 42) matches the str-coerced bound tenant ("42") — a
+        # legit same-tenant read MUST NOT fail closed (issue #1654 RT2
+        # finding 1). A missing field still fails closed via `tf not in row`.
         if (
             not isinstance(row, dict)
             or tf not in row
-            or row_tenant != self._enforce_tenant
+            or str(row_tenant) != str(self._enforce_tenant)
         ):
             from dataflow.fabric.cache import FabricTenantScopeError
 
+            # Do NOT embed the FOREIGN tenant id verbatim — it would land in
+            # the requesting tenant's operator log (observability.md Rule 8
+            # / RT2 finding 2). Emit a sha256[:8] fingerprint for forensic
+            # correlation instead; the bound (own) tenant is safe to name.
+            if isinstance(row, dict) and tf in row:
+                foreign = (
+                    "sha256:"
+                    + hashlib.sha256(str(row_tenant).encode("utf-8")).hexdigest()[:8]
+                )
+            else:
+                foreign = "<absent>"
             raise FabricTenantScopeError(
                 f"cross-tenant fabric {operation} of '{model}': the fetched "
-                f"row's '{tf}'={row_tenant!r} does not match the bound tenant "
-                f"scope {self._enforce_tenant!r}; refused and no row returned "
+                f"record belongs to a different tenant (foreign tenant "
+                f"{foreign}), not the bound tenant scope "
+                f"{self._enforce_tenant!r}; refused and no row returned "
                 f"(single-record reads are tenant-verified post-fetch)."
             )
 

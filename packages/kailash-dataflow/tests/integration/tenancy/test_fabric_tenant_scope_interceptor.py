@@ -591,3 +591,151 @@ async def test_prewarm_serial_skips_multi_tenant(db_with_two_tenants):
     # The multi_tenant product was skipped: fn never ran, no cache written.
     assert executed == []
     assert await pipeline.get_cached("mt_prewarm", tenant_id=None) is None
+
+
+# ---------------------------------------------------------------------------
+# RT2 finding 1: INT-typed tenant_id column normalizes (no false refusal)
+# ---------------------------------------------------------------------------
+
+
+async def _read_org_by_id(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Read a single Org by PK (record_id arrives via params)."""
+    row = await ctx.express.read("Org", params["id"])
+    return {"org": row}
+
+
+@pytest.fixture
+async def db_int_tenant():
+    """Real DataFlow with an INT-typed tenant_id column and 2 tenants."""
+    tmpdir = tempfile.mkdtemp()
+    db_path = Path(tmpdir) / "int_tenant.db"
+    db = DataFlow(f"sqlite:///{db_path}", auto_migrate=True)
+
+    @db.model
+    class Org:  # noqa: D401 - test model (INT tenant_id)
+        tenant_id: int
+        name: str
+
+    await db.initialize()
+    await db.express.create("Org", {"tenant_id": 42, "name": "org-a"})
+    await db.express.create("Org", {"tenant_id": 99, "name": "org-b"})
+
+    yield db
+
+    close = getattr(db, "close", None)
+    if close is not None:
+        result = close()
+        if hasattr(result, "__await__"):
+            await result
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_int_tenant_column_same_tenant_read_not_refused(db_int_tenant):
+    """serving coerces the bound tenant to str; an INT tenant_id column
+    returns an int. A same-tenant read (row 42 vs bound "42") MUST return
+    the row, not fail closed; a cross-tenant read still raises."""
+    db = db_int_tenant
+    pipeline = PipelineExecutor(dataflow=db, dev_mode=True)
+
+    a_id = (await db.express.list("Org", filter={"tenant_id": 42}))[0]["id"]
+    b_id = (await db.express.list("Org", filter={"tenant_id": 99}))[0]["id"]
+
+    # Bind the tenant as a STRING (as the serving layer does) against the
+    # INT-typed column — the read post-fetch check must normalize both.
+    ctx_ok = PipelineContext(
+        express=db.express,
+        sources={},
+        products_cache={},
+        tenant_id="42",
+        enforce_tenant_scope=True,
+    )
+    ok = await pipeline.execute_product(
+        "read_int_own", _read_org_by_id, ctx_ok, params={"id": a_id}, tenant_id="42"
+    )
+    assert ok.data["org"]["name"] == "org-a"  # int 42 vs str "42" → NOT refused
+
+    ctx_x = PipelineContext(
+        express=db.express,
+        sources={},
+        products_cache={},
+        tenant_id="42",
+        enforce_tenant_scope=True,
+    )
+    with pytest.raises(FabricTenantScopeError):
+        await pipeline.execute_product(
+            "read_int_cross",
+            _read_org_by_id,
+            ctx_x,
+            params={"id": b_id},
+            tenant_id="42",
+        )
+
+
+# ---------------------------------------------------------------------------
+# RT2 finding 2: the refusal message does not leak the foreign tenant id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_cross_tenant_read_message_does_not_leak_foreign_tenant_id(
+    db_with_two_tenants,
+):
+    """The post-fetch refusal message must NOT embed the FOREIGN tenant id
+    verbatim (it lands in the requesting tenant's operator log); it carries
+    a sha256 fingerprint instead. The bound (own) tenant may be named."""
+    db = db_with_two_tenants
+    pipeline = PipelineExecutor(dataflow=db, dev_mode=True)
+
+    b_id = (await db.express.list("Deal", filter={"tenant_id": "tenant-b"}))[0]["id"]
+    ctx = PipelineContext(
+        express=db.express,
+        sources={},
+        products_cache={},
+        tenant_id="tenant-a",
+        enforce_tenant_scope=True,
+    )
+    with pytest.raises(FabricTenantScopeError) as exc:
+        await pipeline.execute_product(
+            "read_leak",
+            _read_by_id_product,
+            ctx,
+            params={"id": b_id},
+            tenant_id="tenant-a",
+        )
+    msg = str(exc.value)
+    assert "tenant-b" not in msg  # foreign id NOT leaked verbatim
+    assert "sha256:" in msg  # forensic fingerprint present
+    assert "tenant-a" in msg  # bound (own) tenant is safe to name
+
+
+# ---------------------------------------------------------------------------
+# RT2 finding 3: pinned dialect invariant — operator tokens are '$'-prefixed
+# ---------------------------------------------------------------------------
+
+
+def test_fabric_filter_dialect_operators_are_all_dollar_prefixed():
+    """Defense-in-depth pin: the fabric filter dialect's operator tokens are
+    ALL '$'-prefixed, so ``_require_tenant_predicate``'s top-level
+    '$'-prefix operator screen stays complete. If express/fabric ever adds
+    a NON-'$' top-level logical operator, this fails loudly — pointing at
+    the guard that would then be bypassable (issue #1654 RT2 finding 3).
+
+    Structural pin (not a prose-regex): asserts the enumerated operator
+    allowlist and exercises validate_filter's behavior directly."""
+    from dataflow.fabric.serving import ALLOWED_OPERATORS, validate_filter
+
+    assert ALLOWED_OPERATORS, "operator allowlist is empty — dialect surface moved?"
+    non_dollar = sorted(op for op in ALLOWED_OPERATORS if not op.startswith("$"))
+    assert non_dollar == [], (
+        f"fabric filter operator(s) {non_dollar} are NOT '$'-prefixed; "
+        f"_require_tenant_predicate (context.py) screens only '$'-prefixed "
+        f"top-level keys, so a non-'$' logical operator would bypass the "
+        f"tenant-predicate proof. Update the guard's operator screen."
+    )
+    # validate_filter keys its operator check on the '$'-prefix — the same
+    # marker the guard screens on. Confirm a '$'-prefixed disallowed
+    # operator is rejected (behavioral, not source-grep).
+    with pytest.raises(ValueError):
+        validate_filter({"tenant_id": {"$where": "1=1"}})
