@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.48.0] - 2026-07-11
+
+SAFR governance-hardening: BH5 circuit-breaker (#1510) — completes the SAFR
+BH1–BH5 primitive set on the Python side.
+
+### Added
+
+- **BH5 governance circuit-breaker for the PACT verdict path (#1510).** A
+  first-class trip-and-hold anti-runaway control, evaluated per `(role, action)`
+  at `verify_action` Step 3.7. A `(role, action)` that repeatedly breaches
+  (held/blocked underlying outcome) TRIPS the breaker, which then HOLDS the key
+  blocked for a cooldown before admitting a single probe — the guarantee a rate
+  **limiter** cannot give (a limiter re-admits the instant its window slides).
+  The verdict is composed monotonically (tighten-only): the breaker can only
+  escalate a verdict, never relax one.
+  - New per-role configuration on `OperationalConstraintConfig`:
+    `circuit_failure_threshold`, `circuit_window_seconds`,
+    `circuit_cooldown_seconds` (all optional; all three set → breaker active).
+  - New classes on `kailash.trust.pact.circuit_breaker`: `PactCircuitBreaker`,
+    `CircuitBreakerConfig`, `CircuitDecision`.
+  - **Fail-closed** on non-finite config (`NaN`/`Inf` → BLOCKED); bounded memory
+    that never evicts a tripped key (which would silently reset a breaker);
+    thread-safe.
+  - **Enforcement-surface parity:** the monotonic-tightening validator learns
+    the breaker dimension, so a re-registration that strips or loosens a parent
+    breaker is rejected as a widening (closes the privilege-escalation class the
+    fix would otherwise introduce).
+  - **Signed-envelope backward compatibility:** an unset breaker field is pruned
+    from the `SignedEnvelope` signing pre-image, so a breaker-less envelope signs
+    **byte-identically** to the pre-BH5 form and pre-existing / cross-SDK signed
+    envelopes verify unchanged; a configured breaker keeps its fields
+    (cryptographically bound).
+  - Cross-SDK conformance vectors `circuit_breaker.json` +
+    `rate_limit_enforcement.json` (the rate enforcer was previously
+    vector-less); the Rust SDK mirrors these exact semantics (matching
+    semantics, EATP D6).
+
 ## [2.47.0] - 2026-07-10
 
 SAFR governance-hardening: BH3 origin-authentication (#1510).
