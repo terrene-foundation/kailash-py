@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.14.7] — 2026-07-10 — fabric write-path + source-path tenant guards (#1659, #1658)
+
+### Security
+
+- **Fail-closed tenant guards on the fabric write path and `ctx.source()` read path (#1659 HIGH, #1658).** Follow-ups to the #1654 read-path interceptor, closing the two cross-tenant surfaces #1654 explicitly did not cover:
+  - **Write path (#1659):** `PipelineScopedExpress.create/update/delete/upsert` now enforce the bound tenant. `update`/`delete` refuse (raise `FabricTenantScopeError`) when the target row's `tenant_id` differs from the bound tenant; `create`/`upsert` force-inject the bound tenant on an absent value and refuse a foreign `tenant_id` — closing cross-tenant write and row-theft-by-PK for `multi_tenant` fabric products.
+  - **Source path (#1658):** `ctx.source(name)` reads for a `multi_tenant` product are refused fail-closed across every data method (fetch/fetch_all/fetch_pages/read/list/write/last_successful_data) — the fabric cannot prove an opaque external adapter applied a tenant predicate, so under enforcement it refuses rather than return unscoped rows (`tenant-isolation.md` Rule 8). The #1654 "sources are NOT covered" docstring note is removed.
+  - Both surfaces derive enforcement from the single `enforce_tenant` decision computed in `PipelineContext.__init__` (parity with the #1654 read guard). Foreign tenant ids are sha256-fingerprinted in refusal messages, never echoed. Tier-2 regression suite (real DB, no mocking): 13 tests, one direct refusal + no-leak assertion per write op and per source variant. Verified via a two-agent full-context `/redteam` (reviewer + security-reviewer, both clean).
+
 ## [2.14.6] — 2026-07-10 — cross-DB query-cache bleed fix (#1606) + fabric tenant-scope interceptor (#1654)
 
 ### Security
