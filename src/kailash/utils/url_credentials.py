@@ -57,6 +57,7 @@ __all__ = [
     "mask_url",
     "mask_secret",
     "fingerprint_secret",
+    "is_sensitive_query_key",
     "UNPARSEABLE_URL_SENTINEL",
 ]
 
@@ -67,13 +68,97 @@ __all__ = [
 # log triage can find every helper bail.
 UNPARSEABLE_URL_SENTINEL = "<unparseable url>"
 
-# Query-string parameter names that carry a secret. Matches the set
-# used by :meth:`DatabaseConfig.get_masked_connection_string` so the
-# two maskers stay in lock-step — see ``rules/security.md`` § "No
-# secrets in logs".
+# Canonical, expanded, frozen set of query-string parameter names that
+# carry a secret. This is the SINGLE SOURCE OF TRUTH for "is this URL
+# query key credential-bearing?" across the entire codebase — see
+# ``rules/security.md`` § "No secrets in logs" + § "Credential Decode
+# Helpers". Every masker (``mask_url`` here,
+# ``DatabaseConfig.get_masked_connection_string``, the Redis rate-limit
+# ``_sanitize_url`` helper, and ``SecureLogger``) MUST match against
+# this set via :func:`is_sensitive_query_key` rather than copy a local
+# list — per-site copies drift independently and open a leak path the
+# other maskers would have caught.
+#
+# Keys are stored in NORMALIZED form — lowercased with ``_`` and ``-``
+# stripped — so ``access_token``, ``access-token``, and ``accesstoken``
+# all resolve to the same entry. Match ONLY via
+# :func:`is_sensitive_query_key`, which normalizes its argument the same
+# way; membership is EXACT on the normalized form (NOT a substring
+# scan), so legitimate non-secret params — ``public_key`` (an asymmetric
+# public key is NOT a secret; ``secret_key`` / ``access_key`` ARE),
+# ``keyspace``, ``timeout``, ``sslmode``, ``sslrootcert`` (a cert PATH,
+# not a secret), ``application_name`` — are never masked.
 _SENSITIVE_QUERY_KEYS = frozenset(
-    {"password", "sslpassword", "sslkey", "authtoken", "token", "apikey"}
+    {
+        # password family
+        "password",
+        "passwd",
+        "pwd",
+        "sslpassword",
+        # secret family
+        "secret",
+        "clientsecret",  # client_secret / client-secret
+        "secretkey",  # secret_key / secret-key
+        # token family
+        "token",
+        "authtoken",  # auth_token
+        "apitoken",  # api_token
+        "accesstoken",  # access_token
+        # key family (credential keys only — NOT public_key)
+        "apikey",  # api_key
+        "accesskey",  # access_key
+        "sslkey",
+        "sslcert",  # ssl_cert (client cert material); NOT sslrootcert
+        "privatekey",  # private_key (asymmetric private key IS secret; NOT public_key)
+        # cloud object-storage / presigned-URL credentials & signatures
+        # (mask_url accepts http/https, so presigned URLs can flow through it)
+        "sig",  # Azure SAS signature
+        "signature",  # generic; NOT signature_version / sig_alg (algorithm selectors)
+        "sessiontoken",  # session_token (AWS STS)
+        "xamzsignature",  # X-Amz-Signature (AWS SigV4 presigned)
+        "xamzsecuritytoken",  # X-Amz-Security-Token
+        "xamzcredential",  # X-Amz-Credential
+        # generic auth
+        "auth",
+    }
 )
+
+
+def _normalize_query_key(key: str) -> str:
+    """Lowercase ``key`` and strip ``_`` / ``-`` for credential matching.
+
+    ``access_token``, ``access-token``, and ``AccessToken`` all normalize
+    to ``accesstoken`` so a single canonical set entry covers every
+    common spelling variant.
+    """
+    return key.lower().replace("_", "").replace("-", "")
+
+
+def is_sensitive_query_key(key: str) -> bool:
+    """Return ``True`` if a URL query-string key carries a secret.
+
+    The SINGLE match point for credential query-key detection across
+    every masker in the codebase. ``key`` is normalized (lowercased,
+    ``_``/``-`` stripped) and tested for EXACT membership in the
+    canonical :data:`_SENSITIVE_QUERY_KEYS` set — never a substring
+    scan, so ``keyspace`` and ``public_key`` are NOT flagged while
+    ``secret_key`` and ``access_key`` ARE.
+
+    Examples:
+        >>> is_sensitive_query_key("password")
+        True
+        >>> is_sensitive_query_key("access_token")
+        True
+        >>> is_sensitive_query_key("client-secret")
+        True
+        >>> is_sensitive_query_key("public_key")
+        False
+        >>> is_sensitive_query_key("keyspace")
+        False
+        >>> is_sensitive_query_key("sslrootcert")
+        False
+    """
+    return _normalize_query_key(key) in _SENSITIVE_QUERY_KEYS
 
 
 def preencode_password_special_chars(connection_string: Optional[str]) -> str:
@@ -291,7 +376,7 @@ def mask_url(url: Optional[str]) -> str:
     query_has_secret = False
     if parsed.query:
         query_has_secret = any(
-            k.lower() in _SENSITIVE_QUERY_KEYS
+            is_sensitive_query_key(k)
             for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
         )
 
@@ -316,8 +401,7 @@ def mask_url(url: Optional[str]) -> str:
         if query_has_secret:
             pairs = parse_qsl(parsed.query, keep_blank_values=True)
             masked_pairs = [
-                (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v)
-                for k, v in pairs
+                (k, "***" if is_sensitive_query_key(k) else v) for k, v in pairs
             ]
             parsed = parsed._replace(query=urlencode(masked_pairs))
 
@@ -367,10 +451,9 @@ def _mask_multi_host_url(url: str) -> str:
     query_mutated = False
     if q_sep and query:
         pairs = parse_qsl(query, keep_blank_values=True)
-        if any(k.lower() in _SENSITIVE_QUERY_KEYS for k, _ in pairs):
+        if any(is_sensitive_query_key(k) for k, _ in pairs):
             masked_pairs = [
-                (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v)
-                for k, v in pairs
+                (k, "***" if is_sensitive_query_key(k) else v) for k, v in pairs
             ]
             query = urlencode(masked_pairs)
             query_mutated = True

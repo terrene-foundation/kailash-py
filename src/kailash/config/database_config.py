@@ -150,6 +150,8 @@ class DatabaseConfig:
         """
         from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+        from kailash.utils.url_credentials import is_sensitive_query_key
+
         connection_string = self.connection_string
         try:
             parsed = urlparse(connection_string)
@@ -157,25 +159,15 @@ class DatabaseConfig:
             return connection_string
 
         has_userinfo = bool(parsed.username or parsed.password)
-        # Must match the set in dataflow/utils/masking.py::_SENSITIVE_QUERY_KEYS
-        # AND both Redis rate-limit _sanitize_url helpers
-        # (src/kailash/trust/rate_limit/backends/redis.py and
-        # packages/kailash-nexus/src/nexus/auth/rate_limit/backends/redis.py).
-        # Four sites total — any divergence produces a leak path the
-        # other maskers would have caught. If you add a key here, add it
-        # to all four sites in the same commit.
-        sensitive = {
-            "password",
-            "sslpassword",
-            "sslkey",
-            "authtoken",
-            "token",
-            "apikey",
-        }
+        # Credential-bearing query keys are matched via the SINGLE canonical
+        # helper ``kailash.utils.url_credentials.is_sensitive_query_key`` —
+        # the same set ``mask_url``, the Redis rate-limit ``_sanitize_url``
+        # helpers, and ``SecureLogger`` use. No local copy: per-site copies
+        # drift and open a leak path the other maskers would have caught.
         query_has_secret = False
         if parsed.query:
             query_has_secret = any(
-                k.lower() in sensitive
+                is_sensitive_query_key(k)
                 for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
             )
 
@@ -198,7 +190,7 @@ class DatabaseConfig:
         if query_has_secret:
             pairs = parse_qsl(parsed.query, keep_blank_values=True)
             masked_pairs = [
-                (k, "***" if k.lower() in sensitive else v) for k, v in pairs
+                (k, "***" if is_sensitive_query_key(k) else v) for k, v in pairs
             ]
             parsed = parsed._replace(query=urlencode(masked_pairs))
 

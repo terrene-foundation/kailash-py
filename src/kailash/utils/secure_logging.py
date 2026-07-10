@@ -10,6 +10,8 @@ import re
 from functools import wraps
 from typing import Any, Dict, List, Optional, Pattern, Set, Union
 
+from kailash.utils.url_credentials import is_sensitive_query_key
+
 
 class SecureLoggingPatterns:
     """Patterns for detecting sensitive data."""
@@ -50,7 +52,16 @@ class SecureLoggingPatterns:
         re.compile(r'["\']?secret["\']?\s*[:=]\s*["\']?([^"\']+)["\']?', re.I),
     ]
 
-    # Common PII field names
+    # Common PII field names.
+    #
+    # Credential query-key names (password / pwd / passwd / token /
+    # api_key / apikey / secret / access_token / client_secret /
+    # private_key / ...) are NOT listed here — they are owned by the SINGLE
+    # canonical set ``kailash.utils.url_credentials._SENSITIVE_QUERY_KEYS``
+    # and matched via ``is_sensitive_query_key`` in
+    # :meth:`SecureLogger._mask_dict`, so there is no local copy to drift.
+    # This set holds only the broader PII field names (SSN, email,
+    # address, ...) plus ``pass`` (ambiguous; outside the URL-query set).
     PII_FIELD_NAMES = {
         "ssn",
         "social_security",
@@ -58,15 +69,7 @@ class SecureLoggingPatterns:
         "credit_card",
         "card_number",
         "cc_number",
-        "password",
-        "pwd",
         "pass",
-        "passwd",
-        "token",
-        "api_key",
-        "apikey",
-        "secret",
-        "private_key",
         "email",
         "email_address",
         "phone",
@@ -134,10 +137,14 @@ class SecureLogger:
         masked = {}
 
         for key, value in data.items():
-            # Check if field name indicates sensitive data
+            # Check if field name indicates sensitive data. Credential
+            # query-key names route through the single canonical helper
+            # (normalized match: ``access_token``/``client_secret``/... all
+            # covered); PII field names + custom fields use exact match.
             if (
                 key.lower() in SecureLoggingPatterns.PII_FIELD_NAMES
                 or key.lower() in self.custom_fields
+                or is_sensitive_query_key(key)
             ):
                 masked[key] = (
                     self._mask_value(str(value)) if value is not None else None
