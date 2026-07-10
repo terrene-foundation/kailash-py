@@ -19,6 +19,37 @@ def _hash8(material: str) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
 
 
+def _sanitize_component_host(host: str) -> str:
+    """Strip any credential-carrying userinfo from a component-config host.
+
+    Defense-in-depth parity (#1606): the URL identity path routes through
+    ``mask_url`` (userinfo stripped to ``***``) BEFORE hashing, so no
+    credential byte reaches the hash pre-image. The component-fallback path
+    hashes ``host:port/dbname`` directly — so if an operator mis-sets
+    ``config.database.host`` to a full DSN-with-creds (e.g.
+    ``postgres://u:pw@h/db``) AND leaves ``url`` absent, those credential
+    bytes would otherwise enter the pre-image. When ``host`` is DSN-shaped
+    (contains ``@`` or ``://``), strip the scheme and the userinfo so only a
+    credential-free host substring survives; a normal bare hostname is
+    returned BYTE-IDENTICALLY (the guard triggers ONLY on the DSN-shaped
+    case, so it never changes the identity of a correctly-configured host).
+
+    NOTE: ``host`` and ``dbname`` are assumed delimiter-free for the
+    ``host:port/dbname`` join; a literal ``:`` / ``/`` inside a component
+    field is not disambiguated (no realistic cross-DB collision is
+    constructible — the fields come from structured config, not free text).
+    """
+    if "@" not in host and "://" not in host:
+        return host
+    stripped = host
+    if "://" in stripped:
+        stripped = stripped.split("://", 1)[1]
+    if "@" in stripped:
+        # userinfo (user[:password]) precedes the last '@'; keep only the host side.
+        stripped = stripped.rsplit("@", 1)[1]
+    return stripped
+
+
 def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
     """Return a short, credential-free fingerprint of a database URL.
 
@@ -134,7 +165,13 @@ def resolve_db_identity(
     #    derive from structured fields instead so URL-less configs stay
     #    isolated. host + dbname are the minimum; port is optional.
     if host and dbname:
-        normalized = f"{host}:{port if port is not None else ''}/{dbname}"
+        # Defense-in-depth (#1606): strip any credential-carrying userinfo if
+        # host was mis-set to a DSN, so no credential byte enters the hash
+        # pre-image (parity with the URL path's mask_url step). A bare
+        # hostname is unchanged, so a correctly-configured host's identity is
+        # byte-identical to the pre-sanitize behavior.
+        safe_host = _sanitize_component_host(host)
+        normalized = f"{safe_host}:{port if port is not None else ''}/{dbname}"
         return DbIdentityResolution(_hash8(normalized), "components", url_unparseable)
 
     # 3. No usable identity — segmentation is DISABLED; the caller warns.
