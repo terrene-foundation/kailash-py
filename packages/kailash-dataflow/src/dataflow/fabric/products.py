@@ -177,6 +177,36 @@ def register_product(
                 f"Invalid cron expression for product '{name}': {schedule!r}"
             )
 
+    # Tenant-enforcement cross-check (issue #1654 finding 3): if a product
+    # depends on a model that HAS a tenant_id column (tenant-scoped-capable)
+    # but is declared multi_tenant=False, the fabric read path builds a
+    # NON-enforcing context and ctx.express.list(...) returns EVERY tenant's
+    # rows. A single forgotten flag silently disables tenant enforcement, so
+    # warn LOUDLY naming the product + model. WARN (not raise) because a
+    # legitimately-global product over a tenant-column model is a valid
+    # design — but the operator MUST be told enforcement is off.
+    if not multi_tenant:
+        for dep in deps:
+            model_info = models.get(dep)
+            if not isinstance(model_info, dict):
+                continue
+            model_fields = model_info.get("fields")
+            if isinstance(model_fields, dict) and "tenant_id" in model_fields:
+                logger.warning(
+                    "fabric.product.tenant_enforcement_disabled",
+                    extra={
+                        "product": name,
+                        "model": dep,
+                        "reason": (
+                            f"model '{dep}' has a 'tenant_id' column but product "
+                            f"'{name}' is declared multi_tenant=False — fabric "
+                            f"tenant enforcement is DISABLED for this product; "
+                            f"reads return ALL tenants' rows. Set "
+                            f"multi_tenant=True if this product is tenant-scoped."
+                        ),
+                    },
+                )
+
     # Build registration
     registration = ProductRegistration(
         name=name,

@@ -33,6 +33,16 @@ __all__ = [
     "PipelineContext",
 ]
 
+# Non-filtering kwargs permitted on an ENFORCED multi-tenant read (issue
+# #1654). Anything outside this allowlist could carry an alternate WHERE /
+# ids / where predicate that re-admits other tenants past the top-level
+# tenant_id check, so an enforced list/count/read refuses any kwarg not
+# here (fail-closed). Pagination / ordering / cache / soft-delete kwargs
+# cannot widen the tenant set and are safe to forward.
+_ENFORCED_SAFE_KWARGS = frozenset(
+    {"limit", "offset", "order_by", "cache_ttl", "use_primary", "include_deleted"}
+)
+
 
 # ---------------------------------------------------------------------------
 # SourceHandle -- user-friendly wrapper around BaseSourceAdapter
@@ -379,10 +389,18 @@ class PipelineScopedExpress:
         returned. This is config/structural logic, never an agent
         decision path.
 
+        On an enforced read the filter MUST be a plain dict whose
+        ``tenant_field`` is a SCALAR equal to the bound tenant AND MUST NOT
+        carry any top-level boolean/operator key (``$or`` / ``$and`` /
+        ``$nor`` / any ``$``-prefixed key) — a complex tenant-ambiguating
+        filter can re-admit other tenants while the top-level ``tenant_id``
+        reads correct, so it is refused (issue #1654 finding 4).
+
         Raises:
             FabricTenantScopeError: When enforcement is active and the
-                filter omits the tenant predicate (unscoped) or carries a
-                predicate for a different tenant (cross-tenant).
+                filter omits the tenant predicate (unscoped), carries a
+                top-level operator key, carries a non-scalar tenant value,
+                or carries a predicate for a different tenant (cross-tenant).
         """
         if self._enforce_tenant is None:
             return
@@ -391,7 +409,7 @@ class PipelineScopedExpress:
         from dataflow.fabric.cache import FabricTenantScopeError
 
         tf = self._tenant_field
-        if not filter or tf not in filter:
+        if not isinstance(filter, dict) or tf not in filter:
             raise FabricTenantScopeError(
                 f"multi-tenant fabric {operation} of '{model}' did not carry "
                 f"the '{tf}' predicate; refusing to return unscoped rows "
@@ -399,11 +417,98 @@ class PipelineScopedExpress:
                 f"executed query filter was {filter!r}). Add "
                 f"filter={{'{tf}': ctx.tenant_id}} to the product read."
             )
-        if filter[tf] != self._enforce_tenant:
+        operator_keys = sorted(
+            k for k in filter if isinstance(k, str) and k.startswith("$")
+        )
+        if operator_keys:
+            raise FabricTenantScopeError(
+                f"multi-tenant fabric {operation} of '{model}' carried "
+                f"top-level operator key(s) {operator_keys} on an enforced "
+                f"read; a boolean/operator filter (e.g. $or) can re-admit "
+                f"other tenants past the '{tf}' check and is refused. Use a "
+                f"plain-dict filter with a scalar '{tf}'."
+            )
+        tenant_value = filter[tf]
+        if isinstance(tenant_value, (dict, list, set, tuple)):
+            raise FabricTenantScopeError(
+                f"multi-tenant fabric {operation} of '{model}' bound a "
+                f"non-scalar '{tf}'={tenant_value!r}; a complex tenant "
+                f"predicate (e.g. {{'$in': [...]}}) can span tenants and is "
+                f"refused. Bind '{tf}' to the single scalar ctx.tenant_id."
+            )
+        if tenant_value != self._enforce_tenant:
             raise FabricTenantScopeError(
                 f"cross-tenant fabric {operation} of '{model}': the executed "
-                f"query filter '{tf}'={filter[tf]!r} does not match the bound "
+                f"query filter '{tf}'={tenant_value!r} does not match the bound "
                 f"tenant scope {self._enforce_tenant!r}; refused."
+            )
+
+    def _reject_filtering_kwargs(
+        self,
+        operation: str,
+        model: str,
+        kwargs: Dict[str, Any],
+    ) -> None:
+        """Forbid filtering-capable kwargs on an enforced read (issue #1654).
+
+        The tenant predicate is proven on the ``filter`` dict; a filtering
+        **kwarg forwarded to express (an alternate WHERE / ids / where
+        channel) could re-admit other tenants past that check. On an
+        enforced read only the non-filtering pagination/ordering/cache
+        kwargs in ``_ENFORCED_SAFE_KWARGS`` are permitted — any other kwarg
+        is refused fail-closed rather than silently forwarded.
+        """
+        if self._enforce_tenant is None:
+            return
+        unexpected = sorted(k for k in kwargs if k not in _ENFORCED_SAFE_KWARGS)
+        if unexpected:
+            from dataflow.fabric.cache import FabricTenantScopeError
+
+            raise FabricTenantScopeError(
+                f"multi-tenant fabric {operation} of '{model}' passed "
+                f"non-pagination kwarg(s) {unexpected} on an enforced read; "
+                f"only {sorted(_ENFORCED_SAFE_KWARGS)} are permitted (a "
+                f"filtering kwarg could re-admit other tenants). Refused."
+            )
+
+    def _verify_row_tenant(
+        self,
+        operation: str,
+        model: str,
+        row: Any,
+    ) -> None:
+        """Post-fetch tenant check for a single-record read (issue #1654).
+
+        ``read(model, record_id)`` looks a row up by PK — it has no filter
+        to inspect BEFORE execution, so (unlike list/count) the tenant proof
+        is applied AFTER the fetch: the returned row's ``tenant_field`` MUST
+        equal the bound tenant, else the read is refused and NO row is
+        returned. A ``None`` / absent row is a normal miss and passes
+        through unchanged. This closes the global-PK cross-tenant read: a
+        multi-tenant product doing ``ctx.express.read('M', other_tenant_pk)``
+        can no longer return another tenant's row.
+
+        Raises:
+            FabricTenantScopeError: When enforcement is active and a fetched
+                row's tenant does not match the bound tenant (or the row
+                lacks the tenant field entirely).
+        """
+        if self._enforce_tenant is None or row is None:
+            return
+        tf = self._tenant_field
+        row_tenant = row.get(tf) if isinstance(row, dict) else None
+        if (
+            not isinstance(row, dict)
+            or tf not in row
+            or row_tenant != self._enforce_tenant
+        ):
+            from dataflow.fabric.cache import FabricTenantScopeError
+
+            raise FabricTenantScopeError(
+                f"cross-tenant fabric {operation} of '{model}': the fetched "
+                f"row's '{tf}'={row_tenant!r} does not match the bound tenant "
+                f"scope {self._enforce_tenant!r}; refused and no row returned "
+                f"(single-record reads are tenant-verified post-fetch)."
             )
 
     # -- Read operations (cached) -------------------------------------------
@@ -425,6 +530,7 @@ class PipelineScopedExpress:
             List of matching records.
         """
         self._require_tenant_predicate("list", model, filter)
+        self._reject_filtering_kwargs("list", model, kwargs)
         key = _cache_key("list", model, filter)
         if key not in self._read_cache:
             self._read_cache[key] = await self._express.list(
@@ -450,7 +556,12 @@ class PipelineScopedExpress:
         """
         key = _cache_key("read", model, {"id": record_id})
         if key not in self._read_cache:
-            self._read_cache[key] = await self._express.read(model, record_id, **kwargs)
+            self._reject_filtering_kwargs("read", model, kwargs)
+            row = await self._express.read(model, record_id, **kwargs)
+            # read() is a PK lookup with no filter to prove pre-execution;
+            # the tenant proof is applied post-fetch (issue #1654 finding 1).
+            self._verify_row_tenant("read", model, row)
+            self._read_cache[key] = row
         return self._read_cache[key]
 
     async def count(
@@ -470,6 +581,7 @@ class PipelineScopedExpress:
             Number of matching records.
         """
         self._require_tenant_predicate("count", model, filter)
+        self._reject_filtering_kwargs("count", model, kwargs)
         key = _cache_key("count", model, filter)
         if key not in self._read_cache:
             self._read_cache[key] = await self._express.count(
@@ -550,15 +662,21 @@ class PipelineContext(FabricContext):
     ) -> None:
         enforce_tenant: Optional[str] = None
         if enforce_tenant_scope:
-            if tenant_id is None:
-                # Fail closed: an enforcing multi-tenant context with no
-                # resolved tenant scope must never be constructed — it
-                # would otherwise silently disable the proof.
+            # Fail closed: an enforcing multi-tenant context with no resolved
+            # tenant scope must never be constructed — it would otherwise
+            # silently disable the proof. A None OR empty/whitespace-only
+            # tenant_id is treated identically (issue #1654 finding 2): a
+            # blank tenant is NOT a valid scope and must not flow through as
+            # a shared pseudo-tenant.
+            if tenant_id is None or (
+                isinstance(tenant_id, str) and not tenant_id.strip()
+            ):
                 from dataflow.fabric.cache import FabricTenantScopeError
 
                 raise FabricTenantScopeError(
-                    "enforce_tenant_scope=True requires a resolved tenant_id; "
-                    "refusing to build an unscoped multi-tenant fabric context."
+                    "enforce_tenant_scope=True requires a resolved, non-empty "
+                    f"tenant_id; refusing to build an unscoped multi-tenant "
+                    f"fabric context (received tenant_id={tenant_id!r})."
                 )
             enforce_tenant = tenant_id
         self._pipeline_read_cache: Dict[str, Any] = {}

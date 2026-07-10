@@ -69,21 +69,36 @@ class FabricTenantRequiredError(Exception):
 
 class FabricTenantScopeError(FabricTenantRequiredError):
     """Raised when a multi-tenant fabric read cannot PROVE the tenant
-    predicate was applied to the executed query (issue #1654).
+    predicate was applied to a multi_tenant product's query (issue #1654).
 
     Distinct from :class:`FabricTenantRequiredError` (tenant scope *absent*):
-    this fires when a tenant scope IS resolved but a set-returning read on
-    the fabric product path either
+    this fires when a tenant scope IS resolved but a read on the fabric
+    product path could not be proven tenant-scoped and is refused.
 
-    * omitted the tenant predicate entirely (an *unscoped* query that would
-      materialize every tenant's rows into the caller's tenant slot), or
-    * carried a predicate for a DIFFERENT tenant (a *cross-tenant* attempt).
+    **Exact coverage (accurate scope — NOT "never returns cross-tenant rows"
+    universally):**
 
-    The fabric read path inspects the executed query's bound filter and
-    refuses BEFORE the query runs, so unscoped or cross-tenant rows are
-    never returned — the tenant filter is proven present on the executed
-    query, not merely declared on the product. It subclasses
-    ``FabricTenantRequiredError`` so existing ``except
+    * The set-returning ``ctx.express`` path (``list`` / ``count``) of a
+      ``multi_tenant`` product with a resolvable, non-empty tenant is
+      *fail-closed*: the executed query's bound ``filter`` MUST carry a
+      scalar ``tenant_id`` equal to the bound tenant, MUST NOT carry a
+      top-level ``$``-operator key, and MUST NOT pass a filtering ``**kwarg``
+      — else the query is refused BEFORE it runs.
+    * ``ctx.express.read`` (single-record PK lookup) is tenant-verified
+      *post-fetch*: a fetched row whose ``tenant_id`` does not match the
+      bound tenant is refused and NO row is returned.
+    * ``ctx.source(...)`` (external adapters) and the write path
+      (``create`` / ``update`` / ``delete`` / ``upsert``) are NOT covered
+      by this guard — external-source tenant scoping and write-path tenant
+      enforcement are tracked as separate follow-ups.
+
+    ``tenant_extractor`` (configured on ``db.start()``) is an
+    AUTHORIZATION boundary owned by the caller / Nexus, NOT this guard: a
+    client-controlled header extractor is spoofable, so proving the query
+    carried *a* tenant predicate does not authenticate *which* tenant the
+    request may act as — that remains the extractor's / gateway's job.
+
+    It subclasses ``FabricTenantRequiredError`` so existing ``except
     FabricTenantRequiredError`` handlers keep catching the whole
     tenant-isolation family while callers may catch this narrower case.
     """
