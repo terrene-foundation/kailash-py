@@ -817,7 +817,17 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             if tenant_guard and col == "tenant_id":
                 continue  # never re-assign the owning tenant
             if col == self.version_field and self.version_control:
-                clauses.append(f"{col} = {self.table_name}.{col} + 1")
+                if mysql and tenant_guard:
+                    # PG/SQLite gate the version bump via the DO-UPDATE WHERE;
+                    # MySQL's ODKU has no WHERE, so guard the optimistic-lock
+                    # increment too — a cross-tenant id collision must NOT bump
+                    # the victim tenant's version counter.
+                    clauses.append(
+                        f"{col} = IF(tenant_id = {_new_ref('tenant_id')}, "
+                        f"{self.table_name}.{col} + 1, {col})"
+                    )
+                else:
+                    clauses.append(f"{col} = {self.table_name}.{col} + 1")
             elif col == "updated_at" and self.auto_timestamps:
                 if mysql and tenant_guard:
                     # PG/SQLite gate updated_at via the DO-UPDATE WHERE; MySQL's
