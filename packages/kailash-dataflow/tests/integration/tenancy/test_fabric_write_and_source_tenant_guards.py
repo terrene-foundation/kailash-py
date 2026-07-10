@@ -330,6 +330,40 @@ async def test_multi_tenant_product_source_read_is_refused_fail_closed():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_multi_tenant_product_source_write_and_degradation_are_refused():
+    """The source ``write`` (async) and ``last_successful_data`` (sync
+    degradation) paths are refused fail-closed under enforcement, exactly like
+    the read paths — one direct test per variant (issue #1658), so neither
+    one-line delegation can regress silently."""
+    crm = MockSource("crm", data={"": {"deals": ["cross-tenant-secret"]}})
+
+    ctx = PipelineContext(
+        express=None,
+        sources={"crm": crm},
+        products_cache={},
+        tenant_id="tenant-a",
+        enforce_tenant_scope=True,  # multi_tenant product
+    )
+    handle = ctx.source("crm")
+
+    # write (async) is refused before it can touch the adapter.
+    with pytest.raises(FabricTenantScopeError) as exc_write:
+        await handle.write("deals", {"amount": 100})
+    msg_write = str(exc_write.value)
+    assert "tenant-a" in msg_write and "crm" in msg_write
+    assert "cross-tenant-secret" not in msg_write
+    assert isinstance(exc_write.value, FabricTenantRequiredError)
+
+    # last_successful_data (sync degradation helper) is refused too — the
+    # cached payload is prior fetched row data.
+    with pytest.raises(FabricTenantScopeError) as exc_deg:
+        handle.last_successful_data()
+    assert "cross-tenant-secret" not in str(exc_deg.value)
+    assert isinstance(exc_deg.value, FabricTenantRequiredError)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_single_tenant_product_source_read_is_unaffected():
     """A single-tenant (non-enforcing) context reads the source unchanged —
     no regression for products that are not multi_tenant (issue #1658)."""
