@@ -3851,6 +3851,21 @@ class NodeGenerator:
                             has_updated_at=has_updated_at,
                         )
                     else:
+                        # Cross-tenant WRITE breach fix (rules/tenant-isolation.md):
+                        # for a multi_tenant model with a bound tenant, pass the
+                        # tenant id so the native ON CONFLICT DO UPDATE carries a
+                        # ``WHERE {table}.tenant_id = <bound>`` guard (PG/SQLite) /
+                        # ``IF()`` guard (MySQL). A cross-tenant ``id`` collision
+                        # then leaves the row untouched (0 rows returned), which
+                        # the empty-RETURNING branch below converts into the
+                        # actionable TenantNaturalKeyCollisionError. SQLite's
+                        # single-record path (above) uses the tenant-scoped
+                        # WHERE-precheck and is already fail-closed.
+                        _tenant_guard_value = None
+                        if "tenant_id" in self.model_fields:
+                            from .tenant_context import get_current_tenant_id
+
+                            _tenant_guard_value = get_current_tenant_id()
                         upsert_query = dialect.build_upsert_query(
                             table_name=table_name,
                             insert_data=insert_data,
@@ -3858,6 +3873,7 @@ class NodeGenerator:
                             conflict_columns=conflict_columns,
                             has_updated_at=has_updated_at,
                             use_row_alias=mysql_use_row_alias,  # #1546
+                            tenant_guard=_tenant_guard_value,
                         )
 
                     query = upsert_query.query
@@ -3966,6 +3982,34 @@ class NodeGenerator:
                                 "record": row,
                                 "action": "created" if created else "updated",
                             }
+
+                    # Cross-tenant WRITE breach fix (rules/tenant-isolation.md):
+                    # a PostgreSQL native-ON-CONFLICT upsert on a multi_tenant
+                    # model that returned 0 rows means the tenant-scoped
+                    # DO-UPDATE guard suppressed a cross-tenant ``id`` collision
+                    # (a same-tenant conflict updates + returns its row; a new
+                    # row inserts + returns). Fail closed with the SAME actionable
+                    # diagnostic the bulk path surfaces — never a silent no-op.
+                    if (
+                        database_type.lower() == "postgresql"
+                        and "tenant_id" in self.model_fields
+                    ):
+                        from .tenant_context import get_current_tenant_id
+
+                        _tid = get_current_tenant_id()
+                        if _tid is not None:
+                            from .exceptions import TenantNaturalKeyCollisionError
+
+                            _cid = None
+                            if isinstance(create_data, dict):
+                                _cid = create_data.get("id")
+                            if _cid is None and isinstance(where, dict):
+                                _cid = where.get("id")
+                            raise TenantNaturalKeyCollisionError(
+                                model_name=self.model_name,
+                                tenant_id=_tid,
+                                colliding_id=_cid,
+                            )
 
                     # Enhanced error with catalog-based solutions (DF-710)
                     raise _error_enhancer().enhance_upsert_operation_failed(
@@ -4602,6 +4646,13 @@ class NodeGenerator:
                                 and "error" in bulk_result
                             ):
                                 result["error"] = bulk_result["error"]
+                            # Cross-tenant WRITE breach fix: propagate the
+                            # structured cross-tenant-collision signal so the
+                            # express layer surfaces the actionable #1526
+                            # diagnostic (rules/tenant-isolation.md).
+                            if bulk_result.get("cross_tenant_conflict"):
+                                result["cross_tenant_conflict"] = True
+                                result["skipped"] = bulk_result.get("skipped", 0)
                             return result
                         except BulkUpsertConflictTargetError:
                             # Issue #1519: caller-actionable conflict-target error

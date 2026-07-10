@@ -307,9 +307,17 @@ class PostgreSQLDialect(SQLDialect):
         conflict_columns: List[str],
         has_updated_at: bool = False,
         use_row_alias: bool = False,
+        tenant_guard: Optional[str] = None,
     ) -> UpsertQuery:
         """Build PostgreSQL upsert with xmax detection (``use_row_alias`` is
-        MySQL-only and ignored here)."""
+        MySQL-only and ignored here).
+
+        Cross-tenant WRITE breach fix: when ``tenant_guard`` (the bound tenant id)
+        is supplied, the DO UPDATE carries ``WHERE {table}.tenant_id = :pN`` (the
+        bound tenant, parameter-bound) and ``tenant_id`` is excluded from the SET
+        so a cross-tenant ``id`` collision never overwrites — nor re-owns —
+        another tenant's row (rules/tenant-isolation.md).
+        """
 
         # Build INSERT clause
         insert_columns = list(insert_data.keys())
@@ -325,15 +333,19 @@ class PostgreSQLDialect(SQLDialect):
         # MUST NOT be used to apply the `update` values; bind them as parameters,
         # continuing the :p<i> sequence (AsyncSQLDatabaseNode rebuilds the param
         # dict positionally as {p0, p1, ...} from list(params.values())).
+        _tenant_guarded = tenant_guard is not None
         update_clauses = []
         update_params = {}
         _poff = len(insert_columns)
         for col in update_data.keys():
-            if col not in conflict_columns and col != "id":
-                pkey = f"p{_poff}"
-                update_clauses.append(f"{col} = :{pkey}")
-                update_params[pkey] = update_data[col]
-                _poff += 1
+            if col in conflict_columns or col == "id":
+                continue
+            if _tenant_guarded and col == "tenant_id":
+                continue  # never re-assign the owning tenant
+            pkey = f"p{_poff}"
+            update_clauses.append(f"{col} = :{pkey}")
+            update_params[pkey] = update_data[col]
+            _poff += 1
 
         # Add updated_at if present
         if has_updated_at:
@@ -343,12 +355,21 @@ class PostgreSQLDialect(SQLDialect):
             ", ".join(update_clauses) if update_clauses else "id = EXCLUDED.id"
         )
 
+        # Cross-tenant DO-UPDATE guard: only overwrite when the existing row
+        # belongs to the SAME tenant as the caller.
+        tenant_where = ""
+        if _tenant_guarded:
+            pkey = f"p{_poff}"
+            tenant_where = f"\n            WHERE {table_name}.tenant_id = :{pkey}"
+            update_params[pkey] = tenant_guard
+            _poff += 1
+
         # Build complete query with xmax flag
         query = f"""
             INSERT INTO {table_name} ({", ".join(insert_columns)})
             VALUES ({", ".join(insert_placeholders)})
             ON CONFLICT ({conflict_cols_str})
-            DO UPDATE SET {update_clause_str}
+            DO UPDATE SET {update_clause_str}{tenant_where}
             RETURNING *, (xmax = 0) AS _upsert_inserted
         """
 
@@ -380,9 +401,15 @@ class SQLiteDialect(SQLDialect):
         conflict_columns: List[str],
         has_updated_at: bool = False,
         use_row_alias: bool = False,
+        tenant_guard: Optional[str] = None,
     ) -> UpsertQuery:
         """Build SQLite upsert without xmax (``use_row_alias`` is MySQL-only and
-        ignored here)."""
+        ignored here).
+
+        ``tenant_guard`` (bound tenant id) adds the cross-tenant
+        ``WHERE {table}.tenant_id = :pN`` DO-UPDATE predicate and excludes
+        ``tenant_id`` from the SET — see :meth:`PostgreSQLDialect.build_upsert_query`.
+        """
 
         # Build INSERT clause
         insert_columns = list(insert_data.keys())
@@ -400,15 +427,19 @@ class SQLiteDialect(SQLDialect):
         # Placeholders continue the :p<i> sequence (offset by the insert-column
         # count) because AsyncSQLDatabaseNode rebuilds the param dict positionally
         # as {p0, p1, ...} from list(params.values()) — the names MUST match index.
+        _tenant_guarded = tenant_guard is not None
         update_clauses = []
         update_params = {}
         _poff = len(insert_columns)
         for col in update_data.keys():
-            if col not in conflict_columns and col != "id":
-                pkey = f"p{_poff}"
-                update_clauses.append(f"{col} = :{pkey}")
-                update_params[pkey] = update_data[col]
-                _poff += 1
+            if col in conflict_columns or col == "id":
+                continue
+            if _tenant_guarded and col == "tenant_id":
+                continue  # never re-assign the owning tenant
+            pkey = f"p{_poff}"
+            update_clauses.append(f"{col} = :{pkey}")
+            update_params[pkey] = update_data[col]
+            _poff += 1
 
         # Add updated_at if present
         if has_updated_at:
@@ -418,12 +449,20 @@ class SQLiteDialect(SQLDialect):
             ", ".join(update_clauses) if update_clauses else "id = EXCLUDED.id"
         )
 
+        # Cross-tenant DO-UPDATE guard (see PostgreSQLDialect.build_upsert_query).
+        tenant_where = ""
+        if _tenant_guarded:
+            pkey = f"p{_poff}"
+            tenant_where = f"\n            WHERE {table_name}.tenant_id = :{pkey}"
+            update_params[pkey] = tenant_guard
+            _poff += 1
+
         # Build complete query WITHOUT xmax (SQLite doesn't support it)
         query = f"""
             INSERT INTO {table_name} ({", ".join(insert_columns)})
             VALUES ({", ".join(insert_placeholders)})
             ON CONFLICT ({conflict_cols_str})
-            DO UPDATE SET {update_clause_str}
+            DO UPDATE SET {update_clause_str}{tenant_where}
             RETURNING *
         """
 
@@ -454,6 +493,7 @@ class MySQLDialect(SQLDialect):
         conflict_columns: List[str],
         has_updated_at: bool = False,
         use_row_alias: bool = False,
+        tenant_guard: Optional[str] = None,
     ) -> UpsertQuery:
         """Build MySQL upsert with ON DUPLICATE KEY UPDATE.
 
@@ -465,6 +505,12 @@ class MySQLDialect(SQLDialect):
         ``VALUES(col)`` form, which those servers still require. The INSERT-side
         alias declaration and the ODKU-side reference are built together here so
         the two halves can never drift.
+
+        Cross-tenant WRITE breach fix (``tenant_guard``): MySQL's ODKU has no
+        WHERE, so each SET is guarded with ``col = IF(tenant_id = <new_tenant>,
+        <new_col>, col)`` and ``tenant_id`` is excluded — a cross-tenant ``id``
+        collision keeps every existing value AND the owning tenant unchanged
+        (rules/tenant-isolation.md).
         """
 
         # Build INSERT clause.
@@ -482,20 +528,43 @@ class MySQLDialect(SQLDialect):
         # The row alias is a table alias in a distinct namespace, so it cannot
         # collide with a column named the same (``new_row.new_row`` is still valid).
         alias = "new_row"
+        _tenant_guarded = tenant_guard is not None
+
+        def _new_ref(c: str) -> str:
+            return f"{alias}.{c}" if use_row_alias else f"VALUES({c})"
 
         # Build UPDATE clause. Reference the row alias (8.0.19+) or fall back to
         # the deprecated VALUES(col) form. updated_at is a literal, not a value
         # reference, in both branches.
         update_clauses = []
         for col in update_data.keys():
-            if col not in conflict_columns and col != "id":
-                if use_row_alias:
-                    update_clauses.append(f"{col} = {alias}.{col}")
-                else:
-                    update_clauses.append(f"{col} = VALUES({col})")
+            if col in conflict_columns or col == "id":
+                continue
+            if _tenant_guarded and col == "tenant_id":
+                continue  # never re-assign the owning tenant
+            if _tenant_guarded:
+                # Keep the existing value unless the row belongs to the caller's
+                # tenant. ``tenant_id`` (bare) = the EXISTING row's owner.
+                update_clauses.append(
+                    f"{col} = IF(tenant_id = {_new_ref('tenant_id')}, "
+                    f"{_new_ref(col)}, {col})"
+                )
+            elif use_row_alias:
+                update_clauses.append(f"{col} = {alias}.{col}")
+            else:
+                update_clauses.append(f"{col} = VALUES({col})")
 
         if has_updated_at:
-            update_clauses.append("updated_at = CURRENT_TIMESTAMP")
+            if _tenant_guarded:
+                # Do not even bump the victim row's timestamp on a cross-tenant
+                # collision — the guard keeps updated_at unchanged unless the row
+                # belongs to the caller's tenant.
+                update_clauses.append(
+                    f"updated_at = IF(tenant_id = {_new_ref('tenant_id')}, "
+                    f"CURRENT_TIMESTAMP, updated_at)"
+                )
+            else:
+                update_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
         if update_clauses:
             update_clause_str = ", ".join(update_clauses)

@@ -51,7 +51,7 @@ import os
 import threading
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
@@ -61,6 +61,7 @@ from dataflow.core.agent_context import get_current_agent_id, get_current_cleara
 from dataflow.core.exceptions import (
     DDLFailedError,
     TenantNaturalKeyCollisionError,
+    format_tenant_natural_key_collision_message,
     is_pk_unique_violation,
     sanitize_db_error,
 )
@@ -572,6 +573,66 @@ class DataFlowExpress:
             model, rows, clearance
         )
 
+    def _tenant_pk_collision_context(
+        self, model: str, error_text: str, force_collision: bool = False
+    ) -> Optional[Tuple[str, str]]:
+        """Return ``(tenant_id, table_name)`` iff ``error_text`` is a PK-unique
+        violation on a ``multi_tenant`` model whose active tenant is bound and
+        whose table is resolvable — the precondition BOTH the single-record and
+        the bulk cross-tenant collision diagnostics share (issue #1526).
+        Returns ``None`` (caller keeps the original error path) otherwise.
+
+        ``force_collision`` (cross-tenant WRITE breach fix): the bulk path's
+        tenant-scoped DO-UPDATE guard SUPPRESSES the offending row rather than
+        letting the driver raise a PK-unique violation, so there is no driver
+        message to match. When the guard already PROVED a cross-tenant collision
+        (``cross_tenant_conflict`` in the bulk result), pass ``force_collision``
+        to bypass ONLY the ``is_pk_unique_violation`` text gate — every other
+        precondition (multi_tenant + bound tenant + tenant_id field + resolvable
+        table) still holds.
+
+        Zero-cost short-circuit for single-tenant models: the multi_tenant
+        guard returns ``None`` before any string inspection. The model must
+        carry the ``tenant_id`` column DataFlow injects for multi_tenant
+        instances (defends against a non-tenant model on a multi_tenant
+        DataFlow); an introspection failure means we cannot confirm the
+        multi_tenant shape → classification does not apply and the caller
+        re-raises / re-surfaces the ORIGINAL driver error (no hiding).
+        """
+        security = getattr(self._db.config, "security", None)
+        if not (security and getattr(security, "multi_tenant", False) is True):
+            return None
+        tenant_id = get_current_tenant_id()
+        if tenant_id is None:
+            return None
+        model_fields: Any = None
+        try:
+            model_fields = self._db.get_model_fields(model)
+        except Exception:
+            # Introspection failed — cannot confirm the multi_tenant shape, so
+            # decline (the caller keeps the ORIGINAL error path; nothing hidden).
+            model_fields = None
+        if not model_fields or "tenant_id" not in model_fields:
+            return None
+        # Resolve the table name for PK-column matching; if it cannot be
+        # resolved, do not risk a false positive — keep the original path.
+        class_to_table = getattr(self._db, "_class_name_to_table_name", None)
+        table_name: Optional[str] = None
+        if callable(class_to_table):
+            try:
+                table_name = class_to_table(model)
+            except Exception:
+                # Table-name resolution failed — decline rather than risk a
+                # false-positive collision claim; the raw error path stands.
+                table_name = None
+        if not table_name:
+            return None
+        # The guard already proved the cross-tenant collision → skip the
+        # driver-message match (there is no driver error to match).
+        if not force_collision and not is_pk_unique_violation(error_text, table_name):
+            return None
+        return tenant_id, table_name
+
     async def _maybe_tenant_natural_key_collision(
         self,
         model: str,
@@ -608,37 +669,10 @@ class DataFlowExpress:
         zero-tolerance Rule 3). Zero-cost short-circuit for single-tenant models:
         the multi_tenant guard returns ``None`` before any string inspection.
         """
-        security = getattr(self._db.config, "security", None)
-        if not (security and getattr(security, "multi_tenant", False) is True):
+        ctx = self._tenant_pk_collision_context(model, error_text)
+        if ctx is None:
             return None
-        tenant_id = get_current_tenant_id()
-        if tenant_id is None:
-            return None
-        # The model must carry the tenant_id column DataFlow injects for
-        # multi_tenant instances (defends against a non-tenant model on a
-        # multi_tenant DataFlow). An introspection failure means we cannot
-        # confirm the multi_tenant shape → classification does not apply and
-        # the caller re-raises the ORIGINAL driver error (no hiding).
-        model_fields: Any = None
-        try:
-            model_fields = self._db.get_model_fields(model)
-        except Exception:
-            model_fields = None
-        if not model_fields or "tenant_id" not in model_fields:
-            return None
-        # Resolve the table name for PK-column matching; if it cannot be
-        # resolved, do not risk a false positive — keep the original path.
-        class_to_table = getattr(self._db, "_class_name_to_table_name", None)
-        table_name: Optional[str] = None
-        if callable(class_to_table):
-            try:
-                table_name = class_to_table(model)
-            except Exception:
-                table_name = None
-        if not table_name:
-            return None
-        if not is_pk_unique_violation(error_text, table_name):
-            return None
+        tenant_id, _table_name = ctx
         # Without the caller's id we cannot run the same-tenant disambiguation;
         # decline to convert rather than assert an unverifiable cross-tenant claim.
         if id_value is None:
@@ -655,6 +689,106 @@ class DataFlowExpress:
             colliding_id=id_value,
             original_error=original_error,
         )
+
+    async def _maybe_bulk_tenant_natural_key_collision(
+        self,
+        model: str,
+        records: List[Dict[str, Any]],
+        error_text: str,
+        force_collision: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Return an actionable cross-tenant collision DIAGNOSTIC (a dict, NEVER
+        raised) iff a bulk write's ``error_text`` is a cross-tenant natural-key
+        PK collision on a ``multi_tenant`` model, else ``None`` (issue #1526).
+
+        The bulk paths (:meth:`bulk_create` / :meth:`bulk_upsert`) use
+        partial-failure-dict semantics: they RETURN a failure dict, they do NOT
+        raise. This helper mirrors the single-record
+        :meth:`_maybe_tenant_natural_key_collision` disambiguation into that
+        dict shape so a bulk collision surfaces the SAME actionable,
+        tenant-scoped, no-cross-tenant-leak diagnostic the single path raises —
+        WITHOUT converting the bulk contract to raise-on-first-error.
+
+        Disambiguation (never reads another tenant's data):
+
+        * The batch failed on a PK-unique violation, so NOTHING in the failing
+          batch was inserted. A TENANT-SCOPED read (QueryInterceptor) of each
+          caller-supplied ``id`` returns a row IFF the CURRENT tenant already
+          owns it.
+        * If the current tenant OWNS any supplied id, that id is a same-tenant
+          duplicate that alone explains the PK-unique failure. Mirroring the
+          single path's no-over-broadening discipline, the helper then DECLINES
+          (returns ``None``) rather than assert an unverifiable cross-tenant
+          claim about the remaining ids — the batch is atomic, so a not-owned
+          id in the same batch may simply be a would-have-inserted-fine new id.
+        * If the current tenant owns NONE of the supplied ids yet the batch
+          still failed on a PK-unique violation, then at least one not-owned id
+          provably collides with ANOTHER tenant's row. Those not-owned ids are
+          the caller's OWN ids (no cross-tenant leak); the diagnostic names them
+          with an at-least-one framing.
+
+        Returns a dict ``{"error_type", "tenant_id", "colliding_ids",
+        "message"}`` naming ONLY the caller's own tenant_id + supplied ids, or
+        ``None`` to keep the raw failure-dict error path (no over-broadening, no
+        silent normalization — zero-tolerance Rule 3). The ``message`` is built
+        by the SAME shared builder the single-path exception uses, so the two
+        surfaces never drift (``framework-first.md`` — no parallel hierarchy).
+        """
+        ctx = self._tenant_pk_collision_context(
+            model, error_text, force_collision=force_collision
+        )
+        if ctx is None:
+            return None
+        tenant_id, _table_name = ctx
+        if not records:
+            return None
+        # An INTRA-batch duplicate id is a caller-side duplicate that alone
+        # explains a PK-unique failure — it is NOT a cross-tenant collision.
+        # Decline (keep the raw error) rather than mislabel it: a tenant-scoped
+        # read of the duplicated id returns None (nothing was inserted — the
+        # batch failed), which would otherwise false-positive as cross-tenant.
+        supplied_ids = [
+            str(r.get("id"))
+            for r in records
+            if isinstance(r, dict) and r.get("id") is not None
+        ]
+        if len(supplied_ids) != len(set(supplied_ids)):
+            return None
+        # Partition the caller's OWN supplied ids into owned (same-tenant) vs
+        # not-owned via TENANT-SCOPED reads. Never reads another tenant's data.
+        candidate_ids: List[Any] = []
+        seen: set = set()
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            rid = record.get("id")
+            if rid is None:
+                continue
+            key = str(rid)
+            if key in seen:
+                continue
+            seen.add(key)
+            existing = await self.read(model, key, cache_ttl=0)
+            if existing is not None:
+                # Current tenant already owns this id → the batch failure is
+                # explained by a same-tenant duplicate. Decline to convert (no
+                # over-broadening onto the remaining ids), exactly as the
+                # single-record path declines a same-tenant duplicate.
+                return None
+            candidate_ids.append(rid)
+        if not candidate_ids:
+            # No caller-supplied id was resolvable → cannot attribute; keep the
+            # raw failure-dict error path rather than assert an unverifiable
+            # cross-tenant claim.
+            return None
+        return {
+            "error_type": "TenantNaturalKeyCollisionError",
+            "tenant_id": tenant_id,
+            "colliding_ids": candidate_ids,
+            "message": format_tenant_natural_key_collision_message(
+                model, tenant_id, candidate_ids
+            ),
+        }
 
     async def _raise_for_failed_result(
         self,
@@ -1669,10 +1803,32 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "bulk_create", record_id=None)
 
-            # Issue #373: WARN on partial failure (observability.md Rule 6)
+            # Issue #1526: a multi_tenant bulk write that collides on the
+            # natural-key PK with ANOTHER tenant's row surfaces here as a
+            # whole-batch failure dict ({"success": False, "error": <sanitized
+            # UNIQUE constraint>}). Enrich that failure dict with the SAME
+            # actionable, tenant-scoped, no-cross-tenant-leak diagnostic the
+            # single-record create path raises — WITHOUT converting the bulk
+            # partial-failure-dict contract to raise-on-first-error.
+            if isinstance(result, dict) and result.get("success") is False:
+                collision = await self._maybe_bulk_tenant_natural_key_collision(
+                    model, records, str(result.get("error") or "")
+                )
+                if collision is not None:
+                    result["collision"] = collision
+                    result["error"] = collision["message"]
+
+            # Issue #373: WARN on partial failure (observability.md Rule 7)
             if isinstance(result, dict):
                 failed = result.get("failed", 0) or result.get("failure_count", 0)
                 total = result.get("total", len(records))
+                # A batch that failed AS A WHOLE (e.g. a cross-tenant PK-unique
+                # collision) reports success=False with processed<total rather
+                # than a per-row failed count — still a partial failure that
+                # MUST WARN (observability.md Rule 7).
+                if not failed and result.get("success") is False:
+                    processed = result.get("processed", 0) or 0
+                    failed = max(total - processed, 1)
                 if failed and failed > 0:
                     logger.warning(
                         "bulk_create.partial_failure",
@@ -1681,6 +1837,11 @@ class DataFlowExpress:
                             "total": total,
                             "failed": failed,
                             "succeeded": total - failed,
+                            "first_error": (
+                                str(result.get("error"))
+                                if result.get("error") is not None
+                                else None
+                            ),
                         },
                     )
 
@@ -1908,12 +2069,54 @@ class DataFlowExpress:
             # (scalar aggregate carve-out).
             if isinstance(result, dict):
                 raw_records = result.get("records", []) or []
-                return {
+                out: Dict[str, Any] = {
                     "records": self._apply_classification_mask_rows(model, raw_records),
                     "created": result.get("inserted", 0),
                     "updated": result.get("updated", 0),
                     "total": result.get("total", len(records)),
                 }
+                # Issue #1526: a whole-batch failure (e.g. a cross-tenant PK
+                # collision) previously flattened into an empty-records dict
+                # with NO error surfaced (silent-swallow — zero-tolerance Rule
+                # 3). Preserve the failure signal and, when the failure is a
+                # cross-tenant natural-key collision, enrich it with the SAME
+                # actionable, tenant-scoped, no-cross-tenant-leak diagnostic the
+                # single-record upsert path raises — WITHOUT converting the bulk
+                # partial-failure-dict contract to raise-on-first-error.
+                if result.get("success") is False:
+                    raw_error = result.get("error")
+                    out["success"] = False
+                    # Cross-tenant WRITE breach fix: the tenant-scoped DO-UPDATE
+                    # guard suppresses the offending row (no driver PK-unique
+                    # message), so the collision helper is forced via the
+                    # ``cross_tenant_conflict`` signal rather than a text match.
+                    _forced = bool(result.get("cross_tenant_conflict"))
+                    collision = await self._maybe_bulk_tenant_natural_key_collision(
+                        model, records, str(raw_error or ""), force_collision=_forced
+                    )
+                    if collision is not None:
+                        out["collision"] = collision
+                        out["error"] = collision["message"]
+                    elif raw_error is not None:
+                        out["error"] = raw_error
+                    # observability.md Rule 7: a bulk op with failed>0 MUST WARN.
+                    processed = result.get("processed", 0) or 0
+                    failed = max(out["total"] - processed, 1)
+                    logger.warning(
+                        "bulk_upsert.partial_failure",
+                        extra={
+                            "model": model,
+                            "total": out["total"],
+                            "failed": failed,
+                            "succeeded": out["total"] - failed,
+                            "first_error": (
+                                str(out.get("error"))
+                                if out.get("error") is not None
+                                else None
+                            ),
+                        },
+                    )
+                return out
             return {
                 "records": result if isinstance(result, list) else [],
                 "created": 0,

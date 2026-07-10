@@ -1596,6 +1596,11 @@ class BulkOperations:
             for i in range(0, len(data), batch_size):
                 batch = data[i : i + batch_size]
 
+                # Cross-tenant WRITE breach fix: emit the tenant-scoped DO-UPDATE
+                # guard iff this is a multi_tenant model with a bound tenant
+                # (``bound_tenant is not None`` ⟺ _resolve_bulk_tenant succeeded).
+                tenant_guard = bound_tenant is not None
+
                 # Build database-specific upsert query
                 if database_type.lower() == "postgresql":
                     # PostgreSQL: INSERT ... ON CONFLICT (<conflict_on>) DO UPDATE
@@ -1606,6 +1611,7 @@ class BulkOperations:
                         conflict_resolution,
                         model_name,
                         conflict_columns,
+                        tenant_guard=tenant_guard,
                     )
                 elif database_type.lower() == "mysql":
                     # MySQL: INSERT ... ON DUPLICATE KEY UPDATE ...
@@ -1617,6 +1623,7 @@ class BulkOperations:
                         model_name,
                         conflict_columns,
                         use_row_alias=mysql_use_row_alias,
+                        tenant_guard=tenant_guard,
                     )
                 else:  # sqlite
                     # SQLite: INSERT ... ON CONFLICT (<conflict_on>) DO UPDATE
@@ -1627,6 +1634,7 @@ class BulkOperations:
                         conflict_resolution,
                         model_name,
                         conflict_columns,
+                        tenant_guard=tenant_guard,
                     )
 
                 logger.debug(
@@ -1698,6 +1706,52 @@ class BulkOperations:
                 batches_processed += 1
 
             records_processed = total_inserted + total_updated + total_skipped
+
+            # Cross-tenant WRITE breach fix (rules/tenant-isolation.md): when the
+            # tenant-scoped DO-UPDATE guard is active (multi_tenant model, an
+            # ``update`` resolution, and at least one updatable non-tenant column
+            # so a real ``WHERE {table}.tenant_id = excluded.tenant_id`` was
+            # emitted), a ``skipped`` row can ONLY mean the guard suppressed a
+            # cross-tenant ``id`` collision — the ONLY row shape that conflicts
+            # yet is neither inserted nor updated. Never a silent no-op: fail
+            # closed and hand the express layer a structured signal it converts
+            # into the actionable, tenant-scoped #1526 collision diagnostic.
+            guarded_update_active = (
+                bound_tenant is not None
+                and conflict_resolution not in ("skip", "ignore")
+                and len(
+                    self._upsert_update_columns(
+                        columns, conflict_columns, tenant_guarded=True
+                    )
+                )
+                > 0
+            )
+            if guarded_update_active and total_skipped > 0:
+                logger.warning(
+                    "bulk.bulk_upsert_cross_tenant_conflict_suppressed",
+                    extra={
+                        "model": model_name,
+                        "suppressed": total_skipped,
+                        "tenant_id": bound_tenant,
+                    },
+                )
+                return {
+                    "success": False,
+                    "cross_tenant_conflict": True,
+                    "records_processed": total_inserted + total_updated,
+                    "inserted": total_inserted,
+                    "updated": total_updated,
+                    "skipped": total_skipped,
+                    "batches": batches_processed,
+                    "batch_size": batch_size,
+                    "conflict_resolution": conflict_resolution,
+                    "error": (
+                        "bulk_upsert refused a cross-tenant id collision: one or "
+                        "more supplied ids already belong to a different tenant; "
+                        "the existing row(s) were left untouched."
+                    ),
+                }
+
             elapsed = time.perf_counter() - _upsert_start
             success_result = {
                 "records_processed": records_processed,
@@ -1758,14 +1812,25 @@ class BulkOperations:
 
     @staticmethod
     def _upsert_update_columns(
-        columns: List[str], conflict_columns: List[str]
+        columns: List[str],
+        conflict_columns: List[str],
+        tenant_guarded: bool = False,
     ) -> List[str]:
         """Columns eligible for the DO UPDATE SET clause (issue #1519).
 
         Excludes every conflict-target column (updating the conflict key is a
         no-op / error) plus the immutable ``id`` and ``created_at`` columns.
+
+        Cross-tenant WRITE breach fix: on a ``multi_tenant`` model
+        (``tenant_guarded=True``) ``tenant_id`` is ALSO excluded so an upsert can
+        NEVER re-assign a row's owning tenant — defense-in-depth even inside the
+        SAME tenant, and the necessary companion to the ``WHERE {table}.tenant_id
+        = excluded.tenant_id`` DO-UPDATE guard the dialect builders emit (see
+        ``rules/tenant-isolation.md``).
         """
         excluded = set(conflict_columns) | {"id", "created_at"}
+        if tenant_guarded:
+            excluded.add("tenant_id")
         return [col for col in columns if col not in excluded]
 
     def _build_postgresql_upsert(
@@ -1776,8 +1841,16 @@ class BulkOperations:
         conflict_resolution: str,
         model_name: str,
         conflict_columns: List[str],
+        tenant_guard: bool = False,
     ) -> tuple:
-        """Build PostgreSQL upsert query with ON CONFLICT clause."""
+        """Build PostgreSQL upsert query with ON CONFLICT clause.
+
+        ``tenant_guard`` (multi_tenant models): the DO UPDATE carries a
+        ``WHERE {table}.tenant_id = excluded.tenant_id`` predicate so a
+        cross-tenant ``id`` collision does NOT overwrite another tenant's row —
+        the row is left untouched (0 rows in RETURNING), which the caller detects
+        as a suppressed cross-tenant collision. See ``rules/tenant-isolation.md``.
+        """
         # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
         # are interpolated as bare identifiers (drivers cannot bind
         # identifiers). Quote-validate via the dialect (reject-don't-escape);
@@ -1805,6 +1878,15 @@ class BulkOperations:
         conflict_target = ", ".join(
             dialect.quote_identifier(c) for c in conflict_columns
         )
+        # Cross-tenant WRITE breach fix: a bound-tenant DO-UPDATE predicate.
+        # ``tenant_id`` is stamped into every record upstream, so ``excluded``
+        # carries it; the guard fires ONLY when the existing row belongs to the
+        # SAME tenant. A cross-tenant ``id`` collision leaves the row untouched
+        # (no theft, no tenant_id flip) — rules/tenant-isolation.md.
+        tenant_where = ""
+        if tenant_guard and "tenant_id" in columns:
+            qtcol = dialect.quote_identifier("tenant_id")
+            tenant_where = f" WHERE {quoted_table}.{qtcol} = excluded.{qtcol}"
 
         # Build ON CONFLICT clause with RETURNING to distinguish INSERT vs UPDATE.
         # xmax = 0 → INSERT, xmax > 0 → UPDATE (exact per-row flag).
@@ -1814,7 +1896,9 @@ class BulkOperations:
                 f"RETURNING id, (xmax = 0) AS inserted"
             )
         else:  # update
-            update_columns = self._upsert_update_columns(columns, conflict_columns)
+            update_columns = self._upsert_update_columns(
+                columns, conflict_columns, tenant_guarded=tenant_guard
+            )
             if update_columns:
                 set_parts = [
                     f"{dialect.quote_identifier(col)} = EXCLUDED.{dialect.quote_identifier(col)}"
@@ -1822,7 +1906,8 @@ class BulkOperations:
                 ]
                 conflict_clause = (
                     f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
-                    f"{', '.join(set_parts)} RETURNING id, (xmax = 0) AS inserted"
+                    f"{', '.join(set_parts)}{tenant_where} "
+                    f"RETURNING id, (xmax = 0) AS inserted"
                 )
             else:
                 # Nothing to update (all non-conflict columns are immutable).
@@ -1843,6 +1928,7 @@ class BulkOperations:
         model_name: str,
         conflict_columns: List[str],
         use_row_alias: bool = False,
+        tenant_guard: bool = False,
     ) -> tuple:
         """Build MySQL upsert query with ON DUPLICATE KEY UPDATE clause.
 
@@ -1856,6 +1942,14 @@ class BulkOperations:
         ``VALUES (...) AS new_row ... col = new_row.col``. The INSERT-side alias
         declaration and the ODKU-side references are built together here so the two
         halves cannot drift. MariaDB / MySQL < 8.0.19 keep the legacy form.
+
+        Cross-tenant WRITE breach fix (``tenant_guard``, multi_tenant models):
+        MySQL's ON DUPLICATE KEY UPDATE has NO ``WHERE`` clause, so the guard is
+        pushed into each SET expression:
+        ``col = IF(tenant_id = <new_tenant>, <new_col>, col)`` — a cross-tenant
+        ``id`` collision keeps EVERY existing column value AND the owning
+        ``tenant_id`` unchanged (fail-closed, no theft). ``tenant_id`` is excluded
+        from the update set outright (rules/tenant-isolation.md).
         """
         # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
         # are interpolated as bare identifiers (drivers cannot bind
@@ -1891,18 +1985,30 @@ class BulkOperations:
             )
             duplicate_clause = f"ON DUPLICATE KEY UPDATE {noop_col} = {noop_col}"
         else:  # update
-            update_columns = self._upsert_update_columns(columns, conflict_columns)
+            update_columns = self._upsert_update_columns(
+                columns, conflict_columns, tenant_guarded=tenant_guard
+            )
             if update_columns:
-                if use_row_alias:
-                    set_parts = [
-                        f"{dialect.quote_identifier(col)} = {alias}.{dialect.quote_identifier(col)}"
-                        for col in update_columns
-                    ]
-                else:
-                    set_parts = [
-                        f"{dialect.quote_identifier(col)} = VALUES({dialect.quote_identifier(col)})"
-                        for col in update_columns
-                    ]
+                # Incoming-value reference: row alias (8.0.19+) or VALUES().
+                def _new_ref(c: str) -> str:
+                    qc = dialect.quote_identifier(c)
+                    return f"{alias}.{qc}" if use_row_alias else f"VALUES({qc})"
+
+                emit_guard = tenant_guard and "tenant_id" in columns
+                qtcol = dialect.quote_identifier("tenant_id")
+                set_parts = []
+                for col in update_columns:
+                    qc = dialect.quote_identifier(col)
+                    new_ref = _new_ref(col)
+                    if emit_guard:
+                        # Keep the existing value (``{qc}``) unless the existing
+                        # row belongs to the SAME tenant as the incoming row.
+                        set_parts.append(
+                            f"{qc} = IF({qtcol} = {_new_ref('tenant_id')}, "
+                            f"{new_ref}, {qc})"
+                        )
+                    else:
+                        set_parts.append(f"{qc} = {new_ref}")
                 duplicate_clause = f"ON DUPLICATE KEY UPDATE {', '.join(set_parts)}"
             else:
                 noop_col = dialect.quote_identifier(
@@ -1921,6 +2027,7 @@ class BulkOperations:
         conflict_resolution: str,
         model_name: str,
         conflict_columns: List[str],
+        tenant_guard: bool = False,
     ) -> tuple:
         """Build SQLite upsert query with ON CONFLICT clause.
 
@@ -1928,6 +2035,12 @@ class BulkOperations:
         caller derives real counts via a pre-count of existing conflict keys
         (see ``_count_existing_conflicts``). RETURNING id lets the caller count
         how many rows the statement actually affected.
+
+        ``tenant_guard`` (multi_tenant models): the DO UPDATE carries a
+        ``WHERE {table}.tenant_id = excluded.tenant_id`` predicate so a
+        cross-tenant ``id`` collision leaves the row untouched (absent from
+        RETURNING) — the caller detects the suppressed collision. SQLite honors
+        the ``WHERE`` on ``ON CONFLICT ... DO UPDATE`` (rules/tenant-isolation.md).
         """
         # rules/dataflow-identifier-safety.md MUST-1: table_name + every column
         # are interpolated as bare identifiers (drivers cannot bind
@@ -1954,13 +2067,20 @@ class BulkOperations:
         conflict_target = ", ".join(
             dialect.quote_identifier(c) for c in conflict_columns
         )
+        # Cross-tenant WRITE breach fix (see _build_postgresql_upsert).
+        tenant_where = ""
+        if tenant_guard and "tenant_id" in columns:
+            qtcol = dialect.quote_identifier("tenant_id")
+            tenant_where = f" WHERE {quoted_table}.{qtcol} = excluded.{qtcol}"
 
         # SQLite 3.35+ supports RETURNING.
         if conflict_resolution in ["skip", "ignore"]:
             # DO NOTHING returns only the inserted rows.
             conflict_clause = f"ON CONFLICT ({conflict_target}) DO NOTHING RETURNING id"
         else:  # update
-            update_columns = self._upsert_update_columns(columns, conflict_columns)
+            update_columns = self._upsert_update_columns(
+                columns, conflict_columns, tenant_guarded=tenant_guard
+            )
             if update_columns:
                 set_parts = [
                     f"{dialect.quote_identifier(col)} = excluded.{dialect.quote_identifier(col)}"
@@ -1968,7 +2088,7 @@ class BulkOperations:
                 ]
                 conflict_clause = (
                     f"ON CONFLICT ({conflict_target}) DO UPDATE SET "
-                    f"{', '.join(set_parts)} RETURNING id"
+                    f"{', '.join(set_parts)}{tenant_where} RETURNING id"
                 )
             else:
                 conflict_clause = (
