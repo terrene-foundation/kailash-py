@@ -388,3 +388,258 @@ async def test_issue_1526_bulk_collision_helper_no_leak_and_no_over_broadening()
         assert diag_dup is None
     finally:
         db.close()
+
+
+# ===========================================================================
+# CROSS-TENANT WRITE BREACH (conflict_on=["id"]) — the confirmed data-theft
+# path. Tenant B ``bulk_upsert([{id:X}], conflict_on=["id"])`` (or single-record
+# ``upsert``) MUST NOT overwrite / re-own tenant A's row. Assertions read the
+# RAW table across ALL tenants (NOT db.express.read, which is tenant-scoped and
+# masks the theft). See rules/tenant-isolation.md.
+# ===========================================================================
+
+
+async def _raw_read_all(db: DataFlow, table: str) -> list:
+    """Read the RAW table across ALL tenants (bypasses tenant-scoped reads).
+
+    NOT a mock: a real SELECT against the same backend db.express writes to.
+    db.express.read is tenant-scoped (QueryInterceptor), so it CANNOT observe a
+    cross-tenant theft — only a tenant-blind raw read can.
+    """
+    dbt = db._detect_database_type()
+    node = db._get_or_create_async_sql_node(dbt)
+    res = await node.async_run(
+        query=f"SELECT id, tenant_id, title FROM {table}",
+        params=[],
+        fetch_mode="all",
+        validate_queries=False,
+        transaction_mode="auto",
+    )
+    return res.get("result", {}).get("data", []) or []
+
+
+async def _assert_tenant_a_row_intact(db: DataFlow, table: str, shared_id: str):
+    """Tenant A's row is UNCHANGED and tenant B did NOT gain the row."""
+    rows = await _raw_read_all(db, table)
+    matches = [r for r in rows if str(r["id"]) == shared_id]
+    assert len(matches) == 1, f"expected exactly one row for id={shared_id}: {rows!r}"
+    row = matches[0]
+    # Secret intact, ownership NOT flipped, title NOT overwritten.
+    assert row["tenant_id"] == "tenant-a", f"tenant_id was flipped: {row!r}"
+    assert row["title"] == TENANT_A_SECRET_TITLE, f"title was overwritten: {row!r}"
+
+
+async def _run_bulk_id_conflict_scenario(db: DataFlow) -> None:
+    @db.model
+    class Doc:
+        id: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+    db.tenant_context.register_tenant("tenant-b", "B")
+
+    shared_id = _uid("doc")
+    with db.tenant_context.switch("tenant-a"):
+        await db.express.create(
+            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+        )
+
+    # THE BREACH: tenant B upserts the SAME id on the id PK conflict target.
+    with db.tenant_context.switch("tenant-b"):
+        result = await db.express.bulk_upsert(
+            "Doc", [{"id": shared_id, "title": "B-STOLEN"}], conflict_on=["id"]
+        )
+
+    # Fail-closed: actionable, tenant-scoped collision diagnostic, no leak.
+    _assert_actionable_collision(
+        result, caller_tenant="tenant-b", colliding_id=shared_id
+    )
+    # And — the load-bearing assertion — tenant A's row was NOT stolen.
+    await _assert_tenant_a_row_intact(db, "docs", shared_id)
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.sqlite
+async def test_issue_bulk_upsert_id_conflict_no_cross_tenant_theft_sqlite(caplog):
+    """SQLite: tenant B bulk_upsert(conflict_on=['id']) on tenant A's id does NOT
+    overwrite/steal A's row; surfaces the actionable collision diagnostic +
+    a WARN partial-failure log."""
+    db = _sqlite_db()
+    try:
+        with caplog.at_level(logging.WARNING):
+            await _run_bulk_id_conflict_scenario(db)
+        assert any(
+            "bulk_upsert.partial_failure" in rec.getMessage() for rec in caplog.records
+        ), "expected a bulk_upsert.partial_failure WARN"
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.postgresql
+@pytest.mark.requires_postgres
+async def test_issue_bulk_upsert_id_conflict_no_cross_tenant_theft_postgres():
+    """PostgreSQL: same fail-closed contract against the native ON CONFLICT path
+    (the real-DB-verified breach shape)."""
+    if not _pg_available():
+        pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
+    db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    try:
+        await _run_bulk_id_conflict_scenario(db)
+    finally:
+        db.close()
+
+
+async def _run_single_id_conflict_scenario(db: DataFlow) -> None:
+    from dataflow.core.exceptions import TenantNaturalKeyCollisionError
+
+    @db.model
+    class Doc:
+        id: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+    db.tenant_context.register_tenant("tenant-b", "B")
+
+    shared_id = _uid("doc")
+    with db.tenant_context.switch("tenant-a"):
+        await db.express.create(
+            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+        )
+
+    # Single-record sibling: tenant B upsert on tenant A's id MUST fail closed.
+    with db.tenant_context.switch("tenant-b"):
+        with pytest.raises(Exception) as exc_info:
+            await db.express.upsert(
+                "Doc", {"id": shared_id, "title": "B-STOLEN"}, conflict_on=["id"]
+            )
+    # A caller-actionable raise (never a silent success). On the PG native
+    # ON CONFLICT path this is the typed TenantNaturalKeyCollisionError; the
+    # SQLite tenant-scoped WHERE-precheck raises a PK-unique NodeExecutionError.
+    raised = exc_info.value
+    assert isinstance(raised, (TenantNaturalKeyCollisionError, Exception))
+    assert not isinstance(raised, AssertionError)
+    # The row is intact regardless of which fail-closed raise fired.
+    await _assert_tenant_a_row_intact(db, "docs", shared_id)
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.sqlite
+async def test_issue_single_upsert_id_conflict_no_cross_tenant_theft_sqlite():
+    """SQLite: single-record upsert(conflict_on=['id']) fails closed (no theft)."""
+    db = _sqlite_db()
+    try:
+        await _run_single_id_conflict_scenario(db)
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.postgresql
+@pytest.mark.requires_postgres
+async def test_issue_single_upsert_id_conflict_no_cross_tenant_theft_postgres():
+    """PostgreSQL: single-record upsert raises TenantNaturalKeyCollisionError on
+    the native ON CONFLICT path — the previously-breached data-corruption case."""
+    if not _pg_available():
+        pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
+    from dataflow.core.exceptions import TenantNaturalKeyCollisionError
+
+    db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    try:
+
+        @db.model
+        class Doc:
+            id: str
+            title: str
+
+        db._ensure_connected()
+        db.tenant_context.register_tenant("tenant-a", "A")
+        db.tenant_context.register_tenant("tenant-b", "B")
+        shared_id = _uid("doc")
+        with db.tenant_context.switch("tenant-a"):
+            await db.express.create(
+                "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+            )
+        with db.tenant_context.switch("tenant-b"):
+            with pytest.raises(TenantNaturalKeyCollisionError):
+                await db.express.upsert(
+                    "Doc", {"id": shared_id, "title": "B-STOLEN"}, conflict_on=["id"]
+                )
+        await _assert_tenant_a_row_intact(db, "docs", shared_id)
+    finally:
+        db.close()
+
+
+async def _run_same_tenant_positive_scenario(db: DataFlow) -> None:
+    """The tenant guard MUST NOT break legitimate same-tenant upserts: a
+    new insert, a same-tenant bulk update, and a same-tenant single update."""
+
+    @db.model
+    class Doc:
+        id: str
+        title: str
+
+    db._ensure_connected()
+    db.tenant_context.register_tenant("tenant-a", "A")
+
+    doc_id = _uid("doc")
+    with db.tenant_context.switch("tenant-a"):
+        r_ins = await db.express.bulk_upsert(
+            "Doc", [{"id": doc_id, "title": "v1"}], conflict_on=["id"]
+        )
+        assert r_ins.get("created") == 1 and r_ins.get("updated") == 0
+        r_upd = await db.express.bulk_upsert(
+            "Doc", [{"id": doc_id, "title": "v2"}], conflict_on=["id"]
+        )
+        assert r_upd.get("updated") == 1 and r_upd.get("created") == 0
+        assert (await db.express.read("Doc", doc_id))["title"] == "v2"
+        # Single-record same-tenant update.
+        await db.express.upsert(
+            "Doc", {"id": doc_id, "title": "v3"}, conflict_on=["id"]
+        )
+        assert (await db.express.read("Doc", doc_id))["title"] == "v3"
+        # Single-record new insert.
+        new_id = _uid("doc-new")
+        await db.express.upsert(
+            "Doc", {"id": new_id, "title": "n1"}, conflict_on=["id"]
+        )
+        assert (await db.express.read("Doc", new_id))["title"] == "n1"
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.sqlite
+async def test_issue_same_tenant_upsert_still_updates_sqlite():
+    """SQLite: the cross-tenant guard does NOT regress same-tenant upserts."""
+    db = _sqlite_db()
+    try:
+        await _run_same_tenant_positive_scenario(db)
+    finally:
+        db.close()
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.tier2
+@pytest.mark.postgresql
+@pytest.mark.requires_postgres
+async def test_issue_same_tenant_upsert_still_updates_postgres():
+    """PostgreSQL: same-tenant upserts still update through the guarded path."""
+    if not _pg_available():
+        pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
+    db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    try:
+        await _run_same_tenant_positive_scenario(db)
+    finally:
+        db.close()

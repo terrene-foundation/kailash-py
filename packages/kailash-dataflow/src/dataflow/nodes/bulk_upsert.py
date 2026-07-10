@@ -683,15 +683,31 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
         conflict_columns_str = ", ".join(conflict_on)
 
+        # Cross-tenant WRITE breach fix (rules/tenant-isolation.md): a
+        # tenant-scoped DO-UPDATE guard for multi_tenant models. tenant_id is
+        # stamped into the batch upstream (``_prepare_data_for_upsert`` when
+        # ``tenant_isolation`` is on), so it rides in ``columns``; the WHERE
+        # (PG/SQLite) / IF() (MySQL, in _build_update_clauses) fires only when
+        # the existing row belongs to the SAME tenant — a cross-tenant ``id``
+        # collision leaves the row untouched (no theft, no tenant_id flip).
+        tenant_guard = bool(self.tenant_isolation) and "tenant_id" in columns
+        tenant_where = (
+            f" WHERE {self.table_name}.tenant_id = excluded.tenant_id"
+            if tenant_guard
+            else ""
+        )
+
         if dialect == "postgresql":
             if merge_strategy == "ignore":
                 query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
             else:  # update strategy
-                update_clauses = self._build_update_clauses(columns, conflict_on)
+                update_clauses = self._build_update_clauses(
+                    columns, conflict_on, tenant_guard=tenant_guard
+                )
                 if update_clauses:
                     query = (
                         f"{base_query} ON CONFLICT ({conflict_columns_str}) "
-                        f"DO UPDATE SET {', '.join(update_clauses)}"
+                        f"DO UPDATE SET {', '.join(update_clauses)}{tenant_where}"
                     )
                 else:
                     query = (
@@ -707,12 +723,12 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                 query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
             else:
                 update_clauses = self._build_update_clauses(
-                    columns, conflict_on, sqlite=True
+                    columns, conflict_on, sqlite=True, tenant_guard=tenant_guard
                 )
                 if update_clauses:
                     query = (
                         f"{base_query} ON CONFLICT ({conflict_columns_str}) "
-                        f"DO UPDATE SET {', '.join(update_clauses)}"
+                        f"DO UPDATE SET {', '.join(update_clauses)}{tenant_where}"
                     )
                 else:
                     query = (
@@ -736,7 +752,11 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                 )
             else:
                 update_clauses = self._build_update_clauses(
-                    columns, conflict_on, mysql=True, use_row_alias=use_row_alias
+                    columns,
+                    conflict_on,
+                    mysql=True,
+                    use_row_alias=use_row_alias,
+                    tenant_guard=tenant_guard,
                 )
                 if update_clauses:
                     query = (
@@ -760,6 +780,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         sqlite: bool = False,
         mysql: bool = False,
         use_row_alias: bool = False,
+        tenant_guard: bool = False,
     ) -> List[str]:
         """Build the SET clauses for a DO UPDATE / ON DUPLICATE KEY UPDATE.
 
@@ -774,23 +795,47 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         references the INSERT row alias (``new_row.col``) instead. The alias is
         declared on the INSERT in ``_build_upsert_query`` — the two halves are set
         from the SAME ``use_row_alias`` flag so they cannot drift.
+
+        Cross-tenant WRITE breach fix (``tenant_guard``, multi_tenant models):
+        ``tenant_id`` is excluded from the SET (an upsert never re-owns a row),
+        and the MySQL branch wraps each column in
+        ``col = IF(tenant_id = <new_tenant>, <new>, col)`` (MySQL ODKU has no
+        WHERE). PG/SQLite carry the ``WHERE {table}.tenant_id = excluded.tenant_id``
+        guard in ``_build_upsert_query`` (rules/tenant-isolation.md).
         """
+
+        def _new_ref(c: str) -> str:
+            if mysql:
+                return f"new_row.{c}" if use_row_alias else f"VALUES({c})"
+            ref = "excluded" if sqlite else "EXCLUDED"
+            return f"{ref}.{c}"
+
         clauses: List[str] = []
         for col in columns:
             if col in conflict_on or col in ("id", "created_at"):
                 continue
+            if tenant_guard and col == "tenant_id":
+                continue  # never re-assign the owning tenant
             if col == self.version_field and self.version_control:
                 clauses.append(f"{col} = {self.table_name}.{col} + 1")
             elif col == "updated_at" and self.auto_timestamps:
-                clauses.append(f"{col} = CURRENT_TIMESTAMP")
-            elif mysql:
-                if use_row_alias:
-                    clauses.append(f"{col} = new_row.{col}")
+                if mysql and tenant_guard:
+                    # PG/SQLite gate updated_at via the DO-UPDATE WHERE; MySQL's
+                    # ODKU has no WHERE, so guard the timestamp bump too.
+                    clauses.append(
+                        f"{col} = IF(tenant_id = {_new_ref('tenant_id')}, "
+                        f"CURRENT_TIMESTAMP, {col})"
+                    )
                 else:
-                    clauses.append(f"{col} = VALUES({col})")
-            else:  # postgresql / sqlite both use excluded/EXCLUDED
-                ref = "excluded" if sqlite else "EXCLUDED"
-                clauses.append(f"{col} = {ref}.{col}")
+                    clauses.append(f"{col} = CURRENT_TIMESTAMP")
+            elif mysql and tenant_guard:
+                # ODKU has no WHERE — guard each SET with the tenant IF().
+                clauses.append(
+                    f"{col} = IF(tenant_id = {_new_ref('tenant_id')}, "
+                    f"{_new_ref(col)}, {col})"
+                )
+            else:
+                clauses.append(f"{col} = {_new_ref(col)}")
         return clauses
 
     def _process_upsert_result(

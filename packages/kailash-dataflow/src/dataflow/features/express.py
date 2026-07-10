@@ -574,13 +574,22 @@ class DataFlowExpress:
         )
 
     def _tenant_pk_collision_context(
-        self, model: str, error_text: str
+        self, model: str, error_text: str, force_collision: bool = False
     ) -> Optional[Tuple[str, str]]:
         """Return ``(tenant_id, table_name)`` iff ``error_text`` is a PK-unique
         violation on a ``multi_tenant`` model whose active tenant is bound and
         whose table is resolvable — the precondition BOTH the single-record and
         the bulk cross-tenant collision diagnostics share (issue #1526).
         Returns ``None`` (caller keeps the original error path) otherwise.
+
+        ``force_collision`` (cross-tenant WRITE breach fix): the bulk path's
+        tenant-scoped DO-UPDATE guard SUPPRESSES the offending row rather than
+        letting the driver raise a PK-unique violation, so there is no driver
+        message to match. When the guard already PROVED a cross-tenant collision
+        (``cross_tenant_conflict`` in the bulk result), pass ``force_collision``
+        to bypass ONLY the ``is_pk_unique_violation`` text gate — every other
+        precondition (multi_tenant + bound tenant + tenant_id field + resolvable
+        table) still holds.
 
         Zero-cost short-circuit for single-tenant models: the multi_tenant
         guard returns ``None`` before any string inspection. The model must
@@ -618,7 +627,9 @@ class DataFlowExpress:
                 table_name = None
         if not table_name:
             return None
-        if not is_pk_unique_violation(error_text, table_name):
+        # The guard already proved the cross-tenant collision → skip the
+        # driver-message match (there is no driver error to match).
+        if not force_collision and not is_pk_unique_violation(error_text, table_name):
             return None
         return tenant_id, table_name
 
@@ -684,6 +695,7 @@ class DataFlowExpress:
         model: str,
         records: List[Dict[str, Any]],
         error_text: str,
+        force_collision: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Return an actionable cross-tenant collision DIAGNOSTIC (a dict, NEVER
         raised) iff a bulk write's ``error_text`` is a cross-tenant natural-key
@@ -722,7 +734,9 @@ class DataFlowExpress:
         by the SAME shared builder the single-path exception uses, so the two
         surfaces never drift (``framework-first.md`` — no parallel hierarchy).
         """
-        ctx = self._tenant_pk_collision_context(model, error_text)
+        ctx = self._tenant_pk_collision_context(
+            model, error_text, force_collision=force_collision
+        )
         if ctx is None:
             return None
         tenant_id, _table_name = ctx
@@ -2072,8 +2086,13 @@ class DataFlowExpress:
                 if result.get("success") is False:
                     raw_error = result.get("error")
                     out["success"] = False
+                    # Cross-tenant WRITE breach fix: the tenant-scoped DO-UPDATE
+                    # guard suppresses the offending row (no driver PK-unique
+                    # message), so the collision helper is forced via the
+                    # ``cross_tenant_conflict`` signal rather than a text match.
+                    _forced = bool(result.get("cross_tenant_conflict"))
                     collision = await self._maybe_bulk_tenant_natural_key_collision(
-                        model, records, str(raw_error or "")
+                        model, records, str(raw_error or ""), force_collision=_forced
                     )
                     if collision is not None:
                         out["collision"] = collision
