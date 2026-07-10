@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.14.6] — 2026-07-10 — cross-DB query-cache bleed fix (#1606) + fabric tenant-scope interceptor (#1654)
+
+### Security
+
+- **Query cache keyspace now segments by database-instance identity (#1606).** The cache key now incorporates a credential-free hash of the masked DSN, with a component-config fallback, a loud WARN when isolation is inactive, and a credential-stripped component host in diagnostics. The Express v2 keyspace is a cross-SDK byte contract and is deliberately left untouched by this fix — the Express hot-path bleed remains open pending the coordinated cross-SDK keyspace lockstep (`cross-sdk-inspection.md` Rule 4b).
+
+### Added
+
+- **Fail-closed tenant-scoping `QueryInterceptor` on the fabric data-product read path (#1654).** The interceptor requires a resolvable tenant scope and proves the tenant predicate was actually applied to the executed query before rows return — list/count predicate-proof, a read post-fetch check, a filter-shape + kwarg allowlist, empty-tenant fail-closed, and a registration-time WARN when `multi_tenant=False` is declared over a model that carries a tenant column. The fabric cache is tenant-keyed. Follow-ups #1658 (`ctx.source` scoping) and #1659 (write-path guard) are tracked and not yet closed.
+
 ## [2.14.5] — 2026-07-10 — cross-tenant upsert write-breach fix (#1650/#1526)
 
 ### Security
