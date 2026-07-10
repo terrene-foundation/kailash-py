@@ -6,12 +6,17 @@ Generates deterministic cache keys from queries and parameters.
 
 import hashlib
 import json
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Union
 
-from kailash.utils.url_credentials import mask_url
+from kailash.utils.url_credentials import UNPARSEABLE_URL_SENTINEL, mask_url
 
 if TYPE_CHECKING:
     from dataflow.classification.policy import ClassificationPolicy
+
+
+def _hash8(material: str) -> str:
+    """Return the first 8 hex chars of sha256(material)."""
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
 
 
 def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
@@ -29,8 +34,25 @@ def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
     scheme + ``***`` placeholder + host+port+dbname, NEVER user/password
     bytes) BEFORE hashing, so no credential can ever enter the key. Redis
     keys are an observable surface — treat like logs (``rules/security.md``
-    § "No secrets in logs"). Returns ``None`` for a falsy URL so the
-    generator falls back to the pre-#1606 keyspace shape.
+    § "No secrets in logs").
+
+    Returns ``None`` when the URL is falsy OR unparseable (``mask_url``
+    yields ``UNPARSEABLE_URL_SENTINEL`` — e.g. a libpq keyword/value DSN
+    ``"host=a dbname=x"`` with no ``://``). Hashing the sentinel is
+    DELIBERATELY refused: every unparseable-DSN instance would otherwise
+    share one CONSTANT identity, silently collapsing cross-DB isolation
+    (``rules/zero-tolerance.md`` Rule 3, silent fallback). Callers that
+    need the URL-vs-components-vs-none disposition (to warn the operator)
+    use ``resolve_db_identity`` instead.
+
+    SCOPE (issue #1606) — the identity keys on database LOCATION
+    (host/port/dbname), NOT on the connecting principal: ``mask_url``
+    strips userinfo to ``***``, so ``postgres://alice:pw1@h:5432/db`` and
+    ``postgres://bob:pw2@h:5432/db`` produce the SAME identity. Two
+    instances at the same database with different DB credentials share a
+    cache namespace BY DESIGN. Deployments relying on per-principal
+    DB-level row visibility (RLS / per-user GRANTs) MUST NOT share a cache
+    backend across principals.
 
     NOTE: this segments the QUERY keyspace only. The Express ``v2``
     keyspace (``generate_express_key``) is a byte-for-byte cross-SDK
@@ -43,7 +65,80 @@ def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
     # so hashing it yields a stable per-DB fingerprint with zero credential
     # exposure even if the digest were ever reversed.
     masked = mask_url(database_url)
-    return hashlib.sha256(masked.encode("utf-8")).hexdigest()[:8]
+    if masked == UNPARSEABLE_URL_SENTINEL:
+        # A non-URL DSN (or garbage) masks to a CONSTANT sentinel; hashing it
+        # would give every such instance the same identity — refuse.
+        return None
+    return _hash8(masked)
+
+
+class DbIdentityResolution(NamedTuple):
+    """Outcome of :func:`resolve_db_identity`.
+
+    Attributes:
+        identity: The credential-free DB-identity segment, or ``None`` when
+            no usable identity could be derived (the query keyspace then
+            falls back to the pre-#1606 shape and cross-DB isolation is
+            INACTIVE — the caller MUST warn).
+        source: ``"url"`` (derived from the connection URL), ``"components"``
+            (derived from host/port/dbname structured config after the URL
+            was absent or unparseable), or ``"none"`` (no usable identity).
+        url_unparseable: ``True`` when a URL string was supplied but
+            ``mask_url`` could not parse it (a keyword/value DSN or garbage).
+            The caller warns on this even when the component fallback
+            succeeds, because the supplied URL could not be used.
+    """
+
+    identity: Optional[str]
+    source: str
+    url_unparseable: bool
+
+
+def resolve_db_identity(
+    url: Optional[str] = None,
+    host: Optional[str] = None,
+    port: Optional[Union[int, str]] = None,
+    dbname: Optional[str] = None,
+) -> DbIdentityResolution:
+    """Resolve a credential-free DB-instance identity (issue #1606).
+
+    Tries the connection URL first; when the URL is absent OR unparseable,
+    falls back to the structured component config (``host``/``port``/
+    ``dbname``) so cross-DB isolation still HOLDS for URL-less DataFlow
+    instances (component/params config, or a lazily-populated URL). The
+    component identity is a hash of a normalized ``host:port/dbname``
+    string — host+port+dbname ONLY, NEVER any user/password field — so the
+    same credential-free contract as the URL path holds.
+
+    Returns a :class:`DbIdentityResolution`; when ``identity is None`` the
+    caller MUST emit a loud warning (cross-DB cache isolation is INACTIVE
+    on a shared cache backend). See ``rules/zero-tolerance.md`` Rule 3 —
+    silent-unprotected is the failure mode this resolution + the caller's
+    warning close.
+
+    The identity is captured ONCE at cache-integration construction; a URL
+    set on the config AFTER construction does not retroactively change it
+    (acceptable — DataFlow database URLs are set at init).
+    """
+    # 1. URL path.
+    if url:
+        masked = mask_url(url)
+        if masked != UNPARSEABLE_URL_SENTINEL:
+            return DbIdentityResolution(_hash8(masked), "url", False)
+        url_unparseable = True
+    else:
+        url_unparseable = False
+
+    # 2. Component fallback — credential-free host:port/dbname. Never hash
+    #    the unparseable sentinel (that constant would collapse isolation);
+    #    derive from structured fields instead so URL-less configs stay
+    #    isolated. host + dbname are the minimum; port is optional.
+    if host and dbname:
+        normalized = f"{host}:{port if port is not None else ''}/{dbname}"
+        return DbIdentityResolution(_hash8(normalized), "components", url_unparseable)
+
+    # 3. No usable identity — segmentation is DISABLED; the caller warns.
+    return DbIdentityResolution(None, "none", url_unparseable)
 
 
 class CacheKeyGenerator:
