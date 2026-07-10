@@ -13,7 +13,6 @@ Part of CARE-007: Revocation Event Broadcasting.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import threading
 import uuid
