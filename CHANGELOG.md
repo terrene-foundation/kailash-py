@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.47.0] - 2026-07-10
+
+SAFR governance-hardening: BH3 origin-authentication (#1510).
+
+### Added
+
+- **BH3 origin-authentication for the EATP trust plane (#1510).** Binds an agent-declared action-trace to its **originating instruction** so a fabricated trace fails authentication even with a valid Ed25519 signature — closing the SAFR BH3 gap (a signature proves integrity, not that the trace came from the instruction that authorized it). New public surface on `kailash.trust`: `OriginBoundTrace`, `compute_origin_digest`, `origin_signing_payload`, `sign_origin_bound_trace`, `verify_origin_bound_trace`.
+  - Two signed pre-image forms: **origin-unbound** is byte-identical to the pre-BH3 trace signing pre-image (existing anchors verify unchanged), and **origin-bound** extends it with a JCS-canonical (RFC 8785) `origin` digest of the originating instruction. A discriminator is excluded from the signing pre-image and fail-closed: stripping/flipping it forces a shape mismatch and verification rejects.
+  - The verifier holds the authoritative instruction out-of-band, recomputes the digest and constant-time-compares it — so a key-holding attacker who re-signs a fabricated trace still fails the origin comparison. Fail-closed on every ambiguous path (missing instruction, absent digest, downgrade-to-unbound-when-origin-demanded).
+  - The two pre-image byte forms are pinned as conformance vectors for cross-SDK byte-parity; the Rust SDK mirrors these exact bytes as an independent implementation (matching semantics, EATP D6).
+
 ## [2.46.0] - 2026-07-10
 
 EATP v3 + SAFR governance-hardening epic.
