@@ -1,0 +1,75 @@
+# Session Notes — 2026-07-10 — SDK backlog sprint (CONVERGED)
+
+Direct issue-backlog work (NOT a COC-phase workspace). Durable state lives on GitHub
+(`gh pr list`, `gh issue list`); this file holds non-derivable decisions, cross-SDK
+dispositions, and the redteam convergence trail.
+
+## Read first
+- `gh pr list --state merged --search "merged:>=2026-07-10"` + PR bodies (self-documenting).
+- 4 issues remain open — all correctly BLOCKED/deferred (see below), not skippable.
+
+## MERGED THIS SESSION (5 PRs)
+- **#1647** → closed **#1516** (confidence/evidence-quality threshold routing; #1516 leg-b, completing leg-a #1644). Merge 6362eaea0.
+- **#1648** → closed **#1592** (EATP v3 additive elements: BilateralDelegation single-root atomic, ClearanceAttestation C0..C4, VERIFY_CHAIN deny-overrides, GRACEFUL/SUSPEND revocation, guarantee-tiers; dispatcher-signed ≠ non-repudiation enforced; cross-root variant fails-closed not stubbed; 11 eatp3_* vectors, PACT_VECTORS.sha256 34/34). Merge f3ff8e325.
+- **#1649** → closed **#1517** (universal outbound-effect governance interceptor, leg-b; leg-a resolver #1642 prior. GovernedProvider/ToolInvoker/HTTPClient transparent __getattr__ proxies, fail-closed, no agent code change). Merge 1e3089196.
+- **#1651** → redteam hardening M1/L1/L2 (froze 6 EATP/verify_chain/weft dataclasses; redact_http_target strips userinfo+query from audit; MappingProxyType on OutboundVerdict.governance). Merge 432b8cdc8.
+- **#1650** → **#1526 follow-up + a CRITICAL security fix** (see below). Merge acb85f5fd.
+
+## #1650 — THE SECURITY STORY (why it grew to 4 commits)
+Started as the #1526 bulk-path collision-diagnostic follow-up. The holistic /redteam
+CONFIRMED (real SQLite + real PostgreSQL, verbatim before/after) a **cross-tenant WRITE /
+row-theft breach**: `bulk_upsert(conflict_on=["id"])` on a multi_tenant model emitted
+`ON CONFLICT (id) DO UPDATE SET ...` with NO tenant predicate → tenant B overwrote tenant A's
+row AND flipped tenant_id (A→B), returned success. Pre-existing (not introduced this session),
+fixed in-session per autonomous-execution Rule 4 (same-class, in-budget, warm context).
+- Commit 60de504f5: #1526 bulk collision diagnostic.
+- Commit 8538585c8: **C1** — tenant-scoped `WHERE table.tenant_id = EXCLUDED.tenant_id`
+  (PG/SQLite) + `IF(tenant_id=...)` (MySQL) across features/bulk.py, sql/dialects.py,
+  nodes/bulk_upsert.py; tenant_id excluded from SET (no ownership flip); single-record
+  `express.upsert` sibling was ALSO breached on PG → fixed.
+- Commit df4aa632b: **HIGH residual** (redteam round 2) — MySQL version_field bump was
+  un-guarded (tested before the tenant branch) → IF()-guarded.
+- Commit fa2659490: **HIGH H1** (closure-parity round) — the sibling registered node
+  `BulkCreatePoolNode` (bulk_create_pool.py) had the same breach → guarded + real-DB
+  fail-without/pass-with regression test.
+- **Completeness sweep**: all 5 dataflow upsert builders that emit tenant-user-data DO UPDATE
+  now carry the guard (grep-verified; remaining DO-UPDATE sites are migration/registry tables +
+  capability-flag comments, not tenant data).
+
+## CONVERGENCE RECEIPTS (redteam)
+- Round 1: security-reviewer (task a383f0fe) CONFIRMED C1 CRITICAL, verified M1/L1/L2; runtime
+  verifier (a98672b1) empirical PG+SQLite theft proof.
+- Round 2: security-reviewer (a253f755) verified C1/M1/L1/L2 CLOSED, found HIGH MySQL residual;
+  closure-parity reviewer (a3d3099e) verified all 4 findings closed w/ guarding tests, found HIGH H1.
+- H1 fix + test verified by dedicated real-DB agent (a1cef526): fail-without=2 failed,
+  pass-with=4 passed (SQLite+PG), 109-test sweep clean, same-tenant upsert not broken.
+
+## OPEN ISSUES — all correctly BLOCKED (do NOT close by age)
+- **#1606** (dataflow cross-DB keyspace bleed) — BLOCKED: byte-CHANGING keyspace v2→v3, cross-SDK
+  lockstep w/ Rust. v2 tripwire landed prior (#1638). Needs paired Rust issue (human-gated) + land together.
+- **#1510** (SAFR BH3 origin-auth) — BLOCKED: byte-CHANGING signing pre-image, cross-SDK lockstep. Defer to Rust cadence.
+- **#1601** (verify soft_delete/versioned parity in Rust SDK) — py side done (#1598); fix belongs in the RUST repo. Rust-repo tracker; repo-scope bars acting here.
+- **#1532** (consolidate delegate-connectors) — CROSS-REPO migration; USER-DEFERRED (away-from-keyboard default, 2026-07-09).
+
+## DECISIONS PENDING FOR OWNER (surfaced, not acted)
+1. **Cross-SDK filing (NEW):** the dataflow cross-tenant upsert breach family (bulk_upsert /
+   single upsert / BulkCreatePoolNode ON CONFLICT DO UPDATE) is shared-architecture — the Rust
+   SDK's DataFlow very likely has the SAME breach. Filing needs explicit cross-repo authorization
+   (repo-scope-discipline; agent cannot self-authorize). NOT filed. A scrubbed draft can be prepared.
+   Same for the pre-existing #1606/#1510 paired Rust drafts.
+2. **dataflow release:** #1650 shipped a CRITICAL cross-tenant security fix on the kailash-dataflow
+   2.14.x line (also #1638/#1646 earlier). Given the security severity, recommend a dataflow /release
+   SOON (stronger than normal owner-timing). Owner call.
+3. **Codify (follow-up):** the "every multi_tenant upsert builder MUST tenant-guard its ON CONFLICT
+   DO UPDATE (WHERE tenant_id=EXCLUDED.tenant_id / IF() on MySQL) AND exclude tenant_id from SET"
+   pattern is cascade-valuable — extends tenant-isolation.md Rule 6 (currently canonical-source only,
+   not the ON-CONFLICT-guard shape). Recommend a /codify to land it as a rule clause (don't strand in memory).
+
+## TRAPS / context
+- **Server concurrency throttle** hit hard early (3-agent wave synchronized-died on the
+  `(not your usage limit)` signal). Backed off to SERIAL per worktree-isolation Rule 4 — clean thereafter.
+  Wave-of-2 recovered later in the session. No work lost (worktrees clean on death).
+- **Pyright worktree-vs-main diagnostics** are noise: new modules "unresolved" + defensive
+  isinstance-guards "unreachable" resolve against main, not the worktree. Verify via actual test runs.
+- **nexus / kailash-pact srcs** must be on PYTHONPATH for trust-plane test collection (transitive a2a→nexus import).
+- CI-check-then-merge kept SEPARATE per git.md (pinned head SHA read, then admin-merge).

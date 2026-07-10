@@ -180,6 +180,47 @@ tenant_id = self._tenant_context.get("tenant_id")   # stale after switch();
 
 **Trust Posture Wiring (Rule 6):** Severity `halt-and-report` at the /implement gate (reviewer mechanical sweep: every write/scope path of a `multi_tenant=True` model resolves tenant via the canonical accessor — `rg 'get_current_tenant_id|_tenant_context'` and flag any parallel source) · Grace 7 days from landing · Cumulative per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture) · Regression-within-grace → emergency downgrade (1 step) per MUST-4 · Receipt soft-gate `[ack: tenant-one-canonical-source]` IFF `posture.json::pending_verification` includes this rule_id · Detection: the Audit Protocol grep below + gate-level sweep · **Violation scope:** Rule 6 (write-path tenant-source parity) · Origin: issue #1252 (2026-06, bulk tenant-source mismatch).
 
+### 7. Upsert `ON CONFLICT DO UPDATE` Is Tenant-Guarded And Excludes `tenant_id` From SET
+
+When a `multi_tenant=True` model uses a global single-column `id` PK, EVERY upsert builder that emits `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` (PostgreSQL/SQLite) or `INSERT ... ON DUPLICATE KEY UPDATE ...` (MySQL) MUST (a) EXCLUDE `tenant_id` from the SET clause AND (b) GATE the update by the row's own tenant — PG/SQLite via `WHERE {table}.tenant_id = EXCLUDED.tenant_id` appended to the `DO UPDATE`; MySQL (ODKU has no WHERE) via a per-column `IF(tenant_id = VALUES(tenant_id), <new>, <col>)` guard on EVERY updated column INCLUDING version/timestamp bumps. A guard-suppressed cross-tenant collision MUST route to the actionable tenant-scoped collision diagnostic (naming ONLY the caller's own tenant) — NEVER a silent success or silent skip. EVERY upsert builder in the codebase MUST be audited, not just the primary one.
+
+```python
+# DO — tenant-guarded DO UPDATE, tenant_id excluded from SET
+update_cols = [c for c in cols if c != "id" and not (tenant_guarded and c == "tenant_id")]
+set_parts = [f"{c} = EXCLUDED.{c}" for c in update_cols]
+where = f" WHERE {table}.tenant_id = EXCLUDED.tenant_id" if tenant_guarded else ""
+sql = f"INSERT ... ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)}{where}"
+# MySQL ODKU: f"{c} = IF(tenant_id = VALUES(tenant_id), VALUES({c}), {c})" per column
+
+# DO NOT — un-guarded DO UPDATE (cross-tenant id collision overwrites + steals the other tenant's row)
+set_parts = [f"{c} = EXCLUDED.{c}" for c in cols if c != "id"]  # tenant_id IN the SET → ownership flip
+sql = f"INSERT ... ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)}"  # no WHERE → tenant B overwrites tenant A
+```
+
+**BLOCKED rationalizations:**
+
+- "The write already reads the right tenant (Rule 6), so the upsert is safe"
+- "bulk_upsert tenant isolation is correct" (the exact pre-#1650 assumption that was false on both SQLite and PostgreSQL)
+- "`conflict_on` defaults to `id`; a cross-tenant id collision won't happen"
+- "the ON CONFLICT path returned success, so no collision occurred"
+- "I fixed the primary bulk_upsert builder; the sibling nodes are rare / opt-in"
+- "MySQL ODKU has no WHERE, so it can't be tenant-guarded" (use the per-column `IF()` guard)
+
+**Why:** A global `id` PK means a cross-tenant `id` collision IS a genuine `ON CONFLICT`; an un-guarded `DO UPDATE` resolves it by OVERWRITING the other tenant's row — and, if `tenant_id` is in the SET, flipping its ownership — while returning success, so the collision diagnostic never fires. This is DISTINCT from Rule 6 (which ensures the write reads the RIGHT tenant): a correctly-tenant-scoped write STILL overwrites another tenant's row via the un-guarded upsert-conflict path. Auditing ALL builders (not just the primary) is load-bearing — the #1650 fix found the same breach in a sibling registered node the primary fix missed.
+
+**Trust Posture Wiring (Rule 7):**
+
+- **Severity:** `halt-and-report` at gate-review (security-reviewer + reviewer mechanical sweep at `/implement` + `/redteam`: enumerate every `ON CONFLICT`/`ON DUPLICATE KEY` `DO UPDATE` builder in the DB package, confirm each `multi_tenant` path carries the tenant `WHERE`/`IF()` guard AND excludes `tenant_id` from SET); `advisory` at the hook layer (the tenant-guard property is judgment-bearing over generated SQL, not a structural tool-call signal, per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing (2026-07-10 → 2026-07-17).
+- **Cumulative posture impact:** same-class violations (a `multi_tenant` upsert builder shipped without the tenant `WHERE`/`IF()` guard, or with `tenant_id` in the SET clause) contribute to `trust-posture.md` MUST Rule 4 cumulative-window math (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** a same-class violation within the 7-day grace window routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause trigger key (an SQL-shape property is review-layer-only and judgment-bearing; minting a key would drag `trust-posture.md`, a self-referential-codify allowlist file, into a self-ref edit, and the universal `regression_within_grace` trigger already covers it).
+- **Receipt requirement:** SessionStart soft-gate `[ack: tenant-isolation]` IFF `posture.json::pending_verification` includes this rule_id.
+- **Detection mechanism:** Phase 1 (manual, gate-review) — for any `multi_tenant` upsert change, enumerate ALL `ON CONFLICT`/`ON DUPLICATE KEY` `DO UPDATE` builders (`grep -rln 'DO UPDATE SET\|ON DUPLICATE KEY UPDATE' <db-pkg>/src`), then grep each for the tenant guard (`tenant_id = EXCLUDED.tenant_id` / `IF(tenant_id =`) — a builder emitting a multi_tenant DO UPDATE with no guard is a finding; run by security-reviewer + reviewer at `/implement` + `/redteam` (the Audit Protocol grep below). Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout, after ≥3 real sessions exercise Phase 1) — no hook detector; audit fixtures land with the Phase-2 detector at `.claude/audit-fixtures/tenant-upsert-guard/` per `cc-artifacts.md` Rule 9.
+- **Violation scope:** Rule 7 (upsert `ON CONFLICT DO UPDATE` tenant-guard + `tenant_id`-excluded-from-SET) ONLY; Rules 1–6 stay grandfathered until each is itself `/codify`-touched.
+- **Origin:** See Rule 7 Origin below.
+
+Origin: #1650 / kailash-dataflow 2.14.5 (2026-07-10) — a holistic `/redteam` CONFIRMED (real SQLite + PostgreSQL) that `bulk_upsert` / single `upsert` / `BulkCreatePoolNode` on a `multi_tenant` model with the default `conflict_on=["id"]` overwrote and reassigned another tenant's row via an un-guarded `ON CONFLICT DO UPDATE`; fixed across all five upsert builders. The completeness lesson (audit ALL builders) came from the closure-parity round finding the sibling `BulkCreatePoolNode` after the primary fix.
+
 ## MUST NOT
 
 - Default missing tenant_id to a placeholder ("default", "global", "")
@@ -214,6 +255,11 @@ rg 'audit_store\.append|record_query_success|record_query_failure' .
 # Find every write/scope path; verify each resolves tenant via the canonical source (Rule 6)
 rg 'def (bulk_create|bulk_update|bulk_upsert|upsert|create|update)' .
 rg '_tenant_context\[|_tenant_context\.get' .   # any hit on a write path = HIGH (parallel source)
+
+# Find every upsert DO UPDATE builder; verify each multi_tenant path is tenant-guarded (Rule 7)
+rg -l 'DO UPDATE SET|ON DUPLICATE KEY UPDATE' .            # enumerate ALL upsert builders
+rg 'tenant_id = EXCLUDED\.tenant_id|IF\(tenant_id =' .     # the guard — a builder emitting a
+                                                          # multi_tenant DO UPDATE with NO hit here = HIGH
 ```
 
 Any match that fails the contract above is a HIGH finding.
