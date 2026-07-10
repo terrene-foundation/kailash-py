@@ -237,6 +237,10 @@ class OutboundVerdict:
         reason: Human-readable explanation.
         effect: The effect this verdict is about.
         governance: Structured governance detail (e.g. GovernanceVerdict.to_dict()).
+            Stored read-only (MappingProxyType): frozen=True blocks rebinding the
+            field, and the proxy blocks mutating the dict CONTENTS -- together they
+            make the guarantee "an audited decision cannot be mutated after the
+            fact" hold for the nested detail too, not just the top-level fields.
         timestamp: When the verdict was issued (UTC).
     """
 
@@ -244,8 +248,17 @@ class OutboundVerdict:
     level: str
     reason: str
     effect: OutboundEffect
-    governance: dict[str, Any] = field(default_factory=dict)
+    governance: Mapping[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        # Freeze the governance detail into a read-only view. frozen=True already
+        # prevents rebinding self.governance; wrapping the value in a
+        # MappingProxyType additionally prevents mutating its CONTENTS after the
+        # verdict is recorded. Mirrors the OutboundEffect.metadata pattern.
+        object.__setattr__(
+            self, "governance", MappingProxyType(dict(self.governance or {}))
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -253,7 +266,9 @@ class OutboundVerdict:
             "level": self.level,
             "reason": self.reason,
             "effect": self.effect.to_dict(),
-            "governance": self.governance,
+            # Copy the read-only view back to a plain, JSON-serializable dict so
+            # to_dict() round-trips (json.dumps rejects MappingProxyType).
+            "governance": dict(self.governance),
             "timestamp": self.timestamp.isoformat(),
         }
 

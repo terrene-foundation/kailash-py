@@ -140,7 +140,7 @@ class MissingGateError(WeftError):
     """
 
 
-@dataclass
+@dataclass(frozen=True)
 class WeftEvent:
     """A single citable, hash-chained WEFT provenance event.
 
