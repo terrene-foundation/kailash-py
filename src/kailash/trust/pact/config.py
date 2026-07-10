@@ -22,7 +22,7 @@ import logging
 import math
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -236,6 +236,86 @@ class CommunicationConstraintConfig(BaseModel):
     )
 
 
+class ConfidenceThresholdConfig(BaseModel):
+    """Evidence-quality (confidence) disposition gate (#1516 leg b).
+
+    A configurable minimum confidence for an action to auto-proceed. An action
+    whose ``ctx["confidence"]`` (0.0-1.0, e.g. a ``ReasoningTrace.confidence``)
+    is BELOW the applicable threshold is escalated to ``held`` (human review)
+    REGARDLESS of value / limit-proximity, composed monotonically via
+    :func:`~kailash.trust.pact.risk_factors.combine_levels` so this gate can
+    only TIGHTEN a verdict, never loosen one.
+
+    Fail-closed (``pact-governance.md`` Rule 4 / Rule 6): when a threshold
+    applies to an action but ``ctx`` carries no confidence, or the confidence is
+    ``NaN`` / ``Inf`` / out-of-``[0, 1]``, the action is treated as
+    below-threshold and held -- a low-evidence action never silently
+    auto-proceeds.
+
+    Per-action-class overrides: ``per_action`` maps an action string to its own
+    threshold, falling back to ``default_threshold`` for unlisted actions. A
+    resolved threshold of ``None`` means the gate is INACTIVE for that action
+    (backward-compatible: ``ctx["confidence"]`` is ignored, verdict unchanged).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    default_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum confidence (0.0-1.0) for an action to auto-proceed. None "
+            "disables the gate for any action with no per_action override."
+        ),
+    )
+    per_action: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "Per-action-class confidence thresholds (0.0-1.0), each overriding "
+            "default_threshold for the named action."
+        ),
+    )
+
+    @field_validator("default_threshold")
+    @classmethod
+    def _reject_non_finite_default(cls, v: float | None) -> float | None:
+        """Reject NaN/Inf -- they bypass the ``<`` comparison (Rule 6)."""
+        if v is not None and not math.isfinite(v):
+            raise ValueError(
+                f"default_threshold must be finite, got {v!r}. "
+                f"NaN/Inf values bypass governance checks."
+            )
+        return v
+
+    @field_validator("per_action")
+    @classmethod
+    def _validate_per_action(cls, v: dict[str, float]) -> dict[str, float]:
+        """Every per-action threshold MUST be finite and in ``[0, 1]``."""
+        for action, threshold in v.items():
+            if not math.isfinite(threshold):
+                raise ValueError(
+                    f"per_action[{action!r}] must be finite, got {threshold!r}. "
+                    f"NaN/Inf values bypass governance checks."
+                )
+            if not (0.0 <= threshold <= 1.0):
+                raise ValueError(
+                    f"per_action[{action!r}] must be in [0.0, 1.0], "
+                    f"got {threshold!r}."
+                )
+        return v
+
+    def threshold_for(self, action: str) -> float | None:
+        """Resolve the confidence threshold for ``action``.
+
+        Returns the per-action override when present, else
+        ``default_threshold``, else ``None`` (gate inactive for this action).
+        """
+        if action in self.per_action:
+            return self.per_action[action]
+        return self.default_threshold
+
+
 class ConstraintEnvelopeConfig(BaseModel):
     """A complete constraint envelope across all five CARE dimensions.
 
@@ -357,7 +437,7 @@ class DimensionThresholds(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def ordered(self) -> "DimensionThresholds":
+    def ordered(self) -> Self:
         """Enforce auto_approve <= flag <= hold ordering."""
         if not (
             self.auto_approve_threshold <= self.flag_threshold <= self.hold_threshold
@@ -682,7 +762,7 @@ class OrgDefinition(BaseModel):
     workspaces: list[WorkspaceConfig] = Field(
         default_factory=list, description="All workspace definitions"
     )
-    roles: list = Field(
+    roles: list[Any] = Field(
         default_factory=list,
         description="All role definitions (first-class PACT nodes, list of RoleDefinition)",
     )
@@ -1052,9 +1132,9 @@ class OrgDefinition(BaseModel):
             gradient = getattr(agent, "verification_gradient", None)
             # Fall back to team gradient if agent has none
             if not gradient or not gradient.rules:
-                team = agent_to_team.get(agent.id)
-                if team:
-                    gradient = getattr(team, "verification_gradient", None)
+                agent_team = agent_to_team.get(agent.id)
+                if agent_team:
+                    gradient = getattr(agent_team, "verification_gradient", None)
             if gradient and gradient.rules:
                 rule_patterns = [r.pattern for r in gradient.rules]
                 for cap in getattr(agent, "capabilities", []) or []:
@@ -1434,8 +1514,8 @@ class OrgDefinition(BaseModel):
 
         # Check department -> team tightening
         for team in self.teams:
-            dept = team_dept_lookup.get(team.id)
-            if dept is None or dept.envelope is None:
+            team_dept = team_dept_lookup.get(team.id)
+            if team_dept is None or team_dept.envelope is None:
                 continue
             lead_id = team.team_lead
             if lead_id and lead_id in agent_index:
@@ -1444,9 +1524,9 @@ class OrgDefinition(BaseModel):
                 if lead_env:
                     _check_envelope_tightening(
                         child_env=lead_env,
-                        parent_env=dept.envelope,
+                        parent_env=team_dept.envelope,
                         child_label=f"Team '{team.id}'",
-                        parent_label=f"department '{dept.department_id}'",
+                        parent_label=f"department '{team_dept.department_id}'",
                         code="TEAM_DEPT_TIGHTENING",
                     )
 
@@ -1512,6 +1592,8 @@ __all__ = [
     "DataAccessConstraintConfig",
     "CommunicationConstraintConfig",
     "ConstraintEnvelopeConfig",
+    # Confidence / evidence-quality disposition gate (#1516 leg b)
+    "ConfidenceThresholdConfig",
     # Verification gradient
     "GradientRuleConfig",
     "VerificationGradientConfig",

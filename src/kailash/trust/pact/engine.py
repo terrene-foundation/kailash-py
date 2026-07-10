@@ -52,6 +52,7 @@ from kailash.trust.pact.compilation import (
     compile_org,
 )
 from kailash.trust.pact.config import (
+    ConfidenceThresholdConfig,
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
@@ -242,6 +243,9 @@ class GovernanceEngine:
         vacancy_deadline_hours: int = 24,  # Section 5.5 configurable deadline
         require_bilateral_consent: bool = False,  # Section 4.4 bilateral consent
         risk_factor_registry: RiskFactorRegistry | None = None,  # risk-factor seam
+        confidence_threshold_config: (
+            ConfidenceThresholdConfig | None
+        ) = None,  # #1516 leg b: evidence-quality gate
     ) -> None:
         self._lock = threading.Lock()
 
@@ -249,6 +253,16 @@ class GovernanceEngine:
         # None -> use the process-wide GLOBAL_RISK_FACTOR_REGISTRY so factors
         # registered anywhere are picked up without editing the engine core.
         self._risk_factor_registry: RiskFactorRegistry | None = risk_factor_registry
+
+        # Confidence / evidence-quality disposition gate (#1516 leg b). None ->
+        # gate INACTIVE (backward-compatible: ctx["confidence"] is ignored, the
+        # verdict is byte-unchanged from the pre-gate engine). When set, an
+        # action whose confidence is below the configured threshold is escalated
+        # to `held` regardless of value/limit-proximity, composed monotonically
+        # via combine_levels (tighten-only), fail-closed on missing/NaN.
+        self._confidence_config: ConfidenceThresholdConfig | None = (
+            confidence_threshold_config
+        )
 
         # Stateful sliding-window rate-limit enforcer (#1516 leg a). Tallies
         # REAL verify_action calls per (role, action, window) and blocks on
@@ -848,6 +862,25 @@ class GovernanceEngine:
                     level = combined
                     reason = rate_reason
 
+        # Step 3.6: Confidence / evidence-quality threshold (#1516 leg b).
+        # A disposition input on the action's EVIDENCE QUALITY, independent of
+        # value / limit-proximity / risk factors / rate: an action whose
+        # ctx["confidence"] is below the configured threshold is escalated to
+        # `held` (human review) REGARDLESS of how cheap or in-limit it is.
+        # Composed MONOTONICALLY via combine_levels (tighten-only), and -- like
+        # risk factors -- it runs even with NO envelope, because evidence
+        # quality is intrinsic to the action, not to any envelope constraint.
+        # Fail-closed (pact-governance.md Rule 4/6): a configured threshold with
+        # a missing / NaN / out-of-[0,1] confidence is treated as below-threshold.
+        # conf_detail is None when no threshold governs this action (gate
+        # inactive) -> the audit trail is byte-unchanged for un-configured engines.
+        conf_level, conf_reason, conf_detail = self._evaluate_confidence(action, ctx)
+        if conf_level != "auto_approved" and level != "blocked":
+            combined = combine_levels(level, conf_level)
+            if combined != level:
+                level = combined
+                reason = conf_reason
+
         # Multi-level VERIFY: walk accountability chain and check each ancestor's
         # effective envelope. Most restrictive verdict wins. This prevents a role
         # from executing an action that is allowed at the leaf but blocked by
@@ -925,6 +958,13 @@ class GovernanceEngine:
         # verdict, for audit. Present only when the action carried risk_factors.
         if risk_eval is not None and risk_eval.present:
             audit_details["risk_factors"] = risk_eval.to_dict()
+        # Record the confidence gate's evaluation + whether it escalated the
+        # verdict (#1516 leg b, invariant 4). Present ONLY when a threshold
+        # governs this action (conf_detail is None otherwise) so an un-configured
+        # engine's audit trail is byte-unchanged.
+        if conf_detail is not None:
+            conf_detail["escalated"] = conf_level != "auto_approved"
+            audit_details["confidence"] = conf_detail
 
         verdict = GovernanceVerdict(
             level=level,
@@ -1099,6 +1139,109 @@ class GovernanceEngine:
             f"'{combined}' (driving: {driving})"
         )
         return (combined, reason, risk_eval)
+
+    def _evaluate_confidence(
+        self, action: str, ctx: dict[str, Any]
+    ) -> tuple[str, str, dict[str, Any] | None]:
+        """Evaluate the action's evidence quality against the confidence gate.
+
+        A disposition input on the action's EVIDENCE QUALITY (#1516 leg b),
+        independent of value / limit-proximity / risk factors / rate. When a
+        threshold applies to ``action`` and ``ctx["confidence"]`` is below it,
+        the returned level is ``"held"`` (human review) -- the caller composes
+        it via :func:`combine_levels` so it can only TIGHTEN the verdict.
+
+        Fail-closed (``pact-governance.md`` Rule 4 / Rule 6): a configured
+        threshold with a MISSING confidence, a NON-NUMERIC confidence, or a
+        ``NaN`` / ``Inf`` / out-of-``[0, 1]`` confidence is treated as
+        below-threshold (``"held"``) -- a low-evidence action never silently
+        auto-proceeds.
+
+        Returns:
+            ``(level, reason, audit_detail)``. ``level`` is ``"held"`` when the
+            gate applies and confidence is below-threshold / missing / invalid,
+            else ``"auto_approved"``. ``audit_detail`` is ``None`` when NO
+            threshold applies to this action (gate inactive) -- so an
+            un-configured engine's audit trail is byte-unchanged. When present,
+            it never carries a non-finite float (invalid values are recorded via
+            ``value_repr`` so the audit dict stays JSON/finite-safe).
+        """
+        config = self._confidence_config
+        if config is None:
+            return ("auto_approved", "", None)
+        threshold = config.threshold_for(action)
+        if threshold is None:
+            # No threshold governs this action -> gate inactive, verdict
+            # unchanged, audit trail unchanged (backward-compat).
+            return ("auto_approved", "", None)
+
+        detail: dict[str, Any] = {"threshold": threshold}
+
+        # Fail-closed: a threshold is configured but ctx carries no confidence.
+        # `is None` covers both an absent key and an explicit None.
+        raw = ctx.get("confidence")
+        if raw is None:
+            detail.update({"value": None, "below_threshold": True, "reason": "missing"})
+            return (
+                "held",
+                f"Confidence absent but a threshold ({threshold:.2f}) is "
+                f"configured for action '{action}' -- held for human review "
+                f"(fail-closed)",
+                detail,
+            )
+
+        # Finite + range guard (pact-governance.md Rule 6): a NaN/Inf/out-of-
+        # range value must NOT vacuously pass the `<` comparison. A non-finite
+        # float is recorded via value_repr, never stored raw in the audit dict.
+        try:
+            conf = float(raw)
+        except (TypeError, ValueError):
+            detail.update(
+                {
+                    "value": None,
+                    "value_repr": repr(raw),
+                    "below_threshold": True,
+                    "reason": "non_numeric",
+                }
+            )
+            return (
+                "held",
+                f"Confidence value is not numeric for action '{action}' -- "
+                f"held for human review (fail-closed)",
+                detail,
+            )
+
+        if not math.isfinite(conf) or not (0.0 <= conf <= 1.0):
+            detail.update(
+                {
+                    "value": None,
+                    "value_repr": repr(conf),
+                    "below_threshold": True,
+                    "reason": "out_of_range",
+                }
+            )
+            return (
+                "held",
+                f"Confidence value ({conf!r}) is NaN/Inf/out-of-[0,1] for "
+                f"action '{action}' -- held for human review (fail-closed)",
+                detail,
+            )
+
+        if conf < threshold:
+            detail.update(
+                {"value": conf, "below_threshold": True, "reason": "below_threshold"}
+            )
+            return (
+                "held",
+                f"Confidence {conf:.2f} is below the required threshold "
+                f"{threshold:.2f} for action '{action}' -- held for human review",
+                detail,
+            )
+
+        detail.update(
+            {"value": conf, "below_threshold": False, "reason": "above_threshold"}
+        )
+        return ("auto_approved", "", detail)
 
     def _evaluate_rate_limits(
         self,
