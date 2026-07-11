@@ -932,3 +932,14 @@ changes:
     \ breaking pre-existing + sibling-SDK signatures; the fix is prune-when-unset so not-configured instances\
     \ sign byte-identically (BH3 unbound/bound pattern applied to field additions). Cross-SDK/language-agnostic\
     \ (py+rs). Origin: kailash-py #1510 BH5 / PR #1671 / kailash 2.48.0."
+- type: rule_add
+  artifact: handoff-completion
+  files:
+  - .claude/rules/handoff-completion.md
+  classification_suggestion: global
+  context: "NEW baseline rule (priority:0). A downstream-required action (cross-repo issue/PR, upstream\
+    \ handoff) is done only when EXECUTED or EXPLICITLY surfaced as pending-with-authorization \u2014\
+    \ never left implied-done in a local note; a cross-repo artifact is referenced as existing only after\
+    \ created/verified this session; needs-authorization means ASK specifically, not stop at a note. Co-owner-directed\
+    \ origination (BH5 session left a local rs handoff + a wrong rs#1714 ref unfiled). Rule-10 named-rationale:\
+    \ non-decomposable critical behavioral contract, authored tight (~130 lines). Origin journal/0010."
