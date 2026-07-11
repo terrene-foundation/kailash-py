@@ -2,47 +2,61 @@
 
 ## Where we are
 
-Third-pass `/redteam` **CONVERGED** on the post-v2.48.0 codify wave (0 CRIT / 0 HIGH, 2 clean
-rounds → PR #1686); `/codify` then surfaced the pass's Gate-1 follow-ups into the BUILD→loom
-proposal (PR #1687) so loom picks them up. Phase 05-codify; un-enrolled PUBLIC repo, coordination
-OFF (solo); board clear of ours (only external #1675 open).
+Sixth-pass `/redteam` **independently re-converged** the post-v2.48.0 codify wave on current main:
+2 rounds, 5 parallel adversarial clusters + 1 orchestrator evidence-gate sweep, **0 CRIT/0 HIGH/0 MED,
+2 clean rounds, 0 fixes needed** — the FIRST of the six passes to surface NO new finding and apply NO
+fix (prior 5 each found ≥1; the fifth caught a genuine MED). The wave is now confirmed stable 6×.
+Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo). Board clear of ours (only external #1675 open).
+
+**Recommendation landed in the receipt: close the re-pass loop.** The remaining forest (F2–F8) is entirely
+cross-SDK (F2/F3 → kailash-rs) or loom-Gate-1-bound (F5–F8 → loom); per repo-scope-discipline NONE is
+self-authorizable from this repo. Further same-scope re-passes here have diminishing value.
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0017-DECISION-codify-thirdpass-gate1-followup.md` — this codify's receipt
-2. `workspaces/sdk-backlog/journal/0016-DECISION-redteam-thirdpass-convergence-postv2480.md` — the redteam receipt
-3. `workspaces/sdk-backlog/04-validate/redteam-2026-07-11-thirdpass.md` — full third-pass report + dispositions
-4. `.claude/.proposals/latest.yaml` — BUILD→loom proposal; cross-sdk-inspection Rule 4d entry now carries the Gate-1 follow-up
+1. `workspaces/sdk-backlog/journal/0020-DECISION-redteam-sixthpass-reconvergence.md` — this session's receipt
+2. `workspaces/sdk-backlog/04-validate/redteam-2026-07-11-sixthpass.md` — full report + round table + dispositions
+3. `.claude/.proposals/latest.yaml` — BUILD→loom proposal (25 changes, pending_review; unchanged this pass)
 
 ## In-flight state
 
-- None local — #1686/#1687 landed on main; working tree clean. Codify anchor advanced (local state, gitignored).
+- Sixth-pass receipt (report + journal 0020 + this notes write) staged for commit/PR. No substantive
+  artifact change — the pass fixed nothing; only records the convergence.
 
 ## Executed this session
 
-- None external — no cross-repo actions. PRs #1686/#1687 are in THIS repo's `git log`.
+- 6 background redteam agents (3 R1 + 2 R2 + orchestrator sweeps); no cross-repo actions.
 
-## Outstanding ledger (forest)
+## Outstanding ledger (forest — NONE actionable from this repo)
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
 | F2 | #1606 express `v2` keyspace (rs#1713) | #1606 — Rust-pinned v2 keyspace | BLOCKED — land py+rs together |
 | F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; fix Rust-side | in-flight — close when rs lands |
 | F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
-| F5 | handoff-completion → loom validation | `journal/0010` co-owner directive | pending-loom (proposal queued) |
+| F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
 | F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
-| F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016`+`0017` | pending-loom Gate-1 (in proposal via #1687) |
+| F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016/0017` | pending-loom Gate-1 |
+| F8 | handoff-completion Rule-10 emission-budget headroom check | `journal/0019` fifth-pass MED fix | pending-loom Gate-1 (`emit.mjs --all --dry-run`) |
 
-Closed this session: none of F2–F7 (all loom-side / cross-SDK). F7 ADDED this session. Session
-deliverables landed: PR #1686 (redteam convergence, `journal/0016`), PR #1687 (codify follow-up, `journal/0017`).
+Closed this session: none of F2–F8 (all cross-SDK / loom-bound). The sixth-pass redteam is a completed
+deliverable (receipt only), not an open workstream.
+
+## Unreleased packages (BUILD release-drift)
+
+- Session artifact-only (0 `*.py`) — no new drift. Pre-existing: kailash-dataflow own 2.14.x cadence
+  (owner-timing call) — NOT the COC line; `/release` N/A here.
 
 ## Traps
 
-- **latest.yaml own-org (F6):** the 9 `esperie-enterprise` hits are Gate-1 meta-directives — a mechanical BUILD scrub CORRUPTS them (loom Gate-1 only). Edits re-serialize the whole file (accepted precedent); verify via `python yaml` + semantic append-never-overwrite diff, NOT git line-diff.
-- **loom-bound rules:** handoff-completion.md + cross-sdk-inspection.md durable home is `latest.yaml` → Gate-1; interim BUILD edits are transient (/sync overwrites).
+- **loom-bound (F5/F6/F7/F8):** durable home is `latest.yaml` → Gate-1; BUILD edits to loom-SYNCED rule files are transient (`/sync` overwrites). But `latest.yaml` itself is BUILD-owned `isNeverSynced` — edits there PERSIST.
+- **latest.yaml own-org (F6):** the 9 `esperie-enterprise` hits are Gate-1 meta-directives (all own-org `kailash-rs`/`loom`, allowlisted at latest.yaml:516) — a mechanical BUILD scrub CORRUPTS them. Verify via `python yaml` + semantic diff, NOT git line-diff.
+- **latest.yaml git line-diff is huge** (formatter quote-reserializes the whole file each edit); semantic change is per-entry. Review via `python yaml` deep-equal, not raw lines.
+- **cross-sdk-inspection wiring is 4 per-clause inline blocks** (not an H2) — grep the `**Violation scope:**` MUST-8 marker, not `## Trust Posture Wiring`, or the sweep false-negatives.
 - `gh --repo terrene-foundation/kailash-py` = false-positive repo-scope tripwire (CWD repo); omit `--repo`.
-- codify/* + chore/* run FULL PR-gate matrix (coordination OFF); check CI pinned to head SHA, THEN merge as a separate command.
+- codify/* + chore/* run FULL PR-gate matrix; check CI pinned to head SHA, THEN merge as a separate command.
 
 ## Open questions for the human
 
-- **loom side (F5/F6/F7):** Gate-1 — validate handoff-completion via the eval-harness, templatize `esperie-enterprise` at source, and decide cross-sdk-inspection length-rationale (depth-extract to the guide vs named rationale at Origin).
+- **loom Gate-1 (F5/F6/F7/F8):** validate handoff-completion via eval-harness; templatize `esperie-enterprise` at source; decide cross-sdk-inspection 306-line rationale; run `emit.mjs --all --dry-run` for the handoff-completion baseline-rule emission budget.
+- **Re-pass loop:** recommend stopping same-scope re-passes here (converged 6×, 0 new); progress the forest in its owning repos (loom / kailash-rs).
