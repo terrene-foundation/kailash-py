@@ -22,13 +22,14 @@ Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo).
 
 - **PR #1675** disposed: owner closed (verified `state=CLOSED` @ 2026-07-11T13:02:14Z) + blocked account + filed GitHub spam report. Non-security assessment recorded in `0021`.
 - Cleaned 6 superseded `journal/.pending/` auto-capture stubs (all already promoted to `0010`–`0019`).
+- **User-authorized cross-repo read** (`journal/0022` grant): verified 6 rs# issues on kailash-rs read-only. Live forest = **3 OPEN** (rs#1713/F2, rs#1729/F3, rs#1732/BH5); **3 CLOSED** (rs#1712, rs#1667, rs#1707 — incl. rs#1707 BH3 status-change vs `0008`). None blocks this repo; all actionable only in a kailash-rs session.
 
 ## Outstanding ledger (forest — NONE actionable from this repo)
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
-| F2 | #1606 express `v2` keyspace (rs#1713) | #1606 — Rust-pinned v2 keyspace | BLOCKED — land py+rs together |
-| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; fix Rust-side | in-flight — close when rs lands |
+| F2 | #1606 express `v2` keyspace (rs#1713) | #1606 — Rust-pinned v2 keyspace | rs#1713 **OPEN** (verified 07-11) — land py+rs together |
+| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; fix Rust-side | rs#1729 **OPEN** (verified 07-11) — close when rs lands |
 | F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
 | F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
 | F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
