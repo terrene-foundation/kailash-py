@@ -942,4 +942,5 @@ changes:
     \ never left implied-done in a local note; a cross-repo artifact is referenced as existing only after\
     \ created/verified this session; needs-authorization means ASK specifically, not stop at a note. Co-owner-directed\
     \ origination (BH5 session left a local rs handoff + a wrong rs#1714 ref unfiled). Rule-10 named-rationale:\
-    \ non-decomposable critical behavioral contract, authored tight (~130 lines). Origin journal/0010."
+    \ non-decomposable critical behavioral contract, authored tight (minimal load-bearing clauses; depth\
+    \ in DO/DO-NOT). Origin journal/0010."
