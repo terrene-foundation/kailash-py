@@ -2,30 +2,26 @@
 
 ## Where we are
 
-Sixth-pass `/redteam` **independently re-converged** the post-v2.48.0 codify wave on current main:
-2 rounds, 5 parallel adversarial clusters + 1 orchestrator evidence-gate sweep, **0 CRIT/0 HIGH/0 MED,
-2 clean rounds, 0 fixes needed** — the FIRST of the six passes to surface NO new finding and apply NO
-fix (prior 5 each found ≥1; the fifth caught a genuine MED). The wave is now confirmed stable 6×.
-Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo). Board clear of ours (only external #1675 open).
+**Board is clear of ours.** This session disposed of the one live PR — **#1675** (external
+promotional-spam "JMT x402 Agent Tools"): owner **closed + blocked + reported** it as spam; assessed
+**non-security** (README-only +2/-0, inert, author had read-only public default + 0 write + 0 commits
+on main, merge was branch-protection BLOCKED). Basis: **Absolute Directive #0 — Foundation
+Independence**. Receipt: `journal/0021`.
 
-**Recommendation landed in the receipt: close the re-pass loop.** The remaining forest (F2–F8) is entirely
-cross-SDK (F2/F3 → kailash-rs) or loom-Gate-1-bound (F5–F8 → loom); per repo-scope-discipline NONE is
-self-authorizable from this repo. Further same-scope re-passes here have diminishing value.
+The post-v2.48.0 codify wave stays **6× converged + landed** (PR #1691, `journal/0013`–`0020`). Per
+`0020`'s own disposition, same-scope re-passes have diminishing value — **NOT re-passed this session**.
+Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo).
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0020-DECISION-redteam-sixthpass-reconvergence.md` — this session's receipt
-2. `workspaces/sdk-backlog/04-validate/redteam-2026-07-11-sixthpass.md` — full report + round table + dispositions
-3. `.claude/.proposals/latest.yaml` — BUILD→loom proposal (25 changes, pending_review; unchanged this pass)
-
-## In-flight state
-
-- Sixth-pass receipt (report + journal 0020 + this notes write) staged for commit/PR. No substantive
-  artifact change — the pass fixed nothing; only records the convergence.
+1. `workspaces/sdk-backlog/journal/0021-DECISION-pr1675-promotional-spam-disposition.md` — this session's receipt
+2. `workspaces/sdk-backlog/journal/0020-DECISION-redteam-sixthpass-reconvergence.md` — wave convergence + stop-re-passing disposition
+3. `.claude/.proposals/latest.yaml` — BUILD→loom proposal (25 changes, pending_review; unchanged this session)
 
 ## Executed this session
 
-- 6 background redteam agents (3 R1 + 2 R2 + orchestrator sweeps); no cross-repo actions.
+- **PR #1675** disposed: owner closed (verified `state=CLOSED` @ 2026-07-11T13:02:14Z) + blocked account + filed GitHub spam report. Non-security assessment recorded in `0021`.
+- Cleaned 6 superseded `journal/.pending/` auto-capture stubs (all already promoted to `0010`–`0019`).
 
 ## Outstanding ledger (forest — NONE actionable from this repo)
 
@@ -37,26 +33,18 @@ self-authorizable from this repo. Further same-scope re-passes here have diminis
 | F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
 | F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
 | F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016/0017` | pending-loom Gate-1 |
-| F8 | handoff-completion Rule-10 emission-budget headroom check | `journal/0019` fifth-pass MED fix | pending-loom Gate-1 (`emit.mjs --all --dry-run`) |
+| F8 | handoff-completion Rule-10 emission-budget headroom check | `journal/0019` fifth-pass MED | pending-loom Gate-1 (`emit.mjs --all --dry-run`) |
 
-Closed this session: none of F2–F8 (all cross-SDK / loom-bound). The sixth-pass redteam is a completed
-deliverable (receipt only), not an open workstream.
-
-## Unreleased packages (BUILD release-drift)
-
-- Session artifact-only (0 `*.py`) — no new drift. Pre-existing: kailash-dataflow own 2.14.x cadence
-  (owner-timing call) — NOT the COC line; `/release` N/A here.
+All F2–F8 are cross-SDK (→ kailash-rs) or loom-Gate-1-bound — none self-authorizable here per `repo-scope-discipline.md`.
 
 ## Traps
 
-- **loom-bound (F5/F6/F7/F8):** durable home is `latest.yaml` → Gate-1; BUILD edits to loom-SYNCED rule files are transient (`/sync` overwrites). But `latest.yaml` itself is BUILD-owned `isNeverSynced` — edits there PERSIST.
-- **latest.yaml own-org (F6):** the 9 `esperie-enterprise` hits are Gate-1 meta-directives (all own-org `kailash-rs`/`loom`, allowlisted at latest.yaml:516) — a mechanical BUILD scrub CORRUPTS them. Verify via `python yaml` + semantic diff, NOT git line-diff.
-- **latest.yaml git line-diff is huge** (formatter quote-reserializes the whole file each edit); semantic change is per-entry. Review via `python yaml` deep-equal, not raw lines.
-- **cross-sdk-inspection wiring is 4 per-clause inline blocks** (not an H2) — grep the `**Violation scope:**` MUST-8 marker, not `## Trust Posture Wiring`, or the sweep false-negatives.
+- **New-precedent (spam PRs):** external promotional/x402 spam PR → close + block + report + non-security receipt. If it RECURS across Foundation repos, escalate to a COC rule (per `knowledge-cascade-routing` MUST-1). One instance = repo-local receipt (`0021`), not yet a rule.
+- **loom-bound (F5–F8):** durable home is `latest.yaml` → Gate-1; BUILD edits to loom-SYNCED rule files are `/sync`-transient. `latest.yaml` itself is BUILD-owned `isNeverSynced` — edits there PERSIST.
+- **latest.yaml own-org (F6):** 9 `esperie-enterprise` hits all own-org (allowlisted latest.yaml:516) — a mechanical BUILD scrub CORRUPTS them. Verify via `python yaml` + semantic diff, NOT git line-diff.
 - `gh --repo terrene-foundation/kailash-py` = false-positive repo-scope tripwire (CWD repo); omit `--repo`.
 - codify/* + chore/* run FULL PR-gate matrix; check CI pinned to head SHA, THEN merge as a separate command.
 
 ## Open questions for the human
 
-- **loom Gate-1 (F5/F6/F7/F8):** validate handoff-completion via eval-harness; templatize `esperie-enterprise` at source; decide cross-sdk-inspection 306-line rationale; run `emit.mjs --all --dry-run` for the handoff-completion baseline-rule emission budget.
-- **Re-pass loop:** recommend stopping same-scope re-passes here (converged 6×, 0 new); progress the forest in its owning repos (loom / kailash-rs).
+- **In-repo work is exhausted.** The substantive remaining forest lives in **kailash-rs** (F2/F3) and **loom** (F5–F8) — progress it in those repos. Nothing further is self-authorizable here.
