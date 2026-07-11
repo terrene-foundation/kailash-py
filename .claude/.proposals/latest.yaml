@@ -943,4 +943,8 @@ changes:
     \ created/verified this session; needs-authorization means ASK specifically, not stop at a note. Co-owner-directed\
     \ origination (BH5 session left a local rs handoff + a wrong rs#1714 ref unfiled). Rule-10 named-rationale:\
     \ non-decomposable critical behavioral contract, authored tight (minimal load-bearing clauses; depth\
-    \ in DO/DO-NOT). Origin journal/0010."
+    \ in DO/DO-NOT). Origin journal/0010. Gate-1 to decide (journal/0012): (a) MUST-2 home \u2014 keep\
+    \ in this baseline rule vs relocate to path-scoped verify-claims-before-write.md; (b) self-referential-codify.md\
+    \ Rule 2 allowlist membership \u2014 MUST-2 fires on codify-class output (same predicate that admitted\
+    \ verify-claims-before-write). Behaviorally UNVALIDATED \u2014 no rule eval-harness in the BUILD repo;\
+    \ loom /codify eval is the validation surface."
