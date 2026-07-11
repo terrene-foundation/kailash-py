@@ -1,0 +1,77 @@
+# Session Notes — 2026-07-09
+
+## Where we are
+
+mops-onboarding re-convergence **#12 CONVERGED + LANDED**, THEN a loom Gate-2 sync (#1636) landed, THEN a
+full-repo **/sweep (clean)**. First adversarial audit of the whole suite against the NEW
+`command-skill-parity.md` rule (2026-07-08) whose Origin IS this suite — CLEAN. Recurring citation-vs-wired
+class produced ZERO phantoms; hardened 3 LOW/MED illustrative enumerations (positive-allowlist). Phase
+05-codify at a clean close. **0 open PRs.** Un-enrolled PUBLIC repo, coordination OFF (solo).
+
+## Read first
+
+1. `04-validate/sweep-2026-07-09-postconvergence12.md` — the full-repo sweep (all 9 sweeps)
+2. `04-validate/redteam-2026-07-09-reconvergence12.md` — the #12 audit (4 rounds, 3 parallel agents)
+3. `journal/0043-AMENDMENT-reconvergence12-illustrative-enumeration-hedge.md` — #12 receipt + subclass lesson
+
+## In-flight state
+
+- None local — everything landed on main; working tree clean (only this untracked `.session-notes`).
+- **The loom Gate-2 sync #1636 (`43012c540`) REVERTED the 3 #12 hedges on main** — the EXPECTED `/sync`
+  overwrite dynamic for loom-synced files. NON-LOSSY: the hedges are preserved in
+  `.claude/.proposals/latest.yaml` (`pending_review`, 22 changes, verified present at lines 1177/1198) and
+  re-land canonically once loom processes the proposal at Gate-1. Do NOT re-apply BUILD-side (churn loop —
+  next sync reverts again); let loom Gate-1 handle it.
+- F6/F10/F11/F12/F13/F14 all ride `latest.yaml` (Gate-1 pending). No BUILD-side action pending.
+
+## Executed this session
+
+- **Re-convergence #12** → PR #1635 (`50a006442` → merge `e6be5630f`): 3 parallel adversarial agents
+  (command↔skill parity / citation-vs-wired / dangling-disclosure-markers) → 0 CRIT / 0 HIGH → 3 LOW/MED
+  hardened → R3+R4 = 2 consecutive clean. Report + journal/0043 + `latest.yaml` GLOBAL route.
+- **Landed loom Gate-2 sync PR #1636** (`43012c540`): 81 files (loom-canonical hooks/commands/rules/skills;
+  new skills `46-clean-instantiate` + `47-loom-doctor`; helper rename `detectStateFileMutationSegmentAware
+  → detectStateFileMutation`). CI green; check-then-merge separated per git.md.
+- **/sweep (full repo, 9 sweeps) → CLEAN.** Report at `04-validate/sweep-2026-07-09-postconvergence12.md`.
+  Only findings: #1636 (landed), 15-issue SDK backlog (queued), dataflow 2.14.x unreleased (owner call).
+
+## Outstanding ledger (forest)
+
+| ID  | Item | Value-anchor | Status |
+| --- | ---- | ------------ | ------ |
+| F6  | `scan-synced-disclosure.mjs` operator-local skip parity | journal/0038 | routed to loom (Gate-1 pending) |
+| F10 | `/onboard` DEFER phantom-type GLOBAL fix | journal/0041 (#10) | routed to loom (Gate-1 pending) |
+| F11 | `/claim` predicate-token set GLOBAL fix | journal/0042 (#11) | routed to loom (Gate-1 pending) |
+| F12 | `todo-github-sync.md` stale self-ref | #11 D3 (user-approved) | routed to loom proposal-only |
+| F13 | operator display-name scrub in `user-flow-validation-walk-discipline.md` | #11 LOW (user-approved) | routed to loom proposal-only |
+| F14 | #12 illustrative-enumeration hedges (43/45 skills) | journal/0043 (#12) | routed to loom GLOBAL; **reverted on main by #1636 sync, preserved in latest.yaml** |
+| F3  | mechanical distributable-repo lint | #8 notes | queued (loom/optional) |
+| F4  | `whoami.md` body at headroom limit | #5 notes | queued (loom/optional) |
+| F5  | extract MUST-3 SAFE-helper depth → `skills/45` | #7/#8 advisory | blocked-on-loom |
+
+Closed this session: `#12` re-convergence → PR #1635 (`e6be5630f`); loom sync #1636 → `43012c540`;
+`#12-sweep` → this session's sweep report.
+
+## Unreleased packages (BUILD release-drift)
+
+- **kailash-dataflow** — 11 shippable-code commits since core tag `v2.45.6`, own `2.14.x` cadence (last
+  `release 2.14.3`; 0 core `src/`). Owner-timing call, NOT the COC line. `/release` NOT applicable to #12
+  (COC-artifact codify, no version bump / no PyPI surface). Recommend `/release` for dataflow when ready.
+
+## Traps
+
+- **The /sync overwrite trap is REAL and just fired.** #12 fixed 43/45 skills BUILD-side + routed to loom;
+  the very next loom sync (#1636) reverted them on main. This is BY-DESIGN for loom-synced files — the
+  durable home is `latest.yaml` → Gate-1 → canonical → future sync. Fixing loom-synced files BUILD-side is
+  transient; do it only to keep main correct in the interim, and NEVER re-apply after a sync reverts it.
+- **Illustrative vs completeness enumerations (#12 subclass).** A COMPLETENESS claim MUST equal the wired
+  set; an ILLUSTRATIVE list MUST equal it OR hedge "(among others)". Both end at the same durable fix —
+  anchor the wired source inline. Watch for unhedged partial enumerations of wired sets.
+- "Citation must match the wired mechanism" recurred #9 (symbol) / #10 (journal-type) / #11 (predicate) /
+  #12 (illustrative-omission). Fix pattern each time: cite the wired source inline so the next editor re-derives.
+- Separate a genuine loom-side defect from a loom→BUILD-subset artifact (resolves in loom-canonical). The
+  latter is documented, never "fixed" BUILD-side (the `/sync` overwrite trap).
+- Coordination OFF → codify-branch convention; codify/* + sync/* run FULL PR-gate matrix (no auto-skip).
+  Check CI as a READ pinned to head SHA, THEN merge as a separate command (git.md).
+- Sweep 9 mis-detects this BUILD clone as an orchestration root (operator `loom-links.local.json` lacks
+  `role: build`); N/A by repo-scope policy — never run cross-repo reads from a BUILD session.
