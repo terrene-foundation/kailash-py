@@ -2,11 +2,16 @@
 
 ## Where we are
 
-SDK-backlog session CLOSED. Shipped + verified-live **kailash 2.48.0** (SAFR BH5 circuit-breaker,
-#1510 closed); **filed rs#1732** on kailash-rs for the BH5 cross-SDK parity (correcting a
-"handoff prepared but never filed" gap); and codified that failure as the new baseline rule
-`handoff-completion.md` (redteam-hardened). All SAFR BH1–BH5 complete py-side. Board clean of
-our PRs (only external #1675 open). Phase 05-codify.
+SDK-backlog session CLOSED — **/redteam re-run to CONVERGENCE** on the post-v2.48.0 codify wave
+(handoff-completion rule + Rule 4d + proposal/journals). **2 consecutive clean rounds** (0 CRIT/0 HIGH),
+parallelized (3 clusters R1 + 2 R2), evidence-gated. One LOW fixed → **PR #1682 merged**
+(cross-sdk-inspection shared-ack enumeration normalized to a self-stable phrasing); 3 LOWs
+surfaced-with-reason; 1 non-defect accepted. Report: `04-validate/redteam-2026-07-11.md`; receipt: `journal/0013`.
+
+Prior: shipped + verified-live **kailash 2.48.0** (SAFR BH5 circuit-breaker, #1510 closed);
+**filed rs#1732** on kailash-rs for the BH5 cross-SDK parity (correcting a "handoff prepared but
+never filed" gap); codified that failure as the new baseline rule `handoff-completion.md`
+(redteam-hardened). All SAFR BH1–BH5 complete py-side. Board clean of our PRs (only external #1675 open). Phase 05-codify.
 
 ## Read first
 
