@@ -1,7 +1,8 @@
 source_repo: kailash-py
-codify_date: '2026-06-23'
+codify_date: "2026-06-23"
 status: pending_review
-codify_session: "Session 2026-06-23 (light /codify) \u2014 issue #1426 (kailash-align trl 1.x compatibility)\
+codify_session:
+  "Session 2026-06-23 (light /codify) \u2014 issue #1426 (kailash-align trl 1.x compatibility)\
   \ was fixed + released this session (kailash-align 0.7.3 + kailash-ml 2.2.2 to PyPI); #1430 (ml numba\
   \ floor) closed alongside. Most session learnings were INSTANCES of already-codified rules (bf16/version-skew\
   \ \u2192 git.md CI-parity + testing.md determinism; trl kwarg adapters \u2192 cross-sdk-inspection;\
@@ -28,923 +29,955 @@ codify_session: "Session 2026-06-23 (light /codify) \u2014 issue #1426 (kailash-
   \ baseline-rule edit (git.md is priority:0 baseline, so the rule-authoring Rule-10 proximity-band check\
   \ + Trust-Posture-Wiring grandfather decision + placement are loom Gate-1 calls needing loom's aggregate-emission\
   \ tooling). NOT self-referential (git.md is not on self-referential-codify Rule 2's allowlist) -> a\
-  \ recommended single reviewer pass ran on the proposed text."
+  \ recommended single reviewer pass ran on the proposed text. APPEND 2026-07-11 (BH5\
+  \ post-release codify wave): TWO changes[] entries appended — (1) cross-sdk-inspection\
+  \ rule_update ADDING Rule 4d (new fields on a cross-SDK signed model MUST prune-when-unset\
+  \ from the signing pre-image; Origin kailash-py #1510 BH5 / PR #1671 / kailash 2.48.0);\
+  \ (2) handoff-completion rule_add (NEW priority:0 baseline rule — a downstream-required\
+  \ action is done only when EXECUTED or EXPLICITLY surfaced pending-with-authorization;\
+  \ co-owner-directed origination, journals 0010-0012). Both classification_suggestion global;\
+  \ multi-agent redteam-converged. See changes[] tail."
 changes:
-- type: rule_update
-  artifact: dependencies
-  files:
-  - .claude/rules/dependencies.md
-  classification_suggestion: global
-  context: "ADDS one subsection: \"## Floors On Transitive Deps Are Legitimate When A Lock-Ignoring Install\
-    \ Backtracks Them\".\n\nLesson: dependencies.md \"No Caps on Transitive Dependencies\" + MUST-NOT\
-    \ \"Cap a dependency you do not directly import\" forbid UPPER bounds (<N) on un-imported packages.\
-    \ They do NOT forbid a minimum FLOOR (>=X) on a transitive when a lock-IGNORING install path \u2014\
-    \ CI running `uv pip install -e .` / `pip install -e .` WITHOUT `uv sync --locked` / `--frozen` \u2014\
-    \ fresh-resolves that transitive to a version with no wheel for a supported interpreter. The floor\
-    \ is a concrete install-failure fix, not speculation; it MUST carry an inline comment naming the lock-ignoring\
-    \ path + the no-wheel version it prevents, so a future reader does not mistake it for the speculative\
-    \ cap the rule forbids and revert it. Distinct from the existing section \"Phantom Transitive Deps\
-    \ \u2014 Resolve Via uv lock\" (which DROPS an un-imported transitive); here the transitive is load-bearing\
-    \ via a direct dep and must stay, floored. Two install paths must BOTH succeed (locked via uv.lock\
-    \ + lock-ignoring fresh-resolve); only the manifest floor covers the second.\n\nEvidence (ground-truth\
-    \ re-verified this session): #1430 kailash-ml `numba>=0.61` floor (packages/kailash-ml/pyproject.toml:68\
-    \ on main, whose inline comment already references \"rules/dependencies.md (NOT a cap)\" \u2014 the\
-    \ floor author had to reason AROUND the rule, which is the gap this codify closes). The align CI (.github/workflows/test-kailash-align.yml:103/109/110\
-    \ and the dev/rlhf jobs) installs via lock-ignoring `uv pip install -e`; a fresh resolve on Python\
-    \ 3.12+ backtracked `numba` (transitive via umap-learn -> pynndescent; no direct import \u2014 grep\
-    \ confirmed) to 0.53.1, whose llvmlite failed to build from source. Locked installs were green (the\
-    \ lock pinned numba); only the lock-ignoring CI path broke.\n\nClassification rationale: GLOBAL \u2014\
-    \ the floor-vs-cap-vs-phantom distinction for transitive deps under a lock-ignoring install is CLI-neutral\
-    \ and cross-SDK (the Cargo analogue: a lock-ignoring `cargo build` can backtrack a transitive crate\
-    \ to a version without a prebuilt artifact / MSRV-incompatible release; the principle holds, the manifestation\
-    \ differs). The DO/DO-NOT example is Python-specific (numba/llvmlite/wheels); Gate-1 MAY classify\
-    \ a kailash-rs variant note carrying the Cargo manifestation. Refines the global dependencies.md,\
-    \ no py-only semantics in the rule body.\n\nrule-authoring Rule 10 (proximity-band): dependencies.md\
-    \ is priority:10/scope:path-scoped (NOT baseline) -> proximity-band gate does NOT fire; no paired-extraction/named-rationale\
-    \ required. Self-referential /codify gate: dependencies.md is NOT on self-referential-codify.md Rule\
-    \ 2's allowlist -> the mandatory multi-agent redteam-with-tests round does NOT fire; a recommended\
-    \ single reviewer pass ran instead.\n\nGate-1 FOLLOW-UPs (out of scope for this BUILD codify): (a)\
-    \ the new subsection pushes dependencies.md slightly over rule-authoring.md's 200-line guidance (~213\
-    \ lines); path-scoped so no proximity-band gate, but Gate-1 MAY add a named length-rationale or extract\
-    \ to the dependencies rule-extract guide. (b) dependencies.md carries NO Trust Posture Wiring section\
-    \ (none of its sections do); this subsection follows that file-local convention and ships WITHOUT\
-    \ clause-scoped wiring \u2014 Gate-1 MAY decide on a wiring retrofit (consistent with how the 2026-06-22\
-    \ trust-plane-security / cross-sdk-inspection cycles attached wiring to grandfathered path-scoped\
-    \ rules)."
-- type: skill_created
-  artifact: 45-genesis-bootstrap
-  files:
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  classification_suggestion: global
-  context: "NEW skill \u2014 the fresh-repo first-owner genesis-bootstrap runbook, reconstructing the\
-    \ loom-only guides/co-setup/11-genesis-ceremony.md (absent from BUILD/USE repos) + the five fail-closed\
-    \ guard traps surfaced during the 2026-06-23 kailash-py multi-operator enrollment. Covers pre-flight\
-    \ (signing-first), the bootstrap sequence, org-vs-user + the #358 org-admin relaxation, the script-by-path\
-    \ trap (validate-bash detectStateFileMutation), fold-clean verify, and a troubleshooting matrix. GLOBAL:\
-    \ the ceremony (node + gh-api) and substrate are CLI/language-neutral. REMINDER TO LOOM (user directive):\
-    \ /sync-to-use to ALL downstream USE templates, not only BUILD. Multi-agent redteam (self-referential-codify\
-    \ MUST-1) converged \u2014 reviewer + security-reviewer + cc-architect CLEAN on the final state; receipts\
-    \ in workspaces/mops-onboarding/journal/0001."
-- type: rule_created
-  artifact: enrollment-operations
-  files:
-  - .claude/rules/enrollment-operations.md
-  classification_suggestion: global
-  context: "NEW rule, path-scoped (priority:10; paths = operators.roster.json + enroll/whoami/ecosystem-init/onboard\
-    \ commands). 6 MUST clauses: signing-first (degraded read-only), codify-branch+lease writes, script-by-path\
-    \ state-mutations, fold-clean-before-enrolled, self-enroll-from-own-machine, org-admin-relaxation-org-only.\
-    \ Canonical 8-field Trust Posture Wiring; severity advisory-at-hook (the fail-closed guards carry\
-    \ the block teeth) + halt-and-report at gate-review for the non-hook clauses. GLOBAL. Gate-1 NOTE:\
-    \ rule is 238 lines (>200 guidance) and carries a named Length rationale (guard-trap scope; path-scoped\
-    \ so no baseline-emission cost + Rule-10 proximity-band gate does not fire) per rule-authoring MUST\
-    \ NOT exception. Allowlist DECISION: NOT added to self-referential-codify Rule 2 (it governs ceremony\
-    \ ops, not codify machinery \u2014 a consumer of the lease, not the lease contract); recorded in journal/0001."
-- type: agent_created
-  artifact: coc-onboarding-specialist
-  files:
-  - .claude/agents/onboarding/coc-onboarding-specialist.md
-  classification_suggestion: global
-  context: "NEW agent (agents/onboarding/, alongside idiom-advisor + stack-detector) \u2014 the operator-lifecycle\
-    \ expert tying /ecosystem-init -> /enroll -> genesis bootstrap -> /onboard -> /claim, /posture, /release-claim\
-    \ + a guard-trap recovery table. Tools Read/Bash/Grep/Glob/Edit; Step-0 worktree self-check; provenance-capture\
-    \ hook. References skills 41/43/44/45 + the rule for depth (no duplication). GLOBAL. Cross-SDK: the\
-    \ same suite is the Phase-2 rollout target for kailash-rs (esperie-enterprise) per the user directive;\
-    \ loom may classify rs variant notes (ADO provider, org/owner differences). Redteam converged (final\
-    \ round CLEAN across all three specialists)."
-- type: rule_update
-  artifact: security
-  files:
-  - .claude/rules/security.md
-  - .claude/rules/pact-governance.md
-  classification_suggestion: global
-  context: "APPEND 2026-06-25 (pact-0.14.3 redteam follow-on codify). ADDS one new\nsub-section to security.md\
-    \ (under / adjacent to \"Multi-Site Kwarg Plumbing\"):\n\"Enforcement-Surface Parity\" \u2014 generalizing\
-    \ the existing one-helper-N-call-sites\nrule to the INDEPENDENT-enforcement-surfaces case. PLUS a\
-    \ precise cross-ref in\npact-governance.md Rule 2 (Monotonic Tightening).\n\nLESSON (the gap): security.md\
-    \ \"Multi-Site Kwarg Plumbing\" covers a security\nkwarg plumbed through ONE helper called at N sites;\
-    \ its mechanical fix is\n`grep -rn 'helper_name(' .`. It does NOT cover the case where ONE authorization\n\
-    control is enforced at TWO INDEPENDENT surfaces that share NO callee \u2014 an\nEVALUATION-time gate\
-    \ and a REGISTRATION/monotonic-tightening validator. The\nhelper-grep structurally cannot reach the\
-    \ second surface (different function,\nno shared helper), so a new fail-closed dimension added at\
-    \ the eval gate can\nleave the tightening validator blind. pact-governance Rule 2 covers ENVELOPE\n\
-    INTERSECTION monotonicity (a DIFFERENT mechanism), not MCP re-registration \u2014\nso neither existing\
-    \ rule names this class.\n\nPROPOSED security.md sub-section text (Gate-1 may refine placement/wording):\n\
-    ---8<--- BEGIN PROPOSED TEXT\n## Enforcement-Surface Parity \u2014 A New Fail-Closed Dimension Lands\
-    \ At Every Enforcement Surface, Same PR\n\nWhen a fix PROMOTES a field to an enforced fail-closed\
-    \ authorization control at\nthe EVALUATION surface (the check at decision/eval time), EVERY INDEPENDENT\n\
-    validation surface for the same control \u2014 especially a monotonic-tightening /\nre-registration\
-    \ / admission validator \u2014 MUST learn the new dimension in the\nSAME PR, even when the surfaces\
-    \ share NO helper. Grepping the eval helper's call\nsites is INSUFFICIENT: the registration/tightening\
-    \ validator is a separate\nfunction with no shared callee, so the Multi-Site Kwarg Plumbing grep above\
-    \ (one\nhelper, N call sites) structurally CANNOT reach it. Prefer a SINGLE shared\nrestrictiveness/ordering\
-    \ function consumed by BOTH surfaces (they cannot drift);\na hand-synced second copy MUST match the\
-    \ eval gate's parse/ordering EXACTLY.\nAn unrecognized value MUST rank as TIGHTEST (fail-closed):\
-    \ an\nunrecognized->recognized transition is a WIDENING and MUST raise, never be\naccepted as \"tightening\"\
-    .\n\n```python\n# DO \u2014 one shared rank function; the registration validator consumes it, same\
-    \ PR\ndef _restrictiveness(v):              # the SINGLE ordering: None=widest, unrecognized=tightest\n\
-    \    if v is None: return -1\n    try: return LEVELS.index(parse(v))\n    except ValueError: return\
-    \ len(LEVELS)          # unrecognized -> tightest (fail-closed)\ndef _check_clearance(caller, required):\
-    \ ...                    # eval gate (parse -> fail-closed)\ndef _validate_monotonic_tightening(old,\
-    \ new):                  # registration gate \u2014 SAME PR\n    if _restrictiveness(new) < _restrictiveness(old):\n\
-    \        raise GovernanceError(...)                             # may only KEEP or RAISE the bar\n\
-    \n# DO NOT \u2014 promote the gate at eval, leave the tightening validator blind\ndef _check_clearance(caller,\
-    \ required): ...                    # new fail-closed gate\ndef _validate_monotonic_tightening(old,\
-    \ new):\n    ...   # never learned the new dimension -> a re-registration that DROPS (secret->None)\n\
-    \          # or LOWERS (secret->public) the bar is accepted as \"tightening\" -> gate silently stripped\n\
-    ```\n\n**BLOCKED rationalizations:** \"The eval gate is the enforcement point; the\nvalidator is secondary\"\
-    \ / \"grep of the eval helper's call sites found nothing\"\n/ \"the validator has a safe default\"\
-    \ / \"the new dimension is rare;\nre-registration won't hit it\" / \"the eval check already fails\
-    \ closed, so the\nbypass is theoretical\".\n\n**Why:** The two surfaces enforce ONE control through\
-    \ INDEPENDENT code with no\nshared callee, so the helper-following grep cannot reach the second surface\
-    \ \u2014 a\nnew fail-closed gate the tightening validator never learned lets a\nre-registration lower\
-    \ the bar and be accepted as \"tightening\", a privilege\nescalation the FIX ITSELF introduced.\n\n\
-    **Detection:** for any field promoted to a fail-closed authorization control at\nan eval surface,\
-    \ grep the re-registration / monotonic-tightening validator for\nthat field name \u2014 absence is\
-    \ a finding.\n\nOrigin: kailash-py #1456 -> kailash-pact 0.14.3 (PR #1459). #1456 promoted\n`McpToolPolicy.clearance_required`\
-    \ to a fail-closed gate at `_check_clearance`\n(eval, Step 3.5) but left `_validate_monotonic_tightening`\
-    \ (re-registration)\nblind to it; a `secret`->None / `secret`->`public` re-registration was accepted\n\
-    as \"tightening\", silently stripping the gate (caught by an adversarial /redteam,\nNOT by the existing\
-    \ multi-site grep). Cross-SDK sibling: the kailash-rs Rust\nbinding (same shape).\n---8<--- END PROPOSED\
-    \ TEXT\n\nPROPOSED pact-governance.md Rule 2 cross-ref (one paragraph appended to Rule 2):\n\"Beyond\
-    \ envelope intersection (above), monotonic tightening ALSO governs MCP\ntool-policy RE-REGISTRATION\
-    \ (`_validate_monotonic_tightening`): a NEW fail-closed\ndimension added to a control at its eval\
-    \ surface (e.g. `clearance_required` at\n`_check_clearance`) MUST be learned by the re-registration\
-    \ validator in the SAME\nPR, with the SAME restrictiveness model (None=widest, unrecognized=tightest).\n\
-    This is a DISTINCT mechanism from envelope intersection \u2014 see security.md\nEnforcement-Surface\
-    \ Parity. Origin: #1456 -> pact 0.14.3 (#1459).\"\n\nEVIDENCE (ground-truth verified this session\
-    \ by two independent gate reviewers):\n- packages/kailash-pact/src/pact/mcp/enforcer.py \u2014 the\
-    \ SHIPPED 0.14.3 fix adds a\n  module-level `_clearance_restrictiveness` rank (enforcer.py:74-80:\
-    \ None -> -1\n  widest; unrecognized -> len(_CLEARANCE_LEVELS_ASCENDING)=5 tightest; recognized\n\
-    \  -> 0..4) consumed by `_validate_monotonic_tightening` (:269/:349-356) + 6\n  behavioral regression\
-    \ tests in\n  tests/regression/test_issue_1456_mcp_clearance_before_cost_flag.py:360-428\n  (DROP/LOWER\
-    \ raise; RAISE/ADD/KEEP accepted; unrecognized-is-tightest).\n  Fix commit 146b754e1 (the bug + fix\
-    \ are described verbatim in the body).\n- The two enforcement surfaces share NO callee (reviewer-verified):\
-    \ `_check_clearance`\n  defined :376, called ONLY at :538 (Step 3.5); `_validate_monotonic_tightening`\n\
-    \  defined :269, called ONLY at :265 (register_tool). A grep of `_check_clearance(`\n  call sites\
-    \ returns only :538 \u2014 the validator is invisible to it. This is the\n  helper-grep blind spot\
-    \ the rule names.\n\nCLASSIFICATION rationale: GLOBAL. The principle (a fail-closed control enforced\n\
-    at eval + at a registration/tightening validator must learn a new dimension at\nBOTH surfaces, same\
-    \ PR) is CLI-neutral and cross-SDK \u2014 the kailash-rs Rust\nbinding is the same shape. The DO/DO-NOT\
-    \ example is illustrative Python (no CLI\ndelegation primitive), so the clause emits globally with\
-    \ NO cross-cli slot\npartitioning needed.\n\nRECOMMENDED PLACEMENT (Gate-1 decides \u2014 Human Classifies\
-    \ Every Change): PRIMARY\nin security.md (the principle is cross-domain, not pact-specific) with the\n\
-    compact cross-ref in pact-governance.md Rule 2. ALTERNATIVE Gate-1 may prefer:\nland the PRIMARY clause\
-    \ in pact-governance.md (path-scoped: **/pact/**,\n**/governance/** \u2014 NO baseline-emission cost,\
-    \ NO Rule-10 proximity-band gate)\nwith a COMPACT one-line generalization pointer in security.md,\
-    \ IF the\nbaseline-budget tension below makes the security.md placement costly. Recommend\nsecurity.md-primary\
-    \ on principle-generality grounds; the alternative is the\nbudget-safe fallback.\n\nrule-authoring\
-    \ Rule 10 (proximity-band) \u2014 LOOM-SIDE GATE-1 ACTION REQUIRED:\nsecurity.md is priority:0 / scope:baseline;\
-    \ adding this ~30-line MUST clause MAY\nfall within the 15% proximity-band on a near-breach lane (codex-rs\
-    \ / gemini-rs).\nThis BUILD repo cannot faithfully run loom's aggregate-emission\n`emit.mjs --all\
-    \ --dry-run` headroom check; Gate-1 MUST run it and EITHER (a) pair\nthe addition with an extraction\
-    \ recovering the bytes on the near-breach lane, OR\n(b) carry a named-rationale exception (CVE-class\
-    \ privilege-escalation fix,\nstructurally non-decomposable), OR adopt the pact-governance-primary\
-    \ placement\nalternative (path-scoped -> Rule 10 does NOT fire). NOT performed in this BUILD\nproposal\
-    \ by design.\n\nTrust Posture Wiring \u2014 LOOM-SIDE GATE-1 ACTION: security.md is grandfathered\
-    \ (NO\nexisting Trust Posture Wiring section; none of its sections carry one \u2014 confirmed\nthis\
-    \ session). The proposed clause follows that file-local convention and ships\nWITHOUT clause-scoped\
-    \ wiring. Gate-1 MUST decide per trust-posture.md MUST-8\ngrandfather-cutoff whether the /codify-touch\
-    \ now requires authoring the canonical\n8-field wiring (consistent with how the 2026-06-22 cycles\
-    \ attached wiring to\ngrandfathered path-scoped rules). If wired: detection = cc-architect mechanical\n\
-    sweep (the eval-vs-registration surface-parity grep) at /implement + gate-review,\nadvisory at hook\
-    \ layer; emergency via the cumulative path, NOT a new key.\n\nSelf-referential /codify gate: security.md\
-    \ and pact-governance.md are NOT on\nself-referential-codify.md Rule 2's allowlist (they govern SDK\
-    \ code behavior, NOT\ncodify machinery) -> the mandatory posture-independent multi-agent\nredteam-with-tests\
-    \ round does NOT fire. The recommended /codify gate review\n(reviewer + security-reviewer, parallel)\
-    \ ran on the proposed clause text;\nAPPROVE-WITH-FIXES; all applied: (HIGH) scrubbed the private esperie-enterprise/\n\
-    kailash-rs#1513 ref to a generic cross-SDK-sibling reference; (C1) reworded the\npact-governance Rule\
-    \ 2 cross-ref to state it is a DISTINCT mechanism from envelope\nintersection; (MED/LOW) prescribed\
-    \ a single shared ordering function over\nmatch-by-convention, stated unrecognized->recognized is\
-    \ a widening that must\nraise, added a mechanical detection sweep, and formatted as a rule-authoring.md\n\
-    MUST clause (numbered-style heading, fenced DO/DO-NOT, **BLOCKED**, **Why:**,\nOrigin).\"\n"
-- type: command_update
-  artifact: sweep
-  files:
-  - .claude/commands/sweep.md
-  - .claude/commands/wrapup.md
-  - .claude/hooks/lib/validate-forest-ledger.mjs
-  classification_suggestion: global
-  context: "APPEND 2026-06-25 (mops-onboarding session, post-#1460). Cross-filed as a\ntracked issue at\
-    \ esperie-enterprise/loom#669 (user-authorized cross-repo\nfiling; journal workspaces/mops-onboarding/journal/0004).\
-    \ Gate-1: DEDUPE\nagainst #669 \u2014 same fix (issue = tracker, this = the BUILD->loom proposal).\n\
-    \nLESSON (the gap, two coupled pieces): /sweep + /wrapup are BLIND to the\n\"## Outstanding ledger\
-    \ (forest)\" section of workspace .session-notes.\n`grep -n \"ledger|forest\" .claude/commands/sweep.md`\
-    \ = 0 hits. Surfaced when\n4 dormant kailash-py workspaces (underlying GH issues all CLOSED) each\
-    \ held\nOPEN forest-ledger follow-on items; /sweep reported \"0 todos/active\" and the\nsession declared\
-    \ no outstanding work while those items sat unread.\n\n(i) SWEEP side \u2014 Sweep 1 reads todos/active/\
-    \ only; Sweep 6 only stat()s\n.session-notes MTIME (>30d) and never opens the file. A workspace that\
-    \ is\nissue-closed + 0-todos + <30d + no-open-PR + delivered is invisible on all\n8 axes, its open\
-    \ work recorded only on the one axis no sweep reads.\n\n(ii) RECONCILIATION side \u2014 /wrapup reconciles\
-    \ the ROOT ledger vs the prior\nROOT notes only; per-workspace ledgers never aggregate up.\nvalidate-forest-ledger.mjs\
-    \ --git-prior enforces no-vanish WITHIN one file,\nnot ACROSS workspace->root. Both gaps held at once\
-    \ -> items stranded\n(e.g. a DataFlow reserved-name root-cause fix, a pyright static-debt item).\n\
-    \nPROPOSED FIX (both pieces; loom decides exact wiring at Gate-1):\n1. A tool-backed /sweep step (extend\
-    \ tools/ + commands/sweep.md) that, for\n   every workspaces/*/.session-notes, parses the \"## Outstanding\
-    \ ledger\n   (forest)\" section, extracts every row NOT under \"Closed this session\",\n   and rolls\
-    \ open rows into the repo-wide report deduped by ID \u2014 regardless\n   of MTIME or issue state.\n\
-    2. Extend validate-forest-ledger.mjs from within-file --git-prior to a\n   workspace->root aggregation:\
-    \ any open workspace-ledger ID absent from\n   the ROOT ledger is a finding.\n\nPer sweep-completeness.md\
-    \ Rule 3 (recurring sweep gaps -> tighten command\ntext into a tool invocation). Proposal-only: NO\
-    \ local edit to\ncommands/sweep.md or validate-forest-ledger.mjs in THIS BUILD repo\n(loom-owned +\
-    \ synced; a local edit is clobbered by /sync-to-build) \u2014 loom\nimplements + distributes. NOT\
-    \ self-referential in this repo (a proposal\ndescription; no self-referential-codify Rule-2 allowlist\
-    \ file edited here).\n"
-- type: rule_update
-  artifact: git
-  files:
-  - .claude/rules/git.md
-  classification_suggestion: global
-  context: "APPEND 2026-06-25 (session-continuation codify). ADDS one bullet to git.md\n\xA7 Discipline:\
-    \ \"CI-check and merge are separate steps under duplicate-run races\".\n\nLESSON (the gap): git.md\
-    \ \xA7 Discipline + \xA7 \"Pre-FIRST-Push CI Parity Discipline\"\ngovern push-time CI parity, but\
-    \ NO clause governs the WATCH-then-MERGE window.\nWhen a PR has been pushed and CI is running, `gh\
-    \ pr checks --watch` can resolve\nGREEN on the PRIOR head commit while a NEW duplicate `pull_request`\
-    \ run (the\n`concurrency: cancel-in-progress` / re-trigger pattern) flakes RED on the SAME\nPR. An\
-    \ agent that bundles the check and the merge into one command\n(`gh pr checks <N> && gh pr merge <N>`,\
-    \ or `--watch` immediately followed by\n`gh pr merge`) can land the merge over a stale-green or red\
-    \ duplicate run \u2014\nbypassing the gate it believed it had cleared.\n\nPROPOSED git.md \xA7 Discipline\
-    \ bullet (Gate-1 may refine wording/placement):\n---8<--- BEGIN PROPOSED TEXT\n- **CI-check and merge\
-    \ are SEPARATE steps under duplicate-run races**:\n  `gh pr checks --watch` can resolve green on the\
-    \ PRIOR head commit while a NEW\n  duplicate `pull_request` run flakes red on the SAME PR (the\n \
-    \ `concurrency: cancel-in-progress` re-trigger pattern). Checking CI and merging\n  MUST be separate\
-    \ commands: (1) READ \u2014 pin the exact head SHA\n  (`gh pr view <N> --json headRefOid`) and confirm\
-    \ every REQUIRED check is\n  `conclusion=SUCCESS` on THAT SHA; (2) MERGE \u2014 only then `gh pr merge\
-    \ <N>`.\n  Bundling them in one command (`gh pr checks <N> && gh pr merge <N>`, or\n  `--watch` immediately\
-    \ followed by the merge) is BLOCKED \u2014 the watch can return\n  green on a stale commit and the\
-    \ merge then lands over an unverified or red\n  duplicate run.\n\n  ```bash\n  # DO \u2014 check as\
-    \ a READ step on the exact head, THEN merge\n  head=$(gh pr view <N> --json headRefOid -q .headRefOid)\n\
-    \  gh pr checks <N>                       # confirm required checks SUCCESS on $head\n  gh pr merge\
-    \ <N> --admin --merge        # separate command, after the read\n\n  # DO NOT \u2014 bundle watch\
-    \ + merge (watch may be green on the prior commit)\n  gh pr checks <N> --watch && gh pr merge <N>\
-    \ --admin --merge\n  ```\n\n**Why:** With duplicate `pull_request` runs, a `--watch` that returns\
-    \ green may\nhave resolved against the prior commit's run while a newer duplicate run on the\ncurrent\
-    \ head is still pending or flaked red; bundling the merge to that exit\ncode lands over an ungated\
-    \ state. Separating the read (pinned to the head SHA)\nfrom the merge makes the gate verifiable.\n\
-    ---8<--- END PROPOSED TEXT\n\nEVIDENCE (this repo, prior session): kailash-py PR #1465 (engine pyright\
-    \ + CI\nregression wiring) was admin-merged while a flaky-red duplicate `pull_request`\nrun showed\
-    \ on `gh pr checks`; main was independently healthy (3574 unit pass +\nthe push-event run on the same\
-    \ commit passed), so no harm landed \u2014 but the gate\nwas bypassed, not verified. Recorded as Trap-1\
-    \ in the prior session's\n`.session-notes`. The CI-watch-races-the-duplicate-run pattern is the recurrence\n\
-    this clause prevents.\n\nCLASSIFICATION rationale: GLOBAL. The duplicate-`pull_request`-run race +\
-    \ the\ncheck-then-merge-separately discipline are CLI-neutral (gh CLI, language-neutral)\nand apply\
-    \ to every repo using GitHub PR CI with concurrency re-triggers. The\nDO/DO-NOT example is illustrative\
-    \ `gh` shell (no per-CLI delegation primitive),\nso the bullet emits globally with NO cross-cli slot\
-    \ partitioning needed.\n\nrule-authoring Rule 10 (proximity-band) \u2014 LOOM-SIDE GATE-1 ACTION REQUIRED:\n\
-    git.md is priority:0 / scope:baseline; adding this ~25-line bullet MAY fall\nwithin the 15% proximity-band\
-    \ on a near-breach lane. This BUILD repo cannot\nfaithfully run loom's aggregate-emission `emit.mjs\
-    \ --all --dry-run` headroom\ncheck; Gate-1 MUST run it and EITHER (a) pair the addition with an extraction\n\
-    recovering the bytes on the near-breach lane (e.g. to the git.md rule-extract\nguide, which already\
-    \ holds the extended bash examples), OR (b) carry a\nnamed-rationale exception. NOT performed in this\
-    \ BUILD proposal by design.\n\nTrust Posture Wiring \u2014 LOOM-SIDE GATE-1 ACTION: git.md is grandfathered\
-    \ (NO\nexisting Trust Posture Wiring section). The proposed bullet follows that\nfile-local convention\
-    \ and ships WITHOUT clause-scoped wiring. Gate-1 MUST decide\nper trust-posture.md MUST-8 grandfather-cutoff\
-    \ whether the /codify-touch now\nrequires authoring the canonical 8-field wiring. If wired: detection\
-    \ =\ngate-level reviewer confirming check-then-merge separation in session\ntranscripts that admin-merge\
-    \ a PR; advisory at hook layer; emergency via the\ncumulative path, NOT a new key.\n\nSelf-referential\
-    \ /codify gate: git.md is NOT on self-referential-codify.md Rule\n2's allowlist (it governs git/CI\
-    \ workflow, NOT codify machinery) -> the mandatory\nmulti-agent redteam-with-tests round does NOT\
-    \ fire. A recommended single reviewer\npass ran on the proposed text. Cross-SDK sibling: kailash-rs\
-    \ uses the same gh-CLI\nPR flow; the clause applies identically (the existing git.md \xA7 \"Pre-FIRST-Push\n\
-    CI Parity Discipline\" already carries the rs cargo-command set).\n"
-- type: rule_update
-  artifact: cross-sdk-inspection
-  files:
-  - .claude/rules/cross-sdk-inspection.md
-  - .claude/guides/rule-extracts/git.md
-  - .claude/guides/deterministic-quality/08-cross-sdk-parity.md
-  classification_suggestion: global
-  context: "APPEND 2026-07-02 (session-continuation codify). TWO changes, BOTH global.\n\n(1) REPO-PATH\
-    \ CORRECTION (landed BUILD-side, PR #1487): cross-sdk-inspection.md\npointed cross-SDK issue filing\
-    \ at `terrene-foundation/kailash-rs`, which DOES NOT\nEXIST (`gh repo view` \u2192 \"Could not resolve\
-    \ to a Repository\"). Corrected to the real\nprivate `esperie-enterprise/kailash-rs` (Rule 1 filing\
-    \ target + the Example body).\nSibling artifacts fixed same PR: the git.md protection-table row +\
-    \ the\n08-cross-sdk-parity workflow checkout.\nLOOM GATE-1 ACTION: this defect exists UPSTREAM at\
-    \ loom + every consumer repo (these\nare synced artifacts); distribute the correction fleet-wide,\
-    \ else a /sync-to-build\nre-overwrites the local fix with the still-wrong path.\n\n(2) NEW MUST Rule\
-    \ 6 \u2014 \"Cross-SDK References In Public-Published Artifacts Are\nBLOCKED\": public/published artifacts\
-    \ (CHANGELOG, README, docs, package metadata)\nMUST NOT name the private Rust SDK repo/org/versions/issues/crate-paths/architecture\n\
-    (disclosure + Foundation Independence, Directive 0). Ships WITH a canonical 8-field\nTrust Posture\
-    \ Wiring block (trigger key `public_artifact_private_repo_disclosure`).\n\nSAME-SESSION SAME-CLASS\
-    \ FIXES (autonomous-execution Rule 4), landed BUILD-side:\nCHANGELOG.md \u2014 27 rs references removed/genericized\
-    \ (PR #1488); README.md (the PyPI\nlong_description) \u2014 3 bare kailash-rs refs genericized (the\
-    \ codify PR).\n\nREDTEAM: reviewer + security-reviewer + cc-architect (parallel) \u2192 MERGE-WITH-FIXES;\n\
-    all fixes applied (README scrub + removed a leaked private seed-org token `rrps-mtu`\nfrom the clause's\
-    \ own detection grep). NOT a self-referential-codify Rule-1 round \u2014\ncross-sdk-inspection.md\
-    \ is NOT on that allowlist; clause deliberately NOT added to it\n(public-artifact hygiene is code-behavior\
-    \ governance, like security.md).\n\nCLASSIFICATION: GLOBAL. Disclosure + Foundation-Independence discipline\
-    \ is CLI-neutral\nand applies to every public-published repo; the repo-path correction is a factual\
-    \ fix\nevery consumer needs. The DO/DO-NOT examples are illustrative markdown (no per-CLI\ndelegation\
-    \ primitive), so the clause emits globally with no cross-cli slot partitioning.\n"
-- type: rule_update
-  artifact: cross-sdk-genericization
-  files:
-  - .claude/rules/cross-sdk-inspection.md
-  - .claude/rules/cross-repo.md
-  - .claude/rules/repo-scope-discipline.md
-  - .claude/guides/rule-extracts/independence-rs.md
-  - .claude/skills/30-claude-code-patterns/sdk-upstream-donation.md
-  classification_suggestion: global
-  context: "APPEND 2026-07-02 (same session). Genericize EVERY reference to the private\nRust SDK repo\
-    \ across the synced COC corpus (45 files under .claude/{rules,skills,\nguides}). This CORRECTS a hazard\
-    \ the prior entry (cross-sdk-inspection repo-path\nfix) introduced: replacing the nonexistent `terrene-foundation/kailash-rs`\
-    \ with the\nreal private `esperie-enterprise/kailash-rs` put the private ORG name into synced\nartifacts\
-    \ that reach public USE templates \u2014 AND this BUILD repo is itself public,\nso the org name was\
-    \ live-public.\n\nGATE-1 MUST DO THIS AT SOURCE, TEMPLATIZED \u2014 do NOT hardcode `esperie-enterprise/\n\
-    kailash-rs`. Two existing patterns compose:\n- `cross-repo.md` MUST-1: reference repos by loom-links\
-    \ RESOLVER logical key\n  (`build.rs`), never a hardcoded org/repo. Real org/repo lives in the gitignored\n\
-    \  `loom-links.local.json` (operator-local, never synced \u2014 same #255/#260 fence as\n  `ci-runners.operator.local.md`).\n\
-    - Org-revealing `esperie-enterprise/kailash-rs` \u2192 `build.rs` (+ resolve-via-local\n  note); command\
-    \ EXAMPLES use `<rust-sdk-repo>` placeholder. Bare `kailash-rs` in\n  prose/Origin \u2192 \"the Rust\
-    \ SDK\" (keep issue/PR numbers + technical content). KEEP\n  `terrene-foundation/kailash-py` + `terrene-foundation/mint`\
-    \ verbatim.\n\nBUILD-SIDE (this codify): the 45 files genericized locally (verified 0 `esperie`,\n\
-    0 `kailash-rs`) \u2014 reduces the LIVE public exposure in this public repo now. Several\ntouched\
-    \ files are on the self-referential-codify allowlist (cc-artifacts,\nautonomous-execution, recommendation-quality,\
-    \ repo-scope-discipline,\nvalue-prioritization, hook-output-discipline, coc-sync-landing, 30-claude-code-patterns/**),\n\
-    so the mandatory multi-agent redteam (reviewer + security-reviewer + cc-architect)\nran before merge.\n\
-    \nREMAINING loom-side follow-up (flagged, not closed here): a resolver logical key for\nthe Rust BUILD\
-    \ repo (`build.rs`) must exist in the loom-links schema + operator-local\nexample so the templatized\
-    \ references resolve. If `build.rs` is not yet a declared\nkey, add it in the same Gate-1 landing.\n\
-    \nCLASSIFICATION: GLOBAL. Foundation Independence (Directive 0) + the #255/#260\nno-private-identifiers-in-synced-artifacts\
-    \ fence apply to every consumer + every\npublic USE template. CLI-neutral prose; no slot partitioning.\n"
-- type: rule_update
-  artifact: onboarding-suite-accuracy-corrections
-  files:
-  - .claude/commands/onboard.md
-  - .claude/commands/whoami.md
-  - .claude/rules/enrollment-operations.md
-  - .claude/rules/multi-operator-coordination.md
-  - .claude/skills/43-ecosystem-init/SKILL.md
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  - .claude/operators.roster.README.md
-  - .claude/commands/enroll.md
-  - .claude/skills/41-onboard/SKILL.md
-  - .claude/skills/44-enroll/SKILL.md
-  - .claude/skills/30-claude-code-patterns/genesis-migration-n1-org-admin-anchor.md
-  - .claude/skills/30-claude-code-patterns/multi-operator-coordination-substrate.md
-  classification_suggestion: global
-  context: "APPENDED 2026-07-08 (onboarding-suite accuracy re-validation). The Phase-1\nonboarding suite\
-    \ (skill 45-genesis-bootstrap, rule enrollment-operations, agent\ncoc-onboarding-specialist) was redteam-converged\
-    \ 2026-06-24 and distributed back\nvia the 2026-07-04 loom Gate-2 sync. A 4-round multi-agent redteam\
-    \ (reviewer +\nsecurity-reviewer + cc-architect, each verifying against ground-truth hook source)\n\
-    of the SYNCED-BACK state surfaced behavioral-accuracy drift and fixed it\n(0 CRIT / 0 HIGH; 2 consecutive\
-    \ clean rounds). Corrections, all verified against\nintegrity-guard.js / validate-bash-command.js::detectStateFileMutation\
-    \ /\ngenesis-ceremony.js / operator-id.js / settings.json:\n\n- onboard.md: roster failure-check path\
-    \ corrected (was learning/operators.roster.json;\n  real path .claude/operators.roster.json per operator-id.js\
-    \ ROSTER_REL).\n- enrollment-operations.md AND multi-operator-coordination.md: removed a FALSE\n \
-    \ \"settings.json permissions.deny enforces this\" claim for operators.roster.json +\n  coordination-log.jsonl\
-    \ (only posture.json + violations.jsonl are in deny). Correct\n  enforcement: validate-bash-command.js\
-    \ STATE_PATH_RX (Bash) + integrity-guard.js\n  codify-branch/lease gate (Edit/Write, coordination-ON).\
-    \ Same-bug-class pair fixed\n  together per autonomous-execution.md MUST-4.\n- whoami.md: corrected\
-    \ the \"licensed canonical writer\" framing (the lexical guard has\n  no writer allowlist; it scans\
-    \ the command STRING; node <file> passes because the\n  watched path is off the scanned line).\n-\
-    \ NEW data file operators.roster.README.md: created to close a 4-file dangling\n  reference (whoami.md\
-    \ + operators.roster.schema.json + roster-schema-validate.js +\n  fold-genesis-anchor.js). Documents\
-    \ the PLACEHOLDER- convention + isUnenrolled predicate.\n- LOW: garbled backtick span in enrollment-operations.md\
-    \ Detection field; main ->\n  origin/main codify-branch base consistency; resolveIdentity return-shape\
-    \ (posture /\n  blocked_into are L2-branch only); keyType citation drift in skill 43; phantom\n  /doctor\
-    \ alias in onboard.md; stale self-cited line count (264 -> 266).\n\nCLASSIFICATION: GLOBAL. These\
-    \ correct the SAME GLOBAL artifacts loom already\ndistributes; the corrected guard mechanics are CLI-neutral\
-    \ and consumer-wide. The\nenrollment-operations.md + multi-operator-coordination.md edits are on the\n\
-    self-referential-codify.md Rule 2 allowlist, so the mandatory multi-agent\nredteam-with-tests round\
-    \ ran before merge (satisfied by the 4-round convergence).\nReceipt: journal/0027.\n\nLIFECYCLE NOTE\
-    \ for Gate-1: this latest.yaml was pending_review (dated 2026-06-23)\nwhile the suite was already\
-    \ synced back 2026-07-04 \u2014 a possible un-archived\nalready-distributed proposal. Gate-1 should\
-    \ reconcile: if the 2026-06-24 suite\nentries were already distributed, process ONLY this accuracy-correction\
-    \ entry and\narchive the prior entries per artifact-flow.md Archive-Before-Fresh.\n\nKNOWN-DISPOSITIONED\
-    \ (not a defect): whoami.md is 152 lines (>150 cc-artifacts.md\nRule 3 cap) \u2014 pre-existing, procedural-exception-eligible\
-    \ (4-ceremony runbook);\nnamed rationale recorded in this codify receipt.\n\nSECOND APPEND 2026-07-08\
-    \ (merged-main re-validation, journal/0028). The FIRST append\nabove validated the PRE-MERGE working-tree\
-    \ edits; those then merged (PR #1619). This\nsession re-ran a 10-round multi-agent redteam (reviewer\
-    \ + security-reviewer +\ncc-architect) against the MERGED main state \u2014 per the /redteam doctrine\
-    \ \"re-derive\nevery check from scratch; a prior round's self-report is an input to verify, not\n\
-    evidence\" + user-flow-validation.md MUST-1 (validate the actually-shipped artifact,\nnot the pre-merge\
-    \ draft). Converged 0 CRIT / 0 HIGH (held every round R1-R10) + 2\nconsecutive fully-clean rounds\
-    \ (R9+R10, all three specialists). It surfaced additional\npre-existing accuracy drift the pre-merge\
-    \ pass did not catch, all verified against\nground-truth source (settings.json / fold-rule-9c.js /\
-    \ operators.roster.schema.json /\noperator-id.js / workspace-utils.js / validate-bash-command.js)\
-    \ and fixed:\n\n- permissions.deny FALSE-claim RESIDUAL (same class as the first append's rule-file\n\
-    \  fix, but MISSED in the depth files): skills/43-ecosystem-init:122 credited\n  settings.json permissions.deny\
-    \ as covering operators.roster.json/coordination-log.jsonl\n  (\"matching the same paths\"); corrected\
-    \ to the accurate coverage (posture.json +\n  violations.jsonl + .initialized + .posture-upgrade-nonce\
-    \ ONLY; roster/coord-log rest\n  on STATE_PATH_RX + integrity-guard). Same-class sweep (zero-tolerance.md\
-    \ 1a) found +\n  fixed the identical residual in skills/30-claude-code-patterns/\n  genesis-migration-n1-org-admin-anchor.md:137\
-    \ + multi-operator-coordination-substrate.md:326.\n- skills/41-onboard read-only-contract table: roster\
-    \ return-shape was {operators:[...]}\n  (roster is a `persons` MAP per operators.roster.schema.json\
-    \ + operator-id.js) \u2192\n  {genesis, persons:{<pid>:{...}}}; resolveIdentity under-specified \u2192\
-    \ full documented\n  shape; team-memory {slug,body,frontmatter,integrity_ok} \u2192 runbook-accurate\n\
-    \  {slug,body,signed,promoted_by}; detectActiveWorkspace {workspace,recent_journal[]} \u2192\n  actual\
-    \ helper return {name,path}; skill `name:` onboard \u2192 41-onboard (sibling\n  convention). --json\
-    \ key-count drift 7\u21928 (\"eight section keys\"; onboard.md gains\n  action_items to match the\
-    \ skill block + the markdown Action-Items section).\n- skills/44-enroll:37 + commands/enroll.md:47:\
-    \ \"four business roles\" \u2192 \"three\" (the\n  business_roles enum has exactly 3; product-owner\
-    \ explicitly excluded per schema).\n- stale fold-rule-9c.js LINE citations (shifted by the F122 ADO\
-    \ insertion) re-anchored\n  to grep-stable SYMBOLS (foldGenesisMigration, CO_SIGN_ANCHOR_KIND_ORG_ADMIN)\
-    \ per\n  symbol-anchored-citations.md, at genesis-migration-n1:11 + substrate:303/361. The\n  substrate:378\
-    \ F86 CLOSED-forest historical closure-receipt line-range is LEFT AS-IS\n  (frozen point-in-time audit\
-    \ record, commit-SHA-anchored, spec-accuracy.md Rule 6 exempt).\n- skills/45-genesis-bootstrap:14\
-    \ + enrollment-operations.md:249: \"loom-only and absent\n  from BUILD/USE repos\" was FALSE (the\
-    \ guide IS present in BUILD repos at\n  .claude/guides/co-setup/11-genesis-ceremony.md; it is use_excluded\
-    \ from USE consumers\n  per sync-flow.md); corrected to accurate `use_excluded` framing, consistent\
-    \ with the\n  suite's own other files (skill 43:95, whoami.md:152 \"consumers do not get\").\n\nREFUTED\
-    \ / DISPOSITIONED (NOT fixes, recorded for Gate-1 transparency): a security grep\nflagged `esperie-enterprise/loom`\
-    \ in validate-bash-command.js:888 \u2014 REFUTED by the\nauthoritative scan-synced-disclosure.mjs\
-    \ (0 findings across 1558 files; esperie-enterprise\nis loom's ALLOWLISTED own-org). skills/42-certify\
-    \ name:certify \u2014 out-of-suite-scope +\ngenuinely-mixed repo naming convention (16+ skills use\
-    \ the stripped form); cc-architect\nbelow-LOW non-finding, NOT changed.\n\nCLASSIFICATION: GLOBAL\
-    \ (same rationale as the first append \u2014 same GLOBAL synced\nartifacts, CLI-neutral guard mechanics).\
-    \ Self-referential surfaces touched\n(enrollment-operations.md + multi-operator-coordination-substrate.md\
-    \ +\ngenesis-migration-n1-org-admin-anchor.md + the skills) \u2192 the mandatory\nself-referential-codify.md\
-    \ multi-agent redteam-with-tests round is satisfied by this\nsession's 10-round convergence. Receipt:\
-    \ workspaces/mops-onboarding/journal/0028.\n\nTHIRD APPEND 2026-07-08 (later same day \u2014 independent\
-    \ re-convergence, journal/0029).\nA fresh 3-lens redteam (reviewer + security-reviewer + cc-architect,\
-    \ each re-deriving\nagainst ground-truth hook source) of the current merged-main state (post PR #1620,\n\
-    HEAD 8e85319b7) independently re-confirmed the SECOND-APPEND convergence AND surfaced\n2 residual\
-    \ LOW self-contradictions the 10-round pass missed, both inside\nenrollment-operations.md's own \"\
-    Length rationale\" meta-paragraph (verify-claims-before-write\nclass), now fixed: (1) the self-cited\
-    \ body line-count \"266 lines (per wc -l)\" was stale \u2014\nactual wc -l = 268 (the SECOND APPEND\
-    \ corrected 264->266; this corrects 266->268 after that\nappend's own edits shifted the count); (2)\
-    \ \"SIX distinct fail-closed boundary guards as MUST\nclauses\" over-claimed all six MUSTs as guards,\
-    \ contradicting the same file's \xA7 \"Violation\nscope\" (MUST 1/2/3 guard-enforced; MUST 4/5/6 gate-review)\
-    \ + the Severity field; corrected\nto \"SIX MUST clauses \u2014 three fail-closed boundary guards\
-    \ (MUST 1/2/3) + three gate-review\nclauses (MUST 4/5/6)\". Convergence: R1 (findings) -> fix -> R2\
-    \ (cc-architect CLEAN) + R3\n(reviewer CLEAN) = 2 consecutive fully-clean rounds; 0 CRIT / 0 HIGH\
-    \ every round. Evidence\ngaps closed this session by direct re-derivation (NOT trusting prior self-reports):\n\
-    scan-synced-disclosure.mjs RAN clean (0 findings / 1558 files); host_role:ci\nforever-ineligible +\
-    \ 2-of-N owner co-sign re-derived from fold-rule-9c.js; business_roles\nenum = exactly 3 re-derived\
-    \ from operators.roster.schema.json.\nCLASSIFICATION: GLOBAL (same GLOBAL artifact as both prior appends;\
-    \ the fix is to the\nrule's own meta-rationale, CLI-neutral). enrollment-operations.md is on the\n\
-    self-referential-codify.md Rule 2 allowlist \u2192 the mandatory multi-agent redteam-with-tests\n\
-    round is satisfied by this session's R1-R3 convergence. Receipt:\nworkspaces/mops-onboarding/journal/0029.\n\
-    \nFOURTH APPEND 2026-07-08 (independent re-convergence, journal/0030). A fresh\nmulti-agent redteam\
-    \ (R1: reviewer + cc-architect + security-reviewer, each\nre-deriving EVERY factual claim against\
-    \ ground-truth hook/schema/fold-rule source,\nNOT trusting the prior 10-round + THIRD-APPEND convergence\
-    \ self-reports) surfaced a\nHIGH the prior rounds MISSED plus a MED and a LOW cluster \u2014 all verified\
-    \ against\nground-truth source (journal-reserve.js / coordination-log.js / fold-rule-9b.js /\nviolation-patterns.js\
-    \ / validate-bash-command.js / operators.roster.schema.json /\nsync-flow.md) and fixed:\n\n- HIGH:\
-    \ skills/42-certify Step 2 called the PURE reserveJournalSlot(\"journal\", {...})\n  (filesystem-only;\
-    \ emits NO signed journal-slot-reservation record) while the prose\n  claimed fold-anchored semantics.\
-    \ journal-write-guard.js READS reservations from the\n  fold and refuses a Write to an unreserved\
-    \ slot \u2014 so an operator following /certify\n  would halt \"slot unreserved\" at Step 3. Corrected\
-    \ to\n  reserveJournalSlotSigned(process.cwd(), {dir:\"journal\", identity, type, topic}) +\n  the\
-    \ real {ok, reservation:{slot,filename,...}, record} return shape + Step-3 reads\n  r.reservation.filename.\
-    \ Matches the sibling suite usage (skill-45:176,\n  coc-onboarding-specialist:83 already cite the\
-    \ Signed variant).\n- MED: multi-operator-coordination-substrate.md \xA76 (both \"field presence by\
-    \ fold\n  rules 5 + 9b\" sentences) cited coordination-log.js:1125-1128 for the\n  archive_genN_tip_hash\
-    \ presence check \u2014 but those lines are the rule-1 signature-verify\n  code; the real check is\
-    \ the rule-5 guard (\"rule 5: checkpoint missing required field\n  archive_genN_tip_hash\", coordination-log.js:1333).\
-    \ Bare+stale line cites replaced\n  with grep-stable symbol anchors (rule-5 guard string; fold-rule-9b.js::foldGenerationRotation\n\
-    \  R9-A-01) per symbol-anchored-citations.md. F51/F53/F86-CLOSED historical forest\n  receipts carrying\
-    \ bare :295-343 line cites LEFT AS-IS (commit-SHA-anchored, exempt).\n- LOW cluster: `validate-bash-command.js::detectStateFileMutation`\
-    \ (7 sites across\n  enrollment-operations.md, coc-onboarding-specialist, skill-45, skill-43)\n  misattributed\
-    \ the symbol's home \u2014 validate-bash-command.js INVOKES\n  detectStateFileMutationSegmentAware\
-    \ (the segment-aware wrapper defined in\n  violation-patterns.js). Corrected to the actual invoked\
-    \ symbol.\n- LOW: enrollment-operations.md length rationale self-cited \"268 lines\" but the R1\n\
-    \  SegmentAware rewording added a line (wc -l 268->269); switched to the drift-robust\n  approximate\
-    \ \"~270 lines\" matching the sibling length-rationale convention.\n- LOW (same-class, R2): the THIRD-APPEND-era\
-    \ \"loom-internal <guide>\" mischaracterization\n  (the use_excluded guides/co-setup/11-genesis-ceremony.md\
-    \ is present in BUILD repos,\n  only use_excluded from USE consumers) still lived in commands/whoami.md\
-    \ (x2) +\n  commands/ecosystem-init.md (x1) after the FIRST/SECOND appends fixed skill-45 +\n  skill-43.\
-    \ Aligned all three to the accurate framing (zero-tolerance.md Rule 1a\n  scanner-surface symmetry).\
-    \ The `(loom-internal reference)` redaction markers are a\n  DIFFERENT class (genericized loom-only\
-    \ spec citations) and were correctly untouched.\n\nCONVERGENCE: R1 (reviewer/cc-architect/security-reviewer,\
-    \ 3 independent agents,\ngenuinely run) -> fixes -> R2 (same-class + self-introduced-count) -> fixes\
-    \ -> R3\n(mechanical battery: 23 ::symbol citations resolve, all cited files exist, frontmatter\n\
-    parses, 0 residual drift, disclosure scanner exit 0) CLEAN -> R4 (cross-file consistency\n+ semantic\
-    \ validation of the HIGH fix against journal-write-guard's actual fold-read\nbehavior) CLEAN = 2 consecutive\
-    \ clean rounds; 0 CRIT / 0 HIGH. R2-R4 were run\norchestrator-direct because the R2 subagent wave\
-    \ died on an account usage limit \u2014 an\nerrored agent is ZERO evidence, never a clean round (/redteam\
-    \ evidence gate +\nevidence-first-claims.md MUST-3), so the verification was re-run correctly by the\n\
-    orchestrator. Disclosure scanner re-run clean this session (exit 0); state files\ngitignored.\n\n\
-    CLASSIFICATION: GLOBAL (same GLOBAL synced artifacts as all three prior appends; the\ncorrected guard/reservation\
-    \ mechanics are CLI-neutral and consumer-wide \u2014 the HIGH\ncert-helper fix in particular is an\
-    \ operator-breaking bug every downstream consumer of\nthe synced suite would otherwise inherit). enrollment-operations.md\
-    \ +\nmulti-operator-coordination-substrate.md + genesis-migration-n1-org-admin-anchor.md +\ncommands/ecosystem-init.md\
-    \ are on the self-referential-codify.md Rule 2 allowlist ->\nthe mandatory multi-agent redteam-with-tests\
-    \ round is satisfied by R1's 3 genuinely-run\nindependent specialists. Receipt: workspaces/mops-onboarding/journal/0030.\n\
-    \nFIFTH APPEND 2026-07-08 (exhaustive full-cohort executable-surface pass, journal/0031).\nA user-approved\
-    \ exhaustive pass walked every EXECUTABLE surface (code blocks, function-call\nsignatures, cited hooks/bins,\
-    \ hook REGISTRATIONS) across all 14 cohort files \u2014 since the\nFOURTH-APPEND HIGH lived in a code\
-    \ block, not a prose citation. Findings + a co-owner\narchitecture decision:\n\n- HOOK-WIRING (settings-governed,\
-    \ NOT synced \u2014 recorded for context): probe-phase-guard.js\n  (the PR #355 R1 security HIGH-1\
-    \ closure \u2014 the /certify probe no-assist gate) exists +\n  ships audit fixtures, and certify.md:64\
-    \ + skills/42-certify:58 both claim it is\n  \"registered in .claude/settings.json for matcher Read|Grep|Glob|WebFetch\"\
-    \ \u2014 but it was\n  registered in NO settings surface, so it never fired (the /certify SOLO gate\
-    \ was\n  prose-only, re-opening the security HIGH). Wired it under that exact matcher; verified\n\
-    \  live (no lockfile -> {continue:true}; lockfile+Read -> [BLOCK]). Clone-safe (lockfile-gated).\n\
-    \  settings.json is /settings-governed, outside the self-referential-codify allowlist, so\n  this\
-    \ is a repo-config fix, not a synced-artifact change.\n- ENROLLMENT-OPERATIONS.MD CAVEAT (GLOBAL synced\
-    \ rule \u2014 flows to consumers): added a\n  \"Distributable-Repo Caveat\" section. Root cause verified\
-    \ this pass: a PUBLIC/fork-template\n  repo whose committed operators.roster.json carries a LIVE genesis\
-    \ makes EVERY clone\n  resolve coordination ON (isCoordinationEnabled reads the committed roster's\
-    \ anchored\n  genesis; .claude/learning/ is gitignored). Paired with committed coordination-ENFORCEMENT\n\
-    \  hooks, signing-mutation-guard would degraded-read-only-brick a fresh forker. The caveat\n  codifies:\
-    \ distributable repos ship UN-ENROLLED (PLACEHOLDER genesis); the 6 enforcement\n  hooks MUST NOT\
-    \ be in committed settings.json (operator-local -> gitignored\n  settings.local.json); lockfile-gated\
-    \ hooks (probe-phase-guard) ARE clone-safe in committed\n  settings.json. This is the institutional\
-    \ lesson every downstream distributable consumer\n  needs.\n- REPO-STATE (kailash-py-specific, NOT\
-    \ synced): shipped kailash-py un-enrolled \u2014 committed\n  roster reset to the canonical clean-instantiate\
-    \ PLACEHOLDER shape so clones resolve\n  coordination OFF. Repo-specific state, not a synced artifact;\
-    \ noted for Gate-1 context only.\n\nCLASSIFICATION: GLOBAL for the enrollment-operations.md caveat\
-    \ ONLY (the synced rule; the\ndistributable-repo discipline applies to every consumer that is itself\
-    \ downloadable/forkable).\nThe probe-phase-guard settings.json wiring + the placeholder roster are\
-    \ repo/settings-governed\nstate, NOT synced artifacts \u2014 recorded here for Gate-1 transparency,\
-    \ not for distribution.\nenrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist;\
-    \ the multi-agent\ngate is satisfied by R1's 3 genuinely-run independent specialists + this pass's\
-    \ mechanical\nexecutable-surface verification (per-hook fixture dry-runs + isCoordinationEnabled +\n\
-    roster-schema-validate + disclosure-scanner, all orchestrator-run with real output; the R2\nsubagent\
-    \ wave remained account-limit-throttled, so verification stayed orchestrator-direct per\nthe evidence\
-    \ gate). Receipt: workspaces/mops-onboarding/journal/0031.\n"
-- type: rule_add
-  artifact: command-skill-parity
-  files:
-  - .claude/rules/command-skill-parity.md
-  classification_suggestion: global
-  context: "NEW path-scoped rule (paths: .claude/commands/** + .claude/skills/**), CLI-neutral. Codifies\
-    \ the command\u2194skill parity discipline surfaced by kailash-py mops-onboarding re-convergence #5\
-    \ (journal/0032). Three MUSTs: (1) a shared-step edit (Print/hand-off string, STOP/gate predicate,\
-    \ precondition, ordering, cited field/branch/lockfile/helper name, or a guard's create\u2192teardown\
-    \ lifecycle) MUST update the command\u2194skill mirror in the SAME shard (security.md Multi-Site-Plumbing\
-    \ one abstraction up); (2) /redteam MUST run a command\u2194skill parity sweep over the 5 shared-step\
-    \ axes (a same-step contradiction = MED, HIGH if it drops a security guard or sends an operator to\
-    \ a wrong command); (3) a cited security/enforcement guard's lifecycle MUST be verified to span the\
-    \ ENTIRE protected window (retry loops, re-entry, abandon) \u2014 \"registered\" \u2260 \"covers the\
-    \ whole window\".\nOrigin evidence (security-relevant, cross-SDK): the /certify no-assist gate (probe-phase-guard.js,\
-    \ PR #355 security HIGH-1 closure, wired into committed settings.json in PR #1623) was INERT on one\
-    \ execution path \u2014 the command (certify.md) kept the lockfile through the Phase C gate retry\
-    \ loop; the backing skill (42-certify) removed it before Phase C, whose loop re-runs the probe on\
-    \ failed questions. An orchestrator following the skill could be coached through the certification\
-    \ retries with no structural guard. Invisible to five prior review lenses; surfaced ONLY by the command\u2194\
-    skill parity sweep. Two sibling print-string divergences (enroll B3, ecosystem C5) were also introduced\
-    \ by editing a command without its skill.\nSelf-referential-allowlist disposition (R1 cc-architect\
-    \ HIGH, resolved-by-construction): ADDED to self-referential-codify.md Rule 2's allowlist in this\
-    \ same codify. The author's initial \"not-allowlisted, like symbol-anchored-citations.md\" reasoning\
-    \ was overturned \u2014 the decisive distinction is that this rule is path-scoped to .claude/commands/**\
-    \ + .claude/skills/**, the EXACT surfaces the allowlist enumerates (symbol-anchored-citations is scoped\
-    \ to codify INPUTS: specs/journal/plans), its MUSTs fire on /codify OUTPUT (the user-flow-validation\
-    \ / verify-claims-before-write predicate), it keeps ALLOWLISTED codify-governing command\u2194skill\
-    \ pairs (codify.md/redteam.md/certify.md/onboard.md/sync-*) in sync, and its own Origin is a security-guard\
-    \ drop on the allowlisted certify.md's skill. Rule 2 tiebreaker resolves toward the gate. Covered\
-    \ by the existing .claude/rules/** paths glob (#443 holds, no paths change).\nClassification rationale:\
-    \ GLOBAL \u2014 the command/skill split (cc-artifacts Rule 3) and its shared-step drift failure mode\
-    \ are CLI-neutral (every CLI's command+skill equivalents can drift) and cross-SDK (the same paired-artifact\
-    \ structure exists in every repo carrying a COC setup). The DO/DO-NOT examples are onboarding-suite-specific\
-    \ but the discipline is universal. Receipt: workspaces/mops-onboarding/journal/0032 + 0033.\n"
-- type: artifact_update
-  artifact: onboarding-suite-certify-security-plus-lifecycle
-  files:
-  - .claude/skills/42-certify/SKILL.md
-  - .claude/commands/certify.md
-  - .claude/commands/enroll.md
-  - .claude/skills/44-enroll/SKILL.md
-  - .claude/commands/ecosystem-init.md
-  - .claude/skills/43-ecosystem-init/SKILL.md
-  - .claude/commands/onboard.md
-  - .claude/skills/41-onboard/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #5 fixes to the onboarding suite (kailash-py PR #1624, merged 445d97bf0), surfaced\
-    \ for cross-SDK + downstream propagation because the same skill/hook pairs exist wherever the suite\
-    \ was synced (Rust SDK + loom). HIGHEST PRIORITY for Gate-1: the /certify no-assist guard-lifecycle\
-    \ fix (MED, security-relevant \u2014 see the command-skill-parity entry above) is the one a sibling\
-    \ SDK almost certainly also carries; the skill (42-certify) now keeps the probe-phase-guard lockfile\
-    \ through the Phase C gate retry loop, single removal at Phase C exit (pass OR abandon), matching\
-    \ the command. Other fixes: enroll B3 \"Enrolled\"\u2192\"Enrollment PR opened. Once it merges to\
-    \ main\u2026\" (+ skill 44); grace/pending_verification cited as trust-posture MUST-7 \u2192 MUST-6\
-    \ (onboard + skill 41); certify receipt ::version\u2192::bank_version; 43\u219245 genesis-bootstrap\
-    \ cross-link; ecosystem C5 owner-vs-teammate (+ skill 43); <id>\u2192<display_id>. Converged 0 CRIT/0\
-    \ HIGH/0 MED across 2 consecutive clean rounds (7-round multi-agent redteam, the self-referential-codify.md\
-    \ Rule 1 gate). Distributable invariant re-verified intact after all edits (roster PLACEHOLDER, 0/6\
-    \ enforcement hooks committed, probe-phase-guard=1, disclosure scanner exit 0). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-08-reconvergence5.md\
-    \ + journal/0032.\n"
-- type: rule_update
-  artifact: onboarding-suite-certify-coordination-on-conformance
-  files:
-  - .claude/skills/42-certify/SKILL.md
-  - .claude/commands/certify.md
-  - .claude/commands/claim.md
-  - .claude/commands/onboard.md
-  - .claude/skills/41-onboard/SKILL.md
-  - .claude/commands/ecosystem-init.md
-  - .claude/skills/43-ecosystem-init/SKILL.md
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  - .claude/commands/posture.md
-  classification_suggestion: global
-  context: "Re-convergence #6 fixes to the onboarding suite (kailash-py, 10-round multi-agent redteam,\
-    \ ~30 adversarial agents, the self-referential-codify.md Rule 1 gate; converged 0 CRIT/0 HIGH/0 MED\
-    \ across 2 consecutive clean rounds). SECURITY/CORRECTNESS-RELEVANT + HIGHEST cross-SDK priority \u2014\
-    \ the headline is a PRE-EXISTING gap every prior convergence (#1-#5) missed because kailash-py ships\
-    \ coordination-OFF (integrity-guard / journal-write-guard / codify-lease all passthrough): /certify's\
-    \ write surface was NEVER reconciled with the coordination-ON (enrolled) substrate it ships into.\
-    \ A sibling SDK's synced /certify almost certainly carries the identical gap. Fixes, all source-verified\
-    \ against the actual hooks (integrity-guard.js findCoveringLease/watched-subtrees, codify-lease.js\
-    \ acquire/release/MANDATORY_SCOPE, journal-reserve.js VALID_TYPES, operator-id.js resolveIdentity\
-    \ working-tree roster read): (1) certify pass + deferral journal entries now acquire/release a covering\
-    \ codify-lease on a codify/<display_id>-<date> branch (skill Steps 1.5/5), scope [\"journal/\"] (DIRECTORY\
-    \ scope load-bearing \u2014 findCoveringLease matches trailing-slash-dir prefix, a bare filename does\
-    \ not, MANDATORY_SCOPE excludes journal/); (2) deferral entry type DEFER->DECISION + topic certify-defer-<id>\
-    \ (DEFER is NOT in journal-reserve.js::VALID_TYPES -> old contract failed the reservation closed);\
-    \ (3) brief .pending/ receipts moved OUT of the journal/ subtree -> workspaces/_certify/.pending/\
-    \ (integrity-guard watches ^workspaces/<name>/journal/); (4) entry gate corrected to the code-accurate\
-    \ model \u2014 resolveIdentity reads the WORKING-TREE roster, so certify runs on the enrollment branch\
-    \ (row visible) OR after merge; registration precedes certification; certification gates /claim. Plus\
-    \ command<->skill + lifecycle fixes: certify Phase-0 (validate-cert-bank.mjs security scan + consent\
-    \ STOP) added to the skill (was command-only \u2014 a security-scan drop on the skill-followed path);\
-    \ claim.md SAME-conflict dead-end (nonexistent /lease-override + a /release-claim invocation its own\
-    \ bind-check rejects) -> sibling-self-release/reap; onboard + certify just-enrolled PR-pending branch;\
-    \ genesis double-run idempotency boundary (45 <-> ecosystem-init C3); posture.md self-contradiction;\
-    \ claim.md phantom test-path citation genericized. Distributable invariant re-verified intact after\
-    \ all edits (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure\
-    \ scanner exit 0, 1559 files). TWO items deliberately NOT fixed (out of scope, flagged for loom/rule-owner):\
-    \ enrollment-operations.md MUST-3 categorical wording vs certify Step-2 safe-inline node -e (tighten\
-    \ to \"\u2026on the command line\u2026\"); claim/release-claim/claims M1-era coordination-log writes\
-    \ cite coc-sign+transport not coc-append/coc-emit (helper-naming drift, substantively MUST-1-compliant).\
-    \ Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence6.md.\n"
-- type: rule_update
-  artifact: enrollment-operations
-  files:
-  - .claude/rules/enrollment-operations.md
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  classification_suggestion: global
-  context: "Follow-on to the onboarding-suite proposal above: closes the TWO items the 2026-07-09 re-convergence\
-    \ #6 flagged as deferred-for-loom (see this codify_session tail).\n\nF1 (FIXED \u2014 enrollment-operations.md\
-    \ MUST-3 + genesis-bootstrap skill): the categorical wording (\"no inline node -e for watched-state\
-    \ mutation\") over-claimed against the actual guard and falsely flagged /certify Step 2's SAFE inline\
-    \ reserveJournalSlotSigned(...) call. Ground-truth verification of detectStateFileMutation (violation-patterns.js)\
-    \ + STATE_PATH_RX (validate-bash-command.js:456) established the real enforced invariant: the guard\
-    \ fires ONLY on a STATE_PATH_RX literal on the command line, and it is READ/WRITE-AGNOSTIC (a path-presence\
-    \ detector, not mutation-aware \u2014 an inline READ naming a watched path is blocked too). MUST-3\
-    \ rewritten to state that precisely: script-by-path for authored mutations; a delegated signed-emit\
-    \ helper (reserveJournalSlotSigned / emitSignedRecord routing through coc-emit.js::emitSignedRecord\
-    \ per multi-operator-coordination.md MUST-1, path internal) PERMITTED inline; a raw-fs wrapper / concat-path\
-    \ / arg-supplied appendStamped all BLOCKED or script-by-path (the last matching 42-certify Step 4).\
-    \ \"Owns the write internally\" made NECESSARY-BUT-NOT-SUFFICIENT (a wrapper hiding a raw fs.writeFileSync\
-    \ is not a signed-emit helper). Same read/write-agnostic accuracy propagated to the cross-referenced\
-    \ depth-file 45-genesis-bootstrap/SKILL.md (4 write-only-framing instances corrected) + a phantom\
-    \ whoami.md cross-reference fixed.\n\nF2 (REFUTED \u2014 no edit): the proposed \"align claim/release-claim/claims\
-    \ coordination-log write citations to coc-emit/coc-append\" is refuted by the runtime \u2014 emitSignedRecord\
-    \ serves NO claim/release/reap record; the actual claim-writer adjacency-leasecheck.js::autoClaim\
-    \ + reap-ceremony.js still use coc-sign.js::sign + transport-filesystem.js; coc-append.js is the observations/violations\
-    \ helper. The commands are ACCURATE to the code; editing them would introduce a NEW command<->code\
-    \ divergence (spec-accuracy per journal/0035 \xA73). Left unchanged.\n\nConverged via 7-round multi-agent\
-    \ redteam-with-tests (reviewer + security-reviewer + cc-architect; self-referential-codify.md MUST-1\
-    \ gate \u2014 enrollment-operations.md is allowlisted). Distributable invariant re-verified GREEN\
-    \ after every edit (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure\
-    \ scanner exit 0). Accepted non-blocking: the MUST-3 SAFE-helper paragraph over-density \u2014 candidate\
-    \ for extraction to 45-genesis-bootstrap in the canonical loom pass. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence7.md."
-- type: rule_update
-  artifact: enrollment-operations
-  files:
-  - .claude/rules/enrollment-operations.md
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #8 (2026-07-09) \u2014 completes the guard-firing-surface ENUMERATION in enrollment-operations.md\
-    \ MUST-3 that re-convergence #7 (entry above) did not close. A fresh adversarial audit of the #7 state\
-    \ MERGED on main (PR #1627) surfaced that MUST-3 named THREE guard-firing surfaces (interpreter -c/-e/-m\
-    \ body, redirect, file-utility body \u2014 the detectStateFileMutation layers) but OMITTED the FOURTH\
-    \ whole-command pass, detectHeredocWriteRunBundle (violation-patterns.js, wired into detectStateFileMutationSegmentAware\
-    \ at the tail of the per-segment loop). That pass fires when ONE command BOTH authors a heredoc script\
-    \ whose body carries a STATE_PATH_RX literal AND executes that same script \u2014 the natural inline\
-    \ `cat >f <<EOF \u2026STATE_PATH\u2026 EOF && node f` idiom \u2014 so an operator building the obvious\
-    \ one-command form of MUST-3's \"author the script, run it bare\" DO example is blocked by a detector\
-    \ the rule never named. Same finding-class as #7's read/write-agnostic fix, one level deeper: the\
-    \ \"three-layer\" docstring hid a fourth pass.\n\nFIXES (source-verified against violation-patterns.js\
-    \ detectStateFileMutation layers 1-3 + detectHeredocWriteRunBundle contract + detectStateFileMutationSegmentAware\
-    \ wiring): (1) MUST-3 enumeration now names the 4th detectHeredocWriteRunBundle pass + a DO-NOT heredoc-bundle\
-    \ example (author + run as TWO separate commands); (2) 45-genesis scoped the read/write-AGNOSTIC property\
-    \ to the interpreter -c/-e/-m body layer ONLY (Layers 1-2 additionally require a write construct \u2014\
-    \ redirect operator / file-util verb); (3) restored a conditional on 45-genesis's gh-bundling claim\
-    \ (\"can re-introduce \u2026 if the bundled command itself names a watched path\"); (4) scoped MUST-3's\
-    \ Why-line invariant to \"in an interpreter / redirect / file-utility body on the command line (interpreter\
-    \ bodies fire on a read too)\" \u2014 a bare `cat <state>` read is NOT caught by any layer.\n\nCONVERGENCE:\
-    \ 4-round multi-agent redteam (9 adversarial agent-passes; reviewer + security-reviewer + independent\
-    \ verifier), including DIRECT guard execution (Round 3 ran the actual detector script-by-path and\
-    \ quoted the verdicts: heredoc bundle -> BLOCK, bare read -> PASS, bare `node <file>` -> PASS, control\
-    \ positives all fired). 2 consecutive fully-clean rounds (R3+R4); 0 CRIT / 0 HIGH every round. enrollment-operations.md\
-    \ is on the self-referential-codify.md Rule 2 allowlist -> the mandatory multi-agent redteam-with-tests\
-    \ round is satisfied by the 4-round convergence. Distributable invariant re-verified GREEN after every\
-    \ edit (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure scanner\
-    \ exit 0 / 1559 files).\n\nCLASSIFICATION: GLOBAL (same GLOBAL synced artifacts as the #7 entry above;\
-    \ the corrected guard-firing enumeration is CLI-neutral and consumer-wide \u2014 a downstream consumer\
-    \ of the synced suite inherits the incomplete enumeration otherwise). ACCEPTED NON-BLOCKING (carried,\
-    \ for the canonical loom pass): (a) 45-genesis \"three-layer detector\" framing \u2014 quotes the\
-    \ detectStateFileMutation docstring for the per-segment core then names the 4th pass separately; Round-4\
-    \ reviewer rated it explicitly NOT a finding (within tolerance, both mechanisms named in the same\
-    \ section); a \"three-layer per-segment core + a fourth whole-command pass\" tightening is available\
-    \ but was not taken (would reset the converged clean-round bracket). (b) MUST-3 over-density (carried\
-    \ from #7) \u2014 extraction to 45-genesis is the loom F5 structural pass. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence8.md."
-- type: rule_update
-  artifact: enrollment-operations
-  files:
-  - .claude/commands/whoami.md
-  - .claude/rules/enrollment-operations.md
-  - .claude/skills/42-certify/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #9 (2026-07-09) \u2014 fresh 3-agent adversarial audit of the #8 state MERGED\
-    \ on main (PR #1628). Surfaced a NEW finding-class extension: the recurring \"a guard's DESCRIPTION\
-    \ must match its DETECTION mechanism\" class extends to guard-symbol OWNERSHIP, not just name. whoami.md\
-    \ cited `detectStateFileMutation` (the internal per-segment PRIMITIVE in violation-patterns.js) where\
-    \ the actually-WIRED guard in validate-bash-command.js is `detectStateFileMutationSegmentAware` (the\
-    \ segment-aware wrapper) \u2014 a citation that RESOLVES to a real-but-wrong symbol, invisible to\
-    \ grep/dangling-ref sweeps; only cross-artifact + source verification catches it. 42-certify/SKILL.md:206\
-    \ carried the IDENTICAL imprecision (same-class gap surfaced by the self-ref gate reviewer; fixed\
-    \ in-shard per autonomous-execution MUST-4).\n\nFIXES (source-verified): (1) whoami.md:47 + 42-certify/SKILL.md:206\
-    \ \u2014 bare-primitive `detectStateFileMutation` -> wired-wrapper `detectStateFileMutationSegmentAware`\
-    \ (now 0 bare-primitive citations across the onboarding+certify suite; whoami re-synced with the 4\
-    \ siblings that already named the wrapper); (2) enrollment-operations.md MUST-1 \u2014 the genesis-guard\
-    \ fail-closed BLOCK sentence now names BOTH block branches (real-non-scaffold-roster-without-anchor\
-    \ AND roster-deleted-while-records-remain / enrolled-then-deleted), matching the two severity:block\
-    \ branches in genesis-anchor-guard.js; (3) enrollment-operations.md MUST-4 DO-example \u2014 corrected\
-    \ \"both read the gitignored log\" to \"foldLog folds the gitignored coordination-log's records, resolveIdentity\
-    \ reads the committed roster\" (resolveIdentity reads operators.roster.json, a COMMITTED file, per\
-    \ operator-id.js).\n\nCONVERGENCE: 3 rounds (R1 = 3 parallel adversarial agents; R2 cc-architect confirmation\
-    \ + fresh sweep; R3 mechanical). Onboarding-artifact surface 0 CRIT / 0 HIGH, 2 consecutive clean\
-    \ rounds. enrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist -> the mandatory\
-    \ multi-agent redteam-with-tests gate (reviewer + security-reviewer + cc-architect, parallel) ran\
-    \ on the final diff: 3/3 APPROVE. Distributable invariant re-verified GREEN (roster PLACEHOLDER, 0/6\
-    \ enforcement hooks committed, probe-phase-guard present).\n\nCLASSIFICATION: GLOBAL (the onboarding+certify\
-    \ suite is synced cross-SDK; the wired-symbol correction + block-branch accuracy are CLI-neutral and\
-    \ consumer-wide \u2014 a downstream consumer inherits the wrong-symbol citation otherwise).\n\nLOOM-TOOL\
-    \ FOLLOW-UP FLAG (NOT in this proposal's artifact set \u2014 flagged for loom's attention): re-convergence\
-    \ #9 also surfaced a HIGH disclosure-hygiene finding in kailash-py (an operator-local runbook value\
-    \ file was committed to the public repo; forward-fixed locally via .gitignore + git rm --cached, history-purge\
-    \ held as owner-gated). The ROOT CAUSE is a LOOM-DISTRIBUTED tool: `.claude/bin/scan-synced-disclosure.mjs`\
-    \ UNCONDITIONALLY skips `*.operator.local.md` (the skip that blinded the scanner), whereas the sibling\
-    \ `*.local.json` skip one line below was made destination-conditional by issue #352. loom SHOULD apply\
-    \ the same #352 parity to the `.operator.local.md` skip (ideally: do not skip a *tracked* operator-local\
-    \ file) so every downstream consumer's scanner catches a committed operator-local file. This is a\
-    \ loom codify (the tool is on self-referential-codify's allowlist). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence9.md\
-    \ + workspaces/mops-onboarding/journal/0038-RISK-committed-operator-local-ci-values-public-repo.md."
-- type: rule_update
-  artifact: onboard
-  files:
-  - .claude/commands/onboard.md
-  - .claude/skills/41-onboard/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #10 (2026-07-09) \u2014 fresh 2-agent adversarial audit of the #9 state MERGED\
-    \ on main (PR #1629) + the #9 close-out (PR #1630). Extends the #9 \"a citation must match the wired\
-    \ mechanism\" class from a guard-symbol to a canonical VOCABULARY: the /onboard read-path cited `DEFER`\
-    \ as a journal `type`, a token that is NOT in `journal-reserve.js::VALID_TYPES` ({DECISION, DISCOVERY,\
-    \ TRADE-OFF, RISK, CONNECTION, GAP, AMENDMENT}), NOT in `rules/journal.md`'s enum, and explicitly\
-    \ disclaimed by the sibling /certify artifacts (\"DEFER is NOT a canonical journal type\"). Two mirror\
-    \ sites: onboard.md filtered `DECISION-`/`DISCOVERY-`/`DEFER-` entries; 41-onboard/SKILL.md `types=[\"\
-    DECISION\",\"DISCOVERY\",\"DEFER\"]`. The `DEFER-` branch was dead code (real deferrals are DECISION-typed\
-    \ with \"defer\" in the topic slot; zero DEFER-typed files exist), so no operator-visible data loss\
-    \ -> MED. It survived 9 rounds because the token resolves (passes grep/dangling-ref sweeps) yet contradicts\
-    \ the wired vocabulary; only cross-artifact verification against the sibling /certify pair surfaced\
-    \ it.\n\nFIX (source-verified): dropped `DEFER` from both filters (same-shard command<->skill mirror\
-    \ edit per command-skill-parity.md MUST-1); added a ground-truth-cited note (`journal-reserve.js::VALID_TYPES`\
-    \ / `rules/journal.md`) that deferrals are DECISION-typed and already surfaced by the `DECISION-`\
-    \ filter. onboard.md stays 92 lines (<=150). No DEFER-typed journal file exists tree-wide (verified).\n\
-    \nCONVERGENCE: 4 rounds (R1 mechanical; R2 2 parallel adversarial agents [1 MED found]; R3 3-agent\
-    \ self-referential-codify gate [reviewer + security-reviewer + cc-architect, parallel \u2014 onboard.md\
-    \ is on the self-referential-codify.md Rule 2 allowlist]; R4 mechanical). 0 CRIT / 0 HIGH, 2 consecutive\
-    \ clean rounds (R3 + R4). The #9 guard-symbol fixes + disclosure closure all re-verified holding on\
-    \ merged main; the #9 close-out receipts verified accurate against ground truth.\n\nCLASSIFICATION:\
-    \ GLOBAL (the onboarding suite is synced cross-SDK + downstream; a downstream consumer inherits the\
-    \ DEFER phantom-type citation otherwise). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence10.md\
-    \ + workspaces/mops-onboarding/journal/0041-AMENDMENT-reconvergence10-onboard-defer-phantom-journal-type.md."
-- type: rule_update
-  artifact: claim
-  files:
-  - .claude/commands/claim.md
-  classification_suggestion: global
-  context: "Re-convergence #11 (2026-07-09) \u2014 fresh 3-agent adversarial audit of the #10 state MERGED\
-    \ on main (PRs #1630/#1631). Extends the SAME \"a citation must match the wired mechanism\" class\
-    \ the #9 (guard-symbol) and #10 (canonical journal-type vocabulary) rounds surfaced \u2014 this time\
-    \ a SAME-predicate display-token set in the `/claim` command. `commands/claim.md` Step 6 SAME-dispatch\
-    \ printed the matched predicate as `(exact / dir-contains / workspace / commit-cohort / axis-3)`.\
-    \ Ground truth `.claude/hooks/lib/adjacency.js::sameReason` returns `predicate: pred` where pred is\
-    \ one of the `_matchX` helper literals: `exact` (172), `glob` (173), `dir-contains` (183), `workspace`\
-    \ (186), `commit-cohort` (202), `phase` (217-218), `composed-axis-3` (235). Three defects vs that\
-    \ wired set: (a) `axis-3` is a PHANTOM \u2014 the code emits `composed-axis-3`, never bare `axis-3`\
-    \ (the exact #10 DEFER class: a token that resolves as text but is absent from the wired return set);\
-    \ (b) `glob` OMITTED; (c) `phase` OMITTED. Both omissions are genuine `sameReason` return literals\
-    \ a SAME halt would print, undocumented. MED \u2014 teaches false/incomplete vocabulary; resolution\
-    \ paths are predicate-agnostic so no guard dropped / no misroute (not HIGH). Single-command drift:\
-    \ `claim.md` has NO backing skill, so no command<->skill parity pair to mirror (unlike the #10 onboard\
-    \ command<->skill pair).\n\nFIX (source-verified): replaced the enumeration with the full wired set\
-    \ `(exact / glob / dir-contains / workspace / commit-cohort / phase / composed-axis-3)` + an inline\
-    \ \"the full wired `adjacency.js::sameReason` `predicate` return set\" anchor so future edits re-derive\
-    \ from the wired source, not re-enumerate. Verified each literal against adjacency.js by grep (line\
-    \ numbers above).\n\nCONVERGENCE: R1 mechanical (DEFER #10 fix holds; 0 disclosure leaks in tracked\
-    \ files; markers clean) + R2 3 parallel adversarial agents (parity/phantom-vocab [this MED]; guard-symbol\
-    \ ownership [91/92 clean + 1 by-design loom-canonical matcher divergence, NOT a defect]; dangling-refs/disclosure\
-    \ [disclosure CLEAN; 4 MED dangling refs = pre-existing loom->BUILD-subset artifacts OUTSIDE the onboarding\
-    \ suite, targets resolve in loom-canonical]) -> this MED fixed -> R3/R4 mechanical clean = 2 consecutive\
-    \ clean rounds, 0 CRIT / 0 HIGH. claim.md is NOT on the self-referential-codify.md Rule 2 allowlist,\
-    \ so no mandatory multi-agent gate (the fix is a 2-token-class citation correction verified against\
-    \ wired source).\n\nCLASSIFICATION: GLOBAL (the coordination/onboarding suite is synced cross-SDK\
-    \ + downstream; a downstream consumer inherits the `axis-3` phantom + the `glob`/`phase` omissions\
-    \ otherwise). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md."
-- type: skill_update
-  artifact: todo-github-sync
-  files:
-  - .claude/skills/10-deployment-git/todo-github-sync.md
-  classification_suggestion: global
-  proposal_only: true
-  context: "Re-convergence #11 out-of-scope dangling-ref (D3), user-approved to route. PROPOSAL-ONLY (no\
-    \ local BUILD edit \u2014 a BUILD-side edit to this synced skill would be overwritten by /sync). `skills/10-deployment-git/todo-github-sync.md`\
-    \ line 484 carries a stale self-reference: `**This Guide**: .claude/guides/todo-github-sync-guide.md`.\
-    \ That path does not exist (the guide content IS this skill file now). PROPOSED FIX: change the self-reference\
-    \ target to `.claude/skills/10-deployment-git/todo-github-sync.md` (the skill's own current location).\
-    \ Genuine loom-side stale self-ref (the file moved guides/ -> skills/ and the self-ref was not updated);\
-    \ low value, mechanical. Surfaced by the #11 repo-wide dangling-ref sweep. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md\
-    \ \xA7 R2 out-of-scope."
-- type: skill_update
-  artifact: user-flow-validation-walk-discipline
-  files:
-  - .claude/skills/30-claude-code-patterns/user-flow-validation-walk-discipline.md
-  classification_suggestion: global
-  proposal_only: true
-  context: "Re-convergence #11 out-of-scope disclosure-hygiene LOW, user-approved to route. PROPOSAL-ONLY\
-    \ (no local BUILD edit \u2014 this file is on the self-referential-codify.md Rule 2 allowlist [`30-claude-code-patterns/**`],\
-    \ so a local edit would trigger the multi-agent redteam gate for a trivial placeholder scrub; loom\
-    \ Gate-1 applies it with the proper review). A real operator display-name string appears in this PUBLIC-shipped\
-    \ skill's EXAMPLE dialogue at lines 33, 40, 82, 114 (illustrating the `/onboard` / `/whoami` output).\
-    \ It is a display-name only (NOT a secret / credential / roster person_id), but a real-operator identifier\
-    \ should not ship in a distributed example. PROPOSED FIX (scrub to the placeholder the rule's own\
-    \ MUST-6 uses): the operator display-name -> `<operator-display-id>`; `.proposals/register-<name>.yaml`\
-    \ -> `register-<operator-display-id>.yaml`; `verified:gh-<name>` -> `verified:gh-<operator>`; `disp:<name>`\
-    \ -> `disp:<operator-display-id>`. IMMUTABLE-HISTORICAL note: the same string also appears once in\
-    \ `workspaces/cross-sdk-audit/journal/0018:6` \u2014 that is an immutable journal entry (journal.md\
-    \ MUST-NOT-overwrite) in a DIFFERENT workspace; a journal scrub is a standing user-gated exception\
-    \ (the journal/0038 history-scrub class), NOT included in this mechanical proposal. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md\
-    \ \xA7 R2 out-of-scope (LOW)."
-- type: skill_update
-  artifact: 45-genesis-bootstrap
-  files:
-  - .claude/skills/45-genesis-bootstrap/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #12 (2026-07-09) \u2014 positive-allowlist hardening of two illustrative enumerations\
-    \ in the genesis-bootstrap runbook, source-verified against the wired hooks. Applied BUILD-side AND\
-    \ routed GLOBAL (the onboarding suite is loom-synced; every downstream copy carries the same gaps).\
-    \ NOT self-referential-codify (Rule 2 Skills allowlist enumerates spec-compliance/command-authoring/\
-    \ skill-authoring/hook-authoring/sweep/32-trust-posture/30-claude-code-patterns/ 12-testing-strategies/probe-driven-verification;\
-    \ enrollment-operations.md explicitly OMITS 45-genesis-bootstrap as a runbook). CHANGE 1: the codify-branch\
-    \ watched-paths list (\xA7 pre-flight gate 2) listed 8 tokens; the wired `integrity-guard.js::DIRECT`\
-    \ set is 8 files + 3 subtree predicates \u2014 completed to `documented == wired` (adds `coordination-mode.json`,\
-    \ `learning-codified.json`, `workspaces/<name>/journal/**`) + an inline 'the wired DIRECT set + subtree\
-    \ predicates at integrity-guard.js are authoritative' anchor so the next editor re-derives. CHANGE\
-    \ 2: `runEnrollmentCeremony` return was cited `{ ok, error?, reason?, step? }` but `genesis-ceremony.js`\
-    \ returns `{ok:true, record} | {ok:false, error, reason, step}` \u2014 added `record?` (success path).\
-    \ Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md + journal/0043."
-- type: skill_update
-  artifact: 43-ecosystem-init
-  files:
-  - .claude/skills/43-ecosystem-init/SKILL.md
-  classification_suggestion: global
-  context: "Re-convergence #12 (2026-07-09) \u2014 positive-allowlist hardening of the `STATE_PATH_RX`\
-    \ illustrative enumeration (\xA7 Operational runbook, Layer-3 state-file guard). The list of 5 protected\
-    \ state-file paths was presented UNHEDGED, while its direct sibling in 45-genesis-bootstrap already\
-    \ hedges the SAME wired set with '(among others)' \u2014 a genuine unhedged-vs-hedged-sibling inconsistency.\
-    \ Added '(among others; the wired STATE_PATH_RX at validate-bash-command.js is authoritative)' to\
-    \ match the sibling convention + anchor the next editor to the wired source. Applied BUILD-side AND\
-    \ routed GLOBAL (loom-synced onboarding suite). NOT self-referential-codify (see the 45-genesis-bootstrap\
-    \ entry above for the Rule 2 allowlist rationale). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md\
-    \ + journal/0043."
-- type: rule_update
-  artifact: tenant-isolation
-  files:
-  - .claude/rules/tenant-isolation.md
-  classification_suggestion: global
-  context: "ADDS Rule 7 (\"Upsert ON CONFLICT DO UPDATE Is Tenant-Guarded And Excludes tenant_id From\
-    \ SET\") + extends the Audit Protocol grep.\nLesson: on a multi_tenant model with a global single-column\
-    \ id PK, every upsert builder emitting `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` (PG/SQLite)\
-    \ or `ON DUPLICATE KEY UPDATE` (MySQL) MUST (a) exclude tenant_id from the SET clause and (b) tenant-guard\
-    \ the update \u2014 PG/SQLite via `WHERE {table}.tenant_id = EXCLUDED.tenant_id`, MySQL via per-column\
-    \ `IF(tenant_id = VALUES(tenant_id), <new>, <col>)` (incl. version/timestamp). A guard-suppressed\
-    \ cross-tenant collision routes to the actionable tenant-scoped diagnostic, never a silent success/skip.\
-    \ ALL upsert builders audited, not just the primary. DISTINCT from Rule 6 (canonical tenant source,\
-    \ #1252): a correctly-tenant-scoped write STILL overwrites another tenant's row via the un-guarded\
-    \ conflict path.\nEvidence: PR #1650 + kailash-dataflow 2.14.5 (tag dataflow-v2.14.5, publish run\
-    \ 29074366000 success) \u2014 holistic /redteam CONFIRMED on real SQLite + PostgreSQL that bulk_upsert\
-    \ / single upsert / BulkCreatePoolNode overwrote and reassigned another tenant's row; fixed across\
-    \ all 5 builders. Cross-SDK: the Rust SDK's #1712 filed (shared DataFlow architecture). Canonical\
-    \ 8-field Trust Posture Wiring present; cc-architect APPROVE. Receipts: workspaces/sdk-backlog/journal/0003\
-    \ (DECISION) + 0004 (DISCOVERY).\n"
-- type: rule_update
-  artifact: cross-sdk-inspection
-  files:
-  - .claude/rules/cross-sdk-inspection.md
-  classification_suggestion: global
-  context: "ADDS Rule 4d (New Fields On A Cross-SDK Signed Model MUST Prune-When-Unset From The Signing\
-    \ Pre-Image) \u2014 sibling of Rule 4b. A new optional field on a model that feeds a cross-SDK Ed25519/hash\
-    \ pre-image changes the signed bytes of EVERY existing instance (model_dump emits None as a null key),\
-    \ breaking pre-existing + sibling-SDK signatures; the fix is prune-when-unset so not-configured instances\
-    \ sign byte-identically (BH3 unbound/bound pattern applied to field additions). Cross-SDK/language-agnostic\
-    \ (py+rs). Origin: kailash-py #1510 BH5 / PR #1671 / kailash 2.48.0."
-- type: rule_add
-  artifact: handoff-completion
-  files:
-  - .claude/rules/handoff-completion.md
-  classification_suggestion: global
-  context: "NEW baseline rule (priority:0). A downstream-required action (cross-repo issue/PR, upstream\
-    \ handoff) is done only when EXECUTED or EXPLICITLY surfaced as pending-with-authorization \u2014\
-    \ never left implied-done in a local note; a cross-repo artifact is referenced as existing only after\
-    \ created/verified this session; needs-authorization means ASK specifically, not stop at a note. Co-owner-directed\
-    \ origination (BH5 session left a local rs handoff + a wrong rs#1714 ref unfiled). Rule-10 named-rationale:\
-    \ non-decomposable critical behavioral contract, authored tight (minimal load-bearing clauses; depth\
-    \ in DO/DO-NOT). Origin journal/0010. Gate-1 to decide (journal/0012): (a) MUST-2 home \u2014 keep\
-    \ in this baseline rule vs relocate to path-scoped verify-claims-before-write.md; (b) self-referential-codify.md\
-    \ Rule 2 allowlist membership \u2014 MUST-2 fires on codify-class output (same predicate that admitted\
-    \ verify-claims-before-write). Behaviorally UNVALIDATED \u2014 no rule eval-harness in the BUILD repo;\
-    \ loom /codify eval is the validation surface."
+  - type: rule_update
+    artifact: dependencies
+    files:
+      - .claude/rules/dependencies.md
+    classification_suggestion: global
+    context:
+      "ADDS one subsection: \"## Floors On Transitive Deps Are Legitimate When A Lock-Ignoring Install\
+      \ Backtracks Them\".\n\nLesson: dependencies.md \"No Caps on Transitive Dependencies\" + MUST-NOT\
+      \ \"Cap a dependency you do not directly import\" forbid UPPER bounds (<N) on un-imported packages.\
+      \ They do NOT forbid a minimum FLOOR (>=X) on a transitive when a lock-IGNORING install path \u2014\
+      \ CI running `uv pip install -e .` / `pip install -e .` WITHOUT `uv sync --locked` / `--frozen` \u2014\
+      \ fresh-resolves that transitive to a version with no wheel for a supported interpreter. The floor\
+      \ is a concrete install-failure fix, not speculation; it MUST carry an inline comment naming the lock-ignoring\
+      \ path + the no-wheel version it prevents, so a future reader does not mistake it for the speculative\
+      \ cap the rule forbids and revert it. Distinct from the existing section \"Phantom Transitive Deps\
+      \ \u2014 Resolve Via uv lock\" (which DROPS an un-imported transitive); here the transitive is load-bearing\
+      \ via a direct dep and must stay, floored. Two install paths must BOTH succeed (locked via uv.lock\
+      \ + lock-ignoring fresh-resolve); only the manifest floor covers the second.\n\nEvidence (ground-truth\
+      \ re-verified this session): #1430 kailash-ml `numba>=0.61` floor (packages/kailash-ml/pyproject.toml:68\
+      \ on main, whose inline comment already references \"rules/dependencies.md (NOT a cap)\" \u2014 the\
+      \ floor author had to reason AROUND the rule, which is the gap this codify closes). The align CI (.github/workflows/test-kailash-align.yml:103/109/110\
+      \ and the dev/rlhf jobs) installs via lock-ignoring `uv pip install -e`; a fresh resolve on Python\
+      \ 3.12+ backtracked `numba` (transitive via umap-learn -> pynndescent; no direct import \u2014 grep\
+      \ confirmed) to 0.53.1, whose llvmlite failed to build from source. Locked installs were green (the\
+      \ lock pinned numba); only the lock-ignoring CI path broke.\n\nClassification rationale: GLOBAL \u2014\
+      \ the floor-vs-cap-vs-phantom distinction for transitive deps under a lock-ignoring install is CLI-neutral\
+      \ and cross-SDK (the Cargo analogue: a lock-ignoring `cargo build` can backtrack a transitive crate\
+      \ to a version without a prebuilt artifact / MSRV-incompatible release; the principle holds, the manifestation\
+      \ differs). The DO/DO-NOT example is Python-specific (numba/llvmlite/wheels); Gate-1 MAY classify\
+      \ a kailash-rs variant note carrying the Cargo manifestation. Refines the global dependencies.md,\
+      \ no py-only semantics in the rule body.\n\nrule-authoring Rule 10 (proximity-band): dependencies.md\
+      \ is priority:10/scope:path-scoped (NOT baseline) -> proximity-band gate does NOT fire; no paired-extraction/named-rationale\
+      \ required. Self-referential /codify gate: dependencies.md is NOT on self-referential-codify.md Rule\
+      \ 2's allowlist -> the mandatory multi-agent redteam-with-tests round does NOT fire; a recommended\
+      \ single reviewer pass ran instead.\n\nGate-1 FOLLOW-UPs (out of scope for this BUILD codify): (a)\
+      \ the new subsection pushes dependencies.md slightly over rule-authoring.md's 200-line guidance (~213\
+      \ lines); path-scoped so no proximity-band gate, but Gate-1 MAY add a named length-rationale or extract\
+      \ to the dependencies rule-extract guide. (b) dependencies.md carries NO Trust Posture Wiring section\
+      \ (none of its sections do); this subsection follows that file-local convention and ships WITHOUT\
+      \ clause-scoped wiring \u2014 Gate-1 MAY decide on a wiring retrofit (consistent with how the 2026-06-22\
+      \ trust-plane-security / cross-sdk-inspection cycles attached wiring to grandfathered path-scoped\
+      \ rules)."
+  - type: skill_created
+    artifact: 45-genesis-bootstrap
+    files:
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      "NEW skill \u2014 the fresh-repo first-owner genesis-bootstrap runbook, reconstructing the\
+      \ loom-only guides/co-setup/11-genesis-ceremony.md (absent from BUILD/USE repos) + the five fail-closed\
+      \ guard traps surfaced during the 2026-06-23 kailash-py multi-operator enrollment. Covers pre-flight\
+      \ (signing-first), the bootstrap sequence, org-vs-user + the #358 org-admin relaxation, the script-by-path\
+      \ trap (validate-bash detectStateFileMutation), fold-clean verify, and a troubleshooting matrix. GLOBAL:\
+      \ the ceremony (node + gh-api) and substrate are CLI/language-neutral. REMINDER TO LOOM (user directive):\
+      \ /sync-to-use to ALL downstream USE templates, not only BUILD. Multi-agent redteam (self-referential-codify\
+      \ MUST-1) converged \u2014 reviewer + security-reviewer + cc-architect CLEAN on the final state; receipts\
+      \ in workspaces/mops-onboarding/journal/0001."
+  - type: rule_created
+    artifact: enrollment-operations
+    files:
+      - .claude/rules/enrollment-operations.md
+    classification_suggestion: global
+    context:
+      "NEW rule, path-scoped (priority:10; paths = operators.roster.json + enroll/whoami/ecosystem-init/onboard\
+      \ commands). 6 MUST clauses: signing-first (degraded read-only), codify-branch+lease writes, script-by-path\
+      \ state-mutations, fold-clean-before-enrolled, self-enroll-from-own-machine, org-admin-relaxation-org-only.\
+      \ Canonical 8-field Trust Posture Wiring; severity advisory-at-hook (the fail-closed guards carry\
+      \ the block teeth) + halt-and-report at gate-review for the non-hook clauses. GLOBAL. Gate-1 NOTE:\
+      \ rule is 238 lines (>200 guidance) and carries a named Length rationale (guard-trap scope; path-scoped\
+      \ so no baseline-emission cost + Rule-10 proximity-band gate does not fire) per rule-authoring MUST\
+      \ NOT exception. Allowlist DECISION: NOT added to self-referential-codify Rule 2 (it governs ceremony\
+      \ ops, not codify machinery \u2014 a consumer of the lease, not the lease contract); recorded in journal/0001."
+  - type: agent_created
+    artifact: coc-onboarding-specialist
+    files:
+      - .claude/agents/onboarding/coc-onboarding-specialist.md
+    classification_suggestion: global
+    context:
+      "NEW agent (agents/onboarding/, alongside idiom-advisor + stack-detector) \u2014 the operator-lifecycle\
+      \ expert tying /ecosystem-init -> /enroll -> genesis bootstrap -> /onboard -> /claim, /posture, /release-claim\
+      \ + a guard-trap recovery table. Tools Read/Bash/Grep/Glob/Edit; Step-0 worktree self-check; provenance-capture\
+      \ hook. References skills 41/43/44/45 + the rule for depth (no duplication). GLOBAL. Cross-SDK: the\
+      \ same suite is the Phase-2 rollout target for kailash-rs (esperie-enterprise) per the user directive;\
+      \ loom may classify rs variant notes (ADO provider, org/owner differences). Redteam converged (final\
+      \ round CLEAN across all three specialists)."
+  - type: rule_update
+    artifact: security
+    files:
+      - .claude/rules/security.md
+      - .claude/rules/pact-governance.md
+    classification_suggestion: global
+    context:
+      "APPEND 2026-06-25 (pact-0.14.3 redteam follow-on codify). ADDS one new\nsub-section to security.md\
+      \ (under / adjacent to \"Multi-Site Kwarg Plumbing\"):\n\"Enforcement-Surface Parity\" \u2014 generalizing\
+      \ the existing one-helper-N-call-sites\nrule to the INDEPENDENT-enforcement-surfaces case. PLUS a\
+      \ precise cross-ref in\npact-governance.md Rule 2 (Monotonic Tightening).\n\nLESSON (the gap): security.md\
+      \ \"Multi-Site Kwarg Plumbing\" covers a security\nkwarg plumbed through ONE helper called at N sites;\
+      \ its mechanical fix is\n`grep -rn 'helper_name(' .`. It does NOT cover the case where ONE authorization\n\
+      control is enforced at TWO INDEPENDENT surfaces that share NO callee \u2014 an\nEVALUATION-time gate\
+      \ and a REGISTRATION/monotonic-tightening validator. The\nhelper-grep structurally cannot reach the\
+      \ second surface (different function,\nno shared helper), so a new fail-closed dimension added at\
+      \ the eval gate can\nleave the tightening validator blind. pact-governance Rule 2 covers ENVELOPE\n\
+      INTERSECTION monotonicity (a DIFFERENT mechanism), not MCP re-registration \u2014\nso neither existing\
+      \ rule names this class.\n\nPROPOSED security.md sub-section text (Gate-1 may refine placement/wording):\n\
+      ---8<--- BEGIN PROPOSED TEXT\n## Enforcement-Surface Parity \u2014 A New Fail-Closed Dimension Lands\
+      \ At Every Enforcement Surface, Same PR\n\nWhen a fix PROMOTES a field to an enforced fail-closed\
+      \ authorization control at\nthe EVALUATION surface (the check at decision/eval time), EVERY INDEPENDENT\n\
+      validation surface for the same control \u2014 especially a monotonic-tightening /\nre-registration\
+      \ / admission validator \u2014 MUST learn the new dimension in the\nSAME PR, even when the surfaces\
+      \ share NO helper. Grepping the eval helper's call\nsites is INSUFFICIENT: the registration/tightening\
+      \ validator is a separate\nfunction with no shared callee, so the Multi-Site Kwarg Plumbing grep above\
+      \ (one\nhelper, N call sites) structurally CANNOT reach it. Prefer a SINGLE shared\nrestrictiveness/ordering\
+      \ function consumed by BOTH surfaces (they cannot drift);\na hand-synced second copy MUST match the\
+      \ eval gate's parse/ordering EXACTLY.\nAn unrecognized value MUST rank as TIGHTEST (fail-closed):\
+      \ an\nunrecognized->recognized transition is a WIDENING and MUST raise, never be\naccepted as \"tightening\"\
+      .\n\n```python\n# DO \u2014 one shared rank function; the registration validator consumes it, same\
+      \ PR\ndef _restrictiveness(v):              # the SINGLE ordering: None=widest, unrecognized=tightest\n\
+      \    if v is None: return -1\n    try: return LEVELS.index(parse(v))\n    except ValueError: return\
+      \ len(LEVELS)          # unrecognized -> tightest (fail-closed)\ndef _check_clearance(caller, required):\
+      \ ...                    # eval gate (parse -> fail-closed)\ndef _validate_monotonic_tightening(old,\
+      \ new):                  # registration gate \u2014 SAME PR\n    if _restrictiveness(new) < _restrictiveness(old):\n\
+      \        raise GovernanceError(...)                             # may only KEEP or RAISE the bar\n\
+      \n# DO NOT \u2014 promote the gate at eval, leave the tightening validator blind\ndef _check_clearance(caller,\
+      \ required): ...                    # new fail-closed gate\ndef _validate_monotonic_tightening(old,\
+      \ new):\n    ...   # never learned the new dimension -> a re-registration that DROPS (secret->None)\n\
+      \          # or LOWERS (secret->public) the bar is accepted as \"tightening\" -> gate silently stripped\n\
+      ```\n\n**BLOCKED rationalizations:** \"The eval gate is the enforcement point; the\nvalidator is secondary\"\
+      \ / \"grep of the eval helper's call sites found nothing\"\n/ \"the validator has a safe default\"\
+      \ / \"the new dimension is rare;\nre-registration won't hit it\" / \"the eval check already fails\
+      \ closed, so the\nbypass is theoretical\".\n\n**Why:** The two surfaces enforce ONE control through\
+      \ INDEPENDENT code with no\nshared callee, so the helper-following grep cannot reach the second surface\
+      \ \u2014 a\nnew fail-closed gate the tightening validator never learned lets a\nre-registration lower\
+      \ the bar and be accepted as \"tightening\", a privilege\nescalation the FIX ITSELF introduced.\n\n\
+      **Detection:** for any field promoted to a fail-closed authorization control at\nan eval surface,\
+      \ grep the re-registration / monotonic-tightening validator for\nthat field name \u2014 absence is\
+      \ a finding.\n\nOrigin: kailash-py #1456 -> kailash-pact 0.14.3 (PR #1459). #1456 promoted\n`McpToolPolicy.clearance_required`\
+      \ to a fail-closed gate at `_check_clearance`\n(eval, Step 3.5) but left `_validate_monotonic_tightening`\
+      \ (re-registration)\nblind to it; a `secret`->None / `secret`->`public` re-registration was accepted\n\
+      as \"tightening\", silently stripping the gate (caught by an adversarial /redteam,\nNOT by the existing\
+      \ multi-site grep). Cross-SDK sibling: the kailash-rs Rust\nbinding (same shape).\n---8<--- END PROPOSED\
+      \ TEXT\n\nPROPOSED pact-governance.md Rule 2 cross-ref (one paragraph appended to Rule 2):\n\"Beyond\
+      \ envelope intersection (above), monotonic tightening ALSO governs MCP\ntool-policy RE-REGISTRATION\
+      \ (`_validate_monotonic_tightening`): a NEW fail-closed\ndimension added to a control at its eval\
+      \ surface (e.g. `clearance_required` at\n`_check_clearance`) MUST be learned by the re-registration\
+      \ validator in the SAME\nPR, with the SAME restrictiveness model (None=widest, unrecognized=tightest).\n\
+      This is a DISTINCT mechanism from envelope intersection \u2014 see security.md\nEnforcement-Surface\
+      \ Parity. Origin: #1456 -> pact 0.14.3 (#1459).\"\n\nEVIDENCE (ground-truth verified this session\
+      \ by two independent gate reviewers):\n- packages/kailash-pact/src/pact/mcp/enforcer.py \u2014 the\
+      \ SHIPPED 0.14.3 fix adds a\n  module-level `_clearance_restrictiveness` rank (enforcer.py:74-80:\
+      \ None -> -1\n  widest; unrecognized -> len(_CLEARANCE_LEVELS_ASCENDING)=5 tightest; recognized\n\
+      \  -> 0..4) consumed by `_validate_monotonic_tightening` (:269/:349-356) + 6\n  behavioral regression\
+      \ tests in\n  tests/regression/test_issue_1456_mcp_clearance_before_cost_flag.py:360-428\n  (DROP/LOWER\
+      \ raise; RAISE/ADD/KEEP accepted; unrecognized-is-tightest).\n  Fix commit 146b754e1 (the bug + fix\
+      \ are described verbatim in the body).\n- The two enforcement surfaces share NO callee (reviewer-verified):\
+      \ `_check_clearance`\n  defined :376, called ONLY at :538 (Step 3.5); `_validate_monotonic_tightening`\n\
+      \  defined :269, called ONLY at :265 (register_tool). A grep of `_check_clearance(`\n  call sites\
+      \ returns only :538 \u2014 the validator is invisible to it. This is the\n  helper-grep blind spot\
+      \ the rule names.\n\nCLASSIFICATION rationale: GLOBAL. The principle (a fail-closed control enforced\n\
+      at eval + at a registration/tightening validator must learn a new dimension at\nBOTH surfaces, same\
+      \ PR) is CLI-neutral and cross-SDK \u2014 the kailash-rs Rust\nbinding is the same shape. The DO/DO-NOT\
+      \ example is illustrative Python (no CLI\ndelegation primitive), so the clause emits globally with\
+      \ NO cross-cli slot\npartitioning needed.\n\nRECOMMENDED PLACEMENT (Gate-1 decides \u2014 Human Classifies\
+      \ Every Change): PRIMARY\nin security.md (the principle is cross-domain, not pact-specific) with the\n\
+      compact cross-ref in pact-governance.md Rule 2. ALTERNATIVE Gate-1 may prefer:\nland the PRIMARY clause\
+      \ in pact-governance.md (path-scoped: **/pact/**,\n**/governance/** \u2014 NO baseline-emission cost,\
+      \ NO Rule-10 proximity-band gate)\nwith a COMPACT one-line generalization pointer in security.md,\
+      \ IF the\nbaseline-budget tension below makes the security.md placement costly. Recommend\nsecurity.md-primary\
+      \ on principle-generality grounds; the alternative is the\nbudget-safe fallback.\n\nrule-authoring\
+      \ Rule 10 (proximity-band) \u2014 LOOM-SIDE GATE-1 ACTION REQUIRED:\nsecurity.md is priority:0 / scope:baseline;\
+      \ adding this ~30-line MUST clause MAY\nfall within the 15% proximity-band on a near-breach lane (codex-rs\
+      \ / gemini-rs).\nThis BUILD repo cannot faithfully run loom's aggregate-emission\n`emit.mjs --all\
+      \ --dry-run` headroom check; Gate-1 MUST run it and EITHER (a) pair\nthe addition with an extraction\
+      \ recovering the bytes on the near-breach lane, OR\n(b) carry a named-rationale exception (CVE-class\
+      \ privilege-escalation fix,\nstructurally non-decomposable), OR adopt the pact-governance-primary\
+      \ placement\nalternative (path-scoped -> Rule 10 does NOT fire). NOT performed in this BUILD\nproposal\
+      \ by design.\n\nTrust Posture Wiring \u2014 LOOM-SIDE GATE-1 ACTION: security.md is grandfathered\
+      \ (NO\nexisting Trust Posture Wiring section; none of its sections carry one \u2014 confirmed\nthis\
+      \ session). The proposed clause follows that file-local convention and ships\nWITHOUT clause-scoped\
+      \ wiring. Gate-1 MUST decide per trust-posture.md MUST-8\ngrandfather-cutoff whether the /codify-touch\
+      \ now requires authoring the canonical\n8-field wiring (consistent with how the 2026-06-22 cycles\
+      \ attached wiring to\ngrandfathered path-scoped rules). If wired: detection = cc-architect mechanical\n\
+      sweep (the eval-vs-registration surface-parity grep) at /implement + gate-review,\nadvisory at hook\
+      \ layer; emergency via the cumulative path, NOT a new key.\n\nSelf-referential /codify gate: security.md\
+      \ and pact-governance.md are NOT on\nself-referential-codify.md Rule 2's allowlist (they govern SDK\
+      \ code behavior, NOT\ncodify machinery) -> the mandatory posture-independent multi-agent\nredteam-with-tests\
+      \ round does NOT fire. The recommended /codify gate review\n(reviewer + security-reviewer, parallel)\
+      \ ran on the proposed clause text;\nAPPROVE-WITH-FIXES; all applied: (HIGH) scrubbed the private esperie-enterprise/\n\
+      kailash-rs#1513 ref to a generic cross-SDK-sibling reference; (C1) reworded the\npact-governance Rule\
+      \ 2 cross-ref to state it is a DISTINCT mechanism from envelope\nintersection; (MED/LOW) prescribed\
+      \ a single shared ordering function over\nmatch-by-convention, stated unrecognized->recognized is\
+      \ a widening that must\nraise, added a mechanical detection sweep, and formatted as a rule-authoring.md\n\
+      MUST clause (numbered-style heading, fenced DO/DO-NOT, **BLOCKED**, **Why:**,\nOrigin).\"\n"
+  - type: command_update
+    artifact: sweep
+    files:
+      - .claude/commands/sweep.md
+      - .claude/commands/wrapup.md
+      - .claude/hooks/lib/validate-forest-ledger.mjs
+    classification_suggestion: global
+    context:
+      "APPEND 2026-06-25 (mops-onboarding session, post-#1460). Cross-filed as a\ntracked issue at\
+      \ esperie-enterprise/loom#669 (user-authorized cross-repo\nfiling; journal workspaces/mops-onboarding/journal/0004).\
+      \ Gate-1: DEDUPE\nagainst #669 \u2014 same fix (issue = tracker, this = the BUILD->loom proposal).\n\
+      \nLESSON (the gap, two coupled pieces): /sweep + /wrapup are BLIND to the\n\"## Outstanding ledger\
+      \ (forest)\" section of workspace .session-notes.\n`grep -n \"ledger|forest\" .claude/commands/sweep.md`\
+      \ = 0 hits. Surfaced when\n4 dormant kailash-py workspaces (underlying GH issues all CLOSED) each\
+      \ held\nOPEN forest-ledger follow-on items; /sweep reported \"0 todos/active\" and the\nsession declared\
+      \ no outstanding work while those items sat unread.\n\n(i) SWEEP side \u2014 Sweep 1 reads todos/active/\
+      \ only; Sweep 6 only stat()s\n.session-notes MTIME (>30d) and never opens the file. A workspace that\
+      \ is\nissue-closed + 0-todos + <30d + no-open-PR + delivered is invisible on all\n8 axes, its open\
+      \ work recorded only on the one axis no sweep reads.\n\n(ii) RECONCILIATION side \u2014 /wrapup reconciles\
+      \ the ROOT ledger vs the prior\nROOT notes only; per-workspace ledgers never aggregate up.\nvalidate-forest-ledger.mjs\
+      \ --git-prior enforces no-vanish WITHIN one file,\nnot ACROSS workspace->root. Both gaps held at once\
+      \ -> items stranded\n(e.g. a DataFlow reserved-name root-cause fix, a pyright static-debt item).\n\
+      \nPROPOSED FIX (both pieces; loom decides exact wiring at Gate-1):\n1. A tool-backed /sweep step (extend\
+      \ tools/ + commands/sweep.md) that, for\n   every workspaces/*/.session-notes, parses the \"## Outstanding\
+      \ ledger\n   (forest)\" section, extracts every row NOT under \"Closed this session\",\n   and rolls\
+      \ open rows into the repo-wide report deduped by ID \u2014 regardless\n   of MTIME or issue state.\n\
+      2. Extend validate-forest-ledger.mjs from within-file --git-prior to a\n   workspace->root aggregation:\
+      \ any open workspace-ledger ID absent from\n   the ROOT ledger is a finding.\n\nPer sweep-completeness.md\
+      \ Rule 3 (recurring sweep gaps -> tighten command\ntext into a tool invocation). Proposal-only: NO\
+      \ local edit to\ncommands/sweep.md or validate-forest-ledger.mjs in THIS BUILD repo\n(loom-owned +\
+      \ synced; a local edit is clobbered by /sync-to-build) \u2014 loom\nimplements + distributes. NOT\
+      \ self-referential in this repo (a proposal\ndescription; no self-referential-codify Rule-2 allowlist\
+      \ file edited here).\n"
+  - type: rule_update
+    artifact: git
+    files:
+      - .claude/rules/git.md
+    classification_suggestion: global
+    context:
+      "APPEND 2026-06-25 (session-continuation codify). ADDS one bullet to git.md\n\xA7 Discipline:\
+      \ \"CI-check and merge are separate steps under duplicate-run races\".\n\nLESSON (the gap): git.md\
+      \ \xA7 Discipline + \xA7 \"Pre-FIRST-Push CI Parity Discipline\"\ngovern push-time CI parity, but\
+      \ NO clause governs the WATCH-then-MERGE window.\nWhen a PR has been pushed and CI is running, `gh\
+      \ pr checks --watch` can resolve\nGREEN on the PRIOR head commit while a NEW duplicate `pull_request`\
+      \ run (the\n`concurrency: cancel-in-progress` / re-trigger pattern) flakes RED on the SAME\nPR. An\
+      \ agent that bundles the check and the merge into one command\n(`gh pr checks <N> && gh pr merge <N>`,\
+      \ or `--watch` immediately followed by\n`gh pr merge`) can land the merge over a stale-green or red\
+      \ duplicate run \u2014\nbypassing the gate it believed it had cleared.\n\nPROPOSED git.md \xA7 Discipline\
+      \ bullet (Gate-1 may refine wording/placement):\n---8<--- BEGIN PROPOSED TEXT\n- **CI-check and merge\
+      \ are SEPARATE steps under duplicate-run races**:\n  `gh pr checks --watch` can resolve green on the\
+      \ PRIOR head commit while a NEW\n  duplicate `pull_request` run flakes red on the SAME PR (the\n \
+      \ `concurrency: cancel-in-progress` re-trigger pattern). Checking CI and merging\n  MUST be separate\
+      \ commands: (1) READ \u2014 pin the exact head SHA\n  (`gh pr view <N> --json headRefOid`) and confirm\
+      \ every REQUIRED check is\n  `conclusion=SUCCESS` on THAT SHA; (2) MERGE \u2014 only then `gh pr merge\
+      \ <N>`.\n  Bundling them in one command (`gh pr checks <N> && gh pr merge <N>`, or\n  `--watch` immediately\
+      \ followed by the merge) is BLOCKED \u2014 the watch can return\n  green on a stale commit and the\
+      \ merge then lands over an unverified or red\n  duplicate run.\n\n  ```bash\n  # DO \u2014 check as\
+      \ a READ step on the exact head, THEN merge\n  head=$(gh pr view <N> --json headRefOid -q .headRefOid)\n\
+      \  gh pr checks <N>                       # confirm required checks SUCCESS on $head\n  gh pr merge\
+      \ <N> --admin --merge        # separate command, after the read\n\n  # DO NOT \u2014 bundle watch\
+      \ + merge (watch may be green on the prior commit)\n  gh pr checks <N> --watch && gh pr merge <N>\
+      \ --admin --merge\n  ```\n\n**Why:** With duplicate `pull_request` runs, a `--watch` that returns\
+      \ green may\nhave resolved against the prior commit's run while a newer duplicate run on the\ncurrent\
+      \ head is still pending or flaked red; bundling the merge to that exit\ncode lands over an ungated\
+      \ state. Separating the read (pinned to the head SHA)\nfrom the merge makes the gate verifiable.\n\
+      ---8<--- END PROPOSED TEXT\n\nEVIDENCE (this repo, prior session): kailash-py PR #1465 (engine pyright\
+      \ + CI\nregression wiring) was admin-merged while a flaky-red duplicate `pull_request`\nrun showed\
+      \ on `gh pr checks`; main was independently healthy (3574 unit pass +\nthe push-event run on the same\
+      \ commit passed), so no harm landed \u2014 but the gate\nwas bypassed, not verified. Recorded as Trap-1\
+      \ in the prior session's\n`.session-notes`. The CI-watch-races-the-duplicate-run pattern is the recurrence\n\
+      this clause prevents.\n\nCLASSIFICATION rationale: GLOBAL. The duplicate-`pull_request`-run race +\
+      \ the\ncheck-then-merge-separately discipline are CLI-neutral (gh CLI, language-neutral)\nand apply\
+      \ to every repo using GitHub PR CI with concurrency re-triggers. The\nDO/DO-NOT example is illustrative\
+      \ `gh` shell (no per-CLI delegation primitive),\nso the bullet emits globally with NO cross-cli slot\
+      \ partitioning needed.\n\nrule-authoring Rule 10 (proximity-band) \u2014 LOOM-SIDE GATE-1 ACTION REQUIRED:\n\
+      git.md is priority:0 / scope:baseline; adding this ~25-line bullet MAY fall\nwithin the 15% proximity-band\
+      \ on a near-breach lane. This BUILD repo cannot\nfaithfully run loom's aggregate-emission `emit.mjs\
+      \ --all --dry-run` headroom\ncheck; Gate-1 MUST run it and EITHER (a) pair the addition with an extraction\n\
+      recovering the bytes on the near-breach lane (e.g. to the git.md rule-extract\nguide, which already\
+      \ holds the extended bash examples), OR (b) carry a\nnamed-rationale exception. NOT performed in this\
+      \ BUILD proposal by design.\n\nTrust Posture Wiring \u2014 LOOM-SIDE GATE-1 ACTION: git.md is grandfathered\
+      \ (NO\nexisting Trust Posture Wiring section). The proposed bullet follows that\nfile-local convention\
+      \ and ships WITHOUT clause-scoped wiring. Gate-1 MUST decide\nper trust-posture.md MUST-8 grandfather-cutoff\
+      \ whether the /codify-touch now\nrequires authoring the canonical 8-field wiring. If wired: detection\
+      \ =\ngate-level reviewer confirming check-then-merge separation in session\ntranscripts that admin-merge\
+      \ a PR; advisory at hook layer; emergency via the\ncumulative path, NOT a new key.\n\nSelf-referential\
+      \ /codify gate: git.md is NOT on self-referential-codify.md Rule\n2's allowlist (it governs git/CI\
+      \ workflow, NOT codify machinery) -> the mandatory\nmulti-agent redteam-with-tests round does NOT\
+      \ fire. A recommended single reviewer\npass ran on the proposed text. Cross-SDK sibling: kailash-rs\
+      \ uses the same gh-CLI\nPR flow; the clause applies identically (the existing git.md \xA7 \"Pre-FIRST-Push\n\
+      CI Parity Discipline\" already carries the rs cargo-command set).\n"
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+      - .claude/guides/rule-extracts/git.md
+      - .claude/guides/deterministic-quality/08-cross-sdk-parity.md
+    classification_suggestion: global
+    context:
+      "APPEND 2026-07-02 (session-continuation codify). TWO changes, BOTH global.\n\n(1) REPO-PATH\
+      \ CORRECTION (landed BUILD-side, PR #1487): cross-sdk-inspection.md\npointed cross-SDK issue filing\
+      \ at `terrene-foundation/kailash-rs`, which DOES NOT\nEXIST (`gh repo view` \u2192 \"Could not resolve\
+      \ to a Repository\"). Corrected to the real\nprivate `esperie-enterprise/kailash-rs` (Rule 1 filing\
+      \ target + the Example body).\nSibling artifacts fixed same PR: the git.md protection-table row +\
+      \ the\n08-cross-sdk-parity workflow checkout.\nLOOM GATE-1 ACTION: this defect exists UPSTREAM at\
+      \ loom + every consumer repo (these\nare synced artifacts); distribute the correction fleet-wide,\
+      \ else a /sync-to-build\nre-overwrites the local fix with the still-wrong path.\n\n(2) NEW MUST Rule\
+      \ 6 \u2014 \"Cross-SDK References In Public-Published Artifacts Are\nBLOCKED\": public/published artifacts\
+      \ (CHANGELOG, README, docs, package metadata)\nMUST NOT name the private Rust SDK repo/org/versions/issues/crate-paths/architecture\n\
+      (disclosure + Foundation Independence, Directive 0). Ships WITH a canonical 8-field\nTrust Posture\
+      \ Wiring block (trigger key `public_artifact_private_repo_disclosure`).\n\nSAME-SESSION SAME-CLASS\
+      \ FIXES (autonomous-execution Rule 4), landed BUILD-side:\nCHANGELOG.md \u2014 27 rs references removed/genericized\
+      \ (PR #1488); README.md (the PyPI\nlong_description) \u2014 3 bare kailash-rs refs genericized (the\
+      \ codify PR).\n\nREDTEAM: reviewer + security-reviewer + cc-architect (parallel) \u2192 MERGE-WITH-FIXES;\n\
+      all fixes applied (README scrub + removed a leaked private seed-org token `rrps-mtu`\nfrom the clause's\
+      \ own detection grep). NOT a self-referential-codify Rule-1 round \u2014\ncross-sdk-inspection.md\
+      \ is NOT on that allowlist; clause deliberately NOT added to it\n(public-artifact hygiene is code-behavior\
+      \ governance, like security.md).\n\nCLASSIFICATION: GLOBAL. Disclosure + Foundation-Independence discipline\
+      \ is CLI-neutral\nand applies to every public-published repo; the repo-path correction is a factual\
+      \ fix\nevery consumer needs. The DO/DO-NOT examples are illustrative markdown (no per-CLI\ndelegation\
+      \ primitive), so the clause emits globally with no cross-cli slot partitioning.\n"
+  - type: rule_update
+    artifact: cross-sdk-genericization
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+      - .claude/rules/cross-repo.md
+      - .claude/rules/repo-scope-discipline.md
+      - .claude/guides/rule-extracts/independence-rs.md
+      - .claude/skills/30-claude-code-patterns/sdk-upstream-donation.md
+    classification_suggestion: global
+    context:
+      "APPEND 2026-07-02 (same session). Genericize EVERY reference to the private\nRust SDK repo\
+      \ across the synced COC corpus (45 files under .claude/{rules,skills,\nguides}). This CORRECTS a hazard\
+      \ the prior entry (cross-sdk-inspection repo-path\nfix) introduced: replacing the nonexistent `terrene-foundation/kailash-rs`\
+      \ with the\nreal private `esperie-enterprise/kailash-rs` put the private ORG name into synced\nartifacts\
+      \ that reach public USE templates \u2014 AND this BUILD repo is itself public,\nso the org name was\
+      \ live-public.\n\nGATE-1 MUST DO THIS AT SOURCE, TEMPLATIZED \u2014 do NOT hardcode `esperie-enterprise/\n\
+      kailash-rs`. Two existing patterns compose:\n- `cross-repo.md` MUST-1: reference repos by loom-links\
+      \ RESOLVER logical key\n  (`build.rs`), never a hardcoded org/repo. Real org/repo lives in the gitignored\n\
+      \  `loom-links.local.json` (operator-local, never synced \u2014 same #255/#260 fence as\n  `ci-runners.operator.local.md`).\n\
+      - Org-revealing `esperie-enterprise/kailash-rs` \u2192 `build.rs` (+ resolve-via-local\n  note); command\
+      \ EXAMPLES use `<rust-sdk-repo>` placeholder. Bare `kailash-rs` in\n  prose/Origin \u2192 \"the Rust\
+      \ SDK\" (keep issue/PR numbers + technical content). KEEP\n  `terrene-foundation/kailash-py` + `terrene-foundation/mint`\
+      \ verbatim.\n\nBUILD-SIDE (this codify): the 45 files genericized locally (verified 0 `esperie`,\n\
+      0 `kailash-rs`) \u2014 reduces the LIVE public exposure in this public repo now. Several\ntouched\
+      \ files are on the self-referential-codify allowlist (cc-artifacts,\nautonomous-execution, recommendation-quality,\
+      \ repo-scope-discipline,\nvalue-prioritization, hook-output-discipline, coc-sync-landing, 30-claude-code-patterns/**),\n\
+      so the mandatory multi-agent redteam (reviewer + security-reviewer + cc-architect)\nran before merge.\n\
+      \nREMAINING loom-side follow-up (flagged, not closed here): a resolver logical key for\nthe Rust BUILD\
+      \ repo (`build.rs`) must exist in the loom-links schema + operator-local\nexample so the templatized\
+      \ references resolve. If `build.rs` is not yet a declared\nkey, add it in the same Gate-1 landing.\n\
+      \nCLASSIFICATION: GLOBAL. Foundation Independence (Directive 0) + the #255/#260\nno-private-identifiers-in-synced-artifacts\
+      \ fence apply to every consumer + every\npublic USE template. CLI-neutral prose; no slot partitioning.\n"
+  - type: rule_update
+    artifact: onboarding-suite-accuracy-corrections
+    files:
+      - .claude/commands/onboard.md
+      - .claude/commands/whoami.md
+      - .claude/rules/enrollment-operations.md
+      - .claude/rules/multi-operator-coordination.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+      - .claude/operators.roster.README.md
+      - .claude/commands/enroll.md
+      - .claude/skills/41-onboard/SKILL.md
+      - .claude/skills/44-enroll/SKILL.md
+      - .claude/skills/30-claude-code-patterns/genesis-migration-n1-org-admin-anchor.md
+      - .claude/skills/30-claude-code-patterns/multi-operator-coordination-substrate.md
+    classification_suggestion: global
+    context:
+      "APPENDED 2026-07-08 (onboarding-suite accuracy re-validation). The Phase-1\nonboarding suite\
+      \ (skill 45-genesis-bootstrap, rule enrollment-operations, agent\ncoc-onboarding-specialist) was redteam-converged\
+      \ 2026-06-24 and distributed back\nvia the 2026-07-04 loom Gate-2 sync. A 4-round multi-agent redteam\
+      \ (reviewer +\nsecurity-reviewer + cc-architect, each verifying against ground-truth hook source)\n\
+      of the SYNCED-BACK state surfaced behavioral-accuracy drift and fixed it\n(0 CRIT / 0 HIGH; 2 consecutive\
+      \ clean rounds). Corrections, all verified against\nintegrity-guard.js / validate-bash-command.js::detectStateFileMutation\
+      \ /\ngenesis-ceremony.js / operator-id.js / settings.json:\n\n- onboard.md: roster failure-check path\
+      \ corrected (was learning/operators.roster.json;\n  real path .claude/operators.roster.json per operator-id.js\
+      \ ROSTER_REL).\n- enrollment-operations.md AND multi-operator-coordination.md: removed a FALSE\n \
+      \ \"settings.json permissions.deny enforces this\" claim for operators.roster.json +\n  coordination-log.jsonl\
+      \ (only posture.json + violations.jsonl are in deny). Correct\n  enforcement: validate-bash-command.js\
+      \ STATE_PATH_RX (Bash) + integrity-guard.js\n  codify-branch/lease gate (Edit/Write, coordination-ON).\
+      \ Same-bug-class pair fixed\n  together per autonomous-execution.md MUST-4.\n- whoami.md: corrected\
+      \ the \"licensed canonical writer\" framing (the lexical guard has\n  no writer allowlist; it scans\
+      \ the command STRING; node <file> passes because the\n  watched path is off the scanned line).\n-\
+      \ NEW data file operators.roster.README.md: created to close a 4-file dangling\n  reference (whoami.md\
+      \ + operators.roster.schema.json + roster-schema-validate.js +\n  fold-genesis-anchor.js). Documents\
+      \ the PLACEHOLDER- convention + isUnenrolled predicate.\n- LOW: garbled backtick span in enrollment-operations.md\
+      \ Detection field; main ->\n  origin/main codify-branch base consistency; resolveIdentity return-shape\
+      \ (posture /\n  blocked_into are L2-branch only); keyType citation drift in skill 43; phantom\n  /doctor\
+      \ alias in onboard.md; stale self-cited line count (264 -> 266).\n\nCLASSIFICATION: GLOBAL. These\
+      \ correct the SAME GLOBAL artifacts loom already\ndistributes; the corrected guard mechanics are CLI-neutral\
+      \ and consumer-wide. The\nenrollment-operations.md + multi-operator-coordination.md edits are on the\n\
+      self-referential-codify.md Rule 2 allowlist, so the mandatory multi-agent\nredteam-with-tests round\
+      \ ran before merge (satisfied by the 4-round convergence).\nReceipt: journal/0027.\n\nLIFECYCLE NOTE\
+      \ for Gate-1: this latest.yaml was pending_review (dated 2026-06-23)\nwhile the suite was already\
+      \ synced back 2026-07-04 \u2014 a possible un-archived\nalready-distributed proposal. Gate-1 should\
+      \ reconcile: if the 2026-06-24 suite\nentries were already distributed, process ONLY this accuracy-correction\
+      \ entry and\narchive the prior entries per artifact-flow.md Archive-Before-Fresh.\n\nKNOWN-DISPOSITIONED\
+      \ (not a defect): whoami.md is 152 lines (>150 cc-artifacts.md\nRule 3 cap) \u2014 pre-existing, procedural-exception-eligible\
+      \ (4-ceremony runbook);\nnamed rationale recorded in this codify receipt.\n\nSECOND APPEND 2026-07-08\
+      \ (merged-main re-validation, journal/0028). The FIRST append\nabove validated the PRE-MERGE working-tree\
+      \ edits; those then merged (PR #1619). This\nsession re-ran a 10-round multi-agent redteam (reviewer\
+      \ + security-reviewer +\ncc-architect) against the MERGED main state \u2014 per the /redteam doctrine\
+      \ \"re-derive\nevery check from scratch; a prior round's self-report is an input to verify, not\n\
+      evidence\" + user-flow-validation.md MUST-1 (validate the actually-shipped artifact,\nnot the pre-merge\
+      \ draft). Converged 0 CRIT / 0 HIGH (held every round R1-R10) + 2\nconsecutive fully-clean rounds\
+      \ (R9+R10, all three specialists). It surfaced additional\npre-existing accuracy drift the pre-merge\
+      \ pass did not catch, all verified against\nground-truth source (settings.json / fold-rule-9c.js /\
+      \ operators.roster.schema.json /\noperator-id.js / workspace-utils.js / validate-bash-command.js)\
+      \ and fixed:\n\n- permissions.deny FALSE-claim RESIDUAL (same class as the first append's rule-file\n\
+      \  fix, but MISSED in the depth files): skills/43-ecosystem-init:122 credited\n  settings.json permissions.deny\
+      \ as covering operators.roster.json/coordination-log.jsonl\n  (\"matching the same paths\"); corrected\
+      \ to the accurate coverage (posture.json +\n  violations.jsonl + .initialized + .posture-upgrade-nonce\
+      \ ONLY; roster/coord-log rest\n  on STATE_PATH_RX + integrity-guard). Same-class sweep (zero-tolerance.md\
+      \ 1a) found +\n  fixed the identical residual in skills/30-claude-code-patterns/\n  genesis-migration-n1-org-admin-anchor.md:137\
+      \ + multi-operator-coordination-substrate.md:326.\n- skills/41-onboard read-only-contract table: roster\
+      \ return-shape was {operators:[...]}\n  (roster is a `persons` MAP per operators.roster.schema.json\
+      \ + operator-id.js) \u2192\n  {genesis, persons:{<pid>:{...}}}; resolveIdentity under-specified \u2192\
+      \ full documented\n  shape; team-memory {slug,body,frontmatter,integrity_ok} \u2192 runbook-accurate\n\
+      \  {slug,body,signed,promoted_by}; detectActiveWorkspace {workspace,recent_journal[]} \u2192\n  actual\
+      \ helper return {name,path}; skill `name:` onboard \u2192 41-onboard (sibling\n  convention). --json\
+      \ key-count drift 7\u21928 (\"eight section keys\"; onboard.md gains\n  action_items to match the\
+      \ skill block + the markdown Action-Items section).\n- skills/44-enroll:37 + commands/enroll.md:47:\
+      \ \"four business roles\" \u2192 \"three\" (the\n  business_roles enum has exactly 3; product-owner\
+      \ explicitly excluded per schema).\n- stale fold-rule-9c.js LINE citations (shifted by the F122 ADO\
+      \ insertion) re-anchored\n  to grep-stable SYMBOLS (foldGenesisMigration, CO_SIGN_ANCHOR_KIND_ORG_ADMIN)\
+      \ per\n  symbol-anchored-citations.md, at genesis-migration-n1:11 + substrate:303/361. The\n  substrate:378\
+      \ F86 CLOSED-forest historical closure-receipt line-range is LEFT AS-IS\n  (frozen point-in-time audit\
+      \ record, commit-SHA-anchored, spec-accuracy.md Rule 6 exempt).\n- skills/45-genesis-bootstrap:14\
+      \ + enrollment-operations.md:249: \"loom-only and absent\n  from BUILD/USE repos\" was FALSE (the\
+      \ guide IS present in BUILD repos at\n  .claude/guides/co-setup/11-genesis-ceremony.md; it is use_excluded\
+      \ from USE consumers\n  per sync-flow.md); corrected to accurate `use_excluded` framing, consistent\
+      \ with the\n  suite's own other files (skill 43:95, whoami.md:152 \"consumers do not get\").\n\nREFUTED\
+      \ / DISPOSITIONED (NOT fixes, recorded for Gate-1 transparency): a security grep\nflagged `esperie-enterprise/loom`\
+      \ in validate-bash-command.js:888 \u2014 REFUTED by the\nauthoritative scan-synced-disclosure.mjs\
+      \ (0 findings across 1558 files; esperie-enterprise\nis loom's ALLOWLISTED own-org). skills/42-certify\
+      \ name:certify \u2014 out-of-suite-scope +\ngenuinely-mixed repo naming convention (16+ skills use\
+      \ the stripped form); cc-architect\nbelow-LOW non-finding, NOT changed.\n\nCLASSIFICATION: GLOBAL\
+      \ (same rationale as the first append \u2014 same GLOBAL synced\nartifacts, CLI-neutral guard mechanics).\
+      \ Self-referential surfaces touched\n(enrollment-operations.md + multi-operator-coordination-substrate.md\
+      \ +\ngenesis-migration-n1-org-admin-anchor.md + the skills) \u2192 the mandatory\nself-referential-codify.md\
+      \ multi-agent redteam-with-tests round is satisfied by this\nsession's 10-round convergence. Receipt:\
+      \ workspaces/mops-onboarding/journal/0028.\n\nTHIRD APPEND 2026-07-08 (later same day \u2014 independent\
+      \ re-convergence, journal/0029).\nA fresh 3-lens redteam (reviewer + security-reviewer + cc-architect,\
+      \ each re-deriving\nagainst ground-truth hook source) of the current merged-main state (post PR #1620,\n\
+      HEAD 8e85319b7) independently re-confirmed the SECOND-APPEND convergence AND surfaced\n2 residual\
+      \ LOW self-contradictions the 10-round pass missed, both inside\nenrollment-operations.md's own \"\
+      Length rationale\" meta-paragraph (verify-claims-before-write\nclass), now fixed: (1) the self-cited\
+      \ body line-count \"266 lines (per wc -l)\" was stale \u2014\nactual wc -l = 268 (the SECOND APPEND\
+      \ corrected 264->266; this corrects 266->268 after that\nappend's own edits shifted the count); (2)\
+      \ \"SIX distinct fail-closed boundary guards as MUST\nclauses\" over-claimed all six MUSTs as guards,\
+      \ contradicting the same file's \xA7 \"Violation\nscope\" (MUST 1/2/3 guard-enforced; MUST 4/5/6 gate-review)\
+      \ + the Severity field; corrected\nto \"SIX MUST clauses \u2014 three fail-closed boundary guards\
+      \ (MUST 1/2/3) + three gate-review\nclauses (MUST 4/5/6)\". Convergence: R1 (findings) -> fix -> R2\
+      \ (cc-architect CLEAN) + R3\n(reviewer CLEAN) = 2 consecutive fully-clean rounds; 0 CRIT / 0 HIGH\
+      \ every round. Evidence\ngaps closed this session by direct re-derivation (NOT trusting prior self-reports):\n\
+      scan-synced-disclosure.mjs RAN clean (0 findings / 1558 files); host_role:ci\nforever-ineligible +\
+      \ 2-of-N owner co-sign re-derived from fold-rule-9c.js; business_roles\nenum = exactly 3 re-derived\
+      \ from operators.roster.schema.json.\nCLASSIFICATION: GLOBAL (same GLOBAL artifact as both prior appends;\
+      \ the fix is to the\nrule's own meta-rationale, CLI-neutral). enrollment-operations.md is on the\n\
+      self-referential-codify.md Rule 2 allowlist \u2192 the mandatory multi-agent redteam-with-tests\n\
+      round is satisfied by this session's R1-R3 convergence. Receipt:\nworkspaces/mops-onboarding/journal/0029.\n\
+      \nFOURTH APPEND 2026-07-08 (independent re-convergence, journal/0030). A fresh\nmulti-agent redteam\
+      \ (R1: reviewer + cc-architect + security-reviewer, each\nre-deriving EVERY factual claim against\
+      \ ground-truth hook/schema/fold-rule source,\nNOT trusting the prior 10-round + THIRD-APPEND convergence\
+      \ self-reports) surfaced a\nHIGH the prior rounds MISSED plus a MED and a LOW cluster \u2014 all verified\
+      \ against\nground-truth source (journal-reserve.js / coordination-log.js / fold-rule-9b.js /\nviolation-patterns.js\
+      \ / validate-bash-command.js / operators.roster.schema.json /\nsync-flow.md) and fixed:\n\n- HIGH:\
+      \ skills/42-certify Step 2 called the PURE reserveJournalSlot(\"journal\", {...})\n  (filesystem-only;\
+      \ emits NO signed journal-slot-reservation record) while the prose\n  claimed fold-anchored semantics.\
+      \ journal-write-guard.js READS reservations from the\n  fold and refuses a Write to an unreserved\
+      \ slot \u2014 so an operator following /certify\n  would halt \"slot unreserved\" at Step 3. Corrected\
+      \ to\n  reserveJournalSlotSigned(process.cwd(), {dir:\"journal\", identity, type, topic}) +\n  the\
+      \ real {ok, reservation:{slot,filename,...}, record} return shape + Step-3 reads\n  r.reservation.filename.\
+      \ Matches the sibling suite usage (skill-45:176,\n  coc-onboarding-specialist:83 already cite the\
+      \ Signed variant).\n- MED: multi-operator-coordination-substrate.md \xA76 (both \"field presence by\
+      \ fold\n  rules 5 + 9b\" sentences) cited coordination-log.js:1125-1128 for the\n  archive_genN_tip_hash\
+      \ presence check \u2014 but those lines are the rule-1 signature-verify\n  code; the real check is\
+      \ the rule-5 guard (\"rule 5: checkpoint missing required field\n  archive_genN_tip_hash\", coordination-log.js:1333).\
+      \ Bare+stale line cites replaced\n  with grep-stable symbol anchors (rule-5 guard string; fold-rule-9b.js::foldGenerationRotation\n\
+      \  R9-A-01) per symbol-anchored-citations.md. F51/F53/F86-CLOSED historical forest\n  receipts carrying\
+      \ bare :295-343 line cites LEFT AS-IS (commit-SHA-anchored, exempt).\n- LOW cluster: `validate-bash-command.js::detectStateFileMutation`\
+      \ (7 sites across\n  enrollment-operations.md, coc-onboarding-specialist, skill-45, skill-43)\n  misattributed\
+      \ the symbol's home \u2014 validate-bash-command.js INVOKES\n  detectStateFileMutationSegmentAware\
+      \ (the segment-aware wrapper defined in\n  violation-patterns.js). Corrected to the actual invoked\
+      \ symbol.\n- LOW: enrollment-operations.md length rationale self-cited \"268 lines\" but the R1\n\
+      \  SegmentAware rewording added a line (wc -l 268->269); switched to the drift-robust\n  approximate\
+      \ \"~270 lines\" matching the sibling length-rationale convention.\n- LOW (same-class, R2): the THIRD-APPEND-era\
+      \ \"loom-internal <guide>\" mischaracterization\n  (the use_excluded guides/co-setup/11-genesis-ceremony.md\
+      \ is present in BUILD repos,\n  only use_excluded from USE consumers) still lived in commands/whoami.md\
+      \ (x2) +\n  commands/ecosystem-init.md (x1) after the FIRST/SECOND appends fixed skill-45 +\n  skill-43.\
+      \ Aligned all three to the accurate framing (zero-tolerance.md Rule 1a\n  scanner-surface symmetry).\
+      \ The `(loom-internal reference)` redaction markers are a\n  DIFFERENT class (genericized loom-only\
+      \ spec citations) and were correctly untouched.\n\nCONVERGENCE: R1 (reviewer/cc-architect/security-reviewer,\
+      \ 3 independent agents,\ngenuinely run) -> fixes -> R2 (same-class + self-introduced-count) -> fixes\
+      \ -> R3\n(mechanical battery: 23 ::symbol citations resolve, all cited files exist, frontmatter\n\
+      parses, 0 residual drift, disclosure scanner exit 0) CLEAN -> R4 (cross-file consistency\n+ semantic\
+      \ validation of the HIGH fix against journal-write-guard's actual fold-read\nbehavior) CLEAN = 2 consecutive\
+      \ clean rounds; 0 CRIT / 0 HIGH. R2-R4 were run\norchestrator-direct because the R2 subagent wave\
+      \ died on an account usage limit \u2014 an\nerrored agent is ZERO evidence, never a clean round (/redteam\
+      \ evidence gate +\nevidence-first-claims.md MUST-3), so the verification was re-run correctly by the\n\
+      orchestrator. Disclosure scanner re-run clean this session (exit 0); state files\ngitignored.\n\n\
+      CLASSIFICATION: GLOBAL (same GLOBAL synced artifacts as all three prior appends; the\ncorrected guard/reservation\
+      \ mechanics are CLI-neutral and consumer-wide \u2014 the HIGH\ncert-helper fix in particular is an\
+      \ operator-breaking bug every downstream consumer of\nthe synced suite would otherwise inherit). enrollment-operations.md\
+      \ +\nmulti-operator-coordination-substrate.md + genesis-migration-n1-org-admin-anchor.md +\ncommands/ecosystem-init.md\
+      \ are on the self-referential-codify.md Rule 2 allowlist ->\nthe mandatory multi-agent redteam-with-tests\
+      \ round is satisfied by R1's 3 genuinely-run\nindependent specialists. Receipt: workspaces/mops-onboarding/journal/0030.\n\
+      \nFIFTH APPEND 2026-07-08 (exhaustive full-cohort executable-surface pass, journal/0031).\nA user-approved\
+      \ exhaustive pass walked every EXECUTABLE surface (code blocks, function-call\nsignatures, cited hooks/bins,\
+      \ hook REGISTRATIONS) across all 14 cohort files \u2014 since the\nFOURTH-APPEND HIGH lived in a code\
+      \ block, not a prose citation. Findings + a co-owner\narchitecture decision:\n\n- HOOK-WIRING (settings-governed,\
+      \ NOT synced \u2014 recorded for context): probe-phase-guard.js\n  (the PR #355 R1 security HIGH-1\
+      \ closure \u2014 the /certify probe no-assist gate) exists +\n  ships audit fixtures, and certify.md:64\
+      \ + skills/42-certify:58 both claim it is\n  \"registered in .claude/settings.json for matcher Read|Grep|Glob|WebFetch\"\
+      \ \u2014 but it was\n  registered in NO settings surface, so it never fired (the /certify SOLO gate\
+      \ was\n  prose-only, re-opening the security HIGH). Wired it under that exact matcher; verified\n\
+      \  live (no lockfile -> {continue:true}; lockfile+Read -> [BLOCK]). Clone-safe (lockfile-gated).\n\
+      \  settings.json is /settings-governed, outside the self-referential-codify allowlist, so\n  this\
+      \ is a repo-config fix, not a synced-artifact change.\n- ENROLLMENT-OPERATIONS.MD CAVEAT (GLOBAL synced\
+      \ rule \u2014 flows to consumers): added a\n  \"Distributable-Repo Caveat\" section. Root cause verified\
+      \ this pass: a PUBLIC/fork-template\n  repo whose committed operators.roster.json carries a LIVE genesis\
+      \ makes EVERY clone\n  resolve coordination ON (isCoordinationEnabled reads the committed roster's\
+      \ anchored\n  genesis; .claude/learning/ is gitignored). Paired with committed coordination-ENFORCEMENT\n\
+      \  hooks, signing-mutation-guard would degraded-read-only-brick a fresh forker. The caveat\n  codifies:\
+      \ distributable repos ship UN-ENROLLED (PLACEHOLDER genesis); the 6 enforcement\n  hooks MUST NOT\
+      \ be in committed settings.json (operator-local -> gitignored\n  settings.local.json); lockfile-gated\
+      \ hooks (probe-phase-guard) ARE clone-safe in committed\n  settings.json. This is the institutional\
+      \ lesson every downstream distributable consumer\n  needs.\n- REPO-STATE (kailash-py-specific, NOT\
+      \ synced): shipped kailash-py un-enrolled \u2014 committed\n  roster reset to the canonical clean-instantiate\
+      \ PLACEHOLDER shape so clones resolve\n  coordination OFF. Repo-specific state, not a synced artifact;\
+      \ noted for Gate-1 context only.\n\nCLASSIFICATION: GLOBAL for the enrollment-operations.md caveat\
+      \ ONLY (the synced rule; the\ndistributable-repo discipline applies to every consumer that is itself\
+      \ downloadable/forkable).\nThe probe-phase-guard settings.json wiring + the placeholder roster are\
+      \ repo/settings-governed\nstate, NOT synced artifacts \u2014 recorded here for Gate-1 transparency,\
+      \ not for distribution.\nenrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist;\
+      \ the multi-agent\ngate is satisfied by R1's 3 genuinely-run independent specialists + this pass's\
+      \ mechanical\nexecutable-surface verification (per-hook fixture dry-runs + isCoordinationEnabled +\n\
+      roster-schema-validate + disclosure-scanner, all orchestrator-run with real output; the R2\nsubagent\
+      \ wave remained account-limit-throttled, so verification stayed orchestrator-direct per\nthe evidence\
+      \ gate). Receipt: workspaces/mops-onboarding/journal/0031.\n"
+  - type: rule_add
+    artifact: command-skill-parity
+    files:
+      - .claude/rules/command-skill-parity.md
+    classification_suggestion: global
+    context:
+      "NEW path-scoped rule (paths: .claude/commands/** + .claude/skills/**), CLI-neutral. Codifies\
+      \ the command\u2194skill parity discipline surfaced by kailash-py mops-onboarding re-convergence #5\
+      \ (journal/0032). Three MUSTs: (1) a shared-step edit (Print/hand-off string, STOP/gate predicate,\
+      \ precondition, ordering, cited field/branch/lockfile/helper name, or a guard's create\u2192teardown\
+      \ lifecycle) MUST update the command\u2194skill mirror in the SAME shard (security.md Multi-Site-Plumbing\
+      \ one abstraction up); (2) /redteam MUST run a command\u2194skill parity sweep over the 5 shared-step\
+      \ axes (a same-step contradiction = MED, HIGH if it drops a security guard or sends an operator to\
+      \ a wrong command); (3) a cited security/enforcement guard's lifecycle MUST be verified to span the\
+      \ ENTIRE protected window (retry loops, re-entry, abandon) \u2014 \"registered\" \u2260 \"covers the\
+      \ whole window\".\nOrigin evidence (security-relevant, cross-SDK): the /certify no-assist gate (probe-phase-guard.js,\
+      \ PR #355 security HIGH-1 closure, wired into committed settings.json in PR #1623) was INERT on one\
+      \ execution path \u2014 the command (certify.md) kept the lockfile through the Phase C gate retry\
+      \ loop; the backing skill (42-certify) removed it before Phase C, whose loop re-runs the probe on\
+      \ failed questions. An orchestrator following the skill could be coached through the certification\
+      \ retries with no structural guard. Invisible to five prior review lenses; surfaced ONLY by the command\u2194\
+      skill parity sweep. Two sibling print-string divergences (enroll B3, ecosystem C5) were also introduced\
+      \ by editing a command without its skill.\nSelf-referential-allowlist disposition (R1 cc-architect\
+      \ HIGH, resolved-by-construction): ADDED to self-referential-codify.md Rule 2's allowlist in this\
+      \ same codify. The author's initial \"not-allowlisted, like symbol-anchored-citations.md\" reasoning\
+      \ was overturned \u2014 the decisive distinction is that this rule is path-scoped to .claude/commands/**\
+      \ + .claude/skills/**, the EXACT surfaces the allowlist enumerates (symbol-anchored-citations is scoped\
+      \ to codify INPUTS: specs/journal/plans), its MUSTs fire on /codify OUTPUT (the user-flow-validation\
+      \ / verify-claims-before-write predicate), it keeps ALLOWLISTED codify-governing command\u2194skill\
+      \ pairs (codify.md/redteam.md/certify.md/onboard.md/sync-*) in sync, and its own Origin is a security-guard\
+      \ drop on the allowlisted certify.md's skill. Rule 2 tiebreaker resolves toward the gate. Covered\
+      \ by the existing .claude/rules/** paths glob (#443 holds, no paths change).\nClassification rationale:\
+      \ GLOBAL \u2014 the command/skill split (cc-artifacts Rule 3) and its shared-step drift failure mode\
+      \ are CLI-neutral (every CLI's command+skill equivalents can drift) and cross-SDK (the same paired-artifact\
+      \ structure exists in every repo carrying a COC setup). The DO/DO-NOT examples are onboarding-suite-specific\
+      \ but the discipline is universal. Receipt: workspaces/mops-onboarding/journal/0032 + 0033.\n"
+  - type: artifact_update
+    artifact: onboarding-suite-certify-security-plus-lifecycle
+    files:
+      - .claude/skills/42-certify/SKILL.md
+      - .claude/commands/certify.md
+      - .claude/commands/enroll.md
+      - .claude/skills/44-enroll/SKILL.md
+      - .claude/commands/ecosystem-init.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #5 fixes to the onboarding suite (kailash-py PR #1624, merged 445d97bf0), surfaced\
+      \ for cross-SDK + downstream propagation because the same skill/hook pairs exist wherever the suite\
+      \ was synced (Rust SDK + loom). HIGHEST PRIORITY for Gate-1: the /certify no-assist guard-lifecycle\
+      \ fix (MED, security-relevant \u2014 see the command-skill-parity entry above) is the one a sibling\
+      \ SDK almost certainly also carries; the skill (42-certify) now keeps the probe-phase-guard lockfile\
+      \ through the Phase C gate retry loop, single removal at Phase C exit (pass OR abandon), matching\
+      \ the command. Other fixes: enroll B3 \"Enrolled\"\u2192\"Enrollment PR opened. Once it merges to\
+      \ main\u2026\" (+ skill 44); grace/pending_verification cited as trust-posture MUST-7 \u2192 MUST-6\
+      \ (onboard + skill 41); certify receipt ::version\u2192::bank_version; 43\u219245 genesis-bootstrap\
+      \ cross-link; ecosystem C5 owner-vs-teammate (+ skill 43); <id>\u2192<display_id>. Converged 0 CRIT/0\
+      \ HIGH/0 MED across 2 consecutive clean rounds (7-round multi-agent redteam, the self-referential-codify.md\
+      \ Rule 1 gate). Distributable invariant re-verified intact after all edits (roster PLACEHOLDER, 0/6\
+      \ enforcement hooks committed, probe-phase-guard=1, disclosure scanner exit 0). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-08-reconvergence5.md\
+      \ + journal/0032.\n"
+  - type: rule_update
+    artifact: onboarding-suite-certify-coordination-on-conformance
+    files:
+      - .claude/skills/42-certify/SKILL.md
+      - .claude/commands/certify.md
+      - .claude/commands/claim.md
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+      - .claude/commands/ecosystem-init.md
+      - .claude/skills/43-ecosystem-init/SKILL.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+      - .claude/commands/posture.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #6 fixes to the onboarding suite (kailash-py, 10-round multi-agent redteam,\
+      \ ~30 adversarial agents, the self-referential-codify.md Rule 1 gate; converged 0 CRIT/0 HIGH/0 MED\
+      \ across 2 consecutive clean rounds). SECURITY/CORRECTNESS-RELEVANT + HIGHEST cross-SDK priority \u2014\
+      \ the headline is a PRE-EXISTING gap every prior convergence (#1-#5) missed because kailash-py ships\
+      \ coordination-OFF (integrity-guard / journal-write-guard / codify-lease all passthrough): /certify's\
+      \ write surface was NEVER reconciled with the coordination-ON (enrolled) substrate it ships into.\
+      \ A sibling SDK's synced /certify almost certainly carries the identical gap. Fixes, all source-verified\
+      \ against the actual hooks (integrity-guard.js findCoveringLease/watched-subtrees, codify-lease.js\
+      \ acquire/release/MANDATORY_SCOPE, journal-reserve.js VALID_TYPES, operator-id.js resolveIdentity\
+      \ working-tree roster read): (1) certify pass + deferral journal entries now acquire/release a covering\
+      \ codify-lease on a codify/<display_id>-<date> branch (skill Steps 1.5/5), scope [\"journal/\"] (DIRECTORY\
+      \ scope load-bearing \u2014 findCoveringLease matches trailing-slash-dir prefix, a bare filename does\
+      \ not, MANDATORY_SCOPE excludes journal/); (2) deferral entry type DEFER->DECISION + topic certify-defer-<id>\
+      \ (DEFER is NOT in journal-reserve.js::VALID_TYPES -> old contract failed the reservation closed);\
+      \ (3) brief .pending/ receipts moved OUT of the journal/ subtree -> workspaces/_certify/.pending/\
+      \ (integrity-guard watches ^workspaces/<name>/journal/); (4) entry gate corrected to the code-accurate\
+      \ model \u2014 resolveIdentity reads the WORKING-TREE roster, so certify runs on the enrollment branch\
+      \ (row visible) OR after merge; registration precedes certification; certification gates /claim. Plus\
+      \ command<->skill + lifecycle fixes: certify Phase-0 (validate-cert-bank.mjs security scan + consent\
+      \ STOP) added to the skill (was command-only \u2014 a security-scan drop on the skill-followed path);\
+      \ claim.md SAME-conflict dead-end (nonexistent /lease-override + a /release-claim invocation its own\
+      \ bind-check rejects) -> sibling-self-release/reap; onboard + certify just-enrolled PR-pending branch;\
+      \ genesis double-run idempotency boundary (45 <-> ecosystem-init C3); posture.md self-contradiction;\
+      \ claim.md phantom test-path citation genericized. Distributable invariant re-verified intact after\
+      \ all edits (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure\
+      \ scanner exit 0, 1559 files). TWO items deliberately NOT fixed (out of scope, flagged for loom/rule-owner):\
+      \ enrollment-operations.md MUST-3 categorical wording vs certify Step-2 safe-inline node -e (tighten\
+      \ to \"\u2026on the command line\u2026\"); claim/release-claim/claims M1-era coordination-log writes\
+      \ cite coc-sign+transport not coc-append/coc-emit (helper-naming drift, substantively MUST-1-compliant).\
+      \ Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence6.md.\n"
+  - type: rule_update
+    artifact: enrollment-operations
+    files:
+      - .claude/rules/enrollment-operations.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      "Follow-on to the onboarding-suite proposal above: closes the TWO items the 2026-07-09 re-convergence\
+      \ #6 flagged as deferred-for-loom (see this codify_session tail).\n\nF1 (FIXED \u2014 enrollment-operations.md\
+      \ MUST-3 + genesis-bootstrap skill): the categorical wording (\"no inline node -e for watched-state\
+      \ mutation\") over-claimed against the actual guard and falsely flagged /certify Step 2's SAFE inline\
+      \ reserveJournalSlotSigned(...) call. Ground-truth verification of detectStateFileMutation (violation-patterns.js)\
+      \ + STATE_PATH_RX (validate-bash-command.js:456) established the real enforced invariant: the guard\
+      \ fires ONLY on a STATE_PATH_RX literal on the command line, and it is READ/WRITE-AGNOSTIC (a path-presence\
+      \ detector, not mutation-aware \u2014 an inline READ naming a watched path is blocked too). MUST-3\
+      \ rewritten to state that precisely: script-by-path for authored mutations; a delegated signed-emit\
+      \ helper (reserveJournalSlotSigned / emitSignedRecord routing through coc-emit.js::emitSignedRecord\
+      \ per multi-operator-coordination.md MUST-1, path internal) PERMITTED inline; a raw-fs wrapper / concat-path\
+      \ / arg-supplied appendStamped all BLOCKED or script-by-path (the last matching 42-certify Step 4).\
+      \ \"Owns the write internally\" made NECESSARY-BUT-NOT-SUFFICIENT (a wrapper hiding a raw fs.writeFileSync\
+      \ is not a signed-emit helper). Same read/write-agnostic accuracy propagated to the cross-referenced\
+      \ depth-file 45-genesis-bootstrap/SKILL.md (4 write-only-framing instances corrected) + a phantom\
+      \ whoami.md cross-reference fixed.\n\nF2 (REFUTED \u2014 no edit): the proposed \"align claim/release-claim/claims\
+      \ coordination-log write citations to coc-emit/coc-append\" is refuted by the runtime \u2014 emitSignedRecord\
+      \ serves NO claim/release/reap record; the actual claim-writer adjacency-leasecheck.js::autoClaim\
+      \ + reap-ceremony.js still use coc-sign.js::sign + transport-filesystem.js; coc-append.js is the observations/violations\
+      \ helper. The commands are ACCURATE to the code; editing them would introduce a NEW command<->code\
+      \ divergence (spec-accuracy per journal/0035 \xA73). Left unchanged.\n\nConverged via 7-round multi-agent\
+      \ redteam-with-tests (reviewer + security-reviewer + cc-architect; self-referential-codify.md MUST-1\
+      \ gate \u2014 enrollment-operations.md is allowlisted). Distributable invariant re-verified GREEN\
+      \ after every edit (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure\
+      \ scanner exit 0). Accepted non-blocking: the MUST-3 SAFE-helper paragraph over-density \u2014 candidate\
+      \ for extraction to 45-genesis-bootstrap in the canonical loom pass. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence7.md."
+  - type: rule_update
+    artifact: enrollment-operations
+    files:
+      - .claude/rules/enrollment-operations.md
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #8 (2026-07-09) \u2014 completes the guard-firing-surface ENUMERATION in enrollment-operations.md\
+      \ MUST-3 that re-convergence #7 (entry above) did not close. A fresh adversarial audit of the #7 state\
+      \ MERGED on main (PR #1627) surfaced that MUST-3 named THREE guard-firing surfaces (interpreter -c/-e/-m\
+      \ body, redirect, file-utility body \u2014 the detectStateFileMutation layers) but OMITTED the FOURTH\
+      \ whole-command pass, detectHeredocWriteRunBundle (violation-patterns.js, wired into detectStateFileMutationSegmentAware\
+      \ at the tail of the per-segment loop). That pass fires when ONE command BOTH authors a heredoc script\
+      \ whose body carries a STATE_PATH_RX literal AND executes that same script \u2014 the natural inline\
+      \ `cat >f <<EOF \u2026STATE_PATH\u2026 EOF && node f` idiom \u2014 so an operator building the obvious\
+      \ one-command form of MUST-3's \"author the script, run it bare\" DO example is blocked by a detector\
+      \ the rule never named. Same finding-class as #7's read/write-agnostic fix, one level deeper: the\
+      \ \"three-layer\" docstring hid a fourth pass.\n\nFIXES (source-verified against violation-patterns.js\
+      \ detectStateFileMutation layers 1-3 + detectHeredocWriteRunBundle contract + detectStateFileMutationSegmentAware\
+      \ wiring): (1) MUST-3 enumeration now names the 4th detectHeredocWriteRunBundle pass + a DO-NOT heredoc-bundle\
+      \ example (author + run as TWO separate commands); (2) 45-genesis scoped the read/write-AGNOSTIC property\
+      \ to the interpreter -c/-e/-m body layer ONLY (Layers 1-2 additionally require a write construct \u2014\
+      \ redirect operator / file-util verb); (3) restored a conditional on 45-genesis's gh-bundling claim\
+      \ (\"can re-introduce \u2026 if the bundled command itself names a watched path\"); (4) scoped MUST-3's\
+      \ Why-line invariant to \"in an interpreter / redirect / file-utility body on the command line (interpreter\
+      \ bodies fire on a read too)\" \u2014 a bare `cat <state>` read is NOT caught by any layer.\n\nCONVERGENCE:\
+      \ 4-round multi-agent redteam (9 adversarial agent-passes; reviewer + security-reviewer + independent\
+      \ verifier), including DIRECT guard execution (Round 3 ran the actual detector script-by-path and\
+      \ quoted the verdicts: heredoc bundle -> BLOCK, bare read -> PASS, bare `node <file>` -> PASS, control\
+      \ positives all fired). 2 consecutive fully-clean rounds (R3+R4); 0 CRIT / 0 HIGH every round. enrollment-operations.md\
+      \ is on the self-referential-codify.md Rule 2 allowlist -> the mandatory multi-agent redteam-with-tests\
+      \ round is satisfied by the 4-round convergence. Distributable invariant re-verified GREEN after every\
+      \ edit (roster PLACEHOLDER, 0/6 enforcement hooks committed, probe-phase-guard=1, disclosure scanner\
+      \ exit 0 / 1559 files).\n\nCLASSIFICATION: GLOBAL (same GLOBAL synced artifacts as the #7 entry above;\
+      \ the corrected guard-firing enumeration is CLI-neutral and consumer-wide \u2014 a downstream consumer\
+      \ of the synced suite inherits the incomplete enumeration otherwise). ACCEPTED NON-BLOCKING (carried,\
+      \ for the canonical loom pass): (a) 45-genesis \"three-layer detector\" framing \u2014 quotes the\
+      \ detectStateFileMutation docstring for the per-segment core then names the 4th pass separately; Round-4\
+      \ reviewer rated it explicitly NOT a finding (within tolerance, both mechanisms named in the same\
+      \ section); a \"three-layer per-segment core + a fourth whole-command pass\" tightening is available\
+      \ but was not taken (would reset the converged clean-round bracket). (b) MUST-3 over-density (carried\
+      \ from #7) \u2014 extraction to 45-genesis is the loom F5 structural pass. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence8.md."
+  - type: rule_update
+    artifact: enrollment-operations
+    files:
+      - .claude/commands/whoami.md
+      - .claude/rules/enrollment-operations.md
+      - .claude/skills/42-certify/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #9 (2026-07-09) \u2014 fresh 3-agent adversarial audit of the #8 state MERGED\
+      \ on main (PR #1628). Surfaced a NEW finding-class extension: the recurring \"a guard's DESCRIPTION\
+      \ must match its DETECTION mechanism\" class extends to guard-symbol OWNERSHIP, not just name. whoami.md\
+      \ cited `detectStateFileMutation` (the internal per-segment PRIMITIVE in violation-patterns.js) where\
+      \ the actually-WIRED guard in validate-bash-command.js is `detectStateFileMutationSegmentAware` (the\
+      \ segment-aware wrapper) \u2014 a citation that RESOLVES to a real-but-wrong symbol, invisible to\
+      \ grep/dangling-ref sweeps; only cross-artifact + source verification catches it. 42-certify/SKILL.md:206\
+      \ carried the IDENTICAL imprecision (same-class gap surfaced by the self-ref gate reviewer; fixed\
+      \ in-shard per autonomous-execution MUST-4).\n\nFIXES (source-verified): (1) whoami.md:47 + 42-certify/SKILL.md:206\
+      \ \u2014 bare-primitive `detectStateFileMutation` -> wired-wrapper `detectStateFileMutationSegmentAware`\
+      \ (now 0 bare-primitive citations across the onboarding+certify suite; whoami re-synced with the 4\
+      \ siblings that already named the wrapper); (2) enrollment-operations.md MUST-1 \u2014 the genesis-guard\
+      \ fail-closed BLOCK sentence now names BOTH block branches (real-non-scaffold-roster-without-anchor\
+      \ AND roster-deleted-while-records-remain / enrolled-then-deleted), matching the two severity:block\
+      \ branches in genesis-anchor-guard.js; (3) enrollment-operations.md MUST-4 DO-example \u2014 corrected\
+      \ \"both read the gitignored log\" to \"foldLog folds the gitignored coordination-log's records, resolveIdentity\
+      \ reads the committed roster\" (resolveIdentity reads operators.roster.json, a COMMITTED file, per\
+      \ operator-id.js).\n\nCONVERGENCE: 3 rounds (R1 = 3 parallel adversarial agents; R2 cc-architect confirmation\
+      \ + fresh sweep; R3 mechanical). Onboarding-artifact surface 0 CRIT / 0 HIGH, 2 consecutive clean\
+      \ rounds. enrollment-operations.md is on the self-referential-codify.md Rule 2 allowlist -> the mandatory\
+      \ multi-agent redteam-with-tests gate (reviewer + security-reviewer + cc-architect, parallel) ran\
+      \ on the final diff: 3/3 APPROVE. Distributable invariant re-verified GREEN (roster PLACEHOLDER, 0/6\
+      \ enforcement hooks committed, probe-phase-guard present).\n\nCLASSIFICATION: GLOBAL (the onboarding+certify\
+      \ suite is synced cross-SDK; the wired-symbol correction + block-branch accuracy are CLI-neutral and\
+      \ consumer-wide \u2014 a downstream consumer inherits the wrong-symbol citation otherwise).\n\nLOOM-TOOL\
+      \ FOLLOW-UP FLAG (NOT in this proposal's artifact set \u2014 flagged for loom's attention): re-convergence\
+      \ #9 also surfaced a HIGH disclosure-hygiene finding in kailash-py (an operator-local runbook value\
+      \ file was committed to the public repo; forward-fixed locally via .gitignore + git rm --cached, history-purge\
+      \ held as owner-gated). The ROOT CAUSE is a LOOM-DISTRIBUTED tool: `.claude/bin/scan-synced-disclosure.mjs`\
+      \ UNCONDITIONALLY skips `*.operator.local.md` (the skip that blinded the scanner), whereas the sibling\
+      \ `*.local.json` skip one line below was made destination-conditional by issue #352. loom SHOULD apply\
+      \ the same #352 parity to the `.operator.local.md` skip (ideally: do not skip a *tracked* operator-local\
+      \ file) so every downstream consumer's scanner catches a committed operator-local file. This is a\
+      \ loom codify (the tool is on self-referential-codify's allowlist). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence9.md\
+      \ + workspaces/mops-onboarding/journal/0038-RISK-committed-operator-local-ci-values-public-repo.md."
+  - type: rule_update
+    artifact: onboard
+    files:
+      - .claude/commands/onboard.md
+      - .claude/skills/41-onboard/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #10 (2026-07-09) \u2014 fresh 2-agent adversarial audit of the #9 state MERGED\
+      \ on main (PR #1629) + the #9 close-out (PR #1630). Extends the #9 \"a citation must match the wired\
+      \ mechanism\" class from a guard-symbol to a canonical VOCABULARY: the /onboard read-path cited `DEFER`\
+      \ as a journal `type`, a token that is NOT in `journal-reserve.js::VALID_TYPES` ({DECISION, DISCOVERY,\
+      \ TRADE-OFF, RISK, CONNECTION, GAP, AMENDMENT}), NOT in `rules/journal.md`'s enum, and explicitly\
+      \ disclaimed by the sibling /certify artifacts (\"DEFER is NOT a canonical journal type\"). Two mirror\
+      \ sites: onboard.md filtered `DECISION-`/`DISCOVERY-`/`DEFER-` entries; 41-onboard/SKILL.md `types=[\"\
+      DECISION\",\"DISCOVERY\",\"DEFER\"]`. The `DEFER-` branch was dead code (real deferrals are DECISION-typed\
+      \ with \"defer\" in the topic slot; zero DEFER-typed files exist), so no operator-visible data loss\
+      \ -> MED. It survived 9 rounds because the token resolves (passes grep/dangling-ref sweeps) yet contradicts\
+      \ the wired vocabulary; only cross-artifact verification against the sibling /certify pair surfaced\
+      \ it.\n\nFIX (source-verified): dropped `DEFER` from both filters (same-shard command<->skill mirror\
+      \ edit per command-skill-parity.md MUST-1); added a ground-truth-cited note (`journal-reserve.js::VALID_TYPES`\
+      \ / `rules/journal.md`) that deferrals are DECISION-typed and already surfaced by the `DECISION-`\
+      \ filter. onboard.md stays 92 lines (<=150). No DEFER-typed journal file exists tree-wide (verified).\n\
+      \nCONVERGENCE: 4 rounds (R1 mechanical; R2 2 parallel adversarial agents [1 MED found]; R3 3-agent\
+      \ self-referential-codify gate [reviewer + security-reviewer + cc-architect, parallel \u2014 onboard.md\
+      \ is on the self-referential-codify.md Rule 2 allowlist]; R4 mechanical). 0 CRIT / 0 HIGH, 2 consecutive\
+      \ clean rounds (R3 + R4). The #9 guard-symbol fixes + disclosure closure all re-verified holding on\
+      \ merged main; the #9 close-out receipts verified accurate against ground truth.\n\nCLASSIFICATION:\
+      \ GLOBAL (the onboarding suite is synced cross-SDK + downstream; a downstream consumer inherits the\
+      \ DEFER phantom-type citation otherwise). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence10.md\
+      \ + workspaces/mops-onboarding/journal/0041-AMENDMENT-reconvergence10-onboard-defer-phantom-journal-type.md."
+  - type: rule_update
+    artifact: claim
+    files:
+      - .claude/commands/claim.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #11 (2026-07-09) \u2014 fresh 3-agent adversarial audit of the #10 state MERGED\
+      \ on main (PRs #1630/#1631). Extends the SAME \"a citation must match the wired mechanism\" class\
+      \ the #9 (guard-symbol) and #10 (canonical journal-type vocabulary) rounds surfaced \u2014 this time\
+      \ a SAME-predicate display-token set in the `/claim` command. `commands/claim.md` Step 6 SAME-dispatch\
+      \ printed the matched predicate as `(exact / dir-contains / workspace / commit-cohort / axis-3)`.\
+      \ Ground truth `.claude/hooks/lib/adjacency.js::sameReason` returns `predicate: pred` where pred is\
+      \ one of the `_matchX` helper literals: `exact` (172), `glob` (173), `dir-contains` (183), `workspace`\
+      \ (186), `commit-cohort` (202), `phase` (217-218), `composed-axis-3` (235). Three defects vs that\
+      \ wired set: (a) `axis-3` is a PHANTOM \u2014 the code emits `composed-axis-3`, never bare `axis-3`\
+      \ (the exact #10 DEFER class: a token that resolves as text but is absent from the wired return set);\
+      \ (b) `glob` OMITTED; (c) `phase` OMITTED. Both omissions are genuine `sameReason` return literals\
+      \ a SAME halt would print, undocumented. MED \u2014 teaches false/incomplete vocabulary; resolution\
+      \ paths are predicate-agnostic so no guard dropped / no misroute (not HIGH). Single-command drift:\
+      \ `claim.md` has NO backing skill, so no command<->skill parity pair to mirror (unlike the #10 onboard\
+      \ command<->skill pair).\n\nFIX (source-verified): replaced the enumeration with the full wired set\
+      \ `(exact / glob / dir-contains / workspace / commit-cohort / phase / composed-axis-3)` + an inline\
+      \ \"the full wired `adjacency.js::sameReason` `predicate` return set\" anchor so future edits re-derive\
+      \ from the wired source, not re-enumerate. Verified each literal against adjacency.js by grep (line\
+      \ numbers above).\n\nCONVERGENCE: R1 mechanical (DEFER #10 fix holds; 0 disclosure leaks in tracked\
+      \ files; markers clean) + R2 3 parallel adversarial agents (parity/phantom-vocab [this MED]; guard-symbol\
+      \ ownership [91/92 clean + 1 by-design loom-canonical matcher divergence, NOT a defect]; dangling-refs/disclosure\
+      \ [disclosure CLEAN; 4 MED dangling refs = pre-existing loom->BUILD-subset artifacts OUTSIDE the onboarding\
+      \ suite, targets resolve in loom-canonical]) -> this MED fixed -> R3/R4 mechanical clean = 2 consecutive\
+      \ clean rounds, 0 CRIT / 0 HIGH. claim.md is NOT on the self-referential-codify.md Rule 2 allowlist,\
+      \ so no mandatory multi-agent gate (the fix is a 2-token-class citation correction verified against\
+      \ wired source).\n\nCLASSIFICATION: GLOBAL (the coordination/onboarding suite is synced cross-SDK\
+      \ + downstream; a downstream consumer inherits the `axis-3` phantom + the `glob`/`phase` omissions\
+      \ otherwise). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md."
+  - type: skill_update
+    artifact: todo-github-sync
+    files:
+      - .claude/skills/10-deployment-git/todo-github-sync.md
+    classification_suggestion: global
+    proposal_only: true
+    context:
+      "Re-convergence #11 out-of-scope dangling-ref (D3), user-approved to route. PROPOSAL-ONLY (no\
+      \ local BUILD edit \u2014 a BUILD-side edit to this synced skill would be overwritten by /sync). `skills/10-deployment-git/todo-github-sync.md`\
+      \ line 484 carries a stale self-reference: `**This Guide**: .claude/guides/todo-github-sync-guide.md`.\
+      \ That path does not exist (the guide content IS this skill file now). PROPOSED FIX: change the self-reference\
+      \ target to `.claude/skills/10-deployment-git/todo-github-sync.md` (the skill's own current location).\
+      \ Genuine loom-side stale self-ref (the file moved guides/ -> skills/ and the self-ref was not updated);\
+      \ low value, mechanical. Surfaced by the #11 repo-wide dangling-ref sweep. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md\
+      \ \xA7 R2 out-of-scope."
+  - type: skill_update
+    artifact: user-flow-validation-walk-discipline
+    files:
+      - .claude/skills/30-claude-code-patterns/user-flow-validation-walk-discipline.md
+    classification_suggestion: global
+    proposal_only: true
+    context:
+      "Re-convergence #11 out-of-scope disclosure-hygiene LOW, user-approved to route. PROPOSAL-ONLY\
+      \ (no local BUILD edit \u2014 this file is on the self-referential-codify.md Rule 2 allowlist [`30-claude-code-patterns/**`],\
+      \ so a local edit would trigger the multi-agent redteam gate for a trivial placeholder scrub; loom\
+      \ Gate-1 applies it with the proper review). A real operator display-name string appears in this PUBLIC-shipped\
+      \ skill's EXAMPLE dialogue at lines 33, 40, 82, 114 (illustrating the `/onboard` / `/whoami` output).\
+      \ It is a display-name only (NOT a secret / credential / roster person_id), but a real-operator identifier\
+      \ should not ship in a distributed example. PROPOSED FIX (scrub to the placeholder the rule's own\
+      \ MUST-6 uses): the operator display-name -> `<operator-display-id>`; `.proposals/register-<name>.yaml`\
+      \ -> `register-<operator-display-id>.yaml`; `verified:gh-<name>` -> `verified:gh-<operator>`; `disp:<name>`\
+      \ -> `disp:<operator-display-id>`. IMMUTABLE-HISTORICAL note: the same string also appears once in\
+      \ `workspaces/cross-sdk-audit/journal/0018:6` \u2014 that is an immutable journal entry (journal.md\
+      \ MUST-NOT-overwrite) in a DIFFERENT workspace; a journal scrub is a standing user-gated exception\
+      \ (the journal/0038 history-scrub class), NOT included in this mechanical proposal. Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence11.md\
+      \ \xA7 R2 out-of-scope (LOW)."
+  - type: skill_update
+    artifact: 45-genesis-bootstrap
+    files:
+      - .claude/skills/45-genesis-bootstrap/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #12 (2026-07-09) \u2014 positive-allowlist hardening of two illustrative enumerations\
+      \ in the genesis-bootstrap runbook, source-verified against the wired hooks. Applied BUILD-side AND\
+      \ routed GLOBAL (the onboarding suite is loom-synced; every downstream copy carries the same gaps).\
+      \ NOT self-referential-codify (Rule 2 Skills allowlist enumerates spec-compliance/command-authoring/\
+      \ skill-authoring/hook-authoring/sweep/32-trust-posture/30-claude-code-patterns/ 12-testing-strategies/probe-driven-verification;\
+      \ enrollment-operations.md explicitly OMITS 45-genesis-bootstrap as a runbook). CHANGE 1: the codify-branch\
+      \ watched-paths list (\xA7 pre-flight gate 2) listed 8 tokens; the wired `integrity-guard.js::DIRECT`\
+      \ set is 8 files + 3 subtree predicates \u2014 completed to `documented == wired` (adds `coordination-mode.json`,\
+      \ `learning-codified.json`, `workspaces/<name>/journal/**`) + an inline 'the wired DIRECT set + subtree\
+      \ predicates at integrity-guard.js are authoritative' anchor so the next editor re-derives. CHANGE\
+      \ 2: `runEnrollmentCeremony` return was cited `{ ok, error?, reason?, step? }` but `genesis-ceremony.js`\
+      \ returns `{ok:true, record} | {ok:false, error, reason, step}` \u2014 added `record?` (success path).\
+      \ Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md + journal/0043."
+  - type: skill_update
+    artifact: 43-ecosystem-init
+    files:
+      - .claude/skills/43-ecosystem-init/SKILL.md
+    classification_suggestion: global
+    context:
+      "Re-convergence #12 (2026-07-09) \u2014 positive-allowlist hardening of the `STATE_PATH_RX`\
+      \ illustrative enumeration (\xA7 Operational runbook, Layer-3 state-file guard). The list of 5 protected\
+      \ state-file paths was presented UNHEDGED, while its direct sibling in 45-genesis-bootstrap already\
+      \ hedges the SAME wired set with '(among others)' \u2014 a genuine unhedged-vs-hedged-sibling inconsistency.\
+      \ Added '(among others; the wired STATE_PATH_RX at validate-bash-command.js is authoritative)' to\
+      \ match the sibling convention + anchor the next editor to the wired source. Applied BUILD-side AND\
+      \ routed GLOBAL (loom-synced onboarding suite). NOT self-referential-codify (see the 45-genesis-bootstrap\
+      \ entry above for the Rule 2 allowlist rationale). Receipt: workspaces/mops-onboarding/04-validate/redteam-2026-07-09-reconvergence12.md\
+      \ + journal/0043."
+  - type: rule_update
+    artifact: tenant-isolation
+    files:
+      - .claude/rules/tenant-isolation.md
+    classification_suggestion: global
+    context:
+      "ADDS Rule 7 (\"Upsert ON CONFLICT DO UPDATE Is Tenant-Guarded And Excludes tenant_id From\
+      \ SET\") + extends the Audit Protocol grep.\nLesson: on a multi_tenant model with a global single-column\
+      \ id PK, every upsert builder emitting `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` (PG/SQLite)\
+      \ or `ON DUPLICATE KEY UPDATE` (MySQL) MUST (a) exclude tenant_id from the SET clause and (b) tenant-guard\
+      \ the update \u2014 PG/SQLite via `WHERE {table}.tenant_id = EXCLUDED.tenant_id`, MySQL via per-column\
+      \ `IF(tenant_id = VALUES(tenant_id), <new>, <col>)` (incl. version/timestamp). A guard-suppressed\
+      \ cross-tenant collision routes to the actionable tenant-scoped diagnostic, never a silent success/skip.\
+      \ ALL upsert builders audited, not just the primary. DISTINCT from Rule 6 (canonical tenant source,\
+      \ #1252): a correctly-tenant-scoped write STILL overwrites another tenant's row via the un-guarded\
+      \ conflict path.\nEvidence: PR #1650 + kailash-dataflow 2.14.5 (tag dataflow-v2.14.5, publish run\
+      \ 29074366000 success) \u2014 holistic /redteam CONFIRMED on real SQLite + PostgreSQL that bulk_upsert\
+      \ / single upsert / BulkCreatePoolNode overwrote and reassigned another tenant's row; fixed across\
+      \ all 5 builders. Cross-SDK: the Rust SDK's #1712 filed (shared DataFlow architecture). Canonical\
+      \ 8-field Trust Posture Wiring present; cc-architect APPROVE. Receipts: workspaces/sdk-backlog/journal/0003\
+      \ (DECISION) + 0004 (DISCOVERY).\n"
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+    classification_suggestion: global
+    context:
+      "ADDS Rule 4d (New Fields On A Cross-SDK Signed Model MUST Prune-When-Unset From The Signing\
+      \ Pre-Image) \u2014 sibling of Rule 4b. A new optional field on a model that feeds a cross-SDK Ed25519/hash\
+      \ pre-image changes the signed bytes of EVERY existing instance (model_dump emits None as a null key),\
+      \ breaking pre-existing + sibling-SDK signatures; the fix is prune-when-unset so not-configured instances\
+      \ sign byte-identically (BH3 unbound/bound pattern applied to field additions). Cross-SDK/language-agnostic\
+      \ (py+rs). Origin: kailash-py #1510 BH5 / PR #1671 / kailash 2.48.0."
+  - type: rule_add
+    artifact: handoff-completion
+    files:
+      - .claude/rules/handoff-completion.md
+    classification_suggestion: global
+    context:
+      "NEW baseline rule (priority:0). A downstream-required action (cross-repo issue/PR, upstream\
+      \ handoff) is done only when EXECUTED or EXPLICITLY surfaced as pending-with-authorization \u2014\
+      \ never left implied-done in a local note; a cross-repo artifact is referenced as existing only after\
+      \ created/verified this session; needs-authorization means ASK specifically, not stop at a note. Co-owner-directed\
+      \ origination (BH5 session left a local rs handoff + a wrong rs#1714 ref unfiled). Rule-10 named-rationale:\
+      \ non-decomposable critical behavioral contract, authored tight (minimal load-bearing clauses; depth\
+      \ in DO/DO-NOT). Origin journal/0010. Gate-1 to decide (journal/0012): (a) MUST-2 home \u2014 keep\
+      \ in this baseline rule vs relocate to path-scoped verify-claims-before-write.md; (b) self-referential-codify.md\
+      \ Rule 2 allowlist membership \u2014 MUST-2 fires on codify-class output (same predicate that admitted\
+      \ verify-claims-before-write). Behaviorally UNVALIDATED \u2014 no rule eval-harness in the BUILD repo;\
+      \ loom /codify eval is the validation surface."
