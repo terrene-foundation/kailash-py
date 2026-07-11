@@ -2,55 +2,47 @@
 
 ## Where we are
 
-**Third-pass** `/redteam` to **CONVERGENCE** (under `/autonomize`) on the post-v2.48.0 codify wave
-(handoff-completion.md + cross-sdk-inspection Rule 4d + latest.yaml). Independent holistic pass across
-the full merged union — **10 adversarial clusters + 2 mechanical batteries / 6 rounds**, fresh lenses
-(security, cross-artifact consistency, proposal integrity) → **2 consecutive clean rounds (R5+R6),
-0 CRIT / 0 HIGH**. 3 LOW fixed (sweep:43 dogfood, session-notes count 10→9, latest.yaml APPEND note);
-4 items surfaced-to-human (2 immutable-journal, 2 loom-Gate-1). Core rule files CLEAN all 6 rounds
-(landed #1685; unmodified this pass). Phase 05-codify, only external #1675 open. Un-enrolled PUBLIC
-repo, coordination OFF (solo). Prior passes: journal 0013→PR #1682, journal 0015→PR #1685.
+Third-pass `/redteam` **CONVERGED** on the post-v2.48.0 codify wave (0 CRIT / 0 HIGH, 2 clean
+rounds → PR #1686); `/codify` then surfaced the pass's Gate-1 follow-ups into the BUILD→loom
+proposal (PR #1687) so loom picks them up. Phase 05-codify; un-enrolled PUBLIC repo, coordination
+OFF (solo); board clear of ours (only external #1675 open).
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0016-DECISION-redteam-thirdpass-convergence-postv2480.md` — this pass's receipt
-2. `workspaces/sdk-backlog/04-validate/redteam-2026-07-11-thirdpass.md` — the full third-pass report + dispositions
-3. `.claude/rules/handoff-completion.md` + `.claude/rules/cross-sdk-inspection.md` — the two rules the wave hardened
-4. `gh issue list --state open` — py forest (#1606, #1601, #1532)
+1. `workspaces/sdk-backlog/journal/0017-DECISION-codify-thirdpass-gate1-followup.md` — this codify's receipt
+2. `workspaces/sdk-backlog/journal/0016-DECISION-redteam-thirdpass-convergence-postv2480.md` — the redteam receipt
+3. `workspaces/sdk-backlog/04-validate/redteam-2026-07-11-thirdpass.md` — full third-pass report + dispositions
+4. `.claude/.proposals/latest.yaml` — BUILD→loom proposal; cross-sdk-inspection Rule 4d entry now carries the Gate-1 follow-up
 
 ## In-flight state
 
-- Third-pass fixes + receipt on a branch → PR (pending admin-merge at wrapup): the 3 LOW fixes above +
-  `journal/0016` + the third-pass redteam report. Core rules unchanged (already on main via #1685).
+- None local — #1686/#1687 landed on main; working tree clean. Codify anchor advanced (local state, gitignored).
 
 ## Executed this session
 
-- None external (no cross-repo actions). 3 LOW BUILD-side fixes to workspace/proposal artifacts only.
+- None external — no cross-repo actions. PRs #1686/#1687 are in THIS repo's `git log`.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                          | Value-anchor (MUST-1 source)                                                 | Status                          |
-| --- | --------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------- |
-| F2  | #1606 express `v2` keyspace (rs#1713)         | #1606 — Rust-pinned v2 keyspace, byte-changing v2→v3                          | BLOCKED — land py+rs together   |
-| F3  | #1601 soft_delete parity (rs#1729)            | #1601 — py #1598 done; fix in the Rust repo                                   | in-flight — close when rs lands |
-| F4  | #1532 delegate-connectors → contrib/          | #1532 — consolidate delegate adapter layer beside its framework              | DEFERRED — dedicated session    |
-| F5  | handoff-completion → loom validation          | co-owner directive `journal/0010` ("NEVER LET IT HAPPEN AGAIN")              | pending-loom — proposal queued  |
-| F6  | latest.yaml own-org `esperie-enterprise` scrub | `journal/0015` redteam disposition — PUBLIC repo; loom Gate-1 templatize-at-source | surfaced-to-human → loom Gate-1 |
+| ID | Item | Value-anchor (MUST-1 source) | Status |
+| -- | ---- | ---------------------------- | ------ |
+| F2 | #1606 express `v2` keyspace (rs#1713) | #1606 — Rust-pinned v2 keyspace | BLOCKED — land py+rs together |
+| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; fix Rust-side | in-flight — close when rs lands |
+| F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
+| F5 | handoff-completion → loom validation | `journal/0010` co-owner directive | pending-loom (proposal queued) |
+| F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
+| F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016`+`0017` | pending-loom Gate-1 (in proposal via #1687) |
 
-Closed prior: `redteam-reconvergence` → PR #1685 (merge `e79366ab9`); receipt `journal/0015`.
-This pass: third-pass holistic redteam CONVERGED; receipt `journal/0016`. Two new surface items for
-loom Gate-1: **cross-sdk-inspection.md 306-line no-named-length-rationale** (real fix = depth-extraction,
-not a BUILD band-aid) + **journal 0011 cross-repo-read scope** (process note — future grants name the
-exact trackers to verify).
+Closed this session: none of F2–F7 (all loom-side / cross-SDK). F7 ADDED this session. Session
+deliverables landed: PR #1686 (redteam convergence, `journal/0016`), PR #1687 (codify follow-up, `journal/0017`).
 
 ## Traps
 
-- **latest.yaml own-org (F6):** the 9 `esperie-enterprise` hits are meta-commentary carrying Gate-1 directives — a mechanical BUILD-side scrub CORRUPTS them. Leave to loom Gate-1; do NOT hand-scrub without care.
-- **/sync overwrite:** handoff-completion.md + cross-sdk-inspection.md are loom-bound; interim BUILD-side edits are transient — durable home is latest.yaml → Gate-1.
-- **`gh --repo terrene-foundation/kailash-py` = false-positive repo-scope tripwire** (CWD repo); omit `--repo`.
-- codify/* runs FULL PR-gate matrix (coordination OFF, no auto-skip); check CI pinned to head SHA, THEN merge as a separate command (git.md).
+- **latest.yaml own-org (F6):** the 9 `esperie-enterprise` hits are Gate-1 meta-directives — a mechanical BUILD scrub CORRUPTS them (loom Gate-1 only). Edits re-serialize the whole file (accepted precedent); verify via `python yaml` + semantic append-never-overwrite diff, NOT git line-diff.
+- **loom-bound rules:** handoff-completion.md + cross-sdk-inspection.md durable home is `latest.yaml` → Gate-1; interim BUILD edits are transient (/sync overwrites).
+- `gh --repo terrene-foundation/kailash-py` = false-positive repo-scope tripwire (CWD repo); omit `--repo`.
+- codify/* + chore/* run FULL PR-gate matrix (coordination OFF); check CI pinned to head SHA, THEN merge as a separate command.
 
 ## Open questions for the human
 
-- **F6:** confirm loom Gate-1 templatize-at-source is the disposition, or authorize a careful BUILD-side hand-scrub of the purely-descriptive occurrences.
-- **F5 (loom side):** ingest the BUILD→loom proposal + validate `handoff-completion` via loom's eval-harness + Gate-1.
+- **loom side (F5/F6/F7):** Gate-1 — validate handoff-completion via the eval-harness, templatize `esperie-enterprise` at source, and decide cross-sdk-inspection length-rationale (depth-extract to the guide vs named rationale at Origin).
