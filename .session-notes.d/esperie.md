@@ -5,48 +5,47 @@
 
 ---
 
-last_reconciled_sha: 69c44a2e5
+last_reconciled_sha: 1a0b5d372
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-07-12 (#1606 express-v3 release + forest consolidation)
+# Session Notes — 2026-07-12 (#1694 re-strand — #21/#22 fixed + full-suite audit)
 
 ## Where we are
 
-Shipped **#1606 end-to-end**: DataFlow Express cross-DB cache bleed → v2→v3 keyspace lockstep,
-3-agent redteam to convergence, merged (#1700), released **kailash-dataflow 2.15.0** (PyPI +
-clean-venv verified). Filed cross-SDK **rs#1771**. Then `/sweep` + **consolidated the forest ledger
-to root** (`.session-notes.shared.md` now canonical; legacy workspace monoliths retired to
-pointers). Board clean, no sibling drift. Repo on `main` @ `e67304453`, tree clean. Phase 05-codify.
+Continued mops-onboarding **Phase 05-codify** on loom Gate-1 flag-back **#1694**. Re-authored the two
+stranded proposal entries #21 (45-genesis watched-paths + runEnrollmentCeremony return) + #22
+(43-ecosystem STATE_PATH_RX hedge) as files-present edits, verified byte-for-byte vs the wired hooks,
+redteam-converged (reviewer + cc-architect CLEAN), merged **PR #1704**. Full-suite re-verification
+found **7 more stranded** entries → reported to loom Gate-1 on #1694. On `main`, board clean (0 PRs).
 
 ## Read first
 
-1. `.session-notes.shared.md` — the authoritative root forest ledger (F1/F13/F14-FC/F23/F24). START HERE.
-2. `workspaces/sdk-backlog/04-validate/sweep-2026-07-12.md` — this session's sweep + consolidation report.
-3. `workspaces/sdk-backlog/journal/0028-DECISION-1606-express-v3-fix-and-2150-release.md` — #1606 fix + 2.15.0 receipt.
-4. `workspaces/sdk-backlog/journal/0027-cross-repo-grant-rust-sdk-1606-credential-dsn-parity.md` — rs#1771 grant.
+1. `.session-notes.shared.md` — authoritative root forest ledger (F1/F13/F14-FC/F23/F24). START HERE.
+2. `gh issue view 1694` + its latest comment — the re-strand disposition + the 7 stranded entries for loom Gate-1.
+3. `workspaces/mops-onboarding/journal/0044-DECISION-re-strand-1694-fix-21-22-plus-fullsuite-audit.md` — full receipt.
 
 ## Executed this session
 
-- **Released kailash-dataflow 2.15.0** (tag `dataflow-v2.15.0`, publish-pypi success, GitHub Release, clean-venv install verified) — the #1606 Express fix.
-- **Filed rs#1771** on the Rust SDK (`cross-sdk`) — #1606 `//`-less-DSN credential-in-pre-image parity (grant `journal/0027`).
+- None — no external actions this session (PR #1704 is in THIS repo's git log; the #1694 disposition is a comment on this repo's own issue).
+
+## In-flight state
+
+- **7 stranded proposal entries (#10–#16)** reported to loom Gate-1 via the #1694 comment, awaiting loom-side classification (canonical-apply vs "needs re-authoring here" like #21/#22). NOT re-applied BUILD-side (anti-churn + repo-scope). Loom-tracked, NOT kailash-py SDK forest.
+- #21/#22 now files-present on main — loom Gate-1 must re-ingest so the next sync carries them forward, not revert.
 
 ## Outstanding ledger (forest)
 
-Authoritative = root `.session-notes.shared.md` (consolidated this session). Highlights: **F13
-#1532** delegate-connectors (DEFERRED, authorized grant journaled `sdk-backlog/0014` — the warm
-next pick); F1 mops-onboarding (BLOCKED on its own cross-repo re-confirm); F14/FC SAFR #1514-1517
-(BLOCKED on user scoping); F23 rs#1765 + F24 rs#1771 (cross-SDK, rs-side). No unblocked in-repo
-item remains — next pick is the human's call.
+Authoritative = root `.session-notes.shared.md` (UNCHANGED this session — #1694 is a sub-thread of the
+mops-onboarding program F1, which stays BLOCKED on user cross-repo re-confirm). No forest closures.
+Warm next pick remains **F13 #1532** (DEFERRED; grant journaled sdk-backlog/0014).
 
-Closed this session: `F19` #1606 → PR #1700 + release `dataflow-v2.15.0` (`journal/0028`).
-Reconciled off root: F20 #1607 / F21 #1614 / F22 #1601 (verified CLOSED via gh, prior work).
+Closed this session: none (forest-level).
 
 ## Traps
 
-- **Root split is canonical.** Write wrapups to `.session-notes.d/esperie.md` + `.session-notes.shared.md` (repo root); the workspace `.session-notes` monoliths are now pointer-stubs (forest sections retired 2026-07-12, #669).
-- **Loom-routed items are NOT kailash-py SDK forest.** sdk-backlog F5–F8 + mops-onboarding F3–F14 live loom-side (`latest.yaml` + journal anchors); do NOT migrate them into the root SDK ledger.
-- **venv tool shebangs are stale** (repo moved from `~/repos/loom/kailash-py`): use `.venv/bin/python -m black|isort|pre_commit`, not the bare binaries.
-- **#1532 grant is RECORDED, not standing licence** — restate+confirm+journal-before-acting per cross-repo read (`repo-scope-discipline` conds 3+4). Align to SPECS, not kailash-rs.
-- **rs#1765 / rs#1771** on-remote state never verified from here (repo-scope) — spot-check from a kailash-rs-scoped session before citing as existing.
-- **`/clean-instantiate` is NOT for this repo.** It ran as a dry-run this session and correctly flagged kailash-py as **canon** (origin = `terrene-foundation/kailash-py`, 0 canon-identity tokens, already ships un-enrolled) — NOT applied. It is only ever for a _client's own clone_ before _their_ `/ecosystem-init`. Applying it here would be purely destructive (deletes journal, `--reset-history` discards ~4.8k commits).
+- **#21/#22 are loom-synced files** — stranded because a prior `/sync-to-build` reverted the BUILD-side edits. Files-present now on main, but loom Gate-1 MUST re-ingest (#1694) or a future sync reverts again. Do NOT re-apply after a revert — let loom Gate-1 canonicalize.
+- **Do NOT re-apply the 7 stranded #10–#16 BUILD-side** (churn loop + repo-scope) — loom Gate-1 classifies each per the workspace anti-churn guidance.
+- **state-file-guard blocks a `node -e` / `node <script>` bundled with a protected STATE_PATH_RX path** (roster.json/schema, coordination-log, posture, violations, observations, presence-mechanism, .initialized, caches) — split the command or use script-by-path (a `grep operators.roster.schema.json` on the same line as a `node -e` trips it).
+- **venv tool shebangs stale** (repo moved from `~/repos/loom/kailash-py`): use `.venv/bin/python -m black|isort|pre_commit`.
+- **Root split canonical** — write wrapups to `.session-notes.d/esperie.md` + `.session-notes.shared.md`; workspace monoliths are pointer-stubs.
