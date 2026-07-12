@@ -25,17 +25,13 @@ lockstep) → reviewed to convergence (3 parallel redteam agents) → merged (#1
 
 ## Outstanding ledger (forest)
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
-| F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
-| F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 |
-| F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016/0017` | pending-loom Gate-1 |
-| F8 | handoff-completion Rule-10 emission-budget headroom | `journal/0019` fifth-pass MED | pending-loom Gate-1 |
-| F9 | rs#1765 cross-SDK #1695 parity (Rust side) | `journal/0026` — trust-plane two-surface shape | in-flight — rs-side; close when rs#1765 lands |
-| F10 | rs#1771 cross-SDK #1606 `//`-less-DSN parity (Rust side) | `journal/0027` — L1 hardening mirror | in-flight — rs-side; close when rs#1771 lands |
-
-Closed this session: `F2` → py #1606 Express half (PR #1700 + release `dataflow-v2.15.0`, `journal/0028`); #1606 auto-closed on merge.
+**CONSOLIDATED to the root canonical ledger** `.session-notes.shared.md` (2026-07-12 sweep,
+issue #669 — this workspace monolith no longer carries its own forest section). SDK items
+migrated: this session's `#1606` (was F2, now root `F19` CLOSED via `dataflow-v2.15.0`/PR #1700),
+`#1532` (→ root `F13`), rs#1765 (→ root `F23`), rs#1771 (→ root `F24`). The loom-Gate-1-routed
+items (was F5–F8: handoff-completion, latest.yaml own-org, cross-sdk-inspection length, Rule-10
+headroom) stay loom-side (loom `latest.yaml` + journal anchors `0010/0015/0016-0017/0019`) — not
+kailash-py SDK forest. See `04-validate/sweep-2026-07-12.md`.
 
 ## Traps
 
