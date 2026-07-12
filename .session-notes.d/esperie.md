@@ -5,7 +5,7 @@
 
 ---
 
-last_reconciled_sha: e67304453
+last_reconciled_sha: 69c44a2e5
 migrated_from: .session-notes
 ---
 
@@ -49,3 +49,4 @@ Reconciled off root: F20 #1607 / F21 #1614 / F22 #1601 (verified CLOSED via gh, 
 - **venv tool shebangs are stale** (repo moved from `~/repos/loom/kailash-py`): use `.venv/bin/python -m black|isort|pre_commit`, not the bare binaries.
 - **#1532 grant is RECORDED, not standing licence** — restate+confirm+journal-before-acting per cross-repo read (`repo-scope-discipline` conds 3+4). Align to SPECS, not kailash-rs.
 - **rs#1765 / rs#1771** on-remote state never verified from here (repo-scope) — spot-check from a kailash-rs-scoped session before citing as existing.
+- **`/clean-instantiate` is NOT for this repo.** It ran as a dry-run this session and correctly flagged kailash-py as **canon** (origin = `terrene-foundation/kailash-py`, 0 canon-identity tokens, already ships un-enrolled) — NOT applied. It is only ever for a _client's own clone_ before _their_ `/ecosystem-init`. Applying it here would be purely destructive (deletes journal, `--reset-history` discards ~4.8k commits).
