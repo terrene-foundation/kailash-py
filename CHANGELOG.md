@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.48.1] - 2026-07-12
+
+Security patch — trust-plane default-verification hardening (#1695).
+
+### Fixed
+
+- **Default verification level now detects tampered stored capability grants
+  (#1695).** At the default `VerificationLevel.STANDARD`, `TrustOperations.verify()`
+  matched a capability by name + expiry only — the per-`CapabilityAttestation`
+  Ed25519 signature covering the grant _content_ was verified only at `FULL`. An
+  actor able to tamper the persisted trust chain could mutate a stored grant's
+  content (e.g. widen `read` → `delete`, or loosen constraints) while preserving
+  its `id`, and every enforcement surface — all default to `STANDARD` — authorized
+  it. The default level now verifies the matched capability's content signature
+  (shared `_verify_capability_signature` helper; `FULL`'s full-chain check reuses
+  it), failing closed with a warning when the signing authority is unresolved or
+  the signature is malformed.
+  - The store-only MCP verification path (`EATPMCPServer` without a
+    `TrustOperations` instance) previously matched capabilities with no signature
+    verification; it now **fails closed** on positive authorization, since it has
+    no cryptographic material to detect tampering.
+  - `QUICK` is documented as expiry-only and must not be used as an enforcement
+    level over untrusted or persisted chains.
+  - Regression coverage: `tests/regression/test_issue_1695_tampered_grant_default_verify.py`.
+  - Cross-SDK parity inspection tracked on the Rust SDK.
+
 ## [2.48.0] - 2026-07-11
 
 SAFR governance-hardening: BH5 circuit-breaker (#1510) — completes the SAFR
