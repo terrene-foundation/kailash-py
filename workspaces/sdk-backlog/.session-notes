@@ -28,8 +28,8 @@ Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo).
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
-| F2 | #1606 express `v2` keyspace (rs#1713) | #1606 — Rust-pinned v2 keyspace | rs#1713 **OPEN** (verified 07-11) — land py+rs together |
-| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; fix Rust-side | rs#1729 **OPEN** (verified 07-11) — close when rs lands |
+| F2 | #1606 express `v3` keyspace (rs#1713) | #1606 — rs-pinned v3 keyspace | rs#1713 **CLOSED** (PR#1761, v3 landed) → py #1606 **ACTIVE IMPL** (catch up to v3, byte-mirror rs vectors) |
+| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; verify rs | ✅ **DONE** — rs#1729 CLOSED (PR#1751); py #1601 CLOSED 07-12 |
 | F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
 | F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
 | F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
