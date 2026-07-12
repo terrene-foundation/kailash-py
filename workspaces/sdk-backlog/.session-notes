@@ -2,48 +2,48 @@
 
 ## Where we are
 
-Shipped a trust-plane **privilege-escalation fix (#1695)** end-to-end: fixed → reviewed to
-convergence → merged (#1697) → cut security release **kailash 2.48.1** (live on PyPI, clean-venv
-verified). Also filed the cross-SDK parity issue **rs#1765**, closed py #1601 (rs#1729 done), and
-disposed of promotional-spam PR #1675 (earlier). Phase 05-codify; un-enrolled PUBLIC repo, solo.
-Board clear of ours.
+Shipped **F2 (#1606) end-to-end**: fixed the Express cross-DB cache bleed (v2→v3 keyspace
+lockstep) → reviewed to convergence (3 parallel redteam agents) → merged (#1700) → released
+**kailash-dataflow 2.15.0** (PyPI + clean-venv verified). Filed cross-SDK **rs#1771**. Phase
+05-codify; un-enrolled PUBLIC repo, solo. Board clear of ours (0 open PRs, no sibling drift).
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0026-DECISION-1695-fix-and-2481-release.md` — #1695 fix + 2.48.1 release receipt
-2. `workspaces/sdk-backlog/journal/0024-cross-repo-grant-rust-sdk-gap-audit-reopen.md` — rs gap-audit + v3 keyspace contract (for F2)
-3. `workspaces/sdk-backlog/journal/0025-cross-repo-grant-rust-sdk-1695-parity-filing.md` — rs#1765 filing grant
+1. `workspaces/sdk-backlog/journal/0028-DECISION-1606-express-v3-fix-and-2150-release.md` — F2 fix + 2.15.0 receipt
+2. `workspaces/sdk-backlog/journal/0027-cross-repo-grant-rust-sdk-1606-credential-dsn-parity.md` — rs#1771 grant + result
+3. `workspaces/sdk-backlog/journal/0024-cross-repo-grant-rust-sdk-gap-audit-reopen.md` — v3 keyspace contract (reference)
 
 ## In-flight state
 
-- `journal/0025`, `journal/0026`, and this notes write are uncommitted — land via a workspace-only chore PR (build-repo-release-discipline §1a carve-out; no release).
+- `journal/0027`, `journal/0028`, and this notes write are uncommitted — land via a
+  workspace-only chore PR (build-repo-release-discipline §1a carve-out; no release).
 
 ## Executed this session
 
-- **Released kailash 2.48.1** to PyPI (tag `v2.48.1`, publish-pypi success, GitHub Release) — the #1695 security fix.
-- **Filed rs#1765** on the Rust SDK (`cross-sdk`) — #1695 default-verification parity inspection (grant `journal/0025`).
+- **Released kailash-dataflow 2.15.0** (tag `dataflow-v2.15.0`, publish-pypi success, GitHub Release, clean-venv install verified).
+- **Filed rs#1771** on the Rust SDK (`cross-sdk`) — #1606 `//`-less-DSN credential-in-pre-image parity (grant `journal/0027`).
 
 ## Outstanding ledger (forest)
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
-| F2 | py #1606 express `v3` keyspace catch-up (mirror rs vectors) | #1606 — cross-DB cache bleed on hot path; rs#1713 v3 landed, contract in `journal/0024` | UNBLOCKED — active py impl (byte-mirror rs `dataflow-cache-keys.json`) |
 | F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
 | F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
 | F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 |
 | F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016/0017` | pending-loom Gate-1 |
 | F8 | handoff-completion Rule-10 emission-budget headroom | `journal/0019` fifth-pass MED | pending-loom Gate-1 |
-| F9 | rs#1765 cross-SDK #1695 parity (Rust side) | `journal/0026` — same two-surface shape likely in rs trust plane | in-flight — rs-side; close when rs#1765 lands |
+| F9 | rs#1765 cross-SDK #1695 parity (Rust side) | `journal/0026` — trust-plane two-surface shape | in-flight — rs-side; close when rs#1765 lands |
+| F10 | rs#1771 cross-SDK #1606 `//`-less-DSN parity (Rust side) | `journal/0027` — L1 hardening mirror | in-flight — rs-side; close when rs#1771 lands |
 
-Closed this session: `F3` → py #1601 closed + rs#1729/PR#1751 (soft_delete parity); #1695 → PR #1697 + release v2.48.1 (`journal/0026`).
+Closed this session: `F2` → py #1606 Express half (PR #1700 + release `dataflow-v2.15.0`, `journal/0028`); #1606 auto-closed on merge.
 
 ## Traps
 
-- **F2 is byte-parity work**: py express `v2→v3` MUST mirror rs `test-vectors/dataflow-cache-keys.json` byte-for-byte (6 vectors incl. sentinels); db_instance algo verified in `journal/0024`. Vendor the fixture, don't re-author (cross-sdk-inspection Rule 4a).
-- `.venv/bin/pre-commit` has a stale shebang → run `.venv/bin/python -m pre_commit` instead.
-- release/* branches auto-skip the PR-gate matrix; a stale `build` duplicate shows `cancelled` (concurrency) — verify the LATEST `build` run is success on the head SHA before admin-merge.
-- codify/* + chore/* run FULL matrix; check CI pinned to head SHA, THEN merge as a separate command.
+- **venv tool shebangs are stale** (repo relocated from `~/repos/loom/kailash-py`): `.venv/bin/black`/`isort`/`pre-commit` fail "bad interpreter". Use `.venv/bin/python -m black|isort|pre_commit`.
+- **3 pre-existing `test_express_cache_wiring.py` failures** (ttl/cache_stats/auto_detect) fire ONLY when a local Redis is up on 6379 (they assume no-Redis fallback) — env artifact, green in no-Redis unit CI. Not #1606.
+- `dataflow-v<X.Y.Z>` tags → publish-pypi builds kailash-dataflow. Verify install with `uv pip install --refresh` (index-cache lag).
+- Query keyspace stays v2 (py-local); ONLY the Express keyspace is v3/Rust-pinned. Don't conflate.
 
 ## Open questions for the human
 
-- **F2 (py #1606 express keyspace)** is the highest-value in-repo work now unblocked — recommend it next. F5–F8 remain loom-Gate-1-bound.
+- F4–F8 remain loom-Gate-1-bound / deferred. No clear unblocked in-repo forest item remains — next-highest work is the human's call.
