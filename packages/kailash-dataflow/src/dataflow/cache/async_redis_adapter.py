@@ -353,16 +353,19 @@ class AsyncRedisCacheAdapter:
         The key generator produces three key formats depending on
         whether caching runs in single- or multi-tenant mode:
 
-        - Express keys (single tenant): ``dataflow:<ver>:{model}:{op}:...``
-        - Express keys (multi-tenant): ``dataflow:<ver>:{tenant}:{model}:{op}:...``
+        - Express keys (single tenant): ``dataflow:v3:{db_instance}:{model}:{op}:...``
+        - Express keys (multi-tenant): ``dataflow:v3:{db_instance}:{tenant}:{model}:{op}:...``
         - SQL query keys: ``dataflow:{model}:<ver>:...``
 
         The version segment is matched as a wildcard (``v*``) so that
         every live keyspace version AND any stale legacy entries are
-        swept in one invalidation. This is required because the
-        default keyspace bumped ``v1 → v2`` in BP-049 (cross-SDK
-        parity with kailash-rs v3.19.0); a version-pinned invalidation
-        would leave v2 entries in place and serve stale reads.
+        swept in one invalidation. This is required because the express
+        keyspace bumped ``v1 → v2`` (BP-049) then ``v2 → v3`` (#1606,
+        which inserted the ``db_instance`` segment after the version); a
+        version-pinned invalidation would leave older entries in place and
+        serve stale reads. The greedy ``v*`` in the express globs above
+        spans the ``v3:{db_instance}`` prefix, so v3 keys (with the
+        db-instance segment) are matched without pinning it.
 
         All relevant patterns are scanned so that entries for the model
         are removed regardless of which code path created them.

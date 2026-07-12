@@ -7,11 +7,24 @@ Generates deterministic cache keys from queries and parameters.
 import hashlib
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Union
+from urllib.parse import urlparse
 
 from kailash.utils.url_credentials import UNPARSEABLE_URL_SENTINEL, mask_url
 
 if TYPE_CHECKING:
     from dataflow.classification.policy import ClassificationPolicy
+
+# Express (Rust-pinned) cross-SDK cache keyspace version. Bumped v2 -> v3 for
+# issue #1606 (the Rust SDK's #1713): the v3 keyspace inserts a database-instance
+# segment immediately after the version token so two DataFlow instances at
+# DIFFERENT databases sharing a process-wide cache backend (e.g. Redis) can never
+# collide on the same physical key. This is DISTINCT from
+# ``CacheKeyGenerator.version`` (the py-local QUERY keyspace, still ``v2``): the
+# express keyspace is a byte-for-byte contract with the Rust SDK and MUST move in
+# lockstep with it (canonical vectors: ``tests/fixtures/dataflow-cache-keys.json``,
+# contract ``dataflow-cache-keys-v3``); the query keyspace diverges cross-SDK by
+# construction (py vs rs emit different SQL) and versions independently.
+EXPRESS_KEYSPACE_VERSION = "v3"
 
 
 def _hash8(material: str) -> str:
@@ -85,9 +98,10 @@ def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
     DB-level row visibility (RLS / per-user GRANTs) MUST NOT share a cache
     backend across principals.
 
-    NOTE: this segments the QUERY keyspace only. The Express ``v2``
-    keyspace (``generate_express_key``) is a byte-for-byte cross-SDK
-    contract pinned to kailash-rs and MUST NOT carry this segment.
+    NOTE: this segments the QUERY keyspace only. The Express keyspace
+    (``generate_express_key``) carries its OWN cross-SDK db-instance
+    segment from ``express_db_instance_fingerprint`` (a different algorithm
+    + length); this query-side fingerprint MUST NOT be used there.
     """
     if not database_url:
         return None
@@ -101,6 +115,82 @@ def hash_database_identity(database_url: Optional[str]) -> Optional[str]:
         # would give every such instance the same identity — refuse.
         return None
     return _hash8(masked)
+
+
+def express_db_instance_fingerprint(database_url: Optional[str]) -> Optional[str]:
+    """Return the Rust-pinned ``db<16 hex>`` db-instance segment for EXPRESS v3.
+
+    This is the EXPRESS-keyspace sibling of :func:`hash_database_identity` and is
+    a DELIBERATELY DIFFERENT algorithm — it is a byte-for-byte cross-SDK contract
+    with the Rust SDK (issue #1606 / the Rust SDK's #1713, contract
+    ``dataflow-cache-keys-v3``), NOT the py-local query-keyspace fingerprint:
+
+    * ``hash_database_identity`` (QUERY keyspace) hashes ``mask_url(...)``
+      (``scheme://***@host:port/dbname``) and takes 8 hex chars. py-local shape.
+    * THIS function (EXPRESS keyspace) hashes the NORMALIZED connection target
+      ``scheme://<authority><path>`` — scheme lowercased, userinfo (credentials)
+      and query string and fragment stripped BEFORE hashing — and takes the
+      FIRST 16 hex chars (64 bits), prefixed with the literal ``db``. The two
+      MUST NOT be interchanged; the express bytes are pinned by the vendored
+      canonical vectors and any drift breaks cross-SDK cache-key parity.
+
+    The normalized pre-image carries NO credential byte (userinfo is stripped),
+    so a Redis key — an observable surface (``rules/security.md`` § "No secrets
+    in logs") — can never leak a password even if the digest were reversed. Two
+    instances at the SAME database with different DB credentials share a cache
+    namespace by design (the identity keys on database LOCATION, not principal).
+
+    Returns ``None`` when the URL is falsy OR unparseable (no scheme), OR when a
+    ``//``-less credential-bearing DSN would otherwise leak credential bytes into
+    the pre-image (see below). Callers that get ``None`` MUST emit a loud warning
+    — cross-DB cache isolation is then INACTIVE on a shared backend
+    (``rules/zero-tolerance.md`` Rule 3, no silent fallback).
+
+    KNOWN LIMITATION (cross-SDK-pinned): the identity keys on the connection
+    TARGET (``scheme://host:port/dbname``) — the query string is stripped, so two
+    instances at the SAME host/port/dbname that select a different SCHEMA via a
+    query parameter (e.g. ``?options=-csearch_path=a`` vs ``...=b``) share one
+    ``db_instance``. Deployments relying on per-schema-via-query isolation MUST
+    NOT share a cache backend across those instances. This normalization is the
+    byte-for-byte cross-SDK contract and MUST NOT be changed unilaterally
+    (``cross-sdk-inspection.md`` Rule 4b).
+
+    Examples (canonical vectors):
+        ``postgres://cache-host:5432/app_a``            -> ``dbd4e3f17d35c2bb57``
+        ``sqlite:///var/data/app_b.db``                 -> ``db5c74b84689218303``
+        ``postgres://svc_user:s3cr3t@cache-host:5432/app_a`` -> ``dbd4e3f17d35c2bb57``
+        (credentials stripped -> identical to the credential-free form)
+    """
+    if not database_url:
+        return None
+    try:
+        parsed = urlparse(database_url)
+    except Exception:
+        # urlparse is tolerant, but fail closed on any parse error rather than
+        # hashing a garbage constant that would collapse cross-DB isolation.
+        return None
+    if not parsed.scheme:
+        return None
+    netloc = parsed.netloc
+    # Fail closed on a ``//``-less credential-bearing DSN. ``urlparse`` only
+    # populates ``netloc`` for a ``scheme://authority`` URL; a
+    # ``scheme:user:pass@host/db`` form (no ``//``) leaves ``netloc`` empty and
+    # the userinfo in ``path``, so the ``@``-strip below would never fire and
+    # credential bytes would enter the hash pre-image. Refuse rather than hash a
+    # credential (defense-in-depth; the caller warns and isolation is INACTIVE).
+    # A ``//``-authority URL (``postgres://...``) always has a non-empty netloc;
+    # a sqlite file URL (``sqlite:///path``) has empty netloc but no ``@`` in the
+    # path — so this guard never fires for any valid/canonical target.
+    if not netloc and "@" in parsed.path:
+        return None
+    # Strip userinfo (user[:password]@) from the authority — only host[:port]
+    # survives, so no credential byte enters the hash pre-image.
+    if "@" in netloc:
+        netloc = netloc.rsplit("@", 1)[1]
+    # query + fragment live in parsed.query / parsed.fragment and are excluded
+    # from the pre-image by construction (only scheme://netloc/path is joined).
+    normalized = f"{parsed.scheme.lower()}://{netloc}{parsed.path}"
+    return "db" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 class DbIdentityResolution(NamedTuple):
@@ -188,6 +278,7 @@ class CacheKeyGenerator:
         version: str = "v2",
         classification_policy: Optional["ClassificationPolicy"] = None,
         db_identity: Optional[str] = None,
+        express_db_instance: Optional[str] = None,
     ):
         """
         Initialize key generator.
@@ -195,10 +286,11 @@ class CacheKeyGenerator:
         Args:
             prefix: Global prefix for all keys
             namespace: Optional namespace (e.g., tenant ID)
-            version: Cache keyspace version. Default is ``"v2"`` (BP-049
-                cross-SDK keyspace; pre-fix ``v1`` entries are orphaned on
-                upgrade and naturally expire). Cross-SDK contract matches
-                ``kailash-rs`` v3.19.0.
+            version: QUERY-keyspace version (``generate_key``). Default ``"v2"``
+                (py-local; diverges cross-SDK by construction — py vs rs emit
+                different SQL). This is NOT the express keyspace version; the
+                express keyspace is Rust-pinned at ``EXPRESS_KEYSPACE_VERSION``
+                (``v3``, issue #1606) and is not affected by this argument.
             classification_policy: Optional policy used to hash classified
                 PK values before they enter the key-material hash. When
                 provided, PKs whose model+field pair is classified are
@@ -212,15 +304,27 @@ class CacheKeyGenerator:
                 model name — so two DataFlow instances at *different*
                 databases never collide on the same query cache key
                 (issue #1606: cross-DB cache bleed). It is DELIBERATELY
-                absent from ``generate_express_key``: the Express ``v2``
-                keyspace is a byte-for-byte cross-SDK contract pinned to
-                ``kailash-rs`` and MUST NOT change unilaterally.
+                absent from ``generate_express_key`` — the express keyspace
+                carries its OWN ``express_db_instance`` segment (below), a
+                different byte-for-byte cross-SDK fingerprint; the two MUST
+                NOT be interchanged.
+            express_db_instance: Optional Rust-pinned ``db<16 hex>``
+                database-instance segment for the EXPRESS keyspace
+                (``generate_express_key``), produced by
+                ``express_db_instance_fingerprint``. When set, it is inserted
+                directly AFTER the version token (``dataflow:v3:<db_instance>:
+                ...``) so two DataFlow instances at *different* databases
+                never collide on the same express cache key (issue #1606 /
+                the Rust SDK's #1713, the v2->v3 lockstep). DISTINCT from
+                ``db_identity`` (query keyspace, different algorithm + length);
+                the two are never interchanged.
         """
         self.prefix = prefix
         self.namespace = namespace
         self.version = version
         self._classification_policy = classification_policy
         self.db_identity = db_identity
+        self.express_db_instance = express_db_instance
 
     def _safe_params(self, model_name: str, params: Any) -> Any:
         """Return a copy of ``params`` with classified PK values hashed.
@@ -235,9 +339,7 @@ class CacheKeyGenerator:
         if self._classification_policy is None or not isinstance(params, dict):
             return params
         # Lazy import avoids a cycle with features/express.py.
-        from dataflow.classification.event_payload import (
-            format_record_id_for_event,
-        )
+        from dataflow.classification.event_payload import format_record_id_for_event
 
         def _hash_id(mapping: Dict[str, Any]) -> Dict[str, Any]:
             if "id" not in mapping:
@@ -299,10 +401,11 @@ class CacheKeyGenerator:
         # model name so the existing model-anchored invalidation sweeps
         # (``{prefix}:{model}:*`` and the ``:{model}:`` substring matcher)
         # still match BOTH old-shape (no db_identity) and new-shape keys.
-        # The query keyspace is NOT the Rust-pinned Express v2 keyspace — it
+        # The query keyspace is NOT the Rust-pinned express keyspace — it
         # diverges cross-SDK by construction (py vs rs emit different SQL),
-        # so adding this segment is a py-local change, not a cross-SDK
-        # lockstep. See ``generate_express_key`` (Rust-pinned, untouched).
+        # so this segment is a py-local change, not a cross-SDK lockstep. The
+        # express keyspace has its OWN Rust-pinned db-instance segment; see
+        # ``generate_express_key`` / ``express_db_instance_fingerprint``.
         if self.db_identity:
             components.append(self.db_identity)
 
@@ -352,11 +455,15 @@ class CacheKeyGenerator:
         ``format_record_id_for_event`` BEFORE serialisation so the raw
         value never enters the hash input. See issue #520 (BP-049).
 
-        Shape (``v2`` keyspace; BP-049 cross-SDK):
+        Shape (``v3`` keyspace; issue #1606 / the Rust SDK's #1713 cross-SDK
+        lockstep). The ``db_instance`` segment sits directly after the
+        version, BEFORE the tenant, and is present in BOTH forms (it is
+        absent only when the generator was constructed without an
+        ``express_db_instance`` — a degraded no-DB fallback):
 
-        * Without tenant/namespace: ``dataflow:v2:User:list:a1b2c3d4``
-        * With tenant_id: ``dataflow:v2:tenant-a:User:list:a1b2c3d4``
-        * With namespace: ``dataflow:v2:<namespace>:User:list:a1b2c3d4``
+        * Single-tenant: ``dataflow:v3:<db_instance>:User:list:a1b2c3d4``
+        * Multi-tenant:  ``dataflow:v3:<db_instance>:tenant-a:User:list:a1b2c3d4``
+        * No db_instance (fallback): ``dataflow:v3:User:list:a1b2c3d4``
 
         The ``tenant_id`` argument takes precedence over the
         constructor ``namespace`` when both are supplied, so a
@@ -384,19 +491,58 @@ class CacheKeyGenerator:
         if not operation:
             raise ValueError("Operation is required")
 
-        parts: list[str] = [self.prefix, self.version]
+        params_hash: Optional[str] = None
+        if params is not None:
+            safe = self._safe_params(model_name, params)
+            param_str = json.dumps(safe, sort_keys=True, default=str)
+            params_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]
+
+        return self._assemble_express_key(model_name, operation, params_hash, tenant_id)
+
+    def _assemble_express_key(
+        self,
+        model_name: str,
+        operation: str,
+        params_hash: Optional[str],
+        tenant_id: Optional[str],
+    ) -> str:
+        """Assemble a v3 express physical key from an already-computed hash.
+
+        This is the byte-for-byte cross-SDK assembly seam (the equivalent of
+        the Rust SDK's ``BackendKey::to_physical``): it concatenates the
+        keyspace segments in the canonical v3 order and is exercised directly
+        by the conformance test against the vendored canonical vectors
+        (``tests/fixtures/dataflow-cache-keys.json``). ``generate_express_key``
+        computes ``params_hash`` (MD5 of the serialised params) then delegates
+        here; the conformance test injects the vectors' pre-computed
+        ``params_hash`` instead.
+
+        ``params_hash`` semantics:
+
+        * ``None`` — no params were supplied; the trailing segment is OMITTED
+          (``dataflow:v3:<db_instance>:User:list``). Backward-compatible with
+          the pre-#1606 no-params shape.
+        * ``""`` (empty string) — a PRESENT-but-empty hash; the segment IS
+          appended, so the key ends in a bare ``:`` (canonical vector V4:
+          ``dataflow:v3:<db_instance>:Product:list:``). ``generate_express_key``
+          never emits this (MD5 is always 8 chars); it is a conformance-only
+          shape the assembly must reproduce to match the Rust SDK byte-for-byte.
+        """
+        parts: list[str] = [self.prefix, EXPRESS_KEYSPACE_VERSION]
+        # #1606 db-instance segment: directly after the version, before tenant.
+        # Present in every production key (a DataFlow always has a connection
+        # target); absent only in the degraded no-URL fallback, where the
+        # express wrapper has already logged that cross-DB isolation is INACTIVE.
+        if self.express_db_instance:
+            parts.append(self.express_db_instance)
         if tenant_id is not None:
             parts.append(str(tenant_id))
         elif self.namespace:
             parts.append(self.namespace)
         parts.append(model_name)
         parts.append(operation)
-
-        if params is not None:
-            safe = self._safe_params(model_name, params)
-            param_str = json.dumps(safe, sort_keys=True, default=str)
-            param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]
-            parts.append(param_hash)
+        if params_hash is not None:
+            parts.append(params_hash)
 
         return ":".join(parts)
 

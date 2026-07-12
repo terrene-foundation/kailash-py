@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "contract": "dataflow-cache-keys-v3",
+  "description": "Cross-SDK conformance vectors for the DataFlow Express cache keyspace (issue #1713). kailash-rs LEADS this contract: it DEFINES the v3 keyspace, generates these canonical byte-vectors, and kailash-py (#1606) MUST reproduce every `physical` string byte-for-byte for the same inputs. The v3 keyspace inserts a database-instance dimension immediately after the version token so two DataFlow instances pointed at DIFFERENT databases but sharing a process-wide cache backend (e.g. Redis) can never collide on the same physical key. The db-instance segment is `db<16 lowercase hex>` — the first 16 hex chars (64 bits) of SHA-256 over the NORMALIZED connection target (`scheme://<authority>` with credentials AND query string stripped BEFORE hashing, only the scheme lowercased). No credential or PII ever reaches the keyspace (same rationale as the v1->v2 PK-fingerprint bump). Physical key shape: `dataflow:v3:{db_instance}:{tenant}:{model}:{op}:{params_hash}` (multi-tenant) and `dataflow:v3:{db_instance}:{model}:{op}:{params_hash}` (single-tenant). Each vector's `physical` string is the exact byte output of `BackendKey::to_physical()` for the `input` row; `db_instance` is the exact output of `db_instance_fingerprint(input.db_target)`.",
+  "kailash_rs_reference": "crates/kailash-dataflow/src/cache/mod.rs::{BackendKey::to_physical, db_instance_fingerprint}",
+  "kailash_py_reference": "kailash-py #1606 (the cross-SDK equivalent — MUST mirror these bytes)",
+  "vectors": [
+    {
+      "id": "V1",
+      "description": "Single-tenant Postgres read. Baseline shape: no tenant segment; db-instance sits directly after the version.",
+      "input": {
+        "db_target": "postgres://cache-host:5432/app_a",
+        "tenant": null,
+        "model": "User",
+        "op": "read",
+        "params_hash": "abc123"
+      },
+      "db_instance": "dbd4e3f17d35c2bb57",
+      "physical": "dataflow:v3:dbd4e3f17d35c2bb57:User:read:abc123"
+    },
+    {
+      "id": "V2",
+      "description": "Multi-tenant Postgres read on `app_a`. Full shape: db-instance THEN tenant THEN model. Classified PK already fingerprinted (`sha256:deadbeef`) upstream.",
+      "input": {
+        "db_target": "postgres://cache-host:5432/app_a",
+        "tenant": "tenant-alpha",
+        "model": "Document",
+        "op": "read",
+        "params_hash": "sha256:deadbeef"
+      },
+      "db_instance": "dbd4e3f17d35c2bb57",
+      "physical": "dataflow:v3:dbd4e3f17d35c2bb57:tenant-alpha:Document:read:sha256:deadbeef"
+    },
+    {
+      "id": "V3",
+      "description": "Single-tenant SQLite list. Distinct scheme (`sqlite`) and file path produce a distinct db-instance from the Postgres vectors.",
+      "input": {
+        "db_target": "sqlite:///var/data/app_b.db",
+        "tenant": null,
+        "model": "Order",
+        "op": "list",
+        "params_hash": "filterhash01"
+      },
+      "db_instance": "db5c74b84689218303",
+      "physical": "dataflow:v3:db5c74b84689218303:Order:list:filterhash01"
+    },
+    {
+      "id": "V4",
+      "description": "SENTINEL — empty params_hash (e.g. an unfiltered `list`). The trailing segment is empty, so the physical key ends in a bare `:`. Pins that an empty filter does not collapse a segment.",
+      "input": {
+        "db_target": "postgres://cache-host:5432/app_a",
+        "tenant": null,
+        "model": "Product",
+        "op": "list",
+        "params_hash": ""
+      },
+      "db_instance": "dbd4e3f17d35c2bb57",
+      "physical": "dataflow:v3:dbd4e3f17d35c2bb57:Product:list:"
+    },
+    {
+      "id": "V5",
+      "description": "SENTINEL — cross-database anti-collision. IDENTICAL tenant+model+op+params_hash as V2 but a DIFFERENT database (`app_b` vs `app_a`). The db-instance segment differs, so the physical keys MUST differ — this is the exact #1713 bug this keyspace closes. `physical` MUST NOT equal V2.physical.",
+      "input": {
+        "db_target": "postgres://cache-host:5432/app_b",
+        "tenant": "tenant-alpha",
+        "model": "Document",
+        "op": "read",
+        "params_hash": "sha256:deadbeef"
+      },
+      "db_instance": "dbae1d263c494c6c05",
+      "physical": "dataflow:v3:dbae1d263c494c6c05:tenant-alpha:Document:read:sha256:deadbeef"
+    },
+    {
+      "id": "V6",
+      "description": "SENTINEL — credentials stripped. SAME normalized target as V1 but with `svc_user:s3cr3t@` userinfo. The credential is removed BEFORE hashing, so `db_instance` and `physical` MUST equal V1 exactly (no credential reaches the keyspace).",
+      "input": {
+        "db_target": "postgres://svc_user:s3cr3t@cache-host:5432/app_a",
+        "tenant": null,
+        "model": "User",
+        "op": "read",
+        "params_hash": "abc123"
+      },
+      "db_instance": "dbd4e3f17d35c2bb57",
+      "physical": "dataflow:v3:dbd4e3f17d35c2bb57:User:read:abc123"
+    }
+  ]
+}

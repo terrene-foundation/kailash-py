@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [2.15.0] — 2026-07-12 — Express cross-DB cache-bleed fix: v2→v3 keyspace lockstep (#1606)
+
+### Security
+
+- **Express cache keyspace now segments by database-instance identity (#1606, cross-SDK lockstep).** The Express hot-path keyspace bumps `v2` → `v3`, inserting a credential-free `db<16 hex>` database-instance segment directly after the version token: `dataflow:v3:{db_instance}:{tenant}:{model}:{op}:{params_hash}`. Two DataFlow instances pointed at **different** databases but sharing a process-wide cache backend (e.g. Redis) can no longer collide on the same Express `read`/`list`/`find_one`/`count` key — closing the cross-DB cache bleed on the hot path that the query-keyspace fix (2.14.6) deliberately left open pending this coordinated cross-SDK re-pin (`cross-sdk-inspection.md` Rule 4b).
+  - The `db_instance` fingerprint is `db` + the first 16 hex chars of SHA-256 over the **normalized** connection target (`scheme://<authority><path>`, scheme lowercased, credentials + query string + fragment stripped **before** hashing) — no credential or PII ever reaches the keyspace. Two instances at the **same** database with different DB credentials share a namespace by design (the identity keys on database _location_, not principal).
+  - This is the byte-for-byte cross-SDK equivalent of the Rust SDK's #1713 (contract `dataflow-cache-keys-v3`); the Rust SDK **leads** the contract and kailash-py mirrors its canonical byte-vectors. The vendored conformance fixture (`tests/fixtures/dataflow-cache-keys.json`, byte-identical to the Rust SDK's) pins all six V1–V6 vectors including the empty-params, cross-DB anti-collision, and credential-strip sentinels.
+  - When no usable database identity can be derived from the DataFlow URL, the Express wrapper emits a loud WARN and cross-DB isolation is INACTIVE (fail-open with signal, never a silent constant fallback).
+
+### Changed
+
+- **`generate_express_key` now emits `v3` keys.** The query keyspace (`generate_key`) is unaffected and stays `v2` — it is py-local (py and the Rust SDK emit different SQL) and versions independently. Legacy `v2` Express entries left on a shared cache after upgrade are orphaned and expire on TTL; every invalidation path (`invalidate_model`, `clear_pattern`, the Redis `v*` glob) already sweeps them version- and db-instance-agnostically, so no stale entry survives an explicit invalidation.
+
+### Added
+
+- `express_db_instance_fingerprint()` in `dataflow.cache.key_generator` — the Rust-pinned Express db-instance fingerprint (distinct algorithm + length from the query-keyspace `hash_database_identity`).
+- Byte-for-byte conformance suite (`test_issue_1606_express_v3_conformance.py`) over the vendored canonical vectors, plus a Redis-side regression proof that v3 + db-instance keys are swept by the invalidation glob.
+
 ## [2.14.7] — 2026-07-10 — fabric write-path + source-path tenant guards (#1659, #1658)
 
 ### Security

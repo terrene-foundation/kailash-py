@@ -3,12 +3,18 @@
 This module pins the EXACT byte string of TWO cache keyspaces, which have
 DIFFERENT cross-SDK contracts and MUST NOT be conflated:
 
-1. EXPRESS ``v2`` keyspace (``generate_express_key``) — RUST-PINNED / cross-SDK
-   LOCKSTEP. It is a byte-for-byte contract with kailash-rs (the Rust SDK,
-   ``v3.19.0``, BP-049); see ``src/dataflow/cache/key_generator.py`` docstring.
-   Changing ANY express byte pinned here diverges the two SDKs' cache keys and
-   breaks cross-SDK invalidation — it is a deliberate ``v2 -> v3`` lockstep to
-   be done in BOTH SDKs, never one. These assertions stay loud.
+1. EXPRESS ``v3`` keyspace (``generate_express_key``) — RUST-PINNED / cross-SDK
+   LOCKSTEP. It is a byte-for-byte contract with the Rust SDK (issue #1606 /
+   the Rust SDK's #1713, contract ``dataflow-cache-keys-v3``); see
+   ``src/dataflow/cache/key_generator.py`` docstring. The ``v2 -> v3`` bump
+   inserted a database-instance segment directly after the version so two
+   DataFlow instances at DIFFERENT databases sharing a process-wide cache
+   backend never collide. Changing ANY express byte pinned here diverges the
+   two SDKs' cache keys and breaks cross-SDK invalidation — it is a deliberate
+   lockstep to be done in BOTH SDKs, never one. The exhaustive byte-for-byte
+   conformance vectors live in ``test_issue_1606_express_v3_conformance.py``
+   (vendored canonical fixture); these assertions stay loud on the common
+   shapes. These assertions stay loud.
 
 2. QUERY keyspace (``generate_key``) — NOT Rust-pinned. It hashes a normalized
    SQL string + params, which diverges cross-SDK by construction (the py and rs
@@ -25,16 +31,20 @@ Tier: 1 (Unit — no external dependencies).
 
 import hashlib
 
-from dataflow.cache.key_generator import (
-    CacheKeyGenerator,
-    hash_database_identity,
-)
+from dataflow.cache.key_generator import CacheKeyGenerator, hash_database_identity
 from dataflow.cache.memory_cache import InMemoryCache
 
-# --- Pinned EXPRESS v2 keyspace bytes (Rust-pinned — change ONLY with the ---
-# --- kailash-rs v2->v3 cross-SDK LOCKSTEP) ---------------------------------
-EXPRESS_KEY_WITH_TENANT = "dataflow:v2:tenant-a:User:list:6a3d3c8c"
-EXPRESS_KEY_NO_TENANT = "dataflow:v2:User:list"
+# --- Pinned EXPRESS v3 keyspace bytes (Rust-pinned — change ONLY with the ---
+# --- Rust SDK v2->v3 cross-SDK LOCKSTEP, #1606/the Rust SDK's #1713) --------
+# A fixed express db-instance segment for byte-pinning. In production this is
+# the ``db<16 hex>`` fingerprint of the normalized DSN
+# (express_db_instance_fingerprint). The v3 shape places it directly after the
+# version token, BEFORE the tenant.
+_FIXED_EXPRESS_DBID = "db0011223344556677"
+EXPRESS_KEY_WITH_TENANT = (
+    f"dataflow:v3:{_FIXED_EXPRESS_DBID}:tenant-a:User:list:6a3d3c8c"
+)
+EXPRESS_KEY_NO_TENANT = f"dataflow:v3:{_FIXED_EXPRESS_DBID}:User:list"
 
 # --- Pinned QUERY keyspace bytes (py-local tripwire; NOT Rust-pinned) ------
 # A fixed DB-identity segment for byte-pinning. In production this is the
@@ -56,49 +66,67 @@ _QUERY_PARAMS = [True]
 # EXPRESS keyspace — RUST-PINNED. These assertions guard the cross-SDK
 # byte-for-byte contract and MUST stay loud + unchanged by #1606.
 # =========================================================================
-def test_express_key_v2_bytes_are_pinned():
-    """generate_express_key emits the exact v2 byte string for fixed inputs."""
-    gen = CacheKeyGenerator()
+def test_express_key_v3_bytes_are_pinned():
+    """generate_express_key emits the exact v3 byte string for fixed inputs.
 
-    # With tenant + params: dataflow:v2:<tenant>:<model>:<op>:<hash>
+    The v3 keyspace inserts the ``db<16 hex>`` db-instance segment directly
+    after the version, BEFORE the tenant (issue #1606 / the Rust SDK's #1713).
+    """
+    gen = CacheKeyGenerator(express_db_instance=_FIXED_EXPRESS_DBID)
+
+    # With db_instance + tenant + params:
+    # dataflow:v3:<db_instance>:<tenant>:<model>:<op>:<hash>
     key = gen.generate_express_key(
         "User", "list", {"active": True}, tenant_id="tenant-a"
     )
     assert key == EXPRESS_KEY_WITH_TENANT, (
-        f"v2 Express keyspace drifted: got {key!r}. Changing these bytes is a "
-        f"cross-SDK LOCKSTEP (#1606/rs#1713) — bump v2->v3 in BOTH SDKs, not one."
+        f"v3 Express keyspace drifted: got {key!r}. Changing these bytes is a "
+        f"cross-SDK LOCKSTEP (#1606/the Rust SDK's #1713) — re-pin v3 in BOTH "
+        f"SDKs, not one."
     )
 
-    # Without tenant/params the trailing hash segment is absent.
+    # Without tenant/params the trailing hash segment is absent, but the
+    # db_instance segment stays.
     assert gen.generate_express_key("User", "list") == EXPRESS_KEY_NO_TENANT
 
-    # Version segment is fixed at v2 (the pinned cross-SDK keyspace).
-    assert key.startswith("dataflow:v2:")
+    # Version segment is fixed at v3 (the pinned cross-SDK keyspace).
+    assert key.startswith("dataflow:v3:")
+    # The db-instance segment sits directly after the version.
+    assert key.startswith(f"dataflow:v3:{_FIXED_EXPRESS_DBID}:")
 
 
-def test_express_key_excludes_db_identity_segment():
-    """The #1606 DB-identity segment MUST NOT enter the Rust-pinned express key.
+def test_express_and_query_db_segments_are_decoupled():
+    """The express db_instance and the query db_identity are DISTINCT segments.
 
-    Even when the generator is constructed WITH a db_identity (as it always is
-    in production, from engine.py), generate_express_key emits byte-identical
-    output to a generator without one. This is the structural guard that the
-    #1606 change stayed in the query keyspace and never touched the express
-    (Rust-pinned) keyspace.
+    Both fingerprints coexist on one generator in production (engine.py builds
+    the query generator with ``db_identity``; express.py builds its own with
+    ``express_db_instance``). This pins that neither leaks into the other's
+    keyspace — the express key carries ONLY ``express_db_instance`` and the
+    query key carries ONLY ``db_identity``.
     """
-    gen_with_dbid = CacheKeyGenerator(db_identity=_FIXED_DBID)
-    gen_without_dbid = CacheKeyGenerator()
+    gen = CacheKeyGenerator(
+        express_db_instance=_FIXED_EXPRESS_DBID,
+        db_identity=_FIXED_DBID,
+    )
 
-    key_with = gen_with_dbid.generate_express_key(
+    express_key = gen.generate_express_key(
         "User", "list", {"active": True}, tenant_id="tenant-a"
     )
-    key_without = gen_without_dbid.generate_express_key(
-        "User", "list", {"active": True}, tenant_id="tenant-a"
+    query_key = gen.generate_key("User", _QUERY_SQL, _QUERY_PARAMS)
+
+    # Express key carries the express db_instance, NOT the query db_identity.
+    assert express_key == EXPRESS_KEY_WITH_TENANT
+    assert _FIXED_EXPRESS_DBID in express_key
+    assert _FIXED_DBID not in express_key, (
+        "query db_identity leaked into the Rust-pinned express keyspace: "
+        f"{express_key!r}"
     )
-    assert key_with == key_without == EXPRESS_KEY_WITH_TENANT, (
-        "db_identity leaked into the Rust-pinned express keyspace: "
-        f"with={key_with!r} without={key_without!r}. The #1606 segment is "
-        "query-keyspace-ONLY; express is a cross-SDK byte contract."
-    )
+
+    # Query key carries the query db_identity, NOT the express db_instance.
+    assert _FIXED_DBID in query_key
+    assert (
+        _FIXED_EXPRESS_DBID not in query_key
+    ), f"express db_instance leaked into the query keyspace: {query_key!r}"
 
 
 # =========================================================================
@@ -210,12 +238,17 @@ def test_same_database_same_query_key_no_over_invalidation():
     assert other.generate_key("User", _QUERY_SQL, _QUERY_PARAMS) != key1
 
 
-async def test_invalidate_model_matches_v2_express_key():
+async def test_invalidate_model_matches_v3_express_key():
     """invalidate_model's ``:{tenant}:{model}:`` adjacency still deletes the key.
 
-    Pins the substring contract at memory_cache.py::invalidate_model — a
-    tenant-scoped invalidation matches the current v2 Express key layout
-    (``dataflow:v2:tenant-a:User:list:...`` contains ``:tenant-a:User:``).
+    Pins the substring contract at memory_cache.py::invalidate_model against the
+    v3 Express key layout WITH the #1606 db-instance segment
+    (``dataflow:v3:<db_instance>:tenant-a:User:list:...`` still contains
+    ``:tenant-a:User:``). The db-instance segment sits BEFORE the tenant, so the
+    tenant-scoped matcher is unaffected by the v2->v3 bump — this is the
+    structural proof that the invalidation path needed NO change for v3
+    (``tenant-isolation.md §3a`` — the ``:{model}:`` matcher is version- and
+    db-instance-agnostic).
     """
     cache = InMemoryCache()
     await cache.set(EXPRESS_KEY_WITH_TENANT, {"rows": []})

@@ -55,11 +55,7 @@ import pytest
 
 from dataflow import DataFlow
 from dataflow.cache.key_generator import CacheKeyGenerator
-from dataflow.classification import (
-    DataClassification,
-    MaskingStrategy,
-    classify,
-)
+from dataflow.classification import DataClassification, MaskingStrategy, classify
 from dataflow.classification.policy import ClassificationPolicy
 from dataflow.classification.validation_error import (
     CLASSIFIED_FIELD_NAME_PLACEHOLDER,
@@ -68,7 +64,6 @@ from dataflow.classification.validation_error import (
 )
 from dataflow.validation.decorators import field_validator, validate_model
 from dataflow.validation.result import ValidationResult
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration]
@@ -301,8 +296,9 @@ def test_m2_cache_key_classified_pk_produces_stable_different_key():
     assert key_a != key_b, "Distinct raw PKs MUST produce distinct keys"
     assert "alice@leak.example" not in key_a
     assert "bob@leak.example" not in key_b
-    # v2 keyspace
-    assert ":v2:" in key_a
+    # v3 express keyspace (#1606 bumped v2->v3; bare generator has no
+    # db-instance segment, so the version token sits directly after the prefix)
+    assert ":v3:" in key_a
 
 
 def test_m2_cache_key_filter_nested_id_is_hashed():
