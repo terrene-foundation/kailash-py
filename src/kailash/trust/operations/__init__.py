@@ -574,6 +574,28 @@ class TrustOperations:
                 level=level,
             )
 
+        # SECURITY (#1695): verify the MATCHED capability's Ed25519 content
+        # signature at STANDARD — not just its name + expiry. The signature
+        # covers the grant content (capability + constraints, see
+        # CapabilityAttestation.to_signing_payload), so a tampered *stored*
+        # grant (e.g. read_data -> delete_data, or loosened constraints, with
+        # the id preserved so the id-only chain-state hash is unaffected) is
+        # rejected here at the shipped default level. Previously this signature
+        # was checked only at FULL, so every enforcement surface — all of which
+        # default to STANDARD — authorized tampered grants. FULL still runs the
+        # full-chain _verify_signatures below (which re-covers this capability);
+        # QUICK is name/expiry-only by design and is not an enforcement default.
+        if level != VerificationLevel.FULL:
+            if not await self._verify_capability_signature(chain, capability):
+                return VerificationResult(
+                    valid=False,
+                    reason=(
+                        "Capability signature invalid — stored grant may be "
+                        f"tampered: {capability.id}"
+                    ),
+                    level=level,
+                )
+
         # Evaluate constraints
         if chain.constraint_envelope is not None:
             constraint_result = self._evaluate_constraints(
@@ -1065,6 +1087,74 @@ class TrustOperations:
         # Default: permit if constraint not recognized
         return {"permitted": True}
 
+    async def _verify_capability_signature(
+        self,
+        chain: TrustLineageChain,
+        cap: CapabilityAttestation,
+        authority: Optional[Any] = None,
+    ) -> bool:
+        """Verify one capability attestation's Ed25519 content signature.
+
+        The signature covers ``cap.to_signing_payload()`` — which includes the
+        granted ``capability`` string and ``constraints`` — so a stored-grant
+        content tamper (e.g. ``read_data`` -> ``delete_data`` with the ``id``
+        preserved) invalidates it. This is the single source of truth for
+        per-capability signature verification, used by both the STANDARD-level
+        matched-capability check in ``verify()`` (#1695) and the full-chain
+        ``_verify_signatures`` (FULL level).
+
+        Fails closed: if the signing authority cannot be resolved, returns
+        ``False`` and emits a WARN (a denial the operator must be able to see —
+        `rules/observability.md`), never a silent swallow.
+
+        Args:
+            chain: The trust chain whose genesis authority signed the grant.
+            cap: The capability attestation to verify.
+            authority: Optional pre-resolved authority (FULL resolves it once
+                for the whole chain and passes it to avoid N lookups); when
+                ``None`` the authority is resolved here.
+
+        Returns:
+            True iff the signature is cryptographically valid.
+        """
+        if authority is None:
+            try:
+                authority = await self.authority_registry.get_authority(
+                    chain.genesis.authority_id,
+                    include_inactive=True,  # historical verification
+                )
+            except (AuthorityNotFoundError, AuthorityInactiveError):
+                # Fail closed: cannot resolve the signer -> cannot trust the
+                # grant. Log so the denial is observable (not a silent swallow).
+                logger.warning(
+                    "capability signature verification failed: signing "
+                    "authority unresolved (fail-closed denial)",
+                    extra={
+                        "authority_id": chain.genesis.authority_id,
+                        "capability_id": cap.id,
+                    },
+                )
+                return False
+        cap_payload = serialize_for_signing(cap.to_signing_payload())
+        try:
+            return await self.key_manager.verify(
+                cap_payload,
+                cap.signature,
+                authority.public_key,
+            )
+        except InvalidSignatureError:
+            # verify_signature() returns False on a BadSignatureError but RAISES
+            # InvalidSignatureError on a malformed / empty / wrong-length
+            # signature. A tampered stored grant may carry exactly such a
+            # signature, so treat the raise as an invalid signature and fail
+            # closed (mirrors _verify_reasoning_traces). Observable, not silent.
+            logger.warning(
+                "capability signature verification failed: malformed or "
+                "unverifiable signature (fail-closed denial)",
+                extra={"capability_id": cap.id},
+            )
+            return False
+
     async def _verify_signatures(
         self,
         chain: TrustLineageChain,
@@ -1096,13 +1186,11 @@ class TrustOperations:
                 level=VerificationLevel.FULL,
             )
 
-        # Verify capability signatures
+        # Verify capability signatures (single source of truth: the same
+        # per-capability check STANDARD uses on the matched grant, #1695).
         for cap in chain.capabilities:
-            cap_payload = serialize_for_signing(cap.to_signing_payload())
-            if not await self.key_manager.verify(
-                cap_payload,
-                cap.signature,
-                authority.public_key,
+            if not await self._verify_capability_signature(
+                chain, cap, authority=authority
             ):
                 return VerificationResult(
                     valid=False,

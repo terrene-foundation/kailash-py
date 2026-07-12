@@ -34,12 +34,12 @@ from kailash.trust.chain import (
     CapabilityType,
     VerificationLevel,
 )
-from kailash.trust.signing.crypto import generate_keypair
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.enforce.strict import HeldBehavior, StrictEnforcer
 from kailash.trust.mcp.server import EATPMCPServer
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.posture.postures import PostureStateMachine
-from kailash.trust.chain_store.memory import InMemoryTrustStore
+from kailash.trust.signing.crypto import generate_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +322,9 @@ class TestProtocol:
             "eatp_delegate",
             "eatp_revoke",
         }
-        assert tool_names == expected_tools, f"Expected tools {expected_tools}, got {tool_names}"
+        assert (
+            tool_names == expected_tools
+        ), f"Expected tools {expected_tools}, got {tool_names}"
 
     async def test_tools_list_has_input_schemas(self, server):
         """Each tool definition must include an inputSchema with required fields."""
@@ -336,8 +338,12 @@ class TestProtocol:
             assert "description" in tool, f"Tool {tool['name']} missing 'description'"
             assert "inputSchema" in tool, f"Tool {tool['name']} missing 'inputSchema'"
             schema = tool["inputSchema"]
-            assert schema["type"] == "object", f"Tool {tool['name']} inputSchema type must be 'object'"
-            assert "properties" in schema, f"Tool {tool['name']} inputSchema missing 'properties'"
+            assert (
+                schema["type"] == "object"
+            ), f"Tool {tool['name']} inputSchema type must be 'object'"
+            assert (
+                "properties" in schema
+            ), f"Tool {tool['name']} inputSchema missing 'properties'"
 
     async def test_resources_templates_list(self, server):
         """resources/templates/list must return all 4 resource templates."""
@@ -356,7 +362,9 @@ class TestProtocol:
             "eatp://chains/{authority_id}",
             "eatp://constraints/{agent_id}",
         }
-        assert uri_templates == expected_templates, f"Expected templates {expected_templates}, got {uri_templates}"
+        assert (
+            uri_templates == expected_templates
+        ), f"Expected templates {expected_templates}, got {uri_templates}"
 
     async def test_ping_returns_empty_result(self, server):
         """ping must return an empty result object."""
@@ -515,7 +523,9 @@ class TestToolsValid:
     async def test_eatp_status_returns_agent_state(self, server, trust_ops):
         """eatp_status returns trust score, posture, and capabilities."""
         await _initialize_server(server)
-        await _establish_agent(trust_ops, "agent-s1", ["analyze_data", "generate_report"])
+        await _establish_agent(
+            trust_ops, "agent-s1", ["analyze_data", "generate_report"]
+        )
 
         request = _make_request(
             "tools/call",
@@ -686,7 +696,10 @@ class TestToolsValid:
         raw_response = await server.handle_message(request)
         response = _parse_response(raw_response)
 
-        assert "isError" not in response["result"] or response["result"].get("isError") is not True
+        assert (
+            "isError" not in response["result"]
+            or response["result"].get("isError") is not True
+        )
 
         data = _get_tool_result_data(response)
 
@@ -1126,7 +1139,9 @@ class TestResourcesValid:
     async def test_resource_agent_details(self, server, trust_ops):
         """eatp://agents/{id} returns comprehensive agent details."""
         await _initialize_server(server)
-        await _establish_agent(trust_ops, "agent-res-det", ["analyze_data", "read_reports"])
+        await _establish_agent(
+            trust_ops, "agent-res-det", ["analyze_data", "read_reports"]
+        )
 
         request = _make_request(
             "resources/read",
@@ -1316,7 +1331,9 @@ class TestResourceErrors:
 class TestFullWorkflow:
     """Test complete end-to-end workflows through the MCP server."""
 
-    async def test_establish_verify_delegate_audit_workflow(self, server, trust_ops, audit_store):
+    async def test_establish_verify_delegate_audit_workflow(
+        self, server, trust_ops, audit_store
+    ):
         """
         Full workflow: initialize -> establish agent -> verify action ->
         delegate to second agent -> verify delegation -> audit query.
@@ -1436,7 +1453,9 @@ class TestFullWorkflow:
         raw = await server.handle_message(audit_request)
         audit_data = _get_tool_result_data(_parse_response(raw))
         assert audit_data["total_returned"] >= 1
-        found = any(r["anchor"]["action"] == "analyze_data" for r in audit_data["records"])
+        found = any(
+            r["anchor"]["action"] == "analyze_data" for r in audit_data["records"]
+        )
         assert found, "Audit trail must contain the analyze_data action"
 
         # Step 10: Read resources to verify state
@@ -1486,7 +1505,9 @@ class TestFullWorkflow:
             msg_id=18,
         )
         raw = await server.handle_message(constraint_request)
-        constraint_data = json.loads(_parse_response(raw)["result"]["contents"][0]["text"])
+        constraint_data = json.loads(
+            _parse_response(raw)["result"]["contents"][0]["text"]
+        )
         assert constraint_data["agent_id"] == "agent-alpha"
 
         # Step 11: Revoke the delegation
@@ -1504,8 +1525,15 @@ class TestFullWorkflow:
 
     async def test_lightweight_verify_without_ops(self, server_no_ops, trust_store):
         """
-        Server without TrustOperations uses lightweight verification
-        from the store directly.
+        Server without TrustOperations FAILS CLOSED on positive authorization
+        (#1695).
+
+        The store-only path cannot verify a capability's Ed25519 content
+        signature (no key manager / authority registry here), so it cannot
+        detect a tampered stored grant. It therefore MUST NOT authorize a
+        name-matched capability: it denies (verdict=blocked) and directs the
+        operator to configure trust_ops. A no-capability-match still denies with
+        its own reason.
         """
         await _initialize_server(server_no_ops)
 
@@ -1554,8 +1582,11 @@ class TestFullWorkflow:
         raw = await server_no_ops.handle_message(request)
         data = _get_tool_result_data(_parse_response(raw))
 
-        assert data["valid"] is True
-        assert data["verdict"] == "auto_approved"
+        # #1695: name-matched but signature-unverifiable -> fail closed (deny),
+        # NOT auto-approved. The ops-less path cannot authorize.
+        assert data["valid"] is False
+        assert data["verdict"] == "blocked"
+        assert "TrustOperations" in (data["details"]["reason"] or "")
 
         # Verify unauthorized action
         request2 = _make_request(
