@@ -189,17 +189,20 @@ class InMemoryCache:
         does NOT affect entries for ``"UserAudit"`` or ``"UserSession"``.
         The key generator produces two formats:
 
-        - Express keys: ``dataflow:v*:{model}:{op}:...``
-        - Express keys with tenant: ``dataflow:v*:{tenant}:{model}:{op}:...``
+        - Express keys (v3, #1606): ``dataflow:v3:{db_instance}:{model}:{op}:...``
+        - Express keys with tenant: ``dataflow:v3:{db_instance}:{tenant}:{model}:{op}:...``
+          (the ``db_instance`` segment sits directly after the version, BEFORE
+          the tenant; pre-#1606 v2 keys had no ``db_instance`` segment).
         - SQL query keys: ``dataflow:{model}:v*:...`` or, since issue #1606,
           ``dataflow:{model}:{db_identity}:v*:...`` (the DB-instance
           identity segment sits directly after the model name).
 
-        The ``:{model}:`` segment matcher is agnostic to BOTH the version
-        segment AND the #1606 DB-identity segment (they follow the matched
-        ``:{model}:`` delimiter), so it sweeps legacy v1 keys, pre-#1606 v2
-        keys (no db_identity), AND post-#1606 v2 keys (with db_identity) in
-        one call — the implementation survives future keyspace bumps and the
+        The ``:{model}:`` segment matcher is agnostic to the version segment,
+        the #1606 express ``db_instance`` segment, AND the query-keyspace
+        ``db_identity`` segment (all precede the matched ``:{model}:``
+        delimiter), so it sweeps legacy v1/v2 keys AND v3 express keys
+        (with or without ``db_instance``) in one call — the implementation
+        survives future keyspace bumps and the
         DB-identity addition without edit (``tenant-isolation.md §3a``).
 
         Matching strategy:

@@ -85,10 +85,50 @@ async def test_invalidate_model_regression_pin_v2_entries_swept() -> None:
     await adapter.invalidate_model("User", tenant_id="acme")
 
     # Sample v2 Express key (multi-tenant) as written by
-    # CacheKeyGenerator at the new default keyspace.
+    # CacheKeyGenerator at the pre-#1606 default keyspace. Legacy v2 entries
+    # left on Redis after the v3 upgrade MUST still be swept (backward-compat).
     sample_v2_key = "dataflow:v2:acme:User:list:a1b2c3d4"
     assert any(fnmatch.fnmatchcase(sample_v2_key, p) for p in captured), (
         f"v2 key {sample_v2_key!r} did not match any invalidation "
         f"pattern {captured!r} — the v1→v2 keyspace bump from BP-049 "
         f"is not being cleared on Redis."
     )
+
+
+@pytest.mark.asyncio
+async def test_invalidate_model_regression_pin_v3_db_instance_keys_swept() -> None:
+    """#1606: a v3 key WITH the inserted db-instance segment MUST be swept.
+
+    The v3 keyspace (issue #1606 / the Rust SDK's #1713) inserts a
+    ``db<16 hex>`` db-instance segment directly after the version, BEFORE the
+    tenant: ``dataflow:v3:<db_instance>:<tenant>:<model>:<op>:<hash>``. This
+    shifts every segment right by one, so this PROVES (not reasons) that the
+    ``dataflow:v*:{tenant}:{model}:*`` invalidation glob still matches — the
+    greedy ``*`` after ``v*`` spans the ``v3:<db_instance>`` prefix. Without
+    this test the v2->v3 bump could silently break Redis invalidation of every
+    express entry (``tenant-isolation.md §3a``). Behavioural via ``fnmatch``.
+    """
+    import fnmatch
+
+    adapter = AsyncRedisCacheAdapter.__new__(AsyncRedisCacheAdapter)
+    captured: list[str] = []
+
+    async def fake_clear_pattern(pattern: str) -> int:
+        captured.append(pattern)
+        return 0
+
+    adapter.clear_pattern = AsyncMock(side_effect=fake_clear_pattern)  # type: ignore[method-assign]
+
+    # Model-wide AND tenant-scoped invalidation both emit patterns.
+    await adapter.invalidate_model("User")
+    await adapter.invalidate_model("User", tenant_id="acme")
+
+    # Canonical v3 shapes (db-instance from express_db_instance_fingerprint).
+    v3_single_tenant = "dataflow:v3:dbd4e3f17d35c2bb57:User:read:abc123"
+    v3_multi_tenant = "dataflow:v3:dbd4e3f17d35c2bb57:acme:User:list:a1b2c3d4"
+    for sample in (v3_single_tenant, v3_multi_tenant):
+        assert any(fnmatch.fnmatchcase(sample, p) for p in captured), (
+            f"v3 key {sample!r} did not match any invalidation pattern "
+            f"{captured!r} — the #1606 db-instance segment broke Redis "
+            f"invalidation of express entries."
+        )

@@ -54,7 +54,10 @@ import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 from dataflow.cache.auto_detection import CacheBackend
-from dataflow.cache.key_generator import CacheKeyGenerator
+from dataflow.cache.key_generator import (
+    CacheKeyGenerator,
+    express_db_instance_fingerprint,
+)
 from dataflow.cache.memory_cache import InMemoryCache
 from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
@@ -150,11 +153,31 @@ class DataFlowExpress:
         else:
             self._cache_manager = None
 
+        # Issue #1606 (the Rust SDK's #1713, v2->v3 cross-SDK lockstep):
+        # resolve this DataFlow's credential-free database-instance fingerprint
+        # and plumb it into the express keyspace so two DataFlow instances at
+        # DIFFERENT databases sharing a process-wide cache backend (e.g. Redis)
+        # never collide on the same express key (cross-DB cache bleed). The URL
+        # lives on the structured config (``config.database.url``), NOT as a
+        # ``database_url`` attribute on the DataFlow instance.
+        _db_cfg = getattr(self._db, "config", None)
+        _db_url = getattr(getattr(_db_cfg, "database", None), "url", None)
+        express_db_instance = express_db_instance_fingerprint(_db_url)
+        if express_db_instance is None:
+            logger.warning(
+                "express.cache.db_instance_disabled: no usable database "
+                "identity from the DataFlow URL — cross-DB express cache "
+                "isolation is INACTIVE on a shared cache backend; two DataFlow "
+                "instances at different databases may read each other's cached "
+                "express rows (#1606)",
+                extra={"url_present": _db_url is not None},
+            )
         # BP-049: plumb the DataFlow classification policy into the cache
         # key generator so classified PKs are hashed before serialisation
         # (issue #520). ``self._db`` holds the owning DataFlow instance.
         self._key_gen = CacheKeyGenerator(
             classification_policy=getattr(self._db, "_classification_policy", None),
+            express_db_instance=express_db_instance,
         )
 
         # Local hit/miss counters for Express-level stats
@@ -2313,9 +2336,19 @@ class DataFlowExpress:
         if self._cache_manager is None:
             return 0
         if model:
-            return await self._cache_manager.clear_pattern(
-                f"{self._key_gen.prefix}:{self._key_gen.version}:{model}:*"
-            )
+            # Version- AND db-instance-agnostic model-scoped clear. The
+            # express keyspace bumped v2->v3 (#1606) and inserted a
+            # db-instance segment directly after the version, so a
+            # version-pinned prefix glob
+            # (``{prefix}:{self._key_gen.version}:{model}:*``, pinned to the
+            # generator's query-keyspace version "v2") no longer matches the
+            # v3 express keys AND never matched tenant-scoped express keys
+            # (``...:{tenant}:{model}:...``, model after tenant) — it would
+            # silently clear 0 entries. Delegate to ``invalidate_model``,
+            # whose ``:{model}:`` segment matcher is agnostic to the version
+            # segment, the #1606 db-instance segment, AND the tenant segment
+            # (``tenant-isolation.md`` §3a), mirroring ``_invalidate_model_cache``.
+            return await self._cache_manager.invalidate_model(model)
         else:
             if isinstance(self._cache_manager, InMemoryCache):
                 count = len(self._cache_manager.cache)

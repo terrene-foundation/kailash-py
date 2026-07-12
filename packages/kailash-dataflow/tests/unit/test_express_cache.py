@@ -20,14 +20,17 @@ class TestCacheKeyGeneratorExpress:
     """Test CacheKeyGenerator.generate_express_key()."""
 
     def test_basic_key_format(self):
-        """Key has format prefix:version:model:operation[:hash].
+        """Key format prefix:version[:db_instance][:tenant]:model:operation[:hash].
 
-        Keyspace bumped v1->v2 in commit 64167f7c (BP-049 classified-data
-        cross-SDK fix); test updated to match producer-side default.
+        Keyspace history: v1->v2 (BP-049 classified-data cross-SDK fix);
+        v2->v3 (#1606 / the Rust SDK's #1713 — inserts a db-instance segment
+        directly after the version). A bare generator (no ``express_db_instance``)
+        omits the db-instance segment, so the no-db / no-tenant / no-params shape
+        is ``dataflow:v3:User:list``.
         """
         gen = CacheKeyGenerator()
         key = gen.generate_express_key("User", "list")
-        assert key == "dataflow:v2:User:list"
+        assert key == "dataflow:v3:User:list"
 
     def test_params_produce_hash_suffix(self):
         """When params are provided a short hash is appended."""
