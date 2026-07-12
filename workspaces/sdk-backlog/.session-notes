@@ -1,51 +1,49 @@
-# Session Notes — 2026-07-11
+# Session Notes — 2026-07-12
 
 ## Where we are
 
-**Board is clear of ours.** This session disposed of the one live PR — **#1675** (external
-promotional-spam "JMT x402 Agent Tools"): owner **closed + blocked + reported** it as spam; assessed
-**non-security** (README-only +2/-0, inert, author had read-only public default + 0 write + 0 commits
-on main, merge was branch-protection BLOCKED). Basis: **Absolute Directive #0 — Foundation
-Independence**. Receipt: `journal/0021`.
-
-The post-v2.48.0 codify wave stays **6× converged + landed** (PR #1691, `journal/0013`–`0020`). Per
-`0020`'s own disposition, same-scope re-passes have diminishing value — **NOT re-passed this session**.
-Phase 05-codify; un-enrolled PUBLIC repo, coordination OFF (solo).
+Shipped a trust-plane **privilege-escalation fix (#1695)** end-to-end: fixed → reviewed to
+convergence → merged (#1697) → cut security release **kailash 2.48.1** (live on PyPI, clean-venv
+verified). Also filed the cross-SDK parity issue **rs#1765**, closed py #1601 (rs#1729 done), and
+disposed of promotional-spam PR #1675 (earlier). Phase 05-codify; un-enrolled PUBLIC repo, solo.
+Board clear of ours.
 
 ## Read first
 
-1. `workspaces/sdk-backlog/journal/0021-DECISION-pr1675-promotional-spam-disposition.md` — this session's receipt
-2. `workspaces/sdk-backlog/journal/0020-DECISION-redteam-sixthpass-reconvergence.md` — wave convergence + stop-re-passing disposition
-3. `.claude/.proposals/latest.yaml` — BUILD→loom proposal (25 changes, pending_review; unchanged this session)
+1. `workspaces/sdk-backlog/journal/0026-DECISION-1695-fix-and-2481-release.md` — #1695 fix + 2.48.1 release receipt
+2. `workspaces/sdk-backlog/journal/0024-cross-repo-grant-rust-sdk-gap-audit-reopen.md` — rs gap-audit + v3 keyspace contract (for F2)
+3. `workspaces/sdk-backlog/journal/0025-cross-repo-grant-rust-sdk-1695-parity-filing.md` — rs#1765 filing grant
+
+## In-flight state
+
+- `journal/0025`, `journal/0026`, and this notes write are uncommitted — land via a workspace-only chore PR (build-repo-release-discipline §1a carve-out; no release).
 
 ## Executed this session
 
-- **PR #1675** disposed: owner closed (verified `state=CLOSED` @ 2026-07-11T13:02:14Z) + blocked account + filed GitHub spam report. Non-security assessment recorded in `0021`.
-- Cleaned 6 superseded `journal/.pending/` auto-capture stubs (all already promoted to `0010`–`0019`).
-- **User-authorized cross-repo read** (`journal/0022` grant): verified 6 rs# issues on kailash-rs read-only. Live forest = **3 OPEN** (rs#1713/F2, rs#1729/F3, rs#1732/BH5); **3 CLOSED** (rs#1712, rs#1667, rs#1707 — incl. rs#1707 BH3 status-change vs `0008`). None blocks this repo; all actionable only in a kailash-rs session.
+- **Released kailash 2.48.1** to PyPI (tag `v2.48.1`, publish-pypi success, GitHub Release) — the #1695 security fix.
+- **Filed rs#1765** on the Rust SDK (`cross-sdk`) — #1695 default-verification parity inspection (grant `journal/0025`).
 
-## Outstanding ledger (forest — NONE actionable from this repo)
+## Outstanding ledger (forest)
 
 | ID | Item | Value-anchor (MUST-1 source) | Status |
 | -- | ---- | ---------------------------- | ------ |
-| F2 | #1606 express `v3` keyspace (rs#1713) | #1606 — rs-pinned v3 keyspace | rs#1713 **CLOSED** (PR#1761, v3 landed) → py #1606 **ACTIVE IMPL** (catch up to v3, byte-mirror rs vectors) |
-| F3 | #1601 soft_delete parity (rs#1729) | #1601 — py done; verify rs | ✅ **DONE** — rs#1729 CLOSED (PR#1751); py #1601 CLOSED 07-12 |
+| F2 | py #1606 express `v3` keyspace catch-up (mirror rs vectors) | #1606 — cross-DB cache bleed on hot path; rs#1713 v3 landed, contract in `journal/0024` | UNBLOCKED — active py impl (byte-mirror rs `dataflow-cache-keys.json`) |
 | F4 | #1532 delegate-connectors → contrib/ | #1532 — consolidate adapter layer | DEFERRED — dedicated session |
 | F5 | handoff-completion → loom eval-harness validation | `journal/0010` co-owner directive | pending-loom Gate-1 |
-| F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 templatize-at-source |
+| F6 | latest.yaml own-org `esperie-enterprise` | `journal/0015` PUBLIC-repo disclosure | pending-loom Gate-1 |
 | F7 | cross-sdk-inspection 306-line length-rationale | rule-authoring MUST-NOT; `journal/0016/0017` | pending-loom Gate-1 |
-| F8 | handoff-completion Rule-10 emission-budget headroom check | `journal/0019` fifth-pass MED | pending-loom Gate-1 (`emit.mjs --all --dry-run`) |
+| F8 | handoff-completion Rule-10 emission-budget headroom | `journal/0019` fifth-pass MED | pending-loom Gate-1 |
+| F9 | rs#1765 cross-SDK #1695 parity (Rust side) | `journal/0026` — same two-surface shape likely in rs trust plane | in-flight — rs-side; close when rs#1765 lands |
 
-All F2–F8 are cross-SDK (→ kailash-rs) or loom-Gate-1-bound — none self-authorizable here per `repo-scope-discipline.md`.
+Closed this session: `F3` → py #1601 closed + rs#1729/PR#1751 (soft_delete parity); #1695 → PR #1697 + release v2.48.1 (`journal/0026`).
 
 ## Traps
 
-- **New-precedent (spam PRs):** external promotional/x402 spam PR → close + block + report + non-security receipt. If it RECURS across Foundation repos, escalate to a COC rule (per `knowledge-cascade-routing` MUST-1). One instance = repo-local receipt (`0021`), not yet a rule.
-- **loom-bound (F5–F8):** durable home is `latest.yaml` → Gate-1; BUILD edits to loom-SYNCED rule files are `/sync`-transient. `latest.yaml` itself is BUILD-owned `isNeverSynced` — edits there PERSIST.
-- **latest.yaml own-org (F6):** 9 `esperie-enterprise` hits all own-org (allowlisted latest.yaml:516) — a mechanical BUILD scrub CORRUPTS them. Verify via `python yaml` + semantic diff, NOT git line-diff.
-- `gh --repo terrene-foundation/kailash-py` = false-positive repo-scope tripwire (CWD repo); omit `--repo`.
-- codify/* + chore/* run FULL PR-gate matrix; check CI pinned to head SHA, THEN merge as a separate command.
+- **F2 is byte-parity work**: py express `v2→v3` MUST mirror rs `test-vectors/dataflow-cache-keys.json` byte-for-byte (6 vectors incl. sentinels); db_instance algo verified in `journal/0024`. Vendor the fixture, don't re-author (cross-sdk-inspection Rule 4a).
+- `.venv/bin/pre-commit` has a stale shebang → run `.venv/bin/python -m pre_commit` instead.
+- release/* branches auto-skip the PR-gate matrix; a stale `build` duplicate shows `cancelled` (concurrency) — verify the LATEST `build` run is success on the head SHA before admin-merge.
+- codify/* + chore/* run FULL matrix; check CI pinned to head SHA, THEN merge as a separate command.
 
 ## Open questions for the human
 
-- **In-repo work is exhausted.** The substantive remaining forest lives in **kailash-rs** (F2/F3) and **loom** (F5–F8) — progress it in those repos. Nothing further is self-authorizable here.
+- **F2 (py #1606 express keyspace)** is the highest-value in-repo work now unblocked — recommend it next. F5–F8 remain loom-Gate-1-bound.
