@@ -1123,7 +1123,7 @@ class TrustOperations:
                     chain.genesis.authority_id,
                     include_inactive=True,  # historical verification
                 )
-            except AuthorityNotFoundError:
+            except (AuthorityNotFoundError, AuthorityInactiveError):
                 # Fail closed: cannot resolve the signer -> cannot trust the
                 # grant. Log so the denial is observable (not a silent swallow).
                 logger.warning(
@@ -1136,11 +1136,24 @@ class TrustOperations:
                 )
                 return False
         cap_payload = serialize_for_signing(cap.to_signing_payload())
-        return await self.key_manager.verify(
-            cap_payload,
-            cap.signature,
-            authority.public_key,
-        )
+        try:
+            return await self.key_manager.verify(
+                cap_payload,
+                cap.signature,
+                authority.public_key,
+            )
+        except InvalidSignatureError:
+            # verify_signature() returns False on a BadSignatureError but RAISES
+            # InvalidSignatureError on a malformed / empty / wrong-length
+            # signature. A tampered stored grant may carry exactly such a
+            # signature, so treat the raise as an invalid signature and fail
+            # closed (mirrors _verify_reasoning_traces). Observable, not silent.
+            logger.warning(
+                "capability signature verification failed: malformed or "
+                "unverifiable signature (fail-closed denial)",
+                extra={"capability_id": cap.id},
+            )
+            return False
 
     async def _verify_signatures(
         self,

@@ -29,11 +29,7 @@ import pytest
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import AuthorityType, CapabilityType, VerificationLevel
 from kailash.trust.chain_store.memory import InMemoryTrustStore
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
 
 
@@ -187,3 +183,69 @@ async def test_default_verify_denies_loosened_capability_constraints(ops, _store
         "in storage (#1695)"
     )
     assert "signature" in (result.reason or "").lower()
+
+
+@pytest.mark.regression
+async def test_default_verify_fails_closed_on_malformed_signature(ops, _store):
+    """A tampered grant carrying a malformed/empty signature makes the crypto
+    layer RAISE (InvalidSignatureError) rather than return False; the default
+    verify() MUST still fail closed with a clean denial, not propagate the raise
+    (security-reviewer MEDIUM on the #1695 fix)."""
+    await ops.establish(
+        agent_id="agent-1695c",
+        authority_id="org-acme",
+        capabilities=[
+            CapabilityRequest(
+                capability="read_data",
+                capability_type=CapabilityType.ACTION,
+            ),
+        ],
+    )
+
+    # Tamper: replace the signature with an empty string (malformed).
+    chain = await _store.get_chain("agent-1695c")
+    chain.capabilities[0].signature = ""
+    await _store.update_chain("agent-1695c", chain)
+
+    # MUST NOT raise; MUST return a clean fail-closed denial.
+    result = await ops.verify(agent_id="agent-1695c", action="read_data")
+    assert result.valid is False
+    assert "signature" in (result.reason or "").lower()
+
+
+@pytest.mark.regression
+async def test_mcp_ops_less_verify_fails_closed(ops, _store):
+    """The MCP store-only path (EATPMCPServer without TrustOperations) cannot
+    verify capability signatures, so it MUST fail closed on a name-matched
+    capability rather than authorize an unverifiable/tampered grant
+    (security-reviewer HIGH on the #1695 fix)."""
+    from kailash.trust.mcp.server import EATPMCPServer
+
+    # Establish a real, correctly-signed chain into the shared store.
+    await ops.establish(
+        agent_id="agent-1695d",
+        authority_id="org-acme",
+        capabilities=[
+            CapabilityRequest(
+                capability="read_data",
+                capability_type=CapabilityType.ACTION,
+            ),
+        ],
+    )
+
+    # An ops-less MCP server over the SAME store (the documented default
+    # EATPMCPServer(trust_store=...) construction).
+    server = EATPMCPServer(trust_store=_store, trust_ops=None)
+
+    # Even a genuine, correctly-signed grant is NOT authorized here — the path
+    # cannot verify the signature, so it fails closed.
+    result = await server._verify_from_store("agent-1695d", "read_data", None)
+    assert result.valid is False, (
+        "ops-less MCP verify must fail closed — it cannot verify capability "
+        "signatures (#1695)"
+    )
+    assert "TrustOperations" in (result.reason or "")
+
+    # Sanity: the SAME grant verifies True through a fully-configured ops.
+    ok = await ops.verify(agent_id="agent-1695d", action="read_data")
+    assert ok.valid is True

@@ -162,6 +162,10 @@ class ESAConfig:
     """
 
     enable_capability_discovery: bool = True
+    # SECURITY (#1695): STANDARD (default) verifies the matched capability's
+    # content signature (tamper-evident). QUICK checks only chain expiry — it
+    # skips capability + signature verification — so it MUST NOT be used as an
+    # enforcement level over untrusted or persisted trust chains.
     verification_level: VerificationLevel = VerificationLevel.STANDARD
     auto_audit: bool = True
     cache_capabilities: bool = True
