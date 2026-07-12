@@ -37,20 +37,12 @@ class produced ZERO phantoms; hardened 3 LOW/MED illustrative enumerations (posi
 
 ## Outstanding ledger (forest)
 
-| ID  | Item | Value-anchor | Status |
-| --- | ---- | ------------ | ------ |
-| F6  | `scan-synced-disclosure.mjs` operator-local skip parity | journal/0038 | routed to loom (Gate-1 pending) |
-| F10 | `/onboard` DEFER phantom-type GLOBAL fix | journal/0041 (#10) | routed to loom (Gate-1 pending) |
-| F11 | `/claim` predicate-token set GLOBAL fix | journal/0042 (#11) | routed to loom (Gate-1 pending) |
-| F12 | `todo-github-sync.md` stale self-ref | #11 D3 (user-approved) | routed to loom proposal-only |
-| F13 | operator display-name scrub in `user-flow-validation-walk-discipline.md` | #11 LOW (user-approved) | routed to loom proposal-only |
-| F14 | #12 illustrative-enumeration hedges (43/45 skills) | journal/0043 (#12) | routed to loom GLOBAL; **reverted on main by #1636 sync, preserved in latest.yaml** |
-| F3  | mechanical distributable-repo lint | #8 notes | queued (loom/optional) |
-| F4  | `whoami.md` body at headroom limit | #5 notes | queued (loom/optional) |
-| F5  | extract MUST-3 SAFE-helper depth → `skills/45` | #7/#8 advisory | blocked-on-loom |
-
-Closed this session: `#12` re-convergence → PR #1635 (`e6be5630f`); loom sync #1636 → `43012c540`;
-`#12-sweep` → this session's sweep report.
+**CONSOLIDATED (2026-07-12 sweep, issue #669)** — this workspace monolith no longer carries a
+forest section. The mops-onboarding PROGRAM is tracked as root `.session-notes.shared.md` `F1`.
+Every former row here (F3–F14) is a **loom-routed COC-artifact item** — tracked loom-side in
+`latest.yaml` + its journal anchors (`journal/0038/0041/0042/0043`, #5/#7/#8/#11/#12 notes), NOT
+kailash-py SDK forest. They intentionally do NOT migrate to the kailash-py root SDK ledger. See
+`workspaces/sdk-backlog/04-validate/sweep-2026-07-12.md` § Consolidation.
 
 ## Unreleased packages (BUILD release-drift)
 
