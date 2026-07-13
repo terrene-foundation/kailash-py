@@ -330,8 +330,8 @@ class EventLoopWatchdog:
             and getattr(self, "_watchdog_thread", None) is not None
         ):
             _warnings.warn(
-                f"EventLoopWatchdog was not stopped before garbage collection. "
-                f"Use 'async with EventLoopWatchdog() as wd: ...' for clean lifecycle.",
+                "EventLoopWatchdog was not stopped before garbage collection. "
+                "Use 'async with EventLoopWatchdog() as wd: ...' for clean lifecycle.",
                 ResourceWarning,
                 stacklevel=1,
             )
