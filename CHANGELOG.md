@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.50.0] - 2026-07-13
+
+Observability program (#1708) — a coordinated 5-package release. Configures
+the previously-inert OpenTelemetry provider layer, unifies every server's
+`/metrics` exposition onto one Prometheus endpoint, and closes a set of
+unbounded-cardinality metric labels found across the runtime, pool, and ML
+observability code.
+
+### Added
+
+- **OTLP + Prometheus provider bootstrap (#1708 W1a).** New
+  `kailash.observability.otlp.configure_observability()` installs the global
+  OTel `MeterProvider` / `TracerProvider` / `LoggerProvider` — the SDK already
+  created OTel metric instruments (the workflow `MetricsBridge`, trust, and ML
+  observability code) and tracer spans, but nothing configured the global
+  providers, so every instrument recorded into the default no-op provider and
+  exported nowhere. `configure_observability()` installs a `Resource`
+  (`service.name`/`service.version` on every signal), a Prometheus exposition
+  reader (bridges OTel metrics into the `prometheus_client` registry so one
+  `/metrics` scrape exports both OTel-emitted and `prometheus_client`-native
+  metrics), and an OTLP exporter for metrics + traces (+ optional logs) gated
+  on `OTEL_EXPORTER_OTLP_ENDPOINT`. Degrades to a documented no-op when the
+  `kailash[telemetry]` extra is absent — never raises. Adds
+  `opentelemetry-exporter-prometheus` to the `[telemetry]` extra.
+- **Canonical workflow RED metrics via the OTel `MetricsBridge` (#1708 W1f).**
+  `LocalRuntime` and `AsyncLocalRuntime` now emit a real workflow-execution
+  Rate/Errors/Duration histogram (`workflow.duration`, bounded labels) through
+  the OTel bridge instead of the previous ad-hoc counters.
+- **Real connection-pool acquire-wait histogram (#1708 W1c).** Pool
+  acquire-wait latency is now a real histogram reachable from the production
+  `/metrics` endpoint (`connection_metrics_router`), closing a USE-completeness
+  gap where the metric existed but was never wired to a scrape target.
+
+### Changed
+
+- **Unified server `/metrics` exposition (#1708 W1b).** `workflow_server` and
+  `enterprise_workflow_server` now expose ONE Prometheus endpoint aggregating
+  every metric source (OTel bridge, connection pool, ML observability)
+  instead of each server maintaining its own partial exposition.
+- **Pool idle/exhaustion counters reach the production `/metrics` endpoint
+  (#1708 G1).** Previously computed but not exposed on the
+  `enterprise_workflow_server` production path.
+
+### Fixed
+
+- **Unbounded metric-label cardinality closed across the runtime, ML, and
+  OTLP surfaces (#1708 W1d/W1e/G1/redteam).** Several metric label
+  dimensions could grow without bound under real traffic, each capable of
+  exhausting a Prometheus scrape target's memory over time:
+  - Dropped the unbounded `workflow_id` label from the workflow-execution
+    metric (W1d) — cardinality now scales with workflow _definitions_, not
+    every run.
+  - Bounded non-tenant ML observability labels (W1e) and the ML drift
+    _severity_ label to a fixed whitelist (G1).
+  - Bounded `workflow.name` cardinality and fixed node-histogram bucket
+    boundaries (G1).
+  - Bounded the internal working set of the top-N label bucketer itself
+    (G1) — the bucketer used to track cardinality was, itself, unbounded.
+  - Masked embedded credentials before logging the configured OTLP endpoint
+    (redteam finding) — a credential-bearing `OTEL_EXPORTER_OTLP_ENDPOINT`
+    no longer appears verbatim in logs.
+
+### Removed
+
+- **Orphaned enterprise-monitoring adapter deleted (#1708 G1).**
+  `LocalRuntime.enterprise_monitoring` (a property that lazily constructed an
+  `EnterpriseMonitoringManager`) and the `PrometheusAdapter` /
+  `DataDogAdapter` / `MockMetric` / `EnterpriseMonitoringManager` classes in
+  `kailash.runtime.monitoring.runtime_monitor` are deleted. This subsystem had
+  zero production callers and was never wired to any real metrics backend —
+  `EnterpriseMonitoringManager.record_workflow_execution` /
+  `record_resource_usage` were unreachable dead code, and nothing in `src/`
+  ever read the `enterprise_monitoring` property. The real workflow RED
+  metrics now ship via the OTel `MetricsBridge` (W1f) and unified `/metrics`
+  (W1b) instead. **Migration note:** if any downstream code accessed
+  `runtime.enterprise_monitoring` directly, it must migrate to the OTel-based
+  metrics described above — the property is gone, not deprecated. The
+  `enable_enterprise_monitoring` constructor flag on `LocalRuntime` is
+  unaffected and still drives auto-enabling resource/retry defaults.
+
+### Dependencies
+
+- Sub-package floors (`kailash-nexus`, `kailash-dataflow`, `kailash-kaizen`,
+  `kailash-mcp`) bump their `kailash` dependency floor to `>=2.50.0` — each
+  sub-package's #1708 metric now reaches this release's unified `/metrics`
+  exposition, and the floor bump makes that a resolvable install-time
+  guarantee rather than an implicit assumption.
+
 ## [2.49.0] - 2026-07-13
 
 ### Fixed

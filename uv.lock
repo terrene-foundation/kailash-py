@@ -1800,7 +1800,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.45.0"
+version = "2.50.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -1838,6 +1838,7 @@ all = [
     { name = "numpy" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-sdk" },
     { name = "pandas" },
     { name = "prometheus-client" },
@@ -1974,6 +1975,7 @@ shamir = [
 telemetry = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-sdk" },
 ]
 trust = [
@@ -2042,6 +2044,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'data'", specifier = ">=1.24" },
     { name = "opentelemetry-api", marker = "extra == 'telemetry'", specifier = ">=1.20" },
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'telemetry'", specifier = ">=1.20" },
+    { name = "opentelemetry-exporter-prometheus", marker = "extra == 'telemetry'", specifier = ">=0.41b0" },
     { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = ">=1.20" },
     { name = "pandas", marker = "extra == 'data'", specifier = ">=2.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.2.0" },
@@ -2130,7 +2133,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.13.1"
+version = "2.16.0"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2168,7 +2171,7 @@ requires-dist = [
     { name = "google-cloud-storage", marker = "extra == 'cloud'", specifier = ">=2.18" },
     { name = "httpx", marker = "extra == 'fabric'", specifier = ">=0.27" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
-    { name = "kailash", specifier = ">=2.28.0" },
+    { name = "kailash", specifier = ">=2.50.0" },
     { name = "kailash", extras = ["server"], marker = "extra == 'dev'" },
     { name = "kailash-dataflow", extras = ["fabric", "cloud", "excel", "parquet", "streaming"], marker = "extra == 'fabric-all'" },
     { name = "kailash-dataflow", extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", "security", "monitoring", "templates", "fabric-all"], marker = "extra == 'all'" },
@@ -2198,7 +2201,7 @@ provides-extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", 
 
 [[package]]
 name = "kailash-kaizen"
-version = "2.28.0"
+version = "2.30.0"
 source = { editable = "packages/kailash-kaizen" }
 dependencies = [
     { name = "aiohttp" },
@@ -2265,7 +2268,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'providers-google'", specifier = ">=1.21.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12" },
-    { name = "kailash", specifier = ">=2.28.0" },
+    { name = "kailash", specifier = ">=2.50.0" },
     { name = "kailash-kaizen", extras = ["providers-azure", "providers-google", "providers-tokens", "providers-http", "server", "observability", "db", "cache", "rag", "research-validator"], marker = "extra == 'all'" },
     { name = "kailash-mcp", specifier = ">=0.2.4" },
     { name = "networkx", marker = "extra == 'rag'", specifier = ">=3.0" },
@@ -2282,6 +2285,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
     { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.2.0" },
     { name = "redis", marker = "extra == 'cache'", specifier = ">=5.0.0" },
     { name = "requests", marker = "extra == 'providers-http'", specifier = ">=2.32" },
     { name = "requests", marker = "extra == 'rag'", specifier = ">=2.32" },
@@ -2302,7 +2306,7 @@ provides-extras = ["providers-azure", "providers-google", "providers-tokens", "p
 
 [[package]]
 name = "kailash-mcp"
-version = "0.2.15"
+version = "0.3.0"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "aiohttp" },
@@ -2322,9 +2326,10 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'platform'", specifier = ">=0.115.12" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.12" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.25.0" },
-    { name = "kailash", specifier = ">=2.16.0" },
-    { name = "kailash-mcp", extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server", "platform"], marker = "extra == 'full'" },
+    { name = "kailash", specifier = ">=2.50.0" },
+    { name = "kailash-mcp", extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server", "platform", "monitoring"], marker = "extra == 'full'" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.23.0" },
+    { name = "prometheus-client", marker = "extra == 'monitoring'", specifier = ">=0.22.1" },
     { name = "pyjwt", marker = "extra == 'auth-jwt'", specifier = ">=2.8" },
     { name = "pyjwt", marker = "extra == 'auth-oauth'", specifier = ">=2.8" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
@@ -2335,7 +2340,7 @@ requires-dist = [
     { name = "websockets", specifier = ">=12.0" },
     { name = "websockets", marker = "extra == 'websocket'", specifier = ">=12.0" },
 ]
-provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server", "platform", "full", "dev"]
+provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server", "platform", "monitoring", "full", "dev"]
 
 [[package]]
 name = "kailash-ml"
@@ -2444,7 +2449,7 @@ provides-extras = ["dl", "dl-gpu", "rl", "rl-offline", "rl-envpool", "rl-distrib
 
 [[package]]
 name = "kailash-nexus"
-version = "2.11.0"
+version = "2.12.0"
 source = { editable = "packages/kailash-nexus" }
 dependencies = [
     { name = "aiofiles" },
@@ -2477,7 +2482,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "janus", specifier = ">=1.0" },
-    { name = "kailash", specifier = ">=2.28.4" },
+    { name = "kailash", specifier = ">=2.50.0" },
     { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.20" },
     { name = "puremagic", specifier = ">=1.0" },
     { name = "pyjwt", specifier = ">=2.8" },
@@ -3606,6 +3611,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2e/fa/73d50e2c15c56be4d000c98e24221d494674b0cc95524e2a8cb3856d95a4/opentelemetry_exporter_otlp_proto_http-1.40.0.tar.gz", hash = "sha256:db48f5e0f33217588bbc00274a31517ba830da576e59503507c839b38fa0869c", size = 17772, upload-time = "2026-03-04T14:17:25.324Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/3a/8865d6754e61c9fb170cdd530a124a53769ee5f740236064816eb0ca7301/opentelemetry_exporter_otlp_proto_http-1.40.0-py3-none-any.whl", hash = "sha256:a8d1dab28f504c5d96577d6509f80a8150e44e8f45f82cdbe0e34c99ab040069", size = 19960, upload-time = "2026-03-04T14:17:07.153Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-prometheus"
+version = "0.61b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "prometheus-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4a/20/9e818fd364d12e8d0cfdce4a3b2d82e24d98c4ceebb315de6b6770b5f214/opentelemetry_exporter_prometheus-0.61b0.tar.gz", hash = "sha256:7c4919bd8e79abd62b610767e80f42c9c3a06c5183f4dd9141eedeb57aea284b", size = 15136, upload-time = "2026-03-04T14:17:26.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/4a/b65d40e94d1d930aee73a1a2857211ee6ab10ce3686cbdae5eea78cd9d34/opentelemetry_exporter_prometheus-0.61b0-py3-none-any.whl", hash = "sha256:3013b41f4370143d48d219a2351473761423e5882fa4c213811eaefacba39cb7", size = 13149, upload-time = "2026-03-04T14:17:08.983Z" },
 ]
 
 [[package]]
