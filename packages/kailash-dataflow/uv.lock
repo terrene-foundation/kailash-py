@@ -1199,7 +1199,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.44.1"
+version = "2.49.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -1207,9 +1207,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/d2/f153a5c448732b824334ec5edc81c4a9d0d9bfabfe969d5cfb28cf00dd27/kailash-2.44.1.tar.gz", hash = "sha256:0000f9064cf1d95314189f8602783c9dc7b47d8cd7090e6100336c0eab1d5dba", size = 2986960, upload-time = "2026-06-22T06:43:47.791Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/61/96dc9109b6126676346490f987aeef5891ef3252b2f04782f1014c2c5fd8/kailash-2.49.0.tar.gz", hash = "sha256:1dba624c0ce9ff3239a8af264c8be6013193d66b56b50ecee88b3d48c67aad2d", size = 3100903, upload-time = "2026-07-13T06:22:25.922Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/f5/8aa427cc0135b60c2378c1f6892949c7bc8723ec927f8449b203082976f8/kailash-2.44.1-py3-none-any.whl", hash = "sha256:fc41267c1a3452289f2f7ad50a569198b0d81054deb78622baab9379090be174", size = 3412356, upload-time = "2026-06-22T06:43:45.452Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/f6/3403b77122862cb63a1934a0638db84eb56debc2511427a5c103d471d773/kailash-2.49.0-py3-none-any.whl", hash = "sha256:8af12a81d8409726b150098c6cd9417cd73a8a81ac783ce2c2015ef9d9968dfb", size = 3540777, upload-time = "2026-07-13T06:22:23.721Z" },
 ]
 
 [package.optional-dependencies]
@@ -1229,7 +1229,7 @@ server = [
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.13.0"
+version = "2.15.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
@@ -1356,7 +1356,7 @@ requires-dist = [
     { name = "google-cloud-storage", marker = "extra == 'cloud'", specifier = ">=2.18" },
     { name = "httpx", marker = "extra == 'fabric'", specifier = ">=0.27" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
-    { name = "kailash", specifier = ">=2.28.0" },
+    { name = "kailash", specifier = ">=2.45.5" },
     { name = "kailash", extras = ["server"], marker = "extra == 'dev'" },
     { name = "kailash-dataflow", extras = ["fabric", "cloud", "excel", "parquet", "streaming"], marker = "extra == 'fabric-all'" },
     { name = "kailash-dataflow", extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", "security", "monitoring", "templates", "fabric-all"], marker = "extra == 'all'" },
