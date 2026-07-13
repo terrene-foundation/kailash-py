@@ -40,7 +40,12 @@ from kailash.utils.url_credentials import fingerprint_secret
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.auth.gcp import GcpOauth
-from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
+from kaizen.llm.deployment import (
+    CompletionRouting,
+    Endpoint,
+    LlmDeployment,
+    WireProtocol,
+)
 from kaizen.llm.errors import MissingCredential, ModelRequired
 from kaizen.llm.grammar.bedrock import (
     BedrockClaudeGrammar,
@@ -139,9 +144,36 @@ def register_preset(name: str, factory: Callable[..., LlmDeployment]) -> None:
     logger.info("preset.registered", extra={"preset_name": validated})
 
 
+# Provider-string aliases (NEW-C). Callers reaching the registry with a
+# hyphenated / provider-style name resolve to the canonical snake_case
+# preset. Consulted BEFORE `_validate_preset_name` because aliases may carry
+# hyphens (which `_PRESET_NAME_RE` deliberately rejects), keeping the
+# canonical registry keys clean while accepting the common external spellings.
+#   * `vertex-anthropic` / `vertex_claude`  → `vertex_claude`
+#   * `vertex-gemini` / `vertex-google`     → `vertex_gemini`
+_PRESET_ALIASES: Dict[str, str] = {
+    "vertex-anthropic": "vertex_claude",
+    "vertex-claude": "vertex_claude",
+    "vertex-gemini": "vertex_gemini",
+    "vertex-google": "vertex_gemini",
+}
+
+
+def _normalize_preset_name(name: Any) -> Any:
+    """Map a provider-string alias to its canonical preset name.
+
+    Non-string / unknown inputs pass through unchanged so the downstream
+    validator produces the canonical typed error.
+    """
+    if isinstance(name, str) and name in _PRESET_ALIASES:
+        return _PRESET_ALIASES[name]
+    return name
+
+
 def get_preset(name: str) -> Callable[..., LlmDeployment]:
-    """Retrieve a preset factory by name. Validates the name first."""
-    validated = _validate_preset_name(name)
+    """Retrieve a preset factory by name. Normalizes aliases, then validates."""
+    normalized = _normalize_preset_name(name)
+    validated = _validate_preset_name(normalized)
     try:
         return _PRESETS[validated]
     except KeyError:
@@ -1022,6 +1054,15 @@ def bedrock_claude_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        completion_routing=CompletionRouting(
+            # Bedrock carries the model in the URL path; path_prefix is empty
+            # so the {model} substitution forms /model/{id}/invoke.
+            path_template="/model/{model}/invoke",
+            streaming_path_template="/model/{model}/invoke-with-response-stream",
+            # Bedrock-hosted Anthropic strips `model` from the body and
+            # injects this version literal.
+            anthropic_version_body="bedrock-2023-05-31",
+        ),
         preset_name="bedrock_claude",
     )
     logger.info(
@@ -1119,6 +1160,12 @@ def _build_bedrock_deployment(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        completion_routing=CompletionRouting(
+            # Native Bedrock invoke path; model carried in the URL, empty
+            # path_prefix so {model} forms /model/{id}/invoke.
+            path_template="/model/{model}/invoke",
+            streaming_path_template="/model/{model}/invoke-with-response-stream",
+        ),
         preset_name=preset_name,
     )
     logger.info(
@@ -1311,6 +1358,24 @@ _GRAMMAR_VERTEX_GEMINI = VertexGeminiGrammar()
 _PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9\-]{4,28}[a-z0-9]$")
 _REGION_RE = re.compile(r"^[a-z]{2,20}-[a-z]+\d{1,2}$")
 
+# NEW-B: Vertex multi-region + global location literals accepted in addition
+# to concrete regions (`us-central1`, `europe-west4`). `us` / `eu` are
+# multi-region location values that pass STRAIGHT THROUGH into the URL path
+# (`locations/us`, `locations/eu`); the host still needs a concrete regional
+# subdomain, so a concrete default is used for host derivation ONLY (eu →
+# europe-west3, NOT europe-west1). `global` uses the region-less
+# `aiplatform.googleapis.com` host with `locations/global`.
+_VERTEX_MULTI_REGIONS: frozenset[str] = frozenset({"us", "eu", "global"})
+
+# Concrete regional subdomain used to build the HOST for a multi-region
+# location value. The path `locations/<region>` still carries the multi-region
+# literal verbatim; only the `{host_region}-aiplatform.googleapis.com`
+# subdomain needs a concrete region.
+_VERTEX_MULTIREGION_HOST_DEFAULTS: Dict[str, str] = {
+    "us": "us-central1",
+    "eu": "europe-west3",
+}
+
 
 def _validate_vertex_project(project: Any) -> str:
     """Validate a GCP project id against the strict allowlist regex.
@@ -1335,32 +1400,59 @@ def _validate_vertex_project(project: Any) -> str:
 
 
 def _validate_vertex_region(region: Any) -> str:
-    """Validate a GCP region against the strict allowlist regex."""
+    """Validate a GCP region against the strict allowlist regex.
+
+    Accepts concrete regions (``us-central1``, ``europe-west4``) AND the
+    multi-region / global location literals ``us`` / ``eu`` / ``global``
+    (NEW-B). Everything else fails with a log-injection-safe fingerprint.
+    """
     if not isinstance(region, str) or not region:
         raise ValueError(
             "vertex preset requires a non-empty region string "
-            "(e.g. 'us-central1', 'europe-west4')"
+            "(e.g. 'us-central1', 'europe-west4', 'us', 'eu', 'global')"
         )
+    if region in _VERTEX_MULTI_REGIONS:
+        return region
     if not _REGION_RE.match(region):
         raise ValueError(
             "vertex region failed validation against "
-            f"^[a-z]{{2,20}}-[a-z]+\\d{{1,2}}$ "
+            f"^[a-z]{{2,20}}-[a-z]+\\d{{1,2}}$ (or one of us/eu/global) "
             f"(region_fingerprint={_fingerprint(region)})"
         )
     return region
+
+
+def _derive_vertex_host_and_location(region: str) -> tuple[str, str]:
+    """Return ``(endpoint_host, path_location)`` for a validated region.
+
+    * ``global`` → region-less host ``aiplatform.googleapis.com``, location
+      ``global``.
+    * ``us`` / ``eu`` → host uses the concrete default subdomain
+      (``us-central1`` / ``europe-west3``); the location passes THROUGH
+      as the multi-region literal so the path is ``locations/us`` /
+      ``locations/eu``.
+    * concrete region (``us-central1``) → host + location are both the region.
+    """
+    if region == "global":
+        return "aiplatform.googleapis.com", "global"
+    if region in _VERTEX_MULTIREGION_HOST_DEFAULTS:
+        host_region = _VERTEX_MULTIREGION_HOST_DEFAULTS[region]
+        return f"{host_region}-aiplatform.googleapis.com", region
+    return f"{region}-aiplatform.googleapis.com", region
 
 
 def _build_vertex_deployment(
     *,
     preset_name: str,
     publisher: str,
-    service_account_key: dict | str,
+    service_account_key: dict | str | None,
     project: str,
     region: str,
     model: str,
     env_hint: str,
     grammar: Any,
     wire: WireProtocol,
+    routing: Optional[CompletionRouting] = None,
 ) -> LlmDeployment:
     """Shared constructor for the 2 Vertex presets.
 
@@ -1384,16 +1476,15 @@ def _build_vertex_deployment(
     # platform scope per Vertex spec.
     auth = GcpOauth(service_account_key=service_account_key)
     # --- endpoint assembly --------------------------------------------------
-    endpoint_host = f"{validated_region}-aiplatform.googleapis.com"
-    # The Vertex URL embeds the model in the path (`:rawPredict` for
-    # Anthropic-on-Vertex, `:streamGenerateContent` for Gemini -- but
-    # we use `:rawPredict` for Gemini too, since the Vertex Gemini
-    # path matches the Rust SDK's choice and supports both raw + stream
-    # via the same endpoint with a query flag). path_prefix carries the
-    # full project/location/publisher/model path; the wire adapter
-    # appends `:rawPredict` at completion time.
+    # Host + path-location derive from the region: `global` uses the
+    # region-less host; `us` / `eu` multi-region literals pass through into
+    # the path while the host uses a concrete default subdomain (NEW-B).
+    endpoint_host, path_location = _derive_vertex_host_and_location(validated_region)
+    # path_prefix carries the full project/location/publisher/model path; the
+    # completion path appends the routing verb (`:rawPredict` for
+    # Anthropic-on-Vertex, `:generateContent` for Gemini) at send time.
     path_prefix = (
-        f"/v1/projects/{validated_project}/locations/{validated_region}"
+        f"/v1/projects/{validated_project}/locations/{path_location}"
         f"/publishers/{publisher}/models/{resolved_model}"
     )
     endpoint = Endpoint(
@@ -1405,6 +1496,7 @@ def _build_vertex_deployment(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        completion_routing=routing,
         preset_name=preset_name,
     )
     logger.info(
@@ -1422,7 +1514,7 @@ def _build_vertex_deployment(
 
 
 def vertex_claude_preset(
-    service_account_key: dict | str,
+    service_account_key: dict | str | None,
     project: str,
     region: str,
     model: str,
@@ -1472,11 +1564,20 @@ def vertex_claude_preset(
         env_hint="VERTEX_CLAUDE_MODEL_ID",
         grammar=_GRAMMAR_VERTEX_CLAUDE,
         wire=WireProtocol.AnthropicMessages,
+        routing=CompletionRouting(
+            # model already lives in path_prefix (.../models/{model}); the
+            # verb attaches directly (leading ':') at send time.
+            path_template=":rawPredict",
+            streaming_path_template=":streamRawPredict",
+            # Vertex-hosted Anthropic strips `model` from the body and
+            # injects this version literal.
+            anthropic_version_body="vertex-2023-10-16",
+        ),
     )
 
 
 def vertex_gemini_preset(
-    service_account_key: dict | str,
+    service_account_key: dict | str | None,
     project: str,
     region: str,
     model: str,
@@ -1510,6 +1611,11 @@ def vertex_gemini_preset(
         env_hint="VERTEX_GEMINI_MODEL_ID",
         grammar=_GRAMMAR_VERTEX_GEMINI,
         wire=WireProtocol.VertexGenerateContent,
+        routing=CompletionRouting(
+            # model already in path_prefix; verb attaches directly.
+            path_template=":generateContent",
+            streaming_path_template=":streamGenerateContent",
+        ),
     )
 
 

@@ -139,12 +139,28 @@ def test_grammar_rejects_unknown_caller_model(
         grammar.resolve("gpt-4o-mini")
 
 
-def test_grammar_rejects_unversioned_unknown_claude_alias(
+def test_grammar_open_passthrough_appends_latest_for_bare_unknown_claude(
     grammar: VertexClaudeGrammar,
 ) -> None:
-    """A `claude-` prefix without `@` and not in the table must reject."""
-    with pytest.raises(ModelGrammarInvalid, match=r"vertex_claude_not_in_catalog"):
-        grammar.resolve("claude-99-fictional")
+    """Open passthrough (#498/#1717 NEW-catalog): a `claude-*` id not in the
+    table and without `@` gets `@latest` appended so it forms a valid Vertex
+    on-wire id WITHOUT a catalog edit (mirrors VertexGeminiGrammar)."""
+    assert grammar.resolve("claude-99-fictional") == "claude-99-fictional@latest"
+
+
+def test_grammar_resolves_claude_opus_4_8_via_open_passthrough(
+    grammar: VertexClaudeGrammar,
+) -> None:
+    """`claude-opus-4-8` (post-catalog model) resolves WITHOUT a mapping edit."""
+    assert grammar.resolve("claude-opus-4-8") == "claude-opus-4-8@latest"
+
+
+def test_grammar_open_passthrough_preserves_explicit_version_pin(
+    grammar: VertexClaudeGrammar,
+) -> None:
+    """An explicit `@version` on an unknown claude id is preserved (not
+    double-suffixed with @latest)."""
+    assert grammar.resolve("claude-opus-4-8@20260101") == "claude-opus-4-8@20260101"
 
 
 def test_grammar_rejects_anthropic_dot_prefix(

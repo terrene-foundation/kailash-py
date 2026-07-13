@@ -41,22 +41,26 @@ from __future__ import annotations
 
 from kaizen.llm.wire_protocols import (
     anthropic_messages,
+    bedrock_invoke,
     cohere_generate,
     google_generate_content,
     huggingface_inference,
     mistral_chat,
     ollama_embeddings,
     ollama_native,
+    openai_chat,
     openai_embeddings,
 )
 
 __all__ = [
     "anthropic_messages",
+    "bedrock_invoke",
     "cohere_generate",
     "google_generate_content",
     "huggingface_inference",
     "mistral_chat",
     "ollama_embeddings",
     "ollama_native",
+    "openai_chat",
     "openai_embeddings",
 ]

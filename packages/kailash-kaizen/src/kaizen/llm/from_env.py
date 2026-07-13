@@ -67,7 +67,10 @@ LEGACY_KEY_ORDER = [
 # GCP region shape is `us-central1`, `europe-west4`, etc. (no trailing
 # dash before the digit). The regex accepts both forms.
 _AWS_REGION_RE = re.compile(r"^[a-z]{2,3}-[a-z]+(-[a-z]+)?-\d{1,2}$")
-_GCP_REGION_RE = re.compile(r"^[a-z]{2,20}-[a-z]+\d{1,2}$")
+# GCP region shape is `us-central1`, `europe-west4`, etc. Vertex also
+# accepts the multi-region / global endpoints `us`, `eu`, and `global`
+# (NEW-B); these pass straight through (no `eu -> europe-west1` mapping).
+_GCP_REGION_RE = re.compile(r"^(?:[a-z]{2,20}-[a-z]+\d{1,2}|us|eu|global)$")
 _PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9\-]{4,28}[a-z0-9]$")
 _AZURE_RESOURCE_RE = re.compile(r"^[a-z][a-z0-9-]{1,22}[a-z0-9]$")
 
@@ -175,20 +178,23 @@ def _build_vertex_from_uri(parsed: Any) -> LlmDeployment:
         raise InvalidUri("vertex:// URI project failed regex validation")
     if not region or not _GCP_REGION_RE.match(region):
         raise InvalidUri("vertex:// URI region failed regex validation")
-    sa_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not sa_path:
-        raise MissingCredential(
-            "GOOGLE_APPLICATION_CREDENTIALS not set; required for vertex:// URIs"
-        )
+    # `GOOGLE_APPLICATION_CREDENTIALS` is OPTIONAL for vertex:// URIs. When
+    # set it points at either a service-account OR an external_account
+    # (Workload Identity Federation) JSON file; GcpOauth dispatches on the
+    # file's `type` at credential-build time. When UNSET, `None` flows to
+    # GcpOauth's keyless Application Default Credentials chain (ADC / GCE
+    # metadata server) rather than hard-failing -- so a Vertex deployment
+    # on GCE / Cloud Run / GKE with an attached service account needs no
+    # key file on disk.
+    sa_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    sa_key = sa_path if sa_path else None
     # Dispatch by model family prefix. Anthropic goes through vertex_claude;
     # everything else goes through vertex_gemini.
     from kaizen.llm.presets import vertex_claude_preset, vertex_gemini_preset
 
     if model.startswith("claude-"):
-        return vertex_claude_preset(
-            sa_path, project=project, region=region, model=model
-        )
-    return vertex_gemini_preset(sa_path, project=project, region=region, model=model)
+        return vertex_claude_preset(sa_key, project=project, region=region, model=model)
+    return vertex_gemini_preset(sa_key, project=project, region=region, model=model)
 
 
 def _build_azure_from_uri(parsed: Any) -> LlmDeployment:
@@ -285,6 +291,23 @@ def _call_preset_from_env(selector: str, factory: Any) -> LlmDeployment:
 
         auth = AzureEntra(api_key=api_key)
         return factory(resource, deployment, auth)
+    if selector in ("vertex_claude", "vertex_gemini"):
+        # Vertex-on-GCP without a full URI. project + region + model are
+        # REQUIRED; the service-account key is OPTIONAL -- an unset
+        # `GOOGLE_APPLICATION_CREDENTIALS` flows `None` to the preset's
+        # GcpOauth, which resolves keyless Application Default Credentials
+        # (ADC / GCE metadata server). A set value points at either a
+        # service-account OR an external_account (WIF) file; GcpOauth
+        # dispatches on the file's `type` at credential-build time.
+        project = _require_env("GOOGLE_CLOUD_PROJECT")
+        region = _require_env("VERTEX_LOCATION")
+        if selector == "vertex_claude":
+            model = _require_env("VERTEX_CLAUDE_MODEL_ID", "VERTEX_CLAUDE_MODEL")
+        else:
+            model = _require_env("VERTEX_GEMINI_MODEL_ID", "VERTEX_GEMINI_MODEL")
+        creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+        sa_key = creds if creds else None
+        return factory(sa_key, project=project, region=region, model=model)
     # Fallback: unknown selector shape. Caller MUST set URI tier instead.
     raise NoKeysConfigured(
         f"Selector '{_fingerprint_selector(selector)}' is registered but "
