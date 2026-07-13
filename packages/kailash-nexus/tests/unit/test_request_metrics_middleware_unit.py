@@ -3,21 +3,71 @@
 
 """Tier 1 unit tests for RequestMetricsMiddleware internals.
 
-Covers the cardinality-control route-label helper and the middleware's
-ASGI __call__ behavior against a fake inner app — exception-path status
-recording, exclude-paths pass-through, and the prometheus-absent no-op —
-without standing up a real Nexus instance.
+Covers the cardinality-control route-label helper, the symmetric
+cardinality-control method-label helper (#1708 HIGH follow-up to W5), and
+the middleware's ASGI __call__ behavior against a fake inner app —
+exception-path status recording, exclude-paths pass-through, and the
+prometheus-absent no-op — without standing up a real Nexus instance.
 """
 
 import types
 
 import pytest
 
+from nexus.metrics import _method_label
 from nexus.middleware.request_metrics import (
     RequestMetricsMiddleware,
     _route_label,
     _templated_mount_prefix,
 )
+
+# ---------------------------------------------------------------------------
+# _method_label — cardinality control (#1708 HIGH: symmetric to route bound)
+# ---------------------------------------------------------------------------
+#
+# W5 templated the `route` label to bound cardinality and prevent a
+# path-scanning DoS, but left the `method` label unbounded — RFC 7230's
+# HTTP method `token` grammar permits an arbitrary client-controlled
+# string, and ASGI servers forward non-standard method tokens verbatim.
+# `_method_label` allowlists the standard HTTP verbs and collapses
+# everything else to the "_other" sentinel, closing the method axis of the
+# same cardinality-DoS the route template already defends against.
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT"],
+)
+def test_method_label_allowlisted_verbs_pass_through_verbatim(method):
+    """Every standard HTTP verb is recorded verbatim, unchanged."""
+    assert _method_label(method) == method
+
+
+def test_method_label_lowercase_verb_normalized_to_upper():
+    """Case is normalized before the allowlist check."""
+    assert _method_label("get") == "GET"
+    assert _method_label("Post") == "POST"
+
+
+def test_method_label_bogus_token_collapses_to_other():
+    """An arbitrary client-controlled method token collapses to _other.
+
+    This is the cardinality-DoS closure: a client sending a fresh method
+    string per request (`-X <random>`) must never mint a new label value.
+    """
+    assert _method_label("FOOBAR") == "_other"
+    assert _method_label("X-RANDOM-TOKEN-12345") == "_other"
+
+
+def test_method_label_default_unknown_fallback_collapses_to_other():
+    """The middleware's scope.get('method', 'UNKNOWN') fallback is bounded too."""
+    assert _method_label("UNKNOWN") == "_other"
+
+
+def test_method_label_empty_string_collapses_to_other():
+    """An empty method string (malformed request) collapses to _other."""
+    assert _method_label("") == "_other"
+
 
 # ---------------------------------------------------------------------------
 # _templated_mount_prefix — core-gateway Mount route-label coverage (#1708 W5)

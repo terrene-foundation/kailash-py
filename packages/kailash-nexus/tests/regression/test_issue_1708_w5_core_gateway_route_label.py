@@ -254,3 +254,98 @@ class TestCoreGatewayRouteLabelCoverage:
             assert (
                 'route="/metrics"' not in ln
             ), f"/metrics scrape path leaked into route labels: {ln}"
+
+
+def _method_from_sample(sample_line: str) -> str:
+    start = sample_line.find('method="')
+    assert start != -1, f"no method label in sample: {sample_line}"
+    start += len('method="')
+    end = sample_line.find('"', start)
+    return sample_line[start:end]
+
+
+@pytest.mark.regression
+class TestMethodLabelCardinalityBound:
+    """HTTP RED histogram method label MUST be bounded-cardinality (#1708 HIGH).
+
+    W5 (above) correctly templated the ``route`` label to bound cardinality
+    and prevent a path-scanning DoS -- but left the SYMMETRIC ``method``
+    label unbounded. ``request_metrics.py`` passes
+    ``scope.get("method", "UNKNOWN")`` straight into
+    ``observe_http_request`` -> ``.labels(method=method, ...)``. HTTP method
+    is an arbitrary client-controlled RFC 7230 ``token``, and ASGI servers
+    forward non-standard method tokens verbatim -- a client sending a fresh
+    method string per request (``-X <random>``) mints a brand-new
+    ``(method, route, status)`` series every call, the EXACT path-scanning
+    cardinality-DoS the route templating defends against, left open on the
+    method axis (and firing even on an unmatched/405 route, before any auth
+    check runs).
+
+    These tests drive REAL HTTP requests -- including a bogus, arbitrary
+    method token -- through a real Nexus instance (TestClient over the real
+    ASGI app) and assert against the REAL Prometheus scrape body, per
+    rules/testing.md Tier 2 (no mocking) and rules/user-flow-validation.md
+    (the literal request/response/scrape path).
+    """
+
+    def test_standard_method_recorded_verbatim(self, metrics_app):
+        """A standard HTTP verb (GET) is recorded under its own literal label."""
+        client = TestClient(metrics_app.fastapi_app)
+
+        resp = client.get("/health")
+        assert resp.status_code == 200
+
+        body = client.get("/metrics").text
+        samples = _duration_count_samples(body)
+        health_samples = [ln for ln in samples if 'route="/health"' in ln]
+        assert health_samples, f"expected /health sample; got: {samples}"
+        assert _method_from_sample(health_samples[0]) == "GET"
+
+    def test_bogus_method_token_collapses_to_other_sentinel(self, metrics_app):
+        """An arbitrary, client-controlled method token never becomes its own
+        Prometheus label -- it MUST be exported as ``method="_other"``, the
+        cardinality-DoS closure this HIGH finding fixes.
+        """
+        client = TestClient(metrics_app.fastapi_app)
+        bogus_method = "FOOBARBAZQUX12345"
+
+        resp = client.request(bogus_method, "/health")
+        # The gateway need not understand the method (404/405 is fine) --
+        # the middleware wraps OUTERMOST and records the request regardless
+        # of how the inner app disposed of it.
+        assert resp.status_code in (200, 404, 405)
+
+        body = client.get("/metrics").text
+        samples = _duration_count_samples(body)
+
+        # The raw client-supplied token MUST NEVER appear as a label value.
+        assert not any(
+            f'method="{bogus_method}"' in ln for ln in samples
+        ), f"raw bogus method token leaked into a Prometheus label: {samples}"
+
+        # It MUST instead be collapsed to the bounded "_other" sentinel.
+        other_samples = [ln for ln in samples if _method_from_sample(ln) == "_other"]
+        assert other_samples, (
+            "bogus method token was not recorded under the bounded "
+            f"'_other' sentinel; got samples: {samples}"
+        )
+
+    def test_repeated_bogus_methods_do_not_mint_new_series(self, metrics_app):
+        """N distinct bogus method tokens across N requests collapse to ONE
+        '_other' series, never N distinct series -- the actual cardinality
+        bound, not just a single-request spot-check.
+        """
+        client = TestClient(metrics_app.fastapi_app)
+
+        for i in range(5):
+            client.request(f"SCANNER-TOKEN-{i}", "/health")
+
+        body = client.get("/metrics").text
+        samples = _duration_count_samples(body)
+        distinct_method_labels = {_method_from_sample(ln) for ln in samples}
+
+        # Every bogus token above collapses into the single "_other" bucket;
+        # none of "SCANNER-TOKEN-0".."SCANNER-TOKEN-4" appear as their own label.
+        assert "_other" in distinct_method_labels
+        for i in range(5):
+            assert f"SCANNER-TOKEN-{i}" not in distinct_method_labels

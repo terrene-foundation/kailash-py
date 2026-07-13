@@ -37,6 +37,54 @@ _MISSING_MSG = (
     "Install it with: pip install kailash-nexus[metrics]"
 )
 
+# ---------------------------------------------------------------------------
+# Method-label cardinality bound (#1708 HIGH — symmetric to route templating)
+# ---------------------------------------------------------------------------
+
+# RFC 7230 defines the HTTP method as an arbitrary `token` -- there is no
+# protocol-level bound on its value, and ASGI servers forward whatever byte
+# sequence the client sent (including non-standard tokens) verbatim in
+# ``scope["method"]``. Left unbounded, a client sending a fresh method token
+# per request (e.g. ``-X <random>``) mints a brand-new
+# ``(method, route, status)`` Prometheus series on every single call -- the
+# EXACT path-scanning cardinality-DoS the route TEMPLATE already defends
+# against (see ``nexus/middleware/request_metrics.py::_route_label``), just
+# on the orthogonal method axis. It fires even against unmatched/405 routes,
+# before any auth check runs. This allowlist collapses every non-standard
+# method token to the ``"_other"`` sentinel so the method label is bounded
+# to a fixed, small cardinality regardless of client input.
+_ALLOWED_HTTP_METHODS = frozenset(
+    {
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS",
+        "TRACE",
+        "CONNECT",
+    }
+)
+_OTHER_METHOD_LABEL = "_other"
+
+
+def _method_label(method: str) -> str:
+    """Return a bounded-cardinality HTTP method label.
+
+    Case-normalizes to upper-case and checks against the standard HTTP verb
+    allowlist (RFC 7230 §3.1.1's ``token`` grammar permits ARBITRARY method
+    strings, but only the 9 registered methods above are attributed by
+    name). Any other value -- a malformed token, a client-injected random
+    string, or the middleware's ``"UNKNOWN"`` fallback -- collapses to the
+    ``"_other"`` sentinel, exactly mirroring how an unmatched route
+    collapses to ``"__unmatched__"``.
+    """
+    normalized = method.upper()
+    if normalized in _ALLOWED_HTTP_METHODS:
+        return normalized
+    return _OTHER_METHOD_LABEL
+
 
 def _require_prometheus_client():
     """Lazily import prometheus_client, raising a helpful error if absent."""
@@ -116,7 +164,14 @@ def observe_http_request(
     :class:`~nexus.middleware.request_metrics.RequestMetricsMiddleware`.
 
     Args:
-        method: HTTP method (e.g. ``"GET"``).
+        method: HTTP method (e.g. ``"GET"``). Case-normalized and bounded to
+            the standard HTTP verb allowlist before use as a label value —
+            any other token (a malformed method, a client-injected random
+            string) collapses to the ``"_other"`` sentinel. This mirrors the
+            ``route`` bound below: the label is a member of a small, fixed
+            set, never the raw client-controlled token, to bound
+            cardinality. Applied here (not at the middleware call site) so
+            BOTH instruments inherit the bound from one choke point.
         route: Matched route template (e.g. ``"/users/{id}"``), or the
             ``"__unmatched__"`` sentinel when no route matched — the label
             is the template, never the concrete path, to bound cardinality.
@@ -131,10 +186,13 @@ def observe_http_request(
     # makes that explicit for static analysis of the lazy-init globals.
     assert _http_requests_total is not None  # noqa: S101
     assert _http_request_duration_hist is not None  # noqa: S101
+    method_label = _method_label(method)
     status_label = str(status)
-    _http_requests_total.labels(method=method, route=route, status=status_label).inc()
+    _http_requests_total.labels(
+        method=method_label, route=route, status=status_label
+    ).inc()
     _http_request_duration_hist.labels(
-        method=method, route=route, status=status_label
+        method=method_label, route=route, status=status_label
     ).observe(duration_seconds)
 
 

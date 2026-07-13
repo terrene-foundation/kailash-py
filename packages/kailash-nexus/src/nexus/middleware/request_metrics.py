@@ -8,6 +8,15 @@ Records ``nexus_http_requests_total`` (Counter) and
 request. The metrics surface on the existing Prometheus ``/metrics`` endpoint
 (``register_metrics_endpoint``) because they live in the default registry.
 
+Both label axes are bounded-cardinality: ``route`` is the matched route
+TEMPLATE (never the concrete path — see ``_route_label`` below), and
+``method`` is allowlisted to the standard HTTP verbs (never the raw,
+client-controlled method token — see ``nexus.metrics._method_label``, the
+single choke point both Prometheus instruments share via
+``observe_http_request``). This middleware passes the raw
+``scope["method"]`` through unmodified; the bound is applied downstream so
+both instruments inherit it from one place.
+
 This is a PURE-ASGI middleware (matching ``SecurityHeadersMiddleware``), NOT a
 Starlette ``BaseHTTPMiddleware`` — the latter breaks streaming responses and
 background tasks. ``prometheus_client`` is an OPTIONAL dependency; when it is
