@@ -136,6 +136,14 @@ class _WorkflowNameBucketer:
         if not isinstance(top_n, int) or top_n <= 0:
             raise ValueError(f"top_n must be positive int, got {top_n!r}")
         self._top_n = top_n
+        # Bound the internal counts working set so it cannot grow without
+        # bound under a flood of distinct names (issue #1708 G1 LOW): the
+        # metric label cardinality is already bounded to top_n + "_other",
+        # but an un-pruned counts dict would still leak one entry per distinct
+        # name for process lifetime. Generous headroom over top_n keeps
+        # legitimate displacement working; a brand-new name past the cap goes
+        # straight to "_other" untracked.
+        self._max_tracked = max(top_n * 10, top_n + 1000)
         self._counts: "Counter[str]" = Counter()
         self._admitted: set[str] = set()
         self._lock = threading.Lock()
@@ -145,14 +153,26 @@ class _WorkflowNameBucketer:
         if not isinstance(workflow_name, str) or workflow_name == "":
             raise ValueError("workflow_name must be a non-empty str")
         with self._lock:
-            self._counts[workflow_name] += 1
+            # Already admitted -> verbatim (admitted names are always tracked).
             if workflow_name in self._admitted:
+                self._counts[workflow_name] += 1
                 return workflow_name
+            # Room in the admitted set -> admit the first top_n distinct names.
             if len(self._admitted) < self._top_n:
+                self._counts[workflow_name] += 1
                 self._admitted.add(workflow_name)
                 return workflow_name
-            # Admission competition: if the new name's count exceeds the
-            # lowest admitted name's count, promote it.
+            # Admitted set full. Only track counts for a BOUNDED working set so
+            # _counts cannot grow without bound (G1 LOW); a never-seen name past
+            # the working-set cap buckets to "_other" without being tracked.
+            if workflow_name in self._counts:
+                self._counts[workflow_name] += 1
+            elif len(self._counts) < self._max_tracked:
+                self._counts[workflow_name] = 1
+            else:
+                return _OTHER_WORKFLOW_LABEL
+            # Admission competition: promote if this name now out-counts the
+            # lowest-observed admitted name.
             admitted_counts = {t: self._counts[t] for t in self._admitted}
             lowest_name = min(admitted_counts, key=lambda t: admitted_counts[t])
             if self._counts[workflow_name] > admitted_counts[lowest_name]:

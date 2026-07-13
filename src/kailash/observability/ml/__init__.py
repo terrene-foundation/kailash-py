@@ -93,6 +93,14 @@ class _TenantBucketer:
         if not isinstance(top_n, int) or top_n <= 0:
             raise ValueError(f"top_n must be positive int, got {top_n!r}")
         self._top_n = top_n
+        # Bound the internal counts working set so it cannot grow without
+        # bound under a flood of distinct values (issue #1708 G1 LOW): the
+        # metric label cardinality is already bounded to top_n + "_other",
+        # but an un-pruned counts dict would still leak one entry per distinct
+        # value for process lifetime. Generous headroom over top_n keeps
+        # legitimate displacement working; a brand-new value past the cap goes
+        # straight to "_other" untracked.
+        self._max_tracked = max(top_n * 10, top_n + 1000)
         self._counts: _CollectionsCounter[str] = _CollectionsCounter()
         self._admitted: set[str] = set()
         self._lock = threading.Lock()
@@ -103,12 +111,24 @@ class _TenantBucketer:
                 "tenant_id must be non-empty str (rules/tenant-isolation.md §2)"
             )
         with self._lock:
-            self._counts[tenant_id] += 1
+            # Already admitted -> verbatim (admitted values are always tracked).
             if tenant_id in self._admitted:
+                self._counts[tenant_id] += 1
                 return tenant_id
+            # Room in the admitted set -> admit the first top_n distinct values.
             if len(self._admitted) < self._top_n:
+                self._counts[tenant_id] += 1
                 self._admitted.add(tenant_id)
                 return tenant_id
+            # Admitted set full. Only track counts for a BOUNDED working set so
+            # _counts cannot grow without bound (G1 LOW); a never-seen value past
+            # the working-set cap buckets to "_other" without being tracked.
+            if tenant_id in self._counts:
+                self._counts[tenant_id] += 1
+            elif len(self._counts) < self._max_tracked:
+                self._counts[tenant_id] = 1
+            else:
+                return "_other"
             # Admission competition: if the new tenant's count exceeds
             # the lowest admitted tenant's count, promote it.
             admitted_counts = {t: self._counts[t] for t in self._admitted}
