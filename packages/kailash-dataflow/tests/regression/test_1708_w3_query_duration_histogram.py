@@ -47,6 +47,14 @@ import uuid
 
 import pytest
 
+# ``dataflow_query_duration_seconds`` is a real (non-noop) histogram only when
+# prometheus_client (the ``kailash-dataflow[fabric]`` extra) is installed. The
+# Tier-1 unit CI venv is extras-free by design (see
+# ``packages/kailash-dataflow/tests/CLAUDE.md`` — the fabric suite lives in the
+# integration tier), so skip this whole module cleanly there rather than
+# hard-failing on the missing optional backend.
+pytest.importorskip("prometheus_client")
+
 from dataflow import DataFlow
 from dataflow.observability.query_metrics import (
     DataFlowQueryMetrics,
