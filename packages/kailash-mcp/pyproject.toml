@@ -75,8 +75,17 @@ platform = [
     "fastapi>=0.115.12",
     "uvicorn[standard]>=0.31.0",
 ]
+# Operational monitoring (real Prometheus histogram for tool/resource/prompt
+# call duration — #1708 W2). Guarded via try/except ImportError in
+# utils/metrics.py so this stays an OPTIONAL extra: absence silently
+# disables the mcp_tool_duration_seconds Histogram without breaking
+# `import kailash_mcp`. Mirrors the `monitoring` extra name in the root
+# kailash package (pyproject.toml).
+monitoring = [
+    "prometheus-client>=0.22.1",
+]
 full = [
-    "kailash-mcp[http,sse,websocket,auth-jwt,auth-oauth,server,platform]",
+    "kailash-mcp[http,sse,websocket,auth-jwt,auth-oauth,server,platform,monitoring]",
 ]
 dev = [
     "pytest>=7.0",
