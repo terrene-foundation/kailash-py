@@ -30,12 +30,13 @@ Included in the base install (``pip install kailash``).
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["MetricsBridge", "get_metrics_bridge"]
+__all__ = ["MetricsBridge", "get_metrics_bridge", "sanitize_workflow_name"]
 
 # Lazy OTel metrics import.
 _OTEL_METRICS_AVAILABLE = False
@@ -48,6 +49,68 @@ try:
     _OTEL_METRICS_AVAILABLE = True
 except ImportError:
     pass
+
+# Second-scale explicit bucket boundaries for the workflow-duration histogram
+# (issue #1708 W1f). OTel's DEFAULT histogram buckets are millisecond-scale
+# (tuned for HTTP request latency: 0, 5, 10, 25 ... 10000) and are useless for
+# workflow executions that commonly run from tens of milliseconds to several
+# minutes -- every real workflow duration lands in the single top overflow
+# bucket, so p95/p99 queries return meaningless results. These boundaries are
+# supplied as ``explicit_bucket_boundaries_advisory`` at instrument-creation
+# time, which the OTel SDK's default histogram aggregation honors directly
+# (no separate View registration required).
+WORKFLOW_DURATION_BUCKETS_SECONDS: tuple[float, ...] = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+    30.0,
+    60.0,
+    120.0,
+    300.0,
+    600.0,
+)
+
+# ``WorkflowBuilder.build()`` defaults an unnamed workflow's ``name`` to
+# ``f"Workflow-{workflow_id[:8]}"`` -- an 8-hex-char fragment of a fresh
+# ``uuid4()`` minted on *every* ``.build()`` call (see
+# ``kailash.workflow.builder.WorkflowBuilder.build``). Recording that value
+# verbatim as a metric label/attribute is the SAME unbounded-cardinality bomb
+# issue #1708 (Wave 1d) fixed for the raw ``workflow_id``: a long-lived
+# Prometheus/OTel scrape target would mint a brand-new time series on every
+# execution for any caller that does not explicitly name their workflow.
+_AUTO_GENERATED_WORKFLOW_NAME_RE = re.compile(r"^Workflow-[0-9a-fA-F]{8}$")
+
+# Bounded sentinel substituted for auto-generated / missing workflow names.
+_UNNAMED_WORKFLOW_LABEL = "unnamed_workflow"
+
+
+def sanitize_workflow_name(workflow_name: Optional[str]) -> str:
+    """Collapse an auto-generated per-build workflow name to a bounded sentinel.
+
+    Explicitly-named workflows (``WorkflowBuilder(name="orders")`` or
+    ``.build(name="orders")``) pass through unchanged -- those names are
+    bounded by the caller's own naming discipline. Unnamed workflows,
+    whose ``name`` defaults to ``f"Workflow-{workflow_id[:8]}"``, collapse
+    to a single stable label so the RED metrics stay bounded regardless of
+    how many anonymous workflows execute (issue #1708 W1f).
+
+    Args:
+        workflow_name: The raw ``workflow.name`` value (or ``None``).
+
+    Returns:
+        A bounded label value safe to use as a metric attribute.
+    """
+    if not workflow_name or _AUTO_GENERATED_WORKFLOW_NAME_RE.match(workflow_name):
+        return _UNNAMED_WORKFLOW_LABEL
+    return workflow_name
 
 
 class MetricsBridge:
@@ -89,6 +152,7 @@ class MetricsBridge:
                 name="kailash_workflow_duration_seconds",
                 description="Duration of workflow executions in seconds",
                 unit="s",
+                explicit_bucket_boundaries_advisory=WORKFLOW_DURATION_BUCKETS_SECONDS,
             )
             self._node_duration = meter.create_histogram(
                 name="kailash_node_execution_duration_seconds",
@@ -177,6 +241,56 @@ class MetricsBridge:
         if tenant_id:
             attrs["tenant.id"] = tenant_id
         self._workflow_duration.record(duration_s, attributes=attrs)
+
+    def record_workflow_execution(
+        self,
+        workflow_name: str,
+        duration_s: float,
+        success: bool,
+    ) -> None:
+        """Record the canonical workflow RED triple for one execution.
+
+        Called once per :meth:`~kailash.runtime.local.LocalRuntime.execute`
+        (and the async
+        :meth:`~kailash.runtime.async_local.AsyncLocalRuntime.execute_workflow_async`)
+        invocation -- on BOTH the success path and the exception path, so
+        errors are always rate + duration recorded, never dropped (issue
+        #1708 W1f).
+
+        Increments ``kailash_workflow_executions_total`` with bounded
+        ``{workflow.name, success}`` attributes (Rate + Errors) and records
+        ``duration_s`` into ``kailash_workflow_duration_seconds`` with a
+        bounded ``{workflow.name}`` attribute (Duration).
+
+        ``workflow_name`` is sanitized through :func:`sanitize_workflow_name`
+        before being used as an attribute value -- it is NEVER the per-build
+        ``workflow_id`` UUID (issue #1708 W1d fixed that exact cardinality
+        bomb on the orphaned enterprise adapter; this is the same bounded-
+        label invariant enforced at the canonical hot-path wiring).
+
+        Args:
+            workflow_name: Human-readable workflow identifier (``workflow.name``,
+                not ``workflow_id``).
+            duration_s: Wall-clock duration of the execute() call, in seconds.
+            success: ``True`` when the workflow completed without raising;
+                ``False`` on any exception path.
+        """
+        if not self._enabled:
+            return
+        bounded_name = sanitize_workflow_name(workflow_name)
+        if self._workflow_counter is not None:
+            self._workflow_counter.add(
+                1,
+                attributes={
+                    "workflow.name": bounded_name,
+                    "success": "true" if success else "false",
+                },
+            )
+        if self._workflow_duration is not None:
+            self._workflow_duration.record(
+                duration_s,
+                attributes={"workflow.name": bounded_name},
+            )
 
     def record_node_duration(
         self,

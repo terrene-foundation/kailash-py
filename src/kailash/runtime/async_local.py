@@ -19,6 +19,7 @@ import contextvars
 import hashlib
 import logging
 import os
+import sys
 import time
 import warnings
 import weakref
@@ -50,6 +51,7 @@ from kailash.runtime.durable import (
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.local import LocalRuntime
+from kailash.runtime.metrics import get_metrics_bridge
 from kailash.sdk_exceptions import (
     HardTimeLimitExceeded,
     RuntimeExecutionError,
@@ -939,6 +941,14 @@ class AsyncLocalRuntime(LocalRuntime):
 
         start_time = time.time()
 
+        # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration) via
+        # the OTel MetricsBridge, mirroring LocalRuntime.execute(). Bounded
+        # {workflow.name} label only — NEVER workflow_id (the per-build UUID
+        # cardinality bomb Wave 1d fixed). Recorded once, in the `finally`
+        # block below, on BOTH the success and exception path.
+        _metrics_bridge = get_metrics_bridge()
+        _metrics_workflow_name = getattr(workflow, "name", "") or ""
+
         # Generate run_id for tracking (consistent with LocalRuntime)
         run_id = f"run_{int(time.time() * 1000)}"
 
@@ -1128,6 +1138,20 @@ class AsyncLocalRuntime(LocalRuntime):
             raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
         finally:
+            # Issue #1708 W1f: record the canonical workflow RED triple.
+            # `sys.exc_info()` inside a `finally` attached to the same
+            # `try` frame that is unwinding reports the in-flight exception
+            # (or `(None, None, None)` on a clean return) — this single
+            # check point observes BOTH the success path (`return (results,
+            # run_id)` above) and every exception path (timeout, cancelled,
+            # time-limit, or generic) without duplicating the recording
+            # call at every `except` clause.
+            _metrics_success = sys.exc_info()[0] is None
+            _metrics_bridge.record_workflow_execution(
+                _metrics_workflow_name,
+                time.time() - start_time,
+                success=_metrics_success,
+            )
             # #912 Shard 6: always release the asyncio timer tasks. Safe
             # to call on the no-limits path (cancellable is None then).
             if cancellable is not None:
