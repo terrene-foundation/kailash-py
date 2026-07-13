@@ -13,7 +13,48 @@ import types
 
 import pytest
 
-from nexus.middleware.request_metrics import RequestMetricsMiddleware, _route_label
+from nexus.middleware.request_metrics import (
+    RequestMetricsMiddleware,
+    _route_label,
+    _templated_mount_prefix,
+)
+
+# ---------------------------------------------------------------------------
+# _templated_mount_prefix — core-gateway Mount route-label coverage (#1708 W5)
+# ---------------------------------------------------------------------------
+
+
+def test_templated_mount_prefix_workflow_mount():
+    """A per-workflow Mount root_path is collapsed to a bounded template."""
+    assert _templated_mount_prefix("/workflows/my_workflow") == "/workflows/{name}"
+
+
+def test_templated_mount_prefix_mcp_mount():
+    """A per-MCP-server Mount root_path is collapsed to a bounded template."""
+    assert _templated_mount_prefix("/mcp/my_server") == "/mcp/{name}"
+
+
+def test_templated_mount_prefix_leaves_non_matching_prefix_unchanged():
+    """A root_path that isn't a recognized per-item mount shape passes through.
+
+    Static, operator-registered sub-app mounts (via Nexus.mount()) are
+    already bounded — not request-driven — so no re-templating is needed.
+    """
+    assert _templated_mount_prefix("/admin") == "/admin"
+    assert _templated_mount_prefix("") == ""
+
+
+def test_templated_mount_prefix_does_not_match_nested_workflow_subpaths():
+    """Only the exact two-segment Mount root_path is re-templated.
+
+    A root_path with additional segments (which Mount.matches() never
+    actually produces for a single-level per-workflow mount) is left as-is
+    rather than mis-templated.
+    """
+    assert _templated_mount_prefix("/workflows/my_workflow/nested") == (
+        "/workflows/my_workflow/nested"
+    )
+
 
 # ---------------------------------------------------------------------------
 # _route_label — cardinality control
@@ -43,6 +84,42 @@ def test_route_label_route_without_usable_template_returns_sentinel():
     """A route object with neither path_format nor path returns the sentinel."""
     route = types.SimpleNamespace(path_format=None, path=None)
     assert _route_label({"route": route}) == "__unmatched__"
+
+
+def test_route_label_combines_templated_mount_prefix_with_inner_route() -> None:
+    """A Mount-dispatched request's route label is prefix + inner template.
+
+    Reproduces the exact core-gateway shape (#1708 W5): a request routed
+    through WorkflowServer.register_workflow's per-workflow Mount carries
+    the Mount's matched root_path AND the sub-app's own matched route in
+    the same scope. The combined label must be fully templated.
+    """
+    route = types.SimpleNamespace(path_format="/execute", path="/execute")
+    scope = {"route": route, "root_path": "/workflows/my_workflow"}
+    assert _route_label(scope) == "/workflows/{name}/execute"
+
+
+def test_route_label_mount_prefix_root_route_no_doubled_slash() -> None:
+    """The sub-app's own '/' route does not produce a doubled slash."""
+    route = types.SimpleNamespace(path_format="/", path="/")
+    scope = {"route": route, "root_path": "/workflows/my_workflow"}
+    assert _route_label(scope) == "/workflows/{name}/"
+
+
+def test_route_label_mount_prefix_alone_when_no_inner_route_matched() -> None:
+    """A Mount-dispatched request whose sub-app is not FastAPI-instrumented
+    (no scope["route"]) still attributes to the templated mount prefix
+    instead of collapsing to the __unmatched__ sentinel.
+    """
+    scope = {"root_path": "/mcp/my_server"}
+    assert _route_label(scope) == "/mcp/{name}"
+
+
+def test_route_label_no_root_path_unaffected_by_mount_logic() -> None:
+    """A direct (non-mounted) core-gateway route with no root_path is unchanged."""
+    route = types.SimpleNamespace(path_format="/health", path="/health")
+    scope = {"route": route}
+    assert _route_label(scope) == "/health"
 
 
 # ---------------------------------------------------------------------------
