@@ -768,20 +768,27 @@ class EnterpriseMonitoringManager:
     def record_workflow_execution(
         self, workflow_id: str, duration_ms: float, success: bool
     ) -> None:
-        """Record workflow execution metrics."""
-        # Prometheus
+        """Record workflow execution metrics.
+
+        ``workflow_id`` is a per-build UUID and MUST NOT be used as a metric
+        label/tag (#1708): it is an unbounded-cardinality axis — one new
+        time-series per workflow build, a cardinality bomb on any long-lived
+        scrape target. Only the bounded ``success`` dimension is a label;
+        ``workflow_id`` is retained in the signature for trace/log correlation.
+        """
+        # Prometheus — bounded labels only (no unbounded workflow_id, #1708)
         if self.adapters["prometheus"].enabled:
             counter = self.adapters["prometheus"].counter(
                 "workflows_total",
                 "Total workflows executed",
-                ["workflow_id", "success"],
+                ["success"],
             )
-            counter.labels(workflow_id=workflow_id, success=str(success)).inc()
+            counter.labels(success=str(success)).inc()
 
-        # DataDog
+        # DataDog — bounded tags only (no unbounded workflow_id, #1708)
         self.adapters["datadog"].increment(
             "workflow.executions",
-            tags=[f"workflow_id:{workflow_id}", f"success:{success}"],
+            tags=[f"success:{success}"],
         )
 
     def record_resource_usage(self, resource_type: str, value: float) -> None:
