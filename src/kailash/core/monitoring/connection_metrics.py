@@ -129,6 +129,97 @@ def _get_acquire_wait_histogram() -> "Optional[Any]":
     return _ACQUIRE_WAIT_HISTOGRAM
 
 
+# G1 HIGH-1: the idle-connection gauge and pool-exhaustion counter follow the
+# EXACT same module-level-singleton-on-the-default-REGISTRY pattern as
+# ``_ACQUIRE_WAIT_HISTOGRAM`` above. Before this fix, both metrics were only
+# reachable via ``ConnectionMetricsProvider.register_source(...)``
+# (kailash/servers/connection_metrics_router.py), which has ZERO production
+# callers (grep confirms only tests call it) — so a live WorkflowServer /
+# EnterpriseWorkflowServer with an empty ``_sources`` registry emitted NO
+# idle/exhaustion lines at all. Registering these as real
+# ``prometheus_client`` instruments makes them flow into
+# ``generate_latest()`` (and therefore the unified ``/metrics`` scrape via
+# ``render_prometheus_exposition()``) unconditionally, with no wiring step
+# required.
+_POOL_IDLE_GAUGE: "Optional[Any]" = None
+_POOL_EXHAUSTION_COUNTER: "Optional[Any]" = None
+
+
+def _get_pool_idle_gauge() -> "Optional[Any]":
+    """Return the shared ``kailash_pool_connections_idle`` gauge.
+
+    Created lazily so importing this module never requires
+    ``prometheus_client`` to be installed. Registered against
+    ``prometheus_client.REGISTRY`` (the default registry) so it flows into
+    the unified server ``/metrics`` scrape via ``render_prometheus_exposition()``
+    exactly like ``_get_acquire_wait_histogram`` above.
+
+    The ``pool`` label MUST stay bounded (cardinality note, #1708 G1
+    HIGH-1): pool names are operator-assigned identifiers configured at
+    startup (node id / pool metadata name) from a finite, small set — never
+    a per-request or per-connection unique value. ``redact_pool_key`` is
+    defense-in-depth in case a caller ever passes a connection-string-shaped
+    name (``rules/observability.md`` § 6.3). A caller that constructs one
+    :class:`ConnectionMetricsCollector` per request (rather than one per
+    configured pool) would defeat this bound; that is a caller bug, not a
+    property of this metric.
+    """
+    global _POOL_IDLE_GAUGE
+    if not _PROMETHEUS_AVAILABLE:
+        return None
+    if _POOL_IDLE_GAUGE is not None:
+        return _POOL_IDLE_GAUGE
+
+    metric_name = "kailash_pool_connections_idle"
+    try:
+        _POOL_IDLE_GAUGE = _prometheus_client.Gauge(
+            metric_name,
+            "Number of idle (available, unused) connections currently held by the pool",
+            ["pool"],
+            registry=_prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        # See ``_get_acquire_wait_histogram`` above — this module can be
+        # imported under two distinct qualified names in the same process,
+        # each with its own module-level global, but sharing the one
+        # process-wide ``prometheus_client.REGISTRY``.
+        existing = _prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _POOL_IDLE_GAUGE = existing
+    return _POOL_IDLE_GAUGE
+
+
+def _get_pool_exhaustion_counter() -> "Optional[Any]":
+    """Return the shared ``kailash_pool_exhaustion_events_total`` counter.
+
+    Same lazy-singleton-on-the-default-REGISTRY pattern as
+    :func:`_get_pool_idle_gauge` / :func:`_get_acquire_wait_histogram`. See
+    :func:`_get_pool_idle_gauge` for the ``pool`` label cardinality note.
+    """
+    global _POOL_EXHAUSTION_COUNTER
+    if not _PROMETHEUS_AVAILABLE:
+        return None
+    if _POOL_EXHAUSTION_COUNTER is not None:
+        return _POOL_EXHAUSTION_COUNTER
+
+    metric_name = "kailash_pool_exhaustion_events_total"
+    try:
+        _POOL_EXHAUSTION_COUNTER = _prometheus_client.Counter(
+            metric_name,
+            "Total number of pool-exhaustion events (an acquire attempt found no "
+            "available connection)",
+            ["pool"],
+            registry=_prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        existing = _prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _POOL_EXHAUSTION_COUNTER = existing
+    return _POOL_EXHAUSTION_COUNTER
+
+
 class MetricType(Enum):
     """Types of metrics collected."""
 
@@ -374,10 +465,43 @@ class ConnectionMetricsCollector:
         self._record_time_series("pool_active", active)
         self._record_time_series("pool_utilization", self._gauges["pool_utilization"])
 
+        # Real Prometheus gauge (#1708 G1 HIGH-1) — the REAL emission site
+        # for ``kailash_pool_connections_idle``. Registered on the default
+        # ``REGISTRY`` (see ``_get_pool_idle_gauge``) so it reaches the
+        # unified ``/metrics`` scrape via ``generate_latest()`` with no
+        # ``ConnectionMetricsProvider.register_source(...)`` dependency.
+        # Telemetry MUST NOT be able to break the operation it observes
+        # (this runs on the pool-maintenance / acquire path), so failures
+        # are logged and swallowed here — instrumentation-boundary
+        # isolation, not silent business-logic error hiding
+        # (rules/zero-tolerance.md Rule 3 hooks/cleanup exception).
+        try:
+            gauge = _get_pool_idle_gauge()
+            if gauge is not None:
+                gauge.labels(pool=redact_pool_key(self.pool_name)).set(idle)
+        except Exception:
+            logger.warning(
+                "connection_metrics.idle_gauge_set_failed",
+                exc_info=True,
+            )
+
     def track_pool_exhaustion(self):
         """Track pool exhaustion event."""
         self._counters["pool_exhaustion_events"] += 1
         self._errors[ErrorCategory.POOL_EXHAUSTED] += 1
+
+        # Real Prometheus counter (#1708 G1 HIGH-1) — the REAL emission
+        # site for ``kailash_pool_exhaustion_events_total``. See
+        # ``update_pool_stats`` above for the try/except rationale.
+        try:
+            counter = _get_pool_exhaustion_counter()
+            if counter is not None:
+                counter.labels(pool=redact_pool_key(self.pool_name)).inc()
+        except Exception:
+            logger.warning(
+                "connection_metrics.exhaustion_counter_inc_failed",
+                exc_info=True,
+            )
 
     # Health metrics
 
