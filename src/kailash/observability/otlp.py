@@ -118,6 +118,31 @@ def shutdown_observability() -> None:
             _STATE = None
 
 
+def _mask_otlp_endpoint(endpoint: Optional[str]) -> str:
+    """Mask any embedded userinfo credentials before logging an OTLP endpoint.
+
+    Auth normally travels via ``OTEL_EXPORTER_OTLP_HEADERS`` (never read or
+    logged here), but a pathological config can embed basic-auth in the URL
+    (``http://user:pass@collector``). Redact only when userinfo is present so a
+    normal credential-free endpoint logs verbatim (no spurious ``***@``).
+    """
+    if not endpoint:
+        return "(none)"
+    if "@" not in endpoint:
+        return endpoint
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(endpoint)
+        if parsed.hostname is None or "@" not in (parsed.netloc or ""):
+            return endpoint
+        hostport = parsed.hostname + (f":{parsed.port}" if parsed.port else "")
+        return f"{parsed.scheme}://***@{hostport}{parsed.path}"
+    except Exception:
+        # Never let a logging-mask failure surface the raw credential.
+        return "(masked-unparseable-otlp-endpoint)"
+
+
 def configure_observability(
     *,
     service_name: Optional[str] = None,
@@ -232,7 +257,7 @@ def configure_observability(
             prom_ok,
             traces_ok,
             logs_ok,
-            otlp_endpoint or "(none)",
+            _mask_otlp_endpoint(otlp_endpoint),
         )
         return handle
 
