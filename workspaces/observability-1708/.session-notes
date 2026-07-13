@@ -1,0 +1,41 @@
+# Session Notes — 2026-07-13
+
+## Where we are
+
+Driving the **#1708 enterprise observability program** (5-distribution, OpenTelemetry-unification,
+hold-all-for-one-bundle cadence per user). Audit complete + posted to #1708. **Wave 1 (core) in
+progress** on branch `feat/obs-1708-w1a-otlp-bootstrap` (NOT merged — code-only, bundle held):
+shards 1a/1b/1d/1e landed with tests; 1c + 1f remain. Then Wave-1 redteam gate → Waves 2–5 → bundle release.
+
+## Read first
+
+1. `workspaces/observability-1708/02-plans/observability-program-plan.md` — the wave program + § "Wave 1 progress" table (shard status/commits, architecture decision, cadence B)
+2. `workspaces/observability-1708/01-analysis/observability-gap-audit.md` — evidence-cited gap surface (6 dims + the orphaned-adapter finding)
+3. `git log 04e1585dc..HEAD` — the landed commits (1a/1b/1d/1e + docs)
+4. `src/kailash/observability/otlp.py` — the keystone façade (`configure_observability`) every wave builds on
+
+## In-flight state
+
+- Branch `feat/obs-1708-w1a-otlp-bootstrap` holds ALL Wave-1 work; NO PR yet (hold-all-for-bundle, cadence B).
+- `pyproject.toml` `[telemetry]` gained `opentelemetry-exporter-prometheus` — **uv.lock NOT yet regenerated** (do at wave finalization).
+- Pre-existing modified `.session-notes.shared.md` + `workspaces/sdk-backlog/.session-notes` (unrelated) left untouched — do NOT discard.
+
+## Executed this session
+
+- Posted the observability audit as a comment on #1708 (this repo's issue; not in `git log`).
+
+## Outstanding ledger (forest)
+
+Canonical forest is root `.session-notes.shared.md`. **F25 (#1708) added — in-flight** (Wave 1 partial).
+Unchanged: F13 (#1532 Phase B/C, BLOCKED on co-owner D1+D5), F14/FC, F1, F23/F24 (all blocked / rs-side).
+
+## Traps
+
+- **Next shards**: 1c = pool acquire-wait HISTOGRAM (fix `core/monitoring/connection_metrics.py` mislabeled quantiles-as-histogram `# TYPE ... histogram`; surface idle+exhaustion on `servers/connection_metrics_router.py`). 1f = wire canonical workflow RED via OTel `MetricsBridge` on `LocalRuntime.execute` (Tier-2 per `facade-manager-detection.md` Rule 1).
+- **Histogram buckets**: OTel default buckets are generic-scale — EVERY latency Histogram (core + subpkgs) MUST set explicit second-scale buckets, else p95/p99 is useless.
+- **Venv**: telemetry deps were installed via system `uv` into `.venv`; run tests with `.venv/bin/python -m pytest`.
+- **Waves 2–5** parallelize in worktrees against the façade AFTER Wave-1 G1 redteam converges; each sub-package = own version bump, all published together in the final bundle.
+
+## Open questions for the human
+
+- None blocking. Final gate = the coordinated 5-package release bundle (authorize when all waves converge).
