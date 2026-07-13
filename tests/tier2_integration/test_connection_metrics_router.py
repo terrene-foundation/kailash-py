@@ -134,3 +134,90 @@ class TestPrometheusLines:
         for line in lines:
             assert line.startswith("kailash_connection_")
             assert 'pool="main_pool"' in line
+
+
+class TestUSECompleteness:
+    """USE completeness (#1708 W1c): idle connections + pool-exhaustion events
+    are collected by ConnectionMetricsCollector.update_pool_stats /
+    track_pool_exhaustion but were previously dropped by the router's
+    collect()/get_prometheus_lines() — never reaching the scrape."""
+
+    async def test_collect_surfaces_idle_and_exhaustion_from_pool_source(self):
+        """collect() MUST propagate idle_connections + pool_exhaustion_events
+        from a registered pool source into the result dict."""
+        provider = ConnectionMetricsProvider()
+        provider.register_source(
+            "main_pool",
+            _FakePool(
+                {
+                    "idle_connections": 4,
+                    "pool_exhaustion_events": 2,
+                }
+            ),
+        )
+
+        pool_data = await provider.collect()
+        assert pool_data["main_pool"]["idle_connections"] == 4
+        assert pool_data["main_pool"]["pool_exhaustion_events"] == 2
+
+    def test_get_prometheus_lines_emits_idle_gauge_and_exhaustion_counter(self):
+        """get_prometheus_lines MUST emit a typed gauge line for idle
+        connections and a typed counter line for pool-exhaustion events."""
+        provider = ConnectionMetricsProvider()
+        pool_data = {
+            "main_pool": {
+                "idle_connections": 3,
+                "pool_exhaustion_events": 5,
+            }
+        }
+        lines = provider.get_prometheus_lines(pool_data)
+
+        assert "# TYPE kailash_pool_connections_idle gauge" in lines
+        assert 'kailash_pool_connections_idle{pool="main_pool"} 3' in lines
+        assert "# TYPE kailash_pool_exhaustion_events_total counter" in lines
+        assert 'kailash_pool_exhaustion_events_total{pool="main_pool"} 5' in lines
+
+    def test_get_prometheus_lines_types_each_metric_exactly_once(self):
+        """With multiple pools reporting idle/exhaustion values, the # TYPE
+        header for each metric MUST appear exactly once (Prometheus requires
+        one TYPE declaration per metric name, not one per label set)."""
+        provider = ConnectionMetricsProvider()
+        pool_data = {
+            "pool_a": {"idle_connections": 1, "pool_exhaustion_events": 0},
+            "pool_b": {"idle_connections": 2, "pool_exhaustion_events": 1},
+        }
+        lines = provider.get_prometheus_lines(pool_data)
+
+        assert lines.count("# TYPE kailash_pool_connections_idle gauge") == 1
+        assert lines.count("# TYPE kailash_pool_exhaustion_events_total counter") == 1
+        assert 'kailash_pool_connections_idle{pool="pool_a"} 1' in lines
+        assert 'kailash_pool_connections_idle{pool="pool_b"} 2' in lines
+        assert 'kailash_pool_exhaustion_events_total{pool="pool_a"} 0' in lines
+        assert 'kailash_pool_exhaustion_events_total{pool="pool_b"} 1' in lines
+
+    async def test_connection_metrics_collector_registers_directly_as_pool_source(
+        self,
+    ):
+        """ConnectionMetricsCollector.get_pool_statistics() gives the
+        collector the same async contract ConnectionMetricsProvider expects,
+        so a real collector instance (no fake/adapter) can be registered
+        directly and its idle gauge + exhaustion counter reach the scrape."""
+        from src.kailash.core.monitoring.connection_metrics import (
+            ConnectionMetricsCollector,
+        )
+
+        collector = ConnectionMetricsCollector("real_pool")
+        collector.update_pool_stats(active=6, idle=4, total=10)
+        collector.track_pool_exhaustion()
+        collector.track_pool_exhaustion()
+
+        provider = ConnectionMetricsProvider()
+        provider.register_source("real_pool", collector)
+
+        pool_data = await provider.collect()
+        assert pool_data["real_pool"]["idle_connections"] == 4
+        assert pool_data["real_pool"]["pool_exhaustion_events"] == 2
+
+        lines = provider.get_prometheus_lines(pool_data)
+        assert 'kailash_pool_connections_idle{pool="real_pool"} 4' in lines
+        assert 'kailash_pool_exhaustion_events_total{pool="real_pool"} 2' in lines

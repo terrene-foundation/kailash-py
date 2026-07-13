@@ -28,6 +28,7 @@ import asyncio
 import logging
 import statistics
 import time
+import types
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -35,7 +36,97 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, ContextManager, Dict, List, Optional, Tuple
 
+from kailash.utils.url_credentials import redact_pool_key
+
 logger = logging.getLogger(__name__)
+
+# ``prometheus_client`` is an OPTIONAL dependency (the ``monitoring`` extra —
+# see ``pyproject.toml``), so it MUST NOT be a hard import for this core
+# module (`rules/dependencies.md` § "Declared = Imported"). When absent, the
+# real Prometheus histogram below (#1708 W1c) is silently disabled — callers
+# still get their in-process percentile histograms via ``get_histogram()``.
+try:
+    import prometheus_client as _prometheus_client
+
+    _PROMETHEUS_AVAILABLE = True
+except ImportError:  # pragma: no cover — covered by structural degrade test
+    _prometheus_client: types.ModuleType = types.ModuleType(  # type: ignore[no-redef]
+        "prometheus_client"
+    )
+    _PROMETHEUS_AVAILABLE = False
+
+# Module-level singleton: multiple ConnectionMetricsCollector instances exist
+# simultaneously (one per named pool — see WorkflowConnectionPool.__init__),
+# and prometheus_client raises "Duplicated timeseries in CollectorRegistry"
+# if the same metric name is registered twice against the default registry.
+# The ``pool`` label differentiates per-pool series on this one shared
+# instrument, matching the AsyncSQLMetrics.lock_wait_time_histogram pattern
+# (kailash/monitoring/asyncsql_metrics.py).
+_ACQUIRE_WAIT_HISTOGRAM: "Optional[Any]" = None
+
+
+def _get_acquire_wait_histogram() -> "Optional[Any]":
+    """Return the shared ``kailash_pool_acquire_wait_seconds`` histogram.
+
+    Created lazily on first use so importing this module never requires
+    ``prometheus_client`` to be installed. Uses EXPLICIT second-scale bucket
+    boundaries — the OTel/Prometheus client default buckets are
+    generic-scale (0.005 .. 10.0 with different steps) and give useless
+    p95/p99 resolution for a sub-100ms connection-acquisition metric.
+
+    The histogram is registered against ``prometheus_client.REGISTRY`` (the
+    default registry) so it flows into the unified server ``/metrics``
+    scrape via ``render_prometheus_exposition()``
+    (``kailash/monitoring/metrics.py``), which calls
+    ``prometheus_client.generate_latest()`` with no registry argument
+    (defaults to the same global ``REGISTRY``) — the same path #1708 W1b
+    unified for OTel meters and prometheus_client-native instruments.
+    """
+    global _ACQUIRE_WAIT_HISTOGRAM
+    if not _PROMETHEUS_AVAILABLE:
+        return None
+    if _ACQUIRE_WAIT_HISTOGRAM is not None:
+        return _ACQUIRE_WAIT_HISTOGRAM
+
+    metric_name = "kailash_pool_acquire_wait_seconds"
+    try:
+        _ACQUIRE_WAIT_HISTOGRAM = _prometheus_client.Histogram(
+            metric_name,
+            "Time spent waiting to acquire a connection from the pool",
+            ["pool"],
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1.0,
+                2.5,
+                5.0,
+                10.0,
+                float("inf"),
+            ),
+            registry=_prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        # "Duplicated timeseries in CollectorRegistry" — this module can be
+        # imported under two distinct qualified names in the SAME process
+        # (``kailash.core.monitoring.connection_metrics`` vs
+        # ``src.kailash.core.monitoring.connection_metrics``, exercised by
+        # different test files in this repo's suite), which gives each
+        # import its own module-level ``_ACQUIRE_WAIT_HISTOGRAM`` global even
+        # though both share the SAME process-wide ``prometheus_client.
+        # REGISTRY``. Whichever import path registers first wins; adopt its
+        # already-registered Histogram instance instead of erroring, so the
+        # second import path still observes into the one real timeseries.
+        existing = _prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _ACQUIRE_WAIT_HISTOGRAM = existing
+    return _ACQUIRE_WAIT_HISTOGRAM
 
 
 class MetricType(Enum):
@@ -175,6 +266,37 @@ class ConnectionMetricsCollector:
             self._histograms["connection_acquisition_ms"].append(duration_ms)
             self._counters["connections_acquired"] += 1
             self._record_time_series("acquisition_time_ms", duration_ms)
+
+            # Real Prometheus histogram (#1708 W1c) — bucketed le= series,
+            # distinct from the in-process percentile histogram above (which
+            # only supports post-hoc summary/quantile export; see
+            # export_prometheus()). pool_name is a bounded, operator-assigned
+            # identifier (node id / pool metadata name), never a per-request
+            # UUID, so cardinality stays low; redact_pool_key is defense in
+            # depth in case a caller ever passes a connection-string-shaped
+            # name (rules/observability.md § 6.3).
+            #
+            # WorkflowConnectionPool.acquire() runs this callback inside the
+            # REAL `with self.metrics_collector.track_acquisition():` block
+            # on its production acquire path (workflow_connection_pool.py) —
+            # TimerContext.__exit__ calls this callback unguarded, so an
+            # uncaught exception here would propagate out of the acquisition
+            # itself. Telemetry MUST NOT be able to break the operation it
+            # observes, so failures are logged and swallowed here — this is
+            # instrumentation-boundary isolation, not silent business-logic
+            # error hiding (rules/zero-tolerance.md Rule 3 hooks/cleanup
+            # exception).
+            try:
+                histogram = _get_acquire_wait_histogram()
+                if histogram is not None:
+                    histogram.labels(pool=redact_pool_key(self.pool_name)).observe(
+                        duration_ms / 1000.0
+                    )
+            except Exception:
+                logger.warning(
+                    "connection_metrics.acquire_wait_histogram_observe_failed",
+                    exc_info=True,
+                )
 
         return TimerContext(record)
 
@@ -388,6 +510,40 @@ class ConnectionMetricsCollector:
             },
         }
 
+    async def get_pool_statistics(self) -> Dict[str, Any]:
+        """Return pool statistics shaped for router-level scrape registration.
+
+        Gives this collector the same ``get_pool_statistics()`` async
+        contract that :class:`~kailash.servers.connection_metrics_router.
+        ConnectionMetricsProvider.register_source` expects — so a collector
+        instance can be registered directly (``provider.register_source(name,
+        collector)``) and its idle-connection gauge / pool-exhaustion counter
+        (set by :meth:`update_pool_stats` / :meth:`track_pool_exhaustion`,
+        otherwise only visible via :meth:`get_all_metrics`) reach the unified
+        ``/metrics`` scrape (#1708 W1c) instead of being collected but never
+        exported.
+        """
+        uptime_seconds = max(time.time() - self._start_time, 1e-9)
+        query_hist = self.get_histogram("query_execution_ms")
+        avg_query_time_ms = (
+            query_hist.sum / query_hist.count
+            if query_hist and query_hist.count
+            else 0.0
+        )
+
+        return {
+            "pool_name": self.pool_name,
+            "health_score": self._gauges.get("health_check_success_rate", 1.0) * 100,
+            "active_connections": self._gauges.get("pool_connections_active", 0),
+            "total_connections": self._gauges.get("pool_connections_total", 0),
+            "idle_connections": self._gauges.get("pool_connections_idle", 0),
+            "utilization": self._gauges.get("pool_utilization", 0.0),
+            "queries_per_second": self._counters["queries_total"] / uptime_seconds,
+            "avg_query_time_ms": avg_query_time_ms,
+            "error_rate": self.get_error_summary()["error_rate"],
+            "pool_exhaustion_events": self._counters.get("pool_exhaustion_events", 0),
+        }
+
     def export_prometheus(self) -> str:
         """Export metrics in Prometheus format."""
         lines = []
@@ -409,12 +565,21 @@ class ConnectionMetricsCollector:
             lines.append(f"# TYPE {metric_name} gauge")
             lines.append(f'{metric_name}{{pool="{self.pool_name}"}} {value}')
 
-        # Export histograms
+        # Export percentile summaries (#1708 W1c fix). These are computed
+        # post-hoc from a sliding-window sample deque with NO pre-declared
+        # bucket boundaries — that is the Prometheus "summary" metric shape
+        # (metric_sum + metric_count + metric{quantile="q"}), NOT "histogram"
+        # (which requires metric_bucket{le="..."} series). Declaring this
+        # block "# TYPE ... histogram" was invalid Prometheus exposition: a
+        # real scraper parses histogram-typed series expecting `_bucket`
+        # lines and finds `quantile=` labels instead. For a real bucketed
+        # histogram of pool acquisition wait time, see
+        # kailash_pool_acquire_wait_seconds (_get_acquire_wait_histogram()).
         for name, values in self._histograms.items():
             if values:
                 hist = HistogramData.from_values(list(values))
                 metric_name = f"connection_pool_{name}"
-                lines.append(f"# TYPE {metric_name} histogram")
+                lines.append(f"# TYPE {metric_name} summary")
                 lines.append(
                     f'{metric_name}_count{{pool="{self.pool_name}"}} {hist.count}'
                 )

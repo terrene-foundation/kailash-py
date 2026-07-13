@@ -74,6 +74,18 @@ class ConnectionMetricsProvider:
                         "queries_per_second": stats.get("queries_per_second", 0.0),
                         "avg_query_time_ms": stats.get("avg_query_time_ms", 0.0),
                         "error_rate": stats.get("error_rate", 0.0),
+                        # USE completeness (#1708 W1c): idle connections +
+                        # pool-exhaustion events are collected by
+                        # ConnectionMetricsCollector.update_pool_stats /
+                        # track_pool_exhaustion but were previously dropped
+                        # here, so they never reached the /metrics scrape.
+                        "idle_connections": stats.get(
+                            "idle_connections",
+                            stats.get("pool_connections_idle", 0),
+                        ),
+                        "pool_exhaustion_events": stats.get(
+                            "pool_exhaustion_events", 0
+                        ),
                     }
             except Exception as e:
                 logger.warning("Failed to collect metrics from pool %s: %s", name, e)
@@ -93,6 +105,13 @@ class ConnectionMetricsProvider:
             List of Prometheus text-format lines.
         """
         lines: List[str] = []
+        # USE completeness (#1708 W1c): idle-connection gauge + pool-exhaustion
+        # counter lines are collected per-pool below but their # TYPE header is
+        # emitted once (outside the per-pool loop) — Prometheus requires each
+        # metric NAME be typed exactly once regardless of how many label sets
+        # (pools) report a value for it.
+        idle_lines: List[str] = []
+        exhaustion_lines: List[str] = []
         for pool_name, stats in pool_data.items():
             safe_name = pool_name.replace("-", "_").replace(" ", "_")
             for key in (
@@ -108,6 +127,27 @@ class ConnectionMetricsProvider:
                 if value is not None and not isinstance(value, str):
                     metric_name = f"kailash_connection_{key}"
                     lines.append(f'{metric_name}{{pool="{safe_name}"}} {value}')
+
+            idle = stats.get("idle_connections")
+            if idle is not None and not isinstance(idle, str):
+                idle_lines.append(
+                    f'kailash_pool_connections_idle{{pool="{safe_name}"}} {idle}'
+                )
+
+            exhaustion = stats.get("pool_exhaustion_events")
+            if exhaustion is not None and not isinstance(exhaustion, str):
+                exhaustion_lines.append(
+                    "kailash_pool_exhaustion_events_total"
+                    f'{{pool="{safe_name}"}} {exhaustion}'
+                )
+
+        if idle_lines:
+            lines.append("# TYPE kailash_pool_connections_idle gauge")
+            lines.extend(idle_lines)
+        if exhaustion_lines:
+            lines.append("# TYPE kailash_pool_exhaustion_events_total counter")
+            lines.extend(exhaustion_lines)
+
         return lines
 
 
