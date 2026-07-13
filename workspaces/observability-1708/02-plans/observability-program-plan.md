@@ -42,4 +42,17 @@ No dedicated metrics-export spec exists (`nexus-services.md` covers metrics narr
 
 ## Release cadence (the human-gated, irreversible decision)
 
-Options: **(A)** one release per distribution as each wave converges (5 releases, incremental value delivery); **(B)** hold all until every wave converges, then a coordinated 5-release bundle (atomic contract, longer to first value); **(C)** core-first (Wave 1 → kailash release), then the 4 sub-package waves. **Recommend (C)** — Wave 1 is the keystone that makes the OTel meters actually export, so shipping it first delivers the biggest single jump in enterprise-readiness and de-risks the sub-package waves that build on the unified provider.
+Options: **(A)** one release per distribution as each wave converges (5 releases, incremental value delivery); **(B)** hold all until every wave converges, then a coordinated 5-release bundle (atomic contract, longer to first value); **(C)** core-first (Wave 1 → kailash release), then the 4 sub-package waves. **DECIDED by user 2026-07-13: (B) — hold all for one coordinated bundle.** No releases are cut until every wave converges; then one coordinated 5-package publish (final human-gated authorization).
+
+## Wave 1 progress (2026-07-13) — branch `feat/obs-1708-w1a-otlp-bootstrap`
+
+| Shard                                                                                                                                                                              | Status     | Commit      | Tests          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- | -------------- |
+| 1a OTLP bootstrap                                                                                                                                                                  | ✅ DONE    | `1cb5b0708` | 6              |
+| 1b unified `/metrics`                                                                                                                                                              | ✅ DONE    | `97039577e` | 3              |
+| 1e bounded ML labels                                                                                                                                                               | ✅ DONE    | `f8855b775` | 4              |
+| 1d workflow_id cardinality fix                                                                                                                                                     | ✅ DONE    | (see log)   | 1 (regression) |
+| 1c pool acquire-wait histogram + USE completeness                                                                                                                                  | ⏳ PENDING | —           | —              |
+| 1f canonical workflow-RED wiring via OTel MetricsBridge on execute path (carved from 1d — net-new hot-path instrumentation, needs Tier-2 per `facade-manager-detection.md` Rule 1) | ⏳ PENDING | —           | —              |
+
+27 tests green across landed shards. **Next:** 1c + 1f → Wave-1 G1 redteam gate (holistic, per `wave-loop.md`) → then Waves 2–5 fan out in parallel worktrees against the façade.
