@@ -6,7 +6,9 @@
 Per specs/kaizen-llm-deployments.md § Cross-SDK Parity, the following
 MUST be byte-identical between kailash-py and kailash-rs:
 
-* Preset names (25 primary presets)
+* Preset names (24 byte-identical cross-SDK names in RUST_PRESET_NAMES; the
+  18 Python-idiom convenience presets in _PYTHON_CONVENIENCE_PRESETS extend the
+  registry with capability-parity, cross-SDK-verified by the sibling tests)
 * Region allowlist (BEDROCK_SUPPORTED_REGIONS)
 * Scope constants (CLOUD_PLATFORM_SCOPE, COGNITIVE_SERVICES_SCOPE)
 * Default api-version (AZURE_OPENAI_DEFAULT_API_VERSION)
@@ -57,6 +59,44 @@ RUST_PRESET_NAMES = frozenset(
 )
 
 
+# Python-idiom convenience presets. These extend the byte-identical cross-SDK
+# catalog above with Python-registry-idiom names, and their cross-SDK CAPABILITY
+# parity is independently pinned by the sibling parity tests (each name maps to a
+# Rust classmethod per EATP D6 — the suffix is the Python idiom difference):
+#   * `<provider>_from_env`  → Rust zero-arg `<provider>()`  — test_from_env_presets.py::_FROM_ENV_PRESETS_RUST_PARITY
+#   * `<provider>_default`   → Rust `<provider>_default()`    — test_default_url_presets.py::_DEFAULT_URL_PRESETS_RUST_PARITY
+#   * `<provider>_compatible`→ Rust `<provider>_compatible()` — test_preset_name_and_compatible.py (#761/#762)
+# They are NOT byte-identical top-level preset NAMES (so they are excluded from
+# RUST_PRESET_NAMES), but they ARE an accounted-for, cross-SDK-verified extension
+# of `list_presets()` — not rogue Python-only leaks. Any preset OUTSIDE both sets
+# is an unexpected leak and MUST fail (see test below).
+_PYTHON_CONVENIENCE_PRESETS = frozenset(
+    {
+        # <provider>_from_env (12)
+        "openai_from_env",
+        "anthropic_from_env",
+        "google_from_env",
+        "cohere_from_env",
+        "mistral_from_env",
+        "perplexity_from_env",
+        "huggingface_from_env",
+        "groq_from_env",
+        "together_from_env",
+        "fireworks_from_env",
+        "openrouter_from_env",
+        "deepseek_from_env",
+        # <provider>_default (4)
+        "ollama_default",
+        "lm_studio_default",
+        "llama_cpp_default",
+        "docker_model_runner_default",
+        # <provider>_compatible (2)
+        "openai_compatible",
+        "anthropic_compatible",
+    }
+)
+
+
 def test_every_rust_preset_is_registered_in_python() -> None:
     """Every preset in the Rust literal is registered in the Python SDK."""
     py_presets = set(list_presets())
@@ -67,26 +107,38 @@ def test_every_rust_preset_is_registered_in_python() -> None:
     )
 
 
-def test_no_python_only_presets_leak_public_surface() -> None:
-    """Python SDK registers NO presets beyond the Rust catalog.
+def test_no_unexpected_presets_leak_public_surface() -> None:
+    """Python registers NO preset outside the two accounted-for sets.
 
-    Python-specific additions (ollama helpers, etc.) belong in a separate
-    namespace or behind a feature flag, never in the primary preset
-    registry — otherwise code written against Python silently breaks on
-    Rust port.
+    Every registered preset MUST be either (a) a byte-identical cross-SDK
+    name in RUST_PRESET_NAMES, or (b) a documented Python-idiom convenience
+    preset in _PYTHON_CONVENIENCE_PRESETS (whose cross-SDK CAPABILITY parity
+    is pinned by the sibling parity tests). Anything else is a genuine
+    Python-only leak that would silently break on Rust port.
     """
     py_presets = set(list_presets())
-    extras = py_presets - RUST_PRESET_NAMES
-    assert not extras, (
-        f"Python SDK has {len(extras)} extra preset(s) not in Rust: "
-        f"{sorted(extras)}. These MUST be added to Rust or removed from Python."
+    accounted = RUST_PRESET_NAMES | _PYTHON_CONVENIENCE_PRESETS
+    unexpected = py_presets - accounted
+    assert not unexpected, (
+        f"Python SDK has {len(unexpected)} UNEXPECTED preset(s) accounted for "
+        f"in neither RUST_PRESET_NAMES nor _PYTHON_CONVENIENCE_PRESETS: "
+        f"{sorted(unexpected)}. Add to the Rust catalog + RUST_PRESET_NAMES, or "
+        f"to the documented convenience family (+ its sibling parity test), or "
+        f"remove from Python."
     )
 
 
-def test_preset_registry_size_matches_rust_catalog() -> None:
-    """Strict count check — 24 primary presets total (no silent add/remove)."""
+def test_preset_registry_size_matches_catalog() -> None:
+    """Strict count check — the two accounted-for sets are disjoint and their
+    union is the full registry (no silent add/remove of any preset)."""
     assert len(RUST_PRESET_NAMES) == 24
-    assert len(list_presets()) == len(RUST_PRESET_NAMES)
+    assert len(_PYTHON_CONVENIENCE_PRESETS) == 18
+    assert not (
+        RUST_PRESET_NAMES & _PYTHON_CONVENIENCE_PRESETS
+    ), "a preset appears in BOTH the byte-identical and convenience sets"
+    assert len(list_presets()) == len(RUST_PRESET_NAMES) + len(
+        _PYTHON_CONVENIENCE_PRESETS
+    )
 
 
 def test_cloud_platform_scope_matches_rust() -> None:
