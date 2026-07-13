@@ -165,6 +165,12 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | [middleware.md](middleware.md)         | AgentUIMiddleware, APIGateway, RealtimeMiddleware, auth/comm/DB/MCP middleware |
 | [visualization.md](visualization.md)   | WorkflowVisualizer, PerformanceVisualizer, dashboards, Mermaid diagrams        |
 
+## Observability
+
+| File                                                 | Description                                                                                                                                                                 |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [observability-metrics.md](observability-metrics.md) | Unified metrics-export contract (#1708) — OTel façade `configure_observability`, single `/metrics` scrape, per-distribution metric inventory, cardinality/secret discipline |
+
 ## Reference
 
 | File                               | Description                                                         |
