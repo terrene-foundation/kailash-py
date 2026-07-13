@@ -63,12 +63,12 @@ import logging
 import socket
 import time
 import uuid
-from typing import Any, Mapping, Optional
+from typing import Any, AsyncIterator, Mapping, Optional
 from urllib.parse import urlparse
 
 import httpx
 
-from kaizen.llm.errors import InvalidEndpoint
+from kaizen.llm.errors import InvalidEndpoint, ProviderError, RateLimited
 
 logger = logging.getLogger(__name__)
 
@@ -399,6 +399,106 @@ class LlmHttpClient:
 
     async def post(self, url: str, **kwargs: Any) -> httpx.Response:
         return await self.request("POST", url, **kwargs)
+
+    async def stream_lines(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: Optional[Mapping[str, str]] = None,
+        content: Any = None,
+        auth_strategy_kind: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Open a REAL streaming HTTP request and yield decoded response lines.
+
+        This is a genuine streaming send — it uses ``httpx.AsyncClient.stream``
+        which reads the response body incrementally off the socket, routed
+        through the SAME ``_SafeHttpTransport`` (SSRF resolver + no second
+        httpx client). Each decoded line (SSE ``data:`` frame for OpenAI /
+        Anthropic / Vertex-Gemini, JSONL object for Ollama / Bedrock) is
+        yielded to the caller as it arrives.
+
+        Status mapping happens BEFORE any line is yielded: a 429 raises
+        :class:`RateLimited`, any other ``>= 400`` raises
+        :class:`ProviderError` (with the error body scrubbed by
+        ``ProviderError`` itself). This mirrors the non-streaming taxonomy so
+        callers handle streaming and buffered failures identically.
+
+        Emits ``llm.http.stream.start`` / ``.ok`` / ``.error`` with the same
+        correlation fields as :meth:`request`.
+        """
+        if self._closed:
+            raise RuntimeError(
+                "LlmHttpClient is closed; cannot issue new requests "
+                "(construct a new client or avoid aclose() before reuse)"
+            )
+        request_id = str(uuid.uuid4())
+        endpoint_host = urlparse(url).hostname or "<unknown-host>"
+        t0 = time.monotonic()
+        logger.info(
+            "llm.http.stream.start",
+            extra={
+                "request_id": request_id,
+                "deployment_preset": self._deployment_preset,
+                "auth_strategy_kind": auth_strategy_kind,
+                "endpoint_host": endpoint_host,
+                "method": method,
+            },
+        )
+        try:
+            async with self._client.stream(
+                method,
+                url,
+                headers=dict(headers) if headers else None,
+                content=content,
+                **kwargs,
+            ) as resp:
+                if resp.status_code == 429:
+                    await resp.aread()
+                    retry_after_raw = resp.headers.get("retry-after")
+                    retry_after: Optional[float] = None
+                    if retry_after_raw:
+                        try:
+                            retry_after = float(retry_after_raw)
+                        except (TypeError, ValueError):
+                            retry_after = None
+                    raise RateLimited(retry_after=retry_after)
+                if resp.status_code >= 400:
+                    body = await resp.aread()
+                    raise ProviderError(
+                        resp.status_code,
+                        body_snippet=body.decode("utf-8", "replace"),
+                    )
+                async for line in resp.aiter_lines():
+                    yield line
+        except Exception as exc:
+            latency_ms = (time.monotonic() - t0) * 1000
+            logger.error(
+                "llm.http.stream.error",
+                extra={
+                    "request_id": request_id,
+                    "deployment_preset": self._deployment_preset,
+                    "auth_strategy_kind": auth_strategy_kind,
+                    "endpoint_host": endpoint_host,
+                    "method": method,
+                    "exception_class": type(exc).__name__,
+                    "latency_ms": latency_ms,
+                },
+            )
+            raise
+        latency_ms = (time.monotonic() - t0) * 1000
+        logger.info(
+            "llm.http.stream.ok",
+            extra={
+                "request_id": request_id,
+                "deployment_preset": self._deployment_preset,
+                "auth_strategy_kind": auth_strategy_kind,
+                "endpoint_host": endpoint_host,
+                "method": method,
+                "latency_ms": latency_ms,
+            },
+        )
 
     def __del__(self) -> None:
         # Emit ResourceWarning ONLY; do not call close() from finalizer.

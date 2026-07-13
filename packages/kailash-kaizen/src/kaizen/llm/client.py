@@ -36,17 +36,34 @@ landed and exercised by a Tier 2 end-to-end test. Shipping a public
 
 from __future__ import annotations
 
+import json
 import logging
 from types import TracebackType
-from typing import List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 
-from kaizen.llm.deployment import EmbedOptions, LlmDeployment, WireProtocol
+from kaizen.llm.deployment import (
+    CompletionRequest,
+    EmbedOptions,
+    LlmDeployment,
+    WireProtocol,
+)
 from kaizen.llm.errors import InvalidResponse, ProviderError, RateLimited, Timeout
 from kaizen.llm.http_client import LlmHttpClient
 from kaizen.llm.redaction import redact_messages
-from kaizen.llm.wire_protocols import ollama_embeddings, openai_embeddings
+from kaizen.llm.wire_protocols import (
+    anthropic_messages,
+    bedrock_invoke,
+    cohere_generate,
+    google_generate_content,
+    huggingface_inference,
+    mistral_chat,
+    ollama_embeddings,
+    ollama_native,
+    openai_chat,
+    openai_embeddings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +87,96 @@ _EMBED_DISPATCH: dict = {
         "env_model_hint": "OLLAMA_EMBEDDING_MODEL",
     },
 }
+
+
+# Wire-protocol dispatch for complete() / stream(). Keyed by WireProtocol.
+# Each entry names the chat shaper and the DEFAULT URL-suffix templates used
+# when the deployment carries no `completion_routing` override (direct
+# providers). Presets that share a wire but route differently
+# (vertex_claude / vertex_gemini / bedrock_*) set `deployment.completion_routing`
+# which OVERRIDES these defaults — that override is what disambiguates the
+# three AnthropicMessages consumers (Anthropic-direct vs Vertex-Claude vs
+# Bedrock-Claude). `{model}` in a template is substituted with the resolved
+# model id; a template beginning with `:` attaches to a model-carrying
+# path_prefix without a `/` separator. This is structural dispatch on a typed
+# deployment-configuration value (rules/agent-reasoning.md permits it), not
+# keyword-matching on user input.
+_COMPLETE_DISPATCH: dict = {
+    WireProtocol.OpenAiChat: {
+        "shaper": openai_chat,
+        "path_template": "/chat/completions",
+        "streaming_path_template": "/chat/completions",
+    },
+    WireProtocol.AnthropicMessages: {
+        "shaper": anthropic_messages,
+        "path_template": "/messages",
+        "streaming_path_template": "/messages",
+    },
+    WireProtocol.GoogleGenerateContent: {
+        "shaper": google_generate_content,
+        "path_template": "/models/{model}:generateContent",
+        "streaming_path_template": "/models/{model}:streamGenerateContent",
+    },
+    WireProtocol.VertexGenerateContent: {
+        "shaper": google_generate_content,
+        "path_template": ":generateContent",
+        "streaming_path_template": ":streamGenerateContent",
+    },
+    WireProtocol.BedrockInvoke: {
+        "shaper": bedrock_invoke,
+        "path_template": "/model/{model}/invoke",
+        "streaming_path_template": "/model/{model}/invoke-with-response-stream",
+    },
+    WireProtocol.CohereGenerate: {
+        "shaper": cohere_generate,
+        "path_template": "/chat",
+        "streaming_path_template": "/chat",
+    },
+    WireProtocol.MistralChat: {
+        "shaper": mistral_chat,
+        "path_template": "/chat/completions",
+        "streaming_path_template": "/chat/completions",
+    },
+    WireProtocol.OllamaNative: {
+        "shaper": ollama_native,
+        "path_template": "/api/chat",
+        "streaming_path_template": "/api/chat",
+    },
+    WireProtocol.HuggingFaceInference: {
+        "shaper": huggingface_inference,
+        "path_template": "/models/{model}",
+        "streaming_path_template": "/models/{model}",
+    },
+}
+
+
+def _parse_stream_line(line: str, shaper: Any) -> Optional[Dict[str, Any]]:
+    """Parse one streaming line into a shaper chunk dict, or ``None`` to skip.
+
+    Handles both SSE framing (``data: {json}`` — OpenAI / Anthropic /
+    Vertex-Gemini) and bare JSONL objects (Ollama / Bedrock). Terminal SSE
+    sentinels (``[DONE]``), empty keep-alive lines, and non-JSON control
+    frames (``event:`` / ``:`` comments) are skipped by returning ``None``.
+    """
+    if not line:
+        return None
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if stripped.startswith("data:"):
+        stripped = stripped[len("data:") :].strip()
+    if not stripped or stripped == "[DONE]":
+        return None
+    if stripped[0] not in "{[":
+        # SSE control frame (event:, id:, retry:, or a `:` comment).
+        return None
+    try:
+        obj = json.loads(stripped)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    return shaper.parse_response(obj)
 
 
 class LlmClient:
@@ -550,6 +657,429 @@ class LlmClient:
             prefix_norm = prefix if prefix.startswith("/") else "/" + prefix
             return f"{base}{prefix_norm}{suffix_norm}"
         return f"{base}{suffix_norm}"
+
+    # -----------------------------------------------------------------
+    # complete() / stream() — chat-completion send-path (#1717)
+    # -----------------------------------------------------------------
+
+    def _build_completion_url(self, template: str, model: Optional[str]) -> str:
+        """Join ``base_url`` + ``path_prefix`` + a completion ``template``.
+
+        ``{model}`` in the template is substituted with ``model``. A template
+        beginning with ``:`` (a Vertex verb like ``:rawPredict``) attaches
+        directly to the model-carrying ``path_prefix`` with NO ``/``
+        separator; any other template is joined with a single ``/``. Any
+        ``endpoint.query_params`` are appended as a query string.
+        """
+        assert self._deployment is not None
+        endpoint = self._deployment.endpoint
+        base = str(endpoint.base_url).rstrip("/")
+        prefix = (endpoint.path_prefix or "").rstrip("/")
+        if prefix and not prefix.startswith("/"):
+            prefix = "/" + prefix
+        root = f"{base}{prefix}"
+        suffix = template.replace("{model}", model or "")
+        if suffix.startswith(":"):
+            url = f"{root}{suffix}"
+        else:
+            if not suffix.startswith("/"):
+                suffix = "/" + suffix
+            url = f"{root}{suffix}"
+        if endpoint.query_params:
+            from urllib.parse import urlencode
+
+            url = f"{url}?{urlencode(endpoint.query_params)}"
+        return url
+
+    def _resolve_completion_route(self, dispatch: dict, *, stream: bool) -> str:
+        """Pick the URL template: deployment routing override, else default."""
+        assert self._deployment is not None
+        routing = self._deployment.completion_routing
+        if stream:
+            if routing is not None and routing.streaming_path_template is not None:
+                return routing.streaming_path_template
+            if routing is not None and routing.path_template is not None:
+                return routing.path_template
+            return dispatch["streaming_path_template"]
+        if routing is not None and routing.path_template is not None:
+            return routing.path_template
+        return dispatch["path_template"]
+
+    def _apply_anthropic_platform_transform(
+        self, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Strip ``model`` + inject ``anthropic_version`` for platform Anthropic.
+
+        Gated on ``deployment.completion_routing.anthropic_version_body``:
+        Vertex-Claude (``"vertex-2023-10-16"``) and Bedrock-Claude
+        (``"bedrock-2023-05-31"``) carry the model in the URL and require the
+        ``anthropic_version`` body field. Anthropic-DIRECT leaves
+        ``completion_routing`` (or its ``anthropic_version_body``) ``None``,
+        so the body is returned UNCHANGED — keeping direct-Anthropic bytes
+        identical to the pre-#1717 output. Returns a new dict; input not
+        mutated.
+        """
+        assert self._deployment is not None
+        routing = self._deployment.completion_routing
+        version = routing.anthropic_version_body if routing is not None else None
+        if version is None:
+            return payload
+        transformed = dict(payload)
+        transformed.pop("model", None)
+        transformed["anthropic_version"] = version
+        return transformed
+
+    def _build_completion_request(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        model: Optional[str],
+        temperature: Optional[float],
+        top_p: Optional[float],
+        max_tokens: Optional[int],
+        stop: Optional[List[str]],
+        user: Optional[str],
+        stream: bool,
+    ) -> "CompletionRequest":
+        """Redact messages, resolve the model, build the CompletionRequest."""
+        assert self._deployment is not None
+        if not isinstance(messages, list):
+            raise TypeError(
+                f"messages must be list[dict]; got {type(messages).__name__}"
+            )
+        # Redact PII at the boundary BEFORE the request is shaped for the wire
+        # (rules/observability.md §8 / §6.5). No-op when no policy installed.
+        redacted = self.redact_request_messages(messages)
+        resolved_model = model or self._deployment.default_model
+        if not resolved_model:
+            raise ValueError(
+                "complete() requires a model — pass model=..., or construct "
+                "the deployment with a default_model."
+            )
+        return CompletionRequest(
+            model=resolved_model,
+            messages=redacted,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            stream=stream,
+            user=user,
+        )
+
+    def _build_completion_payload_and_url(
+        self, request: "CompletionRequest", *, stream: bool
+    ) -> tuple[Dict[str, Any], str]:
+        """Shape the request body + build the URL for the deployment's wire."""
+        assert self._deployment is not None
+        wire = self._deployment.wire
+        dispatch = _COMPLETE_DISPATCH.get(wire)
+        if dispatch is None:
+            # Every wire a preset can construct is covered above; the only
+            # uncovered WireProtocol members (OpenAiCompletions, AzureOpenAi)
+            # are never emitted by a preset (Azure uses the OpenAiChat wire).
+            # A deployment reaching here was hand-assembled with an
+            # unsupported wire — a concrete configuration error, not a stub.
+            raise ValueError(
+                f"LlmClient.complete does not support wire={wire.name!r}. "
+                "Supported wires: "
+                f"{', '.join(w.name for w in _COMPLETE_DISPATCH)}. File an "
+                "issue at terrene-foundation/kailash-py referencing #1717 to "
+                "request another provider."
+            )
+        shaper = dispatch["shaper"]
+        payload = shaper.build_request_payload(request)
+        # Platform-Anthropic body transform (Vertex / Bedrock Claude). No-op
+        # for every other wire and for Anthropic-direct.
+        if wire is WireProtocol.AnthropicMessages:
+            payload = self._apply_anthropic_platform_transform(payload)
+        template = self._resolve_completion_route(dispatch, stream=stream)
+        url = self._build_completion_url(template, request.model)
+        return payload, url
+
+    async def _prepare_auth_headers(
+        self, url: str, body_bytes: bytes, *, stream: bool
+    ) -> tuple[Dict[str, str], Optional[str]]:
+        """Run the deployment auth strategy and return (headers, auth_kind).
+
+        Prefers ``apply_async`` (GcpOauth's single-flight refresh) when the
+        strategy exposes it; otherwise the sync ``apply``. The auth request
+        carries ``method`` / ``url`` / ``body`` / ``streaming`` so richer
+        strategies (AwsSigV4) that canonicalize over those fields work too.
+        Endpoint ``required_headers`` (e.g. ``anthropic-version``) merge in
+        via ``setdefault`` so auth never clobbers them.
+        """
+        assert self._deployment is not None
+        request: dict = {
+            "method": "POST",
+            "url": url,
+            "headers": {"Content-Type": "application/json"},
+            "body": body_bytes,
+            "streaming": stream,
+        }
+        auth = self._deployment.auth
+        apply_async = getattr(auth, "apply_async", None)
+        if callable(apply_async):
+            await apply_async(request)
+        else:
+            auth.apply(request)
+        for k, v in self._deployment.endpoint.required_headers.items():
+            request["headers"].setdefault(k, v)
+        auth_kind = (
+            auth.auth_strategy_kind() if hasattr(auth, "auth_strategy_kind") else None
+        )
+        return request["headers"], auth_kind
+
+    async def complete(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        user: Optional[str] = None,
+        http_client: Optional[LlmHttpClient] = None,
+    ) -> Dict[str, Any]:
+        """Issue a chat completion through the configured deployment.
+
+        Mirrors :meth:`embed`: redacts prompt PII at the boundary, shapes the
+        body for the deployment's wire, dispatches through the SSRF-safe
+        ``LlmHttpClient``, maps HTTP status to the typed error taxonomy, and
+        returns the shaper's normalized dict
+        ``{text, raw_blocks?, usage, stop_reason, model}``.
+
+        Supports OpenAI (+ every OpenAI-compatible provider), Anthropic
+        (direct, Vertex-Claude, Bedrock-Claude), Google Gemini (direct +
+        Vertex), Bedrock native families, Cohere, Mistral, Ollama, and
+        HuggingFace. The per-wire URL, the platform-Anthropic body transform,
+        and the per-model temperature floor are all data-driven — no provider
+        branch in the caller path.
+
+        Raises:
+            ValueError: ``messages`` empty of a resolvable model, or no
+                deployment configured.
+            TypeError: ``messages`` not a ``list[dict]``.
+            ValueError: the deployment's ``wire`` is not supported.
+            InvalidResponse / ProviderError / RateLimited / Timeout: wire
+                failures with credential scrubbing.
+            InvalidEndpoint: SSRF guard rejected the URL at DNS-resolve time.
+        """
+        if self._deployment is None:
+            raise ValueError(
+                "LlmClient.complete requires a deployment; construct via "
+                "LlmClient.from_deployment(...) or LlmClient.from_env() first"
+            )
+        wire = self._deployment.wire
+        request = self._build_completion_request(
+            messages,
+            model=model,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            user=user,
+            stream=False,
+        )
+        payload, url = self._build_completion_payload_and_url(request, stream=False)
+        body_bytes = json.dumps(payload).encode("utf-8")
+
+        owns_client = http_client is None
+        if owns_client and self._managed:
+            if self._http_client is None:
+                self._http_client = LlmHttpClient(
+                    deployment_preset=wire.name, timeout=60.0
+                )
+            http_client = self._http_client
+            owns_client = False
+        elif owns_client:
+            http_client = LlmHttpClient(deployment_preset=wire.name, timeout=60.0)
+        assert http_client is not None
+
+        try:
+            headers, auth_kind = await self._prepare_auth_headers(
+                url, body_bytes, stream=False
+            )
+            logger.info(
+                "llm.complete.start",
+                extra={
+                    "wire": wire.name,
+                    "auth_strategy_kind": auth_kind,
+                    "message_count": len(request.messages),
+                    "model": request.model,
+                    "source": "real",
+                    "mode": "real",
+                },
+            )
+            resp = await http_client.post(
+                url,
+                headers=headers,
+                content=body_bytes,
+                auth_strategy_kind=auth_kind,
+            )
+        except httpx.TimeoutException as exc:
+            logger.error(
+                "llm.complete.error",
+                extra={"wire": wire.name, "exception_class": type(exc).__name__},
+            )
+            if owns_client:
+                await http_client.aclose()
+            raise Timeout() from exc
+        except httpx.HTTPError as exc:
+            logger.error(
+                "llm.complete.error",
+                extra={"wire": wire.name, "exception_class": type(exc).__name__},
+            )
+            if owns_client:
+                await http_client.aclose()
+            raise
+
+        try:
+            if resp.status_code == 429:
+                retry_after_raw = resp.headers.get("retry-after")
+                retry_after: Optional[float] = None
+                if retry_after_raw:
+                    try:
+                        retry_after = float(retry_after_raw)
+                    except (TypeError, ValueError):
+                        retry_after = None
+                raise RateLimited(retry_after=retry_after)
+            if resp.status_code >= 400:
+                raise ProviderError(resp.status_code, body_snippet=resp.text or "")
+            try:
+                payload_json = resp.json()
+            except ValueError as exc:
+                raise InvalidResponse(
+                    f"{wire.name.lower()}_complete: response was not valid JSON"
+                ) from exc
+            dispatch = _COMPLETE_DISPATCH[wire]
+            parsed = dispatch["shaper"].parse_response(payload_json)
+            logger.info(
+                "llm.complete.ok",
+                extra={
+                    "wire": wire.name,
+                    "message_count": len(request.messages),
+                    "status_code": resp.status_code,
+                },
+            )
+            return parsed
+        finally:
+            if owns_client:
+                await http_client.aclose()
+
+    async def stream(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        user: Optional[str] = None,
+        http_client: Optional[LlmHttpClient] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Stream a chat completion as an async iterator of parsed chunks.
+
+        A REAL streaming send: routes through ``LlmHttpClient.stream_lines``
+        (httpx ``client.stream`` on the SAME SSRF-safe transport — no second
+        client, no buffering). Each yielded dict is the shaper's parse of one
+        chunk, carrying at least ``{text}``; terminal / non-JSON SSE control
+        lines (``[DONE]``, empty keep-alives) are skipped.
+
+        Consumes the deployment's :class:`StreamingConfig` — when
+        ``streaming.enabled`` is False the request is issued non-streaming and
+        a single parsed chunk is yielded, so callers can always iterate.
+
+        SSE wires (OpenAI / Anthropic / Vertex-Gemini) emit ``data: {json}``
+        lines; JSONL wires (Ollama / Bedrock) emit bare JSON objects per line.
+        Both are handled: a ``data:`` prefix is stripped when present.
+        """
+        if self._deployment is None:
+            raise ValueError(
+                "LlmClient.stream requires a deployment; construct via "
+                "LlmClient.from_deployment(...) or LlmClient.from_env() first"
+            )
+        wire = self._deployment.wire
+
+        # StreamingConfig opt-out: issue a buffered complete() and yield the
+        # single parsed result so the caller's `async for` still works.
+        if not self._deployment.streaming.enabled:
+            result = await self.complete(
+                messages,
+                model=model,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                stop=stop,
+                user=user,
+                http_client=http_client,
+            )
+            yield result
+            return
+
+        request = self._build_completion_request(
+            messages,
+            model=model,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            user=user,
+            stream=True,
+        )
+        payload, url = self._build_completion_payload_and_url(request, stream=True)
+        body_bytes = json.dumps(payload).encode("utf-8")
+
+        owns_client = http_client is None
+        if owns_client and self._managed:
+            if self._http_client is None:
+                self._http_client = LlmHttpClient(
+                    deployment_preset=wire.name, timeout=60.0
+                )
+            http_client = self._http_client
+            owns_client = False
+        elif owns_client:
+            http_client = LlmHttpClient(deployment_preset=wire.name, timeout=60.0)
+        assert http_client is not None
+
+        dispatch = _COMPLETE_DISPATCH[wire]
+        shaper = dispatch["shaper"]
+        try:
+            headers, auth_kind = await self._prepare_auth_headers(
+                url, body_bytes, stream=True
+            )
+            logger.info(
+                "llm.stream.start",
+                extra={
+                    "wire": wire.name,
+                    "auth_strategy_kind": auth_kind,
+                    "message_count": len(request.messages),
+                    "model": request.model,
+                    "source": "real",
+                    "mode": "real",
+                },
+            )
+            async for line in http_client.stream_lines(
+                "POST",
+                url,
+                headers=headers,
+                content=body_bytes,
+                auth_strategy_kind=auth_kind,
+            ):
+                chunk = _parse_stream_line(line, shaper)
+                if chunk is not None:
+                    yield chunk
+        except httpx.TimeoutException as exc:
+            logger.error(
+                "llm.stream.error",
+                extra={"wire": wire.name, "exception_class": type(exc).__name__},
+            )
+            raise Timeout() from exc
+        finally:
+            if owns_client:
+                await http_client.aclose()
 
     def __del__(self) -> None:
         # Emit ResourceWarning ONLY; never call aclose()/close() from the

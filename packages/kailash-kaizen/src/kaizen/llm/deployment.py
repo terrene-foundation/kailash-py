@@ -268,6 +268,47 @@ class StreamingConfig(BaseModel):
     include_usage: bool = True
 
 
+class CompletionRouting(BaseModel):
+    """Per-deployment completion-path routing + platform body transform.
+
+    Carries the wire-specific pieces that CANNOT be derived from the
+    ``WireProtocol`` enum alone because SEVERAL presets share one wire but
+    route differently. The canonical example: ``bedrock_claude``,
+    ``vertex_claude`` and Anthropic-direct ALL use
+    ``WireProtocol.AnthropicMessages`` yet each needs a different URL suffix
+    (``/model/{model}/invoke`` vs ``:rawPredict`` vs ``/messages``) and a
+    different body shape (Bedrock / Vertex strip ``model`` and inject an
+    ``anthropic_version``; direct keeps ``model`` untouched).
+
+    Fields:
+
+    * ``path_template`` — non-streaming URL suffix appended after
+      ``base_url`` + ``path_prefix``. ``{model}`` is substituted with the
+      deployment's resolved model id. A template beginning with ``:`` (e.g.
+      ``:rawPredict``) is appended WITHOUT a ``/`` separator so it attaches
+      to a model-carrying ``path_prefix`` (``.../models/{model}`` +
+      ``:rawPredict``); any other template is joined with a single ``/``.
+    * ``streaming_path_template`` — the streaming variant (``:streamRawPredict``,
+      ``/model/{model}/invoke-with-response-stream``). Falls back to
+      ``path_template`` when ``None``.
+    * ``anthropic_version_body`` — when set (``"vertex-2023-10-16"`` /
+      ``"bedrock-2023-05-31"``), the completion path strips ``model`` from
+      the Anthropic body and inserts ``anthropic_version``. Left ``None`` for
+      Anthropic-direct so its body stays byte-identical to the pre-#1717
+      output.
+
+    Cross-SDK parity: the routing pieces mirror the Rust adapter's per-preset
+    URL + platform-body handling; a fixed deployment produces the same URL +
+    body bytes on both SDKs.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path_template: Optional[str] = None
+    streaming_path_template: Optional[str] = None
+    anthropic_version_body: Optional[str] = None
+
+
 class RetryConfig(BaseModel):
     """Retry policy per deployment (backoff + cap)."""
 
@@ -313,6 +354,17 @@ class LlmDeployment(BaseModel):
     default_model: Optional[str] = None
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
+    completion_routing: Optional[CompletionRouting] = None
+    """Per-deployment completion URL + platform-body routing.
+
+    ``None`` for presets whose completion path is fully determined by their
+    ``wire`` (OpenAI, Anthropic-direct, Cohere, Mistral, Ollama, HF, Google-
+    direct — the ``_COMPLETE_DISPATCH`` default templates cover them). Set by
+    presets that share a wire with a differently-routed sibling
+    (``vertex_claude`` / ``vertex_gemini`` / ``bedrock_*``): it disambiguates
+    the URL suffix and, for platform-hosted Anthropic, drives the
+    strip-``model`` / inject-``anthropic_version`` body transform.
+    """
     preset_name: Optional[str] = None
     """Canonical preset literal (e.g. ``"openai"``, ``"openai_compatible"``).
 
@@ -406,5 +458,6 @@ __all__ = [
     "CompletionRequest",
     "StreamingConfig",
     "RetryConfig",
+    "CompletionRouting",
     "LlmDeployment",
 ]

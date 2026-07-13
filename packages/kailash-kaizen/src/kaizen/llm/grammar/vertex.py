@@ -20,8 +20,13 @@ suffix convention rather than Bedrock's `-v1:0` suffix. Mapping table:
     claude-opus-4-5    -> claude-opus-4-5@latest
     claude-haiku-4-5   -> claude-haiku-4-5@latest
 
-Native passthrough: `claude-*@*` already-versioned ids are returned
-unchanged (so callers can pin a specific version explicitly).
+Open passthrough: any `claude-*` model id resolves without a catalog
+edit -- an already-versioned `claude-*@*` id is returned unchanged (so
+callers can pin a specific version explicitly), and a bare `claude-*`
+id not in the table above (e.g. a future `claude-opus-4-8`) has `@latest`
+appended so it forms a valid Vertex on-wire id. This mirrors the open
+passthrough `VertexGeminiGrammar` already has, so new Claude model names
+work the day Anthropic publishes them to Vertex.
 
 # `VertexGeminiGrammar`
 
@@ -104,8 +109,9 @@ _VERTEX_CLAUDE_MAPPING: Dict[str, str] = {
 class VertexClaudeGrammar:
     """Grammar for Anthropic Claude models served via Vertex AI.
 
-    Caller supplies a short alias (`claude-3-opus`) or an already-versioned
-    on-wire id (`claude-3-opus@20240229`). Anything else raises
+    Caller supplies a short alias (`claude-3-opus`), an already-versioned
+    on-wire id (`claude-3-opus@20240229`), or any other `claude-*` id
+    (open passthrough). A non-`claude-*` id raises
     `ModelGrammarInvalid(reason="vertex_claude_not_in_catalog")`.
 
     Distinct from `BedrockClaudeGrammar` because the on-wire id format
@@ -122,20 +128,26 @@ class VertexClaudeGrammar:
     def resolve(self, caller_model: str) -> str:
         """Translate `caller_model` into a Vertex on-wire Claude model id.
 
-        Returns the translated id, or the input unchanged if it is already
-        in `claude-*@*` shape. Raises
-        `ModelGrammarInvalid(reason="vertex_claude_not_in_catalog")` if the
-        input is neither a known alias nor a valid on-wire id.
+        Resolution order:
+
+        1. A known short alias resolves via `_VERTEX_CLAUDE_MAPPING`.
+        2. Any other `claude-*` id passes through (open passthrough): an
+           already-versioned `claude-*@*` id is returned unchanged; a bare
+           `claude-*` id (e.g. `claude-opus-4-8`) has `@latest` appended so
+           it forms a valid Vertex on-wire id without a catalog edit.
+        3. A non-`claude-*` id raises
+           `ModelGrammarInvalid(reason="vertex_claude_not_in_catalog")`.
         """
         validated = self._validate_caller_model(caller_model)
-        # 1) Short alias
+        # 1) Known short alias -- resolve to its pinned on-wire id.
         if validated in _VERTEX_CLAUDE_MAPPING:
             return _VERTEX_CLAUDE_MAPPING[validated]
-        # 2) Already-versioned passthrough -- `claude-X@<date>` or
-        # `claude-X@latest`. The `@` is the discriminator; un-suffixed
-        # `claude-3-opus` would have hit the alias table above.
-        if validated.startswith("claude-") and "@" in validated:
-            return validated
+        # 2) Open passthrough for any `claude-*` id. `@`-versioned ids pass
+        # through unchanged (explicit pin); bare ids get `@latest` so the
+        # result is always a valid Vertex on-wire id. Mirrors the open
+        # passthrough VertexGeminiGrammar has.
+        if validated.startswith("claude-"):
+            return validated if "@" in validated else f"{validated}@latest"
         raise ModelGrammarInvalid(reason="vertex_claude_not_in_catalog")
 
     def grammar_kind(self) -> str:
