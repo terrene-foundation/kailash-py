@@ -763,8 +763,8 @@ async def test_audit_chain_replay_verifies_hash_linkage() -> None:
 async def test_dv_5_001_runtime_output_matches_vendored_rs_canonical() -> None:
     """DV-5-001 runtime-end-to-end vector test (#1150).
 
-    Vector content (verbatim from
-    ``tests/fixtures/delegate-conformance/canonical.json``):
+    Vector content (verbatim from the packaged
+    ``kailash/delegate/conformance/data/canonical.json``):
 
     * id: ``DV-5-001``
     * spec_anchor: ``5``

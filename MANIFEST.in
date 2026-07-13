@@ -13,6 +13,10 @@ recursive-include src *.pyi
 recursive-include src *.sql
 recursive-include src py.typed
 
+# Ship the delegate conformance vector set as package data (#1532 RC1) so
+# ConformanceVectorLoader.load_canonical() resolves it from the installed wheel.
+recursive-include src/kailash/delegate/conformance/data *.json
+
 # Exclude all non-essential directories
 prune tests
 prune docs

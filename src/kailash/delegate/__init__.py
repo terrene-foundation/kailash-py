@@ -37,13 +37,23 @@ from kailash.delegate.conformance.schema import (
     receipts_agree,
 )
 from kailash.delegate.dispatch import (
+    AttestedReadReceipt,
+    AuthVerifier,
     Connector,
     ConnectorInvocationResult,
     DispatchCascadeViolationError,
     DispatchEnvelopeViolationError,
     DispatchResult,
+    DispatchSignatureError,
+    DispatchSignerError,
     DispatchSurface,
     DispatchValidationError,
+    KnowledgeLedger,
+    LegacyInvokeConnector,
+    Principal,
+    RevocationChannel,
+    SignatureContract,
+    SignedActionEnvelope,
 )
 from kailash.delegate.envelope import DelegateConstraintEnvelope, EnvelopeWideningError
 from kailash.delegate.runtime import (
@@ -139,6 +149,19 @@ __all__ = [
     "DispatchValidationError",
     "DispatchEnvelopeViolationError",
     "DispatchCascadeViolationError",
+    # Group 7b -- Connector-authoring surface (#1532 RC2). Promoted from
+    # kailash.delegate.dispatch so a contrib/ connector depends on ONE stable
+    # surface (kailash.delegate) instead of importing from .dispatch directly.
+    "Principal",
+    "SignedActionEnvelope",
+    "AttestedReadReceipt",
+    "RevocationChannel",
+    "KnowledgeLedger",
+    "AuthVerifier",
+    "SignatureContract",
+    "LegacyInvokeConnector",
+    "DispatchSignatureError",
+    "DispatchSignerError",
     # Group 8 -- Runtime spine + TAOD lifecycle (S6)
     "DelegateRuntime",
     "Posture",

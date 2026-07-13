@@ -53,6 +53,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -476,10 +477,20 @@ def canonical_vector_set_digest(vectors: list[ConformanceVector]) -> str:
 # ---------------------------------------------------------------------------
 
 
-# The canonical fixture path is relative to the repo root and is resolved at
-# load time via the loader's optional ``root`` arg or by walking up from
-# ``__file__`` to find ``tests/fixtures/delegate-conformance/canonical.json``.
-# Hardcoding the literal here keeps the loader engine-free (Fence B).
+# The canonical conformance vectors ship as PACKAGE DATA inside the installed
+# wheel (``src/kailash/delegate/conformance/data/canonical.json``) so
+# :meth:`ConformanceVectorLoader.load_canonical` resolves them via
+# ``importlib.resources`` for every consumer -- source checkout AND
+# ``pip install``ed wheel alike (#1532 RC1). Reading the resource as TEXT (not a
+# filesystem path) keeps resolution zip-safe. Only stdlib is used, so the loader
+# stays engine-free (Fence B).
+_CANONICAL_PACKAGE = "kailash.delegate.conformance"
+_CANONICAL_RESOURCE = "data/canonical.json"
+
+# Legacy repo-root-relative location, retained ONLY for the explicit
+# ``load_canonical(root=...)`` override (a caller pointing at a source tree or a
+# vendored copy). The default (``root=None``) path is the packaged resource
+# above -- NOT this path -- because a wheel install ships no ``tests/`` tree.
 _CANONICAL_REL_PATH = "tests/fixtures/delegate-conformance/canonical.json"
 
 
@@ -523,30 +534,45 @@ class ConformanceVectorLoader:
         """
         p = Path(path)
         text = p.read_text(encoding="utf-8")
+        return cls._load_from_text(text, source=str(p))
+
+    @classmethod
+    def _load_from_text(
+        cls, text: str, *, source: str
+    ) -> tuple[ConformanceVector, ...]:
+        """Parse + validate + integrity-check a vector set from raw JSON text.
+
+        ``source`` labels the origin (a filesystem path or a packaged-resource
+        name) in error messages. Shared by :meth:`load_from_file` (filesystem)
+        and :meth:`load_canonical` (packaged resource) so BOTH paths enforce the
+        identical schema-version + digest-integrity + validation contract.
+        """
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"conformance fixture {p} is not valid JSON: {exc}"
+                f"conformance fixture {source} is not valid JSON: {exc}"
             ) from exc
         if not isinstance(payload, dict):
             raise ValueError(
-                f"conformance fixture {p} top-level MUST be an object; got "
+                f"conformance fixture {source} top-level MUST be an object; got "
                 f"{type(payload).__name__}"
             )
         schema_version = payload.get("schema_version")
         if schema_version != cls.SCHEMA_VERSION:
             raise ValueError(
-                f"conformance fixture {p} schema_version {schema_version!r} "
+                f"conformance fixture {source} schema_version {schema_version!r} "
                 f"does not match loader version {cls.SCHEMA_VERSION}"
             )
         stored_digest = payload.get("digest")
         if not isinstance(stored_digest, str) or not stored_digest:
-            raise ValueError(f"conformance fixture {p} missing or empty 'digest' field")
+            raise ValueError(
+                f"conformance fixture {source} missing or empty 'digest' field"
+            )
         raw_vectors = payload.get("vectors")
         if not isinstance(raw_vectors, list):
             raise ValueError(
-                f"conformance fixture {p} 'vectors' MUST be a list; got "
+                f"conformance fixture {source} 'vectors' MUST be a list; got "
                 f"{type(raw_vectors).__name__}"
             )
         vectors = [ConformanceVector.from_dict(rv) for rv in raw_vectors]
@@ -554,8 +580,8 @@ class ConformanceVectorLoader:
         computed = canonical_vector_set_digest(vectors)
         if computed != stored_digest:
             raise ConformanceVectorIntegrityError(
-                f"conformance fixture {p} integrity check failed -- stored digest "
-                f"{stored_digest!r} != computed {computed!r}. The fixture file "
+                f"conformance fixture {source} integrity check failed -- stored "
+                f"digest {stored_digest!r} != computed {computed!r}. The fixture "
                 f"was modified without updating the digest header; either "
                 f"re-compute the digest via canonical_vector_set_digest() or "
                 f"investigate the tamper."
@@ -566,12 +592,22 @@ class ConformanceVectorLoader:
     def load_canonical(
         cls, root: str | Path | None = None
     ) -> tuple[ConformanceVector, ...]:
-        """Load the canonical OSS conformance fixture set.
+        """Load the canonical OSS conformance vector set.
+
+        The vectors ship as package data inside the installed wheel, so the
+        default (``root=None``) resolves them via ``importlib.resources`` and
+        works identically from a source checkout AND a ``pip install``ed wheel
+        (#1532 RC1 -- previously this walked up from ``__file__`` for a
+        ``tests/`` fixture, which raised ``FileNotFoundError`` for every
+        wheel-installed consumer, forcing downstream connectors to hand-roll a
+        parent-directory-ascent loader).
 
         Args:
-            root: optional repo root. If None, walks up from this module's
-                ``__file__`` looking for ``tests/fixtures/delegate-conformance/
-                canonical.json``.
+            root: optional override. When given, the loader reads
+                ``<root>/canonical.json`` (a vendored copy) or, failing that,
+                ``<root>/tests/fixtures/delegate-conformance/canonical.json``
+                (a legacy source tree). When ``None`` (default), the packaged
+                resource is used.
 
         Returns:
             Tuple of validated canonical vectors.
@@ -582,32 +618,31 @@ class ConformanceVectorLoader:
             SchemaError: malformed vector / duplicate id.
         """
         if root is None:
-            resolved = cls._locate_canonical()
-        else:
-            resolved = Path(root) / _CANONICAL_REL_PATH
-        if not resolved.is_file():
-            raise FileNotFoundError(
-                f"canonical conformance fixture not found at {resolved}; "
-                f"ensure the fixture is committed at {_CANONICAL_REL_PATH}"
+            try:
+                text = (
+                    resources.files(_CANONICAL_PACKAGE)
+                    .joinpath(_CANONICAL_RESOURCE)
+                    .read_text(encoding="utf-8")
+                )
+            except (FileNotFoundError, ModuleNotFoundError) as exc:
+                raise FileNotFoundError(
+                    f"canonical conformance vectors not found as package data "
+                    f"'{_CANONICAL_PACKAGE}/{_CANONICAL_RESOURCE}'; the wheel was "
+                    f"built without the conformance data file (see pyproject.toml "
+                    f"[tool.setuptools.package-data])."
+                ) from exc
+            return cls._load_from_text(
+                text, source=f"{_CANONICAL_PACKAGE}/{_CANONICAL_RESOURCE}"
             )
-        return cls.load_from_file(resolved)
 
-    @staticmethod
-    def _locate_canonical() -> Path:
-        """Walk up from this module's location looking for the canonical
-        fixture. Used when ``load_canonical(root=None)``."""
-        current = Path(__file__).resolve().parent
-        # Walk up to repo root (max 6 levels covers worktree/checkout layouts).
-        for _ in range(6):
-            candidate = current / _CANONICAL_REL_PATH
+        base = Path(root)
+        for candidate in (base / "canonical.json", base / _CANONICAL_REL_PATH):
             if candidate.is_file():
-                return candidate
-            if current.parent == current:
-                break
-            current = current.parent
-        # Fall through to the same path; the caller's FileNotFoundError
-        # surfaces the precise missing path.
-        return Path(__file__).resolve().parents[3] / _CANONICAL_REL_PATH
+                return cls.load_from_file(candidate)
+        raise FileNotFoundError(
+            f"canonical conformance fixture not found under root {base!r} "
+            f"(looked for 'canonical.json' and '{_CANONICAL_REL_PATH}')"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -19,8 +19,8 @@ divergent shape for the same scenario would surface here as a mismatch on
 the same comparator the test exercises.
 
 Per ``rules/cross-sdk-inspection.md`` Rule 4a (sibling-canonical vendoring),
-the vendored canonical conformance vectors (`canonical.json` at
-``tests/fixtures/delegate-conformance/``) carry the rs byte-shape contract
+the vendored canonical conformance vectors (`canonical.json` shipped as
+package data at ``kailash/delegate/conformance/data/``) carry the rs byte-shape contract
 for the BEHAVIOURAL surface (5 vectors). The RECEIPT byte-shape contract
 this test pins is the orthogonal axis — the runtime's `.to_dict()` output
 shape — and is verified by exercising the comparator against deterministic

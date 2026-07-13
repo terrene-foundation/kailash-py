@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.48.1"
+version = "2.49.0"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -247,6 +247,12 @@ all = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+# Ship the delegate conformance vector set inside the wheel (#1532 RC1) so
+# ConformanceVectorLoader.load_canonical() resolves it via importlib.resources
+# for every pip-installed consumer, not only from a source checkout.
+"kailash.delegate.conformance" = ["data/*.json"]
 
 [project.scripts]
 kailash = "kailash.cli:main"

@@ -29,11 +29,12 @@ def test_kailash_delegate_imports_cleanly() -> None:
     mode this assertion catches."""
     import kailash.delegate as pkg
 
-    assert len(pkg.__all__) == 56, (
-        "kailash.delegate.__all__ count drifted; #1143 + #1035 + redteam ship 56 symbols "
-        "(S2: 12 [+PrincipalKind] + S3 trust cascade: 5 + S4 audit chain: 7 "
-        "+ S5 dispatch: 7 + S6 runtime spine: 10 + S7 conformance schema: 7 "
-        "+ #1035 acceptance-gate aliases: 5 + Shard Y verifier exports: 3). "
+    assert len(pkg.__all__) == 66, (
+        "kailash.delegate.__all__ count drifted; #1143 + #1035 + redteam + #1532 ship 66 "
+        "symbols (S2: 12 [+PrincipalKind] + S3 trust cascade: 5 + S4 audit chain: 7 "
+        "+ S5 dispatch: 7 + #1532 connector-authoring surface: 10 + S6 runtime spine: 10 "
+        "+ S7 conformance schema: 7 + #1035 acceptance-gate aliases: 5 "
+        "+ Shard Y verifier exports: 3). "
         "If a later shard added a symbol, update this count in the same commit "
         f"per orphan-detection.md Rule 6a. Got: {pkg.__all__!r}"
     )

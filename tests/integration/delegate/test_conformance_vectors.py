@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tier-2 conformance vector integration test (S7, #1035).
 
-Exercises the 5 canonical behavioural vectors from
-``tests/fixtures/delegate-conformance/canonical.json`` against the REAL
+Exercises the 5 canonical behavioural vectors from the packaged
+``kailash/delegate/conformance/data/canonical.json`` against the REAL
 kailash.delegate engines and asserts that each scenario produces the
 spec-§-anchored :class:`BehaviouralOutcome` the vector declares.
 
