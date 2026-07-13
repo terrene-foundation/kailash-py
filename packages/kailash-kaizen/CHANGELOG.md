@@ -2,6 +2,45 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.30.0] — 2026-07-13 — real production histogram + LLM token/cost counters reach unified `/metrics` (#1708)
+
+Part of the coordinated 5-package #1708 observability release. Requires
+`kailash>=2.50.0` (the unified `/metrics` exposition these metrics now reach).
+
+### Added
+
+- **Real production duration histogram + LLM token/cost counters (#1708
+  W4).** `kaizen.production.metrics` previously emitted a duration metric
+  with only `_count`/`_sum` (no `le=` buckets), making p95/p99 latency
+  impossible to compute. Replaced with a real `prometheus_client` Histogram
+  using explicit second-scale buckets. Token and cost data previously
+  existed only as `CostUpdateEvent`s on the internal event stream, invisible
+  to Prometheus — added `kaizen_llm_prompt_tokens_total`,
+  `kaizen_llm_completion_tokens_total`, and
+  `kaizen_llm_cost_microdollars_total`, wired at both cost-update emission
+  points (primary + per-subagent, double-count-guarded). `model`/`provider`
+  labels are bounded via the existing provider-registry maps; no prompt text
+  or secrets ever reach a label.
+
+### Fixed
+
+- **Production histogram + LLM counters now reach the unified `/metrics`
+  endpoint (#1708 redteam).** The W4 metrics were initially registered on a
+  dedicated per-`MetricsCollector`-instance `CollectorRegistry` exposed only
+  via a property — no production endpoint ever scraped it. Moved to
+  module-level lazy singletons on the global `prometheus_client.REGISTRY`
+  (mirroring the core connection-pool histogram's pattern, including its
+  dual-import-path duplicate-registration guard), so any co-hosted
+  core/Nexus `/metrics` endpoint now folds these metrics in with zero
+  additional wiring.
+- **`agent_type` label bounded (#1708 redteam).** Unlike `model`/`provider`
+  (bounded against a closed enum), `agent_type` had no fixed set of valid
+  values and was exported raw — an unbounded cardinality risk. Now bounded
+  via a thread-safe top-N admission bucketer
+  (`KAIZEN_METRICS_AGENT_TYPE_MAX_VALUES`, default 100 distinct values,
+  overflow collapses to `_other`); in-memory stats retain the raw key for
+  operators, only the exported Prometheus label is bounded.
+
 ## [2.29.0] — 2026-07-10 — outbound governance transport wiring + DeepSeek provider
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.29.0"
+version = "2.30.0"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -31,7 +31,7 @@ dependencies = [
     # SDKs, observability, PostgreSQL, RAG numerics) remain lazy-loaded or
     # scoped to optional subsystems behind extras.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.28.0",
+    "kailash>=2.50.0",
     "kailash-mcp>=0.2.4",       # core/base_agent.py:32 module-scope MCPClient
     "pydantic>=2.0.0",          # llm/deployment.py + auth modules
     "typing-extensions>=4.5.0", # core/schema_factory.py
