@@ -466,7 +466,7 @@ Structural invariants — re-validated on every dispatch + execute path:
 
 Cross-implementation receipt evidence:
 
-- 5 conformance vectors pinned in `tests/fixtures/delegate-conformance/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001).
+- 5 conformance vectors shipped as package data in `kailash/delegate/conformance/data/canonical.json` (DV-3-001, DV-5-001, DV-7-001, DV-9-001, DV-10-001), loaded via `ConformanceVectorLoader.load_canonical()`.
 - 2 vectors (DV-5-001, DV-10-001) vendored byte-for-byte from the cross-SDK canonical per `cross-sdk-inspection.md` Rule 4a.
 - `receipts_agree(rs, py)` cross-impl comparator with default timestamp-exclusion (`terminated_at`, `executed_at`, `started_at`, `signed_at`) and ordered comparison for chained data (`audit_chain_entries`, TAOD `transitions`).
 - Vector tamper-detection on load — `ConformanceVectorIntegrityError` raises on hash-drift between the fixture's stored `digest` and a re-computed digest.

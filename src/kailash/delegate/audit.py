@@ -30,7 +30,8 @@ Cross-SDK design intent: chains emitted by either implementation are
 serialized via :func:`kailash.trust._json.canonical_json_dumps` so that
 the byte representation is stable and verifier-checkable. Cross-impl
 AGREEMENT is currently verified through the shared conformance-vector
-receipts (``tests/fixtures/delegate-conformance/canonical.json`` +
+receipts (the canonical set shipped as package data at
+``kailash/delegate/conformance/data/canonical.json`` +
 ``receipts_agree``), NOT through a live rs-verifier round-trip — there is
 no rs byte-vector pinned in this repo yet (see cross-sdk-inspection.md
 Rule 4: byte-equality to rs is an UNVERIFIED design goal until ≥3 rs-emitted

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.49.0] - 2026-07-13
+
+### Fixed
+
+- **Delegate conformance vectors now ship in the wheel — `load_canonical()`
+  works for pip-installed consumers (#1532 RC1).** The canonical conformance
+  vector set was located at `tests/fixtures/delegate-conformance/canonical.json`
+  — under `tests/`, which is never packaged into the wheel — so
+  `kailash.delegate.conformance.ConformanceVectorLoader.load_canonical()` raised
+  `FileNotFoundError` for every `pip install`ed consumer (it resolved the fixture
+  by walking up from `__file__` for a `tests/` path that only exists in a source
+  checkout). The vectors now ship as package data at
+  `kailash/delegate/conformance/data/canonical.json` and `load_canonical()`
+  resolves them via `importlib.resources`, working identically from a source
+  checkout and an installed wheel. Digest-integrity (tamper-evidence) and the 5
+  canonical vectors (DV-3/5/7/9/10) are unchanged.
+
+### Changed
+
+- **Connector-authoring surface consolidated onto `kailash.delegate` (#1532
+  RC2).** Ten connector-authoring symbols previously exported only from
+  `kailash.delegate.dispatch` are now re-exported from the top-level
+  `kailash.delegate` package: `Principal`, `SignedActionEnvelope`,
+  `AttestedReadReceipt`, `RevocationChannel`, `KnowledgeLedger`, `AuthVerifier`,
+  `SignatureContract`, `LegacyInvokeConnector`, `DispatchSignatureError`,
+  `DispatchSignerError`. A connector now depends on one stable import surface
+  (`kailash.delegate`) instead of importing from `.dispatch` directly. Purely
+  additive — no existing import path changes.
+
 ## [2.48.1] - 2026-07-12
 
 Security patch — trust-plane default-verification hardening (#1695).
