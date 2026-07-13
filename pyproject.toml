@@ -115,6 +115,10 @@ telemetry = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp>=1.20",
+    # Prometheus exposition reader — bridges OTel metrics into the
+    # prometheus_client registry so one /metrics scrape exports both
+    # OTel-emitted and prometheus_client-native metrics (issue #1708).
+    "opentelemetry-exporter-prometheus>=0.41b0",
 ]
 
 # APScheduler — durable runtime scheduler dispatch.
