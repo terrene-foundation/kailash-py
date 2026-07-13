@@ -3,6 +3,14 @@
 Provides the core execution bridge between Kaizen agents and Enterprise-App,
 wrapping agent execution with typed event emission for progress tracking,
 cost attribution, and UI integration.
+
+Every ``cost_update`` emission point ALSO records LLM token + cost usage
+into a real Prometheus registry via ``MetricsCollector.track_llm_usage()``
+(#1708 Wave 4) — closing the "token & cost counters ABSENT from any metric
+surface (only event-stream data)" observability gap: the event stream is
+still emitted for UI consumers, but the SAME data now also reaches
+``kaizen_llm_prompt_tokens_total`` / ``kaizen_llm_completion_tokens_total``
+/ ``kaizen_llm_cost_microdollars_total``.
 """
 
 from __future__ import annotations
@@ -14,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
+from ..production.metrics import MetricsCollector
 from .events import (
     CompletedEvent,
     CostUpdateEvent,
@@ -40,6 +49,10 @@ class ExecutionMetrics:
     end_time: Optional[float] = None
     total_tokens: int = 0
     total_cost_usd: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    model: str = ""
+    provider: str = ""
     cycles_used: int = 0
     tools_used: int = 0
     subagents_spawned: int = 0
@@ -103,6 +116,7 @@ class StreamingExecutor:
         on_event: Optional[Callable[[ExecutionEvent], None]] = None,
         cost_per_1k_input_tokens: float = 0.01,
         cost_per_1k_output_tokens: float = 0.03,
+        metrics_collector: Optional[MetricsCollector] = None,
     ):
         """
         Initialize StreamingExecutor.
@@ -111,10 +125,15 @@ class StreamingExecutor:
             on_event: Optional callback for each event (in addition to yield)
             cost_per_1k_input_tokens: Cost per 1000 input tokens (default: $0.01)
             cost_per_1k_output_tokens: Cost per 1000 output tokens (default: $0.03)
+            metrics_collector: Prometheus metrics collector recording LLM
+                token/cost usage at every ``cost_update`` emission point
+                (creates its own registry-backed collector if None — same
+                convention as ``MetricsHook``).
         """
         self._on_event = on_event
         self._cost_per_1k_input = cost_per_1k_input_tokens
         self._cost_per_1k_output = cost_per_1k_output_tokens
+        self._metrics_collector = metrics_collector or MetricsCollector()
 
     async def execute_with_events(
         self,
@@ -220,6 +239,21 @@ class StreamingExecutor:
                 raise AttributeError(
                     f"Agent {agent_name} has no run or run_async method"
                 )
+
+            # === cost_update (primary agent call) ===
+            # metrics.{total_tokens,total_cost_usd,prompt_tokens,
+            # completion_tokens,model,provider} reflect ONLY the primary
+            # agent's own usage here — _process_result (below) adds
+            # subagent deltas afterward, so recording now avoids double
+            # counting the primary call's usage into the Prometheus
+            # counters (#1708 Wave 4).
+            self._metrics_collector.track_llm_usage(
+                model=metrics.model,
+                provider=metrics.provider,
+                prompt_tokens=metrics.prompt_tokens,
+                completion_tokens=metrics.completion_tokens,
+                cost_usd=metrics.total_cost_usd,
+            )
 
             # Emit events from execution result
             async for event in self._process_result(
@@ -360,17 +394,46 @@ class StreamingExecutor:
         self, result: Dict[str, Any], metrics: ExecutionMetrics
     ) -> None:
         """Update metrics from agent result."""
+        _metadata = result.get("_metadata", {}) if isinstance(result, dict) else {}
+
         # Extract token usage if available
         if "tokens_used" in result:
             metrics.total_tokens = result["tokens_used"]
-        elif "_metadata" in result and "tokens" in result["_metadata"]:
-            metrics.total_tokens = result["_metadata"]["tokens"]
+        elif "tokens" in _metadata:
+            metrics.total_tokens = _metadata["tokens"]
+
+        # Extract prompt/completion token split if the agent result provides
+        # it (real fields — never fabricated/estimated; see cost fallback
+        # below for the pre-existing coarse total-cost estimate, which does
+        # NOT feed the prompt/completion counters).
+        if "prompt_tokens" in result:
+            metrics.prompt_tokens = result["prompt_tokens"]
+        elif "prompt_tokens" in _metadata:
+            metrics.prompt_tokens = _metadata["prompt_tokens"]
+
+        if "completion_tokens" in result:
+            metrics.completion_tokens = result["completion_tokens"]
+        elif "completion_tokens" in _metadata:
+            metrics.completion_tokens = _metadata["completion_tokens"]
+
+        # Extract model/provider attribution if available (bounded at the
+        # metrics layer via MetricsCollector.track_llm_usage — never passed
+        # through as a raw/unbounded Prometheus label here).
+        if "model" in result:
+            metrics.model = result["model"]
+        elif "model" in _metadata:
+            metrics.model = _metadata["model"]
+
+        if "provider" in result:
+            metrics.provider = result["provider"]
+        elif "provider" in _metadata:
+            metrics.provider = _metadata["provider"]
 
         # Extract cost if available
         if "cost_usd" in result:
             metrics.total_cost_usd = result["cost_usd"]
-        elif "_metadata" in result and "cost" in result["_metadata"]:
-            metrics.total_cost_usd = result["_metadata"]["cost"]
+        elif "cost" in _metadata:
+            metrics.total_cost_usd = _metadata["cost"]
 
         # Calculate cost from tokens if not provided
         if metrics.total_cost_usd == 0.0 and metrics.total_tokens > 0:
@@ -471,6 +534,19 @@ class StreamingExecutor:
             metrics.total_tokens += subagent_tokens
             metrics.total_cost_usd += subagent_cost
 
+            # Record this subagent's OWN usage delta (not the running
+            # total) into the real Prometheus registry — the primary
+            # agent's own usage was already recorded above, before this
+            # loop ran, so summing every recorded delta equals
+            # metrics.total_tokens with no double counting (#1708 Wave 4).
+            self._metrics_collector.track_llm_usage(
+                model=subagent_call.get("model", ""),
+                provider=subagent_call.get("provider", ""),
+                prompt_tokens=subagent_call.get("prompt_tokens", 0),
+                completion_tokens=subagent_call.get("completion_tokens", 0),
+                cost_usd=subagent_cost,
+            )
+
             yield self._emit(
                 CostUpdateEvent(
                     session_id=session_id,
@@ -511,6 +587,18 @@ class StreamingExecutor:
         if self._on_event:
             self._on_event(event)
         return event
+
+    @property
+    def metrics_collector(self) -> MetricsCollector:
+        """The Prometheus metrics collector backing every ``cost_update``.
+
+        Exposes the same real registry ``export_prometheus()`` /
+        ``.registry`` surface as ``MetricsHook`` — scrape it directly to
+        observe ``kaizen_llm_prompt_tokens_total`` /
+        ``kaizen_llm_completion_tokens_total`` /
+        ``kaizen_llm_cost_microdollars_total`` end-to-end.
+        """
+        return self._metrics_collector
 
 
 # Convenience function for SSE formatting

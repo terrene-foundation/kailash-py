@@ -120,6 +120,14 @@ dev = [
     "respx>=0.21.0",
     "pytest-benchmark>=4.0.0",
     "pymongo>=4.6.0",  # tests/utils/docker_config.py MongoDB health check
+    # pytest.ini declares `timeout = 120` + @pytest.mark.timeout(N) markers
+    # tree-wide; the plugin providing both was undeclared (testing.md §
+    # "Pytest Plugin + Marker Declaration Pair" — plugin + marker registration
+    # MUST land together). Found as a pre-existing "Unknown config option:
+    # timeout" warning during this session's gate run; fixed per
+    # zero-tolerance.md Rule 1 (pre-existing warnings MUST be resolved
+    # immediately).
+    "pytest-timeout>=2.2.0",
 ]
 # AWS Bedrock preset (#498 Session 3, S4b-i) -- botocore owns SigV4
 # canonicalization; inlined hmac.new in kaizen.llm.auth.aws is BLOCKED.
