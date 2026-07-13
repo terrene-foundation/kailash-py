@@ -577,10 +577,12 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
             """Prometheus metrics endpoint."""
             from starlette.responses import Response
 
-            from ..monitoring.metrics import get_metrics_registry
+            from ..monitoring.metrics import render_prometheus_exposition
 
-            registry = get_metrics_registry()
-            content = registry.export_metrics(format="prometheus")
+            # Unified exposition (#1708): custom registry + prometheus_client
+            # default registry (OTel meters bridged by the observability
+            # Prometheus reader + asyncsql/ML native instruments).
+            content = render_prometheus_exposition()
             return Response(
                 content=content,
                 media_type="text/plain; version=0.0.4; charset=utf-8",
