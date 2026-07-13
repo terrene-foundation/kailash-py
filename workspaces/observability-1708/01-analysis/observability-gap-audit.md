@@ -1,0 +1,48 @@
+# Observability Gap Audit — Issue #1708
+
+**Date:** 2026-07-13 · **Method:** 3 parallel read-only audit agents (export surface / per-subsystem RED+histogram / pool USE+cardinality) + orchestrator wiring cross-check. Every verdict below is grounded in a source line cited by the audit.
+
+## Verdict against the enterprise contract
+
+kailash-py's observability is **fragmented and partially orphaned**. The primitives exist (`prometheus-client`, the OpenTelemetry OTLP stack are declared deps), but they are not wired to the enterprise contract: there is no single scrape surface, latency is a real histogram in only one subsystem, and OTLP metrics export is entirely absent.
+
+| #   | Contract dimension                        | State                     | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ----------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Single unified `/metrics`                 | **PARTIAL**               | Endpoint exists + default-on (`workflow_server.py:453`, `enterprise_workflow_server.py:575`) but exports ONLY the custom `MetricsRegistry` — misses the `prometheus_client` global REGISTRY (asyncsql/ml/runtime) and all OTel meters                                                                                                                                                                                                                                     |
+| 2   | Latency as histograms                     | **MIXED**                 | True bucketed histogram ONLY for HTTP-via-Nexus (`nexus/metrics.py:86`) + DataFlow fabric (`fabric/metrics.py:220`) + Kaizen hook path (`metrics_hook.py:92`). MCP = client-side p95/p99 over 100 samples (`kailash_mcp/utils/metrics.py:373`); Kaizen prod = count/sum fake (`kaizen/production/metrics.py:337`); DB general query = OTel span attr only (`instrumentation/dataflow.py:103`); core-SDK raw HTTP = latest-value fake export (`monitoring/metrics.py:619`) |
+| 3   | Per-subsystem RED + token/cost            | **PARTIAL**               | HTTP RED ✓ (Nexus). DB general-query RED ✗. LLM/agent RED split; **token & cost counters ABSENT** from any metric surface (only event-stream data: `streaming_executor.py:41`). MCP RED ✓ (hand-rolled)                                                                                                                                                                                                                                                                   |
+| 4   | Connection-pool USE                       | **PARTIAL**               | Utilization gauge on the HTTP surface (`connection_metrics_router.py:98`); **no real acquire-wait histogram** (one collector mislabels quantiles as `histogram` w/ no `le=` buckets — `connection_metrics.py:417`); idle + exhaustion counters collect-only, not exported                                                                                                                                                                                                 |
+| 5   | OTLP metrics signal                       | **ABSENT**                | Zero exporter wiring tree-wide; `opentelemetry-exporter-otlp` declared (`pyproject.toml:117`) but never imported. Traces also consumer-only (no provider/processor). No `OTEL_EXPORTER_OTLP_ENDPOINT` read                                                                                                                                                                                                                                                                |
+| 6   | Cardinality safety                        | **1 latent HIGH + 1 MED** | `workflow_id` UUID as Prometheus+DataDog label (`runtime_monitor.py:779,784`) — **but the method is orphaned (see below), so latent not active**. ML labels `model_name`/`version`/`feature_name` unbounded (`observability/ml/__init__.py:273`) while `tenant_id` is correctly bucketed                                                                                                                                                                                  |
+| —   | Resource attrs (`service.name`/`version`) | **ABSENT**                | No `Resource.create` anywhere; no provider to attach it to                                                                                                                                                                                                                                                                                                                                                                                                                |
+| —   | Exemplars (metric→trace)                  | **ABSENT**                | grep-empty tree-wide                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+## Structural root cause: 3 disjoint metric backends + an orphaned adapter path
+
+Three incompatible backends coexist with name/unit drift, and no single scrape output merges them:
+
+- **Custom `MetricsRegistry`** (`monitoring/metrics.py:539`) — own dataclass store + hand-rolled text; `kailash_<c>_<m>`, no units. This is the ONLY backend the server `/metrics` exports.
+- **`prometheus_client` global REGISTRY** — asyncsql (`asyncsql_metrics.py:43`), ml (`observability/ml/__init__.py`), runtime_monitor. Collected, never reaches the server scrape.
+- **OTel Meter API** — `MetricsBridge` (`runtime/metrics.py:82`), trust (`trust/metrics.py:446`, dotted `eatp.trust_score`). Records into an **unconfigured no-op MeterProvider** → nothing exports.
+
+**Orphan finding (orchestrator cross-check, not in the raw audits):** `EnterpriseMonitoringManager` (the Prometheus/DataDog `record_workflow_execution` / `record_resource_usage` adapters, `runtime_monitor.py:768-799`) is **constructed** (`local.py:6270`, behind `enable_enterprise_monitoring`/persistent mode) but its `record_*` methods have **zero callers in `src/`**. The adapters are dead — they never receive a metric. This means the `workflow_id` cardinality bomb cannot fire in production today, AND a whole documented monitoring surface silently collects nothing (`orphan-detection.md` Rule 1).
+
+## Distribution map (5 PyPI distributions)
+
+| Distribution       | Version | #1708 surface                                                                                                                                              |
+| ------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kailash` (core)   | 2.49.0  | registry unification, OTLP bootstrap, unified `/metrics`, pool USE histogram, orphaned-adapter disposition, core-HTTP histogram, resource attrs, exemplars |
+| `kailash-nexus`    | 2.11.0  | HTTP RED already correct; ensure core-gateway paths also covered                                                                                           |
+| `kailash-dataflow` | 2.15.0  | per-query RED histogram (`dataflow_query_duration_seconds`) — mirror the correct fabric pattern                                                            |
+| `kailash-kaizen`   | 2.29.0  | replace fake prod histogram w/ real one; add LLM token/cost counters                                                                                       |
+| `kailash-mcp`      | 0.2.15  | replace client-side p95/p99 summary w/ real Histogram                                                                                                      |
+
+## Severity-ranked gaps
+
+1. **OTLP export entirely unwired (all 3 signals)** — core. The keystone: without a configured MeterProvider/TracerProvider the OTel meters + traces already in the code export nothing. Fix: new `src/kailash/observability/otlp.py` (providers + OTLP exporters + Resource, env-gated).
+2. **No unified registry / `/metrics` misses most metrics** — core. Consolidate onto one backend + one scrape output.
+3. **Latency-histogram gaps** — MCP (mcp), Kaizen prod (kaizen), DB query (dataflow), core-HTTP (core). The "single hardest enterprise gap" per #1708.
+4. **Orphaned enterprise-adapter path** — core. Wire-with-bounded-labels (fixes the latent cardinality bomb) OR delete.
+5. **Pool acquire-wait histogram + USE completeness** — core.
+6. **LLM token/cost counters absent** — kaizen. High enterprise value (cost visibility).
+7. **Unbounded ML labels** — core (`observability/ml`).
