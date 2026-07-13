@@ -15,7 +15,7 @@ import pytest
 
 from kaizen.llm import LlmClient
 from kaizen.llm.client import _validate_completion_model
-from kaizen.llm.presets import openai_preset
+from kaizen.llm.presets import bedrock_claude_preset, openai_preset
 
 
 # Legitimate ids across providers MUST pass unchanged (byte-preserving).
@@ -52,6 +52,9 @@ def test_valid_model_ids_pass_and_are_byte_preserved(model: str) -> None:
         "model#frag",
         "model%2e%2e",  # percent-encoded dot
         ".hidden",  # leading dot
+        "gpt-4o\n",  # trailing newline (Python $ edge — must NOT slip through)
+        "gpt-4o\r",  # trailing carriage return
+        "model\ttab",  # embedded control
         "",  # empty
         "x" * 129,  # over length
     ],
@@ -72,4 +75,22 @@ async def test_complete_rejects_traversal_model_before_network() -> None:
         await client.complete(
             [{"role": "user", "content": "hi"}],
             model="../../v1beta/models/other",
+        )
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_complete_rejects_traversal_on_model_template_wire() -> None:
+    """End-to-end through an actual {model}-template wire (Bedrock puts the model
+    in the URL path); the guard must reject before any transport is acquired."""
+    dep = bedrock_claude_preset(
+        api_key="bedrock-token-not-real",
+        region="us-east-1",
+        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    )
+    client = LlmClient.from_deployment(dep)
+    with pytest.raises(ValueError, match="path segment"):
+        await client.complete(
+            [{"role": "user", "content": "hi"}],
+            model="../../foo/invoke",
         )

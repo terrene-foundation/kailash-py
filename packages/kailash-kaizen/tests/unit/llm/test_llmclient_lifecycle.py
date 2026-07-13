@@ -146,3 +146,36 @@ def test_unmanaged_client_holds_no_transport_and_warns_nothing_at_gc() -> None:
         "unmanaged LlmClient emitted a ResourceWarning at GC; the additive "
         f"lifecycle must not warn for one-shot callers: {[str(w.message) for w in resource_warnings]}"
     )
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_complete_closes_owned_client_on_non_httpx_send_error(
+    monkeypatch,
+) -> None:
+    """F1: a NON-httpx send-phase failure (SSRF InvalidEndpoint, or a GcpOauth
+    token-refresh error from _prepare_auth_headers) happens before `resp` exists
+    and escapes the httpx-only excepts. The owned (unmanaged) client MUST still
+    be closed — no leaked transport, no ResourceWarning at GC.
+    """
+    client = LlmClient.from_deployment(_deployment())
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("simulated non-httpx auth-refresh failure")
+
+    # Forces the failure AFTER the owned LlmHttpClient (with a live transport) is
+    # created inside complete(), but before the response phase.
+    monkeypatch.setattr(client, "_prepare_auth_headers", _boom)
+
+    gc.collect()  # drain unrelated finalizers before the recording window
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(RuntimeError, match="simulated non-httpx"):
+            await client.complete([{"role": "user", "content": "hi"}])
+        gc.collect()
+
+    resource_warnings = [w for w in caught if issubclass(w.category, ResourceWarning)]
+    assert resource_warnings == [], (
+        "complete() leaked the owned HTTP client on a non-httpx send-phase error "
+        f"(F1): {[str(w.message) for w in resource_warnings]}"
+    )

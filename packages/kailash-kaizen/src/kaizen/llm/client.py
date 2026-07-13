@@ -160,7 +160,9 @@ _COMPLETE_DISPATCH: dict = {
 # forbids ``%``/``?``/``#``/whitespace/control, and — checked separately — the
 # ``..`` and ``//`` sequences that alone can change host or traverse. A ``:``
 # inside a path segment cannot change the (SSRF-checked, fixed) host.
-_COMPLETION_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@/:-]{0,127}$")
+# `\Z` (end-of-string), NOT `$` — Python's `$` also matches immediately before a
+# single trailing newline, which would let "model\n" slip a control char through.
+_COMPLETION_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@/:-]{0,127}\Z")
 
 
 def _validate_completion_model(model: str) -> str:
@@ -963,6 +965,15 @@ class LlmClient:
                 "llm.complete.error",
                 extra={"wire": wire.name, "exception_class": type(exc).__name__},
             )
+            if owns_client:
+                await http_client.aclose()
+            raise
+        except BaseException:
+            # A non-httpx send-phase failure — SSRF InvalidEndpoint from the
+            # transport, or a GcpOauth token-refresh error from
+            # _prepare_auth_headers — happens BEFORE `resp` exists, so it never
+            # reaches the response-phase finally below. Close the owned client
+            # here so a one-shot caller does not leak the transport (F1).
             if owns_client:
                 await http_client.aclose()
             raise
