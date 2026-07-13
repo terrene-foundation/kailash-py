@@ -2,6 +2,57 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.31.0] — 2026-07-14 — four-axis `LlmClient` completion send path + Vertex-Claude/Bedrock wire + GCP WIF (#1717)
+
+The four-axis LLM deployment layer previously wire-sent only embeddings; this
+adds the completion half so `LlmClient` can drive Vertex-Claude, Vertex-Gemini,
+and Bedrock chat completions through the deployment abstraction.
+
+### Added
+
+- **`LlmClient.complete()` + `LlmClient.stream()` (#1717).** Completion send path
+  over a `_COMPLETE_DISPATCH` covering all 9 preset-emittable wires (OpenAI chat,
+  Anthropic messages, Google/Vertex generate-content, Bedrock invoke, Cohere,
+  Mistral, Ollama, HuggingFace). Per-wire URL building appends the correct verb
+  (`:rawPredict` / `:streamRawPredict`, `:generateContent` /
+  `:streamGenerateContent`, Bedrock `/model/{id}/invoke[-with-response-stream]`);
+  `stream()` is a real httpx stream through the single SSRF-checked transport.
+  Prompt messages are redacted before the body is shaped.
+- **Vertex-Claude / Bedrock-Claude body transform.** A `CompletionRouting` field
+  on the deployment gates a platform body transform: for Vertex/Bedrock the
+  Anthropic body strips `model` and injects `anthropic_version`
+  (`vertex-2023-10-16` / `bedrock-2023-05-31`). Direct-provider bodies stay
+  byte-identical (transform gated on wire mode). New `openai_chat` +
+  `bedrock_invoke` wire shapers.
+- **GCP auth completeness.** `GcpOauth` gains Workload Identity Federation
+  (`external_account` + service-account impersonation), metadata-server ADC, and
+  `google.auth.default()` ADC, with JSON-`type` credential dispatch. New
+  `auth_strategy_kind` discriminants (`gcp_wif` / `gcp_metadata` / `gcp_adc`);
+  all failures raise typed, path-fingerprinted `AuthError`s.
+- **Config / region / catalog.** `from_env` honors `GOOGLE_CLOUD_PROJECT` /
+  `VERTEX_LOCATION` and a `vertex_claude` / `vertex_gemini` selector branch;
+  region validation accepts `us` / `eu` / `global` (`eu` passes straight through,
+  not remapped to `europe-west1`); the Vertex-Claude grammar adopts an open
+  `claude-*` passthrough so current models like `claude-opus-4-8` resolve.
+- **Per-model temperature floor.** `claude-opus-4-8`-class models omit
+  `temperature` below their minimum instead of hard-400'ing on `temperature=0`.
+- **Provider-string aliases.** `vertex-anthropic` and `vertex_claude` both resolve
+  to the Vertex-Claude preset (`vertex-gemini` / `vertex-google` → Vertex-Gemini).
+
+### Fixed
+
+- **Model URL-path injection (security).** A caller-controlled `model` is now
+  validated fail-closed before it reaches the request URL path (rejects
+  traversal / URL-control characters), covering the Google-direct, Bedrock, and
+  HuggingFace `{model}`-template wires.
+- **Owned-client transport leak.** `complete()` now closes an owned HTTP client on
+  a non-httpx send-phase error (SSRF rejection, auth-refresh failure), matching
+  `stream()`'s cleanup.
+- **Cross-SDK preset parity tests.** Reconciled the stale `RUST_PRESET_NAMES`
+  fixture against the 18 documented Python-idiom convenience presets and pinned
+  the DeepSeek legacy-precedence divergence as a self-clearing strict-xfail
+  (#1721).
+
 ## [2.30.0] — 2026-07-13 — real production histogram + LLM token/cost counters reach unified `/metrics` (#1708)
 
 Part of the coordinated 5-package #1708 observability release. Requires
