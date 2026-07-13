@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from types import TracebackType
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -148,6 +149,33 @@ _COMPLETE_DISPATCH: dict = {
         "streaming_path_template": "/models/{model}",
     },
 }
+
+
+# A caller-supplied ``model`` is interpolated into the URL path for the
+# ``{model}``-template wires (GoogleGenerateContent, BedrockInvoke,
+# HuggingFaceInference). Legitimate ids carry ``/`` (HuggingFace ``org/model``),
+# ``@`` (version pins), ``:`` (Bedrock version suffix ``...v2:0``), ``.`` and
+# ``-``. This shape allows those but is fail-closed against path traversal /
+# URL-control injection: it must start alphanumeric (no leading slash/dot) and
+# forbids ``%``/``?``/``#``/whitespace/control, and — checked separately — the
+# ``..`` and ``//`` sequences that alone can change host or traverse. A ``:``
+# inside a path segment cannot change the (SSRF-checked, fixed) host.
+_COMPLETION_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@/:-]{0,127}$")
+
+
+def _validate_completion_model(model: str) -> str:
+    """Fail-closed validation of a caller-controlled model before it reaches the
+    URL path. Raises ``ValueError`` on any traversal / URL-control attempt so an
+    app that routes untrusted input into ``model=`` cannot escape the provider
+    path. Byte-preserving for valid ids (no encoding — the provider sees the
+    exact id)."""
+    if not _COMPLETION_MODEL_RE.match(model) or ".." in model or "//" in model:
+        raise ValueError(
+            "model contains characters not permitted in a request path segment "
+            "(allowed: alphanumerics and _.@/:- , must start alphanumeric, no "
+            "'..' or '//'); refusing to build the request URL"
+        )
+    return model
 
 
 def _parse_stream_line(line: str, shaper: Any) -> Optional[Dict[str, Any]]:
@@ -756,6 +784,10 @@ class LlmClient:
                 "complete() requires a model — pass model=..., or construct "
                 "the deployment with a default_model."
             )
+        # Fail-closed: a caller-controlled model is interpolated into the URL
+        # path for the {model}-template wires; reject traversal / URL-control
+        # injection before the request is built (security-reviewer #1717 MEDIUM).
+        _validate_completion_model(resolved_model)
         return CompletionRequest(
             model=resolved_model,
             messages=redacted,
@@ -1077,6 +1109,14 @@ class LlmClient:
                 extra={"wire": wire.name, "exception_class": type(exc).__name__},
             )
             raise Timeout() from exc
+        except httpx.HTTPError as exc:
+            # Client-layer log parity with complete(); the transport layer also
+            # logs llm.http.stream.error, but keep the wire-scoped line here too.
+            logger.error(
+                "llm.stream.error",
+                extra={"wire": wire.name, "exception_class": type(exc).__name__},
+            )
+            raise
         finally:
             if owns_client:
                 await http_client.aclose()

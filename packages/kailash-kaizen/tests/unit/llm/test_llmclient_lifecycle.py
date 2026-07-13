@@ -130,6 +130,12 @@ def test_unmanaged_client_holds_no_transport_and_warns_nothing_at_gc() -> None:
     client = LlmClient.from_deployment(_deployment())
     assert client._http_client is None
 
+    # Drain finalizers for any unrelated garbage from prior tests BEFORE the
+    # recording window, so this assertion is scoped to THIS client only. Without
+    # the pre-drain, a sibling test that leaked a managed client would finalize
+    # inside our catch_warnings and be mis-attributed here (GC-order flake).
+    gc.collect()
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         del client

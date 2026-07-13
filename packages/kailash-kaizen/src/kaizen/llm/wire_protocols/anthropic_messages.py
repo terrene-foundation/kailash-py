@@ -61,6 +61,11 @@ def _resolve_temperature(model: str, temperature: float | None) -> float | None:
     at/above the floor passes through unchanged; a value below the floor is
     dropped so the model uses its own default instead of hard-400'ing on an
     out-of-range temperature.
+
+    Caller note: for a floor-constrained model (e.g. ``claude-opus-4-8``) an
+    explicit ``temperature=0`` is OMITTED — the request is NOT deterministic;
+    the model applies its own default sampling. A hard-400 is the only
+    alternative, so determinism is not achievable on these models via this arg.
     """
     if temperature is None:
         return None
