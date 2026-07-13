@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-mcp"
-version = "0.2.15"
+version = "0.3.0"
 description = "Production-ready Model Context Protocol (MCP) client, server, and platform for Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -40,7 +40,7 @@ dependencies = [
     #   `[websocket]` extras retain their declarations as harmless
     #   redundancy (already-installed entries are no-ops).
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.16.0",
+    "kailash>=2.50.0",
     "mcp[cli]>=1.23.0",
     "aiohttp>=3.12.4",
     "websockets>=12.0",
@@ -75,8 +75,17 @@ platform = [
     "fastapi>=0.115.12",
     "uvicorn[standard]>=0.31.0",
 ]
+# Operational monitoring (real Prometheus histogram for tool/resource/prompt
+# call duration — #1708 W2). Guarded via try/except ImportError in
+# utils/metrics.py so this stays an OPTIONAL extra: absence silently
+# disables the mcp_tool_duration_seconds Histogram without breaking
+# `import kailash_mcp`. Mirrors the `monitoring` extra name in the root
+# kailash package (pyproject.toml).
+monitoring = [
+    "prometheus-client>=0.22.1",
+]
 full = [
-    "kailash-mcp[http,sse,websocket,auth-jwt,auth-oauth,server,platform]",
+    "kailash-mcp[http,sse,websocket,auth-jwt,auth-oauth,server,platform,monitoring]",
 ]
 dev = [
     "pytest>=7.0",

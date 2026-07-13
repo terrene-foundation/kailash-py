@@ -181,8 +181,11 @@ class TestMetricsCollector:
         )  # (0.1+0.2+0.3+0.4+0.5)/5
         assert stats["good_tool"]["min_latency"] == 0.1
         assert stats["good_tool"]["max_latency"] == 0.5
-        assert "p95_latency" in stats["good_tool"]
-        assert "p99_latency" in stats["good_tool"]
+        # p95/p99 removed from get_tool_stats (#1708 W2 — the fake client-side
+        # percentiles were replaced by the real mcp_tool_duration_seconds
+        # Prometheus histogram).
+        assert "p95_latency" not in stats["good_tool"]
+        assert "p99_latency" not in stats["good_tool"]
 
         # Check bad_tool stats
         assert stats["bad_tool"]["calls"] == 2

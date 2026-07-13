@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [2.16.0] — 2026-07-13 — Query-duration RED histogram reaches unified `/metrics` (#1708)
+
+Part of the coordinated 5-package #1708 observability release. Requires
+`kailash>=2.50.0` (the unified `/metrics` exposition this histogram now
+reaches).
+
+### Added
+
+- **`dataflow_query_duration_seconds` RED histogram (#1708 W3).** A real
+  Prometheus histogram over query execution latency, observed at the Express
+  hot path (`dataflow.features.express._execute_with_timing`). Registered as
+  a lazy module-level singleton on the global `prometheus_client.REGISTRY`
+  (mirroring the core connection-pool histogram's pattern, including its
+  dual-import-path duplicate-registration guard) so a single unified
+  `/metrics` scrape captures it alongside every other Kailash-family metric —
+  no separate DataFlow-only exposition endpoint required. An initial version
+  of this histogram registered on a dedicated `CollectorRegistry` with no
+  wired scrape route, so every `db.express` call recorded a real observation
+  that no monitoring system could ever see; caught and corrected before
+  release (#1708 redteam) by moving registration onto the global registry.
+
 ## [2.15.0] — 2026-07-12 — Express cross-DB cache-bleed fix: v2→v3 keyspace lockstep (#1606)
 
 ### Security

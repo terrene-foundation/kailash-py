@@ -455,21 +455,20 @@ class WorkflowServer:
             """Prometheus metrics endpoint with connection pool metrics."""
             from starlette.responses import Response
 
-            from ..monitoring.metrics import get_metrics_registry
+            from ..monitoring.metrics import render_prometheus_exposition
 
-            registry = get_metrics_registry()
-            content = registry.export_metrics(format="prometheus")
-
-            # Merge connection pool metrics into Prometheus output
+            # Unified exposition (#1708): custom registry + prometheus_client
+            # default registry (OTel meters + asyncsql/ML) + connection-pool lines.
+            conn_lines = None
             try:
                 pool_data = await self._connection_metrics_provider.collect()
                 conn_lines = self._connection_metrics_provider.get_prometheus_lines(
                     pool_data
                 )
-                if conn_lines:
-                    content = content.rstrip("\n") + "\n" + "\n".join(conn_lines) + "\n"
             except Exception as e:
                 logger.warning("Failed to collect connection metrics: %s", e)
+
+            content = render_prometheus_exposition(extra_lines=conn_lines)
 
             return Response(
                 content=content,

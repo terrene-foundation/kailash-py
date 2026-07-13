@@ -499,8 +499,7 @@ class TestMetricsBridge:
             bridge = mod.MetricsBridge()
             assert bridge.enabled is False
             # All methods are safe no-ops
-            bridge.record_workflow_start("wf")
-            bridge.record_workflow_duration("wf", 1.5)
+            bridge.record_workflow_execution("wf", 1.5, success=True)
             bridge.record_node_duration("n1", "T", 0.5)
         finally:
             mod._OTEL_METRICS_AVAILABLE = original
@@ -513,18 +512,11 @@ class TestMetricsBridge:
         assert bridge.enabled is True
 
     @pytest.mark.skipif(not HAS_OTEL, reason="opentelemetry not installed")
-    def test_record_workflow_start(self) -> None:
+    def test_record_workflow_execution(self) -> None:
         from kailash.runtime.metrics import MetricsBridge
 
         bridge = MetricsBridge()
-        bridge.record_workflow_start("test_wf", tenant_id="t-1")
-
-    @pytest.mark.skipif(not HAS_OTEL, reason="opentelemetry not installed")
-    def test_record_workflow_duration(self) -> None:
-        from kailash.runtime.metrics import MetricsBridge
-
-        bridge = MetricsBridge()
-        bridge.record_workflow_duration("test_wf", 2.5, status="ok")
+        bridge.record_workflow_execution("test_wf", 2.5, success=True)
 
     @pytest.mark.skipif(not HAS_OTEL, reason="opentelemetry not installed")
     def test_record_node_duration(self) -> None:
@@ -534,11 +526,11 @@ class TestMetricsBridge:
         bridge.record_node_duration("n1", "PythonCodeNode", 0.42, status="ok")
 
     @pytest.mark.skipif(not HAS_OTEL, reason="opentelemetry not installed")
-    def test_record_workflow_duration_error(self) -> None:
+    def test_record_workflow_execution_error(self) -> None:
         from kailash.runtime.metrics import MetricsBridge
 
         bridge = MetricsBridge()
-        bridge.record_workflow_duration("fail_wf", 0.1, status="error")
+        bridge.record_workflow_execution("fail_wf", 0.1, success=False)
 
     def test_singleton_get_metrics_bridge(self) -> None:
         from kailash.runtime import metrics as mod

@@ -2,6 +2,38 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.3.0] — 2026-07-13 — real `mcp_tool_duration_seconds` histogram reaches unified `/metrics` (#1708)
+
+Part of the coordinated 5-package #1708 observability release. Requires
+`kailash>=2.50.0` (the unified `/metrics` exposition this histogram now
+reaches). Minor version bump reflects a client-facing metrics-surface change
+(the removed p95/p99 sample-window fields below).
+
+### Added
+
+- **Real `mcp_tool_duration_seconds` histogram (#1708 W2).** Tool / resource /
+  prompt call duration was previously exported only as client-side p95/p99
+  computed over a rolling ~100-sample in-process window — not aggregatable
+  across processes and not a real histogram. Replaced with a
+  `prometheus_client` Histogram (explicit second-scale buckets), observed at
+  the real `track_tool_call` site, registered as a lazy singleton on the
+  global `prometheus_client.REGISTRY` so it reaches any `/metrics` scrape
+  (the package's own bundled Prometheus exporter had no production caller
+  wiring it to an endpoint). The `tool` label is bounded by construction —
+  every production call site passes a decoration-time name (`func.__name__`,
+  `resource:{uri}`, `prompt:{name}`), a finite, developer-registered set, not
+  a per-request or client-supplied value. New optional `monitoring` extra
+  (`prometheus-client>=0.22.1`); absence silently disables the histogram
+  without breaking `import kailash_mcp`.
+
+### Changed
+
+- **Rolling-window p95/p99 sample fields removed from tool-call stats.** The
+  in-process p95/p99-over-~100-samples fields are superseded by the real
+  histogram above (Prometheus-side `histogram_quantile()` over the exported
+  buckets is the aggregatable replacement). `get_tool_stats()` callers
+  reading the removed fields must migrate to a `/metrics` scrape.
+
 ## [0.2.15] — 2026-06-18 — chore: release un-bumped #1258 byte-vector pins
 
 Patch release cutting the previously-unreleased `1e17d63df` source commit (#1258 —

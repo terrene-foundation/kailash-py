@@ -577,10 +577,41 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
             """Prometheus metrics endpoint."""
             from starlette.responses import Response
 
-            from ..monitoring.metrics import get_metrics_registry
+            from ..monitoring.metrics import render_prometheus_exposition
 
-            registry = get_metrics_registry()
-            content = registry.export_metrics(format="prometheus")
+            # Unified exposition (#1708): custom registry + prometheus_client
+            # default registry (OTel meters bridged by the observability
+            # Prometheus reader + asyncsql/ML native instruments) + the
+            # connection-pool utilization/alert lines.
+            #
+            # G1 LOW-1: this endpoint used to omit ``extra_lines=conn_lines``
+            # entirely, so the enterprise surface never emitted the pool
+            # utilization/alert gauges that ``WorkflowServer``'s ``/metrics``
+            # has always had (``WorkflowServer._register_root_endpoints`` —
+            # this class overrides that method wholesale rather than calling
+            # ``super()`` for ``/metrics``, so it needs its own copy of the
+            # same collect-and-render logic to stay in parity). The idle
+            # gauge + exhaustion counter (kailash_pool_connections_idle /
+            # kailash_pool_exhaustion_events_total) and the acquire-wait
+            # histogram (kailash_pool_acquire_wait_seconds) are REAL
+            # ``prometheus_client`` instruments on the default REGISTRY (see
+            # ``kailash/core/monitoring/connection_metrics.py``) and reach
+            # this scrape via ``render_prometheus_exposition()``'s
+            # ``prometheus_client.generate_latest()`` call regardless of
+            # ``conn_lines`` — ``conn_lines`` only carries the router-level
+            # utilization/near-exhaustion-alert gauges collected from
+            # sources registered via ``ConnectionMetricsProvider.
+            # register_source(...)``.
+            conn_lines = None
+            try:
+                pool_data = await self._connection_metrics_provider.collect()
+                conn_lines = self._connection_metrics_provider.get_prometheus_lines(
+                    pool_data
+                )
+            except Exception as e:
+                logger.warning("Failed to collect connection metrics: %s", e)
+
+            content = render_prometheus_exposition(extra_lines=conn_lines)
             return Response(
                 content=content,
                 media_type="text/plain; version=0.0.4; charset=utf-8",

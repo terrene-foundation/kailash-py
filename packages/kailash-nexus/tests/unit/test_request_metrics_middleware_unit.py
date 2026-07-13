@@ -3,17 +3,108 @@
 
 """Tier 1 unit tests for RequestMetricsMiddleware internals.
 
-Covers the cardinality-control route-label helper and the middleware's
-ASGI __call__ behavior against a fake inner app — exception-path status
-recording, exclude-paths pass-through, and the prometheus-absent no-op —
-without standing up a real Nexus instance.
+Covers the cardinality-control route-label helper, the symmetric
+cardinality-control method-label helper (#1708 HIGH follow-up to W5), and
+the middleware's ASGI __call__ behavior against a fake inner app —
+exception-path status recording, exclude-paths pass-through, and the
+prometheus-absent no-op — without standing up a real Nexus instance.
 """
 
 import types
 
 import pytest
 
-from nexus.middleware.request_metrics import RequestMetricsMiddleware, _route_label
+from nexus.metrics import _method_label
+from nexus.middleware.request_metrics import (
+    RequestMetricsMiddleware,
+    _route_label,
+    _templated_mount_prefix,
+)
+
+# ---------------------------------------------------------------------------
+# _method_label — cardinality control (#1708 HIGH: symmetric to route bound)
+# ---------------------------------------------------------------------------
+#
+# W5 templated the `route` label to bound cardinality and prevent a
+# path-scanning DoS, but left the `method` label unbounded — RFC 7230's
+# HTTP method `token` grammar permits an arbitrary client-controlled
+# string, and ASGI servers forward non-standard method tokens verbatim.
+# `_method_label` allowlists the standard HTTP verbs and collapses
+# everything else to the "_other" sentinel, closing the method axis of the
+# same cardinality-DoS the route template already defends against.
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT"],
+)
+def test_method_label_allowlisted_verbs_pass_through_verbatim(method):
+    """Every standard HTTP verb is recorded verbatim, unchanged."""
+    assert _method_label(method) == method
+
+
+def test_method_label_lowercase_verb_normalized_to_upper():
+    """Case is normalized before the allowlist check."""
+    assert _method_label("get") == "GET"
+    assert _method_label("Post") == "POST"
+
+
+def test_method_label_bogus_token_collapses_to_other():
+    """An arbitrary client-controlled method token collapses to _other.
+
+    This is the cardinality-DoS closure: a client sending a fresh method
+    string per request (`-X <random>`) must never mint a new label value.
+    """
+    assert _method_label("FOOBAR") == "_other"
+    assert _method_label("X-RANDOM-TOKEN-12345") == "_other"
+
+
+def test_method_label_default_unknown_fallback_collapses_to_other():
+    """The middleware's scope.get('method', 'UNKNOWN') fallback is bounded too."""
+    assert _method_label("UNKNOWN") == "_other"
+
+
+def test_method_label_empty_string_collapses_to_other():
+    """An empty method string (malformed request) collapses to _other."""
+    assert _method_label("") == "_other"
+
+
+# ---------------------------------------------------------------------------
+# _templated_mount_prefix — core-gateway Mount route-label coverage (#1708 W5)
+# ---------------------------------------------------------------------------
+
+
+def test_templated_mount_prefix_workflow_mount():
+    """A per-workflow Mount root_path is collapsed to a bounded template."""
+    assert _templated_mount_prefix("/workflows/my_workflow") == "/workflows/{name}"
+
+
+def test_templated_mount_prefix_mcp_mount():
+    """A per-MCP-server Mount root_path is collapsed to a bounded template."""
+    assert _templated_mount_prefix("/mcp/my_server") == "/mcp/{name}"
+
+
+def test_templated_mount_prefix_leaves_non_matching_prefix_unchanged():
+    """A root_path that isn't a recognized per-item mount shape passes through.
+
+    Static, operator-registered sub-app mounts (via Nexus.mount()) are
+    already bounded — not request-driven — so no re-templating is needed.
+    """
+    assert _templated_mount_prefix("/admin") == "/admin"
+    assert _templated_mount_prefix("") == ""
+
+
+def test_templated_mount_prefix_does_not_match_nested_workflow_subpaths():
+    """Only the exact two-segment Mount root_path is re-templated.
+
+    A root_path with additional segments (which Mount.matches() never
+    actually produces for a single-level per-workflow mount) is left as-is
+    rather than mis-templated.
+    """
+    assert _templated_mount_prefix("/workflows/my_workflow/nested") == (
+        "/workflows/my_workflow/nested"
+    )
+
 
 # ---------------------------------------------------------------------------
 # _route_label — cardinality control
@@ -43,6 +134,42 @@ def test_route_label_route_without_usable_template_returns_sentinel():
     """A route object with neither path_format nor path returns the sentinel."""
     route = types.SimpleNamespace(path_format=None, path=None)
     assert _route_label({"route": route}) == "__unmatched__"
+
+
+def test_route_label_combines_templated_mount_prefix_with_inner_route() -> None:
+    """A Mount-dispatched request's route label is prefix + inner template.
+
+    Reproduces the exact core-gateway shape (#1708 W5): a request routed
+    through WorkflowServer.register_workflow's per-workflow Mount carries
+    the Mount's matched root_path AND the sub-app's own matched route in
+    the same scope. The combined label must be fully templated.
+    """
+    route = types.SimpleNamespace(path_format="/execute", path="/execute")
+    scope = {"route": route, "root_path": "/workflows/my_workflow"}
+    assert _route_label(scope) == "/workflows/{name}/execute"
+
+
+def test_route_label_mount_prefix_root_route_no_doubled_slash() -> None:
+    """The sub-app's own '/' route does not produce a doubled slash."""
+    route = types.SimpleNamespace(path_format="/", path="/")
+    scope = {"route": route, "root_path": "/workflows/my_workflow"}
+    assert _route_label(scope) == "/workflows/{name}/"
+
+
+def test_route_label_mount_prefix_alone_when_no_inner_route_matched() -> None:
+    """A Mount-dispatched request whose sub-app is not FastAPI-instrumented
+    (no scope["route"]) still attributes to the templated mount prefix
+    instead of collapsing to the __unmatched__ sentinel.
+    """
+    scope = {"root_path": "/mcp/my_server"}
+    assert _route_label(scope) == "/mcp/{name}"
+
+
+def test_route_label_no_root_path_unaffected_by_mount_logic() -> None:
+    """A direct (non-mounted) core-gateway route with no root_path is unchanged."""
+    route = types.SimpleNamespace(path_format="/health", path="/health")
+    scope = {"route": route}
+    assert _route_label(scope) == "/health"
 
 
 # ---------------------------------------------------------------------------

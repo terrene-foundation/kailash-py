@@ -246,7 +246,15 @@ class MetricsFormatter(ResponseFormatter):
 
                 if "avg_latency" in stats:
                     lines.append(f"- **Avg Latency**: {stats['avg_latency']:.3f}s")
-                    lines.append(f"- **P95 Latency**: {stats['p95_latency']:.3f}s")
+                    # P95 Latency line REMOVED (#1708 W2) — `get_tool_stats()`
+                    # no longer computes a client-side p95/p99 approximation
+                    # (fake summary-as-histogram); this direct-KeyError
+                    # reference to `stats['p95_latency']` would otherwise
+                    # crash MetricsFormatter.format() on every call. Real
+                    # percentiles are available via the
+                    # `mcp_tool_duration_seconds` Prometheus histogram
+                    # (query with `histogram_quantile()`), not this
+                    # dict-based introspection formatter.
 
                 lines.append("")
 

@@ -662,6 +662,47 @@ def get_metrics_registry() -> MetricsRegistry:
     return _global_registry
 
 
+def render_prometheus_exposition(extra_lines: "list[str] | None" = None) -> str:
+    """Render the unified Prometheus exposition for a ``/metrics`` scrape (#1708).
+
+    Concatenates, in one OpenMetrics text body:
+
+    1. the custom :class:`MetricsRegistry` (validation / security / performance),
+    2. the ``prometheus_client`` default registry — which includes both
+       ``prometheus_client``-native instruments (asyncsql, ML) AND the OTel
+       meters bridged in by
+       :func:`kailash.observability.configure_observability`'s Prometheus
+       reader, and
+    3. optional ``extra_lines`` (e.g. connection-pool metrics).
+
+    Before #1708 the server ``/metrics`` exported only (1), so most collected
+    metrics were invisible to Prometheus. Degrades gracefully when
+    ``prometheus_client`` is not installed (part 2 is skipped).
+    """
+    parts: "list[str]" = []
+
+    custom = get_metrics_registry().export_metrics(format="prometheus")
+    if custom and custom.strip():
+        parts.append(custom.rstrip("\n"))
+
+    try:
+        import prometheus_client
+
+        native = prometheus_client.generate_latest().decode("utf-8")
+        if native and native.strip():
+            parts.append(native.rstrip("\n"))
+    except ImportError:
+        pass
+
+    if extra_lines:
+        joined = "\n".join(line for line in extra_lines if line).rstrip("\n")
+        if joined:
+            parts.append(joined)
+
+    body = "\n".join(parts)
+    return body + "\n" if body else ""
+
+
 def get_validation_metrics() -> ValidationMetrics:
     """Get the validation metrics collector."""
     collector = _global_registry.get_collector("validation")

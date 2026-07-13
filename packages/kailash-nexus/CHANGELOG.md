@@ -1,5 +1,27 @@
 # Nexus Changelog
 
+## [2.12.0] — 2026-07-13 — HTTP metrics label bounding + core-gateway route coverage (#1708)
+
+Part of the coordinated 5-package #1708 observability release. Requires
+`kailash>=2.50.0` (the unified `/metrics` exposition this fix reaches).
+
+### Fixed
+
+- **HTTP request-duration histogram now covers mounted core-gateway routes
+  (#1708 W5).** `RequestMetricsMiddleware` previously matched routes only
+  against Nexus's own registered handler table; requests served through a
+  mounted Core SDK gateway sub-app fell through to the `__unmatched__`
+  cardinality-safety sentinel instead of their real route template. The
+  middleware now resolves the matched template for mounted-gateway routes as
+  well, so `nexus_http_request_duration_seconds` reports real per-route
+  latency for the full request surface, not just Nexus-native routes.
+- **HTTP `method` label bounded to a fixed allowlist (#1708 redteam).** The
+  `method` label on `nexus_http_requests_total` /
+  `nexus_http_request_duration_seconds` previously echoed the raw HTTP method
+  string from the request; a malformed or attacker-supplied method could grow
+  label cardinality without bound. The label is now bounded to the standard
+  HTTP method allowlist, with a fixed `_other` bucket for anything else.
+
 ## [2.11.0] — 2026-06-17 — Per-request HTTP metrics middleware (#1336)
 
 ### Added

@@ -71,6 +71,7 @@ from dataflow.core.exceptions import (
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.protection import ProtectionViolation
 from dataflow.core.tenant_context import get_current_tenant_id
+from dataflow.observability.query_metrics import get_dataflow_query_metrics
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
@@ -257,7 +258,17 @@ class DataFlowExpress:
         return node
 
     async def _execute_with_timing(self, operation: str, coro) -> Any:
-        """Execute operation with timing tracking."""
+        """Execute operation with timing tracking.
+
+        This is the single choke point every ``db.express`` CRUD call
+        routes through (create/read/update/delete/list/find_one/count/
+        upsert/upsert_advanced/bulk_create/bulk_update/bulk_delete/
+        bulk_upsert -- see the call sites below), so it is also where
+        the real ``dataflow_query_duration_seconds`` RED histogram is
+        recorded (#1708 Wave 3; mirrors ``dataflow.fabric.metrics``).
+        Recording happens in ``finally`` so a query that raises still
+        contributes to the latency distribution.
+        """
         start = time.perf_counter()
         try:
             result = await coro
@@ -267,6 +278,12 @@ class DataFlowExpress:
             self._operation_times.append(elapsed)
             logger.debug(
                 "express.express_ms", extra={"operation": operation, "elapsed": elapsed}
+            )
+            model_name, _, op_name = operation.rpartition(".")
+            get_dataflow_query_metrics().record_query(
+                operation=op_name or operation,
+                model=model_name,
+                duration_s=elapsed / 1000.0,
             )
 
     # ========================================================================

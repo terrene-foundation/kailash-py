@@ -10,4 +10,22 @@ Subpackages:
   - ``kailash.observability.ml`` — ML-lifecycle metrics (training duration,
     inference latency, drift alerts) with bounded-cardinality tenant
     labels, OpenTelemetry bridge, and Prometheus fallback.
+  - ``kailash.observability.otlp`` — process-global OTLP + Prometheus bootstrap
+    (:func:`configure_observability`) that wires the SDK's OpenTelemetry
+    instruments to a Prometheus ``/metrics`` scrape and/or an OTLP collector,
+    with ``service.name`` / ``service.version`` resource attributes (issue #1708).
 """
+
+from kailash.observability.otlp import (
+    ObservabilityHandle,
+    configure_observability,
+    get_observability_handle,
+    shutdown_observability,
+)
+
+__all__ = [
+    "ObservabilityHandle",
+    "configure_observability",
+    "get_observability_handle",
+    "shutdown_observability",
+]

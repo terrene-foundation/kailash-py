@@ -1,0 +1,372 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+"""
+DataFlow per-query RED latency histogram (#1708 Wave 3 / G1 CRIT fix).
+
+Owns the process-wide :class:`DataFlowQueryMetrics` singleton -- the
+real bucketed-histogram counterpart to the OTel-span-attribute-only
+instrumentation in ``kailash.runtime.instrumentation.dataflow`` (audit
+dim 2/3: "DB general query = OTel span attr only"). That span
+attribute (``db.duration_s``) records one number per query on one
+trace; it is never aggregated, never exported as ``le``-bucketed
+data, and cannot answer "what is p95 query latency for the ``list``
+operation on ``Order``?" without a full trace backend.
+
+G1 CRIT fix: ``dataflow_query_duration_seconds`` MUST register on the
+process-wide default ``prometheus_client.REGISTRY`` -- NOT a
+dedicated ``CollectorRegistry()`` -- so it flows into the unified
+server ``/metrics`` scrape via
+``kailash.monitoring.metrics.render_prometheus_exposition()``, which
+calls ``prometheus_client.generate_latest()`` with no registry
+argument (defaults to the global ``REGISTRY``). Before this fix the
+histogram lived on a dedicated registry with ZERO scrape callers --
+``render_exposition()`` had no production caller and no ``/metrics``
+route ever invoked it, so every ``db.express`` CRUD call recorded a
+real observation into a histogram no monitoring system could ever
+see. This module now mirrors
+``kailash.core.monitoring.connection_metrics._get_acquire_wait_histogram``
+(the reference-correct pattern the #1708 audit cited: register on
+the default ``REGISTRY``, and on ``ValueError`` -- "Duplicated
+timeseries in CollectorRegistry", which fires when this module is
+imported under two distinct qualified names in the same process --
+adopt the already-registered collector via
+``REGISTRY._names_to_collectors`` instead of erroring):
+
+- Registration on ``prometheus_client.REGISTRY`` (the default/global
+  registry), as a module-level lazy singleton shared by every
+  :class:`DataFlowQueryMetrics` instance in the process.
+- Loud no-op degradation when ``prometheus_client`` is not installed
+  (it lives behind the ``fabric`` extra, so ``dataflow_query_duration_
+  seconds`` is silent -- not a crash -- on a bare ``pip install
+  kailash-dataflow``).
+- A single process-wide singleton every call site dispatches through,
+  never holding its own metric handles.
+
+(``dataflow.fabric.metrics.FabricMetrics`` legitimately keeps its OWN
+dedicated ``CollectorRegistry`` -- it has its own wired
+``GET /fabric/metrics`` route (``FabricMetrics.get_metrics_route()``)
+that calls its ``render_exposition()`` directly, so that registry IS
+reachable. ``DataFlowQueryMetrics`` has no such route; the unified
+``/metrics`` scrape is its only reachable surface, which requires the
+global ``REGISTRY``.)
+
+Wired into the REAL query execution path
+(``dataflow.features.express.DataFlowExpress._execute_with_timing``),
+which every ``db.express`` CRUD call
+(create/read/update/delete/list/find_one/count/upsert/upsert_advanced/
+bulk_create/bulk_update/bulk_delete/bulk_upsert) already routes
+through for elapsed-time bookkeeping -- ``db.express`` is the
+framework-mandated default CRUD path (~23x faster than
+``WorkflowBuilder``; see ``rules/patterns.md`` /
+``framework-first.md``), so this is the general DataFlow query
+execution hot path, not a side path a subset of callers happen to
+use.
+
+Bounded labels (per ``rules/observability.md`` § "Explicit second-
+scale buckets" + ``rules/tenant-isolation.md`` § "Metric Labels Carry
+Tenant_id (Bounded)" -- the same bounded-cardinality discipline
+applied to the ``operation`` / ``model`` dimensions instead of
+``tenant_id``):
+
+- ``operation`` -- a FIXED, finite enum of DataFlow CRUD verbs
+  (see :data:`_KNOWN_OPERATIONS`). Anything outside the enum
+  collapses to ``"_other"`` so this dimension can never grow.
+- ``model`` -- top-N-by-first-seen bucketing (default cap 100,
+  overridable via the ``model_cardinality_cap`` constructor arg).
+  Once the cap is reached, every additional distinct model name
+  collapses to ``"_other"`` so an application with many (or
+  adversarially-supplied) model names cannot blow up Prometheus
+  label cardinality.
+
+Explicit second-scale buckets (G1 learning from #1708 Wave 1: default
+``prometheus_client`` buckets bottom out at 5ms, but
+``db.express`` operations run in the 0.1-0.3ms range per the
+``ExpressDataFlow`` module docstring -- with default buckets, every
+single observation would land in the same lowest bucket, making
+p95/p99 meaningless). See :data:`_BUCKETS`.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from typing import Any, Optional, Set
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "DataFlowQueryMetrics",
+    "get_dataflow_query_metrics",
+    "reset_dataflow_query_metrics",
+]
+
+
+# ---------------------------------------------------------------------------
+# Bounded-label constants
+# ---------------------------------------------------------------------------
+
+# The finite set of DataFlow Express CRUD verbs. Every
+# ``DataFlowExpress`` public method routes its operation name through
+# ``_execute_with_timing`` using exactly one of these strings (see
+# ``dataflow.features.express``). Anything else (a future operation
+# added without updating this enum, or a malformed caller) buckets to
+# ``_OPERATION_OVERFLOW`` rather than creating a new label value.
+_KNOWN_OPERATIONS = frozenset(
+    {
+        "create",
+        "read",
+        "update",
+        "delete",
+        "list",
+        "find_one",
+        "count",
+        "upsert",
+        "upsert_advanced",
+        "bulk_create",
+        "bulk_update",
+        "bulk_delete",
+        "bulk_upsert",
+    }
+)
+_OPERATION_OVERFLOW = "_other"
+_MODEL_OVERFLOW = "_other"
+_MODEL_UNKNOWN = "_unknown"
+_MODEL_CARDINALITY_CAP_DEFAULT = 100
+
+# Explicit second-scale histogram buckets, tuned for DataFlow query
+# latency (sub-millisecond Express hits through multi-second bulk
+# operations). MUST be declared explicitly -- see module docstring.
+_BUCKETS = (
+    0.0005,
+    0.001,
+    0.0025,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+)
+
+_METRIC_NAME = "dataflow_query_duration_seconds"
+
+
+class _NoOpHistogram:
+    """No-op histogram used when ``prometheus_client`` is not installed.
+
+    Mirrors ``dataflow.fabric.metrics._NoOpMetric`` so
+    :class:`DataFlowQueryMetrics` callers never need to branch on
+    whether the real dependency is present.
+    """
+
+    def labels(self, **kwargs: Any) -> "_NoOpHistogram":
+        return self
+
+    def observe(self, value: float) -> None:
+        pass
+
+
+_NOOP = _NoOpHistogram()
+
+
+# ---------------------------------------------------------------------------
+# Module-level Histogram on the GLOBAL prometheus_client.REGISTRY (G1 CRIT
+# fix) -- mirrors kailash.core.monitoring.connection_metrics.
+# _get_acquire_wait_histogram exactly: lazy construction, no hard import of
+# prometheus_client, dual-import-path duplicate-registration guard.
+# ---------------------------------------------------------------------------
+
+_QUERY_DURATION_HISTOGRAM: "Optional[Any]" = None
+
+
+def _get_query_duration_histogram() -> "Optional[Any]":
+    """Return the shared ``dataflow_query_duration_seconds`` histogram.
+
+    Created lazily on first use so importing this module never requires
+    ``prometheus_client`` to be installed. Registered against
+    ``prometheus_client.REGISTRY`` (the default/global registry) so it flows
+    into the unified server ``/metrics`` scrape via
+    ``kailash.monitoring.metrics.render_prometheus_exposition()``, which
+    calls ``prometheus_client.generate_latest()`` with no registry argument
+    (defaults to this same global ``REGISTRY``) -- the same path #1708 W1b
+    unified for OTel meters and other prometheus_client-native instruments.
+
+    Uses EXPLICIT second-scale bucket boundaries (see :data:`_BUCKETS`) --
+    the default buckets bottom out at 5ms and would put every sub-
+    millisecond ``db.express`` observation in one bucket.
+    """
+    global _QUERY_DURATION_HISTOGRAM
+    if _QUERY_DURATION_HISTOGRAM is not None:
+        return _QUERY_DURATION_HISTOGRAM
+
+    try:
+        from prometheus_client import Histogram, REGISTRY
+    except ImportError:
+        logger.warning(
+            "dataflow.observability.query_metrics.prometheus_client_missing: "
+            "prometheus-client is not installed. dataflow_query_duration_seconds "
+            "will use a no-op histogram and produce no scrape output. Install "
+            "the fabric extra to enable metrics: "
+            "pip install 'kailash-dataflow[fabric]'.",
+        )
+        return None
+
+    try:
+        _QUERY_DURATION_HISTOGRAM = Histogram(
+            _METRIC_NAME,
+            "DataFlow query execution duration in seconds, by operation and model",
+            ["operation", "model"],
+            buckets=_BUCKETS,
+            registry=REGISTRY,
+        )
+    except ValueError:
+        # "Duplicated timeseries in CollectorRegistry" -- this module can be
+        # imported under two distinct qualified names in the SAME process
+        # (mirrors the exact scenario documented in
+        # ``connection_metrics._get_acquire_wait_histogram``), which gives
+        # each import its own module-level ``_QUERY_DURATION_HISTOGRAM``
+        # global even though both share the SAME process-wide
+        # ``prometheus_client.REGISTRY``. Whichever import path registers
+        # first wins; adopt its already-registered Histogram instance
+        # instead of erroring, so the second import path still observes
+        # into the one real timeseries.
+        existing = REGISTRY._names_to_collectors.get(_METRIC_NAME)
+        if existing is None:
+            raise
+        _QUERY_DURATION_HISTOGRAM = existing
+
+    logger.debug("dataflow.observability.query_metrics.registered")
+    return _QUERY_DURATION_HISTOGRAM
+
+
+class _ModelBucketer:
+    """Thread-safe bounded-cardinality tracker for the ``model`` label.
+
+    First-N-distinct-models-seen (within one process lifetime) are
+    admitted verbatim; every model name beyond the cap collapses to
+    ``"_other"``. This is the same "top-N + _other" bounded-label
+    discipline ``rules/tenant-isolation.md`` § 4 mandates for
+    ``tenant_id`` labels, applied here to ``model``.
+    """
+
+    def __init__(self, cap: int = _MODEL_CARDINALITY_CAP_DEFAULT) -> None:
+        self._cap = cap
+        self._admitted: Set[str] = set()
+        self._lock = threading.Lock()
+
+    def bucket(self, model: str) -> str:
+        with self._lock:
+            if model in self._admitted:
+                return model
+            if len(self._admitted) < self._cap:
+                self._admitted.add(model)
+                return model
+            return _MODEL_OVERFLOW
+
+
+class DataFlowQueryMetrics:
+    """Prometheus RED-duration histogram for the DataFlow query path.
+
+    Instantiated via :func:`get_dataflow_query_metrics` (singleton).
+    Direct construction is allowed for tests -- every instance shares the
+    SAME module-level ``prometheus_client`` Histogram registered on the
+    global ``REGISTRY`` (see :func:`_get_query_duration_histogram`); only
+    the bounded-cardinality ``model`` bucketer is per-instance state.
+
+    Histogram:
+    - ``dataflow_query_duration_seconds{operation, model}`` on
+      ``prometheus_client.REGISTRY`` (the default/global registry).
+    """
+
+    def __init__(
+        self, model_cardinality_cap: int = _MODEL_CARDINALITY_CAP_DEFAULT
+    ) -> None:
+        self._model_bucketer = _ModelBucketer(cap=model_cardinality_cap)
+
+        histogram = _get_query_duration_histogram()
+        if histogram is None:
+            self._enabled = False
+            self.query_duration = _NOOP
+        else:
+            self._enabled = True
+            self.query_duration = histogram
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @staticmethod
+    def _bound_operation(operation: str) -> str:
+        return operation if operation in _KNOWN_OPERATIONS else _OPERATION_OVERFLOW
+
+    def record_query(self, operation: str, model: str, duration_s: float) -> None:
+        """Record one query's wall-clock duration.
+
+        Called from the real DataFlow query-execution hot path
+        (``dataflow.features.express.DataFlowExpress.
+        _execute_with_timing``) on EVERY ``db.express`` CRUD call --
+        success or failure, since ``_execute_with_timing`` records
+        timing from a ``finally`` block.
+
+        Args:
+            operation: One of :data:`_KNOWN_OPERATIONS`; any other
+                value is bounded to ``"_other"``.
+            model: The DataFlow model name; bounded to the first
+                ``model_cardinality_cap`` distinct values seen, with
+                overflow bucketed to ``"_other"``.
+            duration_s: Wall-clock duration in seconds.
+        """
+        op = self._bound_operation(operation)
+        mdl = self._model_bucketer.bucket(model) if model else _MODEL_UNKNOWN
+        self.query_duration.labels(operation=op, model=mdl).observe(duration_s)
+
+
+# ---------------------------------------------------------------------------
+# Process-wide singleton
+# ---------------------------------------------------------------------------
+
+
+_DATAFLOW_QUERY_METRICS_SINGLETON: Optional[DataFlowQueryMetrics] = None
+_SINGLETON_LOCK = threading.Lock()
+
+
+def get_dataflow_query_metrics() -> DataFlowQueryMetrics:
+    """Return the process-wide :class:`DataFlowQueryMetrics` singleton.
+
+    Lazily constructs the instance on first access. Every DataFlow
+    query-execution call site MUST go through this function so they
+    share the one Histogram registered on the global
+    ``prometheus_client.REGISTRY`` -- multiple instances still observe
+    into the SAME underlying timeseries (see
+    :func:`_get_query_duration_histogram`), but sharing one wrapper
+    instance keeps the bounded-cardinality ``model`` bucketer
+    consistent process-wide.
+    """
+    global _DATAFLOW_QUERY_METRICS_SINGLETON
+    if _DATAFLOW_QUERY_METRICS_SINGLETON is None:
+        with _SINGLETON_LOCK:
+            if _DATAFLOW_QUERY_METRICS_SINGLETON is None:
+                _DATAFLOW_QUERY_METRICS_SINGLETON = DataFlowQueryMetrics()
+    return _DATAFLOW_QUERY_METRICS_SINGLETON
+
+
+def reset_dataflow_query_metrics() -> None:
+    """Discard the singleton so the next call rebuilds its wrapper state.
+
+    Tests use this between cases to get a fresh :class:`DataFlowQueryMetrics`
+    wrapper (a fresh bounded-cardinality ``model`` bucketer in particular).
+    The underlying ``prometheus_client`` Histogram lives on the global
+    ``REGISTRY`` and is a process-wide singleton by design (see
+    :func:`_get_query_duration_histogram`) -- it is NOT reset here, exactly
+    like every other #1708-wired metric (``kailash_pool_acquire_wait_seconds``,
+    ``kailash_pool_connections_idle``, etc.) registered on the same
+    ``REGISTRY``. Production code SHOULD NOT call this.
+    """
+    global _DATAFLOW_QUERY_METRICS_SINGLETON
+    with _SINGLETON_LOCK:
+        _DATAFLOW_QUERY_METRICS_SINGLETON = None

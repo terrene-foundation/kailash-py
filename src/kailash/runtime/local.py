@@ -39,6 +39,7 @@ import contextvars
 import hashlib
 import json
 import logging
+import sys
 import threading
 import time
 import warnings
@@ -77,6 +78,7 @@ from kailash.runtime.durable import (
     resolve_tenant_id,
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
+from kailash.runtime.metrics import get_metrics_bridge
 from kailash.runtime.mixins import (
     ConditionalExecutionMixin,
     CycleExecutionMixin,
@@ -750,7 +752,6 @@ class LocalRuntime(
 
         # Enterprise feature managers (lazy initialization)
         self._access_control_manager = None
-        self._enterprise_monitoring = None
 
         # Initialize cyclic workflow executor if enabled
         if enable_cycles:
@@ -1128,6 +1129,15 @@ class LocalRuntime(
         else:
             _attempt_token = cancellation_token
 
+        # Issue #1708 W1f: canonical workflow RED (Rate/Errors/Duration)
+        # via the OTel MetricsBridge. Bounded {workflow.name} label only —
+        # NEVER workflow_id (the per-build UUID cardinality bomb Wave 1d
+        # fixed on the orphaned enterprise adapter). Recorded once, in the
+        # `finally` block below, on BOTH the success and exception path.
+        _metrics_bridge = get_metrics_bridge()
+        _metrics_workflow_name = getattr(workflow, "name", "") or ""
+        _metrics_start_time = time.perf_counter()
+
         try:
             try:
                 try:
@@ -1244,6 +1254,22 @@ class LocalRuntime(
 
             return results
         finally:
+            # Issue #1708 W1f: record the canonical workflow RED triple.
+            # `sys.exc_info()` inside a `finally` attached to the same
+            # `try` frame that is unwinding reports the in-flight exception
+            # (or `(None, None, None)` on a clean return) — this is the
+            # single check point that observes BOTH the success path
+            # (`return results` above) and every exception path (raised
+            # anywhere inside the nested try/except above, including the
+            # time-limit classification and the post-completion hard-
+            # deadline poll) without duplicating the recording call at
+            # every raise site.
+            _metrics_success = sys.exc_info()[0] is None
+            _metrics_bridge.record_workflow_execution(
+                _metrics_workflow_name,
+                time.perf_counter() - _metrics_start_time,
+                success=_metrics_success,
+            )
             # Always release the timers AND clear the credential store —
             # the timer cancel is idempotent so the disarm is safe even
             # on the no-limits path (cancellable is None then).
@@ -6254,26 +6280,6 @@ class LocalRuntime(
     def connection_pool_manager(self):
         """Access the connection pool manager."""
         return self._pool_coordinator
-
-    @property
-    def enterprise_monitoring(self):
-        """Access the enterprise monitoring manager."""
-        if self._enterprise_monitoring is None and (
-            self._persistent_mode or self._enable_enterprise_monitoring
-        ):
-            # Initialize enterprise monitoring
-            try:
-                from kailash.runtime.monitoring.runtime_monitor import (
-                    EnterpriseMonitoringManager,
-                )
-
-                self._enterprise_monitoring = EnterpriseMonitoringManager(
-                    self._runtime_id
-                )
-            except ImportError:
-                logger.warning("Enterprise monitoring not available")
-                return None
-        return self._enterprise_monitoring
 
     async def cleanup(self):
         """Clean up runtime resources."""

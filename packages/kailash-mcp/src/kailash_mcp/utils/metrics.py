@@ -13,12 +13,115 @@ import functools
 import logging
 import threading
 import time
+import types
 from collections import defaultdict, deque
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+# ``prometheus_client`` is an OPTIONAL dependency (the ``monitoring`` extra —
+# see ``pyproject.toml``), so it MUST NOT be a hard import for this module
+# (`rules/dependencies.md` § "Declared = Imported"). When absent, the real
+# Prometheus histogram below (#1708 W2) is silently disabled — callers still
+# get their in-process call/error counters and avg/min/max latency via
+# ``get_tool_stats()``. Mirrors the guarded-import pattern established in
+# ``kailash.core.monitoring.connection_metrics`` / ``kailash.monitoring.
+# asyncsql_metrics`` (#1708 W1c).
+try:
+    import prometheus_client as _prometheus_client
+
+    _PROMETHEUS_AVAILABLE = True
+except (
+    ImportError
+):  # pragma: no cover — covered by test_mcp_metrics_prometheus_unavailable_degrades
+    _prometheus_client: types.ModuleType = types.ModuleType(  # type: ignore[no-redef]
+        "prometheus_client"
+    )
+    _PROMETHEUS_AVAILABLE = False
+
+# Module-level singleton: every ``MetricsCollector`` instance (one per
+# ``MCPServer`` — see ``kailash_mcp/server.py``) shares ONE
+# ``mcp_tool_duration_seconds`` Histogram on the process-wide default
+# ``prometheus_client.REGISTRY``. Registering per-instance would either
+# raise "Duplicated timeseries in CollectorRegistry" (same metric name
+# registered twice against the default registry) or, if given a private
+# registry per instance, would never reach a real process's ``/metrics``
+# scrape — which calls ``prometheus_client.generate_latest()`` with no
+# registry argument (defaults to this same global ``REGISTRY``). Matches the
+# ``_get_acquire_wait_histogram`` pattern in
+# ``kailash.core.monitoring.connection_metrics`` (#1708 W1c/G1).
+_TOOL_DURATION_HISTOGRAM: "Optional[Any]" = None
+
+
+def _get_tool_duration_histogram() -> "Optional[Any]":
+    """Return the shared ``mcp_tool_duration_seconds`` histogram.
+
+    Created lazily on first use so importing this module never requires
+    ``prometheus_client`` to be installed. Uses EXPLICIT second-scale bucket
+    boundaries (`rules/observability.md` explicit-buckets requirement) — the
+    prometheus_client default buckets are generic-scale (0.005 .. 10.0 with
+    coarse steps) and give useless p95/p99 resolution for a tool-call
+    duration metric that is typically sub-second.
+
+    ``tool`` label cardinality: every production call site
+    (``MCPServer._create_enhanced_tool`` / ``MCPServer.resource`` /
+    ``MCPServer.prompt`` in ``kailash_mcp/server.py``) passes a value fixed
+    at DECORATION time — ``func.__name__``, ``f"resource:{uri}"``,
+    ``f"prompt:{name}"`` — a finite, developer-registered set (the tool /
+    resource / prompt names a server author writes in source code), never a
+    per-request or client-supplied value. No top-N admission bucketer is
+    required for this label (contrast the ML ``tenant_id`` label in
+    ``kailash.observability.ml``, which IS per-request/caller-supplied and
+    therefore top-N bucketed with an ``"_other"`` overflow bucket).
+    """
+    global _TOOL_DURATION_HISTOGRAM
+    if not _PROMETHEUS_AVAILABLE:
+        return None
+    if _TOOL_DURATION_HISTOGRAM is not None:
+        return _TOOL_DURATION_HISTOGRAM
+
+    metric_name = "mcp_tool_duration_seconds"
+    try:
+        _TOOL_DURATION_HISTOGRAM = _prometheus_client.Histogram(
+            metric_name,
+            "Duration of MCP tool / resource / prompt invocations, in seconds",
+            ["tool"],
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1.0,
+                2.5,
+                5.0,
+                10.0,
+                float("inf"),
+            ),
+            registry=_prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        # "Duplicated timeseries in CollectorRegistry" — this module can be
+        # imported under two distinct qualified names in the same process
+        # (e.g. ``kailash_mcp.utils.metrics`` vs
+        # ``src.kailash_mcp.utils.metrics``), which gives each import its
+        # own module-level ``_TOOL_DURATION_HISTOGRAM`` global even though
+        # both share the SAME process-wide ``prometheus_client.REGISTRY``
+        # (see ``kailash.core.monitoring.connection_metrics`` #1708 W1c for
+        # the sibling scenario + regression test). Whichever import path
+        # registers first wins; adopt its already-registered Histogram
+        # instance instead of erroring, so the second import path still
+        # observes into the one real timeseries.
+        existing = _prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _TOOL_DURATION_HISTOGRAM = existing
+    return _TOOL_DURATION_HISTOGRAM
 
 
 class MetricsCollector:
@@ -97,6 +200,28 @@ class MetricsCollector:
                     self._tool_latencies[tool_name] = self._tool_latencies[tool_name][
                         -100:
                     ]
+
+            # Real Prometheus histogram (#1708 W2) — the REAL bucketed
+            # le=/_sum/_count emission this metric backs, replacing the
+            # removed client-side p95/p99 approximation computed over the
+            # 100-sample window above (see get_tool_stats() /
+            # _export_prometheus()). `latency` is already in seconds (every
+            # call site computes it as `time.time() - start_time`), matching
+            # the `_seconds` metric name / bucket scale — no unit conversion
+            # needed. Telemetry MUST NOT be able to break the tool call it
+            # observes (rules/zero-tolerance.md Rule 3 hooks/cleanup
+            # exception; same instrumentation-boundary-isolation shape as
+            # ConnectionMetricsCollector.track_acquisition), so failures are
+            # logged and swallowed here.
+            try:
+                histogram = _get_tool_duration_histogram()
+                if histogram is not None:
+                    histogram.labels(tool=tool_name).observe(latency)
+            except Exception:
+                logger.warning(
+                    "mcp_metrics.tool_duration_histogram_observe_failed",
+                    exc_info=True,
+                )
 
             # Track errors
             if not success:
@@ -207,8 +332,14 @@ class MetricsCollector:
                             "avg_latency": sum(latencies) / len(latencies),
                             "min_latency": min(latencies),
                             "max_latency": max(latencies),
-                            "p95_latency": self._percentile(latencies, 95),
-                            "p99_latency": self._percentile(latencies, 99),
+                            # p95_latency / p99_latency REMOVED (#1708 W2) —
+                            # this in-process 100-sample-window
+                            # approximation was a fake summary-as-histogram
+                            # (rules/observability.md explicit-buckets +
+                            # G1 "no fake summary" finding). Query real
+                            # percentiles from the mcp_tool_duration_seconds
+                            # Histogram (see _get_tool_duration_histogram())
+                            # via Prometheus `histogram_quantile()` instead.
                         }
                     )
 
@@ -250,6 +381,16 @@ class MetricsCollector:
                         1 for call in recent_calls if not call["success"]
                     )
 
+                    # NOTE (#1708 W2 scope): `recent_p95_latency_5min` below
+                    # is a DIFFERENT surface than the per-tool p95/p99
+                    # removed from get_tool_stats() / _export_prometheus().
+                    # This is a server-wide, in-process-only debug snapshot
+                    # (dict introspection via get_server_stats() /
+                    # export_metrics("dict")) — grep confirms
+                    # _export_prometheus() never reads this key, so it never
+                    # reaches a Prometheus text scrape and is not the
+                    # fake-summary-as-histogram pattern that motivated the
+                    # per-tool removal. Left as-is.
                     stats.update(
                         {
                             "recent_calls_5min": len(recent_calls),
@@ -347,7 +488,25 @@ class MetricsCollector:
                 raise ValueError(f"Unsupported export format: {format}")
 
     def _export_prometheus(self, metrics: Dict[str, Any]) -> str:
-        """Export metrics in Prometheus format."""
+        """Export metrics in Prometheus format.
+
+        NOTE (#1708 W2): this hand-rolled exporter is a legacy introspection
+        surface (``export_metrics(format="prometheus")``) — grep confirms
+        the only production call site in ``kailash_mcp/server.py``
+        (``get_server_stats()``) invokes ``export_metrics()`` with the
+        default ``format="dict"``; nothing reaches ``format="prometheus"``.
+        The REAL production ``/metrics`` surface for tool-call duration is
+        the ``mcp_tool_duration_seconds`` Histogram registered directly on
+        ``prometheus_client.REGISTRY`` by ``track_tool_call()`` — it reaches
+        any process-level ``/metrics`` scrape via
+        ``prometheus_client.generate_latest()`` (no registry argument = the
+        same global default) independent of whether this method is ever
+        called. p95/p99 lines were REMOVED here (previously
+        ``mcp_tool_latency_p95`` / ``mcp_tool_latency_p99``, computed
+        client-side over a 100-sample window) — query real percentiles via
+        Prometheus ``histogram_quantile()`` against
+        ``mcp_tool_duration_seconds_bucket`` instead.
+        """
         lines = []
 
         # Server metrics
@@ -368,12 +527,6 @@ class MetricsCollector:
             if "avg_latency" in tool_stats:
                 lines.append(
                     f"mcp_tool_latency_avg{labels} {tool_stats['avg_latency']}"
-                )
-                lines.append(
-                    f"mcp_tool_latency_p95{labels} {tool_stats['p95_latency']}"
-                )
-                lines.append(
-                    f"mcp_tool_latency_p99{labels} {tool_stats['p99_latency']}"
                 )
 
         return "\n".join(lines)

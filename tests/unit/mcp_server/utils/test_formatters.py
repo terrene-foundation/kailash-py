@@ -286,7 +286,6 @@ class TestFormatterCustomization:
                     "errors": 1,
                     "error_rate": 0.001,
                     "avg_latency": 0.123456789,
-                    "p95_latency": 0.999999999,
                 }
             },
         }
@@ -299,7 +298,9 @@ class TestFormatterCustomization:
         assert "0.12%" in result  # Error rate as percentage
         assert "12.35" in result  # Calls/second to 2 decimal places
         assert "0.123s" in result  # Latency to 3 decimal places
-        assert "1.000s" in result  # P95 latency
+        # P95 latency removed (#1708 W2); the real percentile now lives in the
+        # mcp_tool_duration_seconds histogram, not the formatter text.
+        assert "P95 Latency" not in result
 
 
 class TestFormatterPerformance:

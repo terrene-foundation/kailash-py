@@ -85,7 +85,17 @@ class TestMcpCanonicalFixtureParity:
     every vector's pinned RAW-UTF-8 canonical bytes / SHA-256 reproduce."""
 
     @pytest.fixture(scope="class")
-    def fixture(self) -> dict:
+    @classmethod
+    def fixture(cls) -> dict:
+        # classmethod form (not an instance method) per pytest's
+        # class-scoped-fixture-as-instance-method deprecation
+        # (PytestRemovedIn10Warning) — a class-scoped fixture defined as an
+        # instance method runs against a throwaway `self` (a NEW instance
+        # per test), so instance-attribute writes would silently vanish.
+        # This fixture only returns a value (no `self.` writes), but the
+        # classmethod form is pytest's documented forward-compatible shape
+        # and eliminates the warning without changing behavior — the fixture
+        # value is still injected into each test method identically.
         assert _FIXTURE_PATH.exists(), (
             f"cross-SDK MCP canonical fixture missing at {_FIXTURE_PATH}; "
             "this fixture is the cross-SDK byte contract per issue #1258"

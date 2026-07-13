@@ -50,10 +50,18 @@ from dataflow.observability.correlation import (
     set_correlation_id,
     with_correlation_id,
 )
+from dataflow.observability.query_metrics import (
+    DataFlowQueryMetrics,
+    get_dataflow_query_metrics,
+    reset_dataflow_query_metrics,
+)
 
 __all__ = [
     "clear_correlation_id",
     "get_correlation_id",
     "set_correlation_id",
     "with_correlation_id",
+    "DataFlowQueryMetrics",
+    "get_dataflow_query_metrics",
+    "reset_dataflow_query_metrics",
 ]

@@ -2,12 +2,338 @@
 
 Provides RED metrics (Rate, Errors, Duration) and custom business metrics
 with Prometheus integration.
+
+The request-duration histogram is a REAL ``prometheus_client.Histogram``
+with explicit second-scale ``le=`` buckets (matching the pattern already
+proven in ``kaizen.core.autonomy.hooks.builtin.metrics_hook.MetricsHook``) —
+it replaces an earlier count/sum-only fake that could never back a
+``histogram_quantile()`` p95/p99 query (#1708 Wave 4).
+
+LLM token + cost counters (``kaizen_llm_prompt_tokens_total`` /
+``kaizen_llm_completion_tokens_total`` / ``kaizen_llm_cost_microdollars_total``)
+are also REAL Prometheus counters with BOUNDED ``model``/``provider`` labels —
+unrecognized values collapse to ``_other`` (never a raw caller string, never
+prompt/completion text) to keep cardinality bounded (#1708 Wave 4).
+
+Scrape-wiring fix (#1708 Wave 4 G1): the histogram + the 3 LLM counters
+above are registered as MODULE-LEVEL lazy singletons on the process-wide
+``prometheus_client.REGISTRY`` (mirroring the proven pattern in
+``kailash.core.monitoring.connection_metrics._get_acquire_wait_histogram``,
+including its dual-import duplicate-registration adopt-guard) instead of a
+private per-``MetricsCollector``-instance ``CollectorRegistry`` that no
+production ``/metrics`` endpoint ever scraped. Any co-hosted core/Nexus
+server ``/metrics`` (``generate_latest()`` with no registry argument
+defaults to this same global ``REGISTRY``) now folds these metrics in with
+zero additional wiring.
+
+The ``agent_type`` label on the duration histogram is BOUNDED via a
+thread-safe top-N admission bucketer (``KAIZEN_METRICS_AGENT_TYPE_MAX_VALUES``,
+default 100) — unlike ``model``/``provider`` (bounded against a closed
+enum), ``agent_type`` has no fixed set of valid values, so the first N
+distinct values seen are admitted verbatim and every value after the cap
+collapses to ``_other`` (#1708 Wave 4 G1 fix).
 """
 
+import logging
+import os
 import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Set
+
+import prometheus_client
+from prometheus_client import CollectorRegistry
+from prometheus_client import Counter as PromCounter
+from prometheus_client import Histogram as PromHistogram
+from prometheus_client import generate_latest
+
+from kaizen.providers.registry import _MODEL_PREFIX_MAP, PROVIDERS
+
+logger = logging.getLogger(__name__)
+
+# 1 USD = 1,000,000 microdollars (cross-module convention — see
+# kaizen.cost.tracker._MICRODOLLARS_PER_USD / kaizen.providers.cost) — kept as
+# an integer counter so Prometheus never accumulates float-precision drift.
+_MICRODOLLARS_PER_USD = 1_000_000
+
+# Bounded label sentinel — any caller-supplied model/provider string that
+# doesn't match a known, finite set collapses here instead of becoming an
+# unbounded Prometheus label value.
+_OTHER_LABEL = "_other"
+
+# Explicit second-scale buckets for LLM/agent request duration (seconds).
+# Default prometheus_client buckets top out at 10s with coarse low-end
+# granularity; agent calls span sub-100ms tool invocations through
+# multi-minute autonomous cycles, so the boundaries are widened to 60s.
+_DEFAULT_DURATION_BUCKETS: Sequence[float] = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.075,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1.0,
+    2.5,
+    5.0,
+    7.5,
+    10.0,
+    30.0,
+    60.0,
+)
+
+# Canonical bounded provider enum — reuses the SAME registry the provider
+# resolver uses (kaizen.providers.registry.PROVIDERS) so this module carries
+# no parallel provider-name list.
+_BOUNDED_PROVIDERS = frozenset(PROVIDERS.keys())
+
+
+def _bound_provider_label(provider: str) -> str:
+    """Bound the ``provider`` label to the canonical provider registry.
+
+    Unknown/arbitrary provider strings collapse to ``_other`` to keep
+    Prometheus label cardinality bounded (`observability.md` bucketing
+    discipline) — never pass a raw caller-supplied string through as a
+    label value.
+    """
+    if not provider:
+        return _OTHER_LABEL
+    normalized = provider.strip().lower()
+    return normalized if normalized in _BOUNDED_PROVIDERS else _OTHER_LABEL
+
+
+def _bound_model_label(model: str) -> str:
+    """Bound the ``model`` label to a known model-family prefix.
+
+    Reuses the canonical model-prefix -> provider-family table from
+    ``kaizen.providers.registry`` (the same structural mapping the provider
+    resolver uses) so this module carries no parallel model-family list.
+    Arbitrary/unknown model strings — and raw per-release model identifiers
+    that would otherwise be unbounded cardinality — collapse to ``_other``.
+    """
+    if not model:
+        return _OTHER_LABEL
+    normalized = model.strip().lower()
+    for prefixes, family in _MODEL_PREFIX_MAP:
+        if normalized.startswith(prefixes):
+            return family
+    return _OTHER_LABEL
+
+
+# Default cap for the agent_type top-N bucketer (#1708 Wave 4 G1 fix) —
+# env-overridable so operators with a legitimately larger fixed set of
+# agent types can raise it without a code change.
+_DEFAULT_MAX_AGENT_TYPE_LABELS = 100
+_AGENT_TYPE_MAX_VALUES_ENV = "KAIZEN_METRICS_AGENT_TYPE_MAX_VALUES"
+
+
+def _read_max_agent_type_labels() -> int:
+    """Read the agent_type bucketer cap from the environment (`env-models.md`).
+
+    Falls back to ``_DEFAULT_MAX_AGENT_TYPE_LABELS`` on an absent, non-integer,
+    or negative value — logged at WARNING (not silently swallowed) so a
+    misconfigured env var is visible in production logs
+    (`observability.md` Rule 3).
+    """
+    raw = os.environ.get(_AGENT_TYPE_MAX_VALUES_ENV)
+    if raw is None:
+        return _DEFAULT_MAX_AGENT_TYPE_LABELS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "metrics.invalid_agent_type_max_values_env",
+            extra={"env_var": _AGENT_TYPE_MAX_VALUES_ENV, "raw_value": raw},
+        )
+        return _DEFAULT_MAX_AGENT_TYPE_LABELS
+    if value < 0:
+        logger.warning(
+            "metrics.negative_agent_type_max_values_env",
+            extra={"env_var": _AGENT_TYPE_MAX_VALUES_ENV, "raw_value": raw},
+        )
+        return _DEFAULT_MAX_AGENT_TYPE_LABELS
+    return value
+
+
+class _TopNLabelBucketer:
+    """Thread-safe top-N admission bucketer for an open-ended label dimension.
+
+    Unlike ``_bound_model_label`` / ``_bound_provider_label`` (bounded
+    against a fixed, closed enum), ``agent_type`` has no closed set of
+    valid values — callers can pass arbitrary strings. The first
+    ``max_values`` DISTINCT values observed are admitted verbatim; every
+    value seen after the cap is reached collapses to ``_other`` so the
+    EXPORTED Prometheus label cardinality stays bounded no matter how many
+    distinct agent types a long-running process ever sees
+    (`observability.md` bucketing discipline / `security.md` bounded
+    labels — #1708 Wave 4 G1 fix).
+    """
+
+    def __init__(self, max_values: int):
+        self._max_values = max(max_values, 0)
+        self._lock = threading.Lock()
+        self._admitted: Set[str] = set()
+
+    def bucket(self, value: str) -> str:
+        """Return ``value`` unchanged if admitted, else ``_other``."""
+        if not value:
+            return _OTHER_LABEL
+        normalized = value.strip()
+        if not normalized:
+            return _OTHER_LABEL
+        with self._lock:
+            if normalized in self._admitted:
+                return normalized
+            if len(self._admitted) < self._max_values:
+                self._admitted.add(normalized)
+                return normalized
+            return _OTHER_LABEL
+
+    @property
+    def admitted_count(self) -> int:
+        """Number of distinct values admitted so far (test/introspection)."""
+        with self._lock:
+            return len(self._admitted)
+
+
+# Shared, process-wide bucketer — every MetricsCollector instance's
+# duration-histogram observations route agent_type through this ONE
+# bucketer so the top-N admission cap is enforced across the whole
+# process, not reset per instance.
+_AGENT_TYPE_BUCKETER = _TopNLabelBucketer(_read_max_agent_type_labels())
+
+
+def _bound_agent_type_label(agent_type: str) -> str:
+    """Bound the ``agent_type`` label via the shared top-N bucketer.
+
+    Reuses the same ``_other`` overflow sentinel as
+    ``_bound_model_label``/``_bound_provider_label``, but the bound itself
+    is a top-N admission policy (not a fixed lookup table) because
+    agent_type has no closed enum of valid values (#1708 Wave 4 G1 fix).
+    """
+    return _AGENT_TYPE_BUCKETER.bucket(agent_type)
+
+
+# ---------------------------------------------------------------------------
+# Module-level lazy singletons for the REAL Prometheus instruments backing
+# this module's Wave-4 LLM token/cost counters + request-duration histogram.
+# Registered on prometheus_client.REGISTRY (the process-wide default
+# registry) so ANY co-hosted /metrics scrape (kailash.core / Nexus / a
+# bespoke FastAPI app calling generate_latest() with no registry argument)
+# folds them in with zero additional wiring — mirrors the proven pattern in
+# kailash.core.monitoring.connection_metrics._get_acquire_wait_histogram,
+# including the dual-import duplicate-registration adopt-guard: this module
+# can be imported under two distinct qualified names in the same process
+# (e.g. exercised by different test files in this repo's suite), which
+# would otherwise raise "Duplicated timeseries in CollectorRegistry" on the
+# second import path's first metric construction. Whichever import path
+# registers first wins; the second adopts the already-registered instance
+# from the shared prometheus_client.REGISTRY instead of erroring (#1708
+# Wave 4 G1 fix).
+# ---------------------------------------------------------------------------
+_REQUEST_DURATION_HISTOGRAM: "Optional[PromHistogram]" = None
+_LLM_PROMPT_TOKENS_COUNTER: "Optional[PromCounter]" = None
+_LLM_COMPLETION_TOKENS_COUNTER: "Optional[PromCounter]" = None
+_LLM_COST_MICRODOLLARS_COUNTER: "Optional[PromCounter]" = None
+
+
+def _get_duration_histogram() -> "PromHistogram":
+    """Return the shared ``kaizen_request_duration_seconds`` histogram.
+
+    Created lazily on first use so importing this module doesn't eagerly
+    register against the global registry. See module-level comment block
+    above for the dual-import duplicate-registration adopt-guard rationale.
+    """
+    global _REQUEST_DURATION_HISTOGRAM
+    if _REQUEST_DURATION_HISTOGRAM is not None:
+        return _REQUEST_DURATION_HISTOGRAM
+
+    metric_name = "kaizen_request_duration_seconds"
+    try:
+        _REQUEST_DURATION_HISTOGRAM = PromHistogram(
+            metric_name,
+            "Request duration in seconds",
+            ["agent_type"],
+            registry=prometheus_client.REGISTRY,
+            buckets=tuple(_DEFAULT_DURATION_BUCKETS),
+        )
+    except ValueError:
+        existing = prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _REQUEST_DURATION_HISTOGRAM = existing
+    return _REQUEST_DURATION_HISTOGRAM
+
+
+def _get_llm_prompt_tokens_counter() -> "PromCounter":
+    """Return the shared ``kaizen_llm_prompt_tokens_total`` counter."""
+    global _LLM_PROMPT_TOKENS_COUNTER
+    if _LLM_PROMPT_TOKENS_COUNTER is not None:
+        return _LLM_PROMPT_TOKENS_COUNTER
+
+    metric_name = "kaizen_llm_prompt_tokens_total"
+    try:
+        _LLM_PROMPT_TOKENS_COUNTER = PromCounter(
+            metric_name,
+            "Total LLM prompt (input) tokens consumed, by bounded model "
+            "family and provider",
+            ["model", "provider"],
+            registry=prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        existing = prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _LLM_PROMPT_TOKENS_COUNTER = existing
+    return _LLM_PROMPT_TOKENS_COUNTER
+
+
+def _get_llm_completion_tokens_counter() -> "PromCounter":
+    """Return the shared ``kaizen_llm_completion_tokens_total`` counter."""
+    global _LLM_COMPLETION_TOKENS_COUNTER
+    if _LLM_COMPLETION_TOKENS_COUNTER is not None:
+        return _LLM_COMPLETION_TOKENS_COUNTER
+
+    metric_name = "kaizen_llm_completion_tokens_total"
+    try:
+        _LLM_COMPLETION_TOKENS_COUNTER = PromCounter(
+            metric_name,
+            "Total LLM completion (output) tokens consumed, by bounded "
+            "model family and provider",
+            ["model", "provider"],
+            registry=prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        existing = prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _LLM_COMPLETION_TOKENS_COUNTER = existing
+    return _LLM_COMPLETION_TOKENS_COUNTER
+
+
+def _get_llm_cost_microdollars_counter() -> "PromCounter":
+    """Return the shared ``kaizen_llm_cost_microdollars_total`` counter."""
+    global _LLM_COST_MICRODOLLARS_COUNTER
+    if _LLM_COST_MICRODOLLARS_COUNTER is not None:
+        return _LLM_COST_MICRODOLLARS_COUNTER
+
+    metric_name = "kaizen_llm_cost_microdollars_total"
+    try:
+        _LLM_COST_MICRODOLLARS_COUNTER = PromCounter(
+            metric_name,
+            "Total LLM spend in microdollars (1 USD = 1,000,000 "
+            "microdollars), by bounded model family and provider",
+            ["model", "provider"],
+            registry=prometheus_client.REGISTRY,
+        )
+    except ValueError:
+        existing = prometheus_client.REGISTRY._names_to_collectors.get(metric_name)
+        if existing is None:
+            raise
+        _LLM_COST_MICRODOLLARS_COUNTER = existing
+    return _LLM_COST_MICRODOLLARS_COUNTER
 
 
 @dataclass
@@ -49,25 +375,82 @@ class Counter:
 
 
 class Histogram:
-    """Thread-safe histogram metric for tracking distributions."""
+    """Thread-safe REAL Prometheus histogram for tracking distributions.
 
-    def __init__(self, name: str, description: str):
+    Wraps ``prometheus_client.Histogram`` with explicit second-scale
+    ``le=`` bucket boundaries — a real ``_bucket``/``_sum``/``_count``
+    export that ``histogram_quantile()`` can compute p95/p99 over. This
+    replaces the earlier fake implementation that only ever emitted
+    ``_count``/``_sum`` (no buckets), which cannot back any percentile
+    query (#1708 Wave 4 — see module docstring).
+
+    Labels are BOUNDED to ``agent_type`` at the Prometheus-export layer to
+    keep cardinality bounded. Any additional caller-supplied labels are
+    retained ONLY in an in-memory, per-process sample list so
+    ``get_stats()`` can still report min/max/avg (Prometheus histograms do
+    not track those natively) — they are never exported as Prometheus
+    label values.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        buckets: Sequence[float] = _DEFAULT_DURATION_BUCKETS,
+        registry: Optional[CollectorRegistry] = None,
+        histogram: Optional[PromHistogram] = None,
+    ):
         self.name = name
         self.description = description
+        if histogram is not None:
+            # Pre-built instrument — the module-level global-REGISTRY
+            # singleton (#1708 Wave 4 G1 fix), shared across every
+            # MetricsCollector instance in this process so a co-hosted
+            # /metrics scrape folds this histogram in with zero extra
+            # wiring. ``registry`` may be None here (export_prometheus_text
+            # falls back to the global prometheus_client.REGISTRY).
+            self._histogram = histogram
+            self._registry = registry
+        else:
+            # Explicit/hermetic registry (test isolation, non-default
+            # deployment topologies) — a dedicated instrument bound to it,
+            # matching the pre-#1708-Wave-4-G1-fix behavior.
+            self._registry = registry if registry is not None else CollectorRegistry()
+            self._histogram = PromHistogram(
+                name,
+                description,
+                ["agent_type"],
+                registry=self._registry,
+                buckets=tuple(buckets),
+            )
         self._lock = threading.Lock()
+        # Bounded per-label-key raw samples, retained ONLY for the in-memory
+        # min/max/avg stats surface (get_stats) — never exported to
+        # Prometheus (that surface is the real bucketed histogram above).
         self._observations: Dict[str, List[float]] = defaultdict(list)
 
     def observe(self, value: float, labels: Optional[Dict[str, str]] = None):
-        """Record an observation."""
-        key = self._label_key(labels or {})
+        """Record an observation on the real histogram + in-memory stats."""
+        labels = labels or {}
+        agent_type = labels.get("agent_type", "")
+        # #1708 Wave 4 G1 fix: agent_type has no closed enum (unlike
+        # model/provider) — bound it via the shared top-N bucketer so the
+        # EXPORTED Prometheus label stays cardinality-bounded. The
+        # in-memory stats key below stays keyed on the RAW label (private
+        # per-process memory, never exported) so get_duration_stats()
+        # keeps querying by the caller's original agent_type string.
+        bounded_agent_type = _bound_agent_type_label(agent_type)
+        self._histogram.labels(agent_type=bounded_agent_type).observe(value)
+
+        key = self._label_key(labels)
         with self._lock:
             self._observations[key].append(value)
 
     def get_stats(self, labels: Optional[Dict[str, str]] = None) -> Dict[str, float]:
-        """Get statistics for observations."""
+        """Get in-memory statistics (count/sum/min/max/avg) for observations."""
         key = self._label_key(labels or {})
         with self._lock:
-            values = self._observations.get(key, [])
+            values = list(self._observations.get(key, []))
             if not values:
                 return {"count": 0, "sum": 0.0}
 
@@ -78,6 +461,20 @@ class Histogram:
                 "max": max(values),
                 "avg": sum(values) / len(values),
             }
+
+    def export_prometheus_text(self) -> str:
+        """Export the REAL bucketed histogram in Prometheus text format.
+
+        Includes ``_bucket{le=...}``, ``_sum``, and ``_count`` series —
+        the shape ``histogram_quantile()`` requires. Falls back to the
+        process-wide ``prometheus_client.REGISTRY`` when this instance has
+        no dedicated registry (the default, global-singleton-backed case,
+        #1708 Wave 4 G1 fix).
+        """
+        registry = (
+            self._registry if self._registry is not None else prometheus_client.REGISTRY
+        )
+        return generate_latest(registry).decode("utf-8")
 
     def _label_key(self, labels: Dict[str, str]) -> str:
         """Convert labels to a hashable key."""
@@ -129,20 +526,130 @@ class MetricsCollector:
         >>> stats = metrics.get_duration_stats("qa_agent")
     """
 
-    def __init__(self):
-        """Initialize metrics collector."""
-        # RED metrics
+    def __init__(self, registry: Optional[CollectorRegistry] = None):
+        """Initialize metrics collector.
+
+        Args:
+            registry: Explicit Prometheus registry override for the REAL
+                histogram + LLM token/cost counters — an escape hatch for
+                hermetic test isolation or non-default deployment
+                topologies. When None (the default, and the production
+                path), these instruments bind to the process-wide
+                ``prometheus_client.REGISTRY`` module-level singletons
+                (``_get_duration_histogram`` / ``_get_llm_*_counter``) so
+                EVERY ``MetricsCollector`` in this process shares the SAME
+                real instruments and ANY co-hosted ``/metrics`` scrape
+                (``generate_latest()``) folds them in with zero additional
+                wiring (#1708 Wave 4 G1 fix — these metrics previously
+                lived on a private per-instance ``CollectorRegistry`` no
+                production endpoint ever scraped).
+        """
+        if registry is not None:
+            # Explicit/hermetic registry override — dedicated instruments
+            # bound to it (test isolation / non-default deployment
+            # topologies), matching the pre-#1708-Wave-4-G1-fix behavior.
+            self.registry = registry
+            self._duration_histogram = Histogram(
+                "kaizen_request_duration_seconds",
+                "Request duration in seconds",
+                registry=self.registry,
+            )
+            self._llm_prompt_tokens_counter = PromCounter(
+                "kaizen_llm_prompt_tokens_total",
+                "Total LLM prompt (input) tokens consumed, by bounded model "
+                "family and provider",
+                ["model", "provider"],
+                registry=self.registry,
+            )
+            self._llm_completion_tokens_counter = PromCounter(
+                "kaizen_llm_completion_tokens_total",
+                "Total LLM completion (output) tokens consumed, by bounded "
+                "model family and provider",
+                ["model", "provider"],
+                registry=self.registry,
+            )
+            self._llm_cost_microdollars_counter = PromCounter(
+                "kaizen_llm_cost_microdollars_total",
+                "Total LLM spend in microdollars (1 USD = 1,000,000 "
+                "microdollars), by bounded model family and provider",
+                ["model", "provider"],
+                registry=self.registry,
+            )
+        else:
+            # Production default — the process-wide registry every
+            # co-hosted /metrics scrape reads from (#1708 Wave 4 G1 fix).
+            self.registry = prometheus_client.REGISTRY
+            self._duration_histogram = Histogram(
+                "kaizen_request_duration_seconds",
+                "Request duration in seconds",
+                histogram=_get_duration_histogram(),
+            )
+            self._llm_prompt_tokens_counter = _get_llm_prompt_tokens_counter()
+            self._llm_completion_tokens_counter = _get_llm_completion_tokens_counter()
+            self._llm_cost_microdollars_counter = _get_llm_cost_microdollars_counter()
+
+        # RED metrics (hand-rolled Counter — unaffected by the #1708 Wave 4
+        # G1 fix; not real prometheus_client instruments).
         self._request_counter = Counter(
             "kaizen_requests_total", "Total number of requests"
         )
         self._error_counter = Counter("kaizen_errors_total", "Total number of errors")
-        self._duration_histogram = Histogram(
-            "kaizen_request_duration_seconds", "Request duration in seconds"
-        )
 
         # Custom metrics
         self._gauges: Dict[str, Gauge] = {}
         self._counters: Dict[str, Counter] = {}
+
+    def track_llm_usage(
+        self,
+        model: str = "",
+        provider: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+    ) -> None:
+        """Record LLM token usage and cost for a completed call.
+
+        This is the counterpart to the ``cost_update`` execution event
+        (``kaizen.execution.events.CostUpdateEvent`` /
+        ``kaizen.execution.streaming_executor.StreamingExecutor``) — call
+        it at the same point a ``cost_update`` event is emitted so token +
+        cost visibility reaches the real Prometheus registry, not just the
+        event stream (#1708 Wave 4).
+
+        Args:
+            model: Model name for this call. Bounded to a known model
+                family prefix (e.g. "gpt-4o" -> "openai"); unrecognized
+                values collapse to "_other".
+            provider: Provider name for this call. Bounded to the
+                canonical provider registry; unrecognized values collapse
+                to "_other".
+            prompt_tokens: Prompt (input) tokens consumed by this call.
+            completion_tokens: Completion (output) tokens consumed by
+                this call.
+            cost_usd: Cost of this call in USD. Converted to an integer
+                microdollar count (1 USD = 1,000,000 microdollars) so the
+                Prometheus counter never accumulates float-precision
+                drift.
+        """
+        bounded_model = _bound_model_label(model)
+        bounded_provider = _bound_provider_label(provider)
+
+        if prompt_tokens:
+            self._llm_prompt_tokens_counter.labels(
+                model=bounded_model, provider=bounded_provider
+            ).inc(prompt_tokens)
+
+        if completion_tokens:
+            self._llm_completion_tokens_counter.labels(
+                model=bounded_model, provider=bounded_provider
+            ).inc(completion_tokens)
+
+        if cost_usd:
+            microdollars = round(cost_usd * _MICRODOLLARS_PER_USD)
+            if microdollars:
+                self._llm_cost_microdollars_counter.labels(
+                    model=bounded_model, provider=bounded_provider
+                ).inc(microdollars)
 
     def track_request(
         self, agent_type: str, status: str, labels: Optional[Dict[str, str]] = None
@@ -303,10 +810,18 @@ class MetricsCollector:
     def export_prometheus(self) -> str:
         """Export metrics in Prometheus text format.
 
+        The request-duration histogram and the LLM token/cost counters are
+        REAL ``prometheus_client`` metrics registered on ``self.registry``,
+        so this section is produced by ``generate_latest()`` — the same
+        exposition path Prometheus/OTel scrapers already trust — including
+        real ``_bucket{le=...}`` lines for the histogram (#1708 Wave 4).
+        The hand-rolled request/error counters and custom gauges (not part
+        of this fix) are appended after it unchanged.
+
         Returns:
             Metrics in Prometheus exposition format
         """
-        lines = []
+        lines = [generate_latest(self.registry).decode("utf-8").rstrip("\n")]
 
         # Export request counter
         lines.append(
@@ -329,26 +844,6 @@ class MetricsCollector:
                 lines.append(f"{self._error_counter.name}{{{labels_key}}} {value}")
             else:
                 lines.append(f"{self._error_counter.name} {value}")
-
-        # Export duration histogram
-        lines.append(
-            f"# HELP {self._duration_histogram.name} {self._duration_histogram.description}"
-        )
-        lines.append(f"# TYPE {self._duration_histogram.name} histogram")
-        for labels_key, observations in self._duration_histogram._observations.items():
-            if observations:
-                count = len(observations)
-                total = sum(observations)
-                if labels_key:
-                    lines.append(
-                        f"{self._duration_histogram.name}_count{{{labels_key}}} {count}"
-                    )
-                    lines.append(
-                        f"{self._duration_histogram.name}_sum{{{labels_key}}} {total}"
-                    )
-                else:
-                    lines.append(f"{self._duration_histogram.name}_count {count}")
-                    lines.append(f"{self._duration_histogram.name}_sum {total}")
 
         # Export gauges
         for gauge in self._gauges.values():

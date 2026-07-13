@@ -518,7 +518,6 @@ class TestMetricsFormatter:
                     "errors": 10,
                     "error_rate": 0.002,
                     "avg_latency": 0.125,
-                    "p95_latency": 0.250,
                 },
                 "fetch": {"calls": 3000, "errors": 5, "error_rate": 0.00167},
             }
@@ -532,7 +531,10 @@ class TestMetricsFormatter:
         assert "**Errors**: 10" in result
         assert "**Error Rate**: 0.20%" in result
         assert "**Avg Latency**: 0.125s" in result
-        assert "**P95 Latency**: 0.250s" in result
+        # P95 Latency line removed (#1708 W2 — the fake client-side p95/p99
+        # approximation was replaced by the real mcp_tool_duration_seconds
+        # Prometheus histogram); assert the formatter no longer emits it.
+        assert "P95 Latency" not in result
 
         assert "### fetch" in result
         assert "**Calls**: 3,000" in result

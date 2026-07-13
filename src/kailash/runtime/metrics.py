@@ -30,12 +30,15 @@ Included in the base install (``pip install kailash``).
 from __future__ import annotations
 
 import logging
+import os
+import re
 import threading
+from collections import Counter
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["MetricsBridge", "get_metrics_bridge"]
+__all__ = ["MetricsBridge", "get_metrics_bridge", "sanitize_workflow_name"]
 
 # Lazy OTel metrics import.
 _OTEL_METRICS_AVAILABLE = False
@@ -48,6 +51,201 @@ try:
     _OTEL_METRICS_AVAILABLE = True
 except ImportError:
     pass
+
+# Second-scale explicit bucket boundaries for the workflow-duration histogram
+# (issue #1708 W1f). OTel's DEFAULT histogram buckets are millisecond-scale
+# (tuned for HTTP request latency: 0, 5, 10, 25 ... 10000) and are useless for
+# workflow executions that commonly run from tens of milliseconds to several
+# minutes -- every real workflow duration lands in the single top overflow
+# bucket, so p95/p99 queries return meaningless results. These boundaries are
+# supplied as ``explicit_bucket_boundaries_advisory`` at instrument-creation
+# time, which the OTel SDK's default histogram aggregation honors directly
+# (no separate View registration required).
+WORKFLOW_DURATION_BUCKETS_SECONDS: tuple[float, ...] = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+    30.0,
+    60.0,
+    120.0,
+    300.0,
+    600.0,
+)
+
+# ``WorkflowBuilder.build()`` defaults an unnamed workflow's ``name`` to
+# ``f"Workflow-{workflow_id[:8]}"`` -- an 8-hex-char fragment of a fresh
+# ``uuid4()`` minted on *every* ``.build()`` call (see
+# ``kailash.workflow.builder.WorkflowBuilder.build``). Recording that value
+# verbatim as a metric label/attribute is the SAME unbounded-cardinality bomb
+# issue #1708 (Wave 1d) fixed for the raw ``workflow_id``: a long-lived
+# Prometheus/OTel scrape target would mint a brand-new time series on every
+# execution for any caller that does not explicitly name their workflow.
+_AUTO_GENERATED_WORKFLOW_NAME_RE = re.compile(r"^Workflow-[0-9a-fA-F]{8}$")
+
+# Bounded sentinel substituted for auto-generated / missing workflow names.
+_UNNAMED_WORKFLOW_LABEL = "unnamed_workflow"
+
+# Bounded sentinel substituted for explicitly-named workflows once the
+# top-N admission cap (below) is exceeded.
+_OTHER_WORKFLOW_LABEL = "_other"
+
+# Default top-N cap on distinct *explicitly-named* workflow names admitted
+# verbatim as a metric label value. Mirrors the design (and default order
+# of magnitude) of ``kailash.observability.ml._TenantBucketer`` -- issue
+# #1708 (G1 HIGH): collapsing only the ``Workflow-{8hex}`` auto-default
+# left any explicitly-named workflow (``name=f"etl-{customer_id}"``)
+# unbounded, an equally real cardinality bomb on
+# ``kailash_workflow_executions_total{workflow.name,success}`` +
+# ``kailash_workflow_duration_seconds{workflow.name}``.
+_WORKFLOW_TOP_N_DEFAULT = 100
+
+
+class _WorkflowNameBucketer:
+    """Thread-safe top-N-by-traffic workflow-name bucket tracker.
+
+    Per issue #1708 (G1 HIGH): an explicitly-named workflow's ``name`` is
+    NOT bounded by construction the way the auto-generated
+    ``Workflow-{8hex}`` default is -- a caller minting
+    ``name=f"etl-{customer_id}"`` per tenant/customer would otherwise
+    mint a brand-new metric time series per distinct name, forever. This
+    tracker admits the top-N workflow names (by lifetime observation
+    count) verbatim and buckets the rest as ``"_other"``. The admission
+    decision is monotonic within a process -- once a name is admitted it
+    stays admitted; promotions of newcomers past the cutoff happen only
+    when an unseen name has more observations than the currently-lowest
+    -observed admitted name (so the policy is not a pure FIFO/LRU; it is
+    "top-N by cumulative count").
+
+    Thread-safe: a lock guards admission + the counts dict.
+
+    Self-contained in this module by design (issue #1708 G1) -- does NOT
+    import ``kailash.observability.ml``'s ``_TenantBucketer`` even though
+    the shape mirrors it, to avoid a cross-module edit surface while that
+    module is independently in flight.
+    """
+
+    def __init__(self, top_n: int) -> None:
+        if not isinstance(top_n, int) or top_n <= 0:
+            raise ValueError(f"top_n must be positive int, got {top_n!r}")
+        self._top_n = top_n
+        # Bound the internal counts working set so it cannot grow without
+        # bound under a flood of distinct names (issue #1708 G1 LOW): the
+        # metric label cardinality is already bounded to top_n + "_other",
+        # but an un-pruned counts dict would still leak one entry per distinct
+        # name for process lifetime. Generous headroom over top_n keeps
+        # legitimate displacement working; a brand-new name past the cap goes
+        # straight to "_other" untracked.
+        self._max_tracked = max(top_n * 10, top_n + 1000)
+        self._counts: "Counter[str]" = Counter()
+        self._admitted: set[str] = set()
+        self._lock = threading.Lock()
+
+    def bucket(self, workflow_name: str) -> str:
+        """Admit *workflow_name* verbatim if under the cap, else bucket it."""
+        if not isinstance(workflow_name, str) or workflow_name == "":
+            raise ValueError("workflow_name must be a non-empty str")
+        with self._lock:
+            # Already admitted -> verbatim (admitted names are always tracked).
+            if workflow_name in self._admitted:
+                self._counts[workflow_name] += 1
+                return workflow_name
+            # Room in the admitted set -> admit the first top_n distinct names.
+            if len(self._admitted) < self._top_n:
+                self._counts[workflow_name] += 1
+                self._admitted.add(workflow_name)
+                return workflow_name
+            # Admitted set full. Only track counts for a BOUNDED working set so
+            # _counts cannot grow without bound (G1 LOW); a never-seen name past
+            # the working-set cap buckets to "_other" without being tracked.
+            if workflow_name in self._counts:
+                self._counts[workflow_name] += 1
+            elif len(self._counts) < self._max_tracked:
+                self._counts[workflow_name] = 1
+            else:
+                return _OTHER_WORKFLOW_LABEL
+            # Admission competition: promote if this name now out-counts the
+            # lowest-observed admitted name.
+            admitted_counts = {t: self._counts[t] for t in self._admitted}
+            lowest_name = min(admitted_counts, key=lambda t: admitted_counts[t])
+            if self._counts[workflow_name] > admitted_counts[lowest_name]:
+                self._admitted.remove(lowest_name)
+                self._admitted.add(workflow_name)
+                return workflow_name
+            return _OTHER_WORKFLOW_LABEL
+
+    def reset_for_tests(self) -> None:
+        """Reset the bucket admission state -- tests only."""
+        with self._lock:
+            self._counts.clear()
+            self._admitted.clear()
+
+
+def _workflow_top_n_from_env() -> int:
+    """Read ``KAILASH_WORKFLOW_METRICS_TOP_N`` with a validated fallback."""
+    raw = os.environ.get("KAILASH_WORKFLOW_METRICS_TOP_N")
+    if raw is None or raw == "":
+        return _WORKFLOW_TOP_N_DEFAULT
+    try:
+        val = int(raw)
+    except ValueError:
+        logger.warning(
+            "workflow_metrics.bad_env_top_n",
+            extra={"raw": raw, "fallback": _WORKFLOW_TOP_N_DEFAULT},
+        )
+        return _WORKFLOW_TOP_N_DEFAULT
+    if val <= 0:
+        logger.warning(
+            "workflow_metrics.bad_env_top_n",
+            extra={"raw": raw, "fallback": _WORKFLOW_TOP_N_DEFAULT},
+        )
+        return _WORKFLOW_TOP_N_DEFAULT
+    return val
+
+
+_workflow_name_bucketer = _WorkflowNameBucketer(top_n=_workflow_top_n_from_env())
+
+
+def _reset_workflow_bucketer_for_tests(top_n: Optional[int] = None) -> None:
+    """Test-only: replace the module-global workflow-name bucketer."""
+    global _workflow_name_bucketer
+    n = top_n if top_n is not None else _workflow_top_n_from_env()
+    _workflow_name_bucketer = _WorkflowNameBucketer(top_n=n)
+
+
+def sanitize_workflow_name(workflow_name: Optional[str]) -> str:
+    """Collapse/bound a workflow name to a cardinality-safe metric label.
+
+    Two independent bounds are applied (issue #1708 W1f + G1 HIGH):
+
+    1. Auto-generated names -- unnamed workflows whose ``name`` defaults
+       to ``f"Workflow-{workflow_id[:8]}"`` -- collapse to a single
+       stable sentinel (``"unnamed_workflow"``) so the RED metrics stay
+       bounded regardless of how many anonymous workflows execute.
+    2. Explicitly-named workflows (``WorkflowBuilder(name="orders")`` or
+       ``.build(name="orders")``) pass through the top-N admission
+       bucketer above: the first N distinct names observed by this
+       process are admitted verbatim; any name beyond the cap collapses
+       to ``"_other"``. A caller minting a fresh name per request
+       (``name=f"etl-{customer_id}"``) can no longer mint an unbounded
+       number of time series.
+
+    Args:
+        workflow_name: The raw ``workflow.name`` value (or ``None``).
+
+    Returns:
+        A bounded label value safe to use as a metric attribute.
+    """
+    if not workflow_name or _AUTO_GENERATED_WORKFLOW_NAME_RE.match(workflow_name):
+        return _UNNAMED_WORKFLOW_LABEL
+    return _workflow_name_bucketer.bucket(workflow_name)
 
 
 class MetricsBridge:
@@ -89,11 +287,13 @@ class MetricsBridge:
                 name="kailash_workflow_duration_seconds",
                 description="Duration of workflow executions in seconds",
                 unit="s",
+                explicit_bucket_boundaries_advisory=WORKFLOW_DURATION_BUCKETS_SECONDS,
             )
             self._node_duration = meter.create_histogram(
                 name="kailash_node_execution_duration_seconds",
                 description="Duration of individual node executions in seconds",
                 unit="s",
+                explicit_bucket_boundaries_advisory=WORKFLOW_DURATION_BUCKETS_SECONDS,
             )
             # Issue #876 — history-store audit-log counters.
             self._history_store_dropped = meter.create_counter(
@@ -134,49 +334,67 @@ class MetricsBridge:
     # ------------------------------------------------------------------
     # Recording methods
     # ------------------------------------------------------------------
+    #
+    # NOTE: The legacy ``record_workflow_start`` / ``record_workflow_duration``
+    # methods (unsanitized ``{"workflow.name": workflow_name}`` attributes, no
+    # top-N bound) were removed here (issue #1708 G1 LOW). A repo-wide grep
+    # confirmed zero non-test call sites -- both the sync (``LocalRuntime``)
+    # and async (``AsyncLocalRuntime``) hot paths call
+    # :meth:`record_workflow_execution` below, which already routes
+    # ``workflow_name`` through :func:`sanitize_workflow_name`. The two
+    # legacy methods were dead code superseded by ``record_workflow_execution``
+    # and would have reintroduced the exact unbounded-label cardinality bomb
+    # this issue fixes had a caller ever been added.
 
-    def record_workflow_start(
-        self,
-        workflow_name: str,
-        tenant_id: str = "",
-    ) -> None:
-        """Increment the workflow execution counter.
-
-        Args:
-            workflow_name: Human-readable workflow identifier.
-            tenant_id:     Optional tenant label.
-        """
-        if not self._enabled or self._workflow_counter is None:
-            return
-        attrs: dict[str, str] = {"workflow.name": workflow_name}
-        if tenant_id:
-            attrs["tenant.id"] = tenant_id
-        self._workflow_counter.add(1, attributes=attrs)
-
-    def record_workflow_duration(
+    def record_workflow_execution(
         self,
         workflow_name: str,
         duration_s: float,
-        status: str = "ok",
-        tenant_id: str = "",
+        success: bool,
     ) -> None:
-        """Record a workflow execution duration in the histogram.
+        """Record the canonical workflow RED triple for one execution.
+
+        Called once per :meth:`~kailash.runtime.local.LocalRuntime.execute`
+        (and the async
+        :meth:`~kailash.runtime.async_local.AsyncLocalRuntime.execute_workflow_async`)
+        invocation -- on BOTH the success path and the exception path, so
+        errors are always rate + duration recorded, never dropped (issue
+        #1708 W1f).
+
+        Increments ``kailash_workflow_executions_total`` with bounded
+        ``{workflow.name, success}`` attributes (Rate + Errors) and records
+        ``duration_s`` into ``kailash_workflow_duration_seconds`` with a
+        bounded ``{workflow.name}`` attribute (Duration).
+
+        ``workflow_name`` is sanitized through :func:`sanitize_workflow_name`
+        before being used as an attribute value -- it is NEVER the per-build
+        ``workflow_id`` UUID (issue #1708 W1d fixed that exact cardinality
+        bomb on the orphaned enterprise adapter; this is the same bounded-
+        label invariant enforced at the canonical hot-path wiring).
 
         Args:
-            workflow_name: Human-readable workflow identifier.
-            duration_s:    Elapsed time in seconds.
-            status:        ``"ok"`` or ``"error"``.
-            tenant_id:     Optional tenant label.
+            workflow_name: Human-readable workflow identifier (``workflow.name``,
+                not ``workflow_id``).
+            duration_s: Wall-clock duration of the execute() call, in seconds.
+            success: ``True`` when the workflow completed without raising;
+                ``False`` on any exception path.
         """
-        if not self._enabled or self._workflow_duration is None:
+        if not self._enabled:
             return
-        attrs: dict[str, str] = {
-            "workflow.name": workflow_name,
-            "status": status,
-        }
-        if tenant_id:
-            attrs["tenant.id"] = tenant_id
-        self._workflow_duration.record(duration_s, attributes=attrs)
+        bounded_name = sanitize_workflow_name(workflow_name)
+        if self._workflow_counter is not None:
+            self._workflow_counter.add(
+                1,
+                attributes={
+                    "workflow.name": bounded_name,
+                    "success": "true" if success else "false",
+                },
+            )
+        if self._workflow_duration is not None:
+            self._workflow_duration.record(
+                duration_s,
+                attributes={"workflow.name": bounded_name},
+            )
 
     def record_node_duration(
         self,
