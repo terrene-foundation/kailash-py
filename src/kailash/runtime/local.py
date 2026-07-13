@@ -752,7 +752,6 @@ class LocalRuntime(
 
         # Enterprise feature managers (lazy initialization)
         self._access_control_manager = None
-        self._enterprise_monitoring = None
 
         # Initialize cyclic workflow executor if enabled
         if enable_cycles:
@@ -6281,26 +6280,6 @@ class LocalRuntime(
     def connection_pool_manager(self):
         """Access the connection pool manager."""
         return self._pool_coordinator
-
-    @property
-    def enterprise_monitoring(self):
-        """Access the enterprise monitoring manager."""
-        if self._enterprise_monitoring is None and (
-            self._persistent_mode or self._enable_enterprise_monitoring
-        ):
-            # Initialize enterprise monitoring
-            try:
-                from kailash.runtime.monitoring.runtime_monitor import (
-                    EnterpriseMonitoringManager,
-                )
-
-                self._enterprise_monitoring = EnterpriseMonitoringManager(
-                    self._runtime_id
-                )
-            except ImportError:
-                logger.warning("Enterprise monitoring not available")
-                return None
-        return self._enterprise_monitoring
 
     async def cleanup(self):
         """Clean up runtime resources."""

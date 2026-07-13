@@ -370,27 +370,6 @@ class TestAsyncSQLRuntimeIntegration:
 
         await runtime.cleanup()
 
-    @pytest.mark.asyncio
-    async def test_enterprise_monitoring_integration(self):
-        """Test enterprise monitoring hooks for AsyncSQL operations."""
-        runtime = LocalRuntime(persistent_mode=True, enable_enterprise_monitoring=True)
-
-        workflow = self.create_async_sql_workflow()
-
-        # Execute workflow
-        await runtime.execute_async(workflow.build())
-
-        # Check that monitoring was initialized
-        assert hasattr(runtime, "enterprise_monitoring")
-        assert runtime.enterprise_monitoring is not None
-
-        # Verify monitoring adapters are available
-        adapters = runtime.enterprise_monitoring.adapters
-        assert "prometheus" in adapters
-        assert "datadog" in adapters
-
-        await runtime.cleanup()
-
 
 class TestAsyncSQLErrorHandling:
     """Test error handling scenarios for AsyncSQL integration."""
