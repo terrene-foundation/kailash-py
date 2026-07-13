@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "2.15.0"
+version = "2.16.0"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -33,7 +33,7 @@ dependencies = [
     # MySQL / SQLite / Mongo / Redis drivers move behind their per-DB
     # extras since their imports are function-local.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.45.5",
+    "kailash>=2.50.0",
     "sqlalchemy>=2.0.0",   # decorators.py + multi_tenancy + model_registry
     "asyncpg>=0.28.0",     # migrations/* (17 files, module-scope) — PG canonical async driver
     "click>=8.0.0",        # CLI: dataflow.cli.{validate,analyze,generate,perf,commands}
