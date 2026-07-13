@@ -14,7 +14,16 @@ Three standard counters:
 Bounded-cardinality discipline (per ``rules/tenant-isolation.md`` §4):
 ``tenant_id_bucket`` uses top-N + ``"_other"`` bucketing so the
 metric cardinality never grows unbounded. The default top-N is 100;
-override with ``KAILASH_ML_METRICS_TOP_TENANTS=<N>``.
+override with ``KAILASH_ML_METRICS_TOP_TENANTS=<N>``. The other
+application-supplied label dimensions (``engine_name``, ``model_name``,
+``version``, ``feature_name``) get the same top-N + ``"_other"``
+bucketing. ``severity`` is bounded differently: it is a FIXED enum
+(``"low"``/``"medium"``/``"high"``/``"critical"``) enforced by
+whitelist validation — any out-of-vocabulary value (case-insensitive
+match; a typo, a free-form string from a misbehaving/adversarial drift
+monitor, or non-str input) fails closed to the ``"unknown"`` sentinel
+label rather than landing raw, so the dimension can never grow past 5
+possible values.
 
 OTel bridge: when ``opentelemetry-api`` is installed, the same metrics
 are exposed via the OTel SDK using identical names + labels. Operators
@@ -151,11 +160,25 @@ def _bucket_tenant(tenant_id: str) -> str:
 # and unbounded in the worst case: a flood of distinct values is a time-series
 # cardinality bomb (same class as an unbounded tenant_id label). Each dimension
 # gets its own top-N admission bucketer: values stay verbatim under the cap, an
-# overflow collapses to "_other". severity stays raw (bounded enum vocabulary).
+# overflow collapses to "_other". severity is NOT application-free-form and
+# gets no top-N bucketer of its own: it is whitelist-validated against the
+# fixed 4-value enum vocabulary in ``_SEVERITY_VOCAB`` (see
+# ``_normalize_severity`` below) — any value outside that vocabulary
+# (a typo, a free-form string from a misbehaving/adversarial drift monitor,
+# non-str input) fails closed to the ``_SEVERITY_SENTINEL`` label so the
+# dimension stays bounded like its siblings.
 _engine_bucketer = _TenantBucketer(top_n=_top_n_from_env())
 _model_bucketer = _TenantBucketer(top_n=_top_n_from_env())
 _version_bucketer = _TenantBucketer(top_n=_top_n_from_env())
 _feature_bucketer = _TenantBucketer(top_n=_top_n_from_env())
+
+# Enforced severity vocabulary (per §M1 fix — kailash 2.9.0). Case-normalized
+# to lowercase before matching; any value outside this set — including
+# non-str input — collapses to ``_SEVERITY_SENTINEL`` so the
+# ``kailash_ml_drift_alerts_total.severity`` label dimension is bounded to
+# exactly 5 possible values (4 enum members + the sentinel), never unbounded.
+_SEVERITY_VOCAB = frozenset({"low", "medium", "high", "critical"})
+_SEVERITY_SENTINEL = "unknown"
 
 
 def _bucket_label(bucketer: "_TenantBucketer", value: str) -> str:
@@ -163,6 +186,24 @@ def _bucket_label(bucketer: "_TenantBucketer", value: str) -> str:
     if not isinstance(value, str) or value == "":
         return value
     return bucketer.bucket(value)
+
+
+def _normalize_severity(severity: Any) -> str:
+    """Whitelist-validate + case-normalize ``severity`` against the enum.
+
+    Enforced vocabulary: ``_SEVERITY_VOCAB`` = {"low", "medium", "high",
+    "critical"}. Matching is case-insensitive (input is lowercased before
+    comparison). Any value outside the vocabulary — a typo, a free-form
+    string from a misbehaving/adversarial drift monitor, or non-str input —
+    fails closed to ``_SEVERITY_SENTINEL`` ("unknown") so the metric-label
+    dimension stays bounded regardless of what a caller passes.
+    """
+    if not isinstance(severity, str):
+        return _SEVERITY_SENTINEL
+    normalized = severity.strip().lower()
+    if normalized in _SEVERITY_VOCAB:
+        return normalized
+    return _SEVERITY_SENTINEL
 
 
 def _reset_bucketer_for_tests(top_n: Optional[int] = None) -> None:
@@ -366,19 +407,27 @@ def record_drift_alert(
 ) -> None:
     """Record a drift alert.
 
-    ``severity`` is typically one of ``"low"``, ``"medium"``, ``"high"``,
-    ``"critical"`` — the observability layer does not enforce the
-    vocabulary so drift monitors can use whatever severity lattice
-    their policy supports.
+    ``severity`` MUST be one of ``"low"``, ``"medium"``, ``"high"``,
+    ``"critical"`` (case-insensitive — normalized to lowercase before
+    matching). The observability layer ENFORCES this vocabulary at the
+    metric-label boundary via ``_normalize_severity``: any value outside
+    it — a typo, a free-form string from a misbehaving/adversarial drift
+    monitor, or non-str input — fails closed to the ``"unknown"``
+    sentinel label, so the ``severity`` metric dimension stays bounded
+    the same way its sibling labels (``engine_name`` / ``model_name`` /
+    ``version`` / ``feature_name`` / ``tenant_id_bucket``) are bounded.
+    The raw, un-normalized value the caller passed is still recorded at
+    DEBUG log level (never as a metric label) for operator diagnosis.
     """
     if not isinstance(count, int) or isinstance(count, bool) or count < 1:
         raise ValueError(f"count must be positive int, got {count!r}")
     bucket = _bucket_tenant(tenant_id)
     feature = _bucket_label(_feature_bucketer, feature_name)
+    severity_label = _normalize_severity(severity)
     if PROMETHEUS_AVAILABLE:
         _drift_alerts.labels(
             feature_name=feature,
-            severity=severity,
+            severity=severity_label,
             tenant_id_bucket=bucket,
         ).inc(count)
     if OTEL_AVAILABLE:
@@ -387,7 +436,7 @@ def record_drift_alert(
             count,
             attributes={
                 "feature_name": feature,
-                "severity": severity,
+                "severity": severity_label,
                 "tenant_id_bucket": bucket,
             },
         )
@@ -395,7 +444,8 @@ def record_drift_alert(
         "ml_metric.drift_alert",
         extra={
             "feature_name": feature,
-            "severity": severity,
+            "severity": severity_label,
+            "severity_raw": severity,
             "tenant_id_bucket": bucket,
             "count": count,
         },
