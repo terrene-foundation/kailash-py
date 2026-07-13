@@ -1097,3 +1097,47 @@ changes:
       to path-scoped verify-claims-before-write.md; (b) self-referential-codify.md Rule 2 allowlist membership
       — MUST-2 fires on codify-class output (same predicate that admitted verify-claims-before-write). Behaviorally
       UNVALIDATED — no rule eval-harness in the BUILD repo; loom /codify eval is the validation surface."
+  - type: skill_update
+    artifact: 16-validation-patterns
+    files:
+      - .claude/skills/16-validation-patterns/orphan-audit-playbook.md
+      - .claude/rules/orphan-detection.md
+    classification_suggestion: global
+    context:
+      'APPEND 2026-07-13 (#1708 observability program codify). ADDS to the orphan-audit playbook
+      (the /redteam orphan-detection procedure backing rules/orphan-detection.md): Detection Protocol
+      step 6 (metric-registry scrape-reachability sweep), new §9 (Metric Instruments Must Reach A
+      Production Scrape/Export Surface — Metric-Registry Orphan), and a §4 cross-tree-test-sweep
+      paragraph. Paired one-word descriptor fix in orphan-detection.md ("5-step" -> "6-step").
+
+
+      Lesson (metric-registry orphan): a metric recorded on a dedicated/private CollectorRegistry that
+      no server folds into its /metrics output is the Phase-5.11 orphan at the metrics layer — it records
+      on every call and is scraped never. The trap is that mirroring a metrics-EMISSION pattern is not
+      mirroring its scrape WIRING: copying a reference implementation''s dedicated registry reproduces
+      the instrument but omits the get_metrics_route()/endpoint registration that makes it scrapable.
+      Structural fix: register on the same global registry the unified /metrics folds (for prometheus_client,
+      the default REGISTRY generate_latest() reads). Verify each instrument reaches generate_latest()/the
+      OTel export end-to-end — the instrument existing is not the instrument being scraped. This is
+      facade-manager-detection.md / orphan-detection §1 one layer down (the metric, not the manager, is
+      the orphan). Lesson (cross-tree sweep): a per-package API change must grep BOTH packages/<pkg>/tests/
+      AND the core-tree tests/**; parallel per-package agents sweep their own tree but leave stale
+      sibling core-tree assertions that CI reds.
+
+
+      Evidence: #1708 (kailash 2.50.0 + 4 sub-packages, 2026-07-13). DataFlow + Kaizen metrics recorded
+      on a dedicated CollectorRegistry with a zero-caller render_exposition() and no wired route (mirrored
+      the fabric-metrics registry pattern, omitted its get_metrics_route()); caught ONLY by a holistic
+      redteam tracing each metric''s scrape path, never by a per-shard test. MCP p95/p99 removal (W2) left
+      three stale core-tree test assertions that reded core Tier-1 CI across all Python versions.
+
+
+      CROSS-SDK-FIRST (BUILD proposal): both lessons are language-agnostic and apply to the Rust SDK
+      (kailash-rs) — a metric on an unexposed registry and a per-crate test change missing a sibling
+      binding-test tree are the same failure shapes. Gate-1: consider cross-SDK distribution + whether an
+      equivalent kailash-rs orphan-audit surface needs the same additions. NOT self-referential
+      (16-validation-patterns/orphan-audit-playbook.md + orphan-detection.md are NOT on the
+      self-referential-codify Rule 2 allowlist); a recommended /codify gate review ran (cc-architect),
+      verdict FINDINGS -> the one MED (stale "5-step" descriptor) fixed same-shard; all cross-refs resolve,
+      both incidents corroborate against commits 2d2f57f3c / c66b7ceab / 5408381ad. Landed locally on
+      kailash-py main (PR #1715). Journal: workspaces/observability-1708/journal/0001-DECISION + 0002-DISCOVERY.'
