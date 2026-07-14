@@ -19,7 +19,10 @@ Request schema (OpenAI documented contract):
   through verbatim so multimodal / tool blocks survive.
 * ``temperature`` / ``top_p`` / ``max_tokens`` / ``stop`` / ``stream`` /
   ``user`` — only emitted when the caller set them, so the produced payload
-  is stable across Python dict-ordering changes.
+  is stable across Python dict-ordering changes. The token-limit field name is
+  model-aware: OpenAI GPT-5 / o-series require ``max_completion_tokens`` (they
+  400 on ``max_tokens``), while OpenAI-compatible providers keep ``max_tokens``
+  (see ``_token_limit_field``).
 
 Response schema:
 
@@ -38,6 +41,22 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from kaizen.llm.deployment import CompletionRequest
+
+# OpenAI's GPT-5 family and the o-series reasoning models REJECT `max_tokens`
+# with a hard HTTP 400 ("'max_tokens' is not supported with this model; use
+# 'max_completion_tokens'") — verified live 2026-07-14 against `gpt-5.6-sol`.
+# OpenAI-compatible third-party providers that share this wire (DeepSeek, Groq,
+# Together, Fireworks, OpenRouter, Perplexity, LM Studio, llama.cpp, Ollama,
+# Docker Model Runner) still use `max_tokens`. Pick the field by model family so
+# both work. Match is on the resolved model id; unknown ids keep `max_tokens`.
+_MAX_COMPLETION_TOKENS_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _token_limit_field(model: str) -> str:
+    m = (model or "").lower()
+    if any(m.startswith(p) for p in _MAX_COMPLETION_TOKENS_MODEL_PREFIXES):
+        return "max_completion_tokens"
+    return "max_tokens"
 
 
 def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
@@ -59,7 +78,7 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     if request.top_p is not None:
         payload["top_p"] = request.top_p
     if request.max_tokens is not None:
-        payload["max_tokens"] = request.max_tokens
+        payload[_token_limit_field(request.model)] = request.max_tokens
     if request.stop:
         payload["stop"] = list(request.stop)
     if request.stream:
