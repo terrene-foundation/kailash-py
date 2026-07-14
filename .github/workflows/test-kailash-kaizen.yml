@@ -46,7 +46,7 @@ name: Test kailash-kaizen
 #        would ratchet the thresholds under CI load; excluded until the tests
 #        are rewritten to self-normalizing ratios.
 #
-#      Eight files are excluded via --ignore within an otherwise-clean tier:
+#      Seven files are excluded via --ignore within an otherwise-clean tier:
 #        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
 #          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
@@ -85,12 +85,10 @@ name: Test kailash-kaizen
 #          declared in any kaizen extra (unlike observability/rag, which ARE
 #          extras and are added to the install above). Excluded until the deps
 #          are declared OR the tests use pytest.importorskip — test-hygiene
-#          follow-up. tests/unit/observability/test_audit_trail.py joins this
-#          group: it imports `opentelemetry.exporter.*`, which the
-#          [observability] extra (api/sdk/prometheus/structlog) does NOT ship.
-#          (The remaining 27 optional-dep collection errors —
-#          numpy/Pillow/networkx/prometheus/opentelemetry — are RESOLVED by
-#          installing the [observability,rag] extras, not by exclusion.)
+#          follow-up. (The other optional-dep collection errors —
+#          numpy/Pillow/networkx/prometheus/opentelemetry[+otlp-grpc-exporter]
+#          — are RESOLVED by installing the [observability,rag] extras + the
+#          OTLP gRPC exporter above, not by exclusion.)
 #
 # A per-test --timeout on both invocations makes any hang fail loudly
 # instead of hanging the job.
@@ -200,6 +198,12 @@ jobs:
           # hard top-level import of these extras' deps (they are optional
           # extras, absent from the base install, hence a local-only pass before).
           uv pip install -e "packages/kailash-kaizen[dev,bedrock,vertex,providers-azure,providers-google,providers-tokens,observability,rag]" --python .venv/bin/python
+          # src/kaizen/core/autonomy/observability/tracing_manager.py hard-imports
+          # opentelemetry.exporter.otlp.proto.grpc, which the [observability] extra
+          # does NOT ship — install it explicitly so every test that transitively
+          # imports tracing_manager collects. (kaizen packaging gap: [observability]
+          # should include this exporter — test-hygiene follow-up.)
+          uv pip install opentelemetry-exporter-otlp-proto-grpc --python .venv/bin/python
           uv pip install polars --python .venv/bin/python
 
       - name: Lint (ruff — syntax/undefined only)
@@ -243,7 +247,7 @@ jobs:
             tests/unit/ml/ \
             tests/unit/monitoring/ \
             tests/unit/nodes/ --ignore=tests/unit/nodes/auth/test_directory_integration_unit.py --ignore=tests/unit/nodes/auth/test_enterprise_auth_provider_unit.py --ignore=tests/unit/nodes/auth/test_sso_unit.py \
-            tests/unit/observability/ --ignore=tests/unit/observability/test_audit_trail.py \
+            tests/unit/observability/ \
             tests/unit/orchestration/ \
             tests/unit/providers/ --ignore=tests/unit/providers/test_ollama_model_manager.py \
             tests/unit/rag/ --ignore=tests/unit/rag/test_advanced_nodes.py \
