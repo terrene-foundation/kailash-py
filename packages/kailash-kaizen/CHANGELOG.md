@@ -2,6 +2,23 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.31.2] — 2026-07-14 — docs: honest `supports()` contract (provider capability vs client emission)
+
+### Fixed
+
+- **`LlmDeployment.supports()` contract honesty.** The per-preset capability
+  matrix advertised `tools=True` / `vision=True` etc., which a caller could
+  misread as "the four-axis `LlmClient.complete()` will send my tools" — but the
+  four-axis client emits only the shared `CompletionRequest` fields today (no
+  tools / structured-output / batch / caching / audio). The matrix is a
+  **provider/wire-capability** negotiation surface, byte-parity-locked with the
+  Rust SDK, so the rows are unchanged (flipping them would break cross-SDK
+  parity); instead the `supports()` + `capabilities` docstrings now state
+  explicitly that the rows report provider capability, not client emission
+  (client-side wiring tracked in #1720). A contract test pins the reconciliation
+  and trips when client emission is added. Docstring/test only — no behavior
+  change.
+
 ## [2.31.1] — 2026-07-14 — fix: OpenAI GPT-5 / o-series completions (`max_completion_tokens`)
 
 ### Fixed
