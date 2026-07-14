@@ -984,10 +984,17 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
+        from ..core.credential_provider import get_active_credential_provider
+
         db_node = AsyncSQLDatabaseNode(
             connection_string=self.connection_string,
             database_type=self.database_type,
             validate_queries=False,  # Allow UPSERT operations
+            # Issue #1741: this standalone workflow node holds no DataFlow
+            # instance, so token-based DB auth arrives via the context-scoped
+            # provider (bound by ``credential_provider_scope`` around
+            # runtime.execute); None = unchanged.
+            credential_provider=get_active_credential_provider(),
         )
 
         # Each call creates a fresh (non-pooled) node; clean it up after the query

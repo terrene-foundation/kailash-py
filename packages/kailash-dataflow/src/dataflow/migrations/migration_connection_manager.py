@@ -447,8 +447,12 @@ class MigrationConnectionManager:
 
             # Create wrapper that supports the needed interface
             class AsyncSQLConnectionWrapper:
-                def __init__(self, connection_string):
+                def __init__(self, connection_string, credential_provider=None):
                     self.connection_string = connection_string
+                    # Issue #1741: token-based DB auth for the migration
+                    # executor's AsyncSQLDatabaseNode pool (honored by the
+                    # core node).
+                    self._credential_provider = credential_provider
                     self._transaction = None
 
                     # Detect database type for AsyncSQLDatabaseNode
@@ -469,6 +473,7 @@ class MigrationConnectionManager:
                         query=sql,
                         fetch_mode="all",
                         validate_queries=False,
+                        credential_provider=self._credential_provider,
                     )
                     return node.execute()
 
@@ -511,7 +516,14 @@ class MigrationConnectionManager:
                     return False
 
             logger.debug("Created AsyncSQL wrapper connection")
-            return AsyncSQLConnectionWrapper(safe_connection_string)
+            return AsyncSQLConnectionWrapper(
+                safe_connection_string,
+                getattr(
+                    getattr(getattr(self.dataflow, "config", None), "database", None),
+                    "credential_provider",
+                    None,
+                ),
+            )
 
         except Exception as e:
             logger.error(

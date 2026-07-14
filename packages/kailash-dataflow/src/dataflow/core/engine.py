@@ -89,6 +89,9 @@ from .config import (
     SecurityConfig,
 )
 from .events import DataFlowEventMixin
+from .credential_provider import (  # Issue #1741: single-connection token auth
+    open_credentialed_connection,
+)
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -2639,7 +2642,13 @@ class DataFlow(DataFlowEventMixin):
                 # FAST → inconclusive (None) rather than hanging and piling onto
                 # the saturation. 5s is generous for a same-host verify yet far
                 # below any request deadline.
-                conn = await asyncpg.connect(safe, timeout=5)
+                conn = await open_credentialed_connection(
+                    asyncpg,
+                    safe,
+                    credential_provider=self.config.database.credential_provider,
+                    context="PostgreSQL table-exists verify",
+                    timeout=5,
+                )
                 try:
                     # to_regclass() returns NULL when the relation does not
                     # exist; the table name is bound as a parameter (value
@@ -2909,7 +2918,13 @@ class DataFlow(DataFlowEventMixin):
             port=components.get("port"),
             **components.get("query_params", {}),
         )
-        return await asyncpg.connect(safe, timeout=5)
+        return await open_credentialed_connection(
+            asyncpg,
+            safe,
+            credential_provider=self.config.database.credential_provider,
+            context="PostgreSQL",
+            timeout=5,
+        )
 
     def _open_sqlite_connection(self, database_url: str):
         """Open a fresh sqlite3 connection reflecting COMMITTED state. Returns
@@ -6973,8 +6988,11 @@ class DataFlow(DataFlowEventMixin):
                 last execute()'s rows as tuples (DB-API 2.0 shape).
                 """
 
-                def __init__(self, connection_string):
+                def __init__(self, connection_string, credential_provider=None):
                     self.connection_string = connection_string
+                    # Issue #1741: token-based DB auth for the DDL-executor's
+                    # AsyncSQLDatabaseNode pool (honored by the core node).
+                    self._credential_provider = credential_provider
                     self._transaction = None
                     self._last_rows: list = []
 
@@ -6996,6 +7014,7 @@ class DataFlow(DataFlowEventMixin):
                         query=sql,
                         fetch_mode="all",
                         validate_queries=False,
+                        credential_provider=self._credential_provider,
                     )
                     try:
                         result = node.execute()
@@ -7072,7 +7091,10 @@ class DataFlow(DataFlowEventMixin):
                         self.rollback()
                     return False
 
-            return AsyncSQLConnectionWrapper(safe_connection_string)
+            return AsyncSQLConnectionWrapper(
+                safe_connection_string,
+                self.config.database.credential_provider,
+            )
 
         except Exception as e:
             # Use debug logging for expected non-SQL database scenarios
@@ -7142,7 +7164,12 @@ class DataFlow(DataFlowEventMixin):
                 port=components.get("port"),
                 **components.get("query_params", {}),
             )
-            conn = await asyncpg.connect(safe)
+            conn = await open_credentialed_connection(
+                asyncpg,
+                safe,
+                credential_provider=self.config.database.credential_provider,
+                context="PostgreSQL DDL",
+            )
             try:
                 async with conn.transaction():
                     for stmt in ddl_statements:
@@ -10336,7 +10363,12 @@ class DataFlow(DataFlowEventMixin):
             db_url = self.config.database.get_connection_url(self.config.environment)
 
             # Create connection
-            connection = await asyncpg.connect(db_url)
+            connection = await open_credentialed_connection(
+                asyncpg,
+                db_url,
+                credential_provider=self.config.database.credential_provider,
+                context="PostgreSQL",
+            )
 
             try:
                 yield connection
@@ -10382,7 +10414,12 @@ class DataFlow(DataFlowEventMixin):
 
             if db_url.startswith("postgresql://"):
                 db_url = db_url.replace("postgresql://", "")
-            return await asyncpg.connect(f"postgresql://{db_url}")
+            return await open_credentialed_connection(
+                asyncpg,
+                f"postgresql://{db_url}",
+                credential_provider=self.config.database.credential_provider,
+                context="PostgreSQL",
+            )
         elif db_url.startswith("sqlite://") or db_url == ":memory:":
             import aiosqlite
 
