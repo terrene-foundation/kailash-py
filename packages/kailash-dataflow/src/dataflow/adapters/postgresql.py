@@ -8,8 +8,9 @@ import logging
 import sys
 import traceback
 import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..core.credential_provider import build_asyncpg_credential_connect
 from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
 )
@@ -46,9 +47,31 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.ssl_mode = self.query_params.get("sslmode", "prefer")
         self.application_name = kwargs.get("application_name", "dataflow")
 
+        # Issue #1737: optional per-physical-connection credential callback
+        # (Azure AD / AWS IAM token-based auth). See DatabaseConfig.credential_provider
+        # for the full contract. Absent (None) — behavior is unchanged.
+        self.credential_provider: Optional[Callable[[], str]] = kwargs.get(
+            "credential_provider"
+        )
+
         # Use actual port or default
         if self.port is None:
             self.port = self.default_port
+
+    def _make_credential_provider_connect(self, asyncpg_module: Any) -> Callable:
+        """Build an asyncpg ``connect`` callable that mints a fresh credential.
+
+        Delegates to the shared
+        :func:`dataflow.core.credential_provider.build_asyncpg_credential_connect`
+        helper — see its docstring for the full per-physical-connection /
+        fail-closed / no-secrets-logged contract. Kept as a thin adapter
+        method (rather than inlining the call at the ``create_connection_pool``
+        site) so existing callers/tests referencing
+        ``adapter._make_credential_provider_connect(...)`` keep working.
+        """
+        return build_asyncpg_credential_connect(
+            self.credential_provider, asyncpg_module, context="PostgreSQL"
+        )
 
     async def connect(self) -> None:
         """Establish PostgreSQL connection (legacy method - use create_connection_pool)."""
@@ -82,6 +105,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
             # Create connection pool with reset callback
             params["reset"] = reset_connection
+
+            # Issue #1737: when a credential_provider is configured, override
+            # asyncpg's per-connection ``connect`` hook so every physical
+            # connection mints a fresh credential (see
+            # _make_credential_provider_connect docstring). Absent
+            # credential_provider, ``params["password"]`` (the static value
+            # already set by get_connection_parameters()) is used unchanged —
+            # behavior is UNCHANGED from before this feature existed.
+            if self.credential_provider is not None:
+                params["connect"] = self._make_credential_provider_connect(asyncpg)
+
             self.connection_pool = await asyncpg.create_pool(**params)
             self.is_connected = True
 
@@ -116,11 +150,26 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 "asyncpg is required for PostgreSQL support. Install with: pip install asyncpg"
             )
         except Exception as e:
+            # Issue #1737 (defense-in-depth): route through the same
+            # sanitize_db_error() every other exception-handling method in
+            # this file already uses (execute_query/execute_insert/
+            # execute_bulk_insert/execute_transaction). Empirically verified
+            # (asyncpg 0.31, InvalidPasswordError + unreachable-host +
+            # DSN-string forms) that asyncpg's connect-failure exceptions do
+            # NOT embed the password/token for this driver — but this is the
+            # ONE exception path in the file that skipped the shared
+            # sanitizer, and a raising credential_provider surfaces through
+            # here on the initial pool-fill (see
+            # _make_credential_provider_connect / build_asyncpg_credential_connect,
+            # which already strips the provider's own exception text —
+            # sanitize_db_error is additional defense-in-depth, not the
+            # primary guard).
+            safe_error = sanitize_db_error(str(e))
             logger.error(
                 "postgresql.failed_to_create_postgresql_connection_pool",
-                extra={"error": str(e)},
+                extra={"error": safe_error},
             )
-            raise ConnectionError(f"Connection failed: {e}")
+            raise ConnectionError(f"Connection failed: {safe_error}")
 
     async def close_connection_pool(self) -> None:
         """Close PostgreSQL connection pool."""

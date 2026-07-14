@@ -648,6 +648,17 @@ _PG_VALUE_OUT_OF_RANGE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# _URL_CREDENTIALS_RE (issue #1737): redact the PASSWORD in a connection-string
+# userinfo (``scheme://user:password@host``). A driver connect-failure exception
+# CAN embed the credentialed DSN; every create_pool failure path routes through
+# sanitize_db_error() calling it "defense-in-depth" against exactly that leak, so
+# the sanitizer MUST actually cover it (the other regexes only redact constraint
+# VALUES, not URL credentials). Username class excludes ``:`` (anchors to the
+# user:pass separator) and ``@`` (no overreach when there is no password); the
+# password class ``[^@\s]*`` captures any password up to the ``@`` host delimiter,
+# including embedded colons. Password never spans whitespace/newline.
+_URL_CREDENTIALS_RE = re.compile(r"(://[^:/?#\s@]+:)[^@\s]*(@)")
+
 
 def sanitize_db_error(msg: str) -> str:
     """Redact column VALUES from a DB driver error message.
@@ -669,6 +680,11 @@ def sanitize_db_error(msg: str) -> str:
     """
     if not isinstance(msg, str):
         return "<non-string error>"
+    # Issue #1737: redact connection-string credentials FIRST so a driver
+    # connect-failure exception that embeds the credentialed DSN cannot leak
+    # the password into a log line or a raised ConnectionError. Disjoint from
+    # the constraint-value families below, so ordering is otherwise irrelevant.
+    msg = _URL_CREDENTIALS_RE.sub(r"\1[REDACTED]\2", msg)
     # Issue #1552 (FIX 2 + FIX 7): _KEY_VALUES_RE runs FIRST to catch any
     # ``Key (col)=(value)`` clause OUTSIDE a DETAIL: line (its ``[^)]*`` value
     # class spans newlines). Then the BLOCK _DETAIL_RE (FIX 7) redacts the ENTIRE

@@ -13,10 +13,11 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from dataflow.core.audit_events import DataFlowAuditEvent, DataFlowAuditEventType
 from dataflow.core.event_store import EventStoreBackend
+from dataflow.core.exceptions import sanitize_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,12 @@ class PostgreSQLEventStore(EventStoreBackend):
             (e.g., ``postgresql://user:pass@host/dbname``).
         pool_min_size: Minimum pool connections (default 2).
         pool_max_size: Maximum pool connections (default 10).
+        credential_provider: Optional per-physical-connection credential
+            callback (issue #1737 — Azure AD / AWS IAM token-based auth).
+            Mirrors ``DatabaseConfig.credential_provider``; the audit-trail
+            pool is long-lived for the app's runtime, so it hits the same
+            token-expiry failure mode as the main pool. Absent (None) —
+            behavior is unchanged.
     """
 
     def __init__(
@@ -42,10 +49,12 @@ class PostgreSQLEventStore(EventStoreBackend):
         database_url: str,
         pool_min_size: int = 2,
         pool_max_size: int = 10,
+        credential_provider: Optional[Callable[[], str]] = None,
     ) -> None:
         self._database_url = database_url
         self._pool_min_size = pool_min_size
         self._pool_max_size = pool_max_size
+        self.credential_provider = credential_provider
         self._pool: Any = None  # asyncpg.Pool
 
     async def initialize(self) -> None:
@@ -58,15 +67,47 @@ class PostgreSQLEventStore(EventStoreBackend):
                 "Install it with: pip install asyncpg"
             ) from exc
 
-        self._pool = await asyncpg.create_pool(
-            self._database_url,
-            min_size=self._pool_min_size,
-            max_size=self._pool_max_size,
-        )
+        create_pool_kwargs: Dict[str, Any] = {
+            "min_size": self._pool_min_size,
+            "max_size": self._pool_max_size,
+        }
+        # Issue #1737: same per-physical-connection credential callback as
+        # the main PostgreSQLAdapter pool — see
+        # dataflow.core.credential_provider for the shared contract.
+        if self.credential_provider is not None:
+            from dataflow.core.credential_provider import (
+                build_asyncpg_credential_connect,
+            )
+
+            create_pool_kwargs["connect"] = build_asyncpg_credential_connect(
+                self.credential_provider, asyncpg, context="PostgreSQL event store"
+            )
+
+        # Issue #1737 (defense-in-depth): mirror the main PostgreSQLAdapter's
+        # create_pool exception handling — asyncpg connect-failure exceptions
+        # can embed the credentialed ``self._database_url`` (DSN with password),
+        # and a raising credential_provider surfaces here on the initial
+        # pool-fill. Route through the shared sanitize_db_error() (the same
+        # barrier adapters/postgresql.py uses) so no credential material reaches
+        # the log line or the raised ConnectionError (security.md "No secrets
+        # in logs"). build_asyncpg_credential_connect already strips the
+        # provider's own exception text; this is additional defense-in-depth.
+        try:
+            self._pool = await asyncpg.create_pool(
+                self._database_url, **create_pool_kwargs
+            )
+        except Exception as exc:
+            safe_error = sanitize_db_error(str(exc))
+            logger.error(
+                "postgresql_event_store.failed_to_create_pool",
+                extra={"error": safe_error},
+            )
+            raise ConnectionError(
+                f"PostgreSQL event store connection failed: {safe_error}"
+            )
 
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                """
+            await conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_events (
                     id TEXT PRIMARY KEY,
                     event_type TEXT NOT NULL,
@@ -77,28 +118,21 @@ class PostgreSQLEventStore(EventStoreBackend):
                     changes JSONB DEFAULT '{}'::jsonb,
                     metadata JSONB DEFAULT '{}'::jsonb
                 )
-                """
-            )
+                """)
 
             # Create indexes for common query patterns
-            await conn.execute(
-                """
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_entity
                 ON audit_events (entity_type, entity_id)
-                """
-            )
-            await conn.execute(
-                """
+                """)
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_timestamp
                 ON audit_events (timestamp)
-                """
-            )
-            await conn.execute(
-                """
+                """)
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_user
                 ON audit_events (user_id)
-                """
-            )
+                """)
 
         logger.info("PostgreSQL audit event store initialized")
 

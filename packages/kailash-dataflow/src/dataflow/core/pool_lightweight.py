@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +47,24 @@ class LightweightPool:
     Args:
         database_url: Same database URL as the main pool.
         pool_size: Number of connections. Default: 2. Should not be increased.
+        credential_provider: Optional per-physical-connection credential
+            callback (issue #1737 — Azure AD / AWS IAM token-based auth).
+            Mirrors ``DatabaseConfig.credential_provider``; when set, every
+            physical connection this pool opens mints a fresh credential
+            instead of reusing the (possibly stale) static password parsed
+            from ``database_url``. Absent (None) — behavior is unchanged.
+            SQLite ignores this parameter (no token-based auth concept).
     """
 
     def __init__(
         self,
         database_url: str,
         pool_size: int = _LIGHTWEIGHT_POOL_SIZE,
+        credential_provider: Optional[Callable[[], str]] = None,
     ):
         self._database_url = database_url
         self._pool_size = pool_size
+        self.credential_provider = credential_provider
         self._pool: Any = None
         self._initialized = False
         self._lock: Optional[asyncio.Lock] = None
@@ -110,12 +119,31 @@ class LightweightPool:
                     if url.startswith("postgresql+"):
                         url = "postgresql://" + url.split("://", 1)[1]
 
-                    self._pool = await asyncpg.create_pool(
-                        url,
-                        min_size=1,
-                        max_size=self._pool_size,
-                        command_timeout=5,
-                    )
+                    create_pool_kwargs: dict = {
+                        "min_size": 1,
+                        "max_size": self._pool_size,
+                        "command_timeout": 5,
+                    }
+                    # Issue #1737: same per-physical-connection credential
+                    # callback as the main PostgreSQLAdapter pool. The
+                    # lightweight pool runs for the app's entire lifetime
+                    # (periodic health checks), so it hits the same
+                    # token-expiry failure mode a long-running main pool
+                    # does — wire it identically.
+                    if self.credential_provider is not None:
+                        from dataflow.core.credential_provider import (
+                            build_asyncpg_credential_connect,
+                        )
+
+                        create_pool_kwargs["connect"] = (
+                            build_asyncpg_credential_connect(
+                                self.credential_provider,
+                                asyncpg,
+                                context="PostgreSQL lightweight pool",
+                            )
+                        )
+
+                    self._pool = await asyncpg.create_pool(url, **create_pool_kwargs)
                     self._initialized = True
                     self._init_pid = os.getpid()
                     logger.debug(
@@ -127,11 +155,16 @@ class LightweightPool:
                         "Cannot create lightweight pool: asyncpg not installed"
                     )
                 except Exception as exc:
+                    # Log the exception TYPE only. A credential-provider error
+                    # routed here carries token material in its message / __cause__
+                    # chain; exc_info=True would render that chain into DEBUG logs
+                    # (security.md "No secrets in logs"). The type name is the safe,
+                    # actionable signal — mirrors adapters/postgresql.py, which routes
+                    # every message through sanitize_db_error().
                     logger.warning(
                         "Failed to create lightweight pool: %s",
                         type(exc).__name__,
                     )
-                    logger.debug("Lightweight pool creation error", exc_info=True)
             else:
                 logger.debug("Lightweight pool not created (unsupported database type)")
 
