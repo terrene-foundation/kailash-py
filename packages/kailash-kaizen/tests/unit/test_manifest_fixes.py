@@ -389,3 +389,25 @@ class TestListFieldTypeConfusionRaises:
     def test_governance_data_access_needed_list_still_works(self):
         g = GovernanceManifest.from_dict({"data_access_needed": ["pii", "logs"]})
         assert g.data_access_needed == ["pii", "logs"]
+
+    # Fix #5 extended to the TOML-parse + introspection paths — the PRODUCTION
+    # path (deployment.py -> from_toml_str) goes through these, NOT from_dict.
+    def test_from_toml_str_capabilities_string_raises(self):
+        with pytest.raises(ManifestValidationError, match="capabilities"):
+            AgentManifest.from_toml_str(
+                '[agent]\nname="a"\nmodule="m"\nclass_name="C"\n'
+                'capabilities="pii-detection"\n'
+            )
+
+    def test_from_introspection_capabilities_string_raises(self):
+        with pytest.raises(ManifestValidationError, match="capabilities"):
+            AgentManifest.from_introspection(
+                {"name": "a", "module": "m", "class_name": "C", "capabilities": "pii"}
+            )
+
+    def test_app_from_toml_str_agents_string_raises(self):
+        with pytest.raises(ManifestValidationError, match="agents_requested"):
+            AppManifest.from_toml_str(
+                '[application]\nname="x"\n'
+                '[application.agents_requested]\nagents="single"\n'
+            )

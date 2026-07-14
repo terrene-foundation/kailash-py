@@ -291,9 +291,13 @@ class AgentManifest:
             module=agent_section.get("module", ""),
             class_name=agent_section.get("class_name", agent_section.get("class", "")),
             description=agent_section.get("description", ""),
-            capabilities=list(agent_section.get("capabilities", [])),
-            tools=list(agent_section.get("tools", [])),
-            supported_models=list(agent_section.get("supported_models", [])),
+            capabilities=coerce_list_field(
+                agent_section.get("capabilities", []), "capabilities"
+            ),
+            tools=coerce_list_field(agent_section.get("tools", []), "tools"),
+            supported_models=coerce_list_field(
+                agent_section.get("supported_models", []), "supported_models"
+            ),
             governance=governance,
         )
 
@@ -343,8 +347,12 @@ class AgentManifest:
             module=info.get("module", ""),
             class_name=info.get("class_name", ""),
             description=info.get("description", ""),
-            capabilities=list(info.get("capabilities", [])),
-            tools=list(info.get("tools", [])),
-            supported_models=list(info.get("supported_models", [])),
+            capabilities=coerce_list_field(
+                info.get("capabilities", []), "capabilities"
+            ),
+            tools=coerce_list_field(info.get("tools", []), "tools"),
+            supported_models=coerce_list_field(
+                info.get("supported_models", []), "supported_models"
+            ),
             governance=governance,
         )

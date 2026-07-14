@@ -182,7 +182,9 @@ class AppManifest:
         agents_req_section = app_section.get("agents_requested", {})
         agents_requested: List[str] = []
         if isinstance(agents_req_section, dict):
-            agents_requested = list(agents_req_section.get("agents", []))
+            agents_requested = coerce_list_field(
+                agents_req_section.get("agents", []), "agents_requested"
+            )
         elif isinstance(agents_req_section, list):
             agents_requested = list(agents_req_section)
 
