@@ -47,6 +47,13 @@ def _clear_all_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "BEDROCK_CLAUDE_MODEL_ID",
         "BEDROCK_MODEL",
         "GOOGLE_APPLICATION_CREDENTIALS",
+        # DeepSeek (#1609) — LEGACY_KEY_ORDER's last entry; omitted here
+        # historically, so a real DEEPSEEK_API_KEY in the ambient shell
+        # (or an upward-found .env, e.g. a nested-worktree checkout)
+        # silently flips "nothing configured" tests to MissingCredential.
+        "DEEPSEEK_API_KEY",
+        "DEEPSEEK_PROD_MODEL",
+        "DEEPSEEK_MODEL",
     ]:
         monkeypatch.delenv(var, raising=False)
 
