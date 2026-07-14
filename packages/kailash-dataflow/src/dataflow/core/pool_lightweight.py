@@ -155,11 +155,16 @@ class LightweightPool:
                         "Cannot create lightweight pool: asyncpg not installed"
                     )
                 except Exception as exc:
+                    # Log the exception TYPE only. A credential-provider error
+                    # routed here carries token material in its message / __cause__
+                    # chain; exc_info=True would render that chain into DEBUG logs
+                    # (security.md "No secrets in logs"). The type name is the safe,
+                    # actionable signal — mirrors adapters/postgresql.py, which routes
+                    # every message through sanitize_db_error().
                     logger.warning(
                         "Failed to create lightweight pool: %s",
                         type(exc).__name__,
                     )
-                    logger.debug("Lightweight pool creation error", exc_info=True)
             else:
                 logger.debug("Lightweight pool not created (unsupported database type)")
 

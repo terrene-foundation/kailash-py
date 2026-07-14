@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from dataflow.core.audit_events import DataFlowAuditEvent, DataFlowAuditEventType
 from dataflow.core.event_store import EventStoreBackend
+from dataflow.core.exceptions import sanitize_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,28 @@ class PostgreSQLEventStore(EventStoreBackend):
                 self.credential_provider, asyncpg, context="PostgreSQL event store"
             )
 
-        self._pool = await asyncpg.create_pool(self._database_url, **create_pool_kwargs)
+        # Issue #1737 (defense-in-depth): mirror the main PostgreSQLAdapter's
+        # create_pool exception handling — asyncpg connect-failure exceptions
+        # can embed the credentialed ``self._database_url`` (DSN with password),
+        # and a raising credential_provider surfaces here on the initial
+        # pool-fill. Route through the shared sanitize_db_error() (the same
+        # barrier adapters/postgresql.py uses) so no credential material reaches
+        # the log line or the raised ConnectionError (security.md "No secrets
+        # in logs"). build_asyncpg_credential_connect already strips the
+        # provider's own exception text; this is additional defense-in-depth.
+        try:
+            self._pool = await asyncpg.create_pool(
+                self._database_url, **create_pool_kwargs
+            )
+        except Exception as exc:
+            safe_error = sanitize_db_error(str(exc))
+            logger.error(
+                "postgresql_event_store.failed_to_create_pool",
+                extra={"error": safe_error},
+            )
+            raise ConnectionError(
+                f"PostgreSQL event store connection failed: {safe_error}"
+            )
 
         async with self._pool.acquire() as conn:
             await conn.execute(
