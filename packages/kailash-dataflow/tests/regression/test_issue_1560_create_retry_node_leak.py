@@ -158,9 +158,17 @@ def test_retry_site_wraps_async_run_in_cleanup():
     # construction so a legitimate scope-branch insertion above it (as #1581 did)
     # cannot silently slide the cleanup out of a fixed char window.
     anchor = text.index("PARAM $11 FIX: Detected parameter $11 issue")
-    retry_region = text[anchor : anchor + 4000]
-    node_pos = retry_region.index("sql_node = AsyncSQLDatabaseNode(")
-    tail = retry_region[node_pos:]
+    # Anchor the tail on the fresh-node construction ITSELF (absolute index),
+    # windowed to the construction->cleanup span plus margin. The prior form
+    # sliced ``text[anchor:anchor+4000]`` then took the tail from the
+    # construction, so the effective window was bounded by the DISTANT $11
+    # marker — a legitimate kwarg insertion INTO the construction (the #1741
+    # credential_provider) slid the cleanup past anchor+4000 even though it is
+    # still present (line ~2248). Following the construction realizes this
+    # test's stated intent robustly; the behavioral Tier-2 tests above prove
+    # the runtime leak-free contract, this is only the source pin.
+    node_pos = text.index("sql_node = AsyncSQLDatabaseNode(", anchor)
+    tail = text[node_pos : node_pos + 2600]
     assert "await sql_node.cleanup()" in tail, (
         "the #1560 retry node is no longer cleaned up — the throwaway "
         "AsyncSQLDatabaseNode leak has been reintroduced"
