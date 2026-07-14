@@ -419,6 +419,22 @@ class LlmDeployment(BaseModel):
         vision but ``gpt-3.5-turbo`` does not is the caller's
         responsibility, typically wired through model registry metadata).
 
+        .. warning::
+
+           This matrix reports the **provider / wire-protocol** capability
+           (for cross-SDK negotiation) — NOT what this SDK's four-axis
+           ``LlmClient.complete()`` / ``stream()`` currently EMITS. As of this
+           release the four-axis completion client sends only the shared
+           ``CompletionRequest`` fields (model, messages, temperature, top_p,
+           max_tokens, stop, stream, user); it does NOT yet emit ``tools`` /
+           function-calling, structured output (``response_format``), batch,
+           prompt-caching, or audio request features. So ``supports()["tools"]
+           is True`` means "the provider supports tool-calling", NOT
+           "``complete()`` will send my tools". Wiring these request features
+           into the four-axis client is tracked in the legacy→four-axis
+           consolidation (issue #1720); until then, tool / structured-output /
+           multimodal agent work goes through the ``kaizen.providers`` layer.
+
         Fail-closed default (``rules/security.md`` § Fail-Closed Security
         Defaults): manual constructions whose ``preset_name`` is ``None``
         AND any unknown / future preset name return all-False. Adding a

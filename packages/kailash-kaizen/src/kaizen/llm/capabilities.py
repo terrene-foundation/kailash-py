@@ -30,6 +30,19 @@ in ``crates/kailash-kaizen/src/llm/deployment/capabilities.rs``. Per
 ``rules/cross-sdk-inspection.md`` § 3a, divergence between the two SDKs
 breaks downstream callers who port code between languages — the rows MUST
 stay in lockstep across releases.
+
+Provider capability vs client emission (IMPORTANT): these rows report what
+the **provider / wire protocol** supports — they do NOT assert that this
+SDK's four-axis ``LlmClient.complete()`` / ``stream()`` currently EMITS the
+feature. The four-axis completion client sends only the shared
+``CompletionRequest`` fields today; it does not yet emit ``tools`` /
+structured-output / batch / caching / audio request features (tracked in the
+legacy→four-axis consolidation, issue #1720). So ``tools=True`` here means
+"the provider supports tool-calling", NOT "``complete()`` will send tools".
+Callers needing those features today use the ``kaizen.providers`` layer. The
+rows stay provider-scoped (not client-scoped) BECAUSE they are the cross-SDK
+negotiation contract above — narrowing them to client-emission status would
+break the Rust byte-parity lock.
 """
 
 from __future__ import annotations
