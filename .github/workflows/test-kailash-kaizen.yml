@@ -46,21 +46,27 @@ name: Test kailash-kaizen
 #        would ratchet the thresholds under CI load; excluded until the tests
 #        are rewritten to self-normalizing ratios.
 #
-#      Three files are excluded via --ignore within an otherwise-clean tier:
-#        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
-#          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
-#          src/kaizen/mcp/catalog_server/tools/{deployment,application,
-#          governance}.py import a `kaizen.manifest` package (AgentManifest/
-#          AppManifest/GovernanceManifest + TOML loader/validation errors).
-#          The module IS implemented (~26KB at src/kaizen/manifest/, ~4
-#          months old) but is UNCOMMITTED: the repo-root .gitignore
-#          `MANIFEST` pattern (intended for the sdist MANIFEST file) also
-#          matches the `kaizen/manifest/` directory on case-insensitive
-#          filesystems (macOS APFS), so `git add` silently skips it and it
-#          never reached CI. On Linux CI (case-sensitive) the module is
-#          genuinely absent, so this exclusion holds TODAY; the real fix is a
-#          .gitignore anchor + committing the existing code (tracked as an
-#          urgent follow-up), NOT a ~500-LOC feature build.
+#      Two files are excluded via --ignore within an otherwise-clean tier
+#      (a third — tests/unit/mcp/test_catalog_server.py — was RESOLVED and
+#      is no longer excluded; see note below):
+#        - [RESOLVED, issue #1735] tests/unit/mcp/test_catalog_server.py —
+#          was RED on CI (35 failures, all `ModuleNotFoundError: No module
+#          named 'kaizen.manifest'`) because src/kaizen/mcp/catalog_server/
+#          tools/{deployment,application,governance}.py import a
+#          `kaizen.manifest` package (AgentManifest/AppManifest/
+#          GovernanceManifest + TOML loader/validation errors) that was
+#          fully implemented on disk (~26KB at src/kaizen/manifest/) but
+#          UNCOMMITTED: the repo-root .gitignore `MANIFEST` pattern
+#          (intended for the sdist MANIFEST file) also matched the
+#          `kaizen/manifest/` directory on case-insensitive filesystems
+#          (macOS APFS), so `git add` silently skipped it and it never
+#          reached CI (Linux CI is case-sensitive, so the module was
+#          genuinely absent there). Fixed by anchoring the .gitignore
+#          pattern to `/MANIFEST` (repo-root sdist file only), committing
+#          the module (with 5 review-driven hardening fixes — see
+#          packages/kailash-kaizen/tests/unit/test_manifest_fixes.py), and
+#          re-including this file in the tier above. It is now gated on
+#          every CI run like every other test in this tier.
 #        - tests/unit/providers/test_ollama_model_manager.py —
 #          INFRA-DEPENDENT: `ollama` (the pip client library, distinct from
 #          the vendored `ollama_provider.py`/`ollama_model_manager.py`
@@ -256,7 +262,7 @@ jobs:
             tests/unit/judges/ \
             tests/unit/kaizen/ \
             tests/unit/l3/ \
-            tests/unit/mcp/ --ignore=tests/unit/mcp/test_catalog_server.py \
+            tests/unit/mcp/ \
             tests/unit/memory/ \
             tests/unit/mixins/ \
             tests/unit/ml/ \
