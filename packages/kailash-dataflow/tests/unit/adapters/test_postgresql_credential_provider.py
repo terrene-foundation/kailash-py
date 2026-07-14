@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Callable, List, Optional
 
 import pytest
+
 from dataflow.adapters.postgresql import PostgreSQLAdapter
 from dataflow.exceptions import DataFlowConnectionError
 

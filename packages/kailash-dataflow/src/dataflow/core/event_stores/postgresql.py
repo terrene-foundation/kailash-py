@@ -107,8 +107,7 @@ class PostgreSQLEventStore(EventStoreBackend):
             )
 
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                """
+            await conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_events (
                     id TEXT PRIMARY KEY,
                     event_type TEXT NOT NULL,
@@ -119,28 +118,21 @@ class PostgreSQLEventStore(EventStoreBackend):
                     changes JSONB DEFAULT '{}'::jsonb,
                     metadata JSONB DEFAULT '{}'::jsonb
                 )
-                """
-            )
+                """)
 
             # Create indexes for common query patterns
-            await conn.execute(
-                """
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_entity
                 ON audit_events (entity_type, entity_id)
-                """
-            )
-            await conn.execute(
-                """
+                """)
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_timestamp
                 ON audit_events (timestamp)
-                """
-            )
-            await conn.execute(
-                """
+                """)
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_audit_user
                 ON audit_events (user_id)
-                """
-            )
+                """)
 
         logger.info("PostgreSQL audit event store initialized")
 
