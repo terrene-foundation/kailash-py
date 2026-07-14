@@ -1,67 +1,65 @@
-# Session Notes — 2026-07-14 — #1717 four-axis LLM completion + release
+# Session Notes — 2026-07-14 — #1717 four-axis LLM + follow-ups (real-API, CI, #1720/#1721)
 
-## Where we are — SHIPPED + RELEASED
+## Where we are — SHIPPED + RELEASED (twice)
 
-**#1717 fully resolved, merged, released.** kailash-kaizen **2.31.0** published to
-PyPI (tag `kaizen-v2.31.0`, publish workflow 29269485214 success, GitHub Release
-created). Clean-venv verified: `kaizen.__version__==2.31.0`, `LlmClient.complete`/
-`stream` callable, `vertex-anthropic` alias resolves. Un-enrolled PUBLIC repo, solo.
+- **kailash-kaizen 2.31.0** — #1717 four-axis `LlmClient.complete()`/`stream()`
+  (Vertex-Claude/Gemini + Bedrock wire, GCP WIF/metadata/ADC, config/region/
+  catalog, temperature/alias). PyPI + verified.
+- **kailash-kaizen 2.31.1** — OpenAI GPT-5/o-series `max_completion_tokens` fix
+  (below). PyPI + clean-venv verified (gpt-5 → max_completion_tokens, gpt-4o →
+  max_tokens). Un-enrolled PUBLIC repo, solo.
 
-The four-axis `LlmClient` can now send Vertex-Claude/Gemini + Bedrock completions
-(previously only `embed()` wire-sent; no Vertex-Claude path at all).
+## Real-API validation (co-owner directive: "test with actual keys, they're in .env")
+Exercised `LlmClient.complete()` against LIVE providers. Results:
+- ✅ openai (gpt-5.6-sol, after fix), anthropic-direct, deepseek, **bedrock-Claude
+  Sonnet 4.5** (the #1717 bedrock wire + AwsBearerToken, real Bedrock).
+- ❌ google-direct → 403 Gemini-API-not-enabled on the project (config, not code).
+- Vertex-Claude/Gemini → still UNTESTED (no GOOGLE_APPLICATION_CREDENTIALS / GCP
+  project in .env). **The headline #1717 path is proven only at the wire-bytes
+  level (respx), NOT against a live Vertex endpoint.**
 
-## Merged this session
-- **PR #1719** → #1717 four-axis completion send path (2 parallel impl streams +
-  wire proof + 3-reviewer redteam). Issue #1717 closed.
-- **PR #1722** → #1721 cross-SDK parity reconciliation (the 3 pre-existing failures).
-- **PR #1723** → release-prep kaizen 2.31.0. Tag pushed → PyPI.
+**Bug found + fixed (PR #1726 → 2.31.1):** the #1717 `openai_chat` shaper emitted
+`max_tokens` unconditionally; GPT-5/o-series 400 on it. Now model-aware
+(GPT-5/o1/o3/o4 → max_completion_tokens; compatible providers keep max_tokens).
+Legacy provider already did this right — so four-axis had REGRESSED it. Cross-SDK
+sibling defect filed #1727 (Rust shaper same bug).
 
-## What shipped (all 8 ACs + NEW-A/B/C)
-`complete()`/`stream()` + `_COMPLETE_DISPATCH` (9 wires); per-wire URL verbs
-(`:rawPredict`/`:streamRawPredict`, bedrock `/invoke`); gated Anthropic body
-transform (strip model + `anthropic_version`, direct paths byte-identical);
-GCP WIF/metadata/ADC auth; `GOOGLE_CLOUD_PROJECT`/`VERTEX_LOCATION`; region
-us/eu/global; `claude-opus-4-8` catalog; temperature floor; provider aliases.
-Redteam-hardened: model URL-path injection guard, regex `\Z` newline edge,
-owned-client leak on error path — all with proven regression tests.
+## #1720 — "is it a true redundancy?" ANSWERED: NO
+Four-axis is a CONFIG superset but RUNTIME SUBSET. Legacy has (four-axis LACKS):
+tools/function-calling, structured output, multimodal — all used by agents today.
+Plus four-axis REGRESSED openai max_completion_tokens (the 2.31.1 fix). So NOT a
+redundancy to delete — an INCOMPLETE replacement. Legacy is ahead on agent-facing
+features + some correctness; four-axis ahead on deployment/wire/auth/SSRF/parity.
+#1720 reframed accordingly (consolidation = build four-axis to+past legacy parity
+FIRST). Evidence: journal/0002 (parity delta) + the openai regression.
 
-## The 3 pre-existing cross_sdk_parity failures — RESOLVED (#1721)
-- Preset-name parity (2): reconciled `RUST_PRESET_NAMES` (24 byte-identical) with
-  `_PYTHON_CONVENIENCE_PRESETS` (18 documented, sibling-test-verified). No
-  fabricated Rust names.
-- deepseek legacy precedence (1): `xfail(strict=True)` — Python-ahead; self-clears
-  when Rust adopts the deepseek legacy key.
+## kaizen wired into CI (PR #1725, merged)
+New `.github/workflows/test-kailash-kaizen.yml` — kaizen had NO CI job before
+(unified-ci runs only core/mcp/pact/dataflow), which is why the parity drift hid
+red on main. Gates the fast infra-free LLM + cross_sdk_parity surface (single
+3.12, per-test --timeout, release/* skip). PROVEN: it caught+validated the openai
+fix on #1726. FOLLOW-UP: expand scope to the full unit suite after triaging the
+slow example/ + infra tiers (the full tests/unit/ hangs locally without infra).
 
-## Read first
-- `journal/0001-ANALYZE-and-PLAN.md` — 4-agent analysis + shard plan
-- `journal/0002-parity-delta-legacy-vs-four-axis.md` — the consolidation evidence
-- `journal/0003-redteam-convergence.md` — gate + holistic redteam receipts
+## #1721 — approved Rust read done (journal/0004 grant + 0005 receipt)
+Rust legacy tier HAS deepseek (client.rs:580) → Python aligned, NOT ahead (xfail
+reason corrected, PR #1725). Real issue = broader Python↔Rust legacy divergence
+(Python: OPENAI,AZURE,ANTHROPIC,GOOGLE,DEEPSEEK; Rust: OPENAI,ANTHROPIC,GOOGLE,
+MISTRAL,COHERE,OLLAMA,HF,PERPLEXITY,DEEPSEEK,DOCKER — no Azure) + stale fixture
+matching neither. Reconciliation = co-owner design decision (a write). Tracked #1721.
 
-## Outstanding — surfaced to co-owner (NOT done)
-- **#1720 — legacy→four-axis consolidation (the redundancy).** The legacy
-  `providers/llm/` layer is still the SOLE production completion path (tools +
-  structured output); four-axis can't replace it without regressing agents. A
-  ~6-10 session additive program (parity → dual-run → migrate → delete legacy
-  last, gated on a quickstart regression). I proceeded on the "sequence it"
-  recommendation (user was AFK); the AskUserQuestion is unanswered — reconfirm
-  scope if resuming.
-- **#1721 remainder — Rust-side deepseek legacy adoption.** Needs the Rust repo
-  (cross-repo grant). The strict-xfail is the tripwire.
+## Open for co-owner
+- **#1720** consolidation program scope (build four-axis to parity → migrate →
+  retire legacy). NOT started; needs your go on scope.
+- **#1721** cross-SDK legacy-precedence reconciliation (which order is canonical;
+  does Python keep Azure / adopt the 6 Rust providers).
+- **#1727** Rust openai max_completion_tokens sibling fix.
+- Vertex-Claude/Gemini live validation — needs GCP creds (not in .env).
 
 ## Traps
-- **Local `.venv` under-provisioned.** Missing editable siblings (kaizen-agents,
-  nexus, dataflow) + polars → broad kaizen unit suite collect-errors (env
-  artifact, green in CI). I editable-installed kaizen-agents/nexus/dataflow +
-  polars this session; the full `tests/unit/` run still HANGS (real-infra tests
-  block without infra). Validate the RELEVANT surface only:
-  `tests/unit/llm/ tests/cross_sdk_parity/ tests/integration/llm/` → 1207 passed.
-- **kaizen has NO job in `unified-ci.yml`** (only mcp/pact/dataflow). Kaizen
-  tests are NOT CI-gated — local run is the kaizen validation. The 3 parity
-  failures were red on main precisely because CI never ran them.
-- **Release = tag-triggered OIDC** (`kaizen-v*` → publish-pypi.yml). No manual
-  twine. PyPI/uv index cache lags ~1-2 min after publish; `pip install
-  --no-cache-dir` succeeds before `uv pip install --refresh`.
-
-## Open question for the human
-Ratify the #1720 consolidation scope (sequence as tracked program — my pick — vs
-start the full 6-10 session migration now vs leave both layers). One line steers it.
+- Local `.venv` under-provisioned (kaizen-agents/nexus/dataflow/polars); full
+  tests/unit/ HANGS without infra. Validate `tests/unit/llm + tests/cross_sdk_parity`
+  (fast, green). CI job installs [dev,bedrock,vertex,providers-azure,providers-google,
+  providers-tokens] + siblings.
+- Running python from /tmp → enum.py shadow crash; use `mktemp -d`.
+- PyPI/uv index lag post-publish; `pip install --no-cache-dir` beats `uv --refresh`.
