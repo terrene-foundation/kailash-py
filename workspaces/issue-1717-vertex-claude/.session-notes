@@ -2,53 +2,71 @@
 
 ## Where we are
 
-#1717 four-axis LLM completion is DONE — shipped, released (kailash-kaizen
-2.31.0/2.31.1/2.31.2 on PyPI, all verified), and closed. Follow-ups this session:
-real-API testing (found+fixed the GPT-5 `max_completion_tokens` bug), kaizen wired
-into CI, `supports()` contract-honesty fix, and the #1720 redundancy question
-answered. Repo clean, no in-flight work. Everything remaining is co-owner-gated.
+All in-flight work is SHIPPED and RELEASED. This session drove three workstreams
+merged AND published to PyPI, plus a cross-SDK handoff. Repo clean; the only
+remaining items are explicit follow-ups (tracked) and co-owner-gated design
+questions. Nothing local in flight.
 
-## Read first
+## Executed this session (chronological)
 
-1. `04-validate/sweep-2026-07-14.md` — this session's /sweep (clean; ranked next items)
-2. `journal/0002-parity-delta-legacy-vs-four-axis.md` — the #1720 capability evidence
-3. `journal/0005-DISCOVERY-1721-rust-legacy-precedence-read.md` — the Rust-read findings
-4. GH #1720 — the precise legacy-vs-four-axis capability gating list (2-agent head-to-head)
+1. **#1721 from_env legacy-tier deprecation** → PR #1738 merged. Legacy
+   per-provider-key auto-detect tier now emits `DeprecationWarning`;
+   `NoKeysConfigured` msg derived from `LEGACY_KEY_ORDER`. Root cause: the
+   legacy tier is a deprecated backward-compat layer in BOTH SDKs (grant
+   journal/0006, discovery journal/0007) — retire-not-reconcile.
+2. **#1735 kaizen.manifest rescue** → PR #1739 merged. Rescued the uncommitted
+   `kaizen.manifest` module + hardened 10 review findings (C0 escaping, budget
+   isFinite guard, str-char-split on the production TOML path, safe_repr bounding).
+3. **#1737 dataflow per-connection credential callback** → PR #1740 merged.
+   Token-based DB auth (Azure AD / AWS IAM) via asyncpg's native per-connection
+   `connect=` hook; wired on main adapter + health-check pool + audit event
+   store. Security /redteam surfaced HIGH (exc_info leak) + Important
+   (event-store wrap) + MERGE-WITH-FIXES M1/M2 (from-exc token chain; DSN
+   redaction in sanitize_db_error) — ALL fixed in-PR. Grant journal/0008,
+   discovery journal/0009.
+4. **rs#1810 cross-SDK lockstep** → comment posted (authorized cross-repo write,
+   grant journal/0010). Records the semantics for the Rust side to mirror.
+5. **RELEASE (2 packages, published + verified):**
+   - kailash-dataflow **2.16.0 → 2.17.0** (tag `dataflow-v2.17.0`) — #1737
+   - kailash-kaizen **2.31.2 → 2.32.0** (tag `kaizen-v2.32.0`) — #1735/#1721/#1734
+   - §3 sibling-drift enumeration clean (every other package main==PyPI).
+   - TestPyPI validated → PyPI OIDC publish (both runs SUCCESS) → clean-venv
+     import verified (dataflow DSN-redaction + kaizen.manifest exports) →
+     pip resolved+downloaded both real PyPI wheels.
 
-## In-flight state
+## Follow-ups (tracked, not in-flight)
 
-- None local — working tree clean (except `workspaces/sdk-backlog/.session-notes`,
-  a DIFFERENT workspace's pre-existing dirty state, not this session's).
+- **#1741** — extend the #1737 credential callback to the core-SDK CRUD hot path
+  (`async_sql.py::create_pool`) + 3 remaining asyncpg pools (DatabaseRegistry /
+  staging / SyncTransactionManager). Value-anchor: the CRUD path is where most
+  token-auth users actually hit the DB (only health-check/audit/main-adapter
+  wired today). Higher blast radius → own review cycle.
+- **#1727** — Rust openai_chat `max_completion_tokens` sibling (Rust side).
 
-## Executed this session
+## Outstanding ledger (forest) — co-owner-gated
 
-- Released kailash-kaizen **2.31.0**, **2.31.1**, **2.31.2** to PyPI (tags
-  `kaizen-v2.31.{0,1,2}`), each clean-venv verified.
-- Filed GH issues **#1720** (consolidation), **#1721** (parity), **#1727** (Rust openai sibling).
-- Exercised an approved cross-repo READ of the Rust SDK for #1721 (grant journal/0004).
+| ID     | Item                                           | Status                              |
+| ------ | ---------------------------------------------- | ----------------------------------- |
+| F1720  | Retire legacy→four-axis LLM redundancy         | BLOCKED on co-owner scope (#1720)   |
+| FVERT  | Vertex-Claude/Gemini LIVE validation           | BLOCKED on GCP creds (not in .env)  |
 
-## Outstanding ledger (forest)
-
-| ID     | Item                                              | Value-anchor                                                        | Status                          |
-| ------ | ------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------- |
-| F1720  | Retire legacy→four-axis LLM redundancy            | User's explicit #1717 follow-on ("resolve the redundancy")         | BLOCKED on co-owner scope (#1720) |
-| F1721  | Cross-SDK from_env legacy-precedence reconcile    | Cross-SDK parity (user values); genuine Py↔Rust divergence         | BLOCKED on co-owner design (#1721) |
-| F1727  | Rust openai_chat max_completion_tokens sibling    | Cross-SDK correctness (Py fix live-verified)                       | queued (Rust side) (#1727)      |
-| FCI    | Expand kaizen CI to full unit suite               | Kaizen was un-gated (why #1721 hid); user asked "wire kaizen CI"    | queued (triage slow/infra tiers) |
-| FVERT  | Vertex-Claude/Gemini LIVE validation              | The #1717 headline path; only wire-bytes-proven, never live        | BLOCKED on GCP creds (not in .env) |
-
-Closed this session: `F1717` → releases 2.31.0-2.31.2 (`kaizen-v2.31.*`), issue #1717.
+Closed this session: #1721 (deprecation shipped), #1735 (manifest shipped),
+#1737 (credential callback shipped) — all via kaizen 2.32.0 / dataflow 2.17.0.
 
 ## Traps
 
-- Local `.venv` under-provisioned; full `tests/unit/` HANGS without infra. Validate
-  `tests/unit/llm/ tests/cross_sdk_parity/` (fast/green). CI installs [dev,bedrock,
-  vertex,providers-azure,providers-google,providers-tokens] + siblings + polars.
-- Running python from `/tmp` → `enum.py` shadow crash; use `mktemp -d`.
-- PyPI/uv index lag post-publish; `pip install --no-cache-dir` beats `uv --refresh`.
-- `supports()` reports PROVIDER capability, NOT four-axis client emission (docstring says so now).
+- Running python from `/tmp` → `enum.py` shadow crash; use a clean cwd / `mktemp -d`.
+- Fresh cold venv under machine load can make `import dataflow` hang >5min — it's
+  environmental (same code imports fast in a warm venv; CI green). Verify install
+  via `pip show` + import in a warm venv, not a cold `/tmp` venv under load.
+- PyPI/pip simple-index lag post-publish: `/pypi/<pkg>/<ver>/json` updates before
+  the simple index pip resolves against; retry `pip download --no-cache-dir` a few
+  times (build-repo-release §2). The publish DID happen if the workflow is green +
+  the JSON endpoint serves the version.
+- The `gh --repo terrene-foundation/kailash-py` flag trips the repo-scope lexical
+  hook even though it's the CWD repo (false positive); omit `--repo` on same-repo gh.
 
 ## Open questions for the human
 
-- Ratify #1720 consolidation scope (the biggest lever; ~6-10 sessions). One line unblocks it.
-- Decide #1721 canonical legacy-precedence order (needs a write to Python and/or the fixture).
+- #1720 consolidation scope (biggest lever). One line unblocks it.
+- Whether to prioritize #1741 (CRUD-path credential extension) next session.
