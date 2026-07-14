@@ -102,17 +102,20 @@ def test_supported_schemes_match_rust(rust_fixture: dict) -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Python-ahead cross-SDK divergence (tracked #1721). #1609 added "
-        "DEEPSEEK_API_KEY as a 5th legacy auto-detect key (placed last, so it "
-        "never displaces an existing provider); a bare DEEPSEEK_API_KEY then "
-        "resolves to the deepseek preset. The Rust from_env precedence fixture "
-        "still pins the big-4 (OpenAI>Azure>Anthropic>Google). deepseek is "
-        "already a byte-identical cross-SDK preset AND a parity-verified "
-        "`deepseek_from_env` convenience preset, so the legacy auto-detect is a "
-        "natural parity extension Rust should ADOPT — not a Python feature to "
-        "revert, and the fixture must not claim deepseek until Rust ships it. "
-        "strict=True self-clears (XPASS) the moment the Rust fixture is "
-        "regenerated with the deepseek legacy key, forcing this marker's removal."
+        "Genuine Python<->Rust from_env legacy-precedence divergence + stale "
+        "fixture (tracked #1721). Verified against the Rust source under an "
+        "authorized read (journal/0004+0005): the Rust legacy tier "
+        "(kailash-rs client.rs:481-590) is OPENAI, ANTHROPIC, GOOGLE, MISTRAL, "
+        "COHERE, OLLAMA, HUGGINGFACE, PERPLEXITY, DEEPSEEK, DOCKER — 10 keys, NO "
+        "Azure. Python LEGACY_KEY_ORDER is OPENAI, AZURE_OPENAI, ANTHROPIC, "
+        "GOOGLE, DEEPSEEK — 5 keys, WITH Azure. So DEEPSEEK is cross-SDK-ALIGNED "
+        "(Rust has it at client.rs:580), NOT Python-ahead; the real blocker is a "
+        "genuine divergence (Python has Azure + only 5 keys; Rust has the 6 extra "
+        "providers, no Azure) AND a checked-in fixture (4 keys) that matches "
+        "NEITHER SDK. Reconciling which legacy set/order is canonical is a "
+        "cross-SDK DESIGN decision + a write (co-owner call). strict=True "
+        "self-clears (XPASS) once LEGACY_KEY_ORDER and the fixture are reconciled "
+        "to a single canonical order, forcing this marker's removal."
     ),
 )
 def test_legacy_key_order_matches_rust(rust_fixture: dict) -> None:

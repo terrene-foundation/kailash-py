@@ -1,0 +1,127 @@
+name: Test kailash-kaizen
+
+# Wires kailash-kaizen into CI. Previously kaizen had NO CI job (unified-ci.yml
+# runs only core + mcp + pact + dataflow), so kaizen tests — including the
+# cross_sdk_parity gate — were never exercised on PRs. This job closes that gap.
+#
+# SCOPE (initial): the LLM deployment layer (tests/unit/llm) + the cross-SDK
+# parity gate (tests/cross_sdk_parity) — the fast, deterministic, no-infra
+# surface that was previously un-gated (and where the #1721 parity drift hid
+# red on main). Infra/credential-gated tiers (integration, e2e, requires_*) and
+# the slow example-script suite are excluded here and tracked for a follow-up
+# expansion. A per-test --timeout makes any hang fail loudly instead of hanging
+# the job.
+#
+# COST: single Python (3.12), triggered only on kaizen path changes — mirrors
+# the test-pact single-version precedent. ~3-5 min/run.
+
+on:
+  push:
+    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*, chore/*]
+    paths:
+      - "packages/kailash-kaizen/**"
+      - ".github/workflows/test-kailash-kaizen.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/kailash-kaizen/**"
+      - ".github/workflows/test-kailash-kaizen.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check version consistency (pyproject.toml == __init__.py)
+        run: |
+          PYPROJECT_VER=$(python -c "
+          import tomllib
+          with open('packages/kailash-kaizen/pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          INIT_VER=$(python -c "
+          import ast, pathlib
+          src = pathlib.Path('packages/kailash-kaizen/src/kaizen/__init__.py').read_text()
+          for node in ast.walk(ast.parse(src)):
+              if isinstance(node, ast.Assign):
+                  for t in node.targets:
+                      if getattr(t, 'id', '') == '__version__':
+                          print(ast.literal_eval(node.value))
+          ")
+          echo "pyproject.toml: $PYPROJECT_VER"
+          echo "__init__.py:    $INIT_VER"
+          if [ "$PYPROJECT_VER" != "$INIT_VER" ]; then
+            echo "::error::Version mismatch: pyproject.toml=$PYPROJECT_VER vs __init__.py=$INIT_VER"
+            exit 1
+          fi
+
+  test-kaizen:
+    name: Test kailash-kaizen (LLM + cross-SDK parity)
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 — their
+    # diff is metadata-only; version-check above still runs on the release cut.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
+    needs: version-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-kaizen-py3.12-${{ hashFiles('packages/kailash-kaizen/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-kaizen-py3.12-
+
+      - name: Install kailash-kaizen[dev] + sibling packages
+        run: |
+          uv venv .venv
+          # Root kailash editable — kaizen imports the current core surface.
+          uv pip install -e "." --python .venv/bin/python
+          # Sibling packages kaizen's import graph pulls in at collection time.
+          uv pip install -e "packages/kailash-nexus" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kaizen-agents" --python .venv/bin/python
+          uv pip install -e "packages/kailash-kaizen[dev]" --python .venv/bin/python
+          uv pip install polars --python .venv/bin/python
+
+      - name: Lint (ruff — syntax/undefined only)
+        run: |
+          .venv/bin/ruff check \
+            packages/kailash-kaizen/src/kaizen/llm/ \
+            packages/kailash-kaizen/tests/cross_sdk_parity/ \
+            --select=E9,F63,F7,F82
+
+      - name: Test (LLM unit + cross-SDK parity, infra-free)
+        timeout-minutes: 10
+        working-directory: packages/kailash-kaizen
+        run: |
+          ../../.venv/bin/python -m pytest \
+            tests/unit/llm/ \
+            tests/cross_sdk_parity/ \
+            -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark)' \
+            --timeout=60 --maxfail=15 -q
