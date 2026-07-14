@@ -30,9 +30,40 @@ from ..exceptions import DataFlowConnectionError
 __all__ = [
     "build_asyncpg_credential_connect",
     "open_credentialed_connection",
+    "resolve_fresh_credential",
     "get_active_credential_provider",
     "credential_provider_scope",
 ]
+
+
+def resolve_fresh_credential(
+    credential_provider: Callable[[], str], *, context: str = "PostgreSQL"
+) -> str:
+    """Mint a FRESH credential from ``credential_provider`` for a driver that
+    has NO per-connection callback (e.g. the SYNC ``psycopg2.connect``), with
+    the SAME fail-closed + no-secret-in-logs contract as
+    :func:`build_asyncpg_credential_connect`.
+
+    Returns a fresh non-empty ``str`` token, or raises
+    ``DataFlowConnectionError`` — it NEVER returns a stale/absent credential.
+    The provider's own exception is surfaced only by TYPE name and the cause
+    chain is severed (``from None``) so no token material reaches a traceback.
+    """
+    try:
+        token = credential_provider()
+    except Exception as exc:
+        raise DataFlowConnectionError(
+            f"credential_provider() raised while establishing a new "
+            f"{context} connection ({type(exc).__name__}); refusing to fall "
+            "back to a stale or absent credential"
+        ) from None
+    if not isinstance(token, str) or not token:
+        raise DataFlowConnectionError(
+            "credential_provider() must return a non-empty str; got "
+            f"{type(token).__name__}"
+        )
+    return token
+
 
 # Issue #1741: a context-scoped fallback source for the per-connection
 # credential callback, used by connection sites that build their asyncpg

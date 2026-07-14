@@ -30,6 +30,8 @@ from enum import Enum
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from ..exceptions import DataFlowConnectionError  # Issue #1741: fail-closed cred
+
 logger = logging.getLogger(__name__)
 
 
@@ -394,12 +396,36 @@ class MigrationConnectionManager:
                     # Parse connection safely
                     components = ConnectionParser.parse_connection_string(database_url)
 
+                    # Issue #1741: token-based DB auth (Azure AD / AWS IAM).
+                    # psycopg2 has no per-connection callback, so mint a FRESH
+                    # token synchronously and use it as the password. Fail
+                    # closed (raises DataFlowConnectionError, re-raised below so
+                    # it is NOT swallowed by the :memory: fallback) — never a
+                    # silent stale-password connection.
+                    password = components.get("password", "")
+                    credential_provider = getattr(
+                        getattr(
+                            getattr(self.dataflow, "config", None), "database", None
+                        ),
+                        "credential_provider",
+                        None,
+                    )
+                    if credential_provider is not None:
+                        from ..core.credential_provider import (
+                            resolve_fresh_credential,
+                        )
+
+                        password = resolve_fresh_credential(
+                            credential_provider,
+                            context="PostgreSQL migration connection",
+                        )
+
                     connection = psycopg2.connect(
                         host=components.get("host", "localhost"),
                         port=components.get("port", 5432),
                         database=components.get("database", "postgres"),
                         user=components.get("username", "postgres"),
-                        password=components.get("password", ""),
+                        password=password,
                     )
                     connection.autocommit = False
                     logger.debug("Created new PostgreSQL connection")
@@ -413,6 +439,11 @@ class MigrationConnectionManager:
                 # Fallback to AsyncSQL wrapper
                 return self._create_async_sql_wrapper()
 
+        except DataFlowConnectionError:
+            # Issue #1741: a fail-closed credential error MUST propagate — it
+            # must NOT be swallowed into a silent :memory: SQLite fallback
+            # (that would connect to the WRONG database with no token).
+            raise
         except Exception as e:
             logger.error(
                 "migration_connection_manager.failed_to_create_database_connection",

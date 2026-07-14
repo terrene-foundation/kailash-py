@@ -659,19 +659,17 @@ class StagingEnvironmentManager:
         (``CREATE``/``DROP DATABASE``) admin connections. All of them must
         honor token-based auth (Azure AD / AWS IAM) or a token-auth operator's
         staging flow fails at the probe before the wired pool is ever reached.
-        Absent a provider, this is a plain ``asyncpg.connect`` (unchanged)."""
-        if self.credential_provider is not None:
-            from dataflow.core.credential_provider import (
-                build_asyncpg_credential_connect,
-            )
+        Absent a provider, this is a plain ``asyncpg.connect`` (unchanged).
+        Delegates to the shared ``open_credentialed_connection`` so the
+        fail-closed contract lives in exactly one place."""
+        from dataflow.core.credential_provider import open_credentialed_connection
 
-            connect = build_asyncpg_credential_connect(
-                self.credential_provider,
-                asyncpg,
-                context="PostgreSQL staging admin",
-            )
-            return await connect(**connect_kwargs)
-        return await asyncpg.connect(**connect_kwargs)
+        return await open_credentialed_connection(
+            asyncpg,
+            credential_provider=self.credential_provider,
+            context="PostgreSQL staging admin",
+            **connect_kwargs,
+        )
 
     async def _validate_production_connection(
         self, prod_db: ProductionDatabase

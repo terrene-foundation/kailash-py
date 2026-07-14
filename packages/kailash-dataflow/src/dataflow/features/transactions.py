@@ -611,18 +611,16 @@ async def _open_connection_for_url(
     if scheme in ("postgresql", "postgres"):
         import asyncpg
 
-        if credential_provider is not None:
-            from dataflow.core.credential_provider import (
-                build_asyncpg_credential_connect,
-            )
+        # Delegate to the shared single-connection helper so the fail-closed +
+        # no-secret-in-logs contract lives in exactly one place.
+        from dataflow.core.credential_provider import open_credentialed_connection
 
-            connect = build_asyncpg_credential_connect(
-                credential_provider,
-                asyncpg,
-                context="PostgreSQL sync transaction",
-            )
-            return await connect(url)
-        return await asyncpg.connect(url)
+        return await open_credentialed_connection(
+            asyncpg,
+            url,
+            credential_provider=credential_provider,
+            context="PostgreSQL sync transaction",
+        )
     if scheme == "sqlite":
         import aiosqlite
 
