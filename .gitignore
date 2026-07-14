@@ -69,7 +69,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+/MANIFEST
 
 # Virtual environments
 .env
