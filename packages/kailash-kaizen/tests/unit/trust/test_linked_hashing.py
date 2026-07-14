@@ -96,7 +96,7 @@ class TestLinkedHashChain:
         """Empty chain passes integrity check."""
         chain = LinkedHashChain()
 
-        valid, break_index = chain.verify_integrity()
+        valid, break_index = chain.verify_chain()
 
         assert valid is True
         assert break_index is None
@@ -107,7 +107,7 @@ class TestLinkedHashChain:
         chain = LinkedHashChain()
         chain.add_hash("agent-001", "initial_hash_abc123")
 
-        valid, break_index = chain.verify_integrity()
+        valid, break_index = chain.verify_chain()
 
         assert valid is True
         assert break_index is None
@@ -132,7 +132,7 @@ class TestLinkedHashChain:
         hash2 = chain.add_hash("agent-002", "hash_b")
         hash3 = chain.add_hash("agent-003", "hash_c")
 
-        valid, break_index = chain.verify_integrity()
+        valid, break_index = chain.verify_chain()
 
         assert valid is True
         assert break_index is None
@@ -411,7 +411,7 @@ class TestEdgeCases:
         chain = LinkedHashChain.from_dict(data)
 
         assert len(chain) == 0
-        valid, _ = chain.verify_integrity()
+        valid, _ = chain.verify_chain()
         assert valid is True
 
     def test_verify_chain_linkage_wrong_order(self):
@@ -442,13 +442,15 @@ class TestEdgeCases:
 
 
 class TestVerifyIntegrityStrictMode:
-    """Tests for ROUND5-006: verify_integrity strict mode enforcement.
+    """Tests for ROUND5-006: verify_chain strict mode enforcement.
 
     ROUND5-006 Security Finding:
-    verify_integrity() only performs STRUCTURAL checks and cannot detect
-    tampering without access to original hashes. The strict parameter
-    enforces use of verify_chain_linkage() for proper cryptographic
-    verification in production security contexts.
+    verify_chain() (formerly verify_integrity(), deprecated in favor of
+    verify_chain() — kailash core src/kailash/trust/chain.py) only
+    performs STRUCTURAL checks and cannot detect tampering without access
+    to original hashes. The strict parameter enforces use of
+    verify_chain_linkage() for proper cryptographic verification in
+    production security contexts.
     """
 
     def test_verify_integrity_strict_mode_raises(self):
@@ -462,7 +464,7 @@ class TestVerifyIntegrityStrictMode:
         chain.add_hash("agent-002", "hash_b")
 
         with pytest.raises(ValueError) as exc_info:
-            chain.verify_integrity(strict=True)
+            chain.verify_chain(strict=True)
 
         # Error message should mention verify_chain_linkage
         error_message = str(exc_info.value).lower()
@@ -477,7 +479,7 @@ class TestVerifyIntegrityStrictMode:
 
         # Even empty chain should raise in strict mode
         with pytest.raises(ValueError) as exc_info:
-            chain.verify_integrity(strict=True)
+            chain.verify_chain(strict=True)
 
         assert "verify_chain_linkage" in str(exc_info.value).lower()
 
@@ -493,7 +495,7 @@ class TestVerifyIntegrityStrictMode:
         chain.add_hash("agent-003", "hash_c")
 
         # Non-strict mode should pass structural check
-        valid, break_index = chain.verify_integrity(strict=False)
+        valid, break_index = chain.verify_chain(strict=False)
 
         assert valid is True, "Structural check should pass for valid chain"
         assert break_index is None
@@ -504,7 +506,7 @@ class TestVerifyIntegrityStrictMode:
         chain.add_hash("agent-001", "hash_a")
 
         # Should not raise - default is non-strict
-        valid, break_index = chain.verify_integrity()
+        valid, break_index = chain.verify_chain()
 
         assert valid is True
 
@@ -545,7 +547,7 @@ class TestVerifyIntegrityStrictMode:
         chain.add_hash("agent-002", "hash_b")
 
         # This should work but would log a warning
-        valid, break_index = chain.verify_integrity(strict=False)
+        valid, break_index = chain.verify_chain(strict=False)
 
         # Test passes if no exception and returns valid result
         assert valid is True

@@ -388,10 +388,23 @@ class TestRFC3161TimestampAuthority:
             await rfc3161_authority.get_timestamp(sample_hash)
 
     @pytest.mark.asyncio
-    async def test_rfc3161_verify_metadata_only_without_rfc3161ng(
+    async def test_rfc3161_verify_fails_closed_without_raw_token(
         self, rfc3161_authority, sample_hash
     ):
-        """RFC3161 verify_timestamp performs metadata-only verification without rfc3161ng."""
+        """RFC3161 verify_timestamp fails closed when no raw_token is supplied.
+
+        Stale-test fix: pre-#1332 this asserted metadata-only verification
+        returned True whenever the source/authority matched — a fail-open
+        stub with zero cryptographic verification (security-reviewer
+        fail-open finding, kailash core commit 4c5330b6a). The fix makes
+        verify_timestamp perform real ASN.1 verification via the raw DER
+        TimeStampToken (TimestampResponse.raw_response) and fail closed
+        (return False) whenever that material is missing — matching the
+        EATP fail-closed discipline (rules/eatp.md). This test was not
+        updated when the core fix landed; it still asserted the old
+        fail-open contract. See kailash core src/kailash/trust/signing/
+        timestamping.py::RFC3161TimestampAuthority.verify_timestamp.
+        """
         token = TimestampToken(
             token_id="tok-001",
             hash_value=sample_hash,
@@ -400,9 +413,9 @@ class TestRFC3161TimestampAuthority:
             authority="https://example.com/tsa",
         )
 
+        # No raw_token supplied -> cannot cryptographically verify -> fails closed.
         result = await rfc3161_authority.verify_timestamp(token)
-        # Without rfc3161ng, returns True if hash_value and timestamp are present
-        assert result is True
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_rfc3161_verify_rejects_wrong_authority(
