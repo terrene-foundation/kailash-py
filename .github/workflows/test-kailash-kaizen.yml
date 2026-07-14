@@ -106,7 +106,10 @@ jobs:
           uv pip install -e "packages/kailash-nexus" --python .venv/bin/python
           uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
           uv pip install -e "packages/kaizen-agents" --python .venv/bin/python
-          uv pip install -e "packages/kailash-kaizen[dev]" --python .venv/bin/python
+          # LLM-provider extras the wire/auth tests exercise: bedrock (botocore
+          # SigV4), vertex (google-auth OAuth/WIF), providers-azure (Entra),
+          # providers-google (google-genai), providers-tokens (tiktoken).
+          uv pip install -e "packages/kailash-kaizen[dev,bedrock,vertex,providers-azure,providers-google,providers-tokens]" --python .venv/bin/python
           uv pip install polars --python .venv/bin/python
 
       - name: Lint (ruff — syntax/undefined only)
