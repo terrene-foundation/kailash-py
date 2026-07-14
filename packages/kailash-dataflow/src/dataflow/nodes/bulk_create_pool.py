@@ -599,6 +599,10 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                 # fresh (non-pooled) node; clean it up after the query so its
                 # connection does not leak a ResourceWarning on GC — symmetry with
                 # the sibling bulk_upsert.py::_execute_query cleanup (#1546 round-2).
+                from ..core.credential_provider import (
+                    get_active_credential_provider,
+                )
+
                 sql_node = AsyncSQLDatabaseNode(
                     connection_string=connection_string,
                     database_type=self.database_type,
@@ -607,6 +611,12 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                     fetch_mode="all",
                     validate_queries=False,
                     transaction_mode="auto",
+                    # Issue #1741: this standalone workflow node holds no
+                    # DataFlow instance, so token-based DB auth arrives via the
+                    # context-scoped provider (bound by
+                    # ``credential_provider_scope`` around runtime.execute);
+                    # None = unchanged.
+                    credential_provider=get_active_credential_provider(),
                 )
                 try:
                     # #1585: transaction=None → auto-commit (unchanged); a

@@ -172,8 +172,9 @@ _build/
 site/
 *.doctree
 
-# Data
-data/
+# Data — anchor to repo root so nested SOURCE packages named `data/`
+# (e.g. src/kailash/nodes/data/, tests/**/data/) are NOT silently ignored.
+/data/
 
 # Generated outputs - all output directories
 outputs/

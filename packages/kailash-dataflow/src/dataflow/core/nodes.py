@@ -2221,6 +2221,13 @@ class NodeGenerator:
                                         sql_node = AsyncSQLDatabaseNode(
                                             connection_string=connection_string,
                                             database_type=database_type,
+                                            # Issue #1741: the in-scope branch above
+                                            # already rides credential_provider via
+                                            # _get_or_create_async_sql_node; the no-scope
+                                            # retry fallback opens its OWN fresh pool, so
+                                            # it must carry the callback too or token auth
+                                            # fails intermittently on the retry path.
+                                            credential_provider=self.dataflow_instance.config.database.credential_provider,
                                         )
                                         # Fresh node — clean it up after the query so its
                                         # connection does not leak a ResourceWarning on GC

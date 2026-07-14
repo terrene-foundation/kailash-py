@@ -217,7 +217,22 @@ class ConnectionManagerAdapter:
             return None
         import asyncpg
 
-        return await asyncpg.connect(self._connection_string)
+        from ..core.credential_provider import open_credentialed_connection
+
+        # Issue #1741: this dedicated tx connection is a production migration-
+        # lock path; honor token-based DB auth via the DataFlow's provider.
+        db_config = getattr(
+            getattr(getattr(self, "dataflow", None), "config", None),
+            "database",
+            None,
+        )
+        credential_provider = getattr(db_config, "credential_provider", None)
+        return await open_credentialed_connection(
+            asyncpg,
+            self._connection_string,
+            credential_provider=credential_provider,
+            context="PostgreSQL migration-lock transaction",
+        )
 
     async def begin_transaction(self) -> None:
         """Begin database transaction on a dedicated held connection."""

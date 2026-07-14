@@ -21,11 +21,121 @@ the full field contract.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import contextlib
+import contextvars
+from typing import Any, Callable, Iterator, Optional
 
 from ..exceptions import DataFlowConnectionError
 
-__all__ = ["build_asyncpg_credential_connect"]
+__all__ = [
+    "build_asyncpg_credential_connect",
+    "open_credentialed_connection",
+    "resolve_fresh_credential",
+    "get_active_credential_provider",
+    "credential_provider_scope",
+]
+
+
+def resolve_fresh_credential(
+    credential_provider: Callable[[], str], *, context: str = "PostgreSQL"
+) -> str:
+    """Mint a FRESH credential from ``credential_provider`` for a driver that
+    has NO per-connection callback (e.g. the SYNC ``psycopg2.connect``), with
+    the SAME fail-closed + no-secret-in-logs contract as
+    :func:`build_asyncpg_credential_connect`.
+
+    Returns a fresh non-empty ``str`` token, or raises
+    ``DataFlowConnectionError`` — it NEVER returns a stale/absent credential.
+    The provider's own exception is surfaced only by TYPE name and the cause
+    chain is severed (``from None``) so no token material reaches a traceback.
+    """
+    try:
+        token = credential_provider()
+    except Exception as exc:
+        raise DataFlowConnectionError(
+            f"credential_provider() raised while establishing a new "
+            f"{context} connection ({type(exc).__name__}); refusing to fall "
+            "back to a stale or absent credential"
+        ) from None
+    if not isinstance(token, str) or not token:
+        raise DataFlowConnectionError(
+            "credential_provider() must return a non-empty str; got "
+            f"{type(token).__name__}"
+        )
+    return token
+
+
+# Issue #1741: a context-scoped fallback source for the per-connection
+# credential callback, used by connection sites that build their asyncpg
+# connection from serializable params only and hold NO reference to the
+# DataFlow instance/config (the standalone WorkflowBuilder bulk nodes
+# ``BulkCreatePoolNode`` / ``DataFlowBulkUpsertNode`` — a live ``Callable``
+# cannot ride the workflow-parameter channel). The Kailash runtime snapshots
+# ``contextvars.copy_context()`` at every thread-boundary dispatch and runs the
+# node inside it, so a provider bound before ``runtime.execute(...)`` is visible
+# inside the node's ``async_run``. The db.express / db.transactions / db.bulk_*
+# CRUD path does NOT use this — it threads the provider explicitly through
+# ``_get_or_create_async_sql_node``.
+_active_credential_provider: contextvars.ContextVar[Optional[Callable[[], str]]] = (
+    contextvars.ContextVar("dataflow_active_credential_provider", default=None)
+)
+
+
+def get_active_credential_provider() -> Optional[Callable[[], str]]:
+    """Return the context-bound credential provider, or None if unbound."""
+    return _active_credential_provider.get()
+
+
+@contextlib.contextmanager
+def credential_provider_scope(
+    credential_provider: Optional[Callable[[], str]],
+) -> Iterator[None]:
+    """Bind ``credential_provider`` for the current context (and any task /
+    thread-boundary dispatch descended from it) for the duration of the block.
+
+    Use this to give token-based DB auth (Azure AD / AWS IAM) to the standalone
+    ``BulkCreatePoolNode`` / ``DataFlowBulkUpsertNode`` workflow nodes, which
+    take only a serializable ``connection_string`` and cannot accept a live
+    callback as a node parameter::
+
+        with credential_provider_scope(provide_token):
+            runtime.execute(workflow.build())
+
+    The token/reset is scoped (``ContextVar.reset``) so it never leaks across
+    instances or tests. None is a no-op (behavior unchanged).
+    """
+    token = _active_credential_provider.set(credential_provider)
+    try:
+        yield
+    finally:
+        _active_credential_provider.reset(token)
+
+
+async def open_credentialed_connection(
+    asyncpg_module: Any,
+    *args: Any,
+    credential_provider: Optional[Callable[[], str]] = None,
+    context: str = "PostgreSQL",
+    **connect_kwargs: Any,
+):
+    """Open a SINGLE asyncpg connection, minting a FRESH credential via
+    ``credential_provider`` (issue #1741) when set — else a plain
+    ``asyncpg.connect`` (behavior unchanged).
+
+    The single shared entry point for every non-pool single-connection site
+    (the sync-transaction path, the staging probe / maintenance-DB admin
+    connects, and the engine DDL / verify / migration connects), so the
+    fail-closed + no-secret-in-logs contract lives in exactly one place. The
+    minted token overrides any ``password`` embedded in a positional DSN or
+    passed as a ``password=`` kwarg (asyncpg's explicit kwarg wins), so tokens
+    containing ``&=/%`` need no percent-encoding.
+    """
+    if credential_provider is not None:
+        connect = build_asyncpg_credential_connect(
+            credential_provider, asyncpg_module, context=context
+        )
+        return await connect(*args, **connect_kwargs)
+    return await asyncpg_module.connect(*args, **connect_kwargs)
 
 
 def build_asyncpg_credential_connect(

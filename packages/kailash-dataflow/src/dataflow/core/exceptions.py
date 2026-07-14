@@ -658,6 +658,14 @@ _PG_VALUE_OUT_OF_RANGE_RE = re.compile(
 # password class ``[^@\s]*`` captures any password up to the ``@`` host delimiter,
 # including embedded colons. Password never spans whitespace/newline.
 _URL_CREDENTIALS_RE = re.compile(r"(://[^:/?#\s@]+:)[^@\s]*(@)")
+# Issue #1741: the discrete-kwargs asyncpg pools (DatabaseRegistry, staging)
+# build create_pool from ``host=..., password=...`` — a connect-failure driver
+# error can embed the credential in ``password=<value>`` / ``pgpassword=<value>``
+# KEYWORD form, which the URL regex above does NOT match. Redact the keyword
+# form too (quoted or bare) so the shape survives but the secret does not.
+_KEYWORD_CREDENTIALS_RE = re.compile(
+    r"(?i)\b((?:pg)?password\s*=\s*)('[^']*'|\"[^\"]*\"|[^\s'\";,)]+)"
+)
 
 
 def sanitize_db_error(msg: str) -> str:
@@ -685,6 +693,9 @@ def sanitize_db_error(msg: str) -> str:
     # the password into a log line or a raised ConnectionError. Disjoint from
     # the constraint-value families below, so ordering is otherwise irrelevant.
     msg = _URL_CREDENTIALS_RE.sub(r"\1[REDACTED]\2", msg)
+    # Issue #1741: also redact the ``password=<value>`` keyword form emitted by
+    # discrete-kwargs connect paths (the URL regex above only matches ``://u:pw@``).
+    msg = _KEYWORD_CREDENTIALS_RE.sub(r"\1[REDACTED]", msg)
     # Issue #1552 (FIX 2 + FIX 7): _KEY_VALUES_RE runs FIRST to catch any
     # ``Key (col)=(value)`` clause OUTSIDE a DETAIL: line (its ``[^)]*`` value
     # class spans newlines). Then the BLOCK _DETAIL_RE (FIX 7) redacts the ENTIRE
