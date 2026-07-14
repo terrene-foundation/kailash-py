@@ -107,3 +107,67 @@ class TestEventStoreInitErrorHygiene:
         assert "[REDACTED]" in msg
         combined = " ".join(r.getMessage() for r in caplog.records)
         assert _SECRET not in combined
+
+    @pytest.mark.asyncio
+    async def test_create_pool_failure_redacts_bare_dsn_password(
+        self, monkeypatch, caplog
+    ):
+        """Important #2 (M2): the leak this path actually guards against is a
+        driver connect-error embedding the credentialed DSN. Inject a bare-DSN
+        secret (NOT a ``DETAIL:`` form) and assert the password is redacted by
+        ``sanitize_db_error`` before it reaches the raised error or the log."""
+
+        async def _boom(*args, **kwargs):
+            # asyncpg-style connect failure that embeds the full DSN.
+            raise RuntimeError(f"connection to server at {_PG_URL} failed")
+
+        monkeypatch.setattr(asyncpg, "create_pool", _boom)
+
+        store = PostgreSQLEventStore(
+            database_url=_PG_URL, pool_min_size=1, pool_max_size=1
+        )
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(ConnectionError) as excinfo:
+                await store.initialize()
+
+        msg = str(excinfo.value)
+        assert _SECRET not in msg
+        assert "[REDACTED]" in msg
+        # user + host survive (diagnostic shape preserved); password gone.
+        assert "appuser" in msg
+        combined = " ".join(r.getMessage() for r in caplog.records)
+        assert _SECRET not in combined
+
+
+@pytest.mark.regression
+class TestSanitizeDbErrorUrlCredentials:
+    """Direct behavioral coverage of the #1737 URL-credential redaction added
+    to ``sanitize_db_error`` (the shared barrier the create_pool paths call)."""
+
+    def test_redacts_dsn_password_preserves_user_and_host(self):
+        from dataflow.core.exceptions import sanitize_db_error
+
+        out = sanitize_db_error(f"connect failed: {_PG_URL}")
+        assert _SECRET not in out
+        assert "://appuser:[REDACTED]@db.internal:5432/appdb" in out
+
+    def test_redacts_password_with_embedded_colons(self):
+        from dataflow.core.exceptions import sanitize_db_error
+
+        out = sanitize_db_error("FATAL: at postgresql://u:p:a:ss@h:5432/d")
+        assert "p:a:ss" not in out
+        assert "://u:[REDACTED]@h:5432/d" in out
+
+    def test_no_password_userinfo_is_untouched(self):
+        from dataflow.core.exceptions import sanitize_db_error
+
+        s = "err at postgres://svc@host:5432/db"
+        assert sanitize_db_error(s) == s
+
+    def test_plain_at_sign_email_not_misfired(self):
+        from dataflow.core.exceptions import sanitize_db_error
+
+        # No ``://user:pass@`` userinfo — an email address must NOT be touched
+        # by the URL rule (the DETAIL rule owns the value-redaction here).
+        out = sanitize_db_error("lookup failed for alice@example.com")
+        assert out == "lookup failed for alice@example.com"

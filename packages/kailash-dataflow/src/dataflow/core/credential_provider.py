@@ -75,12 +75,19 @@ def build_asyncpg_credential_connect(
         except Exception as exc:
             # Do NOT interpolate str(exc) — a provider's exception message
             # could echo back token material. Only the exception's type
-            # name is safe to surface.
+            # name is safe to surface. Use ``from None`` (NOT ``from exc``):
+            # ``from exc`` would re-attach the token-bearing provider
+            # exception as ``__cause__``, so it renders in full under any
+            # upstream ``logger.exception(...)`` / traceback — defeating the
+            # str(exc)-stripping above. ``from None`` severs the chain at the
+            # single shared source, covering every consuming pool
+            # (adapter / lightweight / event-store) at once
+            # (security.md "No secrets in logs").
             raise DataFlowConnectionError(
                 f"credential_provider() raised while establishing a new "
                 f"{context} physical connection ({type(exc).__name__}); "
                 "refusing to fall back to a stale or absent credential"
-            ) from exc
+            ) from None
 
         if not isinstance(token, str) or not token:
             raise DataFlowConnectionError(
