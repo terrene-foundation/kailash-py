@@ -20,7 +20,7 @@ name: Test kailash-kaizen
 #      applied ONLY to this invocation — it is NOT applied to invocation 1 so
 #      as to never narrow the original gate's selection.
 #
-#      Two subdirectories are deliberately EXCLUDED by directory:
+#      Three subdirectories are deliberately EXCLUDED by directory:
 #        - tests/unit/package/  — SLOW: test_installation.py performs real
 #          `pip install`/build-wheel/build-sdist subprocess calls (~85-170s
 #          total for 5 tests) — infra-shaped, not a per-PR-gate fit.
@@ -29,12 +29,19 @@ name: Test kailash-kaizen
 #          BaseAgent + strategy and call .execute() with zero LLM/MCP
 #          mocking, attempting real network calls with no distinguishing
 #          pytest marker; pytest-timeout's signal-based --timeout does not
-#          reliably abort the resulting hang. tests/unit/performance/ is
-#          100% @pytest.mark.benchmark-tagged (0 tests would ever be
-#          selected under the marker filter) and is omitted for that reason
-#          alone, not per HANGS/SLOW.
+#          reliably abort the resulting hang.
+#        - tests/unit/examples/ — HANGS: confirmed via a full 300s bounded
+#          run whose traceback shows an in-flight `ssl.SSLSocket.recv()`
+#          blocked inside `httpcore` — a genuine outbound network call, not
+#          a pytest-timeout artifact. Pre-dates this session (the original
+#          workflow's header comment already excluded "the slow
+#          example-script suite"); this audit independently reproduced the
+#          hang with byte-level evidence and confirms the exclusion.
+#        tests/unit/performance/ is 100% @pytest.mark.benchmark-tagged (0
+#        tests would ever be selected under the marker filter) and is
+#        omitted for that reason alone, not per HANGS/SLOW.
 #
-#      Two files are excluded via --ignore within an otherwise-clean tier:
+#      Three files are excluded via --ignore within an otherwise-clean tier:
 #        - tests/unit/mcp/test_catalog_server.py — RED: 35 failures, all
 #          `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
@@ -55,6 +62,13 @@ name: Test kailash-kaizen
 #          OllamaModelManager` raises ImportError whenever the optional
 #          client library is absent — this is the declared install matrix,
 #          not a regression.
+#        - tests/unit/rag/test_advanced_nodes.py — HANGS (same class as
+#          tests/unit/strategies/): HyDENode / SelfCorrectingRAGNode /
+#          StepBackRAGNode tests construct real node instances with zero
+#          LLM mocking; 4 of 5 failures are pytest-timeout(30s) hits, the
+#          5th an empty-string assertion from an un-mocked completion path.
+#          Confined to this one file — the other 14 files in
+#          tests/unit/rag/ are clean (754 passed, 0 failed).
 #
 # A per-test --timeout on both invocations makes any hang fail loudly
 # instead of hanging the job.
@@ -62,7 +76,7 @@ name: Test kailash-kaizen
 # COST: single Python (3.12), triggered only on kaizen path changes — mirrors
 # the test-pact single-version precedent. ~3-5 min/run pre-expansion;
 # the expanded invocation adds ~2-3 min of test execution locally
-# (~5549 tests, 162s) — total est. ~6-9 min/run post-expansion.
+# (~6389 tests, ~166s) — total est. ~6-9 min/run post-expansion.
 
 on:
   push:
@@ -205,6 +219,7 @@ jobs:
             tests/unit/observability/ \
             tests/unit/orchestration/ \
             tests/unit/providers/ --ignore=tests/unit/providers/test_ollama_model_manager.py \
+            tests/unit/rag/ --ignore=tests/unit/rag/test_advanced_nodes.py \
             tests/unit/research/ \
             tests/unit/runtime/ \
             tests/unit/security/ \
