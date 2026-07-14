@@ -171,6 +171,11 @@ class DataFlow(DataFlowEventMixin):
         # than silently no-op'ing into a cross-tenant leak.
         tenant_isolation_strategy: Optional[str] = None,
         encryption_key: Optional[str] = None,
+        # Issue #1737: per-physical-connection credential callback for
+        # token-based DB auth (Azure AD / AWS IAM). See
+        # DatabaseConfig.credential_provider for the full contract. Absent
+        # (None) — behavior is unchanged (static connection-string password).
+        credential_provider: Optional[Callable[[], str]] = None,
         audit_logging: bool = False,
         cache_enabled: Optional[
             bool
@@ -238,6 +243,11 @@ class DataFlow(DataFlowEventMixin):
             echo: Enable SQL logging
             multi_tenant: Enable multi-tenant mode
             encryption_key: Encryption key for sensitive data
+            credential_provider: Optional callable returning a fresh DB
+                password/token on every physical connection (Azure AD / AWS
+                IAM token-based auth, issue #1737). Absent (None) — behavior
+                is unchanged; the static password embedded in database_url
+                is used as before. See DatabaseConfig.credential_provider.
             audit_logging: Enable audit logging
             cache_enabled: Enable query caching
             cache_ttl: Cache time-to-live
@@ -308,6 +318,11 @@ class DataFlow(DataFlowEventMixin):
                 self.config.pool_recycle = pool_recycle
             if echo is not None:
                 self.config.echo = echo
+            # Issue #1737: credential_provider has no top-level
+            # DataFlowConfig convenience property (mirrors how `password`
+            # itself is only reachable via config.database) — set directly.
+            if credential_provider is not None:
+                self.config.database.credential_provider = credential_provider
             if monitoring is not None:
                 self.config.monitoring = monitoring
             if cache_enabled is not None:
@@ -364,6 +379,12 @@ class DataFlow(DataFlowEventMixin):
                     self.config.security.tenant_isolation_strategy = (
                         tenant_isolation_strategy
                     )
+                # Issue #1737: same treatment for credential_provider — it is
+                # not in the zero-config-mode detection list above (a caller
+                # passing ONLY credential_provider, with database_url=None,
+                # would otherwise silently fall into from_env() and lose it).
+                if credential_provider is not None:
+                    self.config.database.credential_provider = credential_provider
             else:
                 # Create structured config from individual parameters
                 database_config = DatabaseConfig(
@@ -372,6 +393,8 @@ class DataFlow(DataFlowEventMixin):
                     max_overflow=pool_max_overflow,  # None flows through to get_max_overflow()
                     pool_recycle=pool_recycle,
                     echo=echo,
+                    # Issue #1737: per-physical-connection credential callback.
+                    credential_provider=credential_provider,
                 )
 
                 monitoring_config = MonitoringConfig(
@@ -5046,7 +5069,13 @@ class DataFlow(DataFlowEventMixin):
         # "Unclosed connection" at GC, the #1572 leak class).
         from ..adapters.postgresql import PostgreSQLAdapter
 
-        adapter = PostgreSQLAdapter(database_url)
+        # Issue #1737: thread the configured credential_provider through so
+        # schema-discovery connections also mint fresh tokens rather than
+        # reusing a static (possibly stale) password.
+        adapter = PostgreSQLAdapter(
+            database_url,
+            credential_provider=self.config.database.credential_provider,
+        )
         try:
             await adapter.create_connection_pool()
 

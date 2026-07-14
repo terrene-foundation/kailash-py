@@ -8,10 +8,11 @@ Automatically detects environment and configures optimal settings.
 import logging
 import multiprocessing
 import os
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .models import Environment
 
@@ -312,6 +313,24 @@ class DatabaseConfig:
     username: Optional[str] = None
     password: Optional[str] = None
 
+    # Issue #1737: per-physical-connection credential callback for
+    # token-based DB auth (Azure AD / AWS IAM). Tokens expire (~15min AWS
+    # IAM, ~60-90min Azure AD) and the SQLAlchemy-era design captured a
+    # STATIC connection string once at pool construction — connections
+    # opened after the token expires authenticate with a STALE token and
+    # fail. When set, ``PostgreSQLAdapter.create_connection_pool()`` wires
+    # this callable into asyncpg's per-connection ``connect`` hook so a
+    # FRESH credential is minted for EVERY physical connection (initial,
+    # recycled, overflow, reconnect) — never the driver-param URL, so no
+    # percent-encoding round-trip on tokens containing ``&=/%``. Absent
+    # (None), behavior is UNCHANGED — the static ``password`` field above
+    # is used as before. A raising callback fails closed (raises a typed
+    # ``DataFlowConnectionError``); it NEVER falls back to a stale token.
+    # The returned value is a live secret — it MUST NEVER be logged (not
+    # the value, not its length, not a prefix) and is held only as long as
+    # it takes to hand it to asyncpg's connect call.
+    credential_provider: Optional[Callable[[], str]] = None
+
     # Connection pool settings
     pool_size: Optional[int] = None
     pool_max_overflow: Optional[int] = None
@@ -342,6 +361,31 @@ class DatabaseConfig:
             self.max_overflow = self.pool_max_overflow
         elif self.max_overflow and not self.pool_max_overflow:
             self.pool_max_overflow = self.max_overflow
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> "DatabaseConfig":
+        """Deep-copy every field EXCEPT ``credential_provider``, which is
+        carried over by reference.
+
+        Issue #1737: ``credential_provider`` is a live external callable —
+        real-world Azure AD / AWS IAM token providers commonly close over
+        non-deepcopy-safe resources (a boto3 client, a threading.Lock, an
+        Azure credential cache). ``DataFlow.__init__``'s ``config=`` branch
+        calls ``deepcopy(config)`` on the caller-supplied ``DataFlowConfig``;
+        without this override, that call raises ``TypeError: cannot pickle
+        '_thread.lock' object`` (or silently duplicates internal state) the
+        moment a real credential_provider is configured — making the
+        feature unusable for its own acceptance criteria. Every other field
+        keeps normal deep-copy isolation.
+        """
+        cls = self.__class__
+        new = cls.__new__(cls)
+        memo[id(self)] = new
+        for f in fields(self):
+            if f.name == "credential_provider":
+                setattr(new, f.name, self.credential_provider)
+            else:
+                setattr(new, f.name, deepcopy(getattr(self, f.name), memo))
+        return new
 
     def get_connection_url(self, environment: Environment) -> str:
         """Generate connection URL based on configuration and environment.
@@ -650,6 +694,8 @@ class DataFlowConfig:
                 db_config_kwargs["pool_recycle"] = kwargs["pool_recycle"]
             if "echo" in kwargs:
                 db_config_kwargs["echo"] = kwargs["echo"]
+            if "credential_provider" in kwargs:
+                db_config_kwargs["credential_provider"] = kwargs["credential_provider"]
             self.database = DatabaseConfig(**db_config_kwargs)
 
         # Handle monitoring configuration

@@ -118,11 +118,15 @@ class ConnectionManager:
         # Transient adapter — opened, verified, discarded. Pool size 1
         # because we do nothing with the pool but prove the connection
         # works, then close it.
+        # Issue #1737: thread the configured credential_provider through so
+        # this reachability probe also mints a fresh token rather than
+        # reusing a static (possibly stale) password.
         factory = AdapterFactory()
         test_adapter = factory.create_adapter(
             db_url,
             pool_size=1,
             max_overflow=0,
+            credential_provider=self.dataflow.config.database.credential_provider,
         )
 
         try:
@@ -192,10 +196,12 @@ class ConnectionManager:
 
         db_url = self._get_db_url()
         factory = AdapterFactory()
+        # Issue #1737: same credential_provider threading as initialize_pool().
         test_adapter = factory.create_adapter(
             db_url,
             pool_size=1,
             max_overflow=0,
+            credential_provider=self.dataflow.config.database.credential_provider,
         )
 
         t0 = time.monotonic()
@@ -343,7 +349,13 @@ class ConnectionManager:
         # `rules/zero-tolerance.md` Rule 1 in the same shard as the #835
         # transient-adapter migration.
         factory = AdapterFactory()
-        test_adapter = factory.create_adapter(target_url, pool_size=1, max_overflow=0)
+        # Issue #1737: same credential_provider threading as initialize_pool().
+        test_adapter = factory.create_adapter(
+            target_url,
+            pool_size=1,
+            max_overflow=0,
+            credential_provider=self.dataflow.config.database.credential_provider,
+        )
         try:
             await test_adapter.connect()
             await test_adapter.execute_query("SELECT 1 AS test")

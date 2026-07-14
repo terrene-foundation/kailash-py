@@ -8,11 +8,12 @@ import logging
 import sys
 import traceback
 import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
 )
+from ..exceptions import DataFlowConnectionError
 from .base import DatabaseAdapter
 from .dialect import DialectManager
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
@@ -46,9 +47,71 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.ssl_mode = self.query_params.get("sslmode", "prefer")
         self.application_name = kwargs.get("application_name", "dataflow")
 
+        # Issue #1737: optional per-physical-connection credential callback
+        # (Azure AD / AWS IAM token-based auth). See DatabaseConfig.credential_provider
+        # for the full contract. Absent (None) — behavior is unchanged.
+        self.credential_provider: Optional[Callable[[], str]] = kwargs.get(
+            "credential_provider"
+        )
+
         # Use actual port or default
         if self.port is None:
             self.port = self.default_port
+
+    def _make_credential_provider_connect(self, asyncpg_module: Any) -> Callable:
+        """Build an asyncpg ``connect`` callable that mints a fresh credential.
+
+        asyncpg's ``Pool`` invokes ``self._connect(*connect_args, **connect_kwargs)``
+        (defaulting to ``asyncpg.connect``) every time it needs a NEW physical
+        connection — on initial pool fill, on recycle after
+        ``max_inactive_connection_lifetime``, on overflow up to ``max_size``,
+        and on reconnect after a holder's connection dies. Overriding ``connect``
+        (rather than baking a static password into ``connect_kwargs`` once) is
+        the asyncpg-native equivalent of SQLAlchemy's ``do_connect`` event — the
+        callback fires per physical connection, satisfying #1737's "EVERY
+        physical connection" acceptance criterion with a stricter guarantee
+        than the interval-based refresh-ahead approach (zero staleness window).
+
+        Fail-closed: a raising (or non-str-returning) ``credential_provider``
+        raises ``DataFlowConnectionError`` here — it NEVER falls back to the
+        static ``password`` captured in ``connect_kwargs`` at pool-construction
+        time. The minted token is set as the driver PARAM (``connect_kwargs
+        ["password"]``), never re-encoded into a DSN/URL, so tokens containing
+        ``&``, ``=``, ``/``, ``%`` (AWS IAM tokens) need no percent-encoding.
+        The token is NEVER logged (not the value, not its length, not a
+        prefix) and is held locally only for the duration of the connect call.
+        """
+        provider = self.credential_provider
+
+        async def _connect_with_fresh_credential(*args: Any, **connect_kwargs: Any):
+            try:
+                token = provider()
+            except Exception as exc:
+                # Do NOT interpolate str(exc) — a provider's exception message
+                # could echo back token material. Only the exception's type
+                # name is safe to surface.
+                raise DataFlowConnectionError(
+                    "credential_provider() raised while establishing a new "
+                    f"PostgreSQL physical connection ({type(exc).__name__}); "
+                    "refusing to fall back to a stale or absent credential"
+                ) from exc
+
+            if not isinstance(token, str) or not token:
+                raise DataFlowConnectionError(
+                    "credential_provider() must return a non-empty str; got "
+                    f"{type(token).__name__}"
+                )
+
+            connect_kwargs["password"] = token
+            try:
+                return await asyncpg_module.connect(*args, **connect_kwargs)
+            finally:
+                # Hold the live secret as briefly as possible: drop the local
+                # binding as soon as it has been handed to the driver.
+                token = None
+                connect_kwargs["password"] = None
+
+        return _connect_with_fresh_credential
 
     async def connect(self) -> None:
         """Establish PostgreSQL connection (legacy method - use create_connection_pool)."""
@@ -82,6 +145,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
             # Create connection pool with reset callback
             params["reset"] = reset_connection
+
+            # Issue #1737: when a credential_provider is configured, override
+            # asyncpg's per-connection ``connect`` hook so every physical
+            # connection mints a fresh credential (see
+            # _make_credential_provider_connect docstring). Absent
+            # credential_provider, ``params["password"]`` (the static value
+            # already set by get_connection_parameters()) is used unchanged —
+            # behavior is UNCHANGED from before this feature existed.
+            if self.credential_provider is not None:
+                params["connect"] = self._make_credential_provider_connect(asyncpg)
+
             self.connection_pool = await asyncpg.create_pool(**params)
             self.is_connected = True
 
