@@ -37,21 +37,30 @@ name: Test kailash-kaizen
 #          workflow's header comment already excluded "the slow
 #          example-script suite"); this audit independently reproduced the
 #          hang with byte-level evidence and confirms the exclusion.
-#        tests/unit/performance/ is 100% @pytest.mark.benchmark-tagged (0
-#        tests would ever be selected under the marker filter) and is
-#        omitted for that reason alone, not per HANGS/SLOW.
+#        tests/unit/performance/ is EXCLUDED because its 18 tests assert
+#        ABSOLUTE wall-clock p95-latency thresholds (`assert perf["p95"] <
+#        10/50/100` ms) — deterministic locally (~0.11s) but flake-prone on
+#        shared CI runners per testing.md § "Complexity Bounds Use Self-
+#        Normalizing Ratios, Not Absolute Wall-Clock Thresholds". (The tier
+#        carries NO pytest markers — it is NOT benchmark-tagged.) Gating it
+#        would ratchet the thresholds under CI load; excluded until the tests
+#        are rewritten to self-normalizing ratios.
 #
 #      Three files are excluded via --ignore within an otherwise-clean tier:
-#        - tests/unit/mcp/test_catalog_server.py — RED: 35 failures, all
-#          `ModuleNotFoundError: No module named 'kaizen.manifest'`.
+#        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
+#          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
 #          governance}.py import a `kaizen.manifest` package (AgentManifest/
-#          AppManifest/GovernanceManifest + TOML loader/validation errors)
-#          that was never implemented — a genuine pre-existing production
-#          bug, but implementing the manifest subsystem is a substantial
-#          net-new feature (~500+ LOC across parsing/validation/errors),
-#          well beyond a CI-gate-expansion shard; tracked as a follow-up
-#          issue, not fixed here.
+#          AppManifest/GovernanceManifest + TOML loader/validation errors).
+#          The module IS implemented (~26KB at src/kaizen/manifest/, ~4
+#          months old) but is UNCOMMITTED: the repo-root .gitignore
+#          `MANIFEST` pattern (intended for the sdist MANIFEST file) also
+#          matches the `kaizen/manifest/` directory on case-insensitive
+#          filesystems (macOS APFS), so `git add` silently skips it and it
+#          never reached CI. On Linux CI (case-sensitive) the module is
+#          genuinely absent, so this exclusion holds TODAY; the real fix is a
+#          .gitignore anchor + committing the existing code (tracked as an
+#          urgent follow-up), NOT a ~500-LOC feature build.
 #        - tests/unit/providers/test_ollama_model_manager.py —
 #          INFRA-DEPENDENT: `ollama` (the pip client library, distinct from
 #          the vendored `ollama_provider.py`/`ollama_model_manager.py`
