@@ -18,11 +18,18 @@
     {
       "tier": 3,
       "form": "legacy",
+      "_provenance": "Corrected 2026-07-14 (#1721) from workspaces/issue-1717-vertex-claude/journal/0005-DISCOVERY-1721-rust-legacy-precedence-read.md (authorized read under the journal/0004 grant). VERIFIED (journal/0005 finding 2, quoting kailash-rs client.rs:481-590): the Rust legacy if-let chain resolves 10 providers in this order -- OPENAI, ANTHROPIC, GOOGLE(/GEMINI), MISTRAL, COHERE, OLLAMA, HUGGINGFACE, PERPLEXITY, DEEPSEEK, DOCKER_MODEL_RUNNER -- with NO Azure entry (AZURE_OPENAI_API_KEY appears in Rust only in test code, client.rs:4967/5137). The prior fixture (4 keys: OPENAI/AZURE_OPENAI/ANTHROPIC/GOOGLE) matched NEITHER SDK and has been replaced by this verified provider order + set. NOT independently re-verified this session (no fresh cross-repo grant, journal/0005 captured only the if-let chain's provider ORDER, not every literal env-var string): the exact env-var key Rust checks for mistral/cohere/ollama/huggingface/perplexity/docker_model_runner is recorded as env_var:null below pending a follow-up authorized Rust read -- do NOT treat a null entry as 'no env var exists'; it means 'not yet pinned'. openai_api_key/anthropic_api_key/google_api_key are carried forward unchanged from the pre-correction fixture (their literal strings were not re-verified against Rust source this session either, but are unchanged from the prior pin). deepseek_api_key is the one literal journal/0005 quotes verbatim (client.rs:580: `std::env::var(\"DEEPSEEK_API_KEY\")`).",
       "key_order": [
         ["OPENAI_API_KEY", "openai"],
-        ["AZURE_OPENAI_API_KEY", "azure_openai"],
         ["ANTHROPIC_API_KEY", "anthropic"],
-        ["GOOGLE_API_KEY", "google"]
+        ["GOOGLE_API_KEY", "google"],
+        [null, "mistral"],
+        [null, "cohere"],
+        [null, "ollama"],
+        [null, "huggingface"],
+        [null, "perplexity"],
+        ["DEEPSEEK_API_KEY", "deepseek"],
+        [null, "docker_model_runner"]
       ]
     },
     {
