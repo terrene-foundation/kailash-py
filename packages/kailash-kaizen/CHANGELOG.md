@@ -2,6 +2,20 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.31.1] — 2026-07-14 — fix: OpenAI GPT-5 / o-series completions (`max_completion_tokens`)
+
+### Fixed
+
+- **`LlmClient.complete()` against OpenAI GPT-5 / o-series models.** The
+  `openai_chat` wire shaper emitted `max_tokens` unconditionally; GPT-5 and the
+  o-series reasoning models reject it with HTTP 400 (`use 'max_completion_tokens'
+instead`) — found by exercising `complete()` against the live OpenAI API. The
+  shaper now selects the token-limit field by model family: GPT-5 / o1 / o3 / o4
+  use `max_completion_tokens`; OpenAI-compatible providers (DeepSeek, Groq,
+  Together, …) keep `max_tokens`. Verified live: OpenAI gpt-5, Anthropic-direct,
+  DeepSeek, and Bedrock-Claude completions all succeed through the four-axis
+  client. Cross-SDK: the Rust SDK's shaper carries the same defect (#1727).
+
 ## [2.31.0] — 2026-07-14 — four-axis `LlmClient` completion send path + Vertex-Claude/Bedrock wire + GCP WIF (#1717)
 
 The four-axis LLM deployment layer previously wire-sent only embeddings; this
