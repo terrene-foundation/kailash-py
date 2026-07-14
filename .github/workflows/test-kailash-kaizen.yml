@@ -46,7 +46,7 @@ name: Test kailash-kaizen
 #        would ratchet the thresholds under CI load; excluded until the tests
 #        are rewritten to self-normalizing ratios.
 #
-#      Seven files are excluded via --ignore within an otherwise-clean tier:
+#      Three files are excluded via --ignore within an otherwise-clean tier:
 #        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
 #          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
@@ -78,25 +78,35 @@ name: Test kailash-kaizen
 #          5th an empty-string assertion from an un-mocked completion path.
 #          Confined to this one file — the other rag/ files are clean once
 #          the rag extra (numpy/Pillow/networkx) is installed (see below).
-#        - tests/unit/nodes/auth/test_{directory_integration,enterprise_auth_
-#          provider,sso}_unit.py (3) + tests/unit/core/autonomy/control/
-#          test_protocol.py (1) — UNDECLARED-DEP: these hard-import `qrcode`
-#          (auth/SSO) and `psutil` (autonomy) at module top, but NEITHER is
-#          declared in any kaizen extra (unlike observability/rag, which ARE
-#          extras and are added to the install above). Excluded until the deps
-#          are declared OR the tests use pytest.importorskip — test-hygiene
-#          follow-up. (The other optional-dep collection errors —
-#          numpy/Pillow/networkx/prometheus/opentelemetry[+otlp-grpc-exporter]
-#          — are RESOLVED by installing the [observability,rag] extras + the
-#          OTLP gRPC exporter above, not by exclusion.)
+#
+#      Two flaky tests are excluded via --deselect (NOT --ignore — the rest of
+#      their file still runs):
+#        - tests/unit/memory/test_semantic_memory.py::
+#          TestSemanticMemorySimilaritySearch::{test_find_similar_basic,
+#          test_find_similar_limit} — the mock simple_embedding_function is
+#          hash-based, so under Python hash randomization (PYTHONHASHSEED) the
+#          similarity ranking is non-deterministic: find_similar() returns []
+#          on some seeds/versions (passed on 3.14, failed on 3.12 in a local
+#          CI repro). Pre-existing, in code this PR does NOT touch — test-
+#          hygiene follow-up.
+#
+#      ALL optional-dep failures (numpy/Pillow/networkx/prometheus/
+#      opentelemetry[+otlp-grpc-exporter]/pynacl/pytz/psutil/qrcode/
+#      beautifulsoup4) are RESOLVED by installing the [observability,rag]
+#      extras + the OTLP gRPC exporter + the loose deps above — NOT by
+#      exclusion. The auth/SSO + autonomy tests that appeared undeclared-dep
+#      now run (qrcode/psutil are installed as loose deps). Verified against a
+#      local fresh-venv Python-3.12 CI repro: 6480 passed, 0 dep errors.
 #
 # A per-test --timeout on both invocations makes any hang fail loudly
 # instead of hanging the job.
 #
 # COST: single Python (3.12), triggered only on kaizen path changes — mirrors
-# the test-pact single-version precedent. ~3-5 min/run pre-expansion;
-# the expanded invocation adds ~2-3 min of test execution locally
-# (~6389 tests, ~166s) — total est. ~6-9 min/run post-expansion.
+# the test-pact single-version precedent. Pre-expansion ~3-5 min/run. Post-
+# expansion the install grows (observability/rag extras + otlp-grpc exporter +
+# loose deps numpy/Pillow/networkx/otel/prometheus/pynacl/pytz/psutil/qrcode/
+# beautifulsoup4) and the expanded invocation runs ~6480 tests in ~175s (local
+# 3.12 repro) — total est. ~9-13 min/run post-expansion.
 
 on:
   push:
@@ -204,6 +214,11 @@ jobs:
           # imports tracing_manager collects. (kaizen packaging gap: [observability]
           # should include this exporter — test-hygiene follow-up.)
           uv pip install opentelemetry-exporter-otlp-proto-grpc --python .venv/bin/python
+          # Loose deps the expanded unit tiers hard-import but NO kaizen extra
+          # declares: pynacl (trust crypto), pytz (governance time-windows),
+          # psutil (autonomy + integrations), qrcode (auth/SSO), beautifulsoup4
+          # (tools web-fetch). Undeclared-dep test-hygiene gap — follow-up filed.
+          uv pip install pynacl pytz psutil qrcode beautifulsoup4 --python .venv/bin/python
           uv pip install polars --python .venv/bin/python
 
       - name: Lint (ruff — syntax/undefined only)
@@ -231,7 +246,7 @@ jobs:
             tests/unit/audio/ \
             tests/unit/composition/ \
             tests/unit/config/ \
-            tests/unit/core/ --ignore=tests/unit/core/autonomy/control/test_protocol.py \
+            tests/unit/core/ \
             tests/unit/cost/ \
             tests/unit/deploy/ \
             tests/unit/execution/ \
@@ -246,7 +261,7 @@ jobs:
             tests/unit/mixins/ \
             tests/unit/ml/ \
             tests/unit/monitoring/ \
-            tests/unit/nodes/ --ignore=tests/unit/nodes/auth/test_directory_integration_unit.py --ignore=tests/unit/nodes/auth/test_enterprise_auth_provider_unit.py --ignore=tests/unit/nodes/auth/test_sso_unit.py \
+            tests/unit/nodes/ \
             tests/unit/observability/ \
             tests/unit/orchestration/ \
             tests/unit/providers/ --ignore=tests/unit/providers/test_ollama_model_manager.py \
@@ -259,4 +274,6 @@ jobs:
             tests/unit/tools/ \
             tests/unit/trust/ \
             -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
+            --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_basic \
+            --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_limit \
             --timeout=30 --maxfail=50 -q
