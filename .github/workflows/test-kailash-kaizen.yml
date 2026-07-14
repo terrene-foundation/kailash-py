@@ -46,7 +46,7 @@ name: Test kailash-kaizen
 #        would ratchet the thresholds under CI load; excluded until the tests
 #        are rewritten to self-normalizing ratios.
 #
-#      Three files are excluded via --ignore within an otherwise-clean tier:
+#      Seven files are excluded via --ignore within an otherwise-clean tier:
 #        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
 #          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
@@ -76,8 +76,18 @@ name: Test kailash-kaizen
 #          StepBackRAGNode tests construct real node instances with zero
 #          LLM mocking; 4 of 5 failures are pytest-timeout(30s) hits, the
 #          5th an empty-string assertion from an un-mocked completion path.
-#          Confined to this one file — the other 14 files in
-#          tests/unit/rag/ are clean (754 passed, 0 failed).
+#          Confined to this one file — the other rag/ files are clean once
+#          the rag extra (numpy/Pillow/networkx) is installed (see below).
+#        - tests/unit/nodes/auth/test_{directory_integration,enterprise_auth_
+#          provider,sso}_unit.py (3) + tests/unit/core/autonomy/control/
+#          test_protocol.py (1) — UNDECLARED-DEP: these hard-import `qrcode`
+#          (auth/SSO) and `psutil` (autonomy) at module top, but NEITHER is
+#          declared in any kaizen extra (unlike observability/rag, which ARE
+#          extras and are added to the install above). Excluded until the deps
+#          are declared OR the tests use pytest.importorskip — test-hygiene
+#          follow-up. (The remaining 27 optional-dep collection errors —
+#          numpy/Pillow/networkx/prometheus/opentelemetry — are RESOLVED by
+#          installing the [observability,rag] extras, not by exclusion.)
 #
 # A per-test --timeout on both invocations makes any hang fail loudly
 # instead of hanging the job.
@@ -181,7 +191,12 @@ jobs:
           # LLM-provider extras the wire/auth tests exercise: bedrock (botocore
           # SigV4), vertex (google-auth OAuth/WIF), providers-azure (Entra),
           # providers-google (google-genai), providers-tokens (tiktoken).
-          uv pip install -e "packages/kailash-kaizen[dev,bedrock,vertex,providers-azure,providers-google,providers-tokens]" --python .venv/bin/python
+          # observability (prometheus-client/opentelemetry/structlog) + rag
+          # (numpy/Pillow/networkx) are REQUIRED for the expanded unit tiers to
+          # COLLECT: the observability/execution/rag/signatures/tools tests do a
+          # hard top-level import of these extras' deps (they are optional
+          # extras, absent from the base install, hence a local-only pass before).
+          uv pip install -e "packages/kailash-kaizen[dev,bedrock,vertex,providers-azure,providers-google,providers-tokens,observability,rag]" --python .venv/bin/python
           uv pip install polars --python .venv/bin/python
 
       - name: Lint (ruff — syntax/undefined only)
@@ -209,7 +224,7 @@ jobs:
             tests/unit/audio/ \
             tests/unit/composition/ \
             tests/unit/config/ \
-            tests/unit/core/ \
+            tests/unit/core/ --ignore=tests/unit/core/autonomy/control/test_protocol.py \
             tests/unit/cost/ \
             tests/unit/deploy/ \
             tests/unit/execution/ \
@@ -224,7 +239,7 @@ jobs:
             tests/unit/mixins/ \
             tests/unit/ml/ \
             tests/unit/monitoring/ \
-            tests/unit/nodes/ \
+            tests/unit/nodes/ --ignore=tests/unit/nodes/auth/test_directory_integration_unit.py --ignore=tests/unit/nodes/auth/test_enterprise_auth_provider_unit.py --ignore=tests/unit/nodes/auth/test_sso_unit.py \
             tests/unit/observability/ \
             tests/unit/orchestration/ \
             tests/unit/providers/ --ignore=tests/unit/providers/test_ollama_model_manager.py \
