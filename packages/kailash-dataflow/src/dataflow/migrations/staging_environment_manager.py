@@ -31,10 +31,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import asyncpg
 
+from ..core.exceptions import sanitize_db_error
 from .dependency_analyzer import DependencyAnalyzer, DependencyReport
 from .foreign_key_analyzer import FKImpactReport, ForeignKeyAnalyzer
 from .risk_assessment_engine import RiskAssessmentEngine, RiskCategory, RiskLevel
@@ -221,14 +222,25 @@ class StagingEnvironmentManager:
     - Automated cleanup and error recovery
     """
 
-    def __init__(self, config: Optional[StagingEnvironmentConfig] = None):
+    def __init__(
+        self,
+        config: Optional[StagingEnvironmentConfig] = None,
+        credential_provider: Optional[Callable[[], str]] = None,
+    ):
         """
         Initialize the staging environment manager.
 
         Args:
             config: Configuration for staging environment management
+            credential_provider: Issue #1741 — optional per-physical-connection
+                credential callback for token-based DB auth (Azure AD / AWS
+                IAM). When set, every physical connection this manager's
+                staging/production pools open mints a fresh credential. Absent
+                (None), behavior is unchanged. See
+                dataflow.core.credential_provider for the fail-closed contract.
         """
         self.config = config or StagingEnvironmentConfig()
+        self.credential_provider = credential_provider
         self.active_environments: Dict[str, StagingEnvironment] = {}
         self._connection_pools: Dict[str, asyncpg.Pool] = {}
 
@@ -663,7 +675,7 @@ class StagingEnvironmentManager:
         pool_key = f"{db_config.host}:{db_config.port}:{db_config.database}"
 
         if pool_key not in self._connection_pools:
-            self._connection_pools[pool_key] = await asyncpg.create_pool(
+            create_pool_kwargs = dict(
                 host=db_config.host,
                 port=db_config.port,
                 database=db_config.database,
@@ -674,6 +686,39 @@ class StagingEnvironmentManager:
                 min_size=2,
                 max_size=self.config.resource_limits.get("max_connection_pool", 10),
             )
+            # Issue #1741: token-based DB auth (Azure AD / AWS IAM). When a
+            # credential_provider is configured, mint a FRESH credential per
+            # physical connection via asyncpg's ``connect`` hook (the minted
+            # token overrides the ``password=`` kwarg above). See
+            # dataflow.core.credential_provider for the fail-closed contract.
+            if self.credential_provider is not None:
+                from dataflow.core.credential_provider import (
+                    build_asyncpg_credential_connect,
+                )
+
+                create_pool_kwargs["connect"] = build_asyncpg_credential_connect(
+                    self.credential_provider,
+                    asyncpg,
+                    context="PostgreSQL staging pool",
+                )
+            try:
+                self._connection_pools[pool_key] = await asyncpg.create_pool(
+                    **create_pool_kwargs
+                )
+            except Exception as exc:
+                # A raising credential_provider surfaces here on the initial
+                # fill, and an asyncpg connect failure can embed the
+                # credentialed connection params. Route through
+                # sanitize_db_error and sever the cause chain (``from None``)
+                # so no credential material reaches a log line or traceback.
+                safe_error = sanitize_db_error(str(exc))
+                logger.error(
+                    "staging_environment_manager.failed_to_create_connection_pool",
+                    extra={"pool_key_host": db_config.host, "error": safe_error},
+                )
+                raise ConnectionError(
+                    f"Failed to create staging connection pool: {safe_error}"
+                ) from None
 
         return self._connection_pools[pool_key]
 

@@ -8937,6 +8937,12 @@ class DataFlow(DataFlowEventMixin):
             node_id=f"dataflow_{database_type}_sql_node",
             connection_string=connection_string,
             database_type=database_type,
+            # Issue #1741: ride the per-connection credential callback into the
+            # CORE CRUD hot-path pool. This is the pool db.express /
+            # db.transactions actually open — the #1737 pools cover only the
+            # probe / health-check / audit-trail connections. None (the
+            # default) leaves behavior unchanged.
+            credential_provider=self.config.database.credential_provider,
         )
 
         # Cache the node with event loop ID for tracking

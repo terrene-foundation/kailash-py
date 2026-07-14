@@ -324,6 +324,17 @@ class DatabaseConfig:
     enable_adaptive_sizing: bool = True
     health_check_interval: int = 30
     min_pool_size: int = 5
+    # Issue #1741: optional per-physical-connection credential callback for
+    # token-based DB auth (Azure AD / AWS IAM). When set, PostgreSQLAdapter.
+    # connect() wires it into asyncpg's per-connection ``connect`` hook so a
+    # FRESH credential is minted for EVERY physical connection (initial,
+    # recycled, overflow, reconnect) — never the static ``password`` above.
+    # Absent (None), behavior is UNCHANGED. A raising callback fails closed
+    # (raises NodeExecutionError); it NEVER falls back to a stale token. The
+    # returned value is a live secret — it MUST NEVER be logged (not the
+    # value, not its length, not a prefix). See
+    # kailash.nodes.data.credential_provider for the full contract.
+    credential_provider: Optional[Callable[[], str]] = None
 
     def __post_init__(self):
         """Validate configuration."""
@@ -1272,8 +1283,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             await conn.execute("SET idle_in_transaction_session_timeout = '30s'")
             await conn.execute("SET statement_timeout = '60s'")
 
-        self._pool = await asyncpg.create_pool(
-            dsn,
+        create_pool_kwargs = dict(
             min_size=1,
             max_size=self.config.max_pool_size,
             timeout=self.config.pool_timeout,
@@ -1281,6 +1291,37 @@ class PostgreSQLAdapter(DatabaseAdapter):
             max_inactive_connection_lifetime=300.0,
             init=_init_connection,
         )
+
+        if self.config.credential_provider is not None:
+            # Issue #1741: token-based DB auth (Azure AD / AWS IAM). Mint a
+            # FRESH credential per physical connection via asyncpg's per-
+            # connection ``connect`` hook — this is the CRUD hot-path pool the
+            # db.express / db.transactions / bulk path actually opens. The
+            # helper's fail-closed contract (raise, never fall back to a stale
+            # token) and no-secret-in-logs guarantee live in
+            # kailash.nodes.data.credential_provider.
+            from kailash.nodes.data.credential_provider import (
+                build_asyncpg_credential_connect,
+            )
+
+            create_pool_kwargs["connect"] = build_asyncpg_credential_connect(
+                self.config.credential_provider, asyncpg, context="PostgreSQL"
+            )
+            try:
+                self._pool = await asyncpg.create_pool(dsn, **create_pool_kwargs)
+            except Exception as exc:
+                # Redacting guard: the DSN embeds a password and a raising
+                # provider surfaces here on the initial fill. Do NOT log the
+                # DSN / exc_info and sever the cause chain (``from None``) so
+                # no credential material (static password OR minted token)
+                # reaches a traceback (security.md "No secrets in logs").
+                raise NodeExecutionError(
+                    "Failed to create PostgreSQL connection pool with "
+                    f"credential_provider ({type(exc).__name__})"
+                ) from None
+        else:
+            # None path: behavior is UNCHANGED from before #1741.
+            self._pool = await asyncpg.create_pool(dsn, **create_pool_kwargs)
         # Issue #1572: if this pool was created on a transient bridge loop,
         # register ``disconnect`` so the bridge drains it before closing the
         # loop (no-op on a persistent app loop — the marker gates it).
@@ -4980,6 +5021,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
             pool_size=self.config.get("pool_size", 10),
             max_pool_size=self.config.get("max_pool_size", 20),
             command_timeout=self.config.get("timeout", 60.0),
+            # Issue #1741: ride-along per-connection credential callback for
+            # token-based DB auth (Azure AD / AWS IAM). None (default) leaves
+            # pool behavior unchanged; a callable is wired into asyncpg's
+            # per-connection ``connect`` hook by PostgreSQLAdapter.connect().
+            credential_provider=self.config.get("credential_provider"),
         )
 
         # Add enterprise features configuration to database config

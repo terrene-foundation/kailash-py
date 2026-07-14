@@ -8,10 +8,11 @@ with automatic failover and load balancing.
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 from ..adapters.connection_parser import ConnectionParser
 from ..database.multi_database import DatabaseDialect, detect_dialect
+from .exceptions import sanitize_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,12 @@ class DatabaseConfig:
     is_read_replica: bool = False
     weight: int = 1
     enabled: bool = True
+    # Issue #1741: optional per-physical-connection credential callback for
+    # token-based DB auth (Azure AD / AWS IAM). Mirrors
+    # ``dataflow.core.config.DatabaseConfig.credential_provider``; when set,
+    # every physical connection this registry's pool opens mints a fresh
+    # credential. Absent (None), behavior is unchanged.
+    credential_provider: Optional[Callable[[], str]] = None
 
 
 class DatabaseRegistry:
@@ -83,7 +90,7 @@ class DatabaseRegistry:
             )
 
             # Create async PostgreSQL connection pool
-            pool = await asyncpg.create_pool(
+            create_pool_kwargs = dict(
                 host=components.get("host"),
                 port=components.get("port") or 5432,
                 database=components.get("database"),
@@ -92,6 +99,37 @@ class DatabaseRegistry:
                 min_size=1,
                 max_size=db_config.pool_size,
             )
+            # Issue #1741: token-based DB auth (Azure AD / AWS IAM). When a
+            # credential_provider is configured, mint a FRESH credential per
+            # physical connection via asyncpg's ``connect`` hook (the minted
+            # token overrides the ``password=`` kwarg above). See
+            # dataflow.core.credential_provider for the fail-closed contract.
+            if db_config.credential_provider is not None:
+                from dataflow.core.credential_provider import (
+                    build_asyncpg_credential_connect,
+                )
+
+                create_pool_kwargs["connect"] = build_asyncpg_credential_connect(
+                    db_config.credential_provider,
+                    asyncpg,
+                    context="PostgreSQL database registry",
+                )
+            try:
+                pool = await asyncpg.create_pool(**create_pool_kwargs)
+            except Exception as exc:
+                # A raising credential_provider surfaces here on the initial
+                # fill, and an asyncpg connect failure can embed the
+                # credentialed connection params. Route through
+                # sanitize_db_error and DO NOT attach exc_info / __cause__ so
+                # no credential material reaches a log line or traceback.
+                safe_error = sanitize_db_error(str(exc))
+                logger.error(
+                    "database_registry.failed_to_create_connection_pool",
+                    extra={"database_name": name, "error": safe_error},
+                )
+                raise ConnectionError(
+                    f"Failed to create connection pool for '{name}': {safe_error}"
+                ) from None
             self._connection_pools[name] = pool
             logger.info(
                 "database_registry.created_async_postgresql_connection_pool_for",
@@ -130,14 +168,16 @@ class DatabaseRegistry:
         """Mark a database as unhealthy."""
         self._health_status[name] = False
         logger.warning(
-            "database_registry.database_marked_as_unhealthy", extra={"database_name": name}
+            "database_registry.database_marked_as_unhealthy",
+            extra={"database_name": name},
         )
 
     def mark_database_healthy(self, name: str):
         """Mark a database as healthy."""
         self._health_status[name] = True
         logger.info(
-            "database_registry.database_marked_as_healthy", extra={"database_name": name}
+            "database_registry.database_marked_as_healthy",
+            extra={"database_name": name},
         )
 
     def is_database_healthy(self, name: str) -> bool:
@@ -151,7 +191,8 @@ class DatabaseRegistry:
                 if conn and not conn.closed:
                     conn.close()
                     logger.info(
-                        "database_registry.closed_connection_for", extra={"database_name": name}
+                        "database_registry.closed_connection_for",
+                        extra={"database_name": name},
                     )
             except Exception as e:
                 logger.error(
@@ -179,7 +220,9 @@ class DatabaseRegistry:
             if name in self._read_replicas:
                 self._read_replicas.remove(name)
 
-            logger.info("database_registry.removed_database", extra={"database_name": name})
+            logger.info(
+                "database_registry.removed_database", extra={"database_name": name}
+            )
 
     def get_connection_info(self) -> Dict[str, any]:
         """Get connection information for all databases."""

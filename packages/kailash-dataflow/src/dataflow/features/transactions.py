@@ -31,7 +31,7 @@ from dataflow.core.exceptions import (
 )  # Issue #1552: redact driver-error VALUES
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
-from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -590,17 +590,38 @@ _SCOPE_INACTIVE = object()
 # across the BG loop's lifetime.
 
 
-async def _open_connection_for_url(url: str) -> Any:
+async def _open_connection_for_url(
+    url: str, credential_provider: Optional[Callable[[], str]] = None
+) -> Any:
     """Open a fresh asyncpg/aiosqlite connection on the current loop.
 
     Dispatches by URL scheme. The returned connection is bound to the
     event loop currently executing this coroutine — for the sync surface,
     that is the SyncTransactionManager's BG loop.
+
+    Issue #1741: when ``credential_provider`` is set (token-based DB auth —
+    Azure AD / AWS IAM), the PostgreSQL branch mints a FRESH credential for
+    this physical connection via the shared fail-closed helper rather than
+    trusting the (possibly stale) password embedded in ``url``. Because the
+    sync manager opens one connection per ``begin()`` (not a pool), the
+    helper's ``connect`` callable is invoked directly. Absent (None),
+    behavior is unchanged.
     """
     scheme = url.split(":", 1)[0].lower()
     if scheme in ("postgresql", "postgres"):
         import asyncpg
 
+        if credential_provider is not None:
+            from dataflow.core.credential_provider import (
+                build_asyncpg_credential_connect,
+            )
+
+            connect = build_asyncpg_credential_connect(
+                credential_provider,
+                asyncpg,
+                context="PostgreSQL sync transaction",
+            )
+            return await connect(url)
         return await asyncpg.connect(url)
     if scheme == "sqlite":
         import aiosqlite
@@ -990,11 +1011,24 @@ class SyncTransactionManager:
             Re-raises any exception from the body after rollback.
         """
         url = self._resolve_database_url()
+        # Issue #1741: resolve the optional per-connection credential callback
+        # from the wrapped DataFlow so token-based auth mints a fresh token for
+        # this transaction's connection (defensive getattr chain — a bare
+        # TransactionManager without a DataFlow back-reference resolves None).
+        credential_provider = getattr(
+            getattr(
+                getattr(getattr(self._transactions, "dataflow", None), "config", None),
+                "database",
+                None,
+            ),
+            "credential_provider",
+            None,
+        )
         # Acquire a fresh connection on the BG loop, BEGIN the transaction.
         # The connection is loop-bound to the BG loop, NOT the host loop,
         # so subsequent ``execute_raw`` calls (also routed via the BG loop)
         # use the same connection without cross-loop drift.
-        conn = self._run_sync(_open_connection_for_url(url))
+        conn = self._run_sync(_open_connection_for_url(url, credential_provider))
         try:
             self._run_sync(_begin_isolation(conn, isolation_level))
         except BaseException:
