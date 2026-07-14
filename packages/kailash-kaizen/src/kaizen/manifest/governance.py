@@ -10,10 +10,12 @@ with the EATP trust posture model.
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from kaizen.manifest._coerce import coerce_list_field
+from kaizen.manifest._coerce import coerce_list_field, safe_repr
+from kaizen.manifest.errors import ManifestValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -45,23 +47,32 @@ class GovernanceManifest:
 
     def __post_init__(self) -> None:
         if self.risk_level not in _VALID_RISK_LEVELS:
-            raise ValueError(
+            raise ManifestValidationError(
                 f"risk_level must be one of {sorted(_VALID_RISK_LEVELS)}, "
-                f"got {self.risk_level!r}"
+                f"got {safe_repr(self.risk_level)}"
             )
         if self.suggested_posture not in _VALID_POSTURES:
-            raise ValueError(
+            raise ManifestValidationError(
                 f"suggested_posture must be one of {sorted(_VALID_POSTURES)}, "
-                f"got {self.suggested_posture!r}"
+                f"got {safe_repr(self.suggested_posture)}"
             )
-        if (
-            self.max_budget_microdollars is not None
-            and self.max_budget_microdollars < 0
-        ):
-            raise ValueError(
-                f"max_budget_microdollars must be non-negative, "
-                f"got {self.max_budget_microdollars}"
-            )
+        if self.max_budget_microdollars is not None:
+            budget = self.max_budget_microdollars
+            # A budget ceiling MUST be a finite, non-negative number. TOML
+            # accepts ``inf``/``nan`` literals and ``float('inf') < 0`` /
+            # ``float('nan') < 0`` are BOTH False, so a bare ``< 0`` guard
+            # lets a non-finite value through — declaring a spend cap of "no
+            # cap" that reaches the live deploy_agent MCP tool. Mirror the
+            # ``math.isfinite`` guard in mcp/catalog_server/tools/governance.py.
+            # The message MUST NOT echo the unbounded value back.
+            if (
+                not isinstance(budget, (int, float))
+                or not math.isfinite(budget)
+                or budget < 0
+            ):
+                raise ManifestValidationError(
+                    "max_budget_microdollars must be a finite, " "non-negative number"
+                )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a plain dict."""

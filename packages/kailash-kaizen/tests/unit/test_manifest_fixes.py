@@ -411,3 +411,201 @@ class TestListFieldTypeConfusionRaises:
                 '[application]\nname="x"\n'
                 '[application.agents_requested]\nagents="single"\n'
             )
+
+
+# ===========================================================================
+# Security review findings (4) + governance-error consistency
+# ===========================================================================
+
+
+def _agent_toml_with_budget(budget_literal: str) -> str:
+    """Build an agent manifest whose [governance] declares a raw budget
+    literal (unquoted → parsed as a TOML number)."""
+    return (
+        '[agent]\nname="x"\nmodule="m"\nclass_name="C"\n'
+        "[governance]\n"
+        'purpose="p"\n'
+        'risk_level="low"\n'
+        'suggested_posture="supervised"\n'
+        f"max_budget_microdollars = {budget_literal}\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finding 1 (HIGH) — non-finite governance budget (inf/nan) is rejected
+# ---------------------------------------------------------------------------
+class TestGovernanceBudgetRejectsNonFinite:
+    def test_inf_budget_raises_validation_error(self):
+        with pytest.raises(ManifestValidationError):
+            AgentManifest.from_toml_str(_agent_toml_with_budget("inf"))
+
+    def test_nan_budget_raises_validation_error(self):
+        with pytest.raises(ManifestValidationError):
+            AgentManifest.from_toml_str(_agent_toml_with_budget("nan"))
+
+    def test_negative_inf_budget_raises_validation_error(self):
+        with pytest.raises(ManifestValidationError):
+            AgentManifest.from_toml_str(_agent_toml_with_budget("-inf"))
+
+    def test_direct_construction_inf_raises(self):
+        with pytest.raises(ManifestValidationError):
+            GovernanceManifest(max_budget_microdollars=float("inf"))
+
+    def test_direct_construction_nan_raises(self):
+        with pytest.raises(ManifestValidationError):
+            GovernanceManifest(max_budget_microdollars=float("nan"))
+
+    def test_error_message_does_not_echo_unbounded_value(self):
+        """The message MUST NOT echo 'inf'/'nan' back (an attacker-supplied
+        non-finite value should not appear in the forwarded error)."""
+        with pytest.raises(ManifestValidationError) as exc_info:
+            GovernanceManifest(max_budget_microdollars=float("inf"))
+        msg = str(exc_info.value).lower()
+        assert "inf" not in msg
+        assert "nan" not in msg
+
+    def test_finite_budget_still_accepted(self):
+        manifest = AgentManifest.from_toml_str(_agent_toml_with_budget("5000000"))
+        assert manifest.governance is not None
+        assert manifest.governance.max_budget_microdollars == 5_000_000
+
+    def test_negative_finite_budget_still_rejected(self):
+        with pytest.raises(ManifestValidationError):
+            GovernanceManifest(max_budget_microdollars=-100)
+
+
+# ---------------------------------------------------------------------------
+# Finding 2 (MEDIUM) — attacker-controlled field values are length-bounded
+# in forwarded error messages (no error-payload amplification)
+# ---------------------------------------------------------------------------
+class TestErrorMessagesAreLengthBounded:
+    def test_coerce_list_field_huge_value_message_is_bounded(self):
+        huge = "p" * 100_000
+        with pytest.raises(ManifestValidationError) as exc_info:
+            AgentManifest.from_dict(
+                {
+                    "name": "b",
+                    "module": "m",
+                    "class_name": "C",
+                    "capabilities": huge,
+                }
+            )
+        msg = str(exc_info.value)
+        # Bounded: the 100KB payload MUST NOT be echoed verbatim.
+        assert len(msg) < 400
+        assert len(msg) < len(huge)
+        assert huge not in msg
+
+    def test_manifest_version_huge_value_message_is_bounded(self):
+        huge = "9" * 100_000
+        with pytest.raises(ManifestValidationError) as exc_info:
+            AgentManifest(manifest_version=huge, name="b", module="m", class_name="C")
+        msg = str(exc_info.value)
+        assert len(msg) < 400
+        assert huge not in msg
+
+    def test_governance_risk_level_huge_value_message_is_bounded(self):
+        huge = "z" * 100_000
+        with pytest.raises(ManifestValidationError) as exc_info:
+            GovernanceManifest(risk_level=huge)
+        msg = str(exc_info.value)
+        assert len(msg) < 400
+        assert huge not in msg
+
+    def test_registry_invalid_name_message_is_bounded(self):
+        from kaizen.mcp.catalog_server.registry import _validate_name
+
+        huge = "!" * 100_000  # fails the name regex
+        with pytest.raises(ValueError) as exc_info:
+            _validate_name(huge)
+        msg = str(exc_info.value)
+        assert len(msg) < 400
+        assert huge not in msg
+
+    def test_safe_repr_truncates_and_marks(self):
+        from kaizen.manifest._coerce import safe_repr
+
+        out = safe_repr("a" * 5000, max_len=200)
+        assert len(out) <= 200
+        assert out.endswith("…(truncated)")
+
+    def test_safe_repr_short_value_unchanged(self):
+        from kaizen.manifest._coerce import safe_repr
+
+        assert safe_repr("small") == "'small'"
+
+
+# ---------------------------------------------------------------------------
+# Finding 3 (LOW) — non-finite app budget raises ManifestValidationError,
+# not a raw OverflowError
+# ---------------------------------------------------------------------------
+class TestAppBudgetOverflow:
+    def _app_toml(self, budget_literal: str) -> str:
+        return (
+            '[application]\nname="a"\nowner="o@example.com"\n'
+            f"[application.budget]\nmonthly = {budget_literal}\n"
+        )
+
+    def test_inf_app_budget_raises_validation_error(self):
+        with pytest.raises(ManifestValidationError, match="monthly"):
+            AppManifest.from_toml_str(self._app_toml("inf"))
+
+    def test_inf_app_budget_does_not_raise_raw_overflow_error(self):
+        try:
+            AppManifest.from_toml_str(self._app_toml("inf"))
+        except OverflowError:
+            pytest.fail(
+                "from_toml_str raised a raw OverflowError instead of "
+                "ManifestValidationError for an inf budget"
+            )
+        except ManifestValidationError:
+            pass  # expected
+
+    def test_nan_app_budget_raises_validation_error(self):
+        with pytest.raises(ManifestValidationError, match="monthly"):
+            AppManifest.from_toml_str(self._app_toml("nan"))
+
+
+# ---------------------------------------------------------------------------
+# Finding 4 (LOW, documentation) — loader path-handling security warning
+# ---------------------------------------------------------------------------
+class TestLoaderDocumentsPathTraversalRisk:
+    def test_module_docstring_warns_about_path_containment(self):
+        import kaizen.manifest.loader as loader_mod
+
+        doc = (loader_mod.__doc__ or "").lower()
+        assert "traversal" in doc or "containment" in doc or "allowlist" in doc
+
+    def test_load_manifest_docstring_warns(self):
+        from kaizen.manifest.loader import load_manifest
+
+        doc = (load_manifest.__doc__ or "").lower()
+        assert "containment" in doc or "allowlist" in doc
+
+    def test_load_app_manifest_docstring_warns(self):
+        from kaizen.manifest.loader import load_app_manifest
+
+        doc = (load_app_manifest.__doc__ or "").lower()
+        assert "containment" in doc or "allowlist" in doc
+
+
+# ---------------------------------------------------------------------------
+# Consistency — governance risk_level/suggested_posture raise
+# ManifestValidationError (aligned with the rest of the module), which is a
+# ValueError subclass so existing pytest.raises(ValueError) still passes.
+# ---------------------------------------------------------------------------
+class TestGovernanceErrorConsistency:
+    def test_invalid_risk_level_raises_manifest_validation_error(self):
+        with pytest.raises(ManifestValidationError, match="risk_level"):
+            GovernanceManifest(risk_level="extreme")
+
+    def test_invalid_posture_raises_manifest_validation_error(self):
+        with pytest.raises(ManifestValidationError, match="suggested_posture"):
+            GovernanceManifest(suggested_posture="autonomous")
+
+    def test_governance_errors_are_still_value_errors(self):
+        # Backward-compat: existing callers catching ValueError still work.
+        with pytest.raises(ValueError):
+            GovernanceManifest(risk_level="extreme")
+        with pytest.raises(ValueError):
+            GovernanceManifest(suggested_posture="autonomous")

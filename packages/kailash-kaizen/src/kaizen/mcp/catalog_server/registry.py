@@ -16,6 +16,8 @@ import re
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
+from kaizen.manifest._coerce import safe_repr
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["MemoryRegistry", "LocalRegistry"]
@@ -35,8 +37,13 @@ def _validate_name(name: str) -> None:
         ValueError: If the name does not match the allowed pattern.
     """
     if not _VALID_NAME_RE.match(name):
+        # ``name`` is attacker-controlled (arrives via the deploy_agent /
+        # app_register MCP tools) and this message is forwarded to the
+        # client; bound the echoed value to prevent error-payload
+        # amplification (security.md length-limits).
         raise ValueError(
-            f"Invalid name {name!r}: must match ^[a-zA-Z][a-zA-Z0-9_-]{{0,127}}$"
+            f"Invalid name {safe_repr(name)}: "
+            f"must match ^[a-zA-Z][a-zA-Z0-9_-]{{0,127}}$"
         )
 
 

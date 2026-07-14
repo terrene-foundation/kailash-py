@@ -20,7 +20,31 @@ from typing import Any, List
 
 from kaizen.manifest.errors import ManifestValidationError
 
-__all__ = ["coerce_list_field"]
+__all__ = ["coerce_list_field", "safe_repr"]
+
+_DEFAULT_REPR_CAP = 200
+_TRUNCATION_SUFFIX = "…(truncated)"
+
+
+def safe_repr(value: Any, max_len: int = _DEFAULT_REPR_CAP) -> str:
+    """Return a length-bounded ``repr`` of *value* for error messages.
+
+    Manifest validation errors are forwarded verbatim to the MCP client
+    (the catalog server relays ``ManifestValidationError`` messages —
+    ``ManifestError`` is a ``ValueError`` subclass). Echoing an
+    attacker-controlled field value with an unbounded ``{value!r}`` lets a
+    caller amplify a tiny request into a huge error payload
+    (DoS / input-validation, per ``security.md`` length-limits). Every
+    attacker-influenced ``{X!r}`` in a manifest error message MUST route
+    through this helper, which truncates the ``repr`` to *max_len*
+    characters (truncation suffix included within the budget) so the
+    emitted message stays bounded regardless of input size.
+    """
+    rendered = repr(value)
+    if len(rendered) <= max_len:
+        return rendered
+    keep = max(0, max_len - len(_TRUNCATION_SUFFIX))
+    return rendered[:keep] + _TRUNCATION_SUFFIX
 
 
 def coerce_list_field(value: Any, field_name: str) -> List[Any]:
@@ -41,14 +65,14 @@ def coerce_list_field(value: Any, field_name: str) -> List[Any]:
     if isinstance(value, (str, bytes)):
         raise ManifestValidationError(
             f"Field {field_name!r} must be a list, got a "
-            f"{type(value).__name__} ({value!r}); a string would silently "
-            f"split into individual characters",
+            f"{type(value).__name__} ({safe_repr(value)}); a string would "
+            f"silently split into individual characters",
             details={"field": field_name, "received_type": type(value).__name__},
         )
     if not isinstance(value, (list, tuple)):
         raise ManifestValidationError(
             f"Field {field_name!r} must be a list, got {type(value).__name__} "
-            f"({value!r})",
+            f"({safe_repr(value)})",
             details={"field": field_name, "received_type": type(value).__name__},
         )
     return list(value)

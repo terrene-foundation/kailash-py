@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from kaizen.manifest._coerce import coerce_list_field
+from kaizen.manifest._coerce import coerce_list_field, safe_repr
 from kaizen.manifest.errors import ManifestParseError, ManifestValidationError
 from kaizen.manifest.governance import GovernanceManifest
 
@@ -113,7 +113,7 @@ class AgentManifest:
         if self.manifest_version not in _SUPPORTED_VERSIONS:
             errors["manifest_version"] = (
                 f"manifest_version must be one of {sorted(_SUPPORTED_VERSIONS)}, "
-                f"got {self.manifest_version!r}"
+                f"got {safe_repr(self.manifest_version)}"
             )
         if errors:
             # Use the first error key for the message so pytest.raises(match=...)

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
-from kaizen.manifest._coerce import coerce_list_field
+from kaizen.manifest._coerce import coerce_list_field, safe_repr
 from kaizen.manifest.errors import ManifestParseError, ManifestValidationError
 
 logger = logging.getLogger(__name__)
@@ -205,11 +205,17 @@ class AppManifest:
             monthly_raw = budget_section["monthly"]
             try:
                 budget_monthly_microdollars = int(Decimal(str(monthly_raw)) * 1_000_000)
-            except (InvalidOperation, ValueError) as exc:
+            except (InvalidOperation, ValueError, OverflowError) as exc:
+                # OverflowError: int(Decimal('Infinity')) — a TOML `inf`
+                # literal reaches Decimal('inf') cleanly, then int() of it
+                # overflows. Same non-finite input class as the governance
+                # budget guard; caught here so the tool surfaces a clean
+                # ManifestValidationError, not a raw OverflowError.
                 raise ManifestValidationError(
                     f"Invalid [application.budget].monthly value in manifest "
-                    f"({source}): expected a number, got {monthly_raw!r}",
-                    details={"source": source, "monthly": repr(monthly_raw)},
+                    f"({source}): expected a finite number, got "
+                    f"{safe_repr(monthly_raw)}",
+                    details={"source": source, "monthly": safe_repr(monthly_raw)},
                 ) from exc
 
         return cls(
