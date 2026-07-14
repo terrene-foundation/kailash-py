@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deprecated
+
+- **kailash-kaizen: legacy `from_env()` per-provider-key auto-detect tier
+  (#1721/#1720).** `LlmClient.from_env()` resolves through three tiers —
+  `KAILASH_LLM_DEPLOYMENT` URI > `KAILASH_LLM_PROVIDER` preset selector >
+  legacy per-provider `*_API_KEY` auto-detect (`OPENAI_API_KEY`,
+  `AZURE_OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`,
+  `DEEPSEEK_API_KEY`). The legacy tier is a backward-compat layer preserving
+  the old `autoselect_provider()` behavior, and is where the #1721 cross-SDK
+  key-list divergence lives (this SDK's 5 legacy keys including Azure vs.
+  the Rust SDK's 10, without Azure) — the canonical URI/selector surface is
+  already cross-SDK-aligned, so the root-cause fix retires the legacy tier
+  rather than reconciling the two key-lists. Resolving via the legacy tier
+  ALONE (no URI, no selector configured) now emits a `DeprecationWarning`
+  plus a structured `llm_client.migration.legacy_key_autodetect_deprecated`
+  `WARNING` log line naming the detected env var and the canonical migration
+  path (`KAILASH_LLM_PROVIDER=<preset>`, e.g. `openai` / `anthropic` /
+  `google` / `deepseek` / `azure_openai`, or a `KAILASH_LLM_DEPLOYMENT` URI).
+  This is the start of the deprecation cycle only (zero-tolerance.md Rule
+  6a) — resolution behavior is unchanged this release; the legacy tier still
+  resolves and will be removed in a future release. The pre-existing
+  `llm_client.migration.legacy_and_deployment_both_configured` coexistence
+  warning (a legacy key set alongside a URI/selector) is unchanged.
+  `kaizen.llm.from_env.LEGACY_KEY_ORDER` (the 5-entry key list) is
+  unmodified — this is a deprecation of the tier, not a reconciliation of
+  the key lists.
+
 ## [2.50.0] - 2026-07-13
 
 Observability program (#1708) — a coordinated 5-package release. Configures

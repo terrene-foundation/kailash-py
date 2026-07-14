@@ -23,6 +23,20 @@ for `LlmClient.from_env()`:
 If BOTH the deployment tier (URI or selector) AND legacy per-provider
 keys are set, emits a `WARNING llm_client.migration.legacy_and_deployment_both_configured`
 and the deployment path wins.
+
+**Deprecation (#1721/#1720):** the legacy tier itself -- resolving with NO
+`KAILASH_LLM_DEPLOYMENT` URI and NO `KAILASH_LLM_PROVIDER` selector present,
+purely from a per-provider `*_API_KEY` -- is a backward-compat migration
+layer preserving the old `autoselect_provider()` behavior. This is where the
+cross-SDK key-list divergence lives (Python's 5 legacy keys incl. Azure vs.
+the Rust SDK's 10, no Azure): the canonical URI/selector surface is already
+cross-SDK-aligned, so the fix is to retire the legacy tier, not reconcile the
+key lists. Resolving via the legacy tier ALONE now emits a `DeprecationWarning`
+plus a `WARNING llm_client.migration.legacy_key_autodetect_deprecated` log
+line naming the detected key and the canonical migration path
+(`KAILASH_LLM_PROVIDER=<preset>` or a `KAILASH_LLM_DEPLOYMENT` URI). This is
+the START of the deprecation cycle -- the legacy tier still resolves this
+release; only removal is deferred (zero-tolerance.md Rule 6a).
 """
 
 from __future__ import annotations
@@ -30,6 +44,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import warnings
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -102,13 +117,28 @@ def resolve_env_deployment() -> LlmDeployment:
     if selector:
         return _build_from_selector(selector)
     if legacy_key is not None:
+        # Legacy tier resolving ALONE (no URI, no selector) -- this is the
+        # deprecated backward-compat auto-detect path (#1721/#1720). Does
+        # NOT change resolution behavior: the legacy tier still resolves
+        # this release. See module docstring "Deprecation" section.
+        message = _legacy_alone_deprecation_message(legacy_key)
+        warnings.warn(message, DeprecationWarning, stacklevel=3)
+        logger.warning(
+            "llm_client.migration.legacy_key_autodetect_deprecated",
+            extra={
+                "legacy_env_var": legacy_key,
+                "suggested_selector": _legacy_preset_name(legacy_key),
+                "canonical_selector_var": ENV_SELECTOR,
+                "canonical_uri_var": ENV_DEPLOYMENT_URI,
+            },
+        )
         return _build_from_legacy(legacy_key)
 
+    _legacy_keys = ", ".join(env_var for env_var, _preset in LEGACY_KEY_ORDER)
     raise NoKeysConfigured(
         "No LLM deployment configured. Set one of: "
         f"{ENV_DEPLOYMENT_URI} (URI), {ENV_SELECTOR} (preset name), "
-        "or a legacy per-provider API key (OPENAI_API_KEY, "
-        "ANTHROPIC_API_KEY, GOOGLE_API_KEY, AZURE_OPENAI_API_KEY)."
+        f"or a legacy per-provider API key ({_legacy_keys})."
     )
 
 
@@ -118,6 +148,38 @@ def _detect_legacy_key() -> Optional[str]:
         if os.environ.get(env_var, "").strip():
             return env_var
     return None
+
+
+def _legacy_preset_name(legacy_key: str) -> Optional[str]:
+    """Return the preset/selector name paired with a legacy env var."""
+    for env_var, preset in LEGACY_KEY_ORDER:
+        if env_var == legacy_key:
+            return preset
+    return None
+
+
+def _legacy_alone_deprecation_message(legacy_key: str) -> str:
+    """Build the deprecation message for legacy-tier-ALONE resolution.
+
+    Fires only when `resolve_env_deployment()` resolves via the legacy tier
+    with NO `KAILASH_LLM_DEPLOYMENT` URI and NO `KAILASH_LLM_PROVIDER`
+    selector present (#1721/#1720). Names the detected legacy env var and
+    points at the canonical migration path -- a preset selector when this
+    key maps to one, else the general selector/URI guidance.
+    """
+    preset = _legacy_preset_name(legacy_key)
+    migration_path = (
+        f"set {ENV_SELECTOR}={preset!r}"
+        if preset is not None
+        else f"set {ENV_SELECTOR} to a registered preset name"
+    )
+    return (
+        f"LlmClient.from_env(): resolved via the legacy per-provider-key "
+        f"auto-detect tier ({legacy_key} is set; no {ENV_DEPLOYMENT_URI} or "
+        f"{ENV_SELECTOR} configured). This legacy auto-detect path is "
+        f"deprecated and will be removed in a future release -- "
+        f"{migration_path} (or a {ENV_DEPLOYMENT_URI} URI) instead."
+    )
 
 
 def _build_from_uri(uri: str) -> LlmDeployment:
@@ -317,7 +379,7 @@ def _call_preset_from_env(selector: str, factory: Any) -> LlmDeployment:
 
 
 def _build_from_legacy(legacy_key: str) -> LlmDeployment:
-    """Legacy tier: detect one of the 4 canonical keys and build."""
+    """Legacy tier: build from the detected legacy per-provider key (one of LEGACY_KEY_ORDER)."""
     from kaizen.llm.presets import (
         anthropic_preset,
         azure_openai_preset,
