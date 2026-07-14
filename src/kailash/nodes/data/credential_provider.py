@@ -11,9 +11,13 @@ connection string captured once at pool-construction time.
 
 This is the CORE-SDK sibling of ``dataflow.core.credential_provider``. The
 core ``AsyncSQLDatabaseNode`` pool (``kailash.nodes.data.async_sql``) is the
-pool the ``db.express`` / ``db.transactions`` / bulk CRUD hot path actually
-opens — the three pools wired in #1737 live in the DataFlow package and cover
-only the probe / health-check / audit-trail connections. The core SDK cannot
+pool the ``db.express`` / ``db.transactions`` CRUD hot path actually opens
+(reached via DataFlow's single ``_get_or_create_async_sql_node`` choke point,
+plus the no-scope CRUD retry fallback) — the three pools wired in #1737 live
+in the DataFlow package and cover only the probe / health-check / audit-trail
+connections. (Bulk fresh-node pools that run OUTSIDE a transaction scope
+construct their own ``AsyncSQLDatabaseNode`` from serializable params only and
+do NOT ride this callback — a documented #1741 follow-up.) The core SDK cannot
 import the DataFlow helper (the dependency direction is DataFlow → core, never
 the reverse), so the identical fail-closed contract lives here, in exactly one
 core-side place, and every core asyncpg pool that wants this behavior builds

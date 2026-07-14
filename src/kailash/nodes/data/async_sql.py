@@ -1296,7 +1296,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             # Issue #1741: token-based DB auth (Azure AD / AWS IAM). Mint a
             # FRESH credential per physical connection via asyncpg's per-
             # connection ``connect`` hook — this is the CRUD hot-path pool the
-            # db.express / db.transactions / bulk path actually opens. The
+            # db.express / db.transactions path actually opens. The
             # helper's fail-closed contract (raise, never fall back to a stale
             # token) and no-secret-in-logs guarantee live in
             # kailash.nodes.data.credential_provider.

@@ -42,6 +42,13 @@ class _RecordingPool:
         pass
 
 
+class _RecordingConn:
+    """Minimal asyncpg.Connection stand-in (the probe calls ``conn.close()``)."""
+
+    async def close(self):
+        pass
+
+
 class _CreatePoolRecorder:
     """Records asyncpg.create_pool kwargs; returns a trivial pool."""
 
@@ -66,7 +73,7 @@ class _ConnectRecorder:
     async def __call__(self, *args, **kwargs):
         self.args.append(args)
         self.calls.append(dict(kwargs))
-        return object()
+        return _RecordingConn()
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +132,10 @@ class TestDatabaseRegistryCredentialProvider:
         with pytest.raises(ConnectionError) as exc_info:
             await reg.get_connection("db1")
 
-        # sanitize_db_error scrubs; ``from None`` severs the cause chain so the
-        # raw (credential-bearing) exception cannot render in a traceback.
+        # sanitize_db_error scrubs the credential (incl. the password=<value>
+        # keyword form) from the raised message; ``from None`` severs the cause
+        # chain so the raw exception cannot render in a traceback.
+        assert secret_pw not in str(exc_info.value)
         assert exc_info.value.__cause__ is None
         assert exc_info.value.__suppress_context__ is True
 
@@ -187,8 +196,9 @@ class TestStagingEnvironmentManagerCredentialProvider:
             StagingEnvironmentManager,
         )
 
+        secret_pw = "leak-me-staging-9f2b"
         raiser = _CreatePoolRecorder(
-            raise_exc=RuntimeError("auth failed for password=leak-me")
+            raise_exc=RuntimeError(f"auth failed for password={secret_pw}")
         )
         monkeypatch.setattr(asyncpg, "create_pool", raiser)
         mgr = StagingEnvironmentManager(
@@ -198,8 +208,45 @@ class TestStagingEnvironmentManagerCredentialProvider:
         with pytest.raises(ConnectionError) as exc_info:
             await mgr._get_connection_pool(self._db_config())
 
+        assert secret_pw not in str(exc_info.value)
         assert exc_info.value.__cause__ is None
         assert exc_info.value.__suppress_context__ is True
+
+    @pytest.mark.asyncio
+    async def test_single_connection_probe_mints_via_provider(self, monkeypatch):
+        """The production-reachability probe + maintenance-DB admin connects
+        (single asyncpg.connect, not the pool) must ALSO honor the provider —
+        else token-auth staging dies at the probe before the wired pool."""
+        from dataflow.migrations.staging_environment_manager import (
+            StagingEnvironmentManager,
+        )
+
+        connect_rec = _ConnectRecorder()
+        monkeypatch.setattr(asyncpg, "connect", connect_rec)
+        mgr = StagingEnvironmentManager(
+            credential_provider=RotatingTokenProvider("token-v1")
+        )
+
+        await mgr._validate_production_connection(self._db_config())
+
+        # The probe minted a fresh token and injected it as password= (the
+        # static ProductionDatabase.password is overridden).
+        assert connect_rec.calls[0]["password"] == "token-v1"
+
+    @pytest.mark.asyncio
+    async def test_single_connection_probe_plain_when_provider_none(self, monkeypatch):
+        from dataflow.migrations.staging_environment_manager import (
+            StagingEnvironmentManager,
+        )
+
+        connect_rec = _ConnectRecorder()
+        monkeypatch.setattr(asyncpg, "connect", connect_rec)
+        mgr = StagingEnvironmentManager()  # no provider
+
+        await mgr._validate_production_connection(self._db_config())
+
+        # None path unchanged: the static ProductionDatabase.password is used.
+        assert connect_rec.calls[0]["password"] == "static_pw"
 
 
 # ---------------------------------------------------------------------------

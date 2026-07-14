@@ -650,12 +650,35 @@ class StagingEnvironmentManager:
             connection_timeout=prod_db.connection_timeout,
         )
 
+    async def _open_credentialed_connection(self, **connect_kwargs):
+        """Open a single asyncpg connection, minting a FRESH credential via the
+        configured ``credential_provider`` (issue #1741) when set.
+
+        The staging manager opens single connections in three places besides
+        its pool — the production-reachability probe and the maintenance-DB
+        (``CREATE``/``DROP DATABASE``) admin connections. All of them must
+        honor token-based auth (Azure AD / AWS IAM) or a token-auth operator's
+        staging flow fails at the probe before the wired pool is ever reached.
+        Absent a provider, this is a plain ``asyncpg.connect`` (unchanged)."""
+        if self.credential_provider is not None:
+            from dataflow.core.credential_provider import (
+                build_asyncpg_credential_connect,
+            )
+
+            connect = build_asyncpg_credential_connect(
+                self.credential_provider,
+                asyncpg,
+                context="PostgreSQL staging admin",
+            )
+            return await connect(**connect_kwargs)
+        return await asyncpg.connect(**connect_kwargs)
+
     async def _validate_production_connection(
         self, prod_db: ProductionDatabase
     ) -> None:
         """Validate connection to production database."""
         try:
-            conn = await asyncpg.connect(
+            conn = await self._open_credentialed_connection(
                 host=prod_db.host,
                 port=prod_db.port,
                 database=prod_db.database,
@@ -666,7 +689,12 @@ class StagingEnvironmentManager:
             )
             await conn.close()
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to production database: {e}")
+            # Route through sanitize_db_error + sever the cause chain so a
+            # credential-bearing connect error cannot leak into the message
+            # or a traceback (issue #1741; parity with the pool path above).
+            raise ConnectionError(
+                f"Failed to connect to production database: {sanitize_db_error(str(e))}"
+            ) from None
 
     async def _get_connection_pool(
         self, db_config: Union[ProductionDatabase, StagingDatabase]
@@ -741,7 +769,7 @@ class StagingEnvironmentManager:
 
         # Connect to the maintenance DB, not the staging DB we're about to
         # create — "postgres" exists on every PostgreSQL server by convention.
-        admin_conn = await asyncpg.connect(
+        admin_conn = await self._open_credentialed_connection(
             host=staging_db.host,
             port=staging_db.port,
             database="postgres",
@@ -781,7 +809,7 @@ class StagingEnvironmentManager:
         if pool is not None:
             await pool.close()
 
-        admin_conn = await asyncpg.connect(
+        admin_conn = await self._open_credentialed_connection(
             host=staging_db.host,
             port=staging_db.port,
             database="postgres",
