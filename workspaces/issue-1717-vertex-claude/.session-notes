@@ -1,47 +1,60 @@
-# Session Notes — 2026-07-14
+# Session Notes — 2026-07-14 (later)
 
 ## Where we are
 
-Clean post-release state. Three workstreams (#1721 deprecation, #1735 manifest,
-#1737 credential callback) shipped, merged, and RELEASED to PyPI; repo swept +
-consolidated (orphan worktree removed). Nothing in flight; main clean.
+Clean post-release state. **#1741 (per-connection credential callback / token-based
+DB auth) is COMPLETE and RELEASED end-to-end.** Nothing in flight; main clean.
 
-## Read first
+## Shipped this session (#1741 — closes the #1737 follow-up)
 
-1. `workspaces/issue-1717-vertex-claude/04-validate/sweep-2026-07-14b.md` — the post-release sweep (all clean; ranked next items)
-2. `workspaces/issue-1717-vertex-claude/journal/0010-*` — the rs#1810 cross-repo grant receipt
-3. GH #1720 — legacy→four-axis consolidation (biggest lever; co-owner-gated)
-4. GH #1741 — CRUD-path credential-callback extension (this session's follow-up)
+Extended the token-auth credential callback (Azure AD / AWS IAM) from #1737's
+three side pools to **every** DataFlow connection path a token-auth user hits:
 
-## In-flight state
+- **CRUD hot path** — the core `AsyncSQLDatabaseNode` pool `db.express`/
+  `db.transactions` actually open (the gap #1737 missed). New core helper
+  `kailash.nodes.data.credential_provider.build_asyncpg_credential_connect` +
+  `DatabaseConfig.credential_provider` field.
+- **3 named pools** — DatabaseRegistry, StagingEnvironmentManager (pool + probe
+  + admin connects), SyncTransactionManager.
+- **DDL/migration** — 5 engine connects, 2 AsyncSQLConnectionWrappers, the
+  migration-lock tx connection, the sync psycopg2 path (via `resolve_fresh_credential`).
+- **Standalone WorkflowBuilder bulk nodes** — via a new context-scoped public
+  API `dataflow.core.credential_provider.credential_provider_scope(cp)` (the
+  nodes hold no DataFlow instance; the runtime's copy_context carries the bind).
+- **Single enforcement point** `open_credentialed_connection`; hardened
+  `sanitize_db_error` to redact the `password=<value>` keyword form.
 
-- None — tree clean, main == origin/main, no open PRs, no active todos.
+### Released to PyPI (verified clean-venv installable)
 
-## Executed this session (external / not in this repo's git log)
+- **kailash 2.51.0** (tag `v2.51.0`) — core credential helper + async_sql hook.
+- **kailash-dataflow 2.18.0** (tag `dataflow-v2.18.0`) — floors `kailash>=2.51.0`.
+- PRs: #1745 (code) + #1746 (release). Issue #1741 CLOSED/COMPLETED.
+- Clean-venv verify PASS: both versions install, floor honored, all new APIs live.
 
-- Released **kailash-dataflow 2.17.0** (tag `dataflow-v2.17.0`) + **kailash-kaizen
-  2.32.0** (tag `kaizen-v2.32.0`) to PyPI — OIDC publish, TestPyPI-validated,
-  clean-venv import verified, GH releases created.
-- Posted a cross-SDK lockstep comment on the Rust SDK's rs#1810 (authorized
-  cross-repo write; grant journal/0010).
-
-## Outstanding ledger (forest)
-
-| ID    | Item                                          | Value-anchor                                                        | Status                          |
-| ----- | --------------------------------------------- | ------------------------------------------------------------------ | ------------------------------- |
-| F1720 | Retire legacy→four-axis LLM redundancy        | User's #1717 follow-on ("resolve the redundancy") — #1720          | BLOCKED on co-owner scope       |
-| F1741 | Extend credential callback to CRUD hot path   | The path most token-auth users hit (#1737 wired only 3 pools) — #1741 | queued (own review cycle)     |
-| FVERT | Vertex-Claude/Gemini LIVE validation          | The #1717 headline path; only wire-proven, never live               | BLOCKED on GCP creds (not .env) |
-
-Closed this session: `#1721` → kaizen 2.32.0 deprecation; `#1735` → kaizen 2.32.0 manifest; `#1737` → dataflow 2.17.0 (PR #1740, tags above).
+### Process
+- 52 new tests, 0 regressions. Two adversarial red-team rounds (reviewer +
+  security-reviewer) per shard; all findings fixed (sanitizer keyword-leak,
+  half-wired staging, psycopg2 sibling + :memory: fail-closed, over-claimed
+  "single entry point" -> made true by consolidation, real-runtime propagation test).
+- Fixed a brittle #1560 source-pin test window (CI-surfaced) + the `.gitignore`
+  `data/` -> `/data/` trap (was silently ignoring nested source `data/` dirs).
 
 ## Traps
+- Session START hit a **machine disk-full** condition (Data volume 100%); cleared
+  the Rust `sccache` (50G regenerable). If bash output writes fail -> check `df`.
+- `test_bootstrap_realizer.py::test_resolve_llm_model_returns_none_when_env_unset`
+  fails LOCALLY only (unrelated to #1741) — the resolver's `load_dotenv()` re-reads
+  this operator's `.env` which defines `OPENAI_PROD_MODEL`. CI-skipped (pytest-check
+  is stages:[pre-commit] + skipped in CI); main is green. A separate test-isolation
+  cleanup, not a blocker.
+- Duplicate `pull_request` CI runs race (`concurrency: cancel-in-progress`) — one
+  run's job can show `fail`/canceled while the live run passes; verify the LIVE run.
 
-- Cold `/tmp` venv under machine load makes `import dataflow`/`kaizen` hang >5min — environmental (same code imports fast in a warm venv + CI green). Verify via `pip show` + warm-venv import, not a cold `/tmp` venv.
-- PyPI simple-index lags the `/json` endpoint post-publish; retry `pip download --no-cache-dir` a few times (build-repo-release §2).
-- `gh --repo terrene-foundation/kailash-py` trips the repo-scope lexical hook though it's the CWD repo (false positive); omit `--repo` on same-repo gh.
-
-## Open questions for the human
-
-- #1720 consolidation scope (biggest lever) — one line unblocks it.
-- Prioritize #1741 (CRUD-path credential extension) next session?
+## Outstanding (small, optional follow-ups)
+- **README/Sphinx token-auth guide** (dataflow): `credential_provider` (#1737) +
+  `credential_provider_scope` (#1741) are docstring+CHANGELOG-documented but have
+  no end-user README section (the #1737 predecessor also left it to docstrings).
+  A docs-only dataflow patch release would surface it; deferred to avoid a
+  release cycle for a doc note. Reviewer flagged as Minor.
+- Prior-session ledger (unchanged, still open): #1720 legacy->four-axis (co-owner
+  scope), FVERT Vertex-Claude LIVE validation (blocked on GCP creds).
