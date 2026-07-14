@@ -2,7 +2,37 @@
 
 ## [Unreleased]
 
-## [2.16.0] — 2026-07-13 — Query-duration RED histogram reaches unified `/metrics` (#1708)
+## [2.17.0] — 2026-07-14 — Per-connection credential callback for token-based DB auth (#1737)
+
+### Added
+
+- **Per-physical-connection credential callback (#1737).** `DatabaseConfig`
+  now accepts `credential_provider: Optional[Callable[[], str]]` — a zero-arg
+  callable returning a fresh password/token minted on **every** new physical
+  connection (initial fill, recycle, overflow, reconnect). This is the
+  asyncpg-native equivalent of SQLAlchemy's `do_connect` event (overriding the
+  pool's per-connection `connect` hook), giving token-based DB auth (Azure AD /
+  AWS IAM tokens used as the password) a zero-staleness refresh with no
+  background refresh-ahead task. The token is set as the driver `password`
+  param — never re-encoded into a DSN/URL — so tokens containing `&=/%` need no
+  percent-encoding. Wired identically on all three long-lived asyncpg pools:
+  the main `PostgreSQLAdapter`, the `LightweightPool` (health checks), and the
+  `PostgreSQLEventStore` (audit trail). The CRUD hot path + remaining pools are
+  a tracked follow-up (#1741). Shared contract lives in one place
+  (`dataflow.core.credential_provider.build_asyncpg_credential_connect`).
+
+### Security
+
+- **Fail-closed credential resolution.** A `credential_provider` that raises,
+  returns a non-`str`, or returns empty raises a typed `DataFlowConnectionError`
+  — it never falls back to a stale or absent credential.
+- **No-secret-in-logs hardening (#1737 /redteam).** The token value/length/
+  prefix is never logged, repr'd, or interpolated. The fail-closed error
+  surfaces only the provider exception's _type name_ and severs it from the
+  `__cause__`/traceback chain so it cannot render under an upstream exception
+  logger. `create_pool`/connect failures are wrapped so a driver error cannot
+  propagate the credentialed DSN, and the shared `sanitize_db_error()` now
+  redacts `scheme://user:PASSWORD@host` connection-string credentials.
 
 Part of the coordinated 5-package #1708 observability release. Requires
 `kailash>=2.50.0` (the unified `/metrics` exposition this histogram now
