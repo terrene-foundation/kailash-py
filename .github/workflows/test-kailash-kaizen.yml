@@ -46,7 +46,7 @@ name: Test kailash-kaizen
 #        would ratchet the thresholds under CI load; excluded until the tests
 #        are rewritten to self-normalizing ratios.
 #
-#      Seven files are excluded via --ignore within an otherwise-clean tier:
+#      Eight files are excluded via --ignore within an otherwise-clean tier:
 #        - tests/unit/mcp/test_catalog_server.py — RED on CI: 35 failures,
 #          all `ModuleNotFoundError: No module named 'kaizen.manifest'`.
 #          src/kaizen/mcp/catalog_server/tools/{deployment,application,
@@ -85,7 +85,10 @@ name: Test kailash-kaizen
 #          declared in any kaizen extra (unlike observability/rag, which ARE
 #          extras and are added to the install above). Excluded until the deps
 #          are declared OR the tests use pytest.importorskip — test-hygiene
-#          follow-up. (The remaining 27 optional-dep collection errors —
+#          follow-up. tests/unit/observability/test_audit_trail.py joins this
+#          group: it imports `opentelemetry.exporter.*`, which the
+#          [observability] extra (api/sdk/prometheus/structlog) does NOT ship.
+#          (The remaining 27 optional-dep collection errors —
 #          numpy/Pillow/networkx/prometheus/opentelemetry — are RESOLVED by
 #          installing the [observability,rag] extras, not by exclusion.)
 #
@@ -240,7 +243,7 @@ jobs:
             tests/unit/ml/ \
             tests/unit/monitoring/ \
             tests/unit/nodes/ --ignore=tests/unit/nodes/auth/test_directory_integration_unit.py --ignore=tests/unit/nodes/auth/test_enterprise_auth_provider_unit.py --ignore=tests/unit/nodes/auth/test_sso_unit.py \
-            tests/unit/observability/ \
+            tests/unit/observability/ --ignore=tests/unit/observability/test_audit_trail.py \
             tests/unit/orchestration/ \
             tests/unit/providers/ --ignore=tests/unit/providers/test_ollama_model_manager.py \
             tests/unit/rag/ --ignore=tests/unit/rag/test_advanced_nodes.py \
