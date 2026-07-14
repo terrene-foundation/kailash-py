@@ -2,6 +2,37 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.32.0] — 2026-07-14 — Manifest module + from_env() legacy-tier deprecation
+
+### Added
+
+- **`kaizen.manifest` module (#1735).** Declarative agent / app / governance
+  manifests (TOML) — parse, validate, and introspect Kaizen agent and
+  application definitions, with typed errors (`ManifestError`,
+  `ManifestParseError`, `ManifestValidationError`) and a governance budget
+  model. Includes hardened parsing: full C0 control-character escaping in TOML
+  string emission, `[[agent]]` array-of-tables validation, non-finite / overflow
+  budget rejection (`math.isfinite` guard), type-guarded list coercion on every
+  `from_dict` / TOML-parse / introspection path, and bounded (`max_len`) error
+  messages so a malformed manifest cannot flood logs.
+
+### Deprecated
+
+- **`LlmClient.from_env()` legacy per-provider-key auto-detect tier
+  (#1721/#1720).** Resolving a client purely from a per-provider API key
+  (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / …) with no `KAILASH_LLM_DEPLOYMENT`
+  (URI) or `KAILASH_LLM_PROVIDER` (selector) set now emits a
+  `DeprecationWarning`. This backward-compat migration tier will be removed in a
+  future major; migrate to the URI or selector tier. The `NoKeysConfigured`
+  message + docstring are now derived from the canonical `LEGACY_KEY_ORDER` so
+  they cannot drift from the resolver.
+
+### Changed
+
+- **Expanded Kaizen CI unit suite (#1734).** Broader FAST unit-tier coverage
+  (LLM + cross-SDK parity) and repaired pre-existing test staleness surfaced by
+  the CI-gate audit. No user-facing behavior change.
+
 ## [2.31.2] — 2026-07-14 — docs: honest `supports()` contract (provider capability vs client emission)
 
 ### Fixed
