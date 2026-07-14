@@ -1,65 +1,54 @@
-# Session Notes — 2026-07-14 — #1717 four-axis LLM + follow-ups (real-API, CI, #1720/#1721)
+# Session Notes — 2026-07-14
 
-## Where we are — SHIPPED + RELEASED (twice)
+## Where we are
 
-- **kailash-kaizen 2.31.0** — #1717 four-axis `LlmClient.complete()`/`stream()`
-  (Vertex-Claude/Gemini + Bedrock wire, GCP WIF/metadata/ADC, config/region/
-  catalog, temperature/alias). PyPI + verified.
-- **kailash-kaizen 2.31.1** — OpenAI GPT-5/o-series `max_completion_tokens` fix
-  (below). PyPI + clean-venv verified (gpt-5 → max_completion_tokens, gpt-4o →
-  max_tokens). Un-enrolled PUBLIC repo, solo.
+#1717 four-axis LLM completion is DONE — shipped, released (kailash-kaizen
+2.31.0/2.31.1/2.31.2 on PyPI, all verified), and closed. Follow-ups this session:
+real-API testing (found+fixed the GPT-5 `max_completion_tokens` bug), kaizen wired
+into CI, `supports()` contract-honesty fix, and the #1720 redundancy question
+answered. Repo clean, no in-flight work. Everything remaining is co-owner-gated.
 
-## Real-API validation (co-owner directive: "test with actual keys, they're in .env")
-Exercised `LlmClient.complete()` against LIVE providers. Results:
-- ✅ openai (gpt-5.6-sol, after fix), anthropic-direct, deepseek, **bedrock-Claude
-  Sonnet 4.5** (the #1717 bedrock wire + AwsBearerToken, real Bedrock).
-- ❌ google-direct → 403 Gemini-API-not-enabled on the project (config, not code).
-- Vertex-Claude/Gemini → still UNTESTED (no GOOGLE_APPLICATION_CREDENTIALS / GCP
-  project in .env). **The headline #1717 path is proven only at the wire-bytes
-  level (respx), NOT against a live Vertex endpoint.**
+## Read first
 
-**Bug found + fixed (PR #1726 → 2.31.1):** the #1717 `openai_chat` shaper emitted
-`max_tokens` unconditionally; GPT-5/o-series 400 on it. Now model-aware
-(GPT-5/o1/o3/o4 → max_completion_tokens; compatible providers keep max_tokens).
-Legacy provider already did this right — so four-axis had REGRESSED it. Cross-SDK
-sibling defect filed #1727 (Rust shaper same bug).
+1. `04-validate/sweep-2026-07-14.md` — this session's /sweep (clean; ranked next items)
+2. `journal/0002-parity-delta-legacy-vs-four-axis.md` — the #1720 capability evidence
+3. `journal/0005-DISCOVERY-1721-rust-legacy-precedence-read.md` — the Rust-read findings
+4. GH #1720 — the precise legacy-vs-four-axis capability gating list (2-agent head-to-head)
 
-## #1720 — "is it a true redundancy?" ANSWERED: NO
-Four-axis is a CONFIG superset but RUNTIME SUBSET. Legacy has (four-axis LACKS):
-tools/function-calling, structured output, multimodal — all used by agents today.
-Plus four-axis REGRESSED openai max_completion_tokens (the 2.31.1 fix). So NOT a
-redundancy to delete — an INCOMPLETE replacement. Legacy is ahead on agent-facing
-features + some correctness; four-axis ahead on deployment/wire/auth/SSRF/parity.
-#1720 reframed accordingly (consolidation = build four-axis to+past legacy parity
-FIRST). Evidence: journal/0002 (parity delta) + the openai regression.
+## In-flight state
 
-## kaizen wired into CI (PR #1725, merged)
-New `.github/workflows/test-kailash-kaizen.yml` — kaizen had NO CI job before
-(unified-ci runs only core/mcp/pact/dataflow), which is why the parity drift hid
-red on main. Gates the fast infra-free LLM + cross_sdk_parity surface (single
-3.12, per-test --timeout, release/* skip). PROVEN: it caught+validated the openai
-fix on #1726. FOLLOW-UP: expand scope to the full unit suite after triaging the
-slow example/ + infra tiers (the full tests/unit/ hangs locally without infra).
+- None local — working tree clean (except `workspaces/sdk-backlog/.session-notes`,
+  a DIFFERENT workspace's pre-existing dirty state, not this session's).
 
-## #1721 — approved Rust read done (journal/0004 grant + 0005 receipt)
-Rust legacy tier HAS deepseek (client.rs:580) → Python aligned, NOT ahead (xfail
-reason corrected, PR #1725). Real issue = broader Python↔Rust legacy divergence
-(Python: OPENAI,AZURE,ANTHROPIC,GOOGLE,DEEPSEEK; Rust: OPENAI,ANTHROPIC,GOOGLE,
-MISTRAL,COHERE,OLLAMA,HF,PERPLEXITY,DEEPSEEK,DOCKER — no Azure) + stale fixture
-matching neither. Reconciliation = co-owner design decision (a write). Tracked #1721.
+## Executed this session
 
-## Open for co-owner
-- **#1720** consolidation program scope (build four-axis to parity → migrate →
-  retire legacy). NOT started; needs your go on scope.
-- **#1721** cross-SDK legacy-precedence reconciliation (which order is canonical;
-  does Python keep Azure / adopt the 6 Rust providers).
-- **#1727** Rust openai max_completion_tokens sibling fix.
-- Vertex-Claude/Gemini live validation — needs GCP creds (not in .env).
+- Released kailash-kaizen **2.31.0**, **2.31.1**, **2.31.2** to PyPI (tags
+  `kaizen-v2.31.{0,1,2}`), each clean-venv verified.
+- Filed GH issues **#1720** (consolidation), **#1721** (parity), **#1727** (Rust openai sibling).
+- Exercised an approved cross-repo READ of the Rust SDK for #1721 (grant journal/0004).
+
+## Outstanding ledger (forest)
+
+| ID     | Item                                              | Value-anchor                                                        | Status                          |
+| ------ | ------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------- |
+| F1720  | Retire legacy→four-axis LLM redundancy            | User's explicit #1717 follow-on ("resolve the redundancy")         | BLOCKED on co-owner scope (#1720) |
+| F1721  | Cross-SDK from_env legacy-precedence reconcile    | Cross-SDK parity (user values); genuine Py↔Rust divergence         | BLOCKED on co-owner design (#1721) |
+| F1727  | Rust openai_chat max_completion_tokens sibling    | Cross-SDK correctness (Py fix live-verified)                       | queued (Rust side) (#1727)      |
+| FCI    | Expand kaizen CI to full unit suite               | Kaizen was un-gated (why #1721 hid); user asked "wire kaizen CI"    | queued (triage slow/infra tiers) |
+| FVERT  | Vertex-Claude/Gemini LIVE validation              | The #1717 headline path; only wire-bytes-proven, never live        | BLOCKED on GCP creds (not in .env) |
+
+Closed this session: `F1717` → releases 2.31.0-2.31.2 (`kaizen-v2.31.*`), issue #1717.
 
 ## Traps
-- Local `.venv` under-provisioned (kaizen-agents/nexus/dataflow/polars); full
-  tests/unit/ HANGS without infra. Validate `tests/unit/llm + tests/cross_sdk_parity`
-  (fast, green). CI job installs [dev,bedrock,vertex,providers-azure,providers-google,
-  providers-tokens] + siblings.
-- Running python from /tmp → enum.py shadow crash; use `mktemp -d`.
+
+- Local `.venv` under-provisioned; full `tests/unit/` HANGS without infra. Validate
+  `tests/unit/llm/ tests/cross_sdk_parity/` (fast/green). CI installs [dev,bedrock,
+  vertex,providers-azure,providers-google,providers-tokens] + siblings + polars.
+- Running python from `/tmp` → `enum.py` shadow crash; use `mktemp -d`.
 - PyPI/uv index lag post-publish; `pip install --no-cache-dir` beats `uv --refresh`.
+- `supports()` reports PROVIDER capability, NOT four-axis client emission (docstring says so now).
+
+## Open questions for the human
+
+- Ratify #1720 consolidation scope (the biggest lever; ~6-10 sessions). One line unblocks it.
+- Decide #1721 canonical legacy-precedence order (needs a write to Python and/or the fixture).
