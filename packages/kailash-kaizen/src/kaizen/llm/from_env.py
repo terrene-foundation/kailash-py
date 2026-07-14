@@ -134,11 +134,11 @@ def resolve_env_deployment() -> LlmDeployment:
         )
         return _build_from_legacy(legacy_key)
 
+    _legacy_keys = ", ".join(env_var for env_var, _preset in LEGACY_KEY_ORDER)
     raise NoKeysConfigured(
         "No LLM deployment configured. Set one of: "
         f"{ENV_DEPLOYMENT_URI} (URI), {ENV_SELECTOR} (preset name), "
-        "or a legacy per-provider API key (OPENAI_API_KEY, "
-        "ANTHROPIC_API_KEY, GOOGLE_API_KEY, AZURE_OPENAI_API_KEY)."
+        f"or a legacy per-provider API key ({_legacy_keys})."
     )
 
 
@@ -379,7 +379,7 @@ def _call_preset_from_env(selector: str, factory: Any) -> LlmDeployment:
 
 
 def _build_from_legacy(legacy_key: str) -> LlmDeployment:
-    """Legacy tier: detect one of the 4 canonical keys and build."""
+    """Legacy tier: build from the detected legacy per-provider key (one of LEGACY_KEY_ORDER)."""
     from kaizen.llm.presets import (
         anthropic_preset,
         azure_openai_preset,
