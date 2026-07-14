@@ -10,10 +10,10 @@ import traceback
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..core.credential_provider import build_asyncpg_credential_connect
 from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
 )
-from ..exceptions import DataFlowConnectionError
 from .base import DatabaseAdapter
 from .dialect import DialectManager
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
@@ -61,57 +61,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
     def _make_credential_provider_connect(self, asyncpg_module: Any) -> Callable:
         """Build an asyncpg ``connect`` callable that mints a fresh credential.
 
-        asyncpg's ``Pool`` invokes ``self._connect(*connect_args, **connect_kwargs)``
-        (defaulting to ``asyncpg.connect``) every time it needs a NEW physical
-        connection — on initial pool fill, on recycle after
-        ``max_inactive_connection_lifetime``, on overflow up to ``max_size``,
-        and on reconnect after a holder's connection dies. Overriding ``connect``
-        (rather than baking a static password into ``connect_kwargs`` once) is
-        the asyncpg-native equivalent of SQLAlchemy's ``do_connect`` event — the
-        callback fires per physical connection, satisfying #1737's "EVERY
-        physical connection" acceptance criterion with a stricter guarantee
-        than the interval-based refresh-ahead approach (zero staleness window).
-
-        Fail-closed: a raising (or non-str-returning) ``credential_provider``
-        raises ``DataFlowConnectionError`` here — it NEVER falls back to the
-        static ``password`` captured in ``connect_kwargs`` at pool-construction
-        time. The minted token is set as the driver PARAM (``connect_kwargs
-        ["password"]``), never re-encoded into a DSN/URL, so tokens containing
-        ``&``, ``=``, ``/``, ``%`` (AWS IAM tokens) need no percent-encoding.
-        The token is NEVER logged (not the value, not its length, not a
-        prefix) and is held locally only for the duration of the connect call.
+        Delegates to the shared
+        :func:`dataflow.core.credential_provider.build_asyncpg_credential_connect`
+        helper — see its docstring for the full per-physical-connection /
+        fail-closed / no-secrets-logged contract. Kept as a thin adapter
+        method (rather than inlining the call at the ``create_connection_pool``
+        site) so existing callers/tests referencing
+        ``adapter._make_credential_provider_connect(...)`` keep working.
         """
-        provider = self.credential_provider
-
-        async def _connect_with_fresh_credential(*args: Any, **connect_kwargs: Any):
-            try:
-                token = provider()
-            except Exception as exc:
-                # Do NOT interpolate str(exc) — a provider's exception message
-                # could echo back token material. Only the exception's type
-                # name is safe to surface.
-                raise DataFlowConnectionError(
-                    "credential_provider() raised while establishing a new "
-                    f"PostgreSQL physical connection ({type(exc).__name__}); "
-                    "refusing to fall back to a stale or absent credential"
-                ) from exc
-
-            if not isinstance(token, str) or not token:
-                raise DataFlowConnectionError(
-                    "credential_provider() must return a non-empty str; got "
-                    f"{type(token).__name__}"
-                )
-
-            connect_kwargs["password"] = token
-            try:
-                return await asyncpg_module.connect(*args, **connect_kwargs)
-            finally:
-                # Hold the live secret as briefly as possible: drop the local
-                # binding as soon as it has been handed to the driver.
-                token = None
-                connect_kwargs["password"] = None
-
-        return _connect_with_fresh_credential
+        return build_asyncpg_credential_connect(
+            self.credential_provider, asyncpg_module, context="PostgreSQL"
+        )
 
     async def connect(self) -> None:
         """Establish PostgreSQL connection (legacy method - use create_connection_pool)."""
@@ -190,11 +150,26 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 "asyncpg is required for PostgreSQL support. Install with: pip install asyncpg"
             )
         except Exception as e:
+            # Issue #1737 (defense-in-depth): route through the same
+            # sanitize_db_error() every other exception-handling method in
+            # this file already uses (execute_query/execute_insert/
+            # execute_bulk_insert/execute_transaction). Empirically verified
+            # (asyncpg 0.31, InvalidPasswordError + unreachable-host +
+            # DSN-string forms) that asyncpg's connect-failure exceptions do
+            # NOT embed the password/token for this driver — but this is the
+            # ONE exception path in the file that skipped the shared
+            # sanitizer, and a raising credential_provider surfaces through
+            # here on the initial pool-fill (see
+            # _make_credential_provider_connect / build_asyncpg_credential_connect,
+            # which already strips the provider's own exception text —
+            # sanitize_db_error is additional defense-in-depth, not the
+            # primary guard).
+            safe_error = sanitize_db_error(str(e))
             logger.error(
                 "postgresql.failed_to_create_postgresql_connection_pool",
-                extra={"error": str(e)},
+                extra={"error": safe_error},
             )
-            raise ConnectionError(f"Connection failed: {e}")
+            raise ConnectionError(f"Connection failed: {safe_error}")
 
     async def close_connection_pool(self) -> None:
         """Close PostgreSQL connection pool."""

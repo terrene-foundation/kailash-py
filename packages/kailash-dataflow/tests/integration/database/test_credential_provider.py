@@ -25,6 +25,7 @@ from typing import List, Optional
 import asyncpg
 import pytest
 
+from dataflow.adapters.exceptions import ConnectionError as AdapterConnectionError
 from dataflow.adapters.postgresql import PostgreSQLAdapter
 from dataflow.exceptions import DataFlowConnectionError
 from tests.infrastructure.test_harness import IntegrationTestSuite
@@ -214,6 +215,79 @@ class TestCredentialProviderRotation:
 
     @pytest.mark.asyncio
     @pytest.mark.regression
+    async def test_held_open_connection_unaffected_while_new_connection_gets_fresh_token(
+        self, test_suite
+    ):
+        """Stronger AC variant: hold conn-1 OPEN across the rotation
+        (proving a connection established BEFORE rotation keeps working on
+        its existing session — PostgreSQL does not re-check auth mid-
+        session) while a CONCURRENT NEW physical connection (an overflow
+        slot, forced by holding conn-1) authenticates with the FRESH
+        post-rotation token. Distinguishes true per-physical-connection
+        freshness from a sequential-only acquire/release/acquire test.
+        """
+        role = _make_role_name()
+        token_v1 = f"tok1_{uuid.uuid4().hex[:10]}"
+        token_v2 = f"tok2_{uuid.uuid4().hex[:10]}"
+
+        admin_conn = await asyncpg.connect(test_suite.config.url)
+        disposable_role = _DisposableRole(admin_conn, role, token_v1)
+        try:
+            await disposable_role.create()
+
+            provider = RotatingTokenProvider(initial_token=token_v1)
+            url = (
+                f"postgresql://{role}:IGNORED-STATIC"
+                f"@{test_suite.config.host}:{test_suite.config.port}/{test_suite.config.database}"
+            )
+            # max_overflow=1 so a SECOND physical connection can open
+            # concurrently while the first is still held open.
+            adapter = PostgreSQLAdapter(
+                url, pool_size=1, max_overflow=1, credential_provider=provider
+            )
+            try:
+                await adapter.create_connection_pool()
+                assert provider.call_count == 1  # initial fill: token-v1
+
+                conn1 = await adapter.connection_pool.acquire()
+                try:
+                    assert await conn1.fetchval("SELECT 1") == 1
+
+                    # Rotate the REAL database credential mid-run, WHILE
+                    # conn1 is still open and in use.
+                    await disposable_role.rotate_password(token_v2)
+                    provider.rotate(token_v2)
+
+                    # Force a genuinely NEW physical connection: pool_size=1
+                    # is already checked out (conn1), so this acquire opens
+                    # an OVERFLOW connection and invokes the provider fresh.
+                    conn2 = await adapter.connection_pool.acquire()
+                    try:
+                        # AC: the NEW physical connection authenticates
+                        # with the FRESH post-rotation token.
+                        assert await conn2.fetchval("SELECT 1") == 1
+                        assert provider.call_count == 2
+                        assert provider.returned_tokens == [token_v1, token_v2]
+
+                        # AND: conn1 — established BEFORE rotation — is
+                        # completely unaffected. Its session was already
+                        # authenticated; PostgreSQL does not re-check
+                        # credentials mid-session. This is what proves
+                        # freshness is PER-PHYSICAL-CONNECTION, not a
+                        # whole-pool invalidation side effect.
+                        assert await conn1.fetchval("SELECT 2") == 2
+                    finally:
+                        await adapter.connection_pool.release(conn2)
+                finally:
+                    await adapter.connection_pool.release(conn1)
+            finally:
+                await adapter.close_connection_pool()
+        finally:
+            await disposable_role.drop()
+            await admin_conn.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
     async def test_stale_token_no_longer_authenticates_after_rotation(self, test_suite):
         """Negative control proving the rotation test above is not
         vacuous: the OLD token genuinely stops working once rotated."""
@@ -379,6 +453,57 @@ class TestCredentialProviderNeverLogsToken:
             assert token_v1 not in log_text
             assert token_v2 not in log_text
             assert secret_marker not in log_text
+        finally:
+            await disposable_role.drop()
+            await admin_conn.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_real_asyncpg_auth_failure_does_not_leak_token_in_exception_or_logs(
+        self, test_suite, caplog
+    ):
+        """A REAL asyncpg-level auth failure (not a raising provider) — the
+        credential_provider returns a WRONG (but token-shaped) value, so
+        PostgreSQL itself rejects it with InvalidPasswordError. Some DB
+        drivers embed the connection URL/DSN (with credentials) in a
+        connect-failure exception message; asyncpg does not (empirically
+        verified against 0.31 across kwargs-password, unreachable-host, and
+        DSN-string forms — see postgresql.py's create_connection_pool()
+        except-block comment) but this regression test pins that property
+        so a future asyncpg version (or driver-error-message change)
+        surfaces loudly rather than silently leaking the token.
+        """
+        role = _make_role_name()
+        real_password = f"real_{uuid.uuid4().hex[:10]}"
+        wrong_token = f"WRONG-TOKEN-{uuid.uuid4().hex[:16]}"
+
+        admin_conn = await asyncpg.connect(test_suite.config.url)
+        disposable_role = _DisposableRole(admin_conn, role, real_password)
+        try:
+            await disposable_role.create()
+
+            class _WrongTokenProvider:
+                def __call__(self) -> str:
+                    return wrong_token
+
+            url = (
+                f"postgresql://{role}:IGNORED-STATIC"
+                f"@{test_suite.config.host}:{test_suite.config.port}/{test_suite.config.database}"
+            )
+            adapter = PostgreSQLAdapter(
+                url,
+                pool_size=1,
+                max_overflow=0,
+                credential_provider=_WrongTokenProvider(),
+            )
+
+            with caplog.at_level(logging.DEBUG):
+                with pytest.raises(AdapterConnectionError) as exc_info:
+                    await adapter.create_connection_pool()
+
+            assert wrong_token not in str(exc_info.value)
+            assert wrong_token not in repr(exc_info.value)
+            assert wrong_token not in caplog.text
         finally:
             await disposable_role.drop()
             await admin_conn.close()

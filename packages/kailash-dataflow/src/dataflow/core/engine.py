@@ -1400,7 +1400,14 @@ class DataFlow(DataFlowEventMixin):
                     try:
                         from dataflow.core.pool_lightweight import LightweightPool
 
-                        self._lightweight_pool = LightweightPool(db_url)
+                        # Issue #1737: thread the configured credential_provider
+                        # through — the lightweight pool runs continuously for
+                        # health checks and hits the same token-expiry failure
+                        # mode as the main pool.
+                        self._lightweight_pool = LightweightPool(
+                            db_url,
+                            credential_provider=self.config.database.credential_provider,
+                        )
                     except Exception:
                         logger.debug(
                             "Lightweight pool creation failed (non-fatal)",
@@ -1875,7 +1882,14 @@ class DataFlow(DataFlowEventMixin):
             ):
                 from dataflow.core.event_stores.postgresql import PostgreSQLEventStore
 
-                backend = PostgreSQLEventStore(database_url=database_url)
+                # Issue #1737: thread the configured credential_provider
+                # through — the audit-trail pool is long-lived for the
+                # app's runtime and hits the same token-expiry failure mode
+                # as the main pool.
+                backend = PostgreSQLEventStore(
+                    database_url=database_url,
+                    credential_provider=self.config.database.credential_provider,
+                )
             else:
                 # Default to SQLite for sqlite URLs and :memory:
                 from dataflow.core.event_stores.sqlite import SQLiteEventStore
