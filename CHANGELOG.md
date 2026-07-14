@@ -34,7 +34,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unmodified — this is a deprecation of the tier, not a reconciliation of
   the key lists.
 
-## [2.50.0] - 2026-07-13
+## [2.51.0] - 2026-07-14
+
+### Added
+
+- **Core-SDK per-connection credential callback for token-based DB auth
+  (#1741).** `kailash.nodes.data.async_sql.DatabaseConfig` now accepts an
+  optional `credential_provider: Optional[Callable[[], str]]` — a zero-arg
+  callable that mints a fresh password/token on **every** physical connection
+  the core `AsyncSQLDatabaseNode` / `PostgreSQLAdapter` pool opens (initial
+  fill, recycle, overflow, reconnect). This is the pool the `db.express` /
+  `db.transactions` CRUD hot path actually opens — DataFlow rides the callback
+  in through `_get_or_create_async_sql_node`. New shared helper
+  `kailash.nodes.data.credential_provider.build_asyncpg_credential_connect`
+  installs asyncpg's per-connection `connect` hook; it is fail-closed (a
+  raising / non-str provider raises `NodeExecutionError` and NEVER falls back
+  to a stale token), never logs the token, sets it as the driver `password`
+  param (never re-encoded into a DSN — tokens containing `&=/%` need no
+  percent-encoding), and severs the provider-exception cause chain. Absent the
+  callback, behavior is unchanged. Companion to kailash-dataflow 2.18.0, which
+  extends the same callback across every DataFlow connection path.
 
 Observability program (#1708) — a coordinated 5-package release. Configures
 the previously-inert OpenTelemetry provider layer, unifies every server's

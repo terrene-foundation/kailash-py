@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+## [2.18.0] — 2026-07-14 — Complete token-based DB auth across every connection path (#1741)
+
+### Added
+
+- **Per-connection credential callback extended to EVERY DataFlow connection
+  path (#1741, follow-up to #1737).** #1737 wired the callback into three side
+  pools (adapter probe, health-check `LightweightPool`, audit-trail
+  `PostgreSQLEventStore`) but missed the pool the token-auth user's actual
+  `db.express` / `db.transactions` / bulk CRUD queries open — the core-SDK
+  `AsyncSQLDatabaseNode` pool — so token auth still failed intermittently on
+  real CRUD traffic after the first token expiry. 2.18.0 closes every path:
+  - **CRUD hot path:** DataFlow rides `config.database.credential_provider`
+    into the core pool via `_get_or_create_async_sql_node` (+ the no-scope CRUD
+    retry fallback). Requires **kailash >= 2.51.0** (new core
+    `DatabaseConfig.credential_provider` field + connect hook).
+  - **The remaining pools:** `DatabaseRegistry`, `StagingEnvironmentManager`
+    (pool + reachability probe + maintenance-DB admin connects), and the
+    `SyncTransactionManager` single-connection path.
+  - **DDL / migration paths:** the engine DDL / verify / `get_connection`
+    connects, the DDL-executor + migration-executor wrappers, the
+    migration-lock tx connection, and the sync `psycopg2` migration connect
+    (via a sync `resolve_fresh_credential` mint).
+  - **Standalone `WorkflowBuilder` bulk nodes** (`BulkCreatePoolNode` /
+    `DataFlowBulkUpsertNode`, which hold no DataFlow instance): a new
+    context-scoped side-channel — `dataflow.core.credential_provider.
+credential_provider_scope(cp)` (public) binds the provider; the nodes read
+    `get_active_credential_provider()`. The Kailash runtime's `copy_context()`
+    snapshot carries it across the node-dispatch boundary. The
+    `db.express` / `db.bulk_*` path needs no scope (already threaded).
+- **Single shared entry point** `open_credentialed_connection` — every non-pool
+  single connection routes through it, so the fail-closed + no-secret-in-logs
+  contract lives in exactly one place.
+
+### Security
+
+- `sanitize_db_error` now also redacts the `password=<value>` keyword form (the
+  discrete-kwargs pools' connect-failure errors), not only the `://u:pw@` URL
+  form. A fail-closed credential error in the psycopg2 migration path is no
+  longer swallowed into the `:memory:` SQLite fallback.
+
+### Out of scope (distinct surfaces)
+
+- The migration-staging validation connects (ephemeral staging DB, not the
+  user's prod), the Docker test-container managers, and the fabric read-only
+  source adapter (its config carries no `credential_provider`).
+
 ## [2.17.0] — 2026-07-14 — Per-connection credential callback for token-based DB auth (#1737)
 
 ### Added
