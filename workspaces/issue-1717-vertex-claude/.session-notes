@@ -1,60 +1,50 @@
-# Session Notes — 2026-07-14 (later)
+# Session Notes — 2026-07-14
 
 ## Where we are
 
 Clean post-release state. **#1741 (per-connection credential callback / token-based
-DB auth) is COMPLETE and RELEASED end-to-end.** Nothing in flight; main clean.
+DB auth) is COMPLETE and RELEASED end-to-end** — kailash 2.51.0 + kailash-dataflow
+2.18.0 on PyPI, verified installable, issue closed. main clean, tree clean, no
+open PRs, no active todos.
 
-## Shipped this session (#1741 — closes the #1737 follow-up)
+## Read first
 
-Extended the token-auth credential callback (Azure AD / AWS IAM) from #1737's
-three side pools to **every** DataFlow connection path a token-auth user hits:
+1. `workspaces/issue-1717-vertex-claude/journal/` — session decisions/discoveries (if any created)
+2. GH #1741 (CLOSED) + PRs #1745 (code) / #1746 (release) — the token-auth completion
+3. `packages/kailash-dataflow/src/dataflow/core/credential_provider.py` — the shared
+   helper + contextvar side-channel (the architectural core of #1741)
+4. `CLAUDE.md` — project directives
 
-- **CRUD hot path** — the core `AsyncSQLDatabaseNode` pool `db.express`/
-  `db.transactions` actually open (the gap #1737 missed). New core helper
-  `kailash.nodes.data.credential_provider.build_asyncpg_credential_connect` +
-  `DatabaseConfig.credential_provider` field.
-- **3 named pools** — DatabaseRegistry, StagingEnvironmentManager (pool + probe
-  + admin connects), SyncTransactionManager.
-- **DDL/migration** — 5 engine connects, 2 AsyncSQLConnectionWrappers, the
-  migration-lock tx connection, the sync psycopg2 path (via `resolve_fresh_credential`).
-- **Standalone WorkflowBuilder bulk nodes** — via a new context-scoped public
-  API `dataflow.core.credential_provider.credential_provider_scope(cp)` (the
-  nodes hold no DataFlow instance; the runtime's copy_context carries the bind).
-- **Single enforcement point** `open_credentialed_connection`; hardened
-  `sanitize_db_error` to redact the `password=<value>` keyword form.
+## In-flight state
 
-### Released to PyPI (verified clean-venv installable)
+- None — everything committed, merged, released, and verified.
 
-- **kailash 2.51.0** (tag `v2.51.0`) — core credential helper + async_sql hook.
-- **kailash-dataflow 2.18.0** (tag `dataflow-v2.18.0`) — floors `kailash>=2.51.0`.
-- PRs: #1745 (code) + #1746 (release). Issue #1741 CLOSED/COMPLETED.
-- Clean-venv verify PASS: both versions install, floor honored, all new APIs live.
+## Executed this session (external / not in this repo's git log)
 
-### Process
-- 52 new tests, 0 regressions. Two adversarial red-team rounds (reviewer +
-  security-reviewer) per shard; all findings fixed (sanitizer keyword-leak,
-  half-wired staging, psycopg2 sibling + :memory: fail-closed, over-claimed
-  "single entry point" -> made true by consolidation, real-runtime propagation test).
-- Fixed a brittle #1560 source-pin test window (CI-surfaced) + the `.gitignore`
-  `data/` -> `/data/` trap (was silently ignoring nested source `data/` dirs).
+- Published **kailash 2.51.0** (tag `v2.51.0`) + **kailash-dataflow 2.18.0**
+  (tag `dataflow-v2.18.0`) to PyPI — OIDC publish, clean-venv install verified,
+  GitHub Releases created.
+
+## Outstanding ledger (forest)
+
+| ID    | Item                                          | Value-anchor (MUST-1 source)                                   | Status                          |
+| ----- | --------------------------------------------- | -------------------------------------------------------------- | ------------------------------- |
+| F1720 | Retire legacy→four-axis LLM redundancy        | User's #1717 follow-on ("resolve the redundancy") — GH #1720   | BLOCKED on co-owner scope       |
+| FVERT | Vertex-Claude/Gemini LIVE validation          | The #1717 headline path; only wire-proven, never live          | BLOCKED on GCP creds (not .env) |
+
+Closed this session: `F1741` (CRUD-path credential extension) → PRs #1745/#1746,
+released kailash 2.51.0 + kailash-dataflow 2.18.0.
+Dispositioned: README/Sphinx token-auth guide — user approved leaving as-is
+(docstrings + CHANGELOG document it; no docs-only release).
 
 ## Traps
-- Session START hit a **machine disk-full** condition (Data volume 100%); cleared
-  the Rust `sccache` (50G regenerable). If bash output writes fail -> check `df`.
-- `test_bootstrap_realizer.py::test_resolve_llm_model_returns_none_when_env_unset`
-  fails LOCALLY only (unrelated to #1741) — the resolver's `load_dotenv()` re-reads
-  this operator's `.env` which defines `OPENAI_PROD_MODEL`. CI-skipped (pytest-check
-  is stages:[pre-commit] + skipped in CI); main is green. A separate test-isolation
-  cleanup, not a blocker.
-- Duplicate `pull_request` CI runs race (`concurrency: cancel-in-progress`) — one
-  run's job can show `fail`/canceled while the live run passes; verify the LIVE run.
 
-## Outstanding (small, optional follow-ups)
-- **README/Sphinx token-auth guide** (dataflow): `credential_provider` (#1737) +
-  `credential_provider_scope` (#1741) are docstring+CHANGELOG-documented but have
-  no end-user README section (the #1737 predecessor also left it to docstrings).
-  A docs-only dataflow patch release would surface it; deferred to avoid a
-  release cycle for a doc note. Reviewer flagged as Minor.
-- Prior-session ledger (unchanged, still open): #1720 legacy->four-axis (co-owner
-  scope), FVERT Vertex-Claude LIVE validation (blocked on GCP creds).
+- **Machine disk-full** hit at session start (Data volume 100%); cleared regenerable
+  Rust `sccache`. If bash output writes fail → check `df -h /System/Volumes/Data`.
+- `test_bootstrap_realizer.py::test_resolve_llm_model_returns_none_when_env_unset`
+  fails LOCALLY only (unrelated) — resolver's `load_dotenv()` re-reads this operator's
+  `.env` (defines `OPENAI_PROD_MODEL`). CI-skipped; main green. Not a blocker.
+- Duplicate `pull_request` CI runs race (`cancel-in-progress`) — a job can show
+  `fail`/canceled on the superseded run while the LIVE run passes; verify the live run.
+- `gh --repo terrene-foundation/kailash-py` trips the repo-scope lexical hook though
+  it's the CWD repo (false positive); omit `--repo` on same-repo gh.
