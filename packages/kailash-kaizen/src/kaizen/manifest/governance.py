@@ -13,6 +13,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from kaizen.manifest._coerce import coerce_list_field
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["GovernanceManifest"]
@@ -79,7 +81,9 @@ class GovernanceManifest:
         return cls(
             purpose=data.get("purpose", ""),
             risk_level=data.get("risk_level", "medium"),
-            data_access_needed=list(data.get("data_access_needed", [])),
+            data_access_needed=coerce_list_field(
+                data.get("data_access_needed", []), "data_access_needed"
+            ),
             suggested_posture=data.get("suggested_posture", "supervised"),
             max_budget_microdollars=data.get("max_budget_microdollars"),
         )

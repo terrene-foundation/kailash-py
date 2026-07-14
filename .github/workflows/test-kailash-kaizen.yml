@@ -263,6 +263,8 @@ jobs:
             tests/unit/kaizen/ \
             tests/unit/l3/ \
             tests/unit/mcp/ \
+            tests/unit/test_manifest.py \
+            tests/unit/test_manifest_fixes.py \
             tests/unit/memory/ \
             tests/unit/mixins/ \
             tests/unit/ml/ \

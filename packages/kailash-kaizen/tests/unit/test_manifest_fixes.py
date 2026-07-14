@@ -41,6 +41,7 @@ if "kaizen" not in sys.modules:
 
 from kaizen.manifest.agent import AgentManifest  # noqa: E402
 from kaizen.manifest.app import AppManifest  # noqa: E402
+from kaizen.manifest.governance import GovernanceManifest  # noqa: E402
 from kaizen.manifest.errors import (  # noqa: E402
     ManifestError,
     ManifestParseError,
@@ -379,3 +380,12 @@ class TestListFieldTypeConfusionRaises:
             }
         )
         assert manifest.capabilities == ["pii-detection", "classification"]
+
+    def test_governance_data_access_needed_string_raises(self):
+        # Fix #5 extended to GovernanceManifest.from_dict (same char-split class)
+        with pytest.raises(ManifestValidationError, match="data_access_needed"):
+            GovernanceManifest.from_dict({"data_access_needed": "pii"})
+
+    def test_governance_data_access_needed_list_still_works(self):
+        g = GovernanceManifest.from_dict({"data_access_needed": ["pii", "logs"]})
+        assert g.data_access_needed == ["pii", "logs"]
