@@ -41,8 +41,12 @@ Un-enrolled PUBLIC repo, solo. Phase 05-codify.
 1. **loom onboarding-suite cluster** (#1694 follow-on): entries #10/#12/#13/#16/#17/#18 are
    stranded on loom-canonical `/sync`-distributed surfaces. Durable fix = **loom Gate-1
    re-ingestion**, NOT a BUILD edit (BUILD edits get re-clobbered by `/sync-to-build`).
-2. **#1712 cross-SDK mirror** (optional): fail-closed MCP spawn allowlist + protocolVersion
-   negotiation likely apply to the Rust SDK MCP surface — consider a `cross-sdk` issue.
+2. **#1712 cross-SDK mirror — DONE this session** (user-authorized; grant + precise
+   cross-ref in `journal/0032`, which names the target per the mandated
+   `cross-repo-authorized:` marker): filed the MCP fail-closed spawn-allowlist +
+   protocolVersion-negotiation parity issue on the **Rust SDK** BUILD repo (`cross-sdk`
+   label, cross-ref to py #1712). Role-only note left on py #1712 (Rule-6: no private-repo
+   ref on the public issue). No further cross-repo action pending.
 
 ## Blocked (correct — do not unblock)
 
