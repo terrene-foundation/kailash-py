@@ -1320,62 +1320,48 @@ class WebSocketServerTransport(BaseTransport):
         logger.info(f"Client {client_id} connected from {websocket.remote_address}")
         self._update_metrics("connections_total")
 
+        # Per-connection outbound send lock. Each inbound message is handled in
+        # its OWN task (below) so a handler that awaits a server-initiated reply
+        # does not block the read loop; those concurrent handlers' response
+        # sends would otherwise interleave on the wire. Serialize every send
+        # through this lock so no two frames corrupt each other (FINDING 2).
+        send_lock = asyncio.Lock()
+        # In-flight per-message handler tasks — tracked so a disconnect can
+        # cancel + await them instead of orphaning a handler blocked mid-await.
+        inflight: "set" = set()
+
         try:
             async for message in websocket:
-                try:
-                    # Parse message
-                    request = json.loads(message)
+                self._update_metrics("messages_received")
+                self._update_metrics("bytes_received", len(message))
 
-                    # Update metrics
-                    self._update_metrics("messages_received")
-                    self._update_metrics("bytes_received", len(message))
-
-                    # Handle message
-                    if self.message_handler:
-                        response = await self._handle_message_safely(request, client_id)
-                    else:
-                        response = {
-                            "jsonrpc": "2.0",
-                            "error": {
-                                "code": -32601,
-                                "message": "No message handler configured",
-                            },
-                            "id": request.get("id"),
-                        }
-
-                    # A None response is the no-send sentinel — a notification
-                    # (absent JSON-RPC id) or an already-routed inbound response
-                    # gets NO reply body (MCP lifecycle: notifications expect no
-                    # response). Only send a real response envelope.
-                    if response is not None:
-                        payload = json.dumps(response)
-                        await websocket.send(payload)
-                        self._update_metrics("messages_sent")
-                        self._update_metrics("bytes_sent", len(payload))
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"Invalid JSON from client {client_id}: {e}")
-                    self._update_metrics("errors_total")
-
-                    error_response = {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32700,
-                            "message": "Parse error: Invalid JSON",
-                        },
-                        "id": None,
-                    }
-                    await websocket.send(json.dumps(error_response))
-
-                except Exception as e:
-                    logger.error(f"Error handling message from client {client_id}: {e}")
-                    self._update_metrics("errors_total")
+                # Dispatch each inbound message CONCURRENTLY. The read loop MUST
+                # keep draining the socket while a handler awaits a
+                # server-initiated reply (sampling/createMessage,
+                # elicitation/create, roots/list) that arrives as a NEW inbound
+                # frame on THIS SAME connection — the single-client
+                # (target == requester) case. A sequential read loop would never
+                # read that reply until the handler returned, deadlocking the
+                # handler until its timeout (FINDING 2). Spawning a task lets the
+                # loop advance to the reply frame immediately.
+                task = asyncio.ensure_future(
+                    self._process_and_respond(message, client_id, websocket, send_lock)
+                )
+                inflight.add(task)
+                task.add_done_callback(inflight.discard)
 
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client {client_id} disconnected")
         except Exception as e:
             logger.error(f"Error in client handler for {client_id}: {e}")
         finally:
+            # Cancel + await any handler tasks still in flight so none leak past
+            # the connection. A handler blocked awaiting a reply that will now
+            # never arrive is unblocked by the cancel; gather() reaps them.
+            for task in list(inflight):
+                task.cancel()
+            if inflight:
+                await asyncio.gather(*inflight, return_exceptions=True)
             # Clean up the transport's own per-client maps.
             self._clients.pop(client_id, None)
             self._client_sessions.pop(client_id, None)
@@ -1391,6 +1377,66 @@ class WebSocketServerTransport(BaseTransport):
                         client_id,
                         exc,
                     )
+
+    async def _process_and_respond(
+        self, message, client_id: str, websocket, send_lock
+    ) -> None:
+        """Parse, handle, and respond to ONE inbound WS message as its own task.
+
+        Spawned per-message by ``handle_client`` so the read loop keeps draining
+        the socket while this handler awaits a server-initiated reply on the
+        SAME connection (FINDING 2 — single-client server-initiated round-trip).
+        Every outbound send serializes through ``send_lock`` so concurrent
+        handlers' responses never interleave on the wire. A handler exception
+        still yields the JSON-RPC error response / metrics update, exactly as the
+        prior sequential loop did.
+        """
+        try:
+            try:
+                request = json.loads(message)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from client {client_id}: {e}")
+                self._update_metrics("errors_total")
+                error_response = {
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "Parse error: Invalid JSON"},
+                    "id": None,
+                }
+                payload = json.dumps(error_response)
+                async with send_lock:
+                    await websocket.send(payload)
+                return
+
+            if self.message_handler:
+                response = await self._handle_message_safely(request, client_id)
+            else:
+                response = {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32601,
+                        "message": "No message handler configured",
+                    },
+                    "id": request.get("id"),
+                }
+
+            # A None response is the no-send sentinel — a notification (absent
+            # JSON-RPC id) or an already-routed inbound response gets NO reply
+            # body (MCP lifecycle: notifications expect no response). Only send a
+            # real response envelope.
+            if response is not None:
+                payload = json.dumps(response)
+                async with send_lock:
+                    await websocket.send(payload)
+                self._update_metrics("messages_sent")
+                self._update_metrics("bytes_sent", len(payload))
+
+        except asyncio.CancelledError:
+            # Connection tore down while this handler was mid-await; propagate so
+            # handle_client's gather() observes the cancellation cleanly.
+            raise
+        except Exception as e:
+            logger.error(f"Error handling message from client {client_id}: {e}")
+            self._update_metrics("errors_total")
 
     async def _handle_message_safely(
         self, request: Dict[str, Any], client_id: str
