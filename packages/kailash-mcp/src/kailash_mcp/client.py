@@ -163,6 +163,99 @@ class MCPClient:
         else:
             self.metrics = None
 
+        # OAuth 2.1 bearer-token binding (#1712). A token provider is an async
+        # callable ``() -> str`` (or an ``OAuth2Client`` whose acquired/refreshed
+        # token is attached expiry-aware) so every outbound request carries the
+        # current ``Authorization: Bearer <token>``. Per-server config may also
+        # supply its own provider; the client-level hook is the default.
+        self._oauth_token_provider = None  # type: Optional[Any]
+        self._oauth_client = None  # type: Optional[Any]
+
+    def set_token_provider(self, provider: Any) -> None:
+        """Register a client-level OAuth bearer-token provider.
+
+        Args:
+            provider: An async callable ``() -> str`` returning the current
+                access token. Called (and awaited) before every outbound
+                request so an expiring token is refreshed then attached.
+        """
+        self._oauth_token_provider = provider
+
+    def set_oauth_client(self, oauth_client: Any) -> None:
+        """Register a client-level ``OAuth2Client`` for bearer-token binding.
+
+        The client's ``get_valid_token()`` (expiry-aware, refresh-then-return)
+        supplies the token attached to every outbound request.
+
+        Args:
+            oauth_client: An ``OAuth2Client`` (or any object exposing an async
+                ``get_valid_token()``).
+        """
+        self._oauth_client = oauth_client
+
+    async def _resolve_bearer_token(
+        self, server_config: Union[str, Dict[str, Any]]
+    ) -> Optional[str]:
+        """Resolve the current OAuth bearer token, refreshing on expiry.
+
+        Resolution order (first hit wins): the server config's own
+        ``oauth_client`` / ``token_provider``, then the client-level
+        ``_oauth_token_provider`` / ``_oauth_client``. Returns ``None`` when no
+        provider is configured (the caller then relies on static credentials).
+
+        Raises:
+            AuthenticationError: when a provider is configured but yields no
+                token (e.g. an ``OAuth2Client`` that never acquired one).
+        """
+        oauth_client = None
+        token_provider = None
+        if isinstance(server_config, dict):
+            auth_config = server_config.get("auth", {}) or {}
+            if auth_config.get("type", "").lower() == "oauth2":
+                oauth_client = auth_config.get("oauth_client")
+                token_provider = auth_config.get("token_provider")
+        oauth_client = oauth_client or self._oauth_client
+        token_provider = token_provider or self._oauth_token_provider
+
+        if token_provider is not None:
+            token = await token_provider()
+            if not token:
+                raise AuthenticationError(
+                    "OAuth token provider returned no token", auth_type="oauth2"
+                )
+            return token
+        if oauth_client is not None:
+            # Expiry-aware: get_valid_token() refreshes a near-expiry token.
+            token = await oauth_client.get_valid_token()
+            if not token:
+                raise AuthenticationError(
+                    "OAuth2 client has no valid token; acquire one first "
+                    "(client-credentials or authorization-code flow)",
+                    auth_type="oauth2",
+                )
+            return token
+        return None
+
+    async def _get_auth_headers_async(
+        self, server_config: Union[str, Dict[str, Any]]
+    ) -> Dict[str, str]:
+        """Build outbound auth headers, binding a fresh OAuth bearer token.
+
+        Wraps the synchronous static-credential header builder and, when an
+        OAuth provider is configured, attaches the current (refreshed-if-expiring)
+        ``Authorization: Bearer <token>`` so every request carries a live token
+        (#1712 fix 5).
+        """
+        headers = (
+            self._get_auth_headers(server_config)
+            if isinstance(server_config, dict)
+            else {}
+        )
+        token = await self._resolve_bearer_token(server_config)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+
     def _guard_spawn_command(self, command: Any) -> None:
         """Fail-closed guard for a local-server stdio spawn command.
 
@@ -322,7 +415,7 @@ class MCPClient:
         from mcp.client.sse import sse_client
 
         url = server_config["url"]
-        headers = self._get_auth_headers(server_config)
+        headers = await self._get_auth_headers_async(server_config)
         request_timeout = timeout or self.connection_timeout
 
         tools: List[Dict[str, Any]] = []
@@ -364,7 +457,7 @@ class MCPClient:
         from mcp.client.streamable_http import streamable_http_client
 
         url = server_config["url"]
-        headers = self._get_auth_headers(server_config)
+        headers = await self._get_auth_headers_async(server_config)
         request_timeout = timeout or self.connection_timeout
 
         http_client = httpx.AsyncClient(headers=headers, timeout=request_timeout)
@@ -609,7 +702,7 @@ class MCPClient:
         from mcp.client.sse import sse_client
 
         url = server_config["url"]
-        headers = self._get_auth_headers(server_config)
+        headers = await self._get_auth_headers_async(server_config)
         request_timeout = timeout or self.connection_timeout
 
         tool_result: Dict[str, Any] = {}
@@ -660,7 +753,7 @@ class MCPClient:
         from mcp.client.streamable_http import streamable_http_client
 
         url = server_config["url"]
-        headers = self._get_auth_headers(server_config)
+        headers = await self._get_auth_headers_async(server_config)
         request_timeout = timeout or self.connection_timeout
 
         http_client = httpx.AsyncClient(headers=headers, timeout=request_timeout)
