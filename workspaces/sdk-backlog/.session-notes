@@ -1,45 +1,73 @@
-# Session Notes — 2026-07-12
+# Session Notes — 2026-07-15 (backlog convergence + 4-package release)
 
 ## Where we are
 
-Shipped **F2 (#1606) end-to-end**: fixed the Express cross-DB cache bleed (v2→v3 keyspace
-lockstep) → reviewed to convergence (3 parallel redteam agents) → merged (#1700) → released
-**kailash-dataflow 2.15.0** (PyPI + clean-venv verified). Filed cross-SDK **rs#1771**. Phase
-05-codify; un-enrolled PUBLIC repo, solo. Board clear of ours (0 open PRs, no sibling drift).
+Drove the actionable SDK backlog to **converged + merged + released**. Four packages
+shipped to PyPI this session, all clean-venv verified. main clean, tree clean.
+Un-enrolled PUBLIC repo, solo. Phase 05-codify.
 
-## Read first
+## Shipped this session (PyPI + GitHub Release + clean-venv verified)
 
-1. `workspaces/sdk-backlog/journal/0028-DECISION-1606-express-v3-fix-and-2150-release.md` — F2 fix + 2.15.0 receipt
-2. `workspaces/sdk-backlog/journal/0027-cross-repo-grant-rust-sdk-1606-credential-dsn-parity.md` — rs#1771 grant + result
-3. `workspaces/sdk-backlog/journal/0024-cross-repo-grant-rust-sdk-gap-audit-reopen.md` — v3 keyspace contract (reference)
+| Package | Version | Tag | Issue | Verified surface |
+| ------- | ------- | --- | ----- | ---------------- |
+| kailash | **2.53.0** (minor, TestPyPI-validated) | `v2.53.0` | #1712 | `import kailash` + `_negotiate_mcp_protocol_version` |
+| kailash-mcp | **0.3.1** (patch) | `mcp-v0.3.1` | #1712 | fail-closed spawn: unlisted `sh` REJECTED |
+| kailash-kaizen | **2.33.1** (patch) | `kaizen-v2.33.1` | #1755 | `_coerce_score` NaN→None / "0.9"→0.9 / "high"→None |
+| kailash-pact | **0.15.0** (minor, TestPyPI-validated) | `pact-v0.15.0` | #1711 | `from pact import EvidenceCollector, EvidencePackage` |
 
-## In-flight state
+## Issues actioned
 
-- `journal/0027`, `journal/0028`, and this notes write are uncommitted — land via a
-  workspace-only chore PR (build-repo-release-discipline §1a carve-out; no release).
+- **#1755** (CLOSED) RAG verification-parse hardening — root-cause fix at the single parse
+  chokepoint (coerce score fields to finite float; ill-formed → heuristic fallback) + 16
+  regression tests → PR #1758 → kaizen 2.33.1.
+- **#1712** (OPEN — first shard) MCP 2025-11-25 spec-parity — fail-closed local-server spawn
+  allowlist wired at ALL 5 spawn surfaces (2 sibling gaps caught by adversarial review:
+  `EnhancedStdioTransport.connect`, discovery health-probe), explicit null-id rejection,
+  protocolVersion negotiation in BOTH `kailash_mcp/server.py` AND trust-plane `EATPMCPServer`
+  → PR #1759 (3 commits) → kailash 2.53.0 + kailash-mcp 0.3.1. **Checklist follow-ups tracked
+  on the issue** (RFC 8707 audience, Streamable HTTP + MCP-Session-Id, notification-202
+  chokepoint, OAuth PRM, sampling/roots/elicitation; + 2 LOW: allowlist basename-spoof,
+  validator consolidation).
+- **#1694** (CLOSED) onboarding-suite strand — BUILD asks already complete on main (commit
+  `1c1e8c691`, ground-truth-verified vs wired hooks).
+- **#1711** (CLOSED) SOC 2 evidence-collection — full CC6+CC7+CC8 EvidencePackage collector in
+  kailash-pact (tenant-scoped fail-closed, no-fabrication, producer↔consumer contract), 15
+  tests → PR #1761 → kailash-pact 0.15.0. LOW follow-up on issue: `_scan_window` 1M scan_limit
+  can undercount a >1M-event tenant (completeness, not a leak) — push tenant scope into
+  `AuditFilter`.
 
-## Executed this session
+## Pending / handoff (needs you — cross-repo, agent can't self-authorize)
 
-- **Released kailash-dataflow 2.15.0** (tag `dataflow-v2.15.0`, publish-pypi success, GitHub Release, clean-venv install verified).
-- **Filed rs#1771** on the Rust SDK (`cross-sdk`) — #1606 `//`-less-DSN credential-in-pre-image parity (grant `journal/0027`).
+1. **loom onboarding-suite cluster** (#1694 follow-on): entries #10/#12/#13/#16/#17/#18 are
+   stranded on loom-canonical `/sync`-distributed surfaces. Durable fix = **loom Gate-1
+   re-ingestion**, NOT a BUILD edit (BUILD edits get re-clobbered by `/sync-to-build`).
+2. **#1712 cross-SDK mirror** (optional): fail-closed MCP spawn allowlist + protocolVersion
+   negotiation likely apply to the Rust SDK MCP surface — consider a `cross-sdk` issue.
 
-## Outstanding ledger (forest)
+## Blocked (correct — do not unblock)
 
-**CONSOLIDATED to the root canonical ledger** `.session-notes.shared.md` (2026-07-12 sweep,
-issue #669 — this workspace monolith no longer carries its own forest section). SDK items
-migrated: this session's `#1606` (was F2, now root `F19` CLOSED via `dataflow-v2.15.0`/PR #1700),
-`#1532` (→ root `F13`), rs#1765 (→ root `F23`), rs#1771 (→ root `F24`). The loom-Gate-1-routed
-items (was F5–F8: handoff-completion, latest.yaml own-org, cross-sdk-inspection length, Rule-10
-headroom) stay loom-side (loom `latest.yaml` + journal anchors `0010/0015/0016-0017/0019`) — not
-kailash-py SDK forest. See `04-validate/sweep-2026-07-12.md`.
+- #1720 / #1721 — co-owner scope calls.
+- FVERT (Vertex-Claude LIVE) — GCP creds not in `.env`.
+- #1727 — py side already landed; only the rs sibling remains.
 
-## Traps
+## Traps hit this session (operational)
 
-- **venv tool shebangs are stale** (repo relocated from `~/repos/loom/kailash-py`): `.venv/bin/black`/`isort`/`pre-commit` fail "bad interpreter". Use `.venv/bin/python -m black|isort|pre_commit`.
-- **3 pre-existing `test_express_cache_wiring.py` failures** (ttl/cache_stats/auto_detect) fire ONLY when a local Redis is up on 6379 (they assume no-Redis fallback) — env artifact, green in no-Redis unit CI. Not #1606.
-- `dataflow-v<X.Y.Z>` tags → publish-pypi builds kailash-dataflow. Verify install with `uv pip install --refresh` (index-cache lag).
-- Query keyspace stays v2 (py-local); ONLY the Express keyspace is v3/Rust-pinned. Don't conflate.
-
-## Open questions for the human
-
-- F4–F8 remain loom-Gate-1-bound / deferred. No clear unblocked in-repo forest item remains — next-highest work is the human's call.
+- **Server-side agent throttle** ("Server is temporarily limiting requests · not your usage
+  limit") killed multi-agent waves AND single agents repeatedly. Response: backed off to
+  2-agent waves, then did the security review + the whole release INLINE (no agents) when the
+  throttle was hot. #1711 finally landed on a single-agent retry once it eased. A blocked/
+  errored reviewer = ZERO evidence — did the #1761 security review inline rather than counting
+  a throttled agent clean.
+- **TestPyPI install**: `uv pip install --index-url testpypi --extra-index-url pypi` needs
+  `--index-strategy unsafe-best-match` (deps live on prod) AND `--refresh` (uv index cache
+  lag). Simple-index reflects slower than the JSON API — check
+  `test.pypi.org/pypi/<pkg>/<ver>/json` before retrying.
+- **`| tail` masks a piped command's non-zero exit** — a failing `uv pip install | tail`
+  returns 0, defeating `&& break` retry loops. Capture to a log file, check the real exit code.
+- **kaizen RAG advanced nodes need the `[rag]` extra** (numpy via `similarity.py` side-effect
+  import) — pre-existing; base `import kaizen` works, `kaizen.nodes.rag.advanced` needs
+  `kailash-kaizen[rag]`.
+- **security-reviewer agent has no Bash** (Read/Grep/Glob only) + sandbox `rg` broken → cannot
+  review git-ref diffs. Use a Bash-capable `reviewer` for ref/pytest reviews, or sweep inline.
+- **release/v\* branch auto-skips the PR-gate matrix**; a metadata-only release-prep PR shows
+  all-SKIPPED (correct) — the code already passed the matrix on the feature PR.
