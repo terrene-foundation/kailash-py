@@ -93,7 +93,12 @@ from kailash_mcp.errors import (
     ToolError,
     ValidationError,
 )
-from kailash_mcp.protocol.protocol import ToolResult, get_protocol_manager
+from kailash_mcp.protocol.protocol import (
+    ProgressToken,
+    ToolResult,
+    cancel_request,
+    get_protocol_manager,
+)
 from kailash_mcp.utils import (
     CacheManager,
     ConfigManager,
@@ -750,6 +755,28 @@ class MCPServer:
         self.client_info: Dict[str, Dict[str, Any]] = {}
         self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
 
+        # Server-initiated ``roots/list`` (server->client) request tracking and
+        # per-client cached roots (spec 2025-11-25). ``_pending_roots_requests``
+        # maps an outbound request id to the awaiting Future; the client's
+        # response is routed back via ``_route_server_initiated_response``.
+        # ``_client_roots`` caches the last-known roots per client and is
+        # refreshed on ``notifications/roots/list_changed``.
+        self._pending_roots_requests: Dict[str, "asyncio.Future"] = {}
+        # Maps an outbound roots/list request id to the client_id it targets, so
+        # a disconnecting client's pending roots Futures can be cancelled+popped
+        # (_on_ws_disconnect) — _pending_roots_requests is keyed by request id,
+        # not client, and would otherwise leak a Future per disconnected client.
+        self._pending_roots_clients: Dict[str, str] = {}
+        self._client_roots: Dict[str, List[Dict[str, Any]]] = {}
+
+        # In-flight tool-call asyncio Tasks keyed by a (client_id, request_id)
+        # composite (``_cancel_key``). An inbound ``notifications/cancelled``
+        # cancels ONLY its own client's task, so a cancelled tool actually stops
+        # and returns NO normal response (spec 2025-11-25) — cancellation is a
+        # real control action, not an inert flag. Bounded: entries are popped on
+        # tool completion AND on client disconnect (_on_ws_disconnect).
+        self._inflight_tasks: Dict[str, "asyncio.Task"] = {}
+
         # Per-session (client_id) request ids already used. JSON-RPC request
         # ids MUST NOT be reused within a session (spec 2025-11-25); a
         # duplicate id is rejected with an Invalid Request error. BOTH maps are
@@ -850,6 +877,17 @@ class MCPServer:
             through to the regular request dispatch.
         """
         rid = str(request_id)
+
+        # Route a server-initiated ``roots/list`` (server->client) response back
+        # to its awaiting Future. Carries the FULL message (result OR error) so
+        # ``request_client_roots`` can distinguish a real roots list from a
+        # ``-32601`` "roots unsupported" fallback.
+        if rid in self._pending_roots_requests:
+            fut = self._pending_roots_requests.pop(rid)
+            self._pending_roots_clients.pop(rid, None)
+            if not fut.done():
+                fut.set_result(message)
+            return True
 
         # Check pending elicitation requests
         if rid in self.elicitation_system._pending_requests:
@@ -2104,13 +2142,45 @@ class MCPServer:
 
         Wired as the WebSocket transport's disconnect handler. Without this the
         server-side maps (`_session_seen_ids` / `_session_seen_order` /
-        `client_info`) grow one entry per connection forever — a remote OOM
-        vector on a public server, since the transport only clears its OWN
-        client maps on disconnect.
+        `client_info` and the per-client progress/cancellation/roots/log-level
+        state) grow one entry per connection forever — a remote OOM vector on a
+        public server, since the transport only clears its OWN client maps on
+        disconnect (FINDING 4 — per-client cleanup).
         """
         self._session_seen_ids.pop(client_id, None)
         self._session_seen_order.pop(client_id, None)
         self.client_info.pop(client_id, None)
+
+        # Per-client roots cache + declared log level.
+        self._client_roots.pop(client_id, None)
+        self._client_log_levels.pop(client_id, None)
+
+        # Cancel + drop any pending server->client roots/list Futures targeting
+        # this client (keyed by request id; _pending_roots_clients maps req id ->
+        # client_id). Leaving them would leak one Future per disconnected client.
+        stale_root_reqs = [
+            rid for rid, cid in self._pending_roots_clients.items() if cid == client_id
+        ]
+        for rid in stale_root_reqs:
+            self._pending_roots_clients.pop(rid, None)
+            fut = self._pending_roots_requests.pop(rid, None)
+            if fut is not None and not fut.done():
+                fut.cancel()
+
+        # Cancel + drop any in-flight tool tasks for this client. Keys are the
+        # (client_id, request_id) composite; the NUL-separated prefix isolates
+        # this client (client "A" never matches client "AB").
+        prefix = f"{client_id}\x00"
+        stale_tasks = [k for k in self._inflight_tasks if k.startswith(prefix)]
+        for k in stale_tasks:
+            task = self._inflight_tasks.pop(k, None)
+            if task is not None and not task.done():
+                task.cancel()
+
+        # Drop this client's cancelled-request state from the shared
+        # CancellationManager (bounded per-client eviction — the disconnect
+        # counterpart to the FIFO cap).
+        get_protocol_manager().cancellation.clear_cancelled_by_prefix(prefix)
 
     async def _handle_websocket_message(
         self, request: Dict[str, Any], client_id: str
@@ -2213,14 +2283,28 @@ class MCPServer:
         params: Dict[str, Any],
         request_id: Any,
         client_id: str,
-    ) -> Dict[str, Any]:
-        """Route a WebSocket JSON-RPC method to its handler."""
+    ) -> Optional[Dict[str, Any]]:
+        """Route a WebSocket JSON-RPC method to its handler.
+
+        Notification methods (``notifications/*``) return ``None`` — they carry
+        no response body per JSON-RPC; the caller discards the return.
+        """
         if method == "initialize":
             return await self._handle_initialize(params, request_id, client_id)
         elif method == "tools/list":
             return await self._handle_list_tools(params, request_id)
         elif method == "tools/call":
-            return await self._handle_call_tool(params, request_id)
+            return await self._handle_call_tool(params, request_id, client_id)
+        elif method == "notifications/cancelled":
+            # Inbound client cancellation of an in-flight request (spec
+            # 2025-11-25). Notification -> no response body.
+            await self._handle_cancelled_notification(params, client_id)
+            return None
+        elif method == "notifications/roots/list_changed":
+            # The client's root list changed -> refresh the cached roots for
+            # this client. Notification -> no response body.
+            await self._handle_roots_list_changed(client_id)
+            return None
         elif method == "resources/list":
             return await self._handle_list_resources(params, request_id)
         elif method == "resources/templates/list":
@@ -2270,13 +2354,16 @@ class MCPServer:
         client_id: str = None,  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
         """Handle initialize request."""
-        # Store client information for capability checks
+        # Store client information for capability checks. The initialize
+        # request id is recorded so a later ``notifications/cancelled`` targeting
+        # it can be ignored — ``initialize`` is non-cancellable per spec.
         if client_id:
             self.client_info[client_id] = {
                 "capabilities": params.get("capabilities", {}),
                 "name": params.get("clientInfo", {}).get("name", "unknown"),
                 "version": params.get("clientInfo", {}).get("version", "unknown"),
                 "initialized_at": time.time(),
+                "initialize_request_id": request_id,
             }
 
         return {
@@ -2414,8 +2501,8 @@ class MCPServer:
         return page, next_cursor, None
 
     async def _handle_call_tool(
-        self, params: Dict[str, Any], request_id: Any
-    ) -> Dict[str, Any]:
+        self, params: Dict[str, Any], request_id: Any, client_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """Handle tools/call request.
 
         Spec 2025-11-25 distinguishes two error classes:
@@ -2426,6 +2513,12 @@ class MCPServer:
           with ``isError: true`` and the error text carried in ``content``,
           so the calling LLM can observe and react to the failure. Mirrors
           ``kailash.trust.mcp.server`` isError handling.
+
+        Progress (spec 2025-11-25): when the request carries
+        ``params._meta.progressToken``, ``notifications/progress`` emitted for
+        this call correlate to THAT token (the token the client supplied), via
+        ``_begin_progress`` / ``_finish_progress``. When no token is supplied,
+        NO progress notification is emitted (progress is opt-in, client-driven).
         """
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
@@ -2454,13 +2547,47 @@ class MCPServer:
 
         tool_info = self._tool_registry[tool_name]
 
-        # --- EXECUTION failure -> isError-in-result -------------------------
-        try:
+        # Correlate any progress emitted during this call to the client's
+        # ``_meta.progressToken`` (opt-in). Returns None when no token supplied.
+        progress_ctx = self._begin_progress(params, client_id, tool_name)
+
+        # FINDING 3 (server-side) — make cancellation REAL, not inert. Run the
+        # tool body inside a tracked ``asyncio.Task`` keyed by the CLIENT-SCOPED
+        # ``(client_id, request_id)`` composite. An inbound
+        # ``notifications/cancelled`` for THIS request
+        # (``_handle_cancelled_notification``) looks the task up by the same key
+        # and ``.cancel()``s it; the ``CancelledError`` surfaces here and we
+        # return NO normal response (spec 2025-11-25 — a cancelled request
+        # receives no result). The task is popped on EVERY exit (``finally``), so
+        # a completed call leaves no entry and a cancel-after-complete is a
+        # graceful no-op. Client-scoping (not a bare ``str(request_id)``) is why a
+        # cancellation from client B cannot stop client A's identically-numbered
+        # request (security.md — per-client isolation).
+        cancel_key = self._cancel_key(client_id, request_id)
+
+        async def _run_tool() -> Any:
             result = self._execute_tool(tool_name, arguments)
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                 result = await result
+            return result
+
+        task = asyncio.ensure_future(_run_tool())
+        self._inflight_tasks[cancel_key] = task
+
+        # --- EXECUTION failure -> isError-in-result -------------------------
+        try:
+            result = await task
+        except asyncio.CancelledError:
+            # Cancelled by an inbound notifications/cancelled targeting THIS
+            # request. Emit a final "cancelled" progress update (if a token was
+            # supplied) and send NO normal response — returning ``None`` is the
+            # transport's no-send sentinel.
+            logger.debug("tool.call.cancelled tool=%s key=%r", tool_name, cancel_key)
+            await self._finish_progress(progress_ctx, "cancelled")
+            return None
         except Exception as e:  # tool body raised -> report as tool result
             logger.warning("tool.call.error tool=%s error=%s", tool_name, e)
+            await self._finish_progress(progress_ctx, "failed")
             return {
                 "jsonrpc": "2.0",
                 "result": {
@@ -2471,6 +2598,10 @@ class MCPServer:
                 },
                 "id": request_id,
             }
+        finally:
+            self._inflight_tasks.pop(cancel_key, None)
+
+        await self._finish_progress(progress_ctx, "completed")
 
         # --- Shape the successful result ------------------------------------
         content, is_error, structured = self._build_tool_result(result, tool_info)
@@ -2480,6 +2611,74 @@ class MCPServer:
         if is_error:
             result_obj["isError"] = True
         return {"jsonrpc": "2.0", "result": result_obj, "id": request_id}
+
+    def _begin_progress(
+        self, params: Dict[str, Any], client_id: Optional[str], operation_name: str
+    ) -> Optional[ProgressToken]:
+        """Start progress tracking correlated to the client's progressToken.
+
+        Reads ``params._meta.progressToken`` (spec 2025-11-25). When present
+        AND the call has a routable ``client_id``, registers a ProgressManager
+        token whose ``value`` echoes the client's token and installs a callback
+        that forwards every ``notifications/progress`` to that client carrying
+        the EXACT client-supplied token (type preserved). Returns the token, or
+        ``None`` when no ``progressToken`` was supplied (opt-in — no progress
+        emitted).
+        """
+        meta = params.get("_meta")
+        client_token = meta.get("progressToken") if isinstance(meta, dict) else None
+        if client_token is None or client_id is None:
+            return None
+
+        protocol = get_protocol_manager()
+        # FINDING 2 — namespace the INTERNAL ProgressManager key by
+        # (client_id, client_token). The process-global ProgressManager keys a
+        # ProgressToken by its ``value`` ONLY (``ProgressToken.__hash__`` is
+        # ``hash(self.value)``), so two websocket clients that both supply the
+        # SAME token value (e.g. ``"1"``) would collide: A's
+        # ``notifications/progress`` would route to B, and A's completion would
+        # delete B's active entry. Prefixing the internal value with
+        # ``client_id`` isolates the two. The WIRE value stays RAW — the
+        # ``_forward`` closure re-keys ``fwd_params["progressToken"]`` back to the
+        # exact client-supplied token (int-vs-str preserved) — and
+        # ``_finish_progress`` reuses THIS same namespaced token, so completion
+        # targets the correct per-client key (security.md — per-client isolation).
+        token_obj = ProgressToken(
+            value=f"{client_id}:{client_token}", operation_name=operation_name
+        )
+        protocol.progress.start_progress(operation_name, progress_token=token_obj)
+
+        async def _forward(notification: Any) -> None:
+            # ``notification`` is a ProgressNotification; re-key its params to the
+            # EXACT client-supplied token (preserving int-vs-str) before send —
+            # the outbound wire token is RAW, never the namespaced internal key.
+            fwd_params = dict(getattr(notification, "params", {}) or {})
+            fwd_params["progressToken"] = client_token
+            await self._send_websocket_notification(
+                client_id,
+                {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/progress",
+                    "params": fwd_params,
+                },
+            )
+
+        protocol.progress.add_progress_callback(token_obj, _forward)
+        return token_obj
+
+    async def _finish_progress(
+        self, progress_ctx: Optional[ProgressToken], status: str
+    ) -> None:
+        """Complete a progress context started by ``_begin_progress``.
+
+        No-op when ``progress_ctx`` is ``None`` (no client token was supplied).
+        ``complete_progress`` fires a final ``notifications/progress`` through
+        the registered callback carrying the client's token.
+        """
+        if progress_ctx is None:
+            return
+        protocol = get_protocol_manager()
+        await protocol.progress.complete_progress(progress_ctx, status)
 
     def _jsonrpc_error(
         self, request_id: Any, code: Any, message: str
@@ -3289,6 +3488,26 @@ class MCPServer:
 
         roots = protocol_mgr.roots.list_roots()
 
+        # FINDING 5 — reflect the CLIENT's own declared roots. A client that has
+        # declared roots via a server-initiated roots/list has them cached in
+        # ``_client_roots`` (refreshed on notifications/roots/list_changed). Prior
+        # to this, that cache was written + invalidated but NEVER read by any
+        # production path (orphan). Merging the client's declared roots here
+        # (dedup by uri, client-declared first) gives the cache + the
+        # list_changed refresh an observable consumer.
+        client_id = params.get("client_id")
+        declared = self._client_roots.get(client_id) if client_id else None
+        if declared:
+            seen: set = set()
+            merged: List[Dict[str, Any]] = []
+            for r in list(declared) + list(roots):
+                uri = r.get("uri") if isinstance(r, dict) else None
+                if uri in seen:
+                    continue
+                seen.add(uri)
+                merged.append(r)
+            roots = merged
+
         # Apply access control if auth manager is available
         if self.auth_manager and params.get("client_id"):
             filtered_roots = []
@@ -3302,6 +3521,159 @@ class MCPServer:
             roots = filtered_roots
 
         return {"jsonrpc": "2.0", "result": {"roots": roots}, "id": request_id}
+
+    @staticmethod
+    def _cancel_key(client_id: Optional[str], request_id: Any) -> str:
+        """Composite CLIENT-SCOPED key for a cancellable in-flight request.
+
+        Cancellation is per-client: a ``notifications/cancelled`` from client A
+        MUST NOT cancel client B's identically-numbered request. Keying the
+        in-flight-task map AND the shared ``CancellationManager`` by this
+        ``(client_id, request_id)`` composite (rather than a bare
+        ``str(request_id)``) is what enforces that isolation (security.md). The
+        NUL separator is the same prefix boundary
+        ``CancellationManager.clear_cancelled_by_prefix`` uses on disconnect
+        (``f"{client_id}\\x00"``), so a client's in-flight tasks and its
+        cancelled-request state share one greppable prefix for eviction.
+        """
+        return f"{client_id}\x00{request_id}"
+
+    def _is_initialize_request(self, client_id: Optional[str], request_id: Any) -> bool:
+        """Return True when ``request_id`` is this client's initialize request.
+
+        ``initialize`` is non-cancellable per spec 2025-11-25; a
+        ``notifications/cancelled`` targeting it MUST be ignored.
+        """
+        if client_id is None:
+            return False
+        info = self.client_info.get(client_id)
+        if not info:
+            return False
+        init_id = info.get("initialize_request_id")
+        return init_id is not None and str(init_id) == str(request_id)
+
+    async def _handle_cancelled_notification(
+        self, params: Dict[str, Any], client_id: Optional[str]
+    ) -> None:
+        """Handle an inbound ``notifications/cancelled`` (spec 2025-11-25).
+
+        REAL cancellation (FINDING 3): the referenced in-flight tool task is
+        looked up by the CLIENT-SCOPED ``(client_id, request_id)`` key and
+        actually ``.cancel()``ed, so the running tool stops and its handler
+        returns NO normal response — cancellation is a control action, not an
+        inert flag. Guards:
+
+        * ``initialize`` is non-cancellable — a cancellation targeting it is
+          ignored (spec).
+        * Client-scoped — a cancellation from client A only touches A's task;
+          client B's identically-numbered request is untouched (security.md).
+        * Cancelling an already-completed / unknown id is a graceful no-op — no
+          in-flight task remains, and the shared ``CancellationManager`` records
+          the composite id idempotently without raising.
+        """
+        target = params.get("requestId")
+        if target is None:
+            logger.debug("notifications/cancelled missing requestId; ignoring")
+            return
+
+        if self._is_initialize_request(client_id, target):
+            logger.debug(
+                "Ignoring cancellation of non-cancellable initialize request %r",
+                target,
+            )
+            return
+
+        reason = params.get("reason")
+        cancel_key = self._cancel_key(client_id, target)
+
+        # Cancel THIS client's in-flight tool task, if still running. The
+        # CancelledError surfaces in _handle_call_tool, which sends no response.
+        task = self._inflight_tasks.get(cancel_key)
+        if task is not None and not task.done():
+            task.cancel()
+
+        # Record the cancellation in the shared CancellationManager under the
+        # SAME client-scoped composite key, so is_cancelled() and the per-client
+        # disconnect eviction (clear_cancelled_by_prefix) both observe it.
+        # Cancelling an already-completed / unknown id is idempotent + safe.
+        await cancel_request(cancel_key, reason=reason)
+
+    async def request_client_roots(
+        self, client_id: str, timeout: float = 10.0
+    ) -> List[Dict[str, Any]]:
+        """Request the client's roots (server->client ``roots/list``).
+
+        Sends a ``roots/list`` REQUEST to the client and awaits the response.
+        A ``-32601`` (method not found) reply — the client does not support
+        roots — falls back gracefully to an empty list (capability absent); any
+        other error, missing transport, or timeout likewise yields ``[]``. On a
+        successful reply the per-client roots cache is refreshed.
+        """
+        send_message = getattr(self._transport, "send_message", None)
+        if self._transport is None or not callable(send_message):
+            logger.debug("request_client_roots: no transport; returning no roots")
+            return []
+
+        req_id = f"roots_list_{uuid.uuid4().hex[:8]}"
+        loop = asyncio.get_event_loop()
+        fut: "asyncio.Future" = loop.create_future()
+        self._pending_roots_requests[req_id] = fut
+
+        await self._transport.send_message(
+            {"jsonrpc": "2.0", "id": req_id, "method": "roots/list", "params": {}},
+            client_id=client_id,
+        )
+
+        try:
+            message = await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            self._pending_roots_requests.pop(req_id, None)
+            logger.warning(
+                "request_client_roots timed out client=%s; treating as no roots",
+                client_id,
+            )
+            return []
+
+        if isinstance(message, dict) and "error" in message:
+            err = message.get("error", {})
+            code = err.get("code") if isinstance(err, dict) else None
+            if code == -32601:
+                logger.debug(
+                    "Client %s does not support roots/list (-32601); no roots",
+                    client_id,
+                )
+            else:
+                logger.warning(
+                    "Client %s roots/list returned error %r; treating as no roots",
+                    client_id,
+                    err,
+                )
+            return []
+
+        result = message.get("result", {}) if isinstance(message, dict) else {}
+        roots = result.get("roots", []) if isinstance(result, dict) else []
+        self._client_roots[client_id] = roots
+        return roots
+
+    async def _handle_roots_list_changed(self, client_id: Optional[str]) -> None:
+        """Handle an inbound ``notifications/roots/list_changed`` (spec 2025-11-25).
+
+        The client's root list changed: invalidate the cached roots and refresh
+        them by re-requesting ``roots/list`` from the client. Notification —
+        no response body.
+        """
+        if client_id is None:
+            logger.debug("roots/list_changed without client_id; ignoring")
+            return
+        self._client_roots.pop(client_id, None)
+        try:
+            await self.request_client_roots(client_id)
+        except Exception as exc:  # refresh is best-effort; surface at WARN
+            logger.warning(
+                "roots/list_changed refresh failed client=%s error=%s",
+                client_id,
+                exc,
+            )
 
     async def _handle_completion_complete(
         self, params: Dict[str, Any], request_id: Any
