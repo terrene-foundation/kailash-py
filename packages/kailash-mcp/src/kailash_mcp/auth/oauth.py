@@ -71,6 +71,7 @@ import base64
 import hashlib
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
@@ -125,6 +126,62 @@ def _require_oauth_extras() -> None:
 
 
 logger = logging.getLogger(__name__)
+
+
+class OAuthDiscoveryError(AuthenticationError):
+    """Raised when OAuth 2.1 authorization-server discovery fails.
+
+    Covers RFC 9728 (Protected Resource Metadata) and RFC 8414 / OIDC
+    (Authorization Server Metadata) discovery failures: network errors,
+    malformed documents, resource/issuer mismatches, and missing required
+    fields. A typed error (never a bare exception or silent fallback) so the
+    calling client can distinguish a discovery failure from an auth failure.
+    """
+
+    def __init__(self, message: str, **kwargs):
+        kwargs.setdefault("auth_type", "oauth2_discovery")
+        super().__init__(message, **kwargs)
+
+
+class OAuthPKCEUnsupportedError(OAuthDiscoveryError):
+    """Raised (fail-closed) when the authorization server does not advertise
+    PKCE ``S256`` support.
+
+    MCP (revision 2025-11-25) requires PKCE with the ``S256`` code-challenge
+    method; the ``plain`` method is discouraged. When AS metadata does not
+    confirm ``S256`` support the flow MUST be refused rather than downgraded.
+    """
+
+
+# RFC 9110 §11.6.1 auth-param: key="quoted-value". RFC 9728 emits the
+# ``resource_metadata`` (and optional ``scope``) challenge parameters this way.
+_WWW_AUTH_PARAM_RE = re.compile(r'([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"')
+
+
+def parse_www_authenticate(header: str) -> Dict[str, str]:
+    """Parse a ``WWW-Authenticate`` header's quoted auth parameters.
+
+    Extracts the ``key="value"`` challenge parameters (e.g.
+    ``resource_metadata`` and ``scope`` per RFC 9728) from a header such as::
+
+        Bearer resource_metadata="https://srv/.well-known/oauth-protected-resource", scope="mcp"
+
+    The leading auth-scheme token (``Bearer``) carries no ``=`` and is ignored.
+    Returned keys are lower-cased. An empty/absent header yields ``{}`` (no
+    challenge params) rather than raising — the caller decides the fallback.
+
+    Args:
+        header: Raw ``WWW-Authenticate`` header value.
+
+    Returns:
+        Mapping of lower-cased challenge parameter name to its value.
+    """
+    if not header:
+        return {}
+    return {
+        match.group(1).lower(): match.group(2)
+        for match in _WWW_AUTH_PARAM_RE.finditer(header)
+    }
 
 
 class GrantType(Enum):
@@ -1477,15 +1534,24 @@ class OAuth2Client:
         token_endpoint: Optional[str] = None,
         authorization_endpoint: Optional[str] = None,
         redirect_uri: Optional[str] = None,
+        resource: Optional[str] = None,
+        http_timeout: float = 30.0,
     ):
         """Initialize OAuth 2.1 client.
 
         Args:
             client_id: OAuth client ID
             client_secret: OAuth client secret
-            token_endpoint: Token endpoint URL
-            authorization_endpoint: Authorization endpoint URL
+            token_endpoint: Token endpoint URL (may be resolved via discovery)
+            authorization_endpoint: Authorization endpoint URL (may be resolved
+                via discovery)
             redirect_uri: Redirect URI
+            resource: Canonical resource-server URI sent as the RFC 8707
+                ``resource`` indicator on every grant so the issued token's
+                audience is bound to the intended MCP server. When discovery
+                runs it is derived from the Protected Resource Metadata's
+                ``resource`` field if not supplied.
+            http_timeout: Per-request timeout (seconds) for discovery fetches.
         """
         _require_oauth_extras()
         self.client_id = client_id
@@ -1493,11 +1559,298 @@ class OAuth2Client:
         self.token_endpoint = token_endpoint
         self.authorization_endpoint = authorization_endpoint
         self.redirect_uri = redirect_uri
+        # RFC 8707 canonical resource indicator (token audience binding).
+        self.resource = self._canonical_uri(resource) if resource else None
+        self.http_timeout = http_timeout
 
         # Token storage
         self._access_token: Optional[str] = None
         self._refresh_token: Optional[str] = None
         self._token_expires_at: Optional[float] = None
+
+        # Discovery results (RFC 9728 / RFC 8414 / OIDC).
+        self._authorization_servers: Optional[List[str]] = None
+        self._code_challenge_methods_supported: Optional[List[str]] = None
+        self._protected_resource_metadata: Optional[Dict[str, Any]] = None
+        self._authorization_server_metadata: Optional[Dict[str, Any]] = None
+
+    # ------------------------------------------------------------------
+    # OAuth 2.1 discovery chain (RFC 9728 → RFC 8414/OIDC → PKCE guard)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _canonical_uri(uri: str) -> str:
+        """Return the canonical form of a resource/issuer URI for comparison.
+
+        Lower-cases scheme + host and strips a trailing slash so that
+        ``https://Srv.example.com/mcp/`` and ``https://srv.example.com/mcp``
+        compare equal (the RFC 8707 canonical-URI comparison the resource
+        indicator relies on).
+        """
+        parsed = urlparse(uri)
+        scheme = (parsed.scheme or "").lower()
+        netloc = (parsed.netloc or "").lower()
+        path = parsed.path.rstrip("/")
+        canonical = f"{scheme}://{netloc}{path}"
+        if parsed.query:
+            canonical = f"{canonical}?{parsed.query}"
+        return canonical
+
+    @staticmethod
+    def _wellknown_prm_url(server_url: str) -> str:
+        """Derive the RFC 9728 Protected Resource Metadata well-known URL.
+
+        Per RFC 9728 §3 the ``/.well-known/oauth-protected-resource`` segment
+        is inserted between the origin and the resource's path.
+        """
+        parsed = urlparse(server_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        path = parsed.path.rstrip("/")
+        return f"{origin}/.well-known/oauth-protected-resource{path}"
+
+    @staticmethod
+    def _as_metadata_urls(as_url: str) -> List[str]:
+        """Candidate AS-metadata URLs: RFC 8414 first, then OIDC fallback.
+
+        RFC 8414 §3 inserts ``/.well-known/oauth-authorization-server`` between
+        origin and path (path-insertion); OpenID Connect Discovery appends
+        ``/.well-known/openid-configuration`` to the issuer (path-append).
+        """
+        parsed = urlparse(as_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        path = parsed.path.rstrip("/")
+        rfc8414 = f"{origin}/.well-known/oauth-authorization-server{path}"
+        oidc = f"{as_url.rstrip('/')}/.well-known/openid-configuration"
+        return [rfc8414, oidc]
+
+    async def _fetch_json(self, url: str, *, description: str) -> Dict[str, Any]:
+        """GET ``url`` and parse JSON with a timeout and typed failures.
+
+        Raises:
+            OAuthDiscoveryError: on non-200 status, transport error, timeout,
+                or a body that is not a JSON object.
+        """
+        _require_oauth_extras()
+        timeout = aiohttp.ClientTimeout(total=self.http_timeout)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(
+                    url, headers={"Accept": "application/json"}
+                ) as response:
+                    if response.status != 200:
+                        body = (await response.text())[:200]
+                        raise OAuthDiscoveryError(
+                            f"{description} fetch from {url} failed: "
+                            f"HTTP {response.status} {body}"
+                        )
+                    try:
+                        # content_type=None: some AS emit a non-JSON MIME type.
+                        payload = await response.json(content_type=None)
+                    except Exception as exc:  # JSON decode error
+                        raise OAuthDiscoveryError(
+                            f"{description} at {url} returned invalid JSON: {exc}"
+                        ) from exc
+        except OAuthDiscoveryError:
+            raise
+        except asyncio.TimeoutError as exc:
+            raise OAuthDiscoveryError(
+                f"{description} fetch from {url} timed out after "
+                f"{self.http_timeout}s"
+            ) from exc
+        except aiohttp.ClientError as exc:
+            raise OAuthDiscoveryError(
+                f"{description} fetch from {url} failed: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise OAuthDiscoveryError(f"{description} at {url} is not a JSON object")
+        return payload
+
+    async def discover_protected_resource_metadata(
+        self, server_url: str, www_authenticate: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Discover the Protected Resource Metadata document (RFC 9728).
+
+        Two discovery mechanisms, in order:
+
+        1. **WWW-Authenticate header** — parse a 401's
+           ``resource_metadata="<url>"`` challenge parameter and fetch it.
+        2. **Well-known fallback** — when the header is absent, probe
+           ``<server>/.well-known/oauth-protected-resource``.
+
+        The PRM's ``resource`` MUST be the canonical URI of the connected
+        server; a mismatch is rejected (a malicious/misconfigured PRM could
+        otherwise redirect the client to an attacker-controlled AS).
+
+        Args:
+            server_url: The MCP server base URL the client connected to.
+            www_authenticate: The ``WWW-Authenticate`` header from the 401, if
+                any.
+
+        Returns:
+            The parsed PRM document.
+
+        Raises:
+            OAuthDiscoveryError: on fetch failure, missing ``resource``,
+                resource mismatch, or missing ``authorization_servers``.
+        """
+        prm_url: Optional[str] = None
+        if www_authenticate:
+            prm_url = parse_www_authenticate(www_authenticate).get("resource_metadata")
+        if not prm_url:
+            prm_url = self._wellknown_prm_url(server_url)
+
+        prm = await self._fetch_json(prm_url, description="Protected Resource Metadata")
+
+        resource = prm.get("resource")
+        if not resource:
+            raise OAuthDiscoveryError(
+                f"Protected Resource Metadata at {prm_url} is missing the "
+                "required 'resource' field"
+            )
+        expected = self.resource or self._canonical_uri(server_url)
+        if self._canonical_uri(resource) != expected:
+            raise OAuthDiscoveryError(
+                f"Protected Resource Metadata 'resource' ({resource!r}) does "
+                f"not match the connected server ({expected!r})"
+            )
+
+        authorization_servers = prm.get("authorization_servers")
+        if not authorization_servers:
+            raise OAuthDiscoveryError(
+                f"Protected Resource Metadata at {prm_url} lists no "
+                "'authorization_servers'"
+            )
+
+        # Bind the canonical resource indicator (RFC 8707) from the PRM.
+        self.resource = self._canonical_uri(resource)
+        self._authorization_servers = list(authorization_servers)
+        self._protected_resource_metadata = prm
+        return prm
+
+    async def discover_authorization_server_metadata(
+        self, as_url: str
+    ) -> Dict[str, Any]:
+        """Discover Authorization Server Metadata (RFC 8414, OIDC fallback).
+
+        Tries the RFC 8414 ``oauth-authorization-server`` URL first, then the
+        OIDC ``openid-configuration`` URL. Asserts the metadata ``issuer``
+        equals the authorization-server URL (RFC 8414 §3.3 / OIDC issuer
+        validation) and resolves ``authorization_endpoint``, ``token_endpoint``,
+        and ``code_challenge_methods_supported`` onto this client.
+
+        Args:
+            as_url: Authorization-server URL (an entry from the PRM's
+                ``authorization_servers``).
+
+        Returns:
+            The parsed AS-metadata document.
+
+        Raises:
+            OAuthDiscoveryError: when neither URL yields metadata, the issuer
+                mismatches, or ``token_endpoint`` is absent.
+        """
+        errors: List[str] = []
+        metadata: Optional[Dict[str, Any]] = None
+        for candidate in self._as_metadata_urls(as_url):
+            try:
+                metadata = await self._fetch_json(
+                    candidate, description="Authorization Server Metadata"
+                )
+                break
+            except OAuthDiscoveryError as exc:
+                errors.append(str(exc))
+        if metadata is None:
+            raise OAuthDiscoveryError(
+                f"Authorization Server Metadata discovery failed for {as_url}: "
+                + "; ".join(errors)
+            )
+
+        issuer = metadata.get("issuer")
+        if not issuer:
+            raise OAuthDiscoveryError(
+                f"Authorization Server Metadata for {as_url} is missing " "'issuer'"
+            )
+        if self._canonical_uri(issuer) != self._canonical_uri(as_url):
+            raise OAuthDiscoveryError(
+                f"Authorization Server Metadata issuer ({issuer!r}) does not "
+                f"match the authorization server ({as_url!r})"
+            )
+
+        token_endpoint = metadata.get("token_endpoint")
+        if not token_endpoint:
+            raise OAuthDiscoveryError(
+                f"Authorization Server Metadata for {as_url} is missing "
+                "'token_endpoint'"
+            )
+
+        self.authorization_endpoint = metadata.get("authorization_endpoint")
+        self.token_endpoint = token_endpoint
+        self._code_challenge_methods_supported = metadata.get(
+            "code_challenge_methods_supported"
+        )
+        self._authorization_server_metadata = metadata
+        return metadata
+
+    def _assert_pkce_s256_supported(self) -> None:
+        """Fail closed unless the AS advertises PKCE ``S256`` support.
+
+        MCP (2025-11-25) requires PKCE with ``S256``. When discovery ran and
+        the ``code_challenge_methods_supported`` array does not contain
+        ``S256`` — or is absent entirely — the flow is refused rather than
+        silently downgraded to ``plain``.
+
+        Raises:
+            OAuthPKCEUnsupportedError: when ``S256`` support is not confirmed.
+        """
+        methods = self._code_challenge_methods_supported
+        if methods is None:
+            raise OAuthPKCEUnsupportedError(
+                "Authorization server did not advertise "
+                "'code_challenge_methods_supported'; PKCE S256 support "
+                "(required by MCP 2025-11-25) cannot be confirmed — refusing "
+                "the flow"
+            )
+        if "S256" not in methods:
+            raise OAuthPKCEUnsupportedError(
+                f"Authorization server does not support PKCE 'S256' "
+                f"(advertised: {methods}); refusing the flow (MCP 2025-11-25 "
+                "requires S256, not 'plain')"
+            )
+
+    async def discover(
+        self, server_url: str, www_authenticate: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Run the full OAuth 2.1 discovery chain for an MCP server.
+
+        RFC 9728 Protected Resource Metadata → pick the first authorization
+        server → RFC 8414/OIDC Authorization Server Metadata → fail-closed
+        PKCE ``S256`` guard. On success the client's ``token_endpoint``,
+        ``authorization_endpoint``, ``resource`` (RFC 8707 indicator) and
+        ``code_challenge_methods_supported`` are populated.
+
+        Args:
+            server_url: The MCP server base URL the client connected to.
+            www_authenticate: The ``WWW-Authenticate`` header from a 401, if
+                any (RFC 9728 mechanism 1); omit to force the well-known probe.
+
+        Returns:
+            ``{"protected_resource_metadata": ..., "authorization_server_metadata": ...}``.
+
+        Raises:
+            OAuthDiscoveryError / OAuthPKCEUnsupportedError: on any failure in
+                the chain (fail closed, never a silent fallback).
+        """
+        prm = await self.discover_protected_resource_metadata(
+            server_url, www_authenticate
+        )
+        as_url = self._authorization_servers[0]  # type: ignore[index]
+        as_metadata = await self.discover_authorization_server_metadata(as_url)
+        # Fail-closed: refuse the flow unless S256 is confirmed.
+        self._assert_pkce_s256_supported()
+        return {
+            "protected_resource_metadata": prm,
+            "authorization_server_metadata": as_metadata,
+        }
 
     async def get_client_credentials_token(
         self, scopes: Optional[List[str]] = None
@@ -1525,6 +1878,10 @@ class OAuth2Client:
 
         if scopes:
             data["scope"] = " ".join(scopes)
+
+        # RFC 8707: bind the issued token's audience to the canonical server.
+        if self.resource:
+            data["resource"] = self.resource
 
         # Make token request
         async with aiohttp.ClientSession() as session:
@@ -1582,8 +1939,17 @@ class OAuth2Client:
         if state:
             params["state"] = state
 
+        # RFC 8707: bind the issued token's audience to the canonical server.
+        if self.resource:
+            params["resource"] = self.resource
+
         code_verifier = None
         if use_pkce:
+            # Fail closed if discovery ran and the AS did not confirm S256.
+            # MCP 2025-11-25 requires S256; 'plain' is never emitted.
+            if self._code_challenge_methods_supported is not None:
+                self._assert_pkce_s256_supported()
+
             # Generate PKCE parameters
             code_verifier = (
                 base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
@@ -1635,6 +2001,10 @@ class OAuth2Client:
 
         if code_verifier:
             data["code_verifier"] = code_verifier
+
+        # RFC 8707: same canonical resource indicator as the authorize request.
+        if self.resource:
+            data["resource"] = self.resource
 
         # Make token request
         async with aiohttp.ClientSession() as session:
@@ -1697,6 +2067,10 @@ class OAuth2Client:
         if self.client_secret:
             data["client_secret"] = self.client_secret
 
+        # RFC 8707: keep the audience bound across refreshes.
+        if self.resource:
+            data["resource"] = self.resource
+
         # Make refresh request
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -1743,6 +2117,10 @@ class OAuth2Client:
 
         if self.client_secret:
             data["client_secret"] = self.client_secret
+
+        # RFC 8707: keep the audience bound across refreshes.
+        if self.resource:
+            data["resource"] = self.resource
 
         # Make token request
         async with aiohttp.ClientSession() as session:
