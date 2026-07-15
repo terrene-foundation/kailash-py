@@ -94,6 +94,33 @@ from kailash_mcp.utils import (
 
 logger = logging.getLogger(__name__)
 
+
+# Supported MCP protocol-handshake revisions, newest first. The server
+# negotiates genuinely (MCP base-protocol lifecycle): on ``initialize`` it
+# echoes the client's requested version when supported, else returns the
+# newest supported version. A hardcoded/echoed fixed version string is
+# non-compliant.
+SUPPORTED_PROTOCOL_VERSIONS = (
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05",
+)
+LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+def negotiate_protocol_version(requested: Any) -> str:
+    """Negotiate the response ``protocolVersion`` for an ``initialize`` request.
+
+    Echoes the client's requested version when the server supports it;
+    otherwise returns the newest supported version (never a hardcoded fixed
+    string). ``requested`` is the client-sent ``params["protocolVersion"]``
+    (or ``None`` when absent).
+    """
+    if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
+        return requested
+    return LATEST_PROTOCOL_VERSION
+
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -1915,7 +1942,9 @@ class MCPServer:
         return {
             "jsonrpc": "2.0",
             "result": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": negotiate_protocol_version(
+                    params.get("protocolVersion")
+                ),
                 "capabilities": {
                     "tools": {"listSupported": True, "callSupported": True},
                     "resources": {

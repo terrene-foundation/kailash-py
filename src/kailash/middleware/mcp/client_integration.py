@@ -113,6 +113,18 @@ class MCPServerConnection:
                         "stdio transport requires 'command' in connection_config"
                     )
 
+                # Fail-closed spawn safety (MCP 2025-11-25 local-server spawn
+                # safety): reject an unlisted command rather than warn-and-allow.
+                from ...channels.mcp.stdio import validate_spawn_command
+
+                validate_spawn_command(
+                    command,
+                    allowed_commands=self.connection_config.get("allowed_commands"),
+                    allow_arbitrary_commands=bool(
+                        self.connection_config.get("allow_arbitrary_commands", False)
+                    ),
+                )
+
                 params = StdioServerParameters(  # type: ignore[reportOptionalCall]
                     command=command,
                     args=args,

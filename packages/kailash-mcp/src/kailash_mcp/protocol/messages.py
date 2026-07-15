@@ -267,6 +267,16 @@ class JsonRpcRequest:
             )
         if "method" not in data:
             raise JsonRpcValidationError("JsonRpcRequest requires 'method' field")
+        # JSON-RPC 2.0 / MCP 2025-11-25: an EXPLICIT null ``id`` is invalid and
+        # is distinct from an ABSENT ``id`` (which denotes a notification).
+        # ``data.get("id")`` alone would silently collapse ``{"id": null}`` into
+        # a notification; reject the explicit-null form here at the parse
+        # boundary (the only place the key's presence is observable).
+        if "id" in data and data["id"] is None:
+            raise JsonRpcValidationError(
+                "JsonRpcRequest: explicit null 'id' is invalid; omit the 'id' "
+                "field entirely for a notification"
+            )
         return cls(
             method=data["method"],
             params=data.get("params"),

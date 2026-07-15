@@ -27,6 +27,7 @@ from kailash_mcp.errors import (
     RetryStrategy,
     TransportError,
 )
+from kailash_mcp.security import validate_spawn_command
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +163,27 @@ class MCPClient:
         else:
             self.metrics = None
 
+    def _guard_spawn_command(self, command: Any) -> None:
+        """Fail-closed guard for a local-server stdio spawn command.
+
+        Per the MCP spec (2025-11-25) local-server spawn safety requirement,
+        an unlisted spawn command is REJECTED (never warn-and-allowed). The
+        allowlist is read from the client ``config``:
+
+        - ``allowed_commands``: optional explicit allowlist (defaults to the
+          curated standard MCP launcher set when absent).
+        - ``allow_arbitrary_commands``: explicit opt-out (never the default).
+
+        Raises:
+            SpawnSecurityError: if ``command`` is not in the effective
+                allowlist (and the opt-out is not set).
+        """
+        validate_spawn_command(
+            command,
+            allowed_commands=self.config.get("allowed_commands"),
+            allow_arbitrary=bool(self.config.get("allow_arbitrary_commands", False)),
+        )
+
     async def discover_tools(
         self,
         server_config: Union[str, Dict[str, Any]],
@@ -249,6 +271,9 @@ class MCPClient:
         command = server_config.get("command", "python")
         args = server_config.get("args", [])
         env = server_config.get("env", {})
+
+        # Fail-closed spawn safety (MCP 2025-11-25 local-server spawn safety).
+        self._guard_spawn_command(command)
 
         # Merge environment
         server_env = os.environ.copy()
@@ -526,6 +551,9 @@ class MCPClient:
         command = server_config.get("command", "python")
         args = server_config.get("args", [])
         env = server_config.get("env", {})
+
+        # Fail-closed spawn safety (MCP 2025-11-25 local-server spawn safety).
+        self._guard_spawn_command(command)
 
         server_env = os.environ.copy()
         server_env.update(env)
@@ -907,6 +935,8 @@ class MCPClient:
         command = server_config.get("command", "python")
         args = server_config.get("args", [])
         env = server_config.get("env", {})
+        # Fail-closed spawn safety (MCP 2025-11-25 local-server spawn safety).
+        self._guard_spawn_command(command)
         server_env = os.environ.copy()
         server_env.update(env)
         server_params = StdioServerParameters(
