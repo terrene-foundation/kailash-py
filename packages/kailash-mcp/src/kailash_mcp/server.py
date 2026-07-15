@@ -2971,7 +2971,7 @@ class MCPServer:
 
         # Correlate any progress emitted during this call to the client's
         # ``_meta.progressToken`` (opt-in). Returns None when no token supplied.
-        progress_ctx = self._begin_progress(params, client_id, tool_name)
+        progress_ctx = self._begin_progress(params, client_id, tool_name, request_id)
 
         # FINDING 3 (server-side) — make cancellation REAL, not inert. Run the
         # tool body inside a tracked ``asyncio.Task`` keyed by the CLIENT-SCOPED
@@ -3043,7 +3043,11 @@ class MCPServer:
         return {"jsonrpc": "2.0", "result": result_obj, "id": request_id}
 
     def _begin_progress(
-        self, params: Dict[str, Any], client_id: Optional[str], operation_name: str
+        self,
+        params: Dict[str, Any],
+        client_id: Optional[str],
+        operation_name: str,
+        request_id: Any = None,
     ) -> Optional[ProgressToken]:
         """Start progress tracking correlated to the client's progressToken.
 
@@ -3074,7 +3078,11 @@ class MCPServer:
         # ``_finish_progress`` reuses THIS same namespaced token, so completion
         # targets the correct per-client key (security.md — per-client isolation).
         token_obj = ProgressToken(
-            value=f"{client_id}:{client_token}", operation_name=operation_name
+            # round-3: include request_id so two CONCURRENT same-client
+            # calls reusing one progressToken value do not collide in the
+            # process-global ProgressManager (concurrent WS dispatch).
+            value=f"{client_id}:{request_id}:{client_token}",
+            operation_name=operation_name,
         )
         protocol.progress.start_progress(operation_name, progress_token=token_obj)
 
@@ -4055,10 +4063,21 @@ class MCPServer:
         # but never populated, so both paths were dead.
         self._pending_roots_clients[req_id] = client_id
 
-        await self._transport.send_message(
-            {"jsonrpc": "2.0", "id": req_id, "method": "roots/list", "params": {}},
-            client_id=client_id,
-        )
+        try:
+            await self._transport.send_message(
+                {"jsonrpc": "2.0", "id": req_id, "method": "roots/list", "params": {}},
+                client_id=client_id,
+            )
+        except Exception as exc:
+            # round-3 F2: a send failure must not leak the pending roots entry.
+            self._pending_roots_requests.pop(req_id, None)
+            self._pending_roots_clients.pop(req_id, None)
+            if not fut.done():
+                fut.cancel()
+            logger.warning(
+                "request_client_roots dispatch failed client=%s: %s", client_id, exc
+            )
+            return []
 
         try:
             message = await asyncio.wait_for(fut, timeout)
@@ -4382,7 +4401,29 @@ class MCPServer:
         fut: "asyncio.Future" = loop.create_future()
         self._register_pending_sampling(sampling_id, fut, request_id, target_client)
 
-        await self._transport.send_message(sampling_request, client_id=target_client)
+        try:
+            await self._transport.send_message(
+                sampling_request, client_id=target_client
+            )
+        except Exception as exc:
+            # round-3 F2: the pending entry was registered BEFORE the send; a
+            # send failure MUST NOT leak the entry/Future or seed a dead id into
+            # the FIFO deque (_drop_pending_sampling prunes all three maps).
+            self._drop_pending_sampling(sampling_id)
+            if not fut.done():
+                fut.cancel()
+            logger.warning(
+                "sampling.dispatch_failed",
+                extra={"sampling_id": sampling_id, "error": str(exc)},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"failed to dispatch sampling request: {exc}",
+                },
+                "id": request_id,
+            }
 
         try:
             completion = await asyncio.wait_for(fut, self._sampling_timeout)

@@ -1185,6 +1185,10 @@ class WebSocketServerTransport(BaseTransport):
         # Server state
         self.server: Optional[websockets.WebSocketServer] = None
         self._clients: Dict[str, Any] = {}  # websockets.WebSocketServerProtocol
+        # round-3 F3: ONE send lock per client_id, shared by the response send
+        # path (_process_and_respond) AND every server-initiated send
+        # (send_message) so concurrent frames on one socket never interleave.
+        self._send_locks: Dict[str, "asyncio.Lock"] = {}
         self._client_sessions: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
 
@@ -1246,6 +1250,14 @@ class WebSocketServerTransport(BaseTransport):
 
         logger.info("WebSocket server stopped")
 
+    def _get_send_lock(self, client_id: str) -> "asyncio.Lock":
+        """Return the per-client send lock, creating it on first use."""
+        lock = self._send_locks.get(client_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._send_locks[client_id] = lock
+        return lock
+
     async def send_message(
         self, message: Dict[str, Any], client_id: Optional[str] = None
     ) -> None:
@@ -1266,7 +1278,8 @@ class WebSocketServerTransport(BaseTransport):
             if client_id:
                 # Send to specific client
                 if client_id in self._clients:
-                    await self._clients[client_id].send(message_data)
+                    async with self._get_send_lock(client_id):
+                        await self._clients[client_id].send(message_data)
                     self._update_metrics("messages_sent")
                     self._update_metrics("bytes_sent", len(message_data))
                 else:
@@ -1277,10 +1290,14 @@ class WebSocketServerTransport(BaseTransport):
             else:
                 # Broadcast to all clients
                 if self._clients:
+                    async def _locked_send(cid: str, client: Any) -> None:
+                        async with self._get_send_lock(cid):
+                            await client.send(message_data)
+
                     await asyncio.gather(
                         *[
-                            client.send(message_data)
-                            for client in self._clients.values()
+                            _locked_send(cid, client)
+                            for cid, client in self._clients.items()
                         ],
                         return_exceptions=True,
                     )
@@ -1325,7 +1342,9 @@ class WebSocketServerTransport(BaseTransport):
         # does not block the read loop; those concurrent handlers' response
         # sends would otherwise interleave on the wire. Serialize every send
         # through this lock so no two frames corrupt each other (FINDING 2).
-        send_lock = asyncio.Lock()
+        # round-3 F3: the SHARED per-client lock (also used by every
+        # server-initiated send in send_message) — not a fresh local lock.
+        send_lock = self._get_send_lock(client_id)
         # In-flight per-message handler tasks — tracked so a disconnect can
         # cancel + await them instead of orphaning a handler blocked mid-await.
         inflight: "set" = set()
@@ -1364,6 +1383,7 @@ class WebSocketServerTransport(BaseTransport):
                 await asyncio.gather(*inflight, return_exceptions=True)
             # Clean up the transport's own per-client maps.
             self._clients.pop(client_id, None)
+            self._send_locks.pop(client_id, None)
             self._client_sessions.pop(client_id, None)
             # Let the server release any state it keyed on this client_id
             # (request-id reuse set, client_info, ...) so a churned connection
