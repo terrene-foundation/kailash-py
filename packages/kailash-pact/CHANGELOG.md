@@ -1,5 +1,19 @@
 # PACT Changelog
 
+## [0.15.0] — 2026-07-15 — SOC 2 evidence-collection primitives at the governance layer (#1711)
+
+### Added
+
+- **`EvidenceCollector` / `EvidencePackage`** — a governance-layer SOC 2 evidence
+  collector deriving CC6 (access control), CC7 (system operations), and CC8
+  (change management) evidence from primitives the SDK already emits (hash-chained
+  audit log, RBAC/ABAC grants, tenant isolation, governance records). Every
+  collector is tenant-scoped and fail-closed (cross-tenant + unattributed records
+  excluded); unmeasured controls report `verified=false` with a reason (no
+  fabricated passes); a producer↔consumer contract test binds every collector
+  filter to a real emitted action-vocabulary name (`PactAuditAction` /
+  `AuditEventType`). Exposed via `from pact import EvidenceCollector, EvidencePackage`.
+
 ## [0.14.3] — 2026-06-25 — fix: enforce MCP tool clearance fail-closed before the cost flag and at re-registration (#1456)
 
 ### Security
