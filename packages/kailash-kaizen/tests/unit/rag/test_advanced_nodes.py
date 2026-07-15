@@ -605,3 +605,58 @@ class TestStepBackRAGNode:
         node = StepBackRAGNode()
         out = node._parse_abstract_query("not-a-dict")  # type: ignore[arg-type]
         assert isinstance(out, str)
+
+
+# ==========================================================================
+# Regression — envelope-unwrap on all four LLM-response parsers (issue #1736)
+# ==========================================================================
+
+
+@pytest.mark.regression
+class TestParserEnvelopeUnwrapRegression:
+    """All four ``_parse_*`` helpers MUST read the NESTED content.
+
+    ``LLMAgentNode.execute()`` returns an envelope
+    ``{"success": ..., "response": {"content": ...}, ...}`` — the LLM's real
+    content is under ``response["response"]["content"]``, NOT the top level.
+    The pre-#1736 parsers read ``response.get("content", "")`` on the OUTER
+    dict, so they always saw ``""`` and every LLM-backed step silently fell
+    back to its rule-based path. These behavioral tests feed the real envelope
+    shape and assert the parser extracts the nested payload — they fail if a
+    future refactor reverts to the top-level read. A flat ``{"content": ...}``
+    (direct provider) shape MUST still parse (backward tolerance).
+    """
+
+    def _envelope(self, content: str) -> dict:
+        return {"success": True, "response": {"content": content}}
+
+    def test_parse_hypotheses_reads_nested_content(self):
+        node = HyDENode()
+        env = self._envelope('{"hypotheses": ["h-one", "h-two"]}')
+        assert node._parse_hypotheses(env) == ["h-one", "h-two"]  # type: ignore[attr-defined]
+        # flat shape (direct provider) still parses
+        flat = {"content": '{"hypotheses": ["h-flat"]}'}
+        assert node._parse_hypotheses(flat) == ["h-flat"]  # type: ignore[attr-defined]
+
+    def test_parse_query_variations_reads_nested_content(self):
+        node = RAGFusionNode(num_query_variations=3)
+        env = self._envelope('{"variations": ["v-one", "v-two"]}')
+        assert node._parse_query_variations(env) == ["v-one", "v-two"]  # type: ignore[attr-defined]
+
+    def test_parse_abstract_query_reads_nested_content(self):
+        node = StepBackRAGNode()
+        env = self._envelope('{"abstract_query": "broad question?"}')
+        assert node._parse_abstract_query(env) == "broad question?"  # type: ignore[attr-defined]
+
+    def test_parse_verification_response_reads_nested_content(self):
+        node = SelfCorrectingRAGNode()
+        env = self._envelope(
+            '{"confidence": 0.9, "retrieval_quality": 0.8, '
+            '"generation_quality": 0.7, "needs_refinement": false}'
+        )
+        out = node._parse_verification_response(env)  # type: ignore[attr-defined]
+        # The nested JSON is parsed through (not the fallback heuristic, which
+        # would emit confidence 0.4/0.6 from a keyword scan of empty content).
+        assert out["confidence"] == 0.9
+        assert out["retrieval_quality"] == 0.8
+        assert out["generation_quality"] == 0.7
