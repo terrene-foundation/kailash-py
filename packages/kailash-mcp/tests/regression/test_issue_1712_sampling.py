@@ -75,6 +75,11 @@ async def _drive_sampling(
     ``reply`` is the JSON-RPC body sans envelope (e.g. ``{"result": {...}}`` or
     ``{"error": {...}}``). Returns ``(handler_result, sent_messages)``.
     """
+    # Finding 4: sampling routes to the REQUESTER's own client. The responder
+    # (the target that replies) IS the requester's client, so the requester's
+    # client_id must be the sampling-capable responder unless the caller set it.
+    params = {**params}
+    params.setdefault("client_id", responder)
     task = asyncio.create_task(
         server._handle_sampling_create_message(params, request_id)
     )
@@ -226,7 +231,7 @@ async def test_sampling_fails_closed_without_approver():
     server = _make_server()
     # Deliberately do NOT bind an approver.
     result = await server._handle_sampling_create_message(
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
         "req-4",
     )
     assert "error" in result
@@ -291,7 +296,7 @@ async def test_sampling_decline_uses_declined_code():
     server = _make_server()
     server.set_sampling_approver(lambda ctx: False)
     result = await server._handle_sampling_create_message(
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
         "req-7",
     )
     assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_DECLINED.value
@@ -308,7 +313,7 @@ async def test_sampling_timeout_uses_timeout_code():
 
     server.set_sampling_approver(approver)
     result = await server._handle_sampling_create_message(
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
         "req-8",
     )
     assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_TIMEOUT.value
@@ -328,7 +333,7 @@ async def test_sampling_approver_mcperror_propagates_code():
 
     server.set_sampling_approver(approver)
     result = await server._handle_sampling_create_message(
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
         "req-9",
     )
     assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_DECLINED.value
@@ -346,7 +351,7 @@ async def test_sampling_approver_unexpected_error_fails_closed():
 
     server.set_sampling_approver(approver)
     result = await server._handle_sampling_create_message(
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
         "req-10",
     )
     assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_REJECTED.value
@@ -561,7 +566,7 @@ async def test_sampling_full_round_trip_delivers_completion_no_32601():
 
     task = asyncio.create_task(
         server._handle_sampling_create_message(
-            {"messages": [{"role": "user", "content": "summarize"}]},
+            {"messages": [{"role": "user", "content": "summarize"}], "client_id": "client-1"},
             "orig-req",
         )
     )
@@ -635,7 +640,7 @@ async def test_disconnect_evicts_pending_sampling_and_unblocks_requester():
 
     task = asyncio.create_task(
         server._handle_sampling_create_message(
-            {"messages": [{"role": "user", "content": "hi"}]},
+            {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-1"},
             "orig-disc",
         )
     )

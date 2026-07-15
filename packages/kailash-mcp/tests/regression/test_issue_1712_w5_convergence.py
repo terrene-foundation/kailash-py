@@ -196,7 +196,7 @@ async def test_sampling_response_from_wrong_client_cannot_resolve():
 
     task = asyncio.create_task(
         server._handle_sampling_create_message(
-            {"messages": [{"role": "user", "content": "hi"}]},
+            {"messages": [{"role": "user", "content": "hi"}], "client_id": "client-A"},
             "orig-req",
         )
     )
@@ -227,3 +227,52 @@ async def test_sampling_response_from_wrong_client_cannot_resolve():
     result = await asyncio.wait_for(task, timeout=5)
     assert result["result"] == completion
     assert result["id"] == "orig-req"
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_pending_sampling_order_pruned_on_resolution_no_spurious_evict():
+    """Convergence round-2 F1: the FIFO-cap deque (_pending_sampling_order) is
+    pruned at every resolution site, so the cap counts only LIVE entries — a
+    lone in-flight request survives a flood of completed unrelated requests
+    (it is NOT spuriously evicted+cancelled)."""
+    server = _server()
+    server._MAX_PENDING_SAMPLING = 4
+    live = asyncio.get_running_loop().create_future()
+    server._register_pending_sampling("LIVE", live, "orig", "cA")
+    for i in range(12):
+        f = asyncio.get_running_loop().create_future()
+        server._register_pending_sampling(f"d{i}", f, f"o{i}", "cA")
+        handled = await server._route_server_initiated_response(
+            f"d{i}", {"id": f"d{i}", "result": {"x": i}}, responding_client_id="cA"
+        )
+        assert handled is True
+        # The deque never drifts from the live requests map (dead ids pruned).
+        assert len(server._pending_sampling_order) == len(
+            server._pending_sampling_requests
+        )
+    assert "LIVE" in server._pending_sampling_requests
+    assert not live.done() and not live.cancelled()
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_sampling_routes_to_requester_not_arbitrary_client():
+    """Convergence round-2 F4: sampling routes to the REQUESTER's OWN client,
+    never a blind pick — a requester whose own client does not advertise
+    sampling is rejected (-32601), NOT routed to a DIFFERENT capable client
+    (which would expose the requester's messages to that client's LLM)."""
+    server = _server()
+    server.set_sampling_approver(lambda ctx: True)
+    server.client_info = {
+        "client-A": {"capabilities": {"sampling": {}}},
+        "client-B": {"capabilities": {}},
+    }
+    result = await server._handle_sampling_create_message(
+        {"messages": [{"role": "user", "content": "secret"}], "client_id": "client-B"},
+        "req-x",
+    )
+    assert "error" in result
+    assert result["error"]["code"] == -32601
+    # NOTHING dispatched to client-A — no cross-client content exposure.
+    assert server._transport.sent == []

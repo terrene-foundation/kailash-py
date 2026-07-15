@@ -1210,8 +1210,7 @@ class MCPServer:
                     extra={"sampling_id": rid, "responder": responding_client_id},
                 )
                 return False
-            entry = self._pending_sampling_requests.pop(rid)
-            self._pending_sampling_clients.pop(rid, None)
+            entry = self._drop_pending_sampling(rid)
             fut = entry.get("future")
             # The FULL message (result OR error) is delivered so the handler can
             # relay a client error distinctly from a model completion.
@@ -2541,8 +2540,7 @@ class MCPServer:
             if cid == client_id
         ]
         for sid in stale_sampling:
-            self._pending_sampling_clients.pop(sid, None)
-            entry = self._pending_sampling_requests.pop(sid, None)
+            entry = self._drop_pending_sampling(sid)
             if entry is not None:
                 fut = entry.get("future")
                 if fut is not None and not fut.done():
@@ -4266,8 +4264,26 @@ class MCPServer:
                 "id": request_id,
             }
 
-        # Select the target client (first advertised; selection logic may grow).
-        target_client = sampling_clients[0]
+        # (FINDING 4 — cross-client isolation) Route sampling to the REQUESTER's
+        # OWN client, never a blind ``sampling_clients[0]`` pick: that would send
+        # client A's messages to client B's LLM (cross-client content exposure).
+        # The requester's client_id is merged into params by the WS dispatch. If
+        # the requester's own client does not advertise sampling, reject (-32601)
+        # rather than silently fall back to a DIFFERENT client.
+        requester = params.get("client_id")
+        if requester is None or requester not in sampling_clients:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": (
+                        "requesting client does not advertise sampling; a "
+                        "sampling request is routed to the requester's own client"
+                    ),
+                },
+                "id": request_id,
+            }
+        target_client = requester
 
         # (3) Human-in-the-loop approval — the server MUST NOT fulfil a sampling
         # request (model-generated content) without a human-review/approval
@@ -4340,8 +4356,7 @@ class MCPServer:
         try:
             completion = await asyncio.wait_for(fut, self._sampling_timeout)
         except asyncio.TimeoutError:
-            self._pending_sampling_requests.pop(sampling_id, None)
-            self._pending_sampling_clients.pop(sampling_id, None)
+            self._drop_pending_sampling(sampling_id)
             logger.warning(
                 "sampling.timeout",
                 extra={"sampling_id": sampling_id, "target_client": target_client},
@@ -4364,8 +4379,7 @@ class MCPServer:
             # Only the former is a sampling failure we translate; a real task
             # cancel is re-raised so cancellation is not silently swallowed.
             if fut.cancelled():
-                self._pending_sampling_requests.pop(sampling_id, None)
-                self._pending_sampling_clients.pop(sampling_id, None)
+                self._drop_pending_sampling(sampling_id)
                 logger.warning(
                     "sampling.target_disconnected",
                     extra={"sampling_id": sampling_id, "target_client": target_client},
@@ -4398,6 +4412,23 @@ class MCPServer:
             "result": result,
             "id": request_id,
         }
+
+    def _drop_pending_sampling(self, sampling_id: str) -> Optional[Dict[str, Any]]:
+        """Remove a pending sampling entry from ALL THREE tracking structures.
+
+        Convergence round-2 (FINDING 1): the FIFO-cap deque
+        ``_pending_sampling_order`` MUST be pruned at every resolution site
+        (reply / timeout / disconnect / cancelled) so the cap counts only LIVE
+        entries. Otherwise dead (resolved) ids fill the deque and a genuinely
+        in-flight request is spuriously evicted+cancelled once
+        ``_MAX_PENDING_SAMPLING`` OTHER requests complete.
+        """
+        self._pending_sampling_clients.pop(sampling_id, None)
+        try:
+            self._pending_sampling_order.remove(sampling_id)
+        except ValueError:
+            pass
+        return self._pending_sampling_requests.pop(sampling_id, None)
 
     def _register_pending_sampling(
         self,
