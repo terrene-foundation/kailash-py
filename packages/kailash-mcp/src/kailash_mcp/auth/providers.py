@@ -21,13 +21,18 @@ Examples:
 
     JWT authentication:
 
-    >>> auth = JWTAuth(secret="my-secret", algorithm="HS256")
+    >>> auth = JWTAuth(
+    ...     secret="my-secret",
+    ...     algorithm="HS256",
+    ...     audience="https://mcp.example.com",
+    ... )
     >>> token = auth.create_token({"user": "alice", "permissions": ["read", "write"]})
 """
 
 import base64
 import binascii
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -232,15 +237,15 @@ class BearerTokenAuth(AuthProvider):
             to be present AND equal to this value. When ``None`` (default),
             absent-iss tokens are accepted (existing behaviour preserved).
         expected_audience: The canonical resource URI this MCP server
-            identifies as (a.k.a. the token audience). When set, JWT
-            validation FAILS CLOSED on the audience dimension — it rejects
-            BOTH audience-absent tokens (missing required ``aud``) AND
-            foreign-audience tokens (``aud`` mismatch), per the MCP
-            2025-11-25 spec. When ``None`` (default), audience is NOT
-            validated (existing behaviour preserved) and a one-time WARNING
-            is logged: MCP servers accepting JWTs MUST set
-            ``expected_audience`` for spec compliance — an unconfigured
-            audience cannot be validated against anything.
+            identifies as (a.k.a. the token audience). REQUIRED whenever
+            ``validate_jwt=True`` — construction raises ``ValueError`` if it is
+            absent (fail-closed, enforcement-surface parity with
+            ``ResourceServer``). JWT validation then FAILS CLOSED on the
+            audience dimension — it rejects BOTH audience-absent tokens
+            (missing required ``aud``) AND foreign-audience tokens (``aud``
+            mismatch), per the MCP 2025-11-25 spec. There is no fail-open
+            default: the only way to skip audience validation is to not
+            validate JWTs (``validate_jwt=False``).
 
     Examples:
         Simple bearer token:
@@ -284,19 +289,23 @@ class BearerTokenAuth(AuthProvider):
         if validate_jwt and not jwt_secret:
             raise ValueError("JWT secret required when validate_jwt=True")
 
-        # Spec-compliance guard (MCP 2025-11-25): a JWT-validating server that
-        # does NOT pin an expected audience cannot reject foreign-audience
-        # tokens minted for a different resource. Surface this ONCE, loudly,
-        # at construction — the audience check is fail-closed WHENEVER
-        # expected_audience is set (see _validate_jwt_token) and disabled when
-        # it is not.
+        # Fail-closed audience guard (MCP 2025-11-25) — enforcement-surface
+        # parity with ``ResourceServer`` (rules/security.md § Enforcement-Surface
+        # Parity). A JWT-validating provider that does NOT pin an expected
+        # audience cannot reject a foreign-audience token minted for a different
+        # resource, so audience enforcement would silently be fail-OPEN. Rather
+        # than warn-and-continue (the pre-fix behaviour that shipped the open
+        # default), REFUSE construction — mirroring the ``jwt_secret`` guard
+        # above. Every JWT-validating provider is now audience fail-closed by
+        # construction; the only way to disable audience validation is to not
+        # validate JWTs at all.
         if validate_jwt and not expected_audience:
-            logger.warning(
-                "JWT auth enabled without expected_audience: token audience "
-                "validation is DISABLED. The MCP 2025-11-25 spec REQUIRES "
-                "servers to validate the token audience fail-closed; set "
-                "expected_audience=<canonical resource URI> to reject "
-                "audience-absent and foreign-audience tokens."
+            raise ValueError(
+                "expected_audience is required when validate_jwt=True: the MCP "
+                "2025-11-25 spec REQUIRES servers to validate the token audience "
+                "fail-closed (reject audience-absent AND foreign-audience "
+                "tokens). Pass expected_audience=<canonical resource URI> so a "
+                "token minted for a different resource cannot be replayed here."
             )
 
         logger.info(f"Initialized Bearer Token auth (JWT: {validate_jwt})")
@@ -377,7 +386,9 @@ class BearerTokenAuth(AuthProvider):
 
         try:
             payload = jwt.decode(  # type: ignore[union-attr]
-                token, self.jwt_secret, **decode_kwargs  # type: ignore[arg-type]
+                token,
+                self.jwt_secret,
+                **decode_kwargs,  # type: ignore[arg-type]
             )
 
             return {
@@ -462,14 +473,14 @@ class JWTAuth(BearerTokenAuth):
             issued by :py:meth:`create_token` AND as the ``expected_issuer``
             allowlist on validation. When set, validation REQUIRES ``iss``
             to be present (cross-SDK port of esperie/kailash-rs#599).
-        audience: The canonical resource URI this server identifies as. Used
-            both as the ``aud`` claim on tokens issued by
-            :py:meth:`create_token` AND as the ``expected_audience`` allowlist
-            on validation. When set, validation is FAIL-CLOSED on audience —
-            it REQUIRES ``aud`` to be present AND equal to this value, per the
-            MCP 2025-11-25 spec. When ``None`` (default), audience is not
-            validated and a one-time WARNING is logged; MCP servers SHOULD set
-            it for spec compliance.
+        audience: The canonical resource URI this server identifies as.
+            REQUIRED — ``JWTAuth`` always validates JWTs, so an absent
+            ``audience`` raises ``ValueError`` at construction (fail-closed,
+            enforcement-surface parity with ``ResourceServer``). Used both as
+            the ``aud`` claim on tokens issued by :py:meth:`create_token` AND
+            as the ``expected_audience`` allowlist on validation, which is
+            FAIL-CLOSED on audience — it REQUIRES ``aud`` to be present AND
+            equal to this value, per the MCP 2025-11-25 spec.
 
     Examples:
         Create JWT auth provider (spec-compliant, audience fail-closed):
@@ -882,7 +893,53 @@ class AuthManager:
     def authenticate_and_authorize(
         self, credentials: Dict[str, Any], required_permission: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Authenticate credentials and check authorization.
+        """Authenticate credentials and check authorization (SYNC path).
+
+        Use this from a synchronous dispatch context. For an ASYNC provider
+        (one whose ``authenticate`` is a coroutine function, e.g.
+        ``ResourceServer``) call :py:meth:`authenticate_and_authorize_async`
+        from an async context instead — a coroutine cannot be awaited here.
+
+        Args:
+            credentials: Authentication credentials
+            required_permission: Required permission for the operation
+
+        Returns:
+            User information dict
+
+        Raises:
+            AuthenticationError: If authentication fails, OR if the configured
+                provider is async and therefore cannot run on the sync path.
+            PermissionError: If user lacks required permission
+            RateLimitError: If rate limit exceeded
+        """
+        result = self.provider.authenticate(credentials)
+        if inspect.isawaitable(result):
+            # An async provider reached the SYNC auth path. Fail CLOSED with a
+            # typed AuthenticationError rather than letting the un-awaited
+            # coroutine leak downstream into an opaque AttributeError -> 500.
+            # Close the coroutine so no "was never awaited" RuntimeWarning
+            # fires at GC.
+            result.close()  # type: ignore[union-attr]
+            raise AuthenticationError(
+                "authentication provider is async; call "
+                "authenticate_and_authorize_async from an async dispatch "
+                "context (async tool handler / WebSocket dispatch)"
+            )
+        return self._authorize(result, required_permission)
+
+    async def authenticate_and_authorize_async(
+        self, credentials: Dict[str, Any], required_permission: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Authenticate credentials and check authorization (ASYNC-aware path).
+
+        Awaits the provider's ``authenticate`` when it is async (e.g.
+        ``ResourceServer.authenticate``), and calls it directly when it is a
+        plain sync provider — so a sync ``AuthProvider`` subclass works
+        unchanged through this path too. This is the path the server's async
+        tool dispatch (WebSocket) uses so an async ``auth_provider`` is
+        actually reachable through the documented server wiring rather than
+        crashing on an un-awaited coroutine.
 
         Args:
             credentials: Authentication credentials
@@ -896,9 +953,21 @@ class AuthManager:
             PermissionError: If user lacks required permission
             RateLimitError: If rate limit exceeded
         """
-        # Authenticate
-        user_info = self.provider.authenticate(credentials)
+        result = self.provider.authenticate(credentials)
+        if inspect.isawaitable(result):
+            user_info = await result
+        else:
+            user_info = result
+        return self._authorize(user_info, required_permission)
 
+    def _authorize(
+        self, user_info: Dict[str, Any], required_permission: Optional[str]
+    ) -> Dict[str, Any]:
+        """Post-authentication rate-limit + permission + audit gate.
+
+        Shared by both the sync and async authenticate paths so the
+        authorization semantics are identical regardless of dispatch context.
+        """
         # Check rate limits
         if self.rate_limiter:
             self.rate_limiter.check_rate_limit(user_info)

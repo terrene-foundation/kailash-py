@@ -330,13 +330,21 @@ class TestJWTAuth:
 
     def test_init(self):
         """Test JWT auth initialization."""
-        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        auth = JWTAuth(
+            self.JWT_TEST_SECRET,
+            algorithm="HS256",
+            audience="https://mcp.example.com",
+        )
         assert auth.jwt_secret == self.JWT_TEST_SECRET
         assert auth.jwt_algorithm == "HS256"
 
     def test_create_token(self):
         """Test JWT token creation."""
-        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        auth = JWTAuth(
+            self.JWT_TEST_SECRET,
+            algorithm="HS256",
+            audience="https://mcp.example.com",
+        )
 
         payload = {"user": "testuser", "permissions": ["read", "write"]}
         token = auth.create_token(payload, expiration=3600)
@@ -346,7 +354,11 @@ class TestJWTAuth:
 
     def test_authenticate_valid_jwt(self):
         """Test authentication with valid JWT token."""
-        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        auth = JWTAuth(
+            self.JWT_TEST_SECRET,
+            algorithm="HS256",
+            audience="https://mcp.example.com",
+        )
 
         payload = {"user": "testuser", "permissions": ["read"]}
         token = auth.create_token(payload, expiration=3600)
@@ -358,14 +370,22 @@ class TestJWTAuth:
 
     def test_authenticate_invalid_jwt(self):
         """Test authentication with invalid JWT token."""
-        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        auth = JWTAuth(
+            self.JWT_TEST_SECRET,
+            algorithm="HS256",
+            audience="https://mcp.example.com",
+        )
 
         with pytest.raises(AuthenticationError):
             auth.authenticate("invalid.jwt.token")
 
     def test_authenticate_expired_jwt(self):
         """Test authentication with expired JWT token."""
-        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        auth = JWTAuth(
+            self.JWT_TEST_SECRET,
+            algorithm="HS256",
+            audience="https://mcp.example.com",
+        )
 
         # Create token that expires in the past
         payload = {"user": "testuser", "exp": int(time.time()) - 3600}  # 1 hour ago

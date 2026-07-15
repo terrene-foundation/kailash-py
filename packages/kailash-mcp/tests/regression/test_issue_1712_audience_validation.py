@@ -128,56 +128,52 @@ def test_foreign_audience_token_rejected():
 
 
 # ---------------------------------------------------------------------------
-# (d) expected_audience unset: behaviour unchanged + warning emitted
+# (d) expected_audience unset: FAIL-CLOSED — construction refuses (F4)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.regression
-def test_audience_unset_preserves_existing_behaviour(caplog):
-    """With no expected_audience, an audience-ABSENT token is still accepted
-    (audience not validated — the pre-fix, non-fail-closed behaviour) and a
-    spec-compliance WARNING is emitted once at construction.
+def test_validate_jwt_without_audience_raises():
+    """A JWT-validating provider with NO expected_audience REFUSES construction.
 
-    An aud-absent token sailing through is exactly the gap the fix closes: the
-    MCP 2025-11-25 spec requires rejecting audience-absent tokens, which the
-    unconfigured path does not do. (PyJWT already rejects a present-but-
-    unexpected `aud` by default, so the residual gap is the absent-aud case.)
+    Enforcement-surface parity (rules/security.md § Enforcement-Surface Parity):
+    ``ResourceServer`` is audience fail-closed, so the ``BearerTokenAuth`` /
+    ``JWTAuth`` JWT path MUST be too. The pre-fix behaviour merely WARNED and
+    continued with audience validation DISABLED (fail-OPEN) — a token minted
+    for a different resource was accepted. The fix raises ``ValueError`` at
+    construction, mirroring the ``jwt_secret``-required guard, so there is no
+    fail-open default.
     """
-    with caplog.at_level(logging.WARNING, logger="kailash_mcp.auth.providers"):
-        auth = BearerTokenAuth(
+    with pytest.raises(ValueError) as excinfo:
+        BearerTokenAuth(
             validate_jwt=True,
             jwt_secret=SECRET,
             jwt_algorithm=ALGO,
-            # expected_audience deliberately omitted
+            # expected_audience deliberately omitted -> fail-closed refusal
         )
+    assert "expected_audience" in str(excinfo.value)
 
-    # The warning fired exactly once, at construction.
-    warnings = [
-        r
-        for r in caplog.records
-        if r.levelno == logging.WARNING and "expected_audience" in r.getMessage()
-    ]
-    assert len(warnings) == 1
 
-    # Behaviour is unchanged: an audience-absent token still authenticates
-    # because audience is not validated when unconfigured (the residual gap
-    # the warning flags and expected_audience closes).
-    token = _encode({"sub": "alice"})  # no aud claim
-    result = auth.authenticate(token)
-    assert result["user_id"] == "alice"
+@pytest.mark.regression
+def test_jwtauth_without_audience_raises():
+    """JWTAuth always validates JWTs, so an absent audience also refuses."""
+    with pytest.raises(ValueError) as excinfo:
+        JWTAuth(secret=SECRET)  # no audience
+    assert "expected_audience" in str(excinfo.value)
 
 
 @pytest.mark.regression
 def test_no_warning_when_audience_configured(caplog):
-    """No spec-compliance warning when expected_audience IS set."""
+    """With expected_audience set, construction SUCCEEDS and emits no warning."""
     with caplog.at_level(logging.WARNING, logger="kailash_mcp.auth.providers"):
-        BearerTokenAuth(
+        auth = BearerTokenAuth(
             validate_jwt=True,
             jwt_secret=SECRET,
             jwt_algorithm=ALGO,
             expected_audience=CANONICAL_AUDIENCE,
         )
 
+    assert auth.expected_audience == CANONICAL_AUDIENCE
     warnings = [
         r
         for r in caplog.records

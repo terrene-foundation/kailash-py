@@ -15,6 +15,13 @@ Features:
 - Connection pooling and management
 - Health checking and monitoring
 
+.. note::
+    ``StreamableHTTPTransport`` in this module is a NON-SPEC legacy transport
+    (custom ``POST /session`` + ``X-Session-ID`` + ``GET /receive`` scheme) and
+    is deprecated. Spec-compliant MCP HTTP goes through the upstream-delegated
+    ``streamable_http_client`` used by ``kailash_mcp.client.MCPClient``
+    (``client.py``); see that class's ``__init__`` for details.
+
 Examples:
     Enhanced STDIO transport:
 
@@ -56,6 +63,7 @@ import socket
 import subprocess
 import time
 import uuid
+import warnings
 import weakref
 from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
@@ -683,7 +691,26 @@ class SSETransport(BaseTransport):
 
 
 class StreamableHTTPTransport(BaseTransport):
-    """StreamableHTTP transport with session management."""
+    """NON-SPEC legacy StreamableHTTP transport with a custom session scheme.
+
+    .. deprecated::
+        This transport does NOT implement the MCP 2025-11-25 Streamable HTTP
+        specification. It uses a custom, non-standard session scheme: a
+        separate ``POST /session`` handshake, the non-spec header name
+        ``X-Session-ID`` (the spec mandates ``MCP-Session-Id``), and a
+        ``GET /receive`` long-poll. No MCP-spec server implements this scheme,
+        so this transport interoperates only with a matching non-spec server.
+
+        The spec-compliant MCP HTTP client path is the upstream-delegated
+        ``streamable_http_client`` used by ``kailash_mcp.client.MCPClient``
+        (see ``MCPClient._discover_tools_http`` / ``MCPClient._call_tool_http``
+        in ``kailash_mcp/client.py``), which speaks the single-endpoint
+        Streamable HTTP transport with correct ``MCP-Session-Id`` and
+        ``MCP-Protocol-Version`` handling. Use that for any real MCP server.
+
+        This class is retained for backward compatibility with existing
+        non-spec consumers and emits a ``DeprecationWarning`` on instantiation.
+    """
 
     def __init__(
         self,
@@ -706,6 +733,16 @@ class StreamableHTTPTransport(BaseTransport):
             skip_security_validation: Skip all security validation (for testing)
             **kwargs: Base transport arguments
         """
+        warnings.warn(
+            "StreamableHTTPTransport is a NON-SPEC legacy transport using a "
+            "custom session scheme (POST /session, X-Session-ID header, "
+            "GET /receive) that no MCP 2025-11-25 server implements. For "
+            "spec-compliant MCP HTTP, use the upstream-delegated "
+            "streamable_http_client via kailash_mcp.client.MCPClient "
+            "(MCP-Session-Id + MCP-Protocol-Version handling).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__("streamable_http", **kwargs)
 
         self.base_url = base_url.rstrip("/")

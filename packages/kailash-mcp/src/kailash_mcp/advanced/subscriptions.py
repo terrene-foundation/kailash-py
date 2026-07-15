@@ -8,6 +8,7 @@ import logging
 import uuid
 import weakref
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Union
@@ -474,10 +475,26 @@ class ResourceSubscription:
 class CursorManager:
     """Manages cursor generation and validation for pagination."""
 
+    # Cap on the number of outstanding cursors held in memory. Bounds memory
+    # so a client minting cursors — now across tools / prompts / resource-
+    # templates / resources list pagination — cannot grow the store without
+    # limit (a remote DoS). On overflow the OLDEST cursor is evicted (FIFO),
+    # mirroring ``MCPServer._MAX_SEEN_REQUEST_IDS``. Time-based expiry
+    # (``cleanup_expired`` / ``is_valid``) still applies on top of this bound.
+    _MAX_CURSORS = 4096
+
     def __init__(self, ttl_seconds: int = 3600):
         self.ttl_seconds = ttl_seconds
-        self._cursors: Dict[str, Dict[str, Any]] = {}
+        # Insertion-ordered so the oldest cursor is evictable in O(1) on
+        # overflow via ``popitem(last=False)``.
+        self._cursors: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
         self._lock = asyncio.Lock()
+
+    def _evict_overflow(self) -> None:
+        """Evict oldest cursors until the store is within ``_MAX_CURSORS``."""
+        while len(self._cursors) > self._MAX_CURSORS:
+            # popitem(last=False) removes the oldest (FIFO) entry.
+            self._cursors.popitem(last=False)
 
     def generate_cursor(self) -> str:
         """Generate a unique cursor."""
@@ -488,6 +505,9 @@ class CursorManager:
         cursor = hashlib.sha256(cursor_data.encode()).hexdigest()[:16]
 
         self._cursors[cursor] = {"created_at": timestamp, "data": {}}
+        # Bound the store: a client cannot mint unbounded cursors across the
+        # newly-routed list types; the oldest is evicted on overflow.
+        self._evict_overflow()
 
         return cursor
 

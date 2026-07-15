@@ -22,6 +22,16 @@ safety) — absent an explicit ``allowed_commands`` the curated
 :data:`DEFAULT_ALLOWED_COMMANDS` launcher set is enforced and an unlisted
 command is rejected. Pass ``allowed_commands=[...]`` to narrow/extend it,
 or ``allow_arbitrary_commands=True`` to opt out explicitly.
+
+Transport status (native vs spec-delegated): this ``StdioTransport`` is a
+native internal/legacy client transport using LSP-style ``Content-Length``
+framing. The MCP-spec-compliant surfaces are the upstream-delegated ones:
+the client HTTP path routes through the upstream ``streamable_http_client``
+(see ``kailash_mcp.client.MCPClient._discover_tools_http`` /
+``_call_tool_http``), and the spec stdio *server* is FastMCP, run via
+``kailash_mcp.server.MCPServerBase.start`` which delegates to
+``self._mcp.run()`` (newline-delimited spec stdio). Prefer those for
+interoperability with spec MCP peers.
 """
 
 from __future__ import annotations
@@ -220,6 +230,8 @@ class StdioTransport(Transport):
             if self._stdin and not self._stdin.is_closing():
                 self._stdin.close()
         except Exception:
+            # Expected-failure cleanup (zero-tolerance Rule 3 carve-out):
+            # closing an already-broken stdin must not mask shutdown.
             pass
 
         if self.process.returncode is None:
@@ -240,6 +252,8 @@ class StdioTransport(Transport):
                     try:
                         await self.process.wait()
                     except Exception:
+                        # Expected-failure cleanup (zero-tolerance Rule 3
+                        # carve-out): reaping an already-dead process.
                         pass
 
 

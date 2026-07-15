@@ -40,6 +40,13 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 
 from .base import ProtocolError, Transport, TransportError, validate_url
 
+# Upper bound on the server-supplied SSE ``retry:`` reconnection delay
+# (milliseconds). The server sends this value verbatim; without a ceiling a
+# malicious or misconfigured server could pin the client into an arbitrarily
+# long reconnect wait (a denial-of-service on the client's own reconnect
+# path). Any parsed value above this ceiling is clamped to it (5 minutes).
+MAX_RECONNECT_MS = 300_000
+
 
 class SseTransport(Transport):
     """MCP client transport over Server-Sent Events.
@@ -97,6 +104,15 @@ class SseTransport(Transport):
         self._closed = False
         self._sse_response: Optional[aiohttp.ClientResponse] = None
         self._sse_lock = asyncio.Lock()
+        # Server-requested reconnection delay from the SSE ``retry:`` field
+        # (milliseconds). ``None`` until the server sends a ``retry:`` line.
+        # MCP requires clients to respect this reconnection time; the value
+        # is honored as a delay before re-opening a closed SSE stream.
+        self._reconnect_delay_ms: Optional[int] = None
+        # Whether the SSE stream has been opened at least once, so the
+        # reconnection delay is applied only on an actual re-open, never on
+        # the first connection.
+        self._sse_opened_once = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -115,6 +131,16 @@ class SseTransport(Transport):
     @property
     def sse_url(self) -> str:
         return f"{self.base_url}{self.sse_path}"
+
+    @property
+    def reconnect_delay_ms(self) -> Optional[int]:
+        """Server-requested SSE reconnection delay in milliseconds.
+
+        Populated from the SSE ``retry:`` field the server sends on the
+        event stream; ``None`` until the server sends one. The transport
+        waits this long before re-opening a closed SSE stream.
+        """
+        return self._reconnect_delay_ms
 
     # ------------------------------------------------------------------
     # Transport protocol
@@ -166,6 +192,11 @@ class SseTransport(Transport):
         async with self._sse_lock:
             session = await self._ensure_session()
             if self._sse_response is None or self._sse_response.closed:
+                # Honor the server-requested reconnection delay (the SSE
+                # ``retry:`` field) before RE-opening a closed stream. The
+                # first open is never delayed.
+                if self._sse_opened_once and self._reconnect_delay_ms is not None:
+                    await asyncio.sleep(self._reconnect_delay_ms / 1000.0)
                 try:
                     self._sse_response = await session.get(
                         self.sse_url,
@@ -175,6 +206,7 @@ class SseTransport(Transport):
                     raise TransportError(
                         f"failed to open SSE stream at {self.sse_url}: {exc}"
                     ) from exc
+                self._sse_opened_once = True
                 if self._sse_response.status >= 400:
                     text = await self._sse_response.text()
                     self._sse_response.release()
@@ -183,22 +215,51 @@ class SseTransport(Transport):
                         f"SSE GET returned HTTP {self._sse_response.status if self._sse_response else '???'}: {text}"
                     )
 
-            data_lines: list[str] = []
-            async for raw_line in self._sse_response.content:
-                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                if line == "":
-                    if data_lines:
-                        return "\n".join(data_lines)
-                    continue
-                if line.startswith(":"):
-                    # SSE comment line — ignore.
-                    continue
-                if line.startswith("data:"):
-                    data_lines.append(line[len("data:") :].lstrip())
-                # Any other field (event:, id:, retry:) is ignored for
-                # the JSON-RPC payload purposes.
+            event = await self._read_event(self._sse_response.content)
+            if event is None:
+                raise TransportError("SSE stream closed before delivering an event")
+            return event
 
-            raise TransportError("SSE stream closed before delivering an event")
+    async def _read_event(self, line_source) -> Optional[str]:
+        """Read one SSE event from an async line source.
+
+        Consumes decoded ``bytes`` lines from ``line_source`` (an async
+        iterator such as :attr:`aiohttp.ClientResponse.content`) until an
+        event boundary (a blank line following ``data:`` lines). When the
+        stream sends a ``retry:`` field, :attr:`reconnect_delay_ms` is
+        updated so a subsequent reconnect honors the server's requested
+        reconnection time (per the SSE specification and the MCP transport
+        requirement that clients respect ``retry:``).
+
+        Returns the joined ``data:`` payload for the event, or ``None`` if
+        the stream ended before a complete event was delivered.
+        """
+        data_lines: list[str] = []
+        async for raw_line in line_source:
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line == "":
+                if data_lines:
+                    return "\n".join(data_lines)
+                continue
+            if line.startswith(":"):
+                # SSE comment line — ignore.
+                continue
+            if line.startswith("data:"):
+                data_lines.append(line[len("data:") :].lstrip())
+                continue
+            if line.startswith("retry:"):
+                delay = _parse_sse_retry_field(line[len("retry:") :])
+                if delay is not None:
+                    # Clamp the server-supplied reconnection delay to a sane
+                    # ceiling so a malicious/misconfigured server cannot pin
+                    # the client into an arbitrarily long reconnect wait (DoS).
+                    # Negative / non-digit values are already rejected by the
+                    # parser (return None), leaving the prior default in place.
+                    self._reconnect_delay_ms = min(delay, MAX_RECONNECT_MS)
+                continue
+            # Any other field (event:, id:) is ignored for the JSON-RPC
+            # payload purposes.
+        return None
 
     async def close(self) -> None:
         """Close the SSE stream and (if owned) the HTTP session."""
@@ -210,6 +271,8 @@ class SseTransport(Transport):
             try:
                 self._sse_response.release()
             except Exception:
+                # Expected-failure cleanup (zero-tolerance Rule 3 carve-out):
+                # releasing an already-broken response must not mask close().
                 pass
             self._sse_response = None
 
@@ -217,8 +280,26 @@ class SseTransport(Transport):
             try:
                 await self._session.close()
             except Exception:
+                # Expected-failure cleanup (zero-tolerance Rule 3 carve-out):
+                # a session that errors on close is already unusable.
                 pass
             self._session = None
+
+
+def _parse_sse_retry_field(value: str) -> Optional[int]:
+    """Parse the value of an SSE ``retry:`` field into milliseconds.
+
+    Per the SSE specification the reconnection-time value MUST consist only
+    of ASCII digits; any other content causes the field to be ignored. A
+    single leading space after the colon is stripped before parsing.
+
+    Returns the integer number of milliseconds, or ``None`` when the value
+    is empty or not a base-10 ASCII-digit run.
+    """
+    stripped = value.lstrip()
+    if stripped and all(ch in "0123456789" for ch in stripped):
+        return int(stripped)
+    return None
 
 
 def _strip_sse_data_prefix(text: str) -> str:

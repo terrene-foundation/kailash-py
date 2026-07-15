@@ -54,6 +54,12 @@ AuthenticationError = (ProvidersAuthenticationError, OAuthAuthenticationError)
 JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"
 JWT_TEST_ISSUER = "https://issuer.test.example"
 JWT_TEST_ALGO = "HS256"
+# Audience is fail-closed-REQUIRED whenever validate_jwt=True (F4 /
+# enforcement-surface parity). These #625 tests exercise the `iss` dimension,
+# so they pin a matching `aud` on every token and pass expected_audience to
+# every JWT-validating provider — otherwise construction refuses and the token
+# is rejected for the wrong reason (missing aud), masking the iss assertion.
+JWT_TEST_AUDIENCE = "https://mcp.test.example/resource"
 
 
 def _encode(claims: dict, *, secret: str = JWT_TEST_SECRET) -> str:
@@ -62,12 +68,14 @@ def _encode(claims: dict, *, secret: str = JWT_TEST_SECRET) -> str:
 
 
 def _make_claims(*, include_iss: bool, issuer_value: str = JWT_TEST_ISSUER) -> dict:
-    """Build canonical claims with `exp` always set (required by PyJWT)."""
+    """Build canonical claims with `exp` and `aud` always set (required by
+    PyJWT under the fail-closed audience guard)."""
     now = datetime.now(timezone.utc)
     claims: dict = {
         "sub": "user-625",
         "exp": int((now + timedelta(seconds=3600)).timestamp()),
         "iat": int(now.timestamp()),
+        "aud": JWT_TEST_AUDIENCE,
         "permissions": ["read"],
     }
     if include_iss:
@@ -93,6 +101,7 @@ def test_missing_iss_rejected_when_issuer_configured():
         jwt_secret=JWT_TEST_SECRET,
         jwt_algorithm=JWT_TEST_ALGO,
         expected_issuer=JWT_TEST_ISSUER,
+        expected_audience=JWT_TEST_AUDIENCE,
     )
 
     # Token deliberately OMITS the `iss` claim.
@@ -120,6 +129,7 @@ def test_missing_iss_allowed_when_issuer_not_configured():
         validate_jwt=True,
         jwt_secret=JWT_TEST_SECRET,
         jwt_algorithm=JWT_TEST_ALGO,
+        expected_audience=JWT_TEST_AUDIENCE,
         # expected_issuer NOT set — opt-out path
     )
 
@@ -138,6 +148,7 @@ def test_present_iss_validated_against_allowlist():
         jwt_secret=JWT_TEST_SECRET,
         jwt_algorithm=JWT_TEST_ALGO,
         expected_issuer=JWT_TEST_ISSUER,
+        expected_audience=JWT_TEST_AUDIENCE,
     )
 
     # iss is present but does NOT match the configured allowlist.
@@ -157,6 +168,7 @@ def test_matching_iss_accepted_when_issuer_configured():
         jwt_secret=JWT_TEST_SECRET,
         jwt_algorithm=JWT_TEST_ALGO,
         expected_issuer=JWT_TEST_ISSUER,
+        expected_audience=JWT_TEST_AUDIENCE,
     )
 
     token = _encode(_make_claims(include_iss=True))
@@ -180,7 +192,9 @@ def test_jwtauth_inherits_iss_required_from_issuer_kwarg():
     so every JWTAuth instance is an issuer-allowlist caller — the
     iss-required behaviour MUST flow through the super().__init__ call.
     """
-    auth = JWTAuth(secret=JWT_TEST_SECRET, issuer=JWT_TEST_ISSUER)
+    auth = JWTAuth(
+        secret=JWT_TEST_SECRET, issuer=JWT_TEST_ISSUER, audience=JWT_TEST_AUDIENCE
+    )
 
     # Forged absent-iss token signed with the right secret.
     token = _encode(_make_claims(include_iss=False))
@@ -196,7 +210,9 @@ def test_jwtauth_round_trip_token_validates():
     Belt-and-suspenders: the iss-required tightening must NOT regress the
     canonical create→verify flow on tokens this very provider issues.
     """
-    auth = JWTAuth(secret=JWT_TEST_SECRET, issuer=JWT_TEST_ISSUER)
+    auth = JWTAuth(
+        secret=JWT_TEST_SECRET, issuer=JWT_TEST_ISSUER, audience=JWT_TEST_AUDIENCE
+    )
 
     token = auth.create_token({"user": "alice", "permissions": ["read"]})
     user_info = auth.authenticate(token)
