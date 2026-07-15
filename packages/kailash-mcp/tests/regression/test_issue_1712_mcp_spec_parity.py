@@ -188,3 +188,101 @@ def test_negotiate_returns_latest_for_unsupported_or_absent(requested):
 @pytest.mark.regression
 def test_latest_is_newest_of_supported_set():
     assert LATEST_PROTOCOL_VERSION == SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+# ---------------------------------------------------------------------------
+# 4. Sibling spawn-site parity — the fail-closed guard is wired at EVERY
+#    process-spawn surface, not only the MCPClient sites. Surfaced by an
+#    adversarial security review of the first shard (enforcement-surface
+#    parity, ``rules/security.md`` § Multi-Site Kwarg Plumbing).
+# ---------------------------------------------------------------------------
+import asyncio
+
+from kailash_mcp.discovery.discovery import HealthChecker, ServerInfo
+from kailash_mcp.transports.transports import EnhancedStdioTransport
+
+
+@pytest.mark.asyncio
+async def test_enhanced_stdio_transport_connect_fails_closed(monkeypatch):
+    """EnhancedStdioTransport.connect rejects an unlisted command BEFORE spawn.
+
+    The typed SpawnSecurityError must propagate (not be wrapped into a generic
+    TransportError), and the subprocess must never be spawned.
+    """
+    spawned = {"called": False}
+
+    async def _no_spawn(*args, **kwargs):
+        spawned["called"] = True
+        raise AssertionError("spawn must not be reached for an unlisted command")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _no_spawn)
+    transport = EnhancedStdioTransport(command="sh")  # shell — not in the allowlist
+    with pytest.raises(SpawnSecurityError) as exc_info:
+        await transport.connect()
+    assert exc_info.value.error_code == MCPErrorCode.AUTHORIZATION_FAILED
+    assert spawned["called"] is False
+
+
+@pytest.mark.asyncio
+async def test_enhanced_stdio_transport_default_launcher_reaches_spawn(monkeypatch):
+    """A listed launcher (python) passes the guard and reaches the spawn call."""
+    reached = {"cmd": None}
+
+    async def _fake_spawn(cmd, *args, **kwargs):
+        reached["cmd"] = cmd
+        raise RuntimeError("stub-spawn-stop")  # halt before real I/O tasks
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_spawn)
+    transport = EnhancedStdioTransport(command="python")
+    with pytest.raises(Exception):  # TransportError from the stubbed spawn
+        await transport.connect()
+    assert reached["cmd"] == "python"  # guard passed, spawn reached
+
+
+@pytest.mark.asyncio
+async def test_enhanced_stdio_transport_allow_arbitrary_bypasses_guard(monkeypatch):
+    """allow_arbitrary_commands=True bypasses the allowlist and reaches spawn."""
+    reached = {"cmd": None}
+
+    async def _fake_spawn(cmd, *args, **kwargs):
+        reached["cmd"] = cmd
+        raise RuntimeError("stub-spawn-stop")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_spawn)
+    transport = EnhancedStdioTransport(
+        command="my-unlisted-server", allow_arbitrary_commands=True
+    )
+    with pytest.raises(Exception):
+        await transport.connect()
+    assert reached["cmd"] == "my-unlisted-server"  # opt-out honored, spawn reached
+
+
+@pytest.mark.asyncio
+async def test_discovery_health_check_blocks_unlisted_command():
+    """HealthChecker.check_server_health reports 'blocked' for an unlisted stdio
+    command instead of spawning it to probe liveness."""
+    checker = HealthChecker(None)
+    server = ServerInfo(
+        name="evil", transport="stdio", command="sh", args=["-c", "echo pwned"]
+    )
+    result = await checker.check_server_health(server)
+    assert result["status"] == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_discovery_health_check_allows_listed_launcher(monkeypatch):
+    """A listed launcher passes the discovery guard and reaches the probe spawn."""
+    reached = {"cmd": None}
+
+    async def _fake_spawn(cmd, *args, **kwargs):
+        reached["cmd"] = cmd
+        raise RuntimeError("stub-spawn-stop")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_spawn)
+    checker = HealthChecker(None)
+    server = ServerInfo(name="ok", transport="stdio", command="python", args=["-V"])
+    result = await checker.check_server_health(server)
+    # spawn was reached (guard passed); the stub failure surfaces as unhealthy,
+    # NOT blocked — the key assertion is status != "blocked".
+    assert result["status"] != "blocked"
+    assert reached["cmd"] == "python"

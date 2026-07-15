@@ -68,6 +68,7 @@ import websockets
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
+from kailash_mcp.security import validate_spawn_command
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,8 @@ class EnhancedStdioTransport(BaseTransport):
         env: Optional[Dict[str, str]] = None,
         working_directory: Optional[str] = None,
         environment_filter: Optional[List[str]] = None,
+        allowed_commands: Optional[List[str]] = None,
+        allow_arbitrary_commands: bool = False,
         **kwargs,
     ):
         """Initialize enhanced STDIO transport.
@@ -261,6 +264,11 @@ class EnhancedStdioTransport(BaseTransport):
             env: Environment variables
             working_directory: Working directory
             environment_filter: Allowed environment variables
+            allowed_commands: Optional explicit spawn allowlist (basenames or
+                full command strings). ``None`` uses the fail-closed default
+                (``DEFAULT_ALLOWED_MCP_COMMANDS``).
+            allow_arbitrary_commands: Explicit opt-out of the spawn allowlist.
+                Never the default — set knowingly by a trusted caller.
             **kwargs: Base transport arguments
         """
         super().__init__("stdio", **kwargs)
@@ -270,6 +278,8 @@ class EnhancedStdioTransport(BaseTransport):
         self.env = env or {}
         self.working_directory = working_directory
         self.environment_filter = environment_filter
+        self.allowed_commands = allowed_commands
+        self.allow_arbitrary_commands = allow_arbitrary_commands
 
         # Process management
         self.process: Optional[asyncio.subprocess.Process] = None
@@ -281,6 +291,17 @@ class EnhancedStdioTransport(BaseTransport):
         """Start the subprocess and connect."""
         if self._connected:
             return
+
+        # Fail-closed spawn allowlist (MCP 2025-11-25 local-server spawn
+        # safety). self.command is untrusted (config / agent output /
+        # discovery response); reject an unlisted command before spawn.
+        # Placed OUTSIDE the try so SpawnSecurityError (AUTHORIZATION_FAILED)
+        # propagates typed, not wrapped into a generic TransportError.
+        validate_spawn_command(
+            self.command,
+            allowed_commands=self.allowed_commands,
+            allow_arbitrary=self.allow_arbitrary_commands,
+        )
 
         try:
             # Prepare environment
