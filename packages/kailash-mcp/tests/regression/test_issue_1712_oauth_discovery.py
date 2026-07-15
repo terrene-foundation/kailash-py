@@ -200,6 +200,44 @@ async def test_prm_missing_authorization_servers_rejected():
         await server.close()
 
 
+@pytest.mark.regression
+async def test_prm_cross_origin_resource_metadata_rejected_before_fetch_ssrf():
+    """A foreign-origin resource_metadata URL (from an untrusted 401 header)
+    MUST be rejected BEFORE the fetch — no SSRF request may fire."""
+    app, record = _build_app()
+    server, base = await _start(app)
+    try:
+        client = OAuth2Client("cid")
+        # Attacker-controlled 401 challenge steering discovery at a foreign
+        # (would-be internal) origin.
+        header = 'Bearer resource_metadata="http://169.254.169.254/latest/prm"'
+        with pytest.raises(OAuthDiscoveryError, match="origin does not match"):
+            await client.discover_protected_resource_metadata(base, header)
+        # Fail-closed BEFORE the fetch: the local server saw no discovery hit,
+        # and (crucially) the client never issued the SSRF GET at all.
+        assert record["hits"] == []
+    finally:
+        await server.close()
+
+
+@pytest.mark.regression
+async def test_prm_same_host_different_port_rejected():
+    """Origin includes the port — a same-host, different-port PRM URL is a
+    distinct origin and MUST be rejected."""
+    app, _ = _build_app()
+    server, base = await _start(app)
+    try:
+        parsed = urlparse(base)
+        foreign_port = (parsed.port or 80) + 1
+        foreign = f"{parsed.scheme}://{parsed.hostname}:{foreign_port}/prm"
+        client = OAuth2Client("cid")
+        header = f'Bearer resource_metadata="{foreign}"'
+        with pytest.raises(OAuthDiscoveryError, match="origin does not match"):
+            await client.discover_protected_resource_metadata(base, header)
+    finally:
+        await server.close()
+
+
 # ---------------------------------------------------------------------------
 # 3. AS metadata discovery (RFC 8414 + OIDC fallback)
 # ---------------------------------------------------------------------------

@@ -1609,6 +1609,24 @@ class OAuth2Client:
         return f"{origin}/.well-known/oauth-protected-resource{path}"
 
     @staticmethod
+    def _same_origin(url_a: str, url_b: str) -> bool:
+        """Return True iff two URLs share scheme + host + port (RFC 6454 origin).
+
+        Used to fail-closed the RFC 9728 mechanism-1 PRM fetch: the
+        ``resource_metadata`` URL in a 401 ``WWW-Authenticate`` header is
+        attacker-influenced, so it MUST be same-origin as the connected server
+        before we fetch it (otherwise a hostile server steers the client into
+        an SSRF / rogue-AS discovery).
+        """
+        a = urlparse(url_a)
+        b = urlparse(url_b)
+        return (
+            (a.scheme or "").lower() == (b.scheme or "").lower()
+            and (a.hostname or "").lower() == (b.hostname or "").lower()
+            and a.port == b.port
+        )
+
+    @staticmethod
     def _as_metadata_urls(as_url: str) -> List[str]:
         """Candidate AS-metadata URLs: RFC 8414 first, then OIDC fallback.
 
@@ -1634,8 +1652,14 @@ class OAuth2Client:
         timeout = aiohttp.ClientTimeout(total=self.http_timeout)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
+                # allow_redirects=False: a discovery endpoint MUST NOT redirect
+                # the client to a foreign origin. Following a redirect would let
+                # a same-origin PRM/AS URL 30x-bounce the fetch to an internal
+                # address (SSRF), defeating the same-origin pre-check below.
                 async with session.get(
-                    url, headers={"Accept": "application/json"}
+                    url,
+                    headers={"Accept": "application/json"},
+                    allow_redirects=False,
                 ) as response:
                     if response.status != 200:
                         body = (await response.text())[:200]
@@ -1698,6 +1722,19 @@ class OAuth2Client:
             prm_url = parse_www_authenticate(www_authenticate).get("resource_metadata")
         if not prm_url:
             prm_url = self._wellknown_prm_url(server_url)
+
+        # SSRF fail-closed (RFC 9728 §7.6): the resource_metadata URL is
+        # attacker-influenced (it rides an untrusted 401 WWW-Authenticate
+        # header). Per RFC 9728 the PRM is published at the resource server's
+        # OWN well-known location, so a PRM URL on a foreign origin is either a
+        # misconfiguration or an attempt to steer the client into a blind SSRF
+        # / rogue-AS discovery. Reject BEFORE the fetch — the resource-field
+        # check below runs only AFTER the request has already fired.
+        if not self._same_origin(prm_url, server_url):
+            raise OAuthDiscoveryError(
+                f"Protected Resource Metadata URL origin does not match the "
+                f"connected server (refusing cross-origin discovery fetch)"
+            )
 
         prm = await self._fetch_json(prm_url, description="Protected Resource Metadata")
 
