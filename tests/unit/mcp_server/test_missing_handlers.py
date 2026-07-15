@@ -8,7 +8,6 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash_mcp.errors import MCPError
 from kailash_mcp.protocol.protocol import get_protocol_manager
 from kailash_mcp.server import MCPServer
@@ -646,8 +645,10 @@ class TestMessageRouting:
 
         result = await server._handle_websocket_message(message, "client_123")
 
+        # Wave 2 (#1712): dispatch merges client_id into params so the level is
+        # tracked per-session for notifications/message gating (spec 2025-11-25).
         server._handle_logging_set_level.assert_called_once_with(
-            {"level": "DEBUG"}, "test_123"
+            {"level": "DEBUG", "client_id": "client_123"}, "test_123"
         )
 
     @pytest.mark.asyncio
