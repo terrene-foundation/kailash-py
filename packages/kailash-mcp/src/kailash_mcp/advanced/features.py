@@ -1097,6 +1097,7 @@ class ElicitationSystem:
         *,
         mode: str = ELICITATION_MODE_FORM,
         url: Optional[str] = None,
+        client_id: Optional[str] = None,
     ) -> Any:
         """Request input from the connected client.
 
@@ -1129,6 +1130,14 @@ class ElicitationSystem:
                 with ``INVALID_PARAMS`` (-32602).
             url: Required in url mode — the server-issued URL the client opens to
                 collect input out-of-band. Ignored in form mode.
+            client_id: Optional id of the client this elicitation targets. When
+                provided it is recorded on the pending request so (a) only that
+                client may resolve it — a response from another client is
+                rejected by the server's response router (cross-client
+                isolation) — and (b) that client's disconnect cancels+evicts the
+                pending request (``cancel_requests_for_client``). When None the
+                request is UNSCOPED: any responder may resolve it and a
+                disconnect does not evict it (backward-compatible default).
 
         Returns:
             The validated response payload from the client.
@@ -1219,12 +1228,14 @@ class ElicitationSystem:
             },
         )
 
-        # Store request metadata
+        # Store request metadata. ``client_id`` (may be None) scopes the request
+        # to a single client for response-routing + disconnect eviction.
         self._pending_requests[request_id] = {
             "prompt": prompt,
             "schema": input_schema,
             "mode": mode,
             "url": url,
+            "client_id": client_id,
             "timestamp": time.time(),
         }
 
@@ -1378,6 +1389,53 @@ class ElicitationSystem:
             return True
 
         return False
+
+    def cancel_requests_for_client(
+        self, client_id: Optional[str], reason: str = "client disconnected"
+    ) -> int:
+        """Cancel + evict every pending request SCOPED to ``client_id``.
+
+        Called from the MCPServer transport-disconnect handler (a SYNC context)
+        so a disconnecting client's awaiting ``request_input()`` callers get a
+        clean ``MCP_REQUEST_CANCELLED`` immediately instead of hanging until
+        their timeout. Synchronous by design — it only invokes the already-
+        registered cancel callbacks (each sets an exception on the awaiting
+        Future) and evicts the pending entry; it never awaits.
+
+        Requests with no bound ``client_id`` (UNSCOPED) are left intact — a
+        disconnect cannot know they targeted the departing client, so evicting
+        them would wrongly cancel unrelated in-flight elicitations. A ``None``
+        ``client_id`` argument therefore matches nothing.
+
+        Args:
+            client_id: The disconnecting client. ``None`` matches no request.
+            reason: Reason string propagated into the raised MCPError.
+
+        Returns:
+            The number of pending requests cancelled + evicted.
+        """
+        if client_id is None:
+            return 0
+        stale = [
+            rid
+            for rid, meta in self._pending_requests.items()
+            if meta.get("client_id") == client_id
+        ]
+        for rid in stale:
+            callback = self._cancel_callbacks.get(rid)
+            if callback is not None:
+                # Sets MCP_REQUEST_CANCELLED on the awaiting Future; the
+                # request_input() finally-block pops the callbacks as it unwinds.
+                callback(reason)
+            # Evict the metadata now so a duplicate disconnect is idempotent and
+            # a receive-only pending request (no awaiter) does not leak.
+            self._pending_requests.pop(rid, None)
+        if stale:
+            logger.info(
+                "elicitation.client_disconnect.cancelled",
+                extra={"client_id": client_id, "count": len(stale)},
+            )
+        return len(stale)
 
     async def _send_elicitation_request(
         self,
