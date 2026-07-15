@@ -760,10 +760,231 @@ class StreamingHandler:
                 await asyncio.sleep(0)  # Allow other tasks to run
 
 
+# A CapabilityFn returns True when at least one connected client has advertised
+# the ``elicitation`` capability, so the send-half can fail closed instead of
+# dispatching an ``elicitation/create`` a client cannot handle (spec 2025-11-25
+# § Elicitation — capability-gated). See MCPServer._bind_elicitation_transport.
+CapabilityFn = Callable[[], bool]
+
+# The two elicitation modes defined by MCP 2025-11-25. ``form`` collects a set
+# of flat primitives inline via ``requestedSchema``; ``url`` hands the user off
+# to a server-issued URL so sensitive data is provided OUT-OF-BAND (never inline
+# in the JSON-RPC params). Any other requested mode is rejected with -32602.
+ELICITATION_MODE_FORM = "form"
+ELICITATION_MODE_URL = "url"
+ELICITATION_MODES = frozenset({ELICITATION_MODE_FORM, ELICITATION_MODE_URL})
+
+# Primitive JSON-Schema types permitted for a form-mode ``requestedSchema``
+# property. The 2025-11-25 form shape is a FLAT object of primitives — no
+# nested objects, no arrays — so a client can always render a simple form and
+# no structured payload smuggles through the collection surface.
+_FLAT_PRIMITIVE_TYPES = frozenset({"string", "number", "integer", "boolean"})
+
+# JSON-Schema structural keywords that reintroduce nesting or indirection and
+# therefore have NO place in a flat-primitive form schema. Present at the top
+# level OR on any property, each is a fail-closed rejection — a form schema that
+# smuggles one of these back in is not renderable as a flat form and could carry
+# a structured payload through the collection surface.
+_SCHEMA_COMBINATOR_KEYS = frozenset({"allOf", "anyOf", "oneOf", "not", "$ref", "$defs"})
+
+# JSON primitive scalar types permitted as ``enum`` members (``None`` — JSON
+# ``null`` — is handled separately since it is not a type instance). ``bool`` is
+# a subclass of ``int``; both are covered by the tuple.
+_ENUM_PRIMITIVE_TYPES = (bool, int, float, str)
+
+
+def _validate_flat_primitive_schema(schema: Dict[str, Any]) -> None:
+    """Validate a form-mode ``requestedSchema`` is a flat object of primitives.
+
+    The MCP 2025-11-25 form-elicitation shape restricts ``requestedSchema`` to
+    an object whose properties are each a primitive (``string`` / ``number`` /
+    ``integer`` / ``boolean``) or an ``enum`` of primitives — NO nested objects
+    and NO arrays. This keeps the collection surface renderable as a flat form
+    and prevents a structured payload from smuggling through it.
+
+    Args:
+        schema: The candidate ``requestedSchema`` dict.
+
+    The guard is EXHAUSTIVE and fail-closed: beyond the obvious nested-object /
+    array cases it rejects every structural JSON-Schema vector that could
+    reintroduce nesting or indirection — top-level ``additionalProperties`` (any
+    value other than ``false`` or a flat-primitive schema), ``patternProperties``,
+    the combinators / refs in :data:`_SCHEMA_COMBINATOR_KEYS` (top-level AND
+    per-property), a property whose ``type`` is not a single primitive string
+    (this closes the previously-uncaught ``TypeError`` on a LIST/union ``type``),
+    a property carrying ``$ref`` (even alongside a primitive ``type`` sibling),
+    and an ``enum`` whose members are not JSON primitive scalars.
+
+    Raises:
+        MCPError(INVALID_PARAMS, -32602): The schema is not a flat-primitive
+            object.
+    """
+    if not isinstance(schema, dict):
+        raise MCPError(
+            "form-mode requestedSchema must be a JSON Schema object, got "
+            f"{type(schema).__name__}",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+
+    declared_type = schema.get("type", "object")
+    if declared_type != "object":
+        raise MCPError(
+            "form-mode requestedSchema must declare type 'object' with flat "
+            f"primitive properties, got type '{declared_type}'",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+
+    # Top-level combinators / refs reintroduce nesting or indirection.
+    _reject_flat_schema_combinators(schema, "form-mode requestedSchema")
+
+    # ``patternProperties`` describes arbitrarily-keyed nested subschemas — a
+    # structured smuggling surface a flat form cannot render.
+    if "patternProperties" in schema:
+        raise MCPError(
+            "form-mode requestedSchema must not use 'patternProperties'; form "
+            "mode requires an explicit flat set of primitive properties "
+            "(use url mode for open-ended / structured schemas)",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+
+    # ``additionalProperties`` may only be ``false`` (a closed object) or itself
+    # a flat-primitive schema; a ``true`` / non-``false`` scalar / nested-object
+    # value reopens the smuggling surface this guard exists to close.
+    if "additionalProperties" in schema:
+        addl = schema["additionalProperties"]
+        if addl is not False:
+            if not isinstance(addl, dict):
+                raise MCPError(
+                    "form-mode requestedSchema 'additionalProperties' must be "
+                    "false or a flat-primitive schema, got "
+                    f"{type(addl).__name__}",
+                    error_code=MCPErrorCode.INVALID_PARAMS,
+                )
+            _validate_flat_primitive_property("<additionalProperties>", addl)
+
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        raise MCPError(
+            "form-mode requestedSchema 'properties' must be an object",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+
+    for field_name, prop in properties.items():
+        _validate_flat_primitive_property(field_name, prop)
+
+
+def _reject_flat_schema_combinators(schema: Dict[str, Any], context: str) -> None:
+    """Reject any :data:`_SCHEMA_COMBINATOR_KEYS` keyword on ``schema``.
+
+    Fail-closed with MCPError(INVALID_PARAMS) naming the offending keyword.
+    Applied at the top level AND per-property so a combinator / ``$ref`` cannot
+    reintroduce nesting or indirection at either level.
+    """
+    for key in _SCHEMA_COMBINATOR_KEYS:
+        if key in schema:
+            raise MCPError(
+                f"{context} must not use the '{key}' JSON-Schema keyword; form "
+                "mode requires a flat object of primitive properties "
+                "(use url mode for structured / combinator schemas)",
+                error_code=MCPErrorCode.INVALID_PARAMS,
+            )
+
+
+def _validate_enum_primitive_members(field_name: str, enum: Any) -> None:
+    """Assert every ``enum`` member is a JSON primitive scalar.
+
+    Members must be ``string`` / ``number`` / ``integer`` / ``boolean`` / ``null``
+    (Python ``str`` / ``int`` / ``float`` / ``bool`` / ``None``). An object- or
+    array-valued member reintroduces nesting through the enum and is rejected
+    with a clean -32602.
+    """
+    if not isinstance(enum, list):
+        raise MCPError(
+            f"form-mode property '{field_name}' 'enum' must be a list, got "
+            f"{type(enum).__name__}",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+    for member in enum:
+        if member is not None and not isinstance(member, _ENUM_PRIMITIVE_TYPES):
+            raise MCPError(
+                f"form-mode property '{field_name}' enum members must be JSON "
+                "primitive scalars (string/number/integer/boolean/null), got "
+                f"{type(member).__name__}",
+                error_code=MCPErrorCode.INVALID_PARAMS,
+            )
+
+
+def _validate_flat_primitive_property(field_name: str, prop: Any) -> None:
+    """Validate one form-mode property is a flat primitive. Raises MCPError.
+
+    Shared by the top-level ``properties`` loop and the ``additionalProperties``
+    (schema form) check so both surfaces enforce the identical flat-primitive
+    contract.
+    """
+    if not isinstance(prop, dict):
+        raise MCPError(
+            f"form-mode property '{field_name}' must be a schema object",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+    # A property may not reintroduce nesting via structural markers ``properties``
+    # (object) / ``items`` (array) / ``patternProperties``.
+    if "properties" in prop or "items" in prop or "patternProperties" in prop:
+        raise MCPError(
+            f"form-mode property '{field_name}' must be a flat primitive; "
+            "nested objects and arrays are not permitted in form mode "
+            "(use url mode for structured data)",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+    # A combinator or ``$ref`` on the property is rejected BEFORE the ``type``
+    # check, so a property carrying ``$ref`` alongside a primitive ``type``
+    # sibling is still rejected.
+    _reject_flat_schema_combinators(prop, f"form-mode property '{field_name}'")
+
+    prop_type = prop.get("type")
+    # An ``enum`` of primitive scalars is a valid flat primitive even without an
+    # explicit ``type``.
+    if prop_type is None and "enum" in prop:
+        _validate_enum_primitive_members(field_name, prop["enum"])
+        return
+    # ``type`` MUST be a SINGLE primitive string. A LIST type (union) or a
+    # non-primitive type reintroduces nesting / ambiguity and is rejected — this
+    # also converts the previously-uncaught ``TypeError`` on ``type: [..]`` into
+    # a clean -32602.
+    if not isinstance(prop_type, str) or prop_type not in _FLAT_PRIMITIVE_TYPES:
+        raise MCPError(
+            f"form-mode property '{field_name}' has non-primitive type "
+            f"{prop_type!r}; form mode allows only a single primitive type in "
+            f"{sorted(_FLAT_PRIMITIVE_TYPES)} or an enum of primitive scalars "
+            "(use url mode for nested objects / arrays / unions)",
+            error_code=MCPErrorCode.INVALID_PARAMS,
+        )
+    # A primitive ``type`` MAY still carry an ``enum`` constraint whose members
+    # MUST be primitive scalars.
+    if "enum" in prop:
+        _validate_enum_primitive_members(field_name, prop["enum"])
+
+
+def _form_response_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a form schema hardened with ``additionalProperties: false``.
+
+    A form-mode response MUST NOT carry undeclared (nested) keys past
+    validation. Injecting ``additionalProperties: false`` at the top level when
+    absent rejects any key the form schema did not declare. If the author
+    already set ``additionalProperties`` (constrained by
+    :func:`_validate_flat_primitive_schema` to ``false`` or a flat-primitive
+    schema), their value is respected. url-mode schemas never reach this path.
+    """
+    if not isinstance(schema, dict) or "additionalProperties" in schema:
+        return schema
+    hardened = dict(schema)
+    hardened["additionalProperties"] = False
+    return hardened
+
+
 class ElicitationSystem:
     """Interactive user input collection system (MCP elicitation/create).
 
-    Implements the MCP 2025-06-18 `elicitation/create` server-to-client request.
+    Implements the MCP 2025-11-25 `elicitation/create` server-to-client request.
     The system is split into two halves, both wired into the framework's hot
     path per rules/orphan-detection.md §1:
 
@@ -791,7 +1012,13 @@ class ElicitationSystem:
     See specs/mcp-server.md §4.9 for the full contract.
     """
 
-    def __init__(self, send: Optional[SendFn] = None):
+    def __init__(
+        self,
+        send: Optional[SendFn] = None,
+        *,
+        server_identity: Optional[Dict[str, Any]] = None,
+        capability_provider: Optional[CapabilityFn] = None,
+    ):
         """Initialize elicitation system.
 
         Args:
@@ -799,11 +1026,48 @@ class ElicitationSystem:
                 can issue `elicitation/create` requests. When None, the system
                 is receive-only — `request_input()` raises MCPError until
                 `bind_transport()` is called.
+            server_identity: Optional server-identity descriptor bound into
+                every ``url``-mode elicitation so the client can verify which
+                server issued the hand-off (spec 2025-11-25). ``url`` mode
+                requires this — see `request_input`.
+            capability_provider: Optional zero-arg callable returning True when
+                a connected client has advertised the ``elicitation``
+                capability. When bound, `request_input` fails closed if it
+                returns False (a client that cannot handle elicitation is never
+                sent one blindly). When None, the capability gate is skipped
+                (in-process / receive-only construction).
         """
         self._send: Optional[SendFn] = send
+        self._server_identity: Optional[Dict[str, Any]] = server_identity
+        self._capability_provider: Optional[CapabilityFn] = capability_provider
         self._pending_requests: Dict[str, Dict[str, Any]] = {}
         self._response_callbacks: Dict[str, Callable] = {}
         self._cancel_callbacks: Dict[str, Callable] = {}
+
+    def bind_capability_provider(self, provider: CapabilityFn) -> None:
+        """Bind the client-elicitation-capability provider.
+
+        Idempotent: a later call replaces the prior provider. When bound,
+        `request_input` consults it BEFORE dispatching and fails closed if the
+        provider reports no client advertises the ``elicitation`` capability.
+
+        Args:
+            provider: Zero-arg callable returning True when ≥1 connected client
+                advertises the ``elicitation`` capability.
+        """
+        self._capability_provider = provider
+
+    def bind_server_identity(self, server_identity: Dict[str, Any]) -> None:
+        """Bind the server-identity descriptor used for ``url``-mode elicitation.
+
+        Idempotent: a later call replaces the prior identity.
+
+        Args:
+            server_identity: Descriptor (e.g. ``{"name": server.name}``) bound
+                into every ``url``-mode outbound request so the client can
+                verify the issuing server.
+        """
+        self._server_identity = server_identity
 
     def bind_transport(self, send: SendFn) -> None:
         """Bind a transport send-callable after construction.
@@ -830,32 +1094,67 @@ class ElicitationSystem:
         prompt: str,
         input_schema: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = 300.0,
+        *,
+        mode: str = ELICITATION_MODE_FORM,
+        url: Optional[str] = None,
     ) -> Any:
         """Request input from the connected client.
 
-        Emits an MCP `elicitation/create` JSON-RPC request, awaits the
-        matching `elicitation/response`, validates against `input_schema`,
-        and returns the validated payload.
+        Emits an MCP 2025-11-25 `elicitation/create` JSON-RPC request with the
+        ``{mode, message, requestedSchema}`` shape, awaits the matching
+        `elicitation/response`, validates against `input_schema`, and returns
+        the validated payload.
+
+        Two modes (spec 2025-11-25):
+
+        - **form** (default): collect a set of FLAT PRIMITIVES inline via
+          `input_schema` (→ ``requestedSchema``). The schema MUST be a flat
+          object of primitives (string / number / integer / boolean / enum) —
+          nested objects and arrays are rejected at request time.
+        - **url**: hand the user off to a server-issued `url`. Sensitive data is
+          provided OUT-OF-BAND at that URL — it is NEVER inlined in the JSON-RPC
+          params. The outbound request carries an ``elicitationId`` and the
+          bound server-identity descriptor so the client can verify the issuing
+          server. An `input_schema` is REJECTED in url mode (it would inline the
+          collection surface url mode exists to keep out-of-band).
 
         Args:
             prompt: Prompt shown to the user by the client.
-            input_schema: Optional JSON Schema (Draft 7) for response
-                validation. When None, defaults to `{"type": "string"}` on the
-                wire (per MCP spec: `requestedSchema` is required in the
-                outbound message).
+            input_schema: Optional JSON Schema for response validation. In form
+                mode, MUST be a flat-primitive object; when None, defaults to
+                `{"type": "string"}` on the wire. MUST be None in url mode.
             timeout: Seconds to wait for the response. When None, waits
                 indefinitely.
+            mode: ``"form"`` (default) or ``"url"``. Any other value is rejected
+                with ``INVALID_PARAMS`` (-32602).
+            url: Required in url mode — the server-issued URL the client opens to
+                collect input out-of-band. Ignored in form mode.
 
         Returns:
             The validated response payload from the client.
 
         Raises:
-            MCPError(INVALID_REQUEST): No send-transport is bound.
+            MCPError(INVALID_PARAMS, code=-32602): `mode` is not in
+                {form, url}, a form-mode schema is not flat-primitive, or a
+                url-mode call is missing `url` / passes an inline schema.
+            MCPError(INVALID_REQUEST): No send-transport is bound, the client
+                has not advertised the ``elicitation`` capability, or url mode
+                is requested with no server identity bound.
             MCPError(MCP_ELICITATION_TIMEOUT, code=-32001): Client did not respond within `timeout`.
             MCPError(MCP_REQUEST_CANCELLED, code=-32800): Client returned a `decline` or
                 `cancel` action.
             ValidationError: Response failed `input_schema` validation.
         """
+        # (1) Mode validation FIRST — an undeclared/unknown mode is a client
+        # contract error rejected with INVALID_PARAMS (-32602) before any
+        # transport work (security.md § Input Validation).
+        if mode not in ELICITATION_MODES:
+            raise MCPError(
+                f"Unknown elicitation mode {mode!r}; supported modes are "
+                f"{sorted(ELICITATION_MODES)}",
+                error_code=MCPErrorCode.INVALID_PARAMS,
+            )
+
         if self._send is None:
             raise MCPError(
                 "ElicitationSystem has no send transport bound. Construct via "
@@ -864,6 +1163,50 @@ class ElicitationSystem:
                 "request_input(). See specs/mcp-server.md §4.9.",
                 error_code=MCPErrorCode.INVALID_REQUEST,
             )
+
+        # (2) Capability gate — never dispatch an elicitation/create to a
+        # client that has not advertised the ``elicitation`` capability. When a
+        # provider is bound and reports no capable client, fail closed instead
+        # of sending blindly (spec 2025-11-25 § capability-gated).
+        if self._capability_provider is not None and not self._capability_provider():
+            raise MCPError(
+                "No connected client has advertised the 'elicitation' "
+                "capability; refusing to send elicitation/create. The client "
+                "MUST declare `capabilities.elicitation` in initialize.",
+                error_code=MCPErrorCode.INVALID_REQUEST,
+            )
+
+        # (3) Per-mode request-shape validation.
+        if mode == ELICITATION_MODE_FORM:
+            # A form schema, when supplied, MUST be a flat object of primitives.
+            if input_schema is not None:
+                _validate_flat_primitive_schema(input_schema)
+        else:  # ELICITATION_MODE_URL
+            if not url:
+                raise MCPError(
+                    "url-mode elicitation requires a non-empty 'url' the client "
+                    "opens to collect input out-of-band.",
+                    error_code=MCPErrorCode.INVALID_PARAMS,
+                )
+            if input_schema is not None:
+                # An inline schema in url mode would inline the collection
+                # surface url mode exists to keep OUT-OF-BAND — reject it so no
+                # sensitive field is described (or later carried) inline.
+                raise MCPError(
+                    "url-mode elicitation MUST NOT carry an inline "
+                    "requestedSchema; sensitive data is collected out-of-band "
+                    "at the url. Use form mode for inline collection.",
+                    error_code=MCPErrorCode.INVALID_PARAMS,
+                )
+            if not self._server_identity:
+                # url mode binds a server identity so the client can verify the
+                # issuer; without it the hand-off is unverifiable.
+                raise MCPError(
+                    "url-mode elicitation requires a bound server identity. "
+                    "Construct ElicitationSystem(server_identity=...) or call "
+                    "bind_server_identity(...) before request_input(mode='url').",
+                    error_code=MCPErrorCode.INVALID_REQUEST,
+                )
 
         request_id = str(uuid.uuid4())
         start_ts = time.monotonic()
@@ -880,6 +1223,8 @@ class ElicitationSystem:
         self._pending_requests[request_id] = {
             "prompt": prompt,
             "schema": input_schema,
+            "mode": mode,
+            "url": url,
             "timestamp": time.time(),
         }
 
@@ -901,7 +1246,9 @@ class ElicitationSystem:
 
         try:
             # Dispatch the elicitation/create request through the bound transport
-            await self._send_elicitation_request(request_id, prompt, input_schema)
+            await self._send_elicitation_request(
+                request_id, prompt, input_schema, mode=mode, url=url
+            )
 
             # Wait for the matching response (or cancel / timeout)
             if timeout:
@@ -913,7 +1260,11 @@ class ElicitationSystem:
             # BEFORE returning to the calling tool — skipping validation lets
             # client-supplied payloads reach downstream tools as trusted input.
             if input_schema:
-                validator = SchemaValidator(input_schema)
+                # Harden the form schema with ``additionalProperties: false`` so
+                # a response carrying undeclared (nested) keys is rejected rather
+                # than passing validation. url-mode never reaches here (its
+                # input_schema is rejected earlier), so this is form-only.
+                validator = SchemaValidator(_form_response_schema(input_schema))
                 validator.validate(response)
 
             elapsed_ms = (time.monotonic() - start_ts) * 1000
@@ -1033,21 +1384,34 @@ class ElicitationSystem:
         request_id: str,
         prompt: str,
         schema: Optional[Dict[str, Any]],
+        *,
+        mode: str = ELICITATION_MODE_FORM,
+        url: Optional[str] = None,
     ) -> None:
         """Serialize and dispatch an MCP elicitation/create request.
 
-        Builds a JSON-RPC 2.0 message per MCP 2025-06-18 and pushes it
-        through the bound send-callable. The client responds asynchronously
-        via the MCP transport's normal receive loop; the server's dispatch
-        layer routes the inbound `elicitation/response` back into
-        `provide_input()` or `cancel_request()`.
+        Builds a JSON-RPC 2.0 message per MCP 2025-11-25 (the
+        ``{mode, message, requestedSchema}`` shape) and pushes it through the
+        bound send-callable. The client responds asynchronously via the MCP
+        transport's normal receive loop; the server's dispatch layer routes the
+        inbound `elicitation/response` back into `provide_input()` or
+        `cancel_request()`.
+
+        In **form** mode the outbound params carry ``requestedSchema`` (the
+        flat-primitive collection schema). In **url** mode the params carry an
+        ``elicitationId`` + ``url`` + the bound ``server`` identity and carry NO
+        ``requestedSchema`` and NO inline field values — sensitive data is
+        collected OUT-OF-BAND at the url, so nothing sensitive is ever placed in
+        the JSON-RPC params (security invariant).
 
         Args:
             request_id: Unique request ID (also used as the JSON-RPC `id`).
             prompt: Prompt string shown to the user.
-            schema: Optional JSON Schema for the response. When None, the
-                outbound `requestedSchema` defaults to
-                `{"type": "string"}` per MCP spec requirement.
+            schema: Optional form-mode JSON Schema for the response. When None
+                in form mode, the outbound `requestedSchema` defaults to
+                `{"type": "string"}`. Unused in url mode.
+            mode: ``"form"`` or ``"url"`` (already validated by `request_input`).
+            url: The out-of-band collection URL (url mode only).
 
         Raises:
             MCPError(INVALID_REQUEST): No send-callable is bound. Callers
@@ -1065,22 +1429,40 @@ class ElicitationSystem:
                 error_code=MCPErrorCode.INVALID_REQUEST,
             )
 
-        requested_schema = schema if schema is not None else {"type": "string"}
+        if mode == ELICITATION_MODE_URL:
+            # url mode: OUT-OF-BAND collection. The params reference the data
+            # via ``url`` + ``elicitationId`` and bind the server identity so
+            # the client can verify the issuer; NO requestedSchema and NO inline
+            # field values are carried (sensitive data never touches the wire).
+            params: Dict[str, Any] = {
+                "requestId": request_id,
+                "mode": ELICITATION_MODE_URL,
+                "message": prompt,
+                "elicitationId": request_id,
+                "url": url,
+                "server": self._server_identity,
+            }
+        else:
+            requested_schema = schema if schema is not None else {"type": "string"}
+            params = {
+                "requestId": request_id,
+                "mode": ELICITATION_MODE_FORM,
+                "message": prompt,
+                "requestedSchema": requested_schema,
+            }
+
         message: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": request_id,
             "method": "elicitation/create",
-            "params": {
-                "requestId": request_id,
-                "message": prompt,
-                "requestedSchema": requested_schema,
-            },
+            "params": params,
         }
 
         logger.info(
             "elicitation.send",
             extra={
                 "elicitation_request_id": request_id,
+                "elicitation_mode": mode,
                 "has_schema": schema is not None,
                 "mode": "real",
             },

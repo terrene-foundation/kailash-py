@@ -58,6 +58,7 @@ import asyncio
 import base64
 import functools
 import gzip
+import inspect
 import json
 import logging
 import re
@@ -121,6 +122,173 @@ SUPPORTED_PROTOCOL_VERSIONS = (
     "2024-11-05",
 )
 LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+# Content-block types permitted inside a sampling message (MCP 2025-11-25).
+# ``text`` / ``image`` / ``audio`` are the base SamplingMessage ContentBlock
+# types; ``tool_use`` / ``tool_result`` are the tool-enabled-sampling
+# additions. This is a SERVER-SIDE allowlist (rules/ui-backend-defense.md) —
+# the client-supplied content ``type`` is validated against it, never trusted.
+SAMPLING_CONTENT_TYPES = frozenset(
+    {"text", "image", "audio", "tool_use", "tool_result"}
+)
+
+
+def _sampling_content_error(content: Any, where: str) -> Optional[str]:
+    """Validate one message ``content`` value's content-type(s).
+
+    Returns an error string when the content carries an unknown content type,
+    or ``None`` when every block is a permitted type. Plain-string content is
+    accepted (treated as ``text`` on the wire, the common shorthand shape).
+
+    A single content block is a dict carrying a ``type`` key; content MAY also
+    be a list of such blocks (multi-part messages). Anything whose declared
+    ``type`` is not in :data:`SAMPLING_CONTENT_TYPES` is rejected — the
+    input-validation gate for sampling (security.md § Input Validation).
+    """
+
+    def _check_block(block: Any) -> Optional[str]:
+        # Plain string is text shorthand — always permitted.
+        if isinstance(block, str):
+            return None
+        if not isinstance(block, dict):
+            return (
+                f"sampling message content {where} must be a string or an object "
+                f"with a 'type'; got {type(block).__name__}"
+            )
+        block_type = block.get("type")
+        if block_type is None:
+            return f"sampling message content {where} object missing required 'type'"
+        if block_type not in SAMPLING_CONTENT_TYPES:
+            return (
+                f"sampling message content {where} has unsupported type "
+                f"{block_type!r}; expected one of {sorted(SAMPLING_CONTENT_TYPES)}"
+            )
+        return None
+
+    if isinstance(content, list):
+        for block in content:
+            err = _check_block(block)
+            if err is not None:
+                return err
+        return None
+    return _check_block(content)
+
+
+def _iter_content_blocks(content: Any):
+    """Yield the individual content blocks of a message ``content`` value.
+
+    Normalizes the three legal shapes (plain string, single dict block, list of
+    blocks) into an iterable of blocks so tool_use / tool_result balance can be
+    computed uniformly.
+    """
+    if isinstance(content, list):
+        yield from content
+    else:
+        yield content
+
+
+def validate_sampling_messages(messages: Any) -> Optional[str]:
+    """Validate a sampling ``messages`` sequence (MCP 2025-11-25).
+
+    Enforces two contracts required by tool-enabled sampling:
+
+    1. **Content-type validation** — every content block declares a type in
+       :data:`SAMPLING_CONTENT_TYPES` (text / image / audio / tool_use /
+       tool_result). Unknown types are rejected.
+    2. **tool_use ↔ tool_result balance (ORDER-aware)** — every ``tool_use``
+       block carries a UNIQUE, hashable ``id``; every ``tool_result`` block's
+       ``tool_use_id`` MUST reference an ``id`` introduced by an EARLIER-position
+       ``tool_use`` (a forward or self reference is rejected), and every
+       ``tool_use`` MUST have at least one matching ``tool_result``. A duplicate
+       ``tool_use`` id, a forward/unknown ``tool_result`` reference, or an orphan
+       ``tool_use`` is rejected. Id values are hashability-guarded (mirroring
+       ``_mark_request_id_seen``) so an unhashable id yields a clean -32602
+       error string rather than an uncaught ``TypeError`` (-32603).
+
+    Returns an error string on the first violation, or ``None`` when the whole
+    sequence is valid. A non-list ``messages`` (or a non-object message) is
+    itself a violation — the shape is validated explicitly (ui-backend-defense).
+    """
+    if not isinstance(messages, list):
+        return f"sampling 'messages' must be a list; got {type(messages).__name__}"
+
+    # ``seen_use_ids`` holds tool_use ids introduced SO FAR (iteration order),
+    # so a tool_result can be checked against only EARLIER-position tool_use
+    # blocks. ``matched_use_ids`` records which of those a later tool_result
+    # referenced, for the trailing orphan-tool_use check.
+    seen_use_ids: set = set()
+    matched_use_ids: set = set()
+
+    for idx, message in enumerate(messages):
+        if not isinstance(message, dict):
+            return (
+                f"sampling message[{idx}] must be an object; "
+                f"got {type(message).__name__}"
+            )
+        content = message.get("content")
+        if content is None:
+            return f"sampling message[{idx}] missing required 'content'"
+
+        # (1) content-type validation
+        err = _sampling_content_error(content, f"in message[{idx}]")
+        if err is not None:
+            return err
+
+        # (2) order-aware tool_use / tool_result balance
+        for block in _iter_content_blocks(content):
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "tool_use":
+                use_id = block.get("id")
+                if use_id is None:
+                    return (
+                        f"sampling message[{idx}] tool_use block missing required 'id'"
+                    )
+                try:
+                    hash(use_id)
+                except TypeError:
+                    return (
+                        f"sampling message[{idx}] tool_use 'id' must be a hashable "
+                        f"scalar; got {type(use_id).__name__}"
+                    )
+                if use_id in seen_use_ids:
+                    return (
+                        f"duplicate tool_use id {use_id!r} at message[{idx}]; each "
+                        "tool_use id must be unique"
+                    )
+                seen_use_ids.add(use_id)
+            elif btype == "tool_result":
+                ref_id = block.get("tool_use_id")
+                if ref_id is None:
+                    return (
+                        f"sampling message[{idx}] tool_result block missing required "
+                        f"'tool_use_id'"
+                    )
+                try:
+                    hash(ref_id)
+                except TypeError:
+                    return (
+                        f"sampling message[{idx}] tool_result 'tool_use_id' must be "
+                        f"a hashable scalar; got {type(ref_id).__name__}"
+                    )
+                if ref_id not in seen_use_ids:
+                    return (
+                        "unbalanced tool_use/tool_result: tool_result at "
+                        f"message[{idx}] references tool_use id {ref_id!r} not "
+                        "introduced by an earlier tool_use"
+                    )
+                matched_use_ids.add(ref_id)
+
+    # Trailing balance: every introduced tool_use MUST have been referenced.
+    orphan_uses = seen_use_ids - matched_use_ids
+    if orphan_uses:
+        return (
+            "unbalanced tool_use/tool_result: tool_use id(s) "
+            f"{sorted(orphan_uses, key=str)} have no matching tool_result"
+        )
+    return None
 
 
 def negotiate_protocol_version(requested: Any) -> str:
@@ -826,13 +994,95 @@ class MCPServer:
         self._transport = None
 
         # ElicitationSystem — server-to-client interactive-input subsystem
-        # (MCP 2025-06-18 elicitation/create). Constructed without a bound
+        # (MCP 2025-11-25 elicitation/create). Constructed without a bound
         # send-callable; the send-half is bound via `_bind_elicitation_transport`
         # when the transport is established. Exposed as a public attribute
         # so tools can call `server.elicitation_system.request_input(...)`.
         # This is the production call site required by
         # rules/orphan-detection.md §1 for the ElicitationSystem manager.
-        self.elicitation_system: ElicitationSystem = ElicitationSystem()
+        #
+        # ``server_identity`` binds this server's identity into every url-mode
+        # elicitation so the client can verify the issuer (spec 2025-11-25).
+        # ``capability_provider`` is a zero-arg predicate that reports whether
+        # any connected client advertised the ``elicitation`` capability, so the
+        # send-half fails closed instead of dispatching to a client that cannot
+        # handle it.
+        self.elicitation_system: ElicitationSystem = ElicitationSystem(
+            server_identity={"name": self.name},
+            capability_provider=self._any_client_advertises_elicitation,
+        )
+
+        # Human-in-the-loop (HITL) approval callback for sampling/createMessage
+        # (MCP 2025-11-25). The server does NOT auto-approve model-generated
+        # content: a sampling request is fulfilled only after this callback
+        # approves it. When None (the default), sampling FAILS CLOSED — every
+        # request is rejected with MCP_SAMPLING_REJECTED, never silently
+        # auto-approved (security.md § HITL fail-closed). Bind an approver via
+        # ``set_sampling_approver`` — the transport-bound-callback idiom used by
+        # ElicitationSystem in advanced/features.py.
+        #
+        # Signature: ``approver(request: dict) -> bool | Awaitable[bool]`` where
+        # ``request`` carries ``messages`` / ``model_preferences`` /
+        # ``target_client`` / ``tool_choice``. Return truthy to approve; return
+        # falsy to decline (→ MCP_SAMPLING_DECLINED); raise ``asyncio.
+        # TimeoutError`` for a review timeout (→ MCP_SAMPLING_TIMEOUT); raise
+        # ``MCPError`` to surface a specific rejection code.
+        self._sampling_approver: Optional[Callable[[Dict[str, Any]], Any]] = None
+
+    def set_sampling_approver(
+        self, approver: Optional[Callable[[Dict[str, Any]], Any]]
+    ) -> None:
+        """Bind (or clear) the human-in-the-loop sampling approval callback.
+
+        Args:
+            approver: Callable invoked with the sampling-request context before
+                any ``sampling/createMessage`` is fulfilled. Returns (or awaits
+                to) a truthy value to approve, a falsy value to decline. May
+                raise ``asyncio.TimeoutError`` (review timeout) or ``MCPError``
+                (specific rejection). Pass ``None`` to clear the binding and
+                restore the fail-closed default (all sampling rejected).
+
+        Idempotent — a later call replaces the prior approver.
+        """
+        self._sampling_approver = approver
+        logger.info(
+            "sampling.approver.bound",
+            extra={"has_approver": approver is not None},
+        )
+
+    @staticmethod
+    def _client_advertises_elicitation(info: Dict[str, Any]) -> bool:
+        """Return True when a client's ``initialize`` info advertised elicitation.
+
+        A client declares support via the spec-2025-11-25 top-level
+        ``capabilities.elicitation`` key, whose value is a capability OBJECT
+        (often empty ``{}``). So the test is "is it a dict" — an empty ``{}``
+        still counts as advertised, but an explicit ``false`` / ``0`` / ``""``
+        does NOT (those are fail-OPEN under a bare ``is not None`` check). The
+        retained ``experimental.elicitation`` alias is a truthiness flag.
+        """
+        caps = info.get("capabilities", {})
+        if not isinstance(caps, dict):
+            return False
+        if isinstance(caps.get("elicitation"), dict):
+            return True
+        experimental = caps.get("experimental", {})
+        return bool(
+            isinstance(experimental, dict) and experimental.get("elicitation", False)
+        )
+
+    def _any_client_advertises_elicitation(self) -> bool:
+        """Capability provider for the ElicitationSystem gate.
+
+        Returns True when at least one connected client advertised the
+        ``elicitation`` capability. Bound into ``self.elicitation_system`` so
+        ``request_input`` fails closed rather than dispatching an
+        ``elicitation/create`` a client cannot handle (spec 2025-11-25).
+        """
+        return any(
+            self._client_advertises_elicitation(info)
+            for info in self.client_info.values()
+        )
 
     def _bind_elicitation_transport(self) -> None:
         """Bind the active transport's send-callable to the elicitation system.
@@ -902,7 +1152,13 @@ class MCPServer:
                 await self.elicitation_system.cancel_request(rid, reason=reason)
                 return True
             result = message.get("result", {})
-            # MCP 2025-06-18 ElicitResult: { action: "accept"|"decline"|"cancel", content?: {...} }
+            # MCP 2025-11-25 ElicitResult three-action model:
+            # { action: "accept"|"decline"|"cancel", content?: {...} }
+            #   accept  → provide_input(content)     (the collected payload)
+            #   decline → cancel_request("declined") (user declined to provide)
+            #   cancel  → cancel_request("cancelled")(user dismissed the prompt)
+            # decline and cancel are BOTH terminal-without-data but carry
+            # distinct reasons so a caller / audit trail can tell them apart.
             if isinstance(result, dict):
                 action = result.get("action", "accept")
                 if action == "accept":
@@ -912,7 +1168,18 @@ class MCPServer:
                     payload = content if content is not None else result
                     await self.elicitation_system.provide_input(rid, payload)
                     return True
-                # decline / cancel
+                if action == "decline":
+                    await self.elicitation_system.cancel_request(
+                        rid, reason="client declined (action=decline)"
+                    )
+                    return True
+                if action == "cancel":
+                    await self.elicitation_system.cancel_request(
+                        rid, reason="client cancelled (action=cancel)"
+                    )
+                    return True
+                # Any other/unknown action is treated as a terminal cancel so the
+                # awaiting request never hangs on an unrecognized action.
                 await self.elicitation_system.cancel_request(
                     rid, reason=f"client action={action}"
                 )
@@ -2391,11 +2658,24 @@ class MCPServer:
                     # experimental.completion alias below is retained for
                     # backward compatibility with older clients.
                     "completions": {},
+                    # Spec-2025-11-25 top-level ``sampling`` capability key. The
+                    # experimental.sampling alias below is retained for
+                    # backward compatibility with older clients / code that
+                    # still reads the experimental namespace.
+                    "sampling": {},
+                    # Spec-2025-11-25 top-level ``elicitation`` capability. The
+                    # server advertises BOTH elicitation modes it serves —
+                    # ``form`` (flat-primitive inline collection) and ``url``
+                    # (out-of-band collection with server-identity binding). The
+                    # experimental.elicitation alias below is retained for
+                    # backward compatibility with older clients.
+                    "elicitation": {"modes": ["form", "url"]},
                     "experimental": {
                         "progressNotifications": True,
                         "cancellation": True,
                         "completion": True,
                         "sampling": True,
+                        "elicitation": True,
                         "websocketCompression": self.enable_websocket_compression,
                     },
                 },
@@ -3769,19 +4049,75 @@ class MCPServer:
     async def _handle_sampling_create_message(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle sampling/createMessage - this is typically server-to-client."""
-        # This is usually initiated by the server to request LLM sampling from the client
-        # For server-side handling, we can validate and forward to connected clients
+        """Handle sampling/createMessage (MCP 2025-11-25 sampling).
 
-        protocol_mgr = get_protocol_manager()
+        Full 2025-11-25 sampling flow, in order:
 
-        # Check if any client supports sampling
+        1. **Content-type + tool-balance validation** (``validate_sampling_
+           messages``): every message content block is a permitted type
+           (text / image / audio / tool_use / tool_result) and every
+           ``tool_use`` has a matching ``tool_result`` (and vice versa). An
+           invalid sequence is rejected with ``INVALID_PARAMS`` (-32602)
+           before any model-generated content is requested.
+        2. **Capability check**: at least one connected client must advertise
+           ``sampling`` (top-level or the ``experimental.sampling`` alias).
+        3. **Human-in-the-loop (HITL) approval**: the request is routed
+           through ``self._sampling_approver`` BEFORE it is fulfilled. When no
+           approver is bound the request FAILS CLOSED
+           (``MCP_SAMPLING_REJECTED``) — the server never silently
+           auto-approves model-generated content (security.md § HITL
+           fail-closed). A bound approver may approve, decline
+           (``MCP_SAMPLING_DECLINED``), time out (``MCP_SAMPLING_TIMEOUT``),
+           or raise a specific ``MCPError``.
+        4. **Dispatch**: the approved request is forwarded to the selected
+           sampling client's transport and tracked in
+           ``_pending_sampling_requests``.
+        """
+        # (1) Content-type + tool_use/tool_result balance validation. Input
+        # validation runs FIRST so a malformed request never reaches the HITL
+        # gate or the transport (security.md § Input Validation).
+        messages = params.get("messages", [])
+        validation_error = validate_sampling_messages(messages)
+        if validation_error is not None:
+            logger.warning(
+                "sampling.validation.rejected",
+                extra={"reason": validation_error},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": MCPErrorCode.INVALID_PARAMS.value,
+                    "message": f"Invalid sampling request: {validation_error}",
+                },
+                "id": request_id,
+            }
+
+        # ``toolChoice`` — tool-enabled sampling: forward the client's choice.
+        tool_choice = params.get("toolChoice")
+
+        # (2) Capability check — a client must advertise ``sampling`` either as
+        # the spec-2025-11-25 TOP-LEVEL capability key or via the retained
+        # ``experimental.sampling`` alias.
+        def _advertises_sampling(info: Dict[str, Any]) -> bool:
+            caps = info.get("capabilities", {})
+            if not isinstance(caps, dict):
+                return False
+            # Top-level ``sampling`` capability (spec 2025-11-25): the value is
+            # a capability OBJECT (often empty ``{}``), so "is it a dict" is the
+            # correct test. An empty ``{}`` counts as advertised; an explicit
+            # ``false`` / ``0`` / ``""`` does NOT (those fail OPEN under a bare
+            # ``is not None`` check).
+            if isinstance(caps.get("sampling"), dict):
+                return True
+            experimental = caps.get("experimental", {})
+            return bool(
+                isinstance(experimental, dict) and experimental.get("sampling", False)
+            )
+
         sampling_clients = [
             client_id
             for client_id, info in self.client_info.items()
-            if info.get("capabilities", {})
-            .get("experimental", {})
-            .get("sampling", False)
+            if _advertises_sampling(info)
         ]
 
         if not sampling_clients:
@@ -3794,9 +4130,36 @@ class MCPServer:
                 "id": request_id,
             }
 
-        # Create sampling request
-        messages = params.get("messages", [])
-        sampling_params = {
+        # Select the target client (first advertised; selection logic may grow).
+        target_client = sampling_clients[0]
+
+        # (3) Human-in-the-loop approval — the server MUST NOT fulfil a sampling
+        # request (model-generated content) without a human-review/approval
+        # decision. Fails CLOSED: no approver bound → reject, never
+        # auto-approve (security.md § HITL fail-closed).
+        approval_context: Dict[str, Any] = {
+            "messages": messages,
+            "model_preferences": params.get("modelPreferences"),
+            "system_prompt": params.get("systemPrompt"),
+            "tool_choice": tool_choice,
+            "target_client": target_client,
+            "request_id": request_id,
+        }
+        approval_error = await self._evaluate_sampling_approval(approval_context)
+        if approval_error is not None:
+            code, message = approval_error
+            logger.warning(
+                "sampling.approval.rejected",
+                extra={"code": code, "reason": message},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": code, "message": message},
+                "id": request_id,
+            }
+
+        # (4) Dispatch the approved sampling request to the target client.
+        sampling_params: Dict[str, Any] = {
             "messages": messages,
             "model_preferences": params.get("modelPreferences"),
             "system_prompt": params.get("systemPrompt"),
@@ -3804,11 +4167,10 @@ class MCPServer:
             "max_tokens": params.get("maxTokens"),
             "metadata": params.get("metadata"),
         }
+        # Only forward toolChoice when the client set it (tool-enabled sampling).
+        if tool_choice is not None:
+            sampling_params["tool_choice"] = tool_choice
 
-        # Send to first available sampling client (or implement selection logic)
-        target_client = sampling_clients[0]
-
-        # Create server-to-client request
         sampling_request = {
             "jsonrpc": "2.0",
             "method": "sampling/createMessage",
@@ -3816,7 +4178,6 @@ class MCPServer:
             "id": f"sampling_{uuid.uuid4().hex[:8]}",
         }
 
-        # Send via WebSocket to client
         if self._transport and hasattr(self._transport, "send_message"):
             await self._transport.send_message(
                 sampling_request, client_id=target_client
@@ -3850,6 +4211,65 @@ class MCPServer:
                 },
                 "id": request_id,
             }
+
+    async def _evaluate_sampling_approval(
+        self, context: Dict[str, Any]
+    ) -> Optional["tuple[int, str]"]:
+        """Run the HITL approval gate for a sampling request.
+
+        Returns ``None`` when the request is APPROVED (dispatch may proceed),
+        or a ``(json_rpc_error_code, message)`` tuple when it is NOT approved.
+        Fails CLOSED: when no approver is bound the request is rejected with
+        ``MCP_SAMPLING_REJECTED`` — the server never auto-approves
+        model-generated content (security.md § HITL fail-closed).
+
+        The bound approver may:
+        * return (or await to) a truthy value → APPROVED;
+        * return (or await to) a falsy value → DECLINED
+          (``MCP_SAMPLING_DECLINED``);
+        * raise ``asyncio.TimeoutError`` → review timeout
+          (``MCP_SAMPLING_TIMEOUT``);
+        * raise ``MCPError`` → that error's code + message;
+        * raise any other exception → treated as a rejection
+          (``MCP_SAMPLING_REJECTED``), logged, never swallowed silently.
+        """
+        approver = self._sampling_approver
+        if approver is None:
+            # Fail closed — the default posture is deny, not auto-approve.
+            return (
+                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
+                "sampling requires human-in-the-loop approval but no approver is "
+                "bound; the server fails closed and will not auto-approve "
+                "model-generated content (bind one via set_sampling_approver)",
+            )
+
+        try:
+            decision = approver(context)
+            if inspect.isawaitable(decision):
+                decision = await decision
+        except asyncio.TimeoutError:
+            return (
+                MCPErrorCode.MCP_SAMPLING_TIMEOUT.value,
+                "sampling approval timed out awaiting human review",
+            )
+        except MCPError as exc:
+            return (exc.error_code.value, exc.message)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a rejection, logged
+            logger.warning(
+                "sampling.approval.error",
+                extra={"error": str(exc)},
+            )
+            return (
+                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
+                f"sampling approval failed: {exc}",
+            )
+
+        if not decision:
+            return (
+                MCPErrorCode.MCP_SAMPLING_DECLINED.value,
+                "sampling request declined by human reviewer",
+            )
+        return None
 
     async def run_stdio(self):
         """Run the server using stdio transport for testing."""

@@ -379,6 +379,13 @@ class TestSamplingCreateMessage:
         mock_transport.send_message = AsyncMock()
         server._transport = mock_transport
 
+        # Bind an approving HITL approver so the FORWARD-path tests in this
+        # class exercise dispatch. Sampling fails CLOSED when no approver is
+        # bound (MCP 2025-11-25 HITL, #1712 W4 E1) — the fail-closed default
+        # and the decline/timeout/error outcomes are pinned in
+        # packages/kailash-mcp/tests/regression/test_issue_1712_sampling.py.
+        server.set_sampling_approver(lambda ctx: True)
+
         return server
 
     @pytest.mark.asyncio

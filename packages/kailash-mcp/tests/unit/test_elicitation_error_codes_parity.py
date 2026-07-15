@@ -120,12 +120,33 @@ class TestElicitationSystemCallSites:
     def test_elicitation_system_constructor_signature_invariant(self) -> None:
         """Locks the ElicitationSystem init signature so a future refactor
         toward a different shape fails loudly.
+
+        MCP 2025-11-25 (gap E3) grew the constructor with two BACKWARD-COMPATIBLE
+        keyword-only params — ``server_identity`` (url-mode issuer binding) and
+        ``capability_provider`` (the client-elicitation-capability gate). Cross-SDK
+        parity relies on ``send`` remaining the FIRST POSITIONAL callable
+        (unchanged); the additions are keyword-only so every existing positional
+        caller ``ElicitationSystem(send)`` still binds identically.
         """
         from kailash_mcp.advanced.features import ElicitationSystem
 
         sig = inspect.signature(ElicitationSystem.__init__)
         params = [p for p in sig.parameters.values() if p.name != "self"]
-        assert [p.name for p in params] == ["send"], (
+        assert [p.name for p in params] == [
+            "send",
+            "server_identity",
+            "capability_provider",
+        ], (
             f"ElicitationSystem.__init__ signature drifted: {sig}. "
-            f"Cross-SDK parity relies on a fixed send-callable shape."
+            f"Cross-SDK parity relies on `send` staying the first positional "
+            f"callable with the 2025-11-25 additions keyword-only."
         )
+        # ``send`` MUST remain a positional-or-keyword first param; the 2025-11-25
+        # additions MUST be keyword-only (so ElicitationSystem(send) is unchanged).
+        send_param = sig.parameters["send"]
+        assert send_param.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.POSITIONAL_ONLY,
+        )
+        for name in ("server_identity", "capability_provider"):
+            assert sig.parameters[name].kind == inspect.Parameter.KEYWORD_ONLY
