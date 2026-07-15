@@ -55,6 +55,7 @@ Enhanced Production Usage:
 """
 
 import asyncio
+import base64
 import functools
 import gzip
 import json
@@ -66,7 +67,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
-from kailash_mcp.advanced.features import ElicitationSystem
+from kailash_mcp.advanced.features import (
+    ElicitationSystem,
+    StructuredTool,
+    ToolAnnotation,
+)
 from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
@@ -83,8 +88,9 @@ from kailash_mcp.errors import (
     ResourceError,
     RetryableOperation,
     ToolError,
+    ValidationError,
 )
-from kailash_mcp.protocol.protocol import get_protocol_manager
+from kailash_mcp.protocol.protocol import ToolResult, get_protocol_manager
 from kailash_mcp.utils import (
     CacheManager,
     ConfigManager,
@@ -119,6 +125,67 @@ def negotiate_protocol_version(requested: Any) -> str:
     if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
         return requested
     return LATEST_PROTOCOL_VERSION
+
+
+# MCP content-block discriminators a tool may return directly (tools/call
+# result.content items). A tool handler returning one of these — or a list of
+# them, or a ``ToolResult`` — is passed through verbatim rather than
+# str()-wrapped (spec 2025-11-25 tool result content).
+_CONTENT_BLOCK_TYPES = frozenset(
+    {"text", "image", "audio", "resource", "resource_link"}
+)
+
+# MIME types treated as text for resources/read. Anything else (or raw bytes)
+# is emitted as a base64 ``blob`` rather than a corrupting ``text`` field.
+_TEXT_MIME_TYPES = frozenset(
+    {
+        "application/json",
+        "application/xml",
+        "application/javascript",
+        "application/ecmascript",
+        "application/x-yaml",
+        "application/yaml",
+        "application/sql",
+    }
+)
+
+
+def _is_text_mime(mime_type: Optional[str]) -> bool:
+    """Return True when ``mime_type`` denotes text-serialisable content.
+
+    Text when the type is ``text/*``, a known textual application type, or a
+    structured-suffix type (``+json`` / ``+xml``). Everything else (images,
+    audio, ``application/octet-stream``, …) is binary and MUST be base64
+    ``blob``-encoded so raw bytes are not corrupted by ``str()``.
+    """
+    if not mime_type or not isinstance(mime_type, str):
+        return True
+    mime = mime_type.split(";", 1)[0].strip().lower()
+    if mime.startswith("text/"):
+        return True
+    if mime.endswith("+json") or mime.endswith("+xml"):
+        return True
+    return mime in _TEXT_MIME_TYPES
+
+
+def _annotations_to_mcp(annotations: Any) -> Optional[Dict[str, Any]]:
+    """Map a registered tool annotation to MCP ``tools/list`` hint fields.
+
+    Accepts a :class:`ToolAnnotation` or a raw dict of MCP hints. The emitted
+    hints (``readOnlyHint`` / ``destructiveHint`` / ``idempotentHint``) are
+    ADVISORY ONLY — see ``_handle_list_tools`` for the authorization invariant.
+    """
+    if annotations is None:
+        return None
+    if isinstance(annotations, ToolAnnotation):
+        return {
+            "readOnlyHint": annotations.is_read_only,
+            "destructiveHint": annotations.is_destructive,
+            "idempotentHint": annotations.is_idempotent,
+        }
+    if isinstance(annotations, dict):
+        return dict(annotations)
+    return None
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -785,6 +852,8 @@ class MCPServer:
         timeout: Optional[float] = None,
         retryable: bool = True,
         stream_response: bool = False,
+        output_schema: Optional[Dict[str, Any]] = None,
+        annotations: Optional[Any] = None,
     ):
         """
         Enhanced tool decorator with authentication, caching, metrics, and error handling.
@@ -800,6 +869,11 @@ class MCPServer:
             timeout: Tool execution timeout in seconds
             retryable: Whether tool failures are retryable
             stream_response: Enable streaming response for large results
+            output_schema: Optional JSON Schema. When set, ``tools/list`` advertises
+                it as ``outputSchema`` and ``tools/call`` validates the result,
+                emitting ``structuredContent`` alongside a text fallback.
+            annotations: Optional :class:`ToolAnnotation` (or MCP-hint dict)
+                advertised in ``tools/list``. ADVISORY ONLY — never gates access.
 
         Returns:
             Decorated function with enhanced capabilities
@@ -861,6 +935,13 @@ class MCPServer:
             # Register with FastMCP
             mcp_tool = self._mcp.tool()(enhanced_func)  # type: ignore[union-attr]
 
+            # Wire advanced/features.StructuredTool for output-schema validation.
+            # Its ``output_validator`` (a SchemaValidator) is reused on every
+            # tools/call to validate the result before emitting structuredContent.
+            structured_tool = (
+                StructuredTool(output_schema=output_schema) if output_schema else None
+            )
+
             # Track in registry with enhanced metadata
             self._tool_registry[tool_name] = {
                 "function": mcp_tool,
@@ -875,6 +956,9 @@ class MCPServer:
                 "timeout": timeout,
                 "retryable": retryable,
                 "stream_response": stream_response,
+                "output_schema": output_schema,
+                "structured_tool": structured_tool,
+                "annotations": annotations,
                 "call_count": 0,
                 "error_count": 0,
                 "last_called": None,
@@ -1981,41 +2065,162 @@ class MCPServer:
         tools = []
         for name, info in self._tool_registry.items():
             if not info.get("disabled", False):
-                tools.append(
-                    {
-                        "name": name,
-                        "description": info.get("description", ""),
-                        "inputSchema": info.get("input_schema", {}),
-                    }
-                )
+                tool_desc: Dict[str, Any] = {
+                    "name": name,
+                    "description": info.get("description", ""),
+                    "inputSchema": info.get("input_schema", {}),
+                }
+                # Advertise outputSchema when the tool declared one so clients
+                # can validate structuredContent (spec 2025-11-25).
+                output_schema = info.get("output_schema")
+                if output_schema:
+                    tool_desc["outputSchema"] = output_schema
+                # Tool annotations (readOnlyHint / destructiveHint / …) are
+                # ADVISORY metadata for client UX. INVARIANT: they MUST NEVER
+                # gate authorization — access control is enforced solely by the
+                # auth/permission manager (see _create_enhanced_tool), never by
+                # these client-supplied-trust hints. Do not read them in any
+                # dispatch/authorization path.
+                mcp_annotations = _annotations_to_mcp(info.get("annotations"))
+                if mcp_annotations:
+                    tool_desc["annotations"] = mcp_annotations
+                tools.append(tool_desc)
 
         return {"jsonrpc": "2.0", "result": {"tools": tools}, "id": request_id}
 
     async def _handle_call_tool(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle tools/call request."""
+        """Handle tools/call request.
+
+        Spec 2025-11-25 distinguishes two error classes:
+
+        * PROTOCOL errors (missing/invalid tool name, unknown tool, malformed
+          ``arguments`` shape) -> JSON-RPC error object (``-32602``).
+        * TOOL EXECUTION failures (the tool body raised) -> a normal result
+          with ``isError: true`` and the error text carried in ``content``,
+          so the calling LLM can observe and react to the failure. Mirrors
+          ``kailash.trust.mcp.server`` isError handling.
+        """
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
-        try:
-            result = self._execute_tool(tool_name, arguments)  # type: ignore[reportArgumentType]
+        # --- PROTOCOL validation -> JSON-RPC errors -------------------------
+        if not tool_name or not isinstance(tool_name, str):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                "Missing or invalid tool name in tools/call params",
+            )
+        if tool_name not in self._tool_registry or self._tool_registry[tool_name].get(
+            "disabled", False
+        ):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                f"Unknown tool: {tool_name}",
+            )
+        if not isinstance(arguments, dict):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                "arguments must be an object",
+            )
 
-            # Handle async results
+        tool_info = self._tool_registry[tool_name]
+
+        # --- EXECUTION failure -> isError-in-result -------------------------
+        try:
+            result = self._execute_tool(tool_name, arguments)
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                 result = await result
+        except Exception as e:  # tool body raised -> report as tool result
+            logger.warning("tool.call.error tool=%s error=%s", tool_name, e)
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {"type": "text", "text": f"Tool execution error: {str(e)}"}
+                    ],
+                    "isError": True,
+                },
+                "id": request_id,
+            }
 
-            return {
-                "jsonrpc": "2.0",
-                "result": {"content": [{"type": "text", "text": str(result)}]},
-                "id": request_id,
-            }
-        except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"},
-                "id": request_id,
-            }
+        # --- Shape the successful result ------------------------------------
+        content, is_error, structured = self._build_tool_result(result, tool_info)
+        result_obj: Dict[str, Any] = {"content": content}
+        if structured is not None:
+            result_obj["structuredContent"] = structured
+        if is_error:
+            result_obj["isError"] = True
+        return {"jsonrpc": "2.0", "result": result_obj, "id": request_id}
+
+    def _jsonrpc_error(
+        self, request_id: Any, code: Any, message: str
+    ) -> Dict[str, Any]:
+        """Build a JSON-RPC error envelope (PROTOCOL failures only)."""
+        code_value = code.value if isinstance(code, MCPErrorCode) else code
+        return {
+            "jsonrpc": "2.0",
+            "error": {"code": code_value, "message": message},
+            "id": request_id,
+        }
+
+    def _build_tool_result(
+        self, result: Any, tool_info: Dict[str, Any]
+    ) -> "tuple[List[Dict[str, Any]], bool, Optional[Any]]":
+        """Normalise a tool return value into ``(content, is_error, structured)``.
+
+        * ``ToolResult`` (protocol.protocol) -> its ``content`` + ``isError``,
+          wiring ``ToolResult.image()`` / ``.resource()`` passthrough.
+        * A content-block list, or a single content-block dict (text / image /
+          audio / resource / resource_link) -> passed through verbatim.
+        * A tool with a registered ``outputSchema`` -> validate; on success emit
+          ``structuredContent`` + a text fallback, on failure isError-in-result.
+        * Any other scalar / string / dict -> a single ``text`` block.
+        """
+        # 1. ToolResult passthrough (image / resource / explicit isError).
+        if isinstance(result, ToolResult):
+            payload = result.to_dict()
+            return payload["content"], bool(payload.get("isError", False)), None
+
+        # 2. A pre-built content-block list -> passthrough.
+        if (
+            isinstance(result, list)
+            and result
+            and all(
+                isinstance(item, dict) and item.get("type") in _CONTENT_BLOCK_TYPES
+                for item in result
+            )
+        ):
+            return result, False, None
+
+        # 3. A single content-block dict -> wrap in a list, passthrough.
+        if isinstance(result, dict) and result.get("type") in _CONTENT_BLOCK_TYPES:
+            return [result], False, None
+
+        # 4. Output-schema validation via StructuredTool.output_validator.
+        structured_tool = tool_info.get("structured_tool")
+        if structured_tool is not None and structured_tool.output_validator is not None:
+            try:
+                structured_tool.output_validator.validate(result)
+            except ValidationError as e:  # validation failure -> isError result
+                return (
+                    [
+                        {
+                            "type": "text",
+                            "text": f"Output validation failed: {str(e)}",
+                        }
+                    ],
+                    True,
+                    None,
+                )
+            text_fallback = json.dumps(result, default=str)
+            return [{"type": "text", "text": text_fallback}], False, result
+
+        # 5. Plain scalar / string / unstructured dict -> text block.
+        return [{"type": "text", "text": str(result)}], False, None
 
     async def _handle_list_resources(
         self, params: Dict[str, Any], request_id: Any
