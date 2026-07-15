@@ -16,9 +16,12 @@ parity. Both implementations are wire-level compatible — a Python
 client can speak to a Rust-spawned MCP server and vice versa.
 
 Security: subprocess spawning never invokes a shell (``shell=False``),
-so the command/args are not interpreted by ``/bin/sh``. The caller is
-responsible for the executable allowlist; supply ``allowed_commands``
-to enforce one.
+so the command/args are not interpreted by ``/bin/sh``. The executable
+allowlist fails CLOSED by default (MCP 2025-11-25 local-server spawn
+safety) — absent an explicit ``allowed_commands`` the curated
+:data:`DEFAULT_ALLOWED_COMMANDS` launcher set is enforced and an unlisted
+command is rejected. Pass ``allowed_commands=[...]`` to narrow/extend it,
+or ``allow_arbitrary_commands=True`` to opt out explicitly.
 """
 
 from __future__ import annotations
@@ -37,6 +40,27 @@ CONTENT_LENGTH_PREFIX = "Content-Length: "
 # guards against malicious / runaway peers that would otherwise drive
 # us to OOM by sending an outsized Content-Length header.
 MAX_MESSAGE_SIZE = 64 * 1024 * 1024
+
+# Fail-closed default allowlist of standard MCP launcher executables (MCP
+# 2025-11-25 local-server spawn safety). Deliberately EXCLUDES shells
+# (``sh`` / ``bash`` / ``cmd`` / ``powershell``) and generic download-exec
+# tools (``curl`` / ``wget``) — those are the arbitrary-command-injection
+# vectors the fail-closed default exists to reject. Absent an explicit
+# ``allowed_commands``, an unlisted command is REJECTED, never warn-and-allowed.
+DEFAULT_ALLOWED_COMMANDS = frozenset(
+    {
+        "python",
+        "python3",
+        "uv",
+        "uvx",
+        "node",
+        "npx",
+        "deno",
+        "bunx",
+        "bun",
+        "docker",
+    }
+)
 
 
 class StdioTransport(Transport):
@@ -76,19 +100,29 @@ class StdioTransport(Transport):
         args: Optional[Sequence[str]] = None,
         *,
         allowed_commands: Optional[Sequence[str]] = None,
+        allow_arbitrary_commands: bool = False,
         env: Optional[dict] = None,
         cwd: Optional[str] = None,
     ) -> "StdioTransport":
         """Spawn an MCP server subprocess and connect a transport.
 
+        The command allowlist fails CLOSED by default (MCP 2025-11-25
+        local-server spawn safety): an unlisted command is REJECTED, never
+        warn-and-allowed.
+
         Args:
             command: Path or basename of the executable to spawn. Path
                 traversal sequences (``..``) are rejected.
             args: Optional list of arguments to pass to the executable.
-            allowed_commands: If provided, the command's basename MUST
-                appear in this list — otherwise a :class:`TransportError`
-                is raised. Use this to enforce a strict allowlist for
-                user-supplied input.
+            allowed_commands: Explicit allowlist. When omitted, the curated
+                :data:`DEFAULT_ALLOWED_COMMANDS` set (standard MCP launchers)
+                is enforced — the fail-closed default. A command whose
+                basename (or full string) is not in the effective allowlist
+                raises :class:`TransportError`.
+            allow_arbitrary_commands: Explicit opt-out of the allowlist. When
+                ``True`` any non-empty, non-traversing command is permitted.
+                This is the only way to spawn an unlisted command; it is never
+                the default.
             env: Optional environment mapping (passed to the subprocess).
             cwd: Optional working directory for the subprocess.
 
@@ -99,7 +133,7 @@ class StdioTransport(Transport):
             TransportError: If the command fails validation or spawning
                 fails.
         """
-        cls._validate_command(command, allowed_commands)
+        cls._validate_command(command, allowed_commands, allow_arbitrary_commands)
         cmd_args: list[str] = list(args or [])
         try:
             process = await asyncio.create_subprocess_exec(
@@ -126,18 +160,27 @@ class StdioTransport(Transport):
         return cls(process)
 
     @staticmethod
-    def _validate_command(command: str, allowed: Optional[Sequence[str]]) -> None:
+    def _validate_command(
+        command: str,
+        allowed: Optional[Sequence[str]],
+        allow_arbitrary: bool = False,
+    ) -> None:
         if not isinstance(command, str) or not command:
             raise TransportError("command must be a non-empty string")
-        if ".." in command.split(os.sep):
+        if ".." in command.replace("\\", "/").split("/"):
             raise TransportError(f"command rejected (path traversal): {command!r}")
-        if allowed is not None:
-            basename = os.path.basename(command)
-            if basename not in allowed and command not in allowed:
-                allowed_str = ", ".join(repr(c) for c in allowed)
-                raise TransportError(
-                    f"command {command!r} not in the allowlist [{allowed_str}]"
-                )
+        if allow_arbitrary:
+            return
+        # Fail closed: absent an explicit allowlist, enforce the curated
+        # default launcher set rather than permitting arbitrary commands.
+        effective = allowed if allowed is not None else DEFAULT_ALLOWED_COMMANDS
+        basename = os.path.basename(command)
+        if basename not in effective and command not in effective:
+            allowed_str = ", ".join(repr(c) for c in sorted(effective))
+            raise TransportError(
+                f"command {command!r} not in the allowlist [{allowed_str}]; "
+                f"pass allowed_commands=[...] or allow_arbitrary_commands=True"
+            )
 
     # ------------------------------------------------------------------
     # Transport protocol
@@ -298,10 +341,30 @@ def _quote_for_log(command: str, args: Sequence[str]) -> str:
     return shlex.join([command, *args])
 
 
+def validate_spawn_command(
+    command: str,
+    allowed_commands: Optional[Sequence[str]] = None,
+    allow_arbitrary_commands: bool = False,
+) -> None:
+    """Fail-closed validation of an MCP local-server spawn command.
+
+    Shared entry point for every MCP stdio spawn site (this transport AND the
+    middleware MCP client). Absent ``allowed_commands`` the curated
+    :data:`DEFAULT_ALLOWED_COMMANDS` set is enforced; an unlisted command
+    raises :class:`TransportError` (never warn-and-allow). Set
+    ``allow_arbitrary_commands=True`` to opt out explicitly.
+    """
+    StdioTransport._validate_command(
+        command, allowed_commands, allow_arbitrary_commands
+    )
+
+
 __all__ = [
     "StdioTransport",
     "write_framed_message",
     "read_framed_message",
+    "validate_spawn_command",
+    "DEFAULT_ALLOWED_COMMANDS",
     "MAX_MESSAGE_SIZE",
     "CONTENT_LENGTH_PREFIX",
 ]

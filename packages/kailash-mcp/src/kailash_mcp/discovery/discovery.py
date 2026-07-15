@@ -50,6 +50,7 @@ from urllib.parse import urlparse
 
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, ServiceDiscoveryError
+from kailash_mcp.security import SpawnSecurityError, validate_spawn_command
 
 logger = logging.getLogger(__name__)
 
@@ -1151,6 +1152,22 @@ class HealthChecker:
             elif server.transport == "stdio":
                 # For stdio, check if command exists and is executable
                 if server.command:
+                    # Fail-closed spawn allowlist (MCP 2025-11-25 local-server
+                    # spawn safety): a health probe MUST NOT spawn an unlisted
+                    # command. server.command is untrusted (registry / discovery
+                    # response). Reject before spawn; report blocked, don't run.
+                    try:
+                        validate_spawn_command(server.command)
+                    except SpawnSecurityError as e:
+                        logger.warning(
+                            "health_check.spawn_blocked",
+                            extra={"error": str(e)},
+                        )
+                        return {
+                            "status": "blocked",
+                            "response_time": None,
+                            "error": str(e),
+                        }
                     try:
                         # Test if we can run the command
                         import asyncio

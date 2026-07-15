@@ -299,6 +299,34 @@ class TestProtocol:
         assert result["serverInfo"]["name"] == "eatp-mcp-server"
         assert "version" in result["serverInfo"]
 
+    async def test_initialize_negotiates_newer_supported_version(self, server):
+        """A client requesting a newer SUPPORTED version gets it echoed, not a
+        hardcoded fixed string (#1712 protocolVersion negotiation)."""
+        request = _make_request(
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0"},
+            },
+        )
+        response = _parse_response(await server.handle_message(request))
+        assert response["result"]["protocolVersion"] == "2025-06-18"
+
+    async def test_initialize_unsupported_version_returns_latest(self, server):
+        """An unsupported requested version negotiates to the newest supported
+        version — the server never blindly echoes the client's string."""
+        request = _make_request(
+            "initialize",
+            {
+                "protocolVersion": "1999-01-01",
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0"},
+            },
+        )
+        response = _parse_response(await server.handle_message(request))
+        assert response["result"]["protocolVersion"] == "2025-06-18"
+
     async def test_initialized_notification_returns_none(self, server):
         """notifications/initialized is a notification (no id) and returns None."""
         notification = _make_notification("notifications/initialized")

@@ -166,6 +166,41 @@ class TestStdioTransport:
         with pytest.raises(TransportError):
             await StdioTransport.spawn(command="", args=[])
 
+    # ----- #1712: fail-closed spawn allowlist by default -------------------
+
+    def test_validate_spawn_command_default_permits_launcher(self) -> None:
+        from kailash.channels.mcp.stdio import validate_spawn_command
+
+        validate_spawn_command("python3")  # curated default set -> no raise
+
+    @pytest.mark.parametrize("cmd", ["bash", "sh", "curl", "rm", "/usr/bin/curl"])
+    def test_validate_spawn_command_default_rejects_unlisted(self, cmd) -> None:
+        from kailash.channels.mcp.stdio import validate_spawn_command
+
+        with pytest.raises(TransportError):
+            validate_spawn_command(cmd)  # fail-closed, not warn-and-allow
+
+    def test_validate_spawn_command_opt_out_permits_arbitrary(self) -> None:
+        from kailash.channels.mcp.stdio import validate_spawn_command
+
+        validate_spawn_command("my-custom-server", allow_arbitrary_commands=True)
+
+    @pytest.mark.parametrize("bad", ["../evil", "a/../../sh"])
+    def test_validate_spawn_command_rejects_traversal_even_with_opt_out(
+        self, bad
+    ) -> None:
+        from kailash.channels.mcp.stdio import validate_spawn_command
+
+        with pytest.raises(TransportError):
+            validate_spawn_command(bad, allow_arbitrary_commands=True)
+
+    @pytest.mark.asyncio
+    async def test_spawn_default_rejects_unlisted_command(self) -> None:
+        # No allowed_commands: the fail-closed default rejects an unlisted
+        # command BEFORE spawning a subprocess (MCP 2025-11-25 spawn safety).
+        with pytest.raises(TransportError):
+            await StdioTransport.spawn(command="bash", args=["-c", "echo hi"])
+
 
 # ----- exception hierarchy --------------------------------------------------
 
