@@ -2,6 +2,23 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.3.1] — 2026-07-15 — fail-closed MCP local-server spawn allowlist + spec-parity fixes (#1712)
+
+### Security
+
+- **Fail-closed local-server spawn allowlist** (`kailash_mcp.security.validate_spawn_command`,
+  `SpawnSecurityError`). An unlisted spawn command is now REJECTED by default
+  (never warn-and-allowed), per the MCP 2025-11-25 local-server spawn-safety
+  requirement. Wired at every process-spawn surface: the three `MCPClient` stdio
+  sites, `EnhancedStdioTransport.connect`, and the discovery health-probe.
+
+### Fixed
+
+- **Explicit `null` JSON-RPC request id** is rejected at the parse boundary
+  (`JsonRpcRequest.from_dict`), distinct from an absent id (= notification).
+- **`protocolVersion` negotiation** — the server echoes a supported requested
+  version, else returns the newest supported, instead of a hardcoded string.
+
 ## [0.3.0] — 2026-07-13 — real `mcp_tool_duration_seconds` histogram reaches unified `/metrics` (#1708)
 
 Part of the coordinated 5-package #1708 observability release. Requires
