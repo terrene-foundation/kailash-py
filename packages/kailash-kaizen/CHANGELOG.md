@@ -2,7 +2,42 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [2.32.0] — 2026-07-14 — Manifest module + from_env() legacy-tier deprecation
+## [2.33.0] — 2026-07-15 — RAG advanced-node parser fix + Tier-1 test-hang resolution
+
+### Fixed
+
+- **RAG advanced nodes silently ignored LLM output and always used the
+  rule-based fallback (#1736).** The four LLM-response parsers backing
+  the HyDE, StepBack, SelfCorrecting, and RAGFusion nodes
+  (`_parse_verification_response`, `_parse_query_variations`,
+  `_parse_hypotheses`, `_parse_abstract_query` in
+  `kaizen/nodes/rag/advanced.py`) read `response.get("content", "")` off
+  the **outer** `LLMAgentNode.execute()` envelope, but the LLM's actual
+  content is nested one level deeper at
+  `response["response"]["content"]`. Every one of these nodes therefore
+  called the LLM, discarded its output, and silently fell back to the
+  rule-based path — invisible in practice because the fallback produced
+  plausible-looking output, and the only tests that exercised these code
+  paths were hanging on real network calls (see below) rather than
+  failing. Each parser now unwraps the nested envelope
+  (`inner = response.get("response", response)`, flat-dict tolerant),
+  so these four nodes actually consume LLM output for the first time.
+
+- **Kaizen Tier-1 unit tests hung for 300s+ on unmocked LLM/network
+  calls (#1736).** `tests/unit/strategies/` and
+  `tests/unit/rag/test_advanced_nodes.py` constructed real `BaseAgent` /
+  RAG nodes and invoked `.execute()` / `.run()` with no LLM mocking,
+  triggering real outbound network calls that `pytest-timeout`'s signal
+  method could not reliably abort. Added an autouse conftest stub
+  (`tests/unit/strategies/conftest.py`) and a module-scoped fixture in
+  `test_advanced_nodes.py` stubbing the provider seam (`get_provider` +
+  `OpenAIProvider.{chat,chat_async,is_available}`) so these suites run
+  offline and deterministically; `pytest.ini` now sets
+  `timeout_method = thread` for stronger hang enforcement; both suites
+  are re-included in the kaizen CI gate
+  (`.github/workflows/test-kailash-kaizen.yml`) with zero per-test
+  deselects. Fixing the test hang is what exposed the parser bug above —
+  both are fixed in this release, not just the hang.
 
 ### Added
 
