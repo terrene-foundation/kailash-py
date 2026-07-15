@@ -34,6 +34,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unmodified — this is a deprecation of the tier, not a reconciliation of
   the key lists.
 
+## [2.52.0] - 2026-07-15
+
+### Security
+
+- **Fail-closed resource bounds on the BH3 origin-digest trust ingress
+  (DoS) (#1713).** The shared canonicalization ingress
+  (`kailash.trust._jcs.jcs_encode`) previously ran two unbounded recursive
+  passes plus a SHA-256 digest over attacker-shaped `Any` input **before**
+  any authentication check — an unauthenticated caller could trigger
+  unbounded CPU/memory via deep nesting (uncaught `RecursionError`) or
+  wide/large payloads (huge lists, multi-GB strings). A new iterative,
+  non-recursive bounds guard (`_check_digest_bounds`) rejects over-limit
+  input (traversal depth, node count, child count, cumulative string
+  bytes) with a typed `ValueError` before any unbounded work begins.
+  Placed at the shared ingress, the guard covers every
+  attacker-influenceable caller in one pass — the BH3 origin digest, the
+  Audit-Anchor `subject_hash` path, and the weft/bilateral/attestation
+  content-hash paths. In-bounds input digests byte-identically; no
+  cross-SDK byte change.
+
+- **Chain-integrity, expiry, and genesis verification before
+  capability/lineage mint (#1710).** `delegate()` and `audit()` — the two
+  surfaces that mint a signed, portable artifact from a _stored_ trust
+  chain — previously checked expiry inconsistently (`audit()` checked
+  nothing at all) and never re-verified chain integrity before signing,
+  so a relying party trusting the signed artifact off-chain could be
+  handed a mint produced from a tampered chain or an already-expired
+  grant. Both surfaces now route through one shared fail-closed pre-sign
+  gate that requires a verifiable genesis issuer, rejects an expired
+  grant, and re-verifies the Ed25519 signature chain before any signature
+  is produced. Valid, unexpired, genesis-anchored chains mint
+  byte-identically — this is a cross-SDK-aligned fix (independent
+  implementation, matching semantics) with the Rust SDK.
+
 ## [2.51.0] - 2026-07-14
 
 ### Added
