@@ -54,6 +54,50 @@ def _make_server() -> MCPServer:
     return server
 
 
+_TEXT_COMPLETION = {"role": "assistant", "content": {"type": "text", "text": "ok"}}
+
+
+async def _drive_sampling(
+    server: MCPServer,
+    params: dict,
+    request_id,
+    reply: dict,
+    *,
+    responder: str = "client-1",
+):
+    """Run the sampling handler to completion by feeding the target's reply.
+
+    The Wave-5 handler AWAITS the target client's reply (roots-Future model),
+    so the round-trip must be driven: dispatch the handler as a task, wait for
+    the outbound request to land on the transport, feed the target's reply
+    through the response router, then await the handler's completion.
+
+    ``reply`` is the JSON-RPC body sans envelope (e.g. ``{"result": {...}}`` or
+    ``{"error": {...}}``). Returns ``(handler_result, sent_messages)``.
+    """
+    task = asyncio.create_task(
+        server._handle_sampling_create_message(params, request_id)
+    )
+    # Let the handler dispatch the outbound sampling/createMessage request.
+    for _ in range(200):
+        await asyncio.sleep(0)
+        if server._transport.sent:
+            break
+    else:  # pragma: no cover - defensive: handler never dispatched
+        task.cancel()
+        raise AssertionError("handler did not dispatch a sampling request")
+
+    sampling_msg, _target = server._transport.sent[0]
+    sampling_id = sampling_msg["id"]
+    reply_msg = {"jsonrpc": "2.0", "id": sampling_id, **reply}
+    handled = await server._route_server_initiated_response(
+        sampling_id, reply_msg, responding_client_id=responder
+    )
+    assert handled is True, "the target client's reply was NOT consumed"
+    result = await asyncio.wait_for(task, timeout=5)
+    return result, server._transport.sent
+
+
 # ---------------------------------------------------------------------------
 # (2) Content-type validation
 # ---------------------------------------------------------------------------
@@ -152,17 +196,22 @@ async def test_sampling_forwards_tool_choice():
     """toolChoice is forwarded on the outbound sampling request."""
     server = _make_server()
     server.set_sampling_approver(lambda ctx: True)
-    result = await server._handle_sampling_create_message(
+    result, sent = await _drive_sampling(
+        server,
         {
             "messages": [{"role": "user", "content": "hi"}],
             "toolChoice": {"type": "auto"},
         },
         "req-3",
+        {"result": _TEXT_COMPLETION},
     )
-    assert "result" in result
-    assert result["result"]["status"] == "sampling_requested"
-    sent_msg, _client = server._transport.sent[0]
+    # The ORIGINAL requester receives the model completion, not a bare ack.
+    assert result["result"] == _TEXT_COMPLETION
+    assert result["id"] == "req-3"
+    sent_msg, _client = sent[0]
     assert sent_msg["params"]["tool_choice"] == {"type": "auto"}
+    # Pending map drained after the round-trip.
+    assert server._pending_sampling_requests == {}
 
 
 # ---------------------------------------------------------------------------
@@ -198,16 +247,17 @@ async def test_sampling_approver_approves_reaches_dispatch():
         return True
 
     server.set_sampling_approver(approver)
-    result = await server._handle_sampling_create_message(
+    result, sent = await _drive_sampling(
+        server,
         {"messages": [{"role": "user", "content": "hi"}]},
         "req-5",
+        {"result": _TEXT_COMPLETION},
     )
-    assert "result" in result
-    assert result["result"]["status"] == "sampling_requested"
+    assert result["result"] == _TEXT_COMPLETION
     # The approver saw the request context BEFORE dispatch.
     assert len(approved_contexts) == 1
     assert approved_contexts[0]["target_client"] == "client-1"
-    assert len(server._transport.sent) == 1
+    assert len(sent) == 1
 
 
 @pytest.mark.regression
@@ -221,11 +271,13 @@ async def test_sampling_async_approver_supported():
         return True
 
     server.set_sampling_approver(approver)
-    result = await server._handle_sampling_create_message(
+    result, _sent = await _drive_sampling(
+        server,
         {"messages": [{"role": "user", "content": "hi"}]},
         "req-6",
+        {"result": _TEXT_COMPLETION},
     )
-    assert result["result"]["status"] == "sampling_requested"
+    assert result["result"] == _TEXT_COMPLETION
 
 
 # ---------------------------------------------------------------------------
@@ -346,12 +398,17 @@ async def test_sampling_capability_check_accepts_experimental_alias():
         "old-client": {"capabilities": {"experimental": {"sampling": True}}}
     }
     server.set_sampling_approver(lambda ctx: True)
-    result = await server._handle_sampling_create_message(
+    result, sent = await _drive_sampling(
+        server,
         {"messages": [{"role": "user", "content": "hi"}]},
         "req-11",
+        {"result": _TEXT_COMPLETION},
+        responder="old-client",
     )
-    assert result["result"]["status"] == "sampling_requested"
-    assert result["result"]["target_client"] == "old-client"
+    assert result["result"] == _TEXT_COMPLETION
+    # The request was dispatched to the experimental-alias client.
+    _sent_msg, target = sent[0]
+    assert target == "old-client"
 
 
 @pytest.mark.regression
@@ -477,8 +534,156 @@ async def test_sampling_empty_dict_capability_is_advertised():
     server = _make_server()
     server.client_info = {"c": {"capabilities": {"sampling": {}}}}
     server.set_sampling_approver(lambda ctx: True)
-    result = await server._handle_sampling_create_message(
+    result, _sent = await _drive_sampling(
+        server,
         {"messages": [{"role": "user", "content": "hi"}]},
         "req-empty",
+        {"result": _TEXT_COMPLETION},
+        responder="c",
     )
-    assert result["result"]["status"] == "sampling_requested"
+    assert result["result"] == _TEXT_COMPLETION
+
+
+# ---------------------------------------------------------------------------
+# W5 Finding 1 — sampling responses are ROUTED end-to-end: the target client's
+# reply is CONSUMED (no spurious -32601), the model completion reaches the
+# ORIGINAL requester, and the pending map drains.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_sampling_full_round_trip_delivers_completion_no_32601():
+    """The reply is consumed (router returns True → NO -32601), the completion
+    reaches the original requester, and the pending map is drained."""
+    server = _make_server()
+    server.set_sampling_approver(lambda ctx: True)
+
+    task = asyncio.create_task(
+        server._handle_sampling_create_message(
+            {"messages": [{"role": "user", "content": "summarize"}]},
+            "orig-req",
+        )
+    )
+    for _ in range(200):
+        await asyncio.sleep(0)
+        if server._transport.sent:
+            break
+    sampling_msg, target = server._transport.sent[0]
+    sampling_id = sampling_msg["id"]
+    assert target == "client-1"
+    # The pending entry exists while the handler awaits (before the reply).
+    assert sampling_id in server._pending_sampling_requests
+
+    completion = {
+        "role": "assistant",
+        "content": {"type": "text", "text": "the summary"},
+        "model": "test-model",
+    }
+    # Feed the client's reply through the SAME path the WS server uses.
+    handled = await server._route_server_initiated_response(
+        sampling_id,
+        {"jsonrpc": "2.0", "id": sampling_id, "result": completion},
+        responding_client_id="client-1",
+    )
+    # (a) reply CONSUMED — the router owned it, so the dispatch layer emits
+    #     NO -32601 "method not found" for the response.
+    assert handled is True
+
+    result = await asyncio.wait_for(task, timeout=5)
+    # (b) the model completion reached the ORIGINAL requester under its id.
+    assert result["id"] == "orig-req"
+    assert result["result"] == completion
+    assert "error" not in result
+    # (c) the pending maps are drained.
+    assert server._pending_sampling_requests == {}
+    assert server._pending_sampling_clients == {}
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_sampling_client_error_reply_relayed_to_requester():
+    """A client ERROR reply is relayed as an error to the original requester
+    (distinct from a completion) — the reply is still consumed."""
+    server = _make_server()
+    server.set_sampling_approver(lambda ctx: True)
+    result, _sent = await _drive_sampling(
+        server,
+        {"messages": [{"role": "user", "content": "hi"}]},
+        "orig-err",
+        {"error": {"code": -32000, "message": "client model unavailable"}},
+    )
+    assert "error" in result
+    assert result["error"]["message"] == "client model unavailable"
+    assert result["id"] == "orig-err"
+    assert server._pending_sampling_requests == {}
+
+
+# ---------------------------------------------------------------------------
+# W5 Finding 2 — the pending-sampling map is bounded: a disconnecting target
+# evicts its pending entries, and a FIFO cap bounds never-answered requests.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_disconnect_evicts_pending_sampling_and_unblocks_requester():
+    """A target-client disconnect cancels+pops its pending sampling entry and
+    unblocks the original requester with a typed REJECTED error."""
+    server = _make_server()
+    server.set_sampling_approver(lambda ctx: True)
+
+    task = asyncio.create_task(
+        server._handle_sampling_create_message(
+            {"messages": [{"role": "user", "content": "hi"}]},
+            "orig-disc",
+        )
+    )
+    for _ in range(200):
+        await asyncio.sleep(0)
+        if server._transport.sent:
+            break
+    sampling_msg, _target = server._transport.sent[0]
+    sampling_id = sampling_msg["id"]
+    assert sampling_id in server._pending_sampling_requests
+
+    # The target client disconnects before replying.
+    server._on_ws_disconnect("client-1")
+
+    # Maps evicted immediately.
+    assert sampling_id not in server._pending_sampling_requests
+    assert sampling_id not in server._pending_sampling_clients
+
+    # The requester is unblocked with a typed error, not a hang.
+    result = await asyncio.wait_for(task, timeout=5)
+    assert result["id"] == "orig-disc"
+    assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_REJECTED.value
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_pending_sampling_fifo_cap_bounds_map():
+    """Never-answered sampling requests cannot grow the map without limit — the
+    FIFO cap evicts (cancels) the oldest pending Future past the bound."""
+    server = _make_server()
+    # Shrink the cap so the test is fast + deterministic.
+    server._MAX_PENDING_SAMPLING = 3
+
+    futures = []
+    for i in range(10):
+        fut = asyncio.get_event_loop().create_future()
+        futures.append(fut)
+        server._register_pending_sampling(f"s-{i}", fut, f"req-{i}", "client-1")
+        await asyncio.sleep(0)
+
+    # The map never exceeds the cap despite 10 registrations.
+    assert len(server._pending_sampling_requests) <= 3
+    assert len(server._pending_sampling_clients) <= 3
+    # Only the most-recent 3 remain.
+    assert set(server._pending_sampling_requests) == {"s-7", "s-8", "s-9"}
+    # The evicted oldest Futures were cancelled (not leaked).
+    assert futures[0].cancelled()
+    assert futures[6].cancelled()
+    # Cancel the survivors so the test leaves no pending Futures.
+    for fut in futures[7:]:
+        fut.cancel()
