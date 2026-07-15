@@ -638,7 +638,11 @@ Assess the quality and provide improvement suggestions:
     def _parse_verification_response(self, response: Dict) -> Dict[str, Any]:
         """Parse verification response from LLM"""
         try:
-            content = response.get("content", "")
+            # LLMAgentNode.execute() returns an envelope {"success", "response":
+            # {"content": ...}, ...} — the content is NESTED, not top-level. Unwrap
+            # the envelope while tolerating a flat {"content": ...} shape (issue #1736).
+            inner = response.get("response", response)
+            content = inner.get("content", "") if isinstance(inner, dict) else ""
             if isinstance(content, list):
                 content = content[0] if content else "{}"
 
@@ -1062,7 +1066,10 @@ Generate {self.num_query_variations} high-quality variations that will improve r
     def _parse_query_variations(self, response: Dict) -> List[str]:
         """Parse query variations from LLM response"""
         try:
-            content = response.get("content", "")
+            # LLMAgentNode.execute() nests content under "response"; unwrap the
+            # envelope while tolerating a flat {"content": ...} shape (issue #1736).
+            inner = response.get("response", response)
+            content = inner.get("content", "") if isinstance(inner, dict) else ""
             if isinstance(content, list):
                 content = content[0] if content else "{}"
 
@@ -1558,7 +1565,10 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
     def _parse_hypotheses(self, response: Dict) -> List[str]:
         """Parse hypotheses from LLM response"""
         try:
-            content = response.get("content", "")
+            # LLMAgentNode.execute() nests content under "response"; unwrap the
+            # envelope while tolerating a flat {"content": ...} shape (issue #1736).
+            inner = response.get("response", response)
+            content = inner.get("content", "") if isinstance(inner, dict) else ""
             if isinstance(content, list):
                 content = content[0] if content else "{}"
 
@@ -1901,7 +1911,10 @@ Generate a broader, more abstract version that would help retrieve relevant back
         # cannot reference an unbound name if response.get(...) itself raises.
         content: Any = ""
         try:
-            content = response.get("content", "")
+            # LLMAgentNode.execute() nests content under "response"; unwrap the
+            # envelope while tolerating a flat {"content": ...} shape (issue #1736).
+            inner = response.get("response", response)
+            content = inner.get("content", "") if isinstance(inner, dict) else ""
             if isinstance(content, list):
                 content = content[0] if content else "{}"
 
