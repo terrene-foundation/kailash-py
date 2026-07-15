@@ -55,6 +55,7 @@ Enhanced Production Usage:
 """
 
 import asyncio
+import base64
 import functools
 import gzip
 import json
@@ -62,11 +63,17 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Union
+from urllib.parse import urlparse
 
-from kailash_mcp.advanced.features import ElicitationSystem
+from kailash_mcp.advanced.features import (
+    ElicitationSystem,
+    StructuredTool,
+    ToolAnnotation,
+)
 from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
@@ -83,8 +90,9 @@ from kailash_mcp.errors import (
     ResourceError,
     RetryableOperation,
     ToolError,
+    ValidationError,
 )
-from kailash_mcp.protocol.protocol import get_protocol_manager
+from kailash_mcp.protocol.protocol import ToolResult, get_protocol_manager
 from kailash_mcp.utils import (
     CacheManager,
     ConfigManager,
@@ -119,6 +127,67 @@ def negotiate_protocol_version(requested: Any) -> str:
     if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
         return requested
     return LATEST_PROTOCOL_VERSION
+
+
+# MCP content-block discriminators a tool may return directly (tools/call
+# result.content items). A tool handler returning one of these — or a list of
+# them, or a ``ToolResult`` — is passed through verbatim rather than
+# str()-wrapped (spec 2025-11-25 tool result content).
+_CONTENT_BLOCK_TYPES = frozenset(
+    {"text", "image", "audio", "resource", "resource_link"}
+)
+
+# MIME types treated as text for resources/read. Anything else (or raw bytes)
+# is emitted as a base64 ``blob`` rather than a corrupting ``text`` field.
+_TEXT_MIME_TYPES = frozenset(
+    {
+        "application/json",
+        "application/xml",
+        "application/javascript",
+        "application/ecmascript",
+        "application/x-yaml",
+        "application/yaml",
+        "application/sql",
+    }
+)
+
+
+def _is_text_mime(mime_type: Optional[str]) -> bool:
+    """Return True when ``mime_type`` denotes text-serialisable content.
+
+    Text when the type is ``text/*``, a known textual application type, or a
+    structured-suffix type (``+json`` / ``+xml``). Everything else (images,
+    audio, ``application/octet-stream``, …) is binary and MUST be base64
+    ``blob``-encoded so raw bytes are not corrupted by ``str()``.
+    """
+    if not mime_type or not isinstance(mime_type, str):
+        return True
+    mime = mime_type.split(";", 1)[0].strip().lower()
+    if mime.startswith("text/"):
+        return True
+    if mime.endswith("+json") or mime.endswith("+xml"):
+        return True
+    return mime in _TEXT_MIME_TYPES
+
+
+def _annotations_to_mcp(annotations: Any) -> Optional[Dict[str, Any]]:
+    """Map a registered tool annotation to MCP ``tools/list`` hint fields.
+
+    Accepts a :class:`ToolAnnotation` or a raw dict of MCP hints. The emitted
+    hints (``readOnlyHint`` / ``destructiveHint`` / ``idempotentHint``) are
+    ADVISORY ONLY — see ``_handle_list_tools`` for the authorization invariant.
+    """
+    if annotations is None:
+        return None
+    if isinstance(annotations, ToolAnnotation):
+        return {
+            "readOnlyHint": annotations.is_read_only,
+            "destructiveHint": annotations.is_destructive,
+            "idempotentHint": annotations.is_idempotent,
+        }
+    if isinstance(annotations, dict):
+        return dict(annotations)
+    return None
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -579,6 +648,17 @@ class MCPServer:
         self.client_info: Dict[str, Dict[str, Any]] = {}
         self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
 
+        # Per-session (client_id) request ids already used. JSON-RPC request
+        # ids MUST NOT be reused within a session (spec 2025-11-25); a
+        # duplicate id is rejected with an Invalid Request error. BOTH maps are
+        # BOUNDED to avoid a remote OOM/DoS: the per-session id set is capped
+        # (FIFO eviction via the order deque, _MAX_SEEN_REQUEST_IDS) so a
+        # client streaming unique ids cannot grow it without bound, and both
+        # are popped on disconnect (_on_ws_disconnect) so churned connections
+        # do not leak.
+        self._session_seen_ids: Dict[str, set] = {}
+        self._session_seen_order: Dict[str, deque] = {}
+
         # Resource subscription support
         self.enable_subscriptions = enable_subscriptions
         self.event_store = event_store
@@ -785,6 +865,8 @@ class MCPServer:
         timeout: Optional[float] = None,
         retryable: bool = True,
         stream_response: bool = False,
+        output_schema: Optional[Dict[str, Any]] = None,
+        annotations: Optional[Any] = None,
     ):
         """
         Enhanced tool decorator with authentication, caching, metrics, and error handling.
@@ -800,6 +882,11 @@ class MCPServer:
             timeout: Tool execution timeout in seconds
             retryable: Whether tool failures are retryable
             stream_response: Enable streaming response for large results
+            output_schema: Optional JSON Schema. When set, ``tools/list`` advertises
+                it as ``outputSchema`` and ``tools/call`` validates the result,
+                emitting ``structuredContent`` alongside a text fallback.
+            annotations: Optional :class:`ToolAnnotation` (or MCP-hint dict)
+                advertised in ``tools/list``. ADVISORY ONLY — never gates access.
 
         Returns:
             Decorated function with enhanced capabilities
@@ -861,6 +948,13 @@ class MCPServer:
             # Register with FastMCP
             mcp_tool = self._mcp.tool()(enhanced_func)  # type: ignore[union-attr]
 
+            # Wire advanced/features.StructuredTool for output-schema validation.
+            # Its ``output_validator`` (a SchemaValidator) is reused on every
+            # tools/call to validate the result before emitting structuredContent.
+            structured_tool = (
+                StructuredTool(output_schema=output_schema) if output_schema else None
+            )
+
             # Track in registry with enhanced metadata
             self._tool_registry[tool_name] = {
                 "function": mcp_tool,
@@ -875,6 +969,9 @@ class MCPServer:
                 "timeout": timeout,
                 "retryable": retryable,
                 "stream_response": stream_response,
+                "output_schema": output_schema,
+                "structured_tool": structured_tool,
+                "annotations": annotations,
                 "call_count": 0,
                 "error_count": 0,
                 "last_called": None,
@@ -1377,12 +1474,15 @@ class MCPServer:
 
         return credentials
 
-    def resource(self, uri: str):
+    def resource(self, uri: str, mime_type: str = "text/plain"):
         """
         Add resource with metrics tracking.
 
         Args:
             uri: Resource URI pattern
+            mime_type: MIME type of the resource content. A non-text type (or a
+                handler returning raw bytes) causes resources/read to emit a
+                base64 ``blob`` rather than a ``text`` field (spec 2025-11-25).
 
         Returns:
             Decorated function
@@ -1406,7 +1506,7 @@ class MCPServer:
                 "original_handler": func,
                 "name": uri,
                 "description": func.__doc__ or f"Resource: {uri}",
-                "mime_type": "text/plain",
+                "mime_type": mime_type,
                 "created_at": time.time(),
             }
 
@@ -1799,6 +1899,7 @@ class MCPServer:
                 host=self.websocket_host,
                 port=self.websocket_port,
                 message_handler=self._handle_websocket_message,  # type: ignore[reportArgumentType]
+                disconnect_handler=self._on_ws_disconnect,
                 auth_provider=self.auth_provider,
                 timeout=self.transport_timeout,
                 max_message_size=self.max_request_size,
@@ -1836,10 +1937,63 @@ class MCPServer:
                 await self._transport.disconnect()
                 self._transport = None
 
+    # Cap on the per-session request-id reuse-tracking set. Bounds memory so a
+    # client streaming unique ids cannot grow the set without limit; reuse is
+    # still detected within this most-recent-N window.
+    _MAX_SEEN_REQUEST_IDS = 4096
+
+    def _mark_request_id_seen(self, client_id: str, request_id: Any) -> bool:
+        """Record ``request_id`` for ``client_id`` and report prior use.
+
+        Returns True if the id was ALREADY used in this session (the caller
+        rejects it as an Invalid Request). Otherwise records it — bounded to
+        ``_MAX_SEEN_REQUEST_IDS`` via FIFO eviction — and returns False.
+        Non-hashable ids (a JSON array id) cannot be set members and pass
+        through untracked (return False) rather than erroring.
+        """
+        try:
+            hash(request_id)
+        except TypeError:
+            return False
+        seen = self._session_seen_ids.setdefault(client_id, set())
+        if request_id in seen:
+            return True
+        order = self._session_seen_order.setdefault(client_id, deque())
+        seen.add(request_id)
+        order.append(request_id)
+        if len(order) > self._MAX_SEEN_REQUEST_IDS:
+            evicted = order.popleft()
+            seen.discard(evicted)
+        return False
+
+    def _on_ws_disconnect(self, client_id: str) -> None:
+        """Release all per-connection server state when a client disconnects.
+
+        Wired as the WebSocket transport's disconnect handler. Without this the
+        server-side maps (`_session_seen_ids` / `_session_seen_order` /
+        `client_info`) grow one entry per connection forever — a remote OOM
+        vector on a public server, since the transport only clears its OWN
+        client maps on disconnect.
+        """
+        self._session_seen_ids.pop(client_id, None)
+        self._session_seen_order.pop(client_id, None)
+        self.client_info.pop(client_id, None)
+
     async def _handle_websocket_message(
         self, request: Dict[str, Any], client_id: str
-    ) -> Dict[str, Any]:
-        """Handle incoming WebSocket message with decompression support."""
+    ) -> Optional[Dict[str, Any]]:
+        """Handle incoming WebSocket message with decompression support.
+
+        Returns ``None`` as a no-send sentinel (notification / ping-as-
+        notification / already-routed response); the transport skips the send.
+        Mirrors ``kailash.trust.mcp.server`` lifecycle handling:
+
+        * A NOTIFICATION (absent ``id``) runs its handler for side effects and
+          sends NOTHING — never a ``-32601`` body.
+        * ``ping`` returns an empty ``{}`` result (base-protocol utility).
+        * A request whose ``id`` was already used in this session is rejected
+          with an Invalid Request error (ids MUST be unique per session).
+        """
         try:
             # Decompress message if needed
             decompressed_request = self._decompress_message(request)
@@ -1870,60 +2024,106 @@ class MCPServer:
                     # Response routed to originating pending request; no
                     # further handler response needed (this is the client
                     # replying to US, not a client-initiated request).
-                    return {}
+                    return None
 
-            # Route to appropriate handler
-            if method == "initialize":
-                return await self._handle_initialize(params, request_id, client_id)
-            elif method == "tools/list":
-                return await self._handle_list_tools(params, request_id)
-            elif method == "tools/call":
-                return await self._handle_call_tool(params, request_id)
-            elif method == "resources/list":
-                return await self._handle_list_resources(params, request_id)
-            elif method == "resources/read":
-                return await self._handle_read_resource(params, request_id, client_id)
-            elif method == "resources/subscribe":
-                return await self._handle_subscribe(params, request_id, client_id)
-            elif method == "resources/unsubscribe":
-                return await self._handle_unsubscribe(params, request_id, client_id)
-            elif method == "resources/batch_subscribe":
-                return await self._handle_batch_subscribe(params, request_id, client_id)
-            elif method == "resources/batch_unsubscribe":
-                return await self._handle_batch_unsubscribe(
-                    params, request_id, client_id
-                )
-            elif method == "prompts/list":
-                return await self._handle_list_prompts(params, request_id)
-            elif method == "prompts/get":
-                return await self._handle_get_prompt(params, request_id)
-            elif method == "logging/setLevel":
-                return await self._handle_logging_set_level(params, request_id)
-            elif method == "roots/list":
-                # Add client_id to params for roots/list handler
-                params_with_client = {**params, "client_id": client_id}
-                return await self._handle_roots_list(params_with_client, request_id)
-            elif method == "completion/complete":
-                return await self._handle_completion_complete(params, request_id)
-            elif method == "sampling/createMessage":
-                # Add client_id to params for sampling handler
-                params_with_client = {**params, "client_id": client_id}
-                return await self._handle_sampling_create_message(
-                    params_with_client, request_id
-                )
-            else:
+            # ``ping`` (base-protocol utility): a request-form ping gets an
+            # empty result; a notification-form ping (no id) sends nothing.
+            if method == "ping":
+                if request_id is None:
+                    return None
+                return {"jsonrpc": "2.0", "result": {}, "id": request_id}
+
+            # NOTIFICATION (absent id): run the handler for its side effects and
+            # send NOTHING — never a -32601 body, even for an unknown method.
+            if request_id is None:
+                if method:
+                    try:
+                        await self._dispatch_ws_method(method, params, None, client_id)
+                    except Exception as exc:  # notifications expect no response
+                        logger.warning(
+                            "ws.notification.error method=%s error=%s", method, exc
+                        )
+                return None
+
+            # Per-session request-id reuse: an id already used in this session
+            # is an Invalid Request (spec 2025-11-25). Tracking is bounded (see
+            # _mark_request_id_seen); non-hashable ids pass through untracked.
+            if self._mark_request_id_seen(client_id, request_id):
                 return {
                     "jsonrpc": "2.0",
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                    "error": {
+                        "code": -32600,
+                        "message": (
+                            f"Request id already used in this session: "
+                            f"{request_id!r}"
+                        ),
+                    },
                     "id": request_id,
                 }
 
+            return await self._dispatch_ws_method(method, params, request_id, client_id)
+
         except Exception as e:
             logger.error(f"Error handling WebSocket message: {e}")
+            # A notification (absent id) never receives a response, even on
+            # internal error.
+            if request.get("id") is None:
+                return None
             return {
                 "jsonrpc": "2.0",
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
                 "id": request.get("id"),
+            }
+
+    async def _dispatch_ws_method(
+        self,
+        method: str,
+        params: Dict[str, Any],
+        request_id: Any,
+        client_id: str,
+    ) -> Dict[str, Any]:
+        """Route a WebSocket JSON-RPC method to its handler."""
+        if method == "initialize":
+            return await self._handle_initialize(params, request_id, client_id)
+        elif method == "tools/list":
+            return await self._handle_list_tools(params, request_id)
+        elif method == "tools/call":
+            return await self._handle_call_tool(params, request_id)
+        elif method == "resources/list":
+            return await self._handle_list_resources(params, request_id)
+        elif method == "resources/read":
+            return await self._handle_read_resource(params, request_id, client_id)
+        elif method == "resources/subscribe":
+            return await self._handle_subscribe(params, request_id, client_id)
+        elif method == "resources/unsubscribe":
+            return await self._handle_unsubscribe(params, request_id, client_id)
+        elif method == "resources/batch_subscribe":
+            return await self._handle_batch_subscribe(params, request_id, client_id)
+        elif method == "resources/batch_unsubscribe":
+            return await self._handle_batch_unsubscribe(params, request_id, client_id)
+        elif method == "prompts/list":
+            return await self._handle_list_prompts(params, request_id)
+        elif method == "prompts/get":
+            return await self._handle_get_prompt(params, request_id)
+        elif method == "logging/setLevel":
+            return await self._handle_logging_set_level(params, request_id)
+        elif method == "roots/list":
+            # Add client_id to params for roots/list handler
+            params_with_client = {**params, "client_id": client_id}
+            return await self._handle_roots_list(params_with_client, request_id)
+        elif method == "completion/complete":
+            return await self._handle_completion_complete(params, request_id)
+        elif method == "sampling/createMessage":
+            # Add client_id to params for sampling handler
+            params_with_client = {**params, "client_id": client_id}
+            return await self._handle_sampling_create_message(
+                params_with_client, request_id
+            )
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": f"Method not found: {method}"},
+                "id": request_id,
             }
 
     async def _handle_initialize(
@@ -1981,41 +2181,162 @@ class MCPServer:
         tools = []
         for name, info in self._tool_registry.items():
             if not info.get("disabled", False):
-                tools.append(
-                    {
-                        "name": name,
-                        "description": info.get("description", ""),
-                        "inputSchema": info.get("input_schema", {}),
-                    }
-                )
+                tool_desc: Dict[str, Any] = {
+                    "name": name,
+                    "description": info.get("description", ""),
+                    "inputSchema": info.get("input_schema", {}),
+                }
+                # Advertise outputSchema when the tool declared one so clients
+                # can validate structuredContent (spec 2025-11-25).
+                output_schema = info.get("output_schema")
+                if output_schema:
+                    tool_desc["outputSchema"] = output_schema
+                # Tool annotations (readOnlyHint / destructiveHint / …) are
+                # ADVISORY metadata for client UX. INVARIANT: they MUST NEVER
+                # gate authorization — access control is enforced solely by the
+                # auth/permission manager (see _create_enhanced_tool), never by
+                # these client-supplied-trust hints. Do not read them in any
+                # dispatch/authorization path.
+                mcp_annotations = _annotations_to_mcp(info.get("annotations"))
+                if mcp_annotations:
+                    tool_desc["annotations"] = mcp_annotations
+                tools.append(tool_desc)
 
         return {"jsonrpc": "2.0", "result": {"tools": tools}, "id": request_id}
 
     async def _handle_call_tool(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle tools/call request."""
+        """Handle tools/call request.
+
+        Spec 2025-11-25 distinguishes two error classes:
+
+        * PROTOCOL errors (missing/invalid tool name, unknown tool, malformed
+          ``arguments`` shape) -> JSON-RPC error object (``-32602``).
+        * TOOL EXECUTION failures (the tool body raised) -> a normal result
+          with ``isError: true`` and the error text carried in ``content``,
+          so the calling LLM can observe and react to the failure. Mirrors
+          ``kailash.trust.mcp.server`` isError handling.
+        """
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
-        try:
-            result = self._execute_tool(tool_name, arguments)  # type: ignore[reportArgumentType]
+        # --- PROTOCOL validation -> JSON-RPC errors -------------------------
+        if not tool_name or not isinstance(tool_name, str):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                "Missing or invalid tool name in tools/call params",
+            )
+        if tool_name not in self._tool_registry or self._tool_registry[tool_name].get(
+            "disabled", False
+        ):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                f"Unknown tool: {tool_name}",
+            )
+        if not isinstance(arguments, dict):
+            return self._jsonrpc_error(
+                request_id,
+                MCPErrorCode.INVALID_PARAMS,
+                "arguments must be an object",
+            )
 
-            # Handle async results
+        tool_info = self._tool_registry[tool_name]
+
+        # --- EXECUTION failure -> isError-in-result -------------------------
+        try:
+            result = self._execute_tool(tool_name, arguments)
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                 result = await result
+        except Exception as e:  # tool body raised -> report as tool result
+            logger.warning("tool.call.error tool=%s error=%s", tool_name, e)
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {"type": "text", "text": f"Tool execution error: {str(e)}"}
+                    ],
+                    "isError": True,
+                },
+                "id": request_id,
+            }
 
-            return {
-                "jsonrpc": "2.0",
-                "result": {"content": [{"type": "text", "text": str(result)}]},
-                "id": request_id,
-            }
-        except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"},
-                "id": request_id,
-            }
+        # --- Shape the successful result ------------------------------------
+        content, is_error, structured = self._build_tool_result(result, tool_info)
+        result_obj: Dict[str, Any] = {"content": content}
+        if structured is not None:
+            result_obj["structuredContent"] = structured
+        if is_error:
+            result_obj["isError"] = True
+        return {"jsonrpc": "2.0", "result": result_obj, "id": request_id}
+
+    def _jsonrpc_error(
+        self, request_id: Any, code: Any, message: str
+    ) -> Dict[str, Any]:
+        """Build a JSON-RPC error envelope (PROTOCOL failures only)."""
+        code_value = code.value if isinstance(code, MCPErrorCode) else code
+        return {
+            "jsonrpc": "2.0",
+            "error": {"code": code_value, "message": message},
+            "id": request_id,
+        }
+
+    def _build_tool_result(
+        self, result: Any, tool_info: Dict[str, Any]
+    ) -> "tuple[List[Dict[str, Any]], bool, Optional[Any]]":
+        """Normalise a tool return value into ``(content, is_error, structured)``.
+
+        * ``ToolResult`` (protocol.protocol) -> its ``content`` + ``isError``,
+          wiring ``ToolResult.image()`` / ``.resource()`` passthrough.
+        * A content-block list, or a single content-block dict (text / image /
+          audio / resource / resource_link) -> passed through verbatim.
+        * A tool with a registered ``outputSchema`` -> validate; on success emit
+          ``structuredContent`` + a text fallback, on failure isError-in-result.
+        * Any other scalar / string / dict -> a single ``text`` block.
+        """
+        # 1. ToolResult passthrough (image / resource / explicit isError).
+        if isinstance(result, ToolResult):
+            payload = result.to_dict()
+            return payload["content"], bool(payload.get("isError", False)), None
+
+        # 2. A pre-built content-block list -> passthrough.
+        if (
+            isinstance(result, list)
+            and result
+            and all(
+                isinstance(item, dict) and item.get("type") in _CONTENT_BLOCK_TYPES
+                for item in result
+            )
+        ):
+            return result, False, None
+
+        # 3. A single content-block dict -> wrap in a list, passthrough.
+        if isinstance(result, dict) and result.get("type") in _CONTENT_BLOCK_TYPES:
+            return [result], False, None
+
+        # 4. Output-schema validation via StructuredTool.output_validator.
+        structured_tool = tool_info.get("structured_tool")
+        if structured_tool is not None and structured_tool.output_validator is not None:
+            try:
+                structured_tool.output_validator.validate(result)
+            except ValidationError as e:  # validation failure -> isError result
+                return (
+                    [
+                        {
+                            "type": "text",
+                            "text": f"Output validation failed: {str(e)}",
+                        }
+                    ],
+                    True,
+                    None,
+                )
+            text_fallback = json.dumps(result, default=str)
+            return [{"type": "text", "text": text_fallback}], False, result
+
+        # 5. Plain scalar / string / unstructured dict -> text block.
+        return [{"type": "text", "text": str(result)}], False, None
 
     async def _handle_list_resources(
         self, params: Dict[str, Any], request_id: Any
@@ -2083,8 +2404,28 @@ class MCPServer:
     async def _handle_read_resource(
         self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
-        """Handle resources/read request with change detection."""
+        """Handle resources/read request with change detection.
+
+        Spec 2025-11-25 resources/read fidelity:
+
+        * The ``uri`` param is RFC-3986 validated (scheme + no whitespace)
+          BEFORE registry lookup; a malformed URI is a distinct ``-32602``
+          "invalid URI" (not a generic not-found).
+        * Binary content (raw bytes, or a non-text ``mimeType``) is
+          base64-encoded into a ``blob`` — never str()-corrupted into ``text``.
+          ``text`` and ``blob`` are mutually exclusive per content item.
+        * The registered/derived ``mimeType`` is echoed on returned contents.
+        """
         uri = params.get("uri")
+
+        # RFC 3986 validation FIRST — a malformed URI is a distinct -32602,
+        # not a generic not-found (which would mask the real client error).
+        if not self._is_valid_resource_uri(uri):
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": f"Invalid URI: {uri!r}"},
+                "id": request_id,
+            }
 
         # First try exact match
         resource_info = None
@@ -2117,12 +2458,14 @@ class MCPServer:
             else:
                 content = ""
 
+            mime_type = resource_info.get("mime_type", "text/plain")
+
             # Process change detection if subscription manager is available
             if self.subscription_manager:
                 resource_data = {
                     "uri": uri,
                     "text": str(content),
-                    "mimeType": resource_info.get("mime_type", "text/plain"),
+                    "mimeType": mime_type,
                 }
 
                 # Check for changes and notify subscribers
@@ -2133,9 +2476,10 @@ class MCPServer:
                 if change:
                     await self.subscription_manager.process_resource_change(change)
 
+            content_item = self._build_resource_content(uri, content, mime_type)
             return {
                 "jsonrpc": "2.0",
-                "result": {"contents": [{"uri": uri, "text": str(content)}]},
+                "result": {"contents": [content_item]},
                 "id": request_id,
             }
         except Exception as e:
@@ -2144,6 +2488,46 @@ class MCPServer:
                 "error": {"code": -32603, "message": f"Resource read error: {str(e)}"},
                 "id": request_id,
             }
+
+    @staticmethod
+    def _is_valid_resource_uri(uri: Any) -> bool:
+        """RFC-3986 validate a resources/read ``uri`` param.
+
+        Requires a non-empty string carrying a scheme and no whitespace /
+        control characters. A malformed URI is rejected here so it can be
+        reported as a distinct ``-32602`` before registry lookup.
+        """
+        if not uri or not isinstance(uri, str):
+            return False
+        if any(ch.isspace() or ord(ch) < 0x20 for ch in uri):
+            return False
+        try:
+            parsed = urlparse(uri)
+        except (ValueError, TypeError):
+            return False
+        return bool(parsed.scheme)
+
+    def _build_resource_content(
+        self, uri: str, content: Any, mime_type: str
+    ) -> Dict[str, Any]:
+        """Build a single resources/read content item.
+
+        Binary content (raw bytes, or a non-text ``mimeType``) is base64
+        ``blob``-encoded (mirroring advanced/features.BinaryResourceHandler);
+        text content is emitted as ``text``. ``text`` and ``blob`` are mutually
+        exclusive per item; ``mimeType`` is always echoed.
+        """
+        is_binary = isinstance(content, (bytes, bytearray)) or not _is_text_mime(
+            mime_type
+        )
+        if is_binary:
+            if isinstance(content, (bytes, bytearray)):
+                raw = bytes(content)
+            else:
+                raw = str(content).encode("utf-8")
+            blob = base64.b64encode(raw).decode("ascii")
+            return {"uri": uri, "mimeType": mime_type, "blob": blob}
+        return {"uri": uri, "mimeType": mime_type, "text": str(content)}
 
     def _match_resource_template(self, uri: str) -> tuple:
         """Match URI against resource templates and extract parameters."""

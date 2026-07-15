@@ -1114,6 +1114,7 @@ class WebSocketServerTransport(BaseTransport):
         message_handler: Optional[
             Callable[[Dict[str, Any], str], Dict[str, Any]]
         ] = None,
+        disconnect_handler: Optional[Callable[[str], None]] = None,
         ping_interval: float = 20.0,
         ping_timeout: float = 20.0,
         max_message_size: int = 10 * 1024 * 1024,  # 10MB
@@ -1125,6 +1126,10 @@ class WebSocketServerTransport(BaseTransport):
             host: Host to bind to
             port: Port to listen on
             message_handler: Handler for incoming messages
+            disconnect_handler: Optional callback invoked with the client_id
+                when a client disconnects, so the server can release any
+                per-connection state it keyed on that id (the transport only
+                clears its OWN client maps).
             ping_interval: Ping interval in seconds
             ping_timeout: Ping timeout in seconds
             max_message_size: Maximum message size in bytes
@@ -1135,6 +1140,7 @@ class WebSocketServerTransport(BaseTransport):
         self.host = host
         self.port = port
         self.message_handler = message_handler
+        self.disconnect_handler = disconnect_handler
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
         self.max_message_size = max_message_size
@@ -1300,10 +1306,15 @@ class WebSocketServerTransport(BaseTransport):
                             "id": request.get("id"),
                         }
 
-                    # Send response
-                    await websocket.send(json.dumps(response))
-                    self._update_metrics("messages_sent")
-                    self._update_metrics("bytes_sent", len(json.dumps(response)))
+                    # A None response is the no-send sentinel — a notification
+                    # (absent JSON-RPC id) or an already-routed inbound response
+                    # gets NO reply body (MCP lifecycle: notifications expect no
+                    # response). Only send a real response envelope.
+                    if response is not None:
+                        payload = json.dumps(response)
+                        await websocket.send(payload)
+                        self._update_metrics("messages_sent")
+                        self._update_metrics("bytes_sent", len(payload))
 
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON from client {client_id}: {e}")
@@ -1328,9 +1339,21 @@ class WebSocketServerTransport(BaseTransport):
         except Exception as e:
             logger.error(f"Error in client handler for {client_id}: {e}")
         finally:
-            # Clean up client
-            del self._clients[client_id]
-            del self._client_sessions[client_id]
+            # Clean up the transport's own per-client maps.
+            self._clients.pop(client_id, None)
+            self._client_sessions.pop(client_id, None)
+            # Let the server release any state it keyed on this client_id
+            # (request-id reuse set, client_info, ...) so a churned connection
+            # does not leak server-side memory.
+            if self.disconnect_handler is not None:
+                try:
+                    self.disconnect_handler(client_id)
+                except Exception as exc:  # cleanup must not mask disconnect
+                    logger.warning(
+                        "ws.disconnect_handler.error client=%s error=%s",
+                        client_id,
+                        exc,
+                    )
 
     async def _handle_message_safely(
         self, request: Dict[str, Any], client_id: str
