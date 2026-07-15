@@ -85,6 +85,10 @@ def test_measurable_criteria_have_sources_unmeasurable_have_reason():
     """A criterion either has real sources OR a stated unverifiable reason."""
     for spec in CONTROL_SPECS.values():
         for criterion in spec.criteria:
+            if criterion.kind != "records":
+                # chain_integrity is measured from the hash chain, not an
+                # action filter, so it legitimately carries no source_actions.
+                continue
             if criterion.unverifiable_reason is None:
                 assert criterion.source_actions, criterion.key
             else:
@@ -234,7 +238,7 @@ def test_cc6_and_cc8_evidence_collected_and_exportable():
 
     package = asyncio.run(scenario())
 
-    assert {c.control for c in package.controls} == {"CC6", "CC8"}
+    assert {c.control for c in package.controls} == {"CC6", "CC7", "CC8"}
     assert package.chain_verified is True
 
     assert _find_criterion(package, "CC6", "logical_access_grants").evidence_count == 2
@@ -346,3 +350,91 @@ def test_unknown_control_fails_closed():
 def test_none_store_fails_closed():
     with pytest.raises(EvidenceCollectionError):
         EvidenceCollector(None)
+
+
+# ---------------------------------------------------------------------------
+# CC7 — system operations (chain integrity + security/operational events)
+# ---------------------------------------------------------------------------
+
+
+def test_cc7_chain_integrity_and_operational_events():
+    async def scenario():
+        store = InMemoryAuditStore()
+        await _append(
+            store,
+            tenant_id="acme",
+            action=AuditEventType.CONSTRAINT_VIOLATED.value,
+            outcome="denied",
+        )
+        await _append(
+            store,
+            tenant_id="acme",
+            action=PactAuditAction.BARRIER_ENFORCED.value,
+            outcome="denied",
+        )
+        await _append(
+            store, tenant_id="acme", action=PactAuditAction.PLAN_SUSPENDED.value
+        )
+        collector = EvidenceCollector(store)
+        return await collector.collect(
+            tenant_id="acme",
+            period_start=_WINDOW_START,
+            period_end=_WINDOW_END,
+            controls=["CC7"],
+        )
+
+    package = asyncio.run(scenario())
+
+    chain = _find_criterion(package, "CC7", "audit_chain_integrity")
+    assert chain.verified is True
+    assert chain.evidence_count == 1
+    assert chain.items[0].outcome == "success"  # intact chain
+
+    security = _find_criterion(package, "CC7", "security_events")
+    assert security.evidence_count == 2  # constraint_violated + barrier_enforced
+
+    suspensions = _find_criterion(package, "CC7", "operational_suspensions")
+    assert suspensions.evidence_count == 1
+
+    # External monitoring/alerting is honestly unmeasured.
+    monitoring = _find_criterion(package, "CC7", "monitoring_alerts")
+    assert monitoring.verified is False
+    assert monitoring.unverified_reason
+
+
+def test_cc7_chain_integrity_unmeasurable_without_verify_chain():
+    """A store that does not expose chain verification -> verified=False, not a
+    fabricated pass."""
+
+    class _QueryOnlyStore:
+        """A real audit store variant exposing only query (no verify_chain)."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        async def query(self, flt):
+            return await self._inner.query(flt)
+
+    async def scenario():
+        inner = InMemoryAuditStore()
+        await _append(
+            inner, tenant_id="acme", action=PactAuditAction.PLAN_SUSPENDED.value
+        )
+        collector = EvidenceCollector(_QueryOnlyStore(inner))
+        return await collector.collect(
+            tenant_id="acme",
+            period_start=_WINDOW_START,
+            period_end=_WINDOW_END,
+            controls=["CC7"],
+        )
+
+    package = asyncio.run(scenario())
+    assert package.chain_verified is None
+    chain = _find_criterion(package, "CC7", "audit_chain_integrity")
+    assert chain.verified is False
+    assert chain.evidence_count == 0
+    assert chain.unverified_reason
+    # Record-based criteria still work without chain verification.
+    assert (
+        _find_criterion(package, "CC7", "operational_suspensions").evidence_count == 1
+    )

@@ -76,6 +76,11 @@ class CriterionSpec:
     description: str
     source_actions: tuple[str, ...]
     unverifiable_reason: str | None = None
+    kind: str = "records"
+    """How the criterion is measured. ``"records"`` (default) filters emitted
+    audit records by ``source_actions``; ``"chain_integrity"`` derives its
+    evidence from the audit store's hash-chain verification result instead of
+    an action filter (and so carries no ``source_actions``)."""
 
 
 @dataclass(frozen=True)
@@ -210,11 +215,76 @@ _CC8 = ControlSpec(
 
 
 # ---------------------------------------------------------------------------
+# CC7 — System Operations
+#   Hash-chain integrity of the immutable audit log + emitted security /
+#   operational-suspension events. External monitoring/alerting/incident
+#   systems are the deploying org's and are honestly reported verified=False.
+# ---------------------------------------------------------------------------
+
+_CC7 = ControlSpec(
+    control="CC7",
+    title="System Operations",
+    criteria=(
+        CriterionSpec(
+            key="audit_chain_integrity",
+            description=(
+                "Tamper-evidence: the immutable audit log's hash chain verified "
+                "intact over the period (Merkle/hash-chain verification)."
+            ),
+            source_actions=(),
+            kind="chain_integrity",
+        ),
+        CriterionSpec(
+            key="security_events",
+            description=(
+                "Security-relevant operational events: constraint violations, "
+                "denied actions/trust, barrier enforcement, and workflow/node "
+                "errors."
+            ),
+            source_actions=(
+                _AET.CONSTRAINT_VIOLATED.value,
+                _AET.ACTION_DENIED.value,
+                _AET.TRUST_DENIED.value,
+                _AET.WORKFLOW_ERROR.value,
+                _AET.NODE_ERROR.value,
+                _AET.SYSTEM_EVENT.value,
+                _PAA.BARRIER_ENFORCED.value,
+            ),
+        ),
+        CriterionSpec(
+            key="operational_suspensions",
+            description=(
+                "Operational suspensions and resumptions: governance plan "
+                "suspend/resume and resume-condition updates."
+            ),
+            source_actions=(
+                _PAA.PLAN_SUSPENDED.value,
+                _PAA.PLAN_RESUMED.value,
+                _PAA.RESUME_CONDITION_UPDATED.value,
+            ),
+        ),
+        CriterionSpec(
+            key="monitoring_alerts",
+            description="External monitoring, alerting, and incident/escalation records.",
+            source_actions=(),
+            unverifiable_reason=(
+                "The SDK emits no monitoring/alert/incident/escalation record "
+                "primitive; operational monitoring and incident response run in "
+                "the deploying organization's observability and on-call systems, "
+                "outside the SDK's emission surface."
+            ),
+        ),
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Registry of implemented controls
 # ---------------------------------------------------------------------------
 
 CONTROL_SPECS: dict[str, ControlSpec] = {
     _CC6.control: _CC6,
+    _CC7.control: _CC7,
     _CC8.control: _CC8,
 }
 """Implemented SOC 2 controls, keyed by control id."""

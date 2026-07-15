@@ -260,7 +260,8 @@ class EvidenceCollector:
         for control_id in selected:
             spec = CONTROL_SPECS[control_id]
             criteria = tuple(
-                self._build_criterion(cspec, events) for cspec in spec.criteria
+                self._build_criterion(cspec, events, chain_verified)
+                for cspec in spec.criteria
             )
             built.append(
                 ControlEvidence(
@@ -321,9 +322,57 @@ class EvidenceCollector:
             )
             return False
 
-    def _build_criterion(
-        self, spec: CriterionSpec, events: Iterable[AuditEvent]
+    def _build_chain_integrity(
+        self, spec: CriterionSpec, chain_verified: Optional[bool]
     ) -> CriterionEvidence:
+        # The audit store does not expose chain verification -> unmeasurable.
+        if chain_verified is None:
+            return CriterionEvidence(
+                criterion=spec.key,
+                description=spec.description,
+                verified=False,
+                evidence_count=0,
+                source_actions=spec.source_actions,
+                items=(),
+                unverified_reason=(
+                    "the configured audit store does not expose hash-chain "
+                    "verification"
+                ),
+            )
+        # Verification ran -> the criterion is measured. The pass/fail result is
+        # carried on the evidence item's outcome (a failed chain is a real,
+        # measured adverse finding, not an unmeasured control).
+        item = EvidenceItem(
+            event_id="audit-chain-integrity",
+            timestamp=_now_iso(),
+            action="audit_chain_verification",
+            actor="system",
+            outcome="success" if chain_verified else "failure",
+            resource="audit_chain",
+        )
+        return CriterionEvidence(
+            criterion=spec.key,
+            description=spec.description,
+            verified=True,
+            evidence_count=1,
+            source_actions=spec.source_actions,
+            items=(item,),
+            unverified_reason=(
+                None
+                if chain_verified
+                else "audit chain integrity verification FAILED -- tamper detected"
+            ),
+        )
+
+    def _build_criterion(
+        self,
+        spec: CriterionSpec,
+        events: Iterable[AuditEvent],
+        chain_verified: Optional[bool],
+    ) -> CriterionEvidence:
+        if spec.kind == "chain_integrity":
+            return self._build_chain_integrity(spec, chain_verified)
+
         # No emitting producer for this criterion -> honest verified=False.
         if spec.unverifiable_reason is not None:
             return CriterionEvidence(
