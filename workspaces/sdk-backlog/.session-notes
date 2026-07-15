@@ -1,77 +1,48 @@
-# Session Notes — 2026-07-15 (backlog convergence + 4-package release)
+# Session Notes — 2026-07-15
 
 ## Where we are
 
-Drove the actionable SDK backlog to **converged + merged + released**. Four packages
-shipped to PyPI this session, all clean-venv verified. main clean, tree clean.
-Un-enrolled PUBLIC repo, solo. Phase 05-codify.
+Drove Wave 1 of #1712 (MCP 2025-11-25 spec-parity) to merged + released + clean-venv-verified:
+**kailash-mcp 0.3.2** (JWT audience fail-closed · client OAuth 2.1 discovery · server tool-result/
+resources/lifecycle conformance). #1712 stays OPEN — ~4–5 waves remain. main clean, tree clean.
 
-## Shipped this session (PyPI + GitHub Release + clean-venv verified)
+## Read first
 
-| Package | Version | Tag | Issue | Verified surface |
-| ------- | ------- | --- | ----- | ---------------- |
-| kailash | **2.53.0** (minor, TestPyPI-validated) | `v2.53.0` | #1712 | `import kailash` + `_negotiate_mcp_protocol_version` |
-| kailash-mcp | **0.3.1** (patch) | `mcp-v0.3.1` | #1712 | fail-closed spawn: unlisted `sh` REJECTED |
-| kailash-kaizen | **2.33.1** (patch) | `kaizen-v2.33.1` | #1755 | `_coerce_score` NaN→None / "0.9"→0.9 / "high"→None |
-| kailash-pact | **0.15.0** (minor, TestPyPI-validated) | `pact-v0.15.0` | #1711 | `from pact import EvidenceCollector, EvidencePackage` |
+1. GH #1712 — the checklist + my two progress comments (what's met vs remaining waves)
+2. `workspaces/sdk-backlog/1712-shard-plan.md` — wave/shard plan + file-conflict serialization
+3. `.claude/rules/agents.md` § "Holistic Post-Multi-Wave Redteam" — MANDATORY before declaring #1712 converged
+4. `CLAUDE.md` — project directives
 
-## Issues actioned
+## In-flight state
 
-- **#1755** (CLOSED) RAG verification-parse hardening — root-cause fix at the single parse
-  chokepoint (coerce score fields to finite float; ill-formed → heuristic fallback) + 16
-  regression tests → PR #1758 → kaizen 2.33.1.
-- **#1712** (OPEN — first shard) MCP 2025-11-25 spec-parity — fail-closed local-server spawn
-  allowlist wired at ALL 5 spawn surfaces (2 sibling gaps caught by adversarial review:
-  `EnhancedStdioTransport.connect`, discovery health-probe), explicit null-id rejection,
-  protocolVersion negotiation in BOTH `kailash_mcp/server.py` AND trust-plane `EATPMCPServer`
-  → PR #1759 (3 commits) → kailash 2.53.0 + kailash-mcp 0.3.1. **Checklist follow-ups tracked
-  on the issue** (RFC 8707 audience, Streamable HTTP + MCP-Session-Id, notification-202
-  chokepoint, OAuth PRM, sampling/roots/elicitation; + 2 LOW: allowlist basename-spoof,
-  validator consolidation).
-- **#1694** (CLOSED) onboarding-suite strand — BUILD asks already complete on main (commit
-  `1c1e8c691`, ground-truth-verified vs wired hooks).
-- **#1711** (CLOSED) SOC 2 evidence-collection — full CC6+CC7+CC8 EvidencePackage collector in
-  kailash-pact (tenant-scoped fail-closed, no-fabrication, producer↔consumer contract), 15
-  tests → PR #1761 → kailash-pact 0.15.0. LOW follow-up on issue: `_scan_window` 1M scan_limit
-  can undercount a >1M-event tenant (completeness, not a leak) — push tenant scope into
-  `AuditFilter`.
+- None uncommitted — all merged + released, worktrees pruned. Fresh start on remaining waves.
 
-## Pending / handoff (needs you — cross-repo, agent can't self-authorize)
+## Executed this session
 
-1. **loom onboarding-suite cluster** (#1694 follow-on): entries #10/#12/#13/#16/#17/#18 are
-   stranded on loom-canonical `/sync`-distributed surfaces. Durable fix = **loom Gate-1
-   re-ingestion**, NOT a BUILD edit (BUILD edits get re-clobbered by `/sync-to-build`).
-2. **#1712 cross-SDK mirror — DONE this session** (user-authorized; grant + precise
-   cross-ref in `journal/0032`, which names the target per the mandated
-   `cross-repo-authorized:` marker): filed the MCP fail-closed spawn-allowlist +
-   protocolVersion-negotiation parity issue on the **Rust SDK** BUILD repo (`cross-sdk`
-   label, cross-ref to py #1712). Role-only note left on py #1712 (Rule-6: no private-repo
-   ref on the public issue). No further cross-repo action pending.
+- Released **kailash-mcp 0.3.2** to PyPI (tag `mcp-v0.3.2`, publish-pypi run success) + GitHub Release;
+  clean-venv install/import verified. (External — not recoverable from this repo's git log.)
 
-## Blocked (correct — do not unblock)
+## Outstanding ledger (forest)
 
-- #1720 / #1721 — co-owner scope calls.
-- FVERT (Vertex-Claude LIVE) — GCP creds not in `.env`.
-- #1727 — py side already landed; only the rs sibling remains.
+| ID | Item | Value-anchor (MUST-1 source) | Status |
+| -- | ---- | ---------------------------- | ------ |
+| F1 | #1712 remaining waves: server-side OAuth PRM/WWW-Auth · Streamable HTTP transport (+MCP-Protocol-Version/Session-Id) · pagination · completions ranking · logging notifications/message · sampling/roots/elicitation · stdio wire-format | user-filed #1712 checklist | queued — Wave 1 released; waves 2–6 open |
+| F2 | loom onboarding-suite cluster (#1694 follow-on) — stranded on loom `/sync` surfaces | #1694 (user-filed) | BLOCKED — loom Gate-1 re-ingestion, NOT a BUILD edit |
+| F3 | #1720 retire legacy→four-axis LLM redundancy | #1720 (user's #1717 follow-on) | BLOCKED — co-owner scope call |
+| F4 | #1721 py preset-registry drift vs Rust fixture | #1721 (cross-SDK contract) | BLOCKED — co-owner scope call |
+| F5 | FVERT Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in `.env` |
+| F6 | #1727 openai_chat max_completion_tokens — rs sibling | #1727 (cross-SDK) | BLOCKED — py side landed; rs sibling only (cross-repo) |
 
-## Traps hit this session (operational)
+Closed this session: `#1712-wave1` → kailash-mcp 0.3.2 (PRs #1765/#1766/#1767 + release #1768; tag mcp-v0.3.2). #1712 itself stays open (F1).
 
-- **Server-side agent throttle** ("Server is temporarily limiting requests · not your usage
-  limit") killed multi-agent waves AND single agents repeatedly. Response: backed off to
-  2-agent waves, then did the security review + the whole release INLINE (no agents) when the
-  throttle was hot. #1711 finally landed on a single-agent retry once it eased. A blocked/
-  errored reviewer = ZERO evidence — did the #1761 security review inline rather than counting
-  a throttled agent clean.
-- **TestPyPI install**: `uv pip install --index-url testpypi --extra-index-url pypi` needs
-  `--index-strategy unsafe-best-match` (deps live on prod) AND `--refresh` (uv index cache
-  lag). Simple-index reflects slower than the JSON API — check
-  `test.pypi.org/pypi/<pkg>/<ver>/json` before retrying.
-- **`| tail` masks a piped command's non-zero exit** — a failing `uv pip install | tail`
-  returns 0, defeating `&& break` retry loops. Capture to a log file, check the real exit code.
-- **kaizen RAG advanced nodes need the `[rag]` extra** (numpy via `similarity.py` side-effect
-  import) — pre-existing; base `import kaizen` works, `kaizen.nodes.rag.advanced` needs
-  `kailash-kaizen[rag]`.
-- **security-reviewer agent has no Bash** (Read/Grep/Glob only) + sandbox `rg` broken → cannot
-  review git-ref diffs. Use a Bash-capable `reviewer` for ref/pytest reviews, or sweep inline.
-- **release/v\* branch auto-skips the PR-gate matrix**; a metadata-only release-prep PR shows
-  all-SKIPPED (correct) — the code already passed the matrix on the feature PR.
+## Traps
+
+- kailash-mcp is NOT editable-installed in `.venv`. Run its tests as `PYTHONPATH=packages/kailash-mcp/src .venv/bin/python -m pytest`. Bare/global `python` has fastmcp 2.12.4 → `@mcp.tool()` non-callable → spurious #1708 failures; canonical `.venv` passes.
+- Worktree/main LSP split: pyright "No parameter named X" / "unknown attribute" on test files = LSP reading main's pre-merge copy, NOT real; clears on merge.
+- `release/*` branches auto-skip the PR-gate matrix (all checks "skipping" — correct); feature PRs run the full matrix + emit DUPLICATE `pull_request` runs — pin head SHA when reading checks.
+- PyPI cache lag: `uv pip install --refresh "<pkg>==<ver>"` may fail attempt 1 ("unsatisfiable") right after publish; retry (succeeded attempt 2).
+- Remaining #1712 waves serialize on server.py / transports.py / client.py — can't fully parallelize; see shard-plan.
+
+## Open questions for the human
+
+- None pressing — remaining waves queued + value-anchored on #1712; recommend a fresh session for the Streamable HTTP transport + holistic redteam.

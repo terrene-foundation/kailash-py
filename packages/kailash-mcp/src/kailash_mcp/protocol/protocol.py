@@ -52,15 +52,19 @@ Examples:
 """
 
 import asyncio
+import inspect
 import json
 import logging
+import posixpath
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from urllib.parse import unquote, urlsplit
 
 from kailash_mcp.errors import MCPError, MCPErrorCode
 
@@ -551,13 +555,31 @@ class ProgressManager:
 
 
 class CancellationManager:
-    """Manages request cancellation and cleanup."""
+    """Manages request cancellation and cleanup.
+
+    The cancelled-request set is BOUNDED (``_MAX_CANCELLED_REQUESTS`` via FIFO
+    eviction) so a client streaming unique request ids cannot grow it without
+    limit (remote OOM/DoS), and stored reasons are length-capped
+    (``_MAX_REASON_LEN``). Request ids are client-scoped by the server (the
+    ``MCPServer`` keys by a ``client_id``-prefixed composite), so
+    ``clear_cancelled_by_prefix`` lets the server drop one client's state on
+    disconnect.
+    """
+
+    # Cap on the retained cancelled-request set. Mirrors the server-side
+    # ``_MAX_SEEN_REQUEST_IDS`` bound; a cancelled id beyond the cap is
+    # FIFO-evicted so client-controlled ids cannot grow the set without bound.
+    _MAX_CANCELLED_REQUESTS = 4096
+    # Cap on a stored cancellation reason string (client-supplied, untrusted).
+    _MAX_REASON_LEN = 1024
 
     def __init__(self):
         """Initialize cancellation manager."""
         self._cancelled_requests: set[str] = set()
+        self._cancelled_order: deque = deque()
         self._cancellation_callbacks: Dict[str, List[Callable]] = {}
         self._request_cleanup: Dict[str, List[Callable]] = {}
+        self._cancellation_reasons: Dict[str, Optional[str]] = {}
 
     async def cancel_request(
         self, request_id: str, reason: Optional[str] = None
@@ -571,12 +593,20 @@ class CancellationManager:
         if request_id in self._cancelled_requests:
             return  # Already cancelled
 
-        self._cancelled_requests.add(request_id)
+        # Cap the client-supplied reason before storing (untrusted length).
+        if isinstance(reason, str) and len(reason) > self._MAX_REASON_LEN:
+            reason = reason[: self._MAX_REASON_LEN]
 
-        # Store cancellation reason
-        if not hasattr(self, "_cancellation_reasons"):
-            self._cancellation_reasons = {}
+        self._cancelled_requests.add(request_id)
+        self._cancelled_order.append(request_id)
         self._cancellation_reasons[request_id] = reason
+
+        # Bound the set: FIFO-evict the oldest cancelled ids beyond the cap so
+        # a client streaming unique ids cannot grow it without bound.
+        while len(self._cancelled_order) > self._MAX_CANCELLED_REQUESTS:
+            evicted = self._cancelled_order.popleft()
+            self._cancelled_requests.discard(evicted)
+            self._cancellation_reasons.pop(evicted, None)
 
         # Create cancellation notification
         notification = CancelledNotification.create(request_id, reason)
@@ -647,8 +677,34 @@ class CancellationManager:
             request_id: Request ID to clear
         """
         self._cancelled_requests.discard(request_id)
-        if hasattr(self, "_cancellation_reasons"):
-            self._cancellation_reasons.pop(request_id, None)
+        self._cancellation_reasons.pop(request_id, None)
+        try:
+            self._cancelled_order.remove(request_id)
+        except ValueError:
+            pass
+
+    def clear_cancelled_by_prefix(self, prefix: str) -> int:
+        """Drop all cancelled-request state whose id starts with ``prefix``.
+
+        The server keys cancellation by a ``client_id``-prefixed composite; on
+        client disconnect it calls this with ``f"{client_id}\\x00"`` to evict
+        that one client's cancellation state (bounded-state cleanup — the
+        per-client eviction the disconnect handler needs). Returns the number
+        of ids removed.
+        """
+        to_remove = [rid for rid in self._cancelled_requests if rid.startswith(prefix)]
+        if not to_remove:
+            return 0
+        removed = set(to_remove)
+        for rid in to_remove:
+            self._cancelled_requests.discard(rid)
+            self._cancellation_reasons.pop(rid, None)
+            self._cancellation_callbacks.pop(rid, None)
+            self._request_cleanup.pop(rid, None)
+        remaining = [rid for rid in self._cancelled_order if rid not in removed]
+        self._cancelled_order.clear()
+        self._cancelled_order.extend(remaining)
+        return len(to_remove)
 
     def get_cancellation_reason(self, request_id: str) -> Optional[str]:
         """Get cancellation reason for a request.
@@ -659,8 +715,6 @@ class CancellationManager:
         Returns:
             Cancellation reason if cancelled, None otherwise
         """
-        if not hasattr(self, "_cancellation_reasons"):
-            self._cancellation_reasons = {}
         return self._cancellation_reasons.get(request_id)
 
 
@@ -895,6 +949,62 @@ class RootsManager:
         """
         return self._roots.copy()
 
+    @staticmethod
+    def _normalize_uri(uri: str) -> "Optional[tuple[str, str, str]]":
+        """Return ``(scheme, netloc, normalized_path)`` for ``uri`` or ``None``.
+
+        The path component is percent-decoded ONCE (``urllib.parse.unquote``)
+        then normalised (``posixpath.normpath``). ANY decoded path carrying a
+        ``..`` traversal segment is REJECTED (returns ``None``) — a crafted
+        ``file:///workspace/../../etc/passwd`` (or its ``%2e%2e`` percent-encoded
+        form) MUST NOT be treated as within any root. The reject fires BEFORE
+        ``normpath`` collapses the ``..`` and hides the escape (security.md —
+        path normalization / root-URI consent).
+        """
+        try:
+            parts = urlsplit(uri)
+        except ValueError:
+            return None
+        decoded_path = unquote(parts.path)
+        # Reject any traversal segment BEFORE normalisation collapses it.
+        if any(seg == ".." for seg in decoded_path.split("/")):
+            return None
+        normalized = posixpath.normpath(decoded_path) if decoded_path else decoded_path
+        return (parts.scheme.lower(), parts.netloc, normalized)
+
+    @staticmethod
+    def _uri_within_root(uri: str, root_uri: str) -> bool:
+        """Return True only when ``uri`` is the root itself or a path-SEGMENT
+        descendant of it, after normalisation.
+
+        Two security boundaries compose here:
+
+        * **Path-SEGMENT (not substring) matching** — a bare
+          ``uri.startswith(root_uri)`` authorizes ``file:///workspace-evil``
+          when ``file:///workspace`` is granted; the trailing-slash boundary
+          rejects a sibling directory sharing a name prefix.
+        * **Normalisation** — both URIs are percent-decoded once and
+          ``posixpath.normpath``-ed, and any ``..`` traversal segment is
+          rejected outright (``_normalize_uri`` returns ``None``), so
+          ``file:///workspace/../../etc/passwd`` no longer lexically matches
+          ``file:///workspace/`` (security.md — no fail-open).
+
+        The scheme + authority (netloc) MUST also match; a URI on a different
+        scheme/host is never within the root.
+        """
+        u = RootsManager._normalize_uri(uri)
+        r = RootsManager._normalize_uri(root_uri)
+        if u is None or r is None:
+            return False
+        u_scheme, u_netloc, u_path = u
+        r_scheme, r_netloc, r_path = r
+        if u_scheme != r_scheme or u_netloc != r_netloc:
+            return False
+        if u_path == r_path:
+            return True
+        boundary = r_path if r_path.endswith("/") else r_path + "/"
+        return u_path.startswith(boundary)
+
     def find_root_for_uri(self, uri: str) -> Optional[Dict[str, Any]]:
         """Find the root that contains the given URI.
 
@@ -905,7 +1015,7 @@ class RootsManager:
             Root object if found, None otherwise
         """
         for root in self._roots:
-            if uri.startswith(root["uri"]):
+            if self._uri_within_root(uri, root["uri"]):
                 return root
         return None
 
@@ -917,34 +1027,59 @@ class RootsManager:
         """
         self._access_validators.append(validator)
 
-    async def validate_access(self, uri: str, operation: str = "read") -> bool:
+    async def validate_access(
+        self,
+        uri: str,
+        operation: str = "read",
+        user_context: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """Validate access to a URI.
 
         Args:
-            uri: URI to validate
-            operation: Operation type
+            uri: URI to validate.
+            operation: Operation type.
+            user_context: Optional caller/session context (e.g. the client's
+                declared capabilities + identity). Forwarded to any registered
+                access validator whose signature accepts it, so the consent
+                decision can be scoped per-caller. The server call site
+                (``MCPServer._handle_roots_list``) passes the client's
+                ``client_info`` entry here; a validator that never landed this
+                parameter previously raised ``TypeError`` (the latent bug this
+                fixes).
 
         Returns:
-            True if access is allowed
+            True if access is allowed.
         """
-        # Check if URI is under any root
+        # Check if URI is under any root — path-SEGMENT matching (security.md),
+        # NOT substring, so ``file:///workspace`` does not authorize
+        # ``file:///workspace-evil``.
         is_under_root = False
         for root in self._roots:
-            root_uri = root["uri"]
-            if uri.startswith(root_uri):
+            if self._uri_within_root(uri, root["uri"]):
                 is_under_root = True
                 break
 
         if not is_under_root:
             return False
 
-        # Run access validators
+        # Run access validators. A validator may opt into the per-caller
+        # decision by declaring a third parameter; two-arg validators keep the
+        # legacy (uri, operation) contract. This consumes ``user_context`` in
+        # the consent decision (zero-tolerance Rule 3c) without breaking
+        # pre-existing 2-arg validators.
         for validator in self._access_validators:
             try:
+                accepts_context = len(inspect.signature(validator).parameters) >= 3
                 if asyncio.iscoroutinefunction(validator):
-                    allowed = await validator(uri, operation)
+                    if accepts_context:
+                        allowed = await validator(uri, operation, user_context)
+                    else:
+                        allowed = await validator(uri, operation)
                 else:
-                    allowed = validator(uri, operation)
+                    if accepts_context:
+                        allowed = validator(uri, operation, user_context)
+                    else:
+                        allowed = validator(uri, operation)
 
                 if not allowed:
                     return False
