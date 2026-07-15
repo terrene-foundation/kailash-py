@@ -63,6 +63,7 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Union
@@ -647,10 +648,16 @@ class MCPServer:
         self.client_info: Dict[str, Dict[str, Any]] = {}
         self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
 
-        # Per-session (client_id) set of request ids already used. JSON-RPC
-        # request ids MUST NOT be reused within a session (spec 2025-11-25);
-        # a duplicate id is rejected with an Invalid Request error.
+        # Per-session (client_id) request ids already used. JSON-RPC request
+        # ids MUST NOT be reused within a session (spec 2025-11-25); a
+        # duplicate id is rejected with an Invalid Request error. BOTH maps are
+        # BOUNDED to avoid a remote OOM/DoS: the per-session id set is capped
+        # (FIFO eviction via the order deque, _MAX_SEEN_REQUEST_IDS) so a
+        # client streaming unique ids cannot grow it without bound, and both
+        # are popped on disconnect (_on_ws_disconnect) so churned connections
+        # do not leak.
         self._session_seen_ids: Dict[str, set] = {}
+        self._session_seen_order: Dict[str, deque] = {}
 
         # Resource subscription support
         self.enable_subscriptions = enable_subscriptions
@@ -1892,6 +1899,7 @@ class MCPServer:
                 host=self.websocket_host,
                 port=self.websocket_port,
                 message_handler=self._handle_websocket_message,  # type: ignore[reportArgumentType]
+                disconnect_handler=self._on_ws_disconnect,
                 auth_provider=self.auth_provider,
                 timeout=self.transport_timeout,
                 max_message_size=self.max_request_size,
@@ -1928,6 +1936,48 @@ class MCPServer:
             if self._transport:
                 await self._transport.disconnect()
                 self._transport = None
+
+    # Cap on the per-session request-id reuse-tracking set. Bounds memory so a
+    # client streaming unique ids cannot grow the set without limit; reuse is
+    # still detected within this most-recent-N window.
+    _MAX_SEEN_REQUEST_IDS = 4096
+
+    def _mark_request_id_seen(self, client_id: str, request_id: Any) -> bool:
+        """Record ``request_id`` for ``client_id`` and report prior use.
+
+        Returns True if the id was ALREADY used in this session (the caller
+        rejects it as an Invalid Request). Otherwise records it — bounded to
+        ``_MAX_SEEN_REQUEST_IDS`` via FIFO eviction — and returns False.
+        Non-hashable ids (a JSON array id) cannot be set members and pass
+        through untracked (return False) rather than erroring.
+        """
+        try:
+            hash(request_id)
+        except TypeError:
+            return False
+        seen = self._session_seen_ids.setdefault(client_id, set())
+        if request_id in seen:
+            return True
+        order = self._session_seen_order.setdefault(client_id, deque())
+        seen.add(request_id)
+        order.append(request_id)
+        if len(order) > self._MAX_SEEN_REQUEST_IDS:
+            evicted = order.popleft()
+            seen.discard(evicted)
+        return False
+
+    def _on_ws_disconnect(self, client_id: str) -> None:
+        """Release all per-connection server state when a client disconnects.
+
+        Wired as the WebSocket transport's disconnect handler. Without this the
+        server-side maps (`_session_seen_ids` / `_session_seen_order` /
+        `client_info`) grow one entry per connection forever — a remote OOM
+        vector on a public server, since the transport only clears its OWN
+        client maps on disconnect.
+        """
+        self._session_seen_ids.pop(client_id, None)
+        self._session_seen_order.pop(client_id, None)
+        self.client_info.pop(client_id, None)
 
     async def _handle_websocket_message(
         self, request: Dict[str, Any], client_id: str
@@ -1996,27 +2046,20 @@ class MCPServer:
                 return None
 
             # Per-session request-id reuse: an id already used in this session
-            # is an Invalid Request (spec 2025-11-25). Non-hashable ids (a JSON
-            # array id) cannot be tracked and are passed through.
-            seen = self._session_seen_ids.setdefault(client_id, set())
-            try:
-                already_used = request_id in seen
-            except TypeError:
-                already_used = False
-            else:
-                if already_used:
-                    return {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32600,
-                            "message": (
-                                f"Request id already used in this session: "
-                                f"{request_id!r}"
-                            ),
-                        },
-                        "id": request_id,
-                    }
-                seen.add(request_id)
+            # is an Invalid Request (spec 2025-11-25). Tracking is bounded (see
+            # _mark_request_id_seen); non-hashable ids pass through untracked.
+            if self._mark_request_id_seen(client_id, request_id):
+                return {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32600,
+                        "message": (
+                            f"Request id already used in this session: "
+                            f"{request_id!r}"
+                        ),
+                    },
+                    "id": request_id,
+                }
 
             return await self._dispatch_ws_method(method, params, request_id, client_id)
 

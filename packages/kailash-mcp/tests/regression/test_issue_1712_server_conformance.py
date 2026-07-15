@@ -429,3 +429,49 @@ async def test_ws_request_id_reuse_scoped_per_session():
         _ws_msg(method="tools/list", request_id=8), "client-a"
     )
     assert "result" in fresh
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_disconnect_releases_per_connection_state():
+    """On disconnect the server pops ALL state keyed on the client_id —
+    otherwise a churned connection leaks memory (a remote OOM vector)."""
+    server = _make_server()
+    await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=1), "client-x"
+    )
+    server.client_info["client-x"] = {"connected_at": 0}
+    assert "client-x" in server._session_seen_ids
+    assert "client-x" in server._session_seen_order
+    assert "client-x" in server.client_info
+
+    server._on_ws_disconnect("client-x")
+
+    assert "client-x" not in server._session_seen_ids
+    assert "client-x" not in server._session_seen_order
+    assert "client-x" not in server.client_info
+    # Idempotent: a second disconnect (or one for an unknown client) is a no-op.
+    server._on_ws_disconnect("client-x")
+    server._on_ws_disconnect("never-seen")
+
+
+@pytest.mark.regression
+def test_request_id_reuse_set_is_bounded():
+    """The per-session reuse-tracking set is capped (FIFO eviction) so a client
+    streaming unique ids cannot grow it without bound."""
+    server = _make_server()
+    cap = server._MAX_SEEN_REQUEST_IDS
+    for i in range(cap + 500):
+        # Never previously seen -> always False (recorded, not rejected).
+        assert server._mark_request_id_seen("c", i) is False
+
+    seen = server._session_seen_ids["c"]
+    order = server._session_seen_order["c"]
+    assert len(seen) <= cap
+    assert len(order) <= cap
+    # Within-window reuse is still detected...
+    assert server._mark_request_id_seen("c", cap + 499) is True
+    # ...but an id evicted past the window is no longer remembered (accepted).
+    assert server._mark_request_id_seen("c", 0) is False
+    # Non-hashable ids pass through untracked rather than erroring.
+    assert server._mark_request_id_seen("c", [1, 2]) is False
