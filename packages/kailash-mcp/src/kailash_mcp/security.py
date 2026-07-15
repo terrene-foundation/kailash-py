@@ -120,7 +120,8 @@ def validate_spawn_command(
 
     raise SpawnSecurityError(
         f"spawn command {command!r} is not in the allowlist "
-        f"(allowed: {sorted(allowed)}). Add it to `allowed_commands`, or set "
-        f"`allow_arbitrary_commands=True` to permit arbitrary commands.",
+        f"(allowed: {sorted(allowed)}). Add it to `allowed_commands`, pass "
+        f"`allow_arbitrary=True` (or set `allow_arbitrary_commands=True` in the "
+        f"client/transport config) to permit arbitrary commands.",
         command=command,
     )

@@ -65,7 +65,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _JSONRPC_VERSION = "2.0"
-_MCP_PROTOCOL_VERSION = "2024-11-05"
+
+# MCP protocol versions this trust-plane server can speak, newest first. The
+# initialize handshake NEGOTIATES rather than echoing a fixed string (a
+# hardcoded/echoed version is non-compliant with the MCP lifecycle, #1712):
+# echo the client's requested version when supported, else return the newest
+# supported version.
+_SUPPORTED_MCP_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+_LATEST_MCP_PROTOCOL_VERSION = _SUPPORTED_MCP_PROTOCOL_VERSIONS[0]
+
+
+def _negotiate_mcp_protocol_version(requested: Any) -> str:
+    """Echo the client's requested protocolVersion if supported, else newest."""
+    if isinstance(requested, str) and requested in _SUPPORTED_MCP_PROTOCOL_VERSIONS:
+        return requested
+    return _LATEST_MCP_PROTOCOL_VERSION
 
 
 def _ok_response(id: Any, result: Any) -> Dict[str, Any]:
@@ -461,8 +475,9 @@ class EATPMCPServer:
     async def _handle_initialize(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle the ``initialize`` handshake."""
         await self._ensure_initialized()
+        requested = params.get("protocolVersion") if isinstance(params, dict) else None
         return {
-            "protocolVersion": _MCP_PROTOCOL_VERSION,
+            "protocolVersion": _negotiate_mcp_protocol_version(requested),
             "capabilities": {
                 "tools": {"listChanged": False},
                 "resources": {"subscribe": False, "listChanged": False},
