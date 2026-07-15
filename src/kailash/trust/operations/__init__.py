@@ -1223,6 +1223,121 @@ class TrustOperations:
             level=VerificationLevel.FULL,
         )
 
+    async def _verify_source_chain_before_mint(
+        self,
+        chain: TrustLineageChain,
+        subject_id: str,
+    ) -> None:
+        """Fail-closed pre-sign gate for any mint that derives a *signed,
+        portable* artifact from a stored trust chain (#1710).
+
+        EATP-07 capability attestations and trust-lineage aggregates are signed,
+        portable artifacts: a relying party verifies the signature WITHOUT ever
+        seeing the underlying chain. If a mint reads the source chain via an
+        un-verified, expiry-blind path, a signed artifact can be produced from a
+        *tampered* chain or an *expired* grant and then trusted off-chain. This
+        gate closes that hole by refusing -- BEFORE any signature is produced --
+        when the source chain:
+
+        1. lacks a verifiable genesis issuer (no genesis / no issuing authority),
+        2. is expired (the grant's validity window has closed), or
+        3. fails cryptographic integrity verification (tampered signatures).
+
+        This is the single shared pre-sign verification used by EVERY mint
+        surface that reads a chain and signs a portable record (``delegate`` and
+        ``audit``), so the surfaces cannot drift (``rules/security.md`` §
+        Enforcement-Surface Parity).
+
+        Fail-closed (``rules/eatp.md``): unknown / error states DENY. Every
+        refusal raises a typed :class:`TrustError` subclass carrying ``.details``
+        and NO signature is produced on any refusal path. On a valid, unexpired,
+        genesis-anchored chain this is behaviour-invariant -- it only ever adds
+        refusals, never a new success shape.
+
+        Args:
+            chain: The source trust chain the mint reads.
+            subject_id: The agent the mint is acting for (used in error details).
+
+        Raises:
+            InvalidTrustChainError: If the chain lacks a genesis issuer, is
+                expired, or fails integrity verification.
+        """
+        # (a) Require a genesis issuer. Checked first so ``is_expired()`` and
+        # ``_verify_signatures`` never dereference a missing genesis. A chain
+        # with no verifiable genesis has no anchor of trust to mint from.
+        genesis = getattr(chain, "genesis", None)
+        if genesis is None or not getattr(genesis, "authority_id", None):
+            logger.warning(
+                "mint refused: source chain has no verifiable genesis issuer "
+                "(fail-closed)",
+                extra={"subject_id": subject_id},
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                "source chain has no verifiable genesis issuer",
+                violations=["missing_genesis_issuer"],
+            )
+
+        # (b) Reject an expired grant. Minting a fresh signed artifact from an
+        # expired chain would let the artifact outlive the grant it derives from.
+        if chain.is_expired():
+            logger.warning(
+                "mint refused: source chain grant is expired (fail-closed)",
+                extra={"subject_id": subject_id},
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                "source chain grant is expired",
+                violations=["expired_grant"],
+            )
+
+        # (c) Verify cryptographic chain integrity. Reuses the existing
+        # full-chain signature verifier (genesis + capability + delegation
+        # signatures) -- no new crypto is hand-rolled. A tampered chain fails
+        # here and no signature is produced.
+        try:
+            integrity = await self._verify_signatures(chain)
+        except (AuthorityNotFoundError, AuthorityInactiveError) as exc:
+            # An unresolvable / unusable genesis authority means the chain has
+            # no verifiable issuer -- fail closed as a missing-issuer refusal.
+            logger.warning(
+                "mint refused: source chain genesis issuer unresolved " "(fail-closed)",
+                extra={"subject_id": subject_id, "error": str(exc)},
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                "source chain genesis issuer could not be resolved",
+                violations=["missing_genesis_issuer"],
+            ) from exc
+        except InvalidSignatureError as exc:
+            # A malformed / wrong-length / unverifiable genesis signature raises
+            # (rather than returning False) from _verify_signatures' genesis
+            # check. That is a chain-integrity failure -- fail closed with the
+            # same typed refusal the returned-False integrity path uses, so a
+            # tampered genesis cannot mint a signed artifact.
+            logger.warning(
+                "mint refused: source chain has a malformed / unverifiable "
+                "signature (fail-closed)",
+                extra={"subject_id": subject_id, "error": str(exc)},
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                "source chain failed integrity verification: malformed signature",
+                violations=["chain_integrity_failed"],
+            ) from exc
+
+        if not integrity.valid:
+            logger.warning(
+                "mint refused: source chain failed integrity verification "
+                "(fail-closed)",
+                extra={"subject_id": subject_id, "reason": integrity.reason},
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                f"source chain failed integrity verification: {integrity.reason}",
+                violations=["chain_integrity_failed"],
+            )
+
     async def _verify_delegation_signature(
         self,
         delegation: DelegationRecord,
@@ -1486,6 +1601,15 @@ class TrustOperations:
         except TrustChainNotFoundError:
             raise TrustChainNotFoundError(delegator_id)
 
+        # 1b. Fail-closed pre-sign gate (#1710): verify the delegator chain's
+        # genesis issuer + validity window + cryptographic integrity BEFORE any
+        # signed, portable artifact (delegation record / derived genesis /
+        # derived capability attestations) is minted from it. Refuses a
+        # tampered / expired / genesis-less source chain (subsumes the former
+        # standalone is_expired() check via the shared helper -- one gate across
+        # every mint surface, per rules/security.md Enforcement-Surface Parity).
+        await self._verify_source_chain_before_mint(delegator_chain, delegator_id)
+
         # 2. Verify delegator has all requested capabilities
         delegator_caps = {cap.capability for cap in delegator_chain.capabilities}
         for requested_cap in capabilities:
@@ -1498,14 +1622,6 @@ class TrustOperations:
                     requested_cap,
                     f"Delegator {delegator_id} does not have capability '{requested_cap}'",
                 )
-
-        # 3. Verify delegator's trust is not expired
-        if delegator_chain.is_expired():
-            raise DelegationError(
-                "Delegator's trust chain is expired",
-                delegator_id=delegator_id,
-                delegatee_id=delegatee_id,
-            )
 
         # 4. Verify delegator can delegate (not explicitly restricted)
         delegator_constraints = [
@@ -1800,6 +1916,16 @@ class TrustOperations:
             chain = await self.trust_store.get_chain(agent_id)
         except TrustChainNotFoundError:
             raise TrustChainNotFoundError(agent_id)
+
+        # 1b. Fail-closed pre-sign gate (#1710): an AuditAnchor is a signed,
+        # portable artifact bound to this chain's ``trust_chain_hash`` -- a
+        # relying party verifies it off-chain. Verify the source chain's genesis
+        # issuer + validity window + cryptographic integrity BEFORE signing, so
+        # a tampered / expired / genesis-less chain cannot produce a signed
+        # anchor asserting a provenance the chain no longer supports (the same
+        # shared gate ``delegate`` uses -- rules/security.md Enforcement-Surface
+        # Parity).
+        await self._verify_source_chain_before_mint(chain, agent_id)
 
         # 2. Compute current trust chain hash
         trust_chain_hash = hash_chain(chain.to_dict())
