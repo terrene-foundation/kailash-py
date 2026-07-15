@@ -34,6 +34,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unmodified — this is a deprecation of the tier, not a reconciliation of
   the key lists.
 
+## [2.53.0] - 2026-07-15
+
+### Security
+
+- **Fail-closed MCP local-server spawn allowlist in the core transports**
+  (#1712). The `channels/mcp` `StdioTransport` and the `middleware/mcp` client
+  now reject an unlisted spawn command by default (previously fail-open), per
+  the MCP 2025-11-25 local-server spawn-safety requirement, with an
+  `allow_arbitrary_commands` opt-out.
+
+### Fixed
+
+- **Trust-plane MCP server (`EATPMCPServer`) negotiates `protocolVersion`**
+  instead of returning a hardcoded `2024-11-05` (#1712) — echoes a supported
+  requested version, else the newest supported.
+
 ## [2.52.0] - 2026-07-15
 
 ### Security

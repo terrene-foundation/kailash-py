@@ -2,6 +2,21 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.33.1] — 2026-07-15 — RAG verification-parse hardening (#1755)
+
+### Fixed
+
+- **`SelfCorrectingRAGNode` crashed or looped on ill-formed LLM confidence
+  (#1755).** Post-2.33.0 the RAG advanced-node parsers consume real LLM output,
+  so `_parse_verification_response` sits on a live path. It validated field
+  *presence* only: a `confidence` returned as a string raised an uncaught
+  `TypeError` at the numeric gate in `run()`, and a `NaN` confidence
+  (`json.loads` accepts the bare `NaN` literal) never met the gate — forcing the
+  self-correction loop to run to `max_corrections` every time. Every score field
+  is now coerced to a finite float at the single parse chokepoint (`_coerce_score`);
+  an ill-formed (non-numeric / non-finite) score routes to the existing heuristic
+  fallback.
+
 ## [2.33.0] — 2026-07-15 — RAG advanced-node parser fix + Tier-1 test-hang resolution
 
 ### Fixed
