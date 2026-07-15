@@ -40,11 +40,140 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 from kailash.trust._canonical import canonical_scalars
 
-__all__ = ["jcs_encode", "jcs_subject_hash"]
+__all__ = [
+    "MAX_DIGEST_CHILDREN",
+    "MAX_DIGEST_DEPTH",
+    "MAX_DIGEST_NODES",
+    "MAX_DIGEST_STRING_TOTAL_BYTES",
+    "jcs_encode",
+    "jcs_subject_hash",
+]
+
+# ---------------------------------------------------------------------------
+# Fail-closed resource bounds on the digest ingress (issue #1713).
+#
+# `jcs_encode` is the SHARED ingress for every attacker-influenceable subject
+# that reaches this canonical encoder: the BH3 origin digest
+# (`reasoning.origin.compute_origin_digest`, #1510) AND the EATP Audit-Anchor
+# external-`subject_hash` path (`pact.audit`, #1590), plus the weft / bilateral
+# / attestation content-hash paths. Every one of those runs an attacker-shaped
+# `Any` through TWO unbounded recursive passes (`canonical_scalars` then
+# `_encode`) and a SHA-256 BEFORE any auth check — an unauthenticated CPU /
+# memory denial-of-service. A crafted wide/large payload burns unbounded
+# CPU+memory; a deeply-nested payload drives the recursion toward RecursionError
+# (swallowed to False on verify, but propagated UNCAUGHT on the sign path).
+#
+# The guard below traverses the RAW input ONCE, iteratively (its own traversal
+# CANNOT RecursionError), and fails closed with a typed ValueError naming the
+# exceeded limit + the observed value BEFORE canonicalization/hashing runs. The
+# magnitudes mirror the PACT org-compilation limits (`pact.compilation`,
+# `pact-governance.md` §7) — they are DoS backstops, NOT business limits, and
+# are generous enough that every legitimate subject passes unchanged. A
+# reject-only bound changes ZERO bytes for in-bounds input, so the pinned
+# cross-SDK conformance vectors stay byte-identical (no cross-SDK lockstep).
+# ---------------------------------------------------------------------------
+
+MAX_DIGEST_DEPTH: int = 50
+"""Maximum container-nesting depth of a subject passed to :func:`jcs_encode`."""
+
+MAX_DIGEST_NODES: int = 100_000
+"""Maximum total nodes (scalars + containers + dict keys) traversed."""
+
+MAX_DIGEST_CHILDREN: int = 500
+"""Maximum direct children (entries / elements) of any single container."""
+
+MAX_DIGEST_STRING_TOTAL_BYTES: int = 10_000_000
+"""Maximum cumulative UTF-8 byte length of all strings/bytes in the subject
+(10 MB) — rejects a single multi-GB string or the sum of many large ones."""
+
+
+def _check_digest_bounds(root: Any) -> None:
+    """Fail-closed resource-bound check over the RAW digest input (issue #1713).
+
+    Traverses ``root`` ONCE with an explicit stack (never Python recursion — so
+    a deeply-nested adversarial payload cannot RecursionError the guard itself),
+    enforcing :data:`MAX_DIGEST_DEPTH`, :data:`MAX_DIGEST_NODES`,
+    :data:`MAX_DIGEST_CHILDREN`, and :data:`MAX_DIGEST_STRING_TOTAL_BYTES`. Runs
+    BEFORE :func:`canonical_scalars` / :func:`_encode` / the SHA-256 so an
+    oversize subject is rejected before any unbounded work.
+
+    Raises:
+        ValueError: ``origin-oversize-rejected``-class error naming the exceeded
+            limit AND the observed value. Fail-closed: unknown/error → reject
+            (never sign/verify).
+    """
+    total_nodes = 0
+    total_str_bytes = 0
+    # Stack of (node, depth); iterative to bound the guard's own memory/stack.
+    stack: list[tuple[Any, int]] = [(root, 1)]
+    while stack:
+        node, depth = stack.pop()
+        total_nodes += 1
+        if total_nodes > MAX_DIGEST_NODES:
+            raise ValueError(
+                "origin-oversize-rejected: subject exceeds max total nodes "
+                f"(limit={MAX_DIGEST_NODES}, observed>{MAX_DIGEST_NODES})"
+            )
+        if depth > MAX_DIGEST_DEPTH:
+            raise ValueError(
+                "origin-oversize-rejected: subject exceeds max nesting depth "
+                f"(limit={MAX_DIGEST_DEPTH}, observed={depth})"
+            )
+
+        # Leaf scalars carrying byte weight — accumulate and stop descending.
+        if isinstance(node, str):
+            total_str_bytes += len(node.encode("utf-8"))
+            if total_str_bytes > MAX_DIGEST_STRING_TOTAL_BYTES:
+                raise ValueError(
+                    "origin-oversize-rejected: subject exceeds max cumulative "
+                    f"string length (limit={MAX_DIGEST_STRING_TOTAL_BYTES} bytes, "
+                    f"observed>{MAX_DIGEST_STRING_TOTAL_BYTES})"
+                )
+            continue
+        if isinstance(node, (bytes, bytearray)):
+            total_str_bytes += len(node)
+            if total_str_bytes > MAX_DIGEST_STRING_TOTAL_BYTES:
+                raise ValueError(
+                    "origin-oversize-rejected: subject exceeds max cumulative "
+                    f"string length (limit={MAX_DIGEST_STRING_TOTAL_BYTES} bytes, "
+                    f"observed>{MAX_DIGEST_STRING_TOTAL_BYTES})"
+                )
+            continue
+
+        # Containers — count direct children, then descend. Mirrors the type
+        # whitelist canonical_scalars recurses into (dict / set / list / tuple /
+        # dataclass) so the guard sees exactly what the encoder will.
+        children: list[Any] | None = None
+        if not isinstance(node, type) and is_dataclass(node):
+            children = [getattr(node, f.name) for f in fields(node)]
+        elif isinstance(node, dict):
+            # Both keys and values are traversed by the encoder; count entries.
+            if len(node) > MAX_DIGEST_CHILDREN:
+                raise ValueError(
+                    "origin-oversize-rejected: container exceeds max children "
+                    f"(limit={MAX_DIGEST_CHILDREN}, observed={len(node)})"
+                )
+            for key, value in node.items():
+                stack.append((key, depth + 1))
+                stack.append((value, depth + 1))
+            continue
+        elif isinstance(node, (list, tuple, set, frozenset)):
+            children = list(node)
+
+        if children is not None:
+            if len(children) > MAX_DIGEST_CHILDREN:
+                raise ValueError(
+                    "origin-oversize-rejected: container exceeds max children "
+                    f"(limit={MAX_DIGEST_CHILDREN}, observed={len(children)})"
+                )
+            for child in children:
+                stack.append((child, depth + 1))
+
 
 # repr(float) either has an exponent ("1e+21", "1.5e-08") or does not
 # ("123.45", "1.0"). Split on the exponent marker to recover mantissa + exponent.
@@ -237,10 +366,15 @@ def jcs_encode(value: Any) -> str:
     sorted by UTF-16 code unit, no inter-token whitespace.
 
     Raises:
-        ValueError: if ``value`` contains a non-finite float.
+        ValueError: if ``value`` exceeds a digest resource bound (issue #1713 —
+            depth / node-count / per-container children / cumulative string
+            length), or if ``value`` contains a non-finite float.
         TypeError: if ``value`` contains a value with no RFC-8785 encoding
             after normalization, or a non-string object key.
     """
+    # Fail-closed resource-bound check on the RAW input BEFORE the two unbounded
+    # recursive passes (canonical_scalars → _encode) + hash run (issue #1713).
+    _check_digest_bounds(value)
     normalized = canonical_scalars(value)
     return _encode(normalized)
 
