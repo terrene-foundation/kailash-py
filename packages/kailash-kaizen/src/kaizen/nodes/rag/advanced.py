@@ -13,6 +13,7 @@ All techniques use existing Kailash components and WorkflowBuilder patterns.
 
 import json
 import logging
+import math
 import os
 from typing import Any, Dict, List, Optional
 
@@ -653,14 +654,33 @@ Assess the quality and provide improvement suggestions:
                 json_str = content[json_start:json_end]
                 verification = json.loads(json_str)
 
-                # Validate required fields
+                # Validate required fields — presence AND type/finiteness.
+                # An LLM may emit a score as a string ("0.9") or a non-finite
+                # value (NaN/Infinity — json.loads accepts both). Presence
+                # alone is insufficient: a string crashes the downstream
+                # numeric gate (`confidence >= threshold`) with an uncaught
+                # TypeError, and a NaN silently never meets the gate, forcing
+                # the self-correction loop to run to max_corrections. Coerce
+                # every score field; if any is ill-formed, treat the whole
+                # response as unparseable and route to the heuristic fallback.
                 required_fields = [
                     "confidence",
                     "retrieval_quality",
                     "generation_quality",
                 ]
                 if all(field in verification for field in required_fields):
-                    return verification
+                    coerced = {
+                        field: self._coerce_score(verification[field])
+                        for field in required_fields
+                    }
+                    if all(value is not None for value in coerced.values()):
+                        verification.update(coerced)
+                        return verification
+                    logger.warning(
+                        "Verification response had ill-formed score field(s) "
+                        "(non-numeric or non-finite); falling back to "
+                        "heuristic assessment"
+                    )
 
             # Fallback if parsing fails
             return self._create_fallback_verification(content)
@@ -668,6 +688,25 @@ Assess the quality and provide improvement suggestions:
         except Exception as e:
             logger.warning(f"Failed to parse verification response: {e}")
             return self._create_fallback_verification(str(e))
+
+    @staticmethod
+    def _coerce_score(value: Any) -> Optional[float]:
+        """Coerce an LLM-provided quality score to a finite float.
+
+        Returns the float value when ``value`` is a real number (or a numeric
+        string like ``"0.9"``) and finite; returns ``None`` when the value is
+        non-numeric or non-finite (``NaN`` / ``Infinity``). ``None`` signals
+        an ill-formed score so the caller can route to the heuristic fallback
+        instead of comparing an uncoercible value against the confidence
+        threshold (issue #1755).
+        """
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(score):
+            return None
+        return score
 
     def _create_fallback_verification(self, content: str) -> Dict[str, Any]:
         """Create fallback verification when parsing fails"""
