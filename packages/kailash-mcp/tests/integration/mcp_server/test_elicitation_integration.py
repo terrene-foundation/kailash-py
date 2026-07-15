@@ -64,10 +64,9 @@ per spec § 4.9 Cross-SDK Parity table (kailash-rs#471, kailash-py#572).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Coroutine, Callable, Dict, List
+from typing import Any, Callable, Coroutine, Dict, List
 
 import pytest
-
 from kailash_mcp.errors import MCPError, MCPErrorCode, ValidationError
 from kailash_mcp.server import MCPServer
 
@@ -134,6 +133,12 @@ def server() -> MCPServer:
         enable_metrics=False,
         enable_subscriptions=False,
     )
+    # Register a client that advertised the ``elicitation`` capability during
+    # initialize (spec 2025-11-25). The server's ElicitationSystem is
+    # capability-gated — it fails closed unless a connected client supports
+    # elicitation — so this mirrors the realistic production precondition for
+    # sending elicitation/create.
+    srv.client_info["test-client"] = {"capabilities": {"elicitation": {}}}
     return srv
 
 

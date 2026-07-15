@@ -88,6 +88,20 @@ class MCPErrorCode(Enum):
     MCP_TRANSPORT_REBOUND = -32002  # alias of AUTHENTICATION_FAILED
     MCP_SCHEMA_VALIDATION = -32602  # alias of INVALID_PARAMS
 
+    # MCP 2025-11-25 sampling/createMessage wire codes — the JSON-RPC error
+    # payloads for the human-in-the-loop (HITL) approval outcomes on a
+    # server-initiated sampling request. Mirrors the elicitation block above.
+    # Distinct application-range values (< -32768, outside the JSON-RPC
+    # reserved band) keep sampling rejection/timeout/decline greppable and
+    # distinct from the elicitation cancellation code (-32800). The server
+    # does NOT auto-approve model-generated content: an unbound approver
+    # fails closed with MCP_SAMPLING_REJECTED (security.md HITL fail-closed).
+    MCP_SAMPLING_REJECTED = (
+        -32810
+    )  # HITL fail-closed: no approver bound / approval rejected
+    MCP_SAMPLING_TIMEOUT = -32811  # HITL approval timed out
+    MCP_SAMPLING_DECLINED = -32812  # human reviewer explicitly declined
+
 
 class MCPError(Exception):
     """Enhanced MCP error with structured information.

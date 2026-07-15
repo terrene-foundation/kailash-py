@@ -89,15 +89,19 @@ async def test_elicitation_json_rpc_wire_shape() -> None:
     async def capturing_send(message: Dict[str, Any]) -> None:
         captured.append(message)
 
-        # Feed a response so request_input returns instead of timing out.
+        # Feed a valid form-mode response so request_input returns instead of
+        # timing out. The response MUST satisfy the flat-object schema (hardened
+        # with additionalProperties: false), so it is an object, not a bare str.
         async def later() -> None:
             await asyncio.sleep(0)
-            await system.provide_input(message["id"], "done")
+            await system.provide_input(message["id"], {"name": "Ada"})
 
         asyncio.create_task(later())
 
     system.bind_transport(capturing_send)
-    schema = {"type": "string", "minLength": 1}
+    # MCP 2025-11-25 form mode requires a flat OBJECT-of-primitives schema; a
+    # bare `{"type": "string"}` is rejected by _validate_flat_primitive_schema.
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
     await system.request_input("Enter name:", input_schema=schema, timeout=1.0)
 
     assert len(captured) == 1
@@ -107,6 +111,8 @@ async def test_elicitation_json_rpc_wire_shape() -> None:
     assert isinstance(msg["id"], str) and len(msg["id"]) > 0
     params = msg["params"]
     assert params["requestId"] == msg["id"]
+    # 2025-11-25 params carry the elicitation `mode` alongside message + schema.
+    assert params["mode"] == "form"
     assert params["message"] == "Enter name:"
     assert params["requestedSchema"] == schema
 
@@ -272,6 +278,10 @@ async def test_mcpserver_route_server_initiated_response_accept_action() -> None
     """MCPServer._route_server_initiated_response delivers accept-action results."""
     captured: List[Dict[str, Any]] = []
     server = MCPServer("test-server")
+    # 2025-11-25 capability gate: request_input fails closed unless a connected
+    # client has advertised the `elicitation` capability. Register one so the
+    # accept-action routing (not the gate) is what this test exercises.
+    server.client_info["c1"] = {"capabilities": {"elicitation": {}}}
 
     async def capturing_send(message: Dict[str, Any]) -> None:
         captured.append(message)
@@ -300,6 +310,9 @@ async def test_mcpserver_route_server_initiated_response_accept_action() -> None
 async def test_mcpserver_route_server_initiated_response_decline_action() -> None:
     """Decline/cancel action surfaces as MCPError(REQUEST_CANCELLED)."""
     server = MCPServer("test-server")
+    # 2025-11-25 capability gate: register a capable client so the decline-action
+    # routing (not the fail-closed gate) is what this test exercises.
+    server.client_info["c1"] = {"capabilities": {"elicitation": {}}}
 
     async def declining_send(message: Dict[str, Any]) -> None:
         async def later() -> None:
