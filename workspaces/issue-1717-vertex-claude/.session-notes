@@ -1,50 +1,81 @@
-# Session Notes — 2026-07-14
+# Session Notes — 2026-07-15
 
 ## Where we are
 
-Clean post-release state. **#1741 (per-connection credential callback / token-based
-DB auth) is COMPLETE and RELEASED end-to-end** — kailash 2.51.0 + kailash-dataflow
-2.18.0 on PyPI, verified installable, issue closed. main clean, tree clean, no
-open PRs, no active todos.
+Clean post-release state. **Four issues in the kaizen/EATP cluster CONVERGED and
+RELEASED end-to-end** — kailash **2.52.0** + kailash-kaizen **2.33.0** on PyPI,
+verified installable + importable, cross-SDK mirrors filed. main clean, no open PRs
+of ours (after the workspace chore lands), no active todos.
 
 ## Read first
 
-1. `workspaces/issue-1717-vertex-claude/journal/` — session decisions/discoveries (if any created)
-2. GH #1741 (CLOSED) + PRs #1745 (code) / #1746 (release) — the token-auth completion
-3. `packages/kailash-dataflow/src/dataflow/core/credential_provider.py` — the shared
-   helper + contextvar side-channel (the architectural core of #1741)
-4. `CLAUDE.md` — project directives
+1. `journal/0011-cross-repo-grant-rust-mirror-issues-1710-1713.md` — the cross-repo
+   grant + filed rs#1829/rs#1830
+2. GH #1713 / #1710 / #1736 (fixes) + PRs #1749 / #1750 / #1751 / #1752 (+ release
+   PRs #1753 / #1754)
+3. `CLAUDE.md` — project directives
+
+## Executed this session (all merged + released + verified)
+
+| Issue | Fix | PR | Released in |
+| ----- | --- | -- | ----------- |
+| #1713 | BH3 origin-digest fail-closed DoS resource bounds (`_check_digest_bounds` at `jcs_encode` ingress; byte-neutral; covers BH3 + #1590 subject_hash) | #1749 | kailash 2.52.0 |
+| #1710 | Fail-closed chain-integrity + expiry + genesis gate before capability/lineage/audit mint (shared `_verify_source_chain_before_mint` on `delegate()`+`audit()`) | #1750 | kailash 2.52.0 |
+| #1710-fu | Isolate CARE-004 depth tests from the new #1710 gate (my #1710 gate regressed 3 kaizen depth tests using fake-sig chains — caught by redteam) | #1752 | (test-only) |
+| #1736 | Kaizen Tier-1 test-hang mocking + `timeout_method=thread` + CI-gate re-inclusion; AND the real src bug it exposed — 4 RAG advanced-node parsers read the OUTER `LLMAgentNode.execute()` envelope, so HyDE/StepBack/SelfCorrecting/RAGFusion silently discarded LLM output | #1751 | kaizen 2.33.0 |
+
+- **Published** kailash 2.52.0 (tag `v2.52.0`) + kailash-kaizen 2.33.0 (tag `kaizen-v2.33.0`)
+  to PyPI — publish-pypi success, GitHub Releases created, clean-venv install+import verified
+  on py3.12 (`kailash 2.52.0 | kaizen 2.33.0`).
+- **Filed cross-SDK mirrors** (user-authorized, journal/0011): rs#1829 (mirror #1710 mint gate),
+  rs#1830 (mirror #1713 DoS bounds), both `cross-sdk`-labelled on esperie-enterprise/kailash-rs.
+- **Filed #1755** — RAG parser robustness fast-follow (2 LOW notes from redteam; below).
+
+## Holistic redteam (3 parallel, over merged union a1118cd34)
+
+closure-parity all TRUE · adversarial CLEAN×4 axes · full-suite sweep GREEN. Production
+`delegate()`/`audit()` blast-radius confirmed SAFE (every mint reads a stored established
+chain; new refusals are already-invalid states no valid flow produces). Key lesson: the
+per-shard #1710 gate review ran core `tests/trust/` but MISSED the kaizen trust tree —
+the holistic sweep MUST run FULL per-package suites.
 
 ## In-flight state
 
-- None — everything committed, merged, released, and verified.
+- `journal/0011` + this notes write are uncommitted — land via a workspace-only chore PR
+  (build-repo-release-discipline §1a carve-out; no release).
 
-## Executed this session (external / not in this repo's git log)
+## Outstanding / follow-ups (tracked, NOT deferred-as-forgotten)
 
-- Published **kailash 2.51.0** (tag `v2.51.0`) + **kailash-dataflow 2.18.0**
-  (tag `dataflow-v2.18.0`) to PyPI — OIDC publish, clean-venv install verified,
-  GitHub Releases created.
-
-## Outstanding ledger (forest)
-
-| ID    | Item                                          | Value-anchor (MUST-1 source)                                   | Status                          |
-| ----- | --------------------------------------------- | -------------------------------------------------------------- | ------------------------------- |
-| F1720 | Retire legacy→four-axis LLM redundancy        | User's #1717 follow-on ("resolve the redundancy") — GH #1720   | BLOCKED on co-owner scope       |
-| FVERT | Vertex-Claude/Gemini LIVE validation          | The #1717 headline path; only wire-proven, never live          | BLOCKED on GCP creds (not .env) |
-
-Closed this session: `F1741` (CRUD-path credential extension) → PRs #1745/#1746,
-released kailash 2.51.0 + kailash-dataflow 2.18.0.
-Dispositioned: README/Sphinx token-auth guide — user approved leaving as-is
-(docstrings + CHANGELOG document it; no docs-only release).
+- **#1755** — RAG `_parse_verification_response` type-validate + NaN-guard (2 LOW robustness
+  notes from the redteam; live path post-#1736). Non-blocking fast-follow → kaizen 2.33.1.
+- **#1727** — Python side already landed (openai_chat max_completion_tokens); only the Rust
+  sibling remains (cross-repo).
+- **#1720 / #1721** — legacy→four-axis LLM consolidation / preset-registry drift — stay
+  **co-owner-gated** (cross-SDK design decision), unchanged this session.
+- **verify_integrity()→verify_chain() DeprecationWarning** in kaizen
+  `adversarial/test_audit_integrity.py:727/748` — pre-existing, not this session's; a quick
+  cleanup when kaizen tests are next touched.
 
 ## Traps
 
-- **Machine disk-full** hit at session start (Data volume 100%); cleared regenerable
-  Rust `sccache`. If bash output writes fail → check `df -h /System/Volumes/Data`.
-- `test_bootstrap_realizer.py::test_resolve_llm_model_returns_none_when_env_unset`
-  fails LOCALLY only (unrelated) — resolver's `load_dotenv()` re-reads this operator's
-  `.env` (defines `OPENAI_PROD_MODEL`). CI-skipped; main green. Not a blocker.
-- Duplicate `pull_request` CI runs race (`cancel-in-progress`) — a job can show
-  `fail`/canceled on the superseded run while the LIVE run passes; verify the live run.
-- `gh --repo terrene-foundation/kailash-py` trips the repo-scope lexical hook though
-  it's the CWD repo (false positive); omit `--repo` on same-repo gh.
+- **PyPI index-cache lag**: after publish, `uv pip install` may 404 the new version for a
+  few min while the CDN propagates; the PyPI JSON API (`/pypi/<pkg>/json`) reflects sooner.
+  Verify with `--refresh` and retry.
+- **cwd shadowing on import smoke-tests**: `/tmp` has stray `enum.py`/`re`-shadowing `.py`
+  files → `AttributeError: partially initialized module 're'`. Run import checks from a
+  CLEAN empty dir, never `/tmp`.
+- **Duplicate `pull_request`/`push` CI runs** race (`cancel-in-progress`): a check can show
+  CANCELLED/timeout on the superseded run while the live run passes on the SAME SHA. Pin the
+  head SHA, confirm the live run. main has NO required status-check contexts (`[]`) — merge is
+  review-gated → owner `--admin`.
+- **PACT job 5-min action-timeout** flakes on a slow runner (the suite runs ~5min); re-run
+  the job. Local PACT needs `KAIZEN_DEFAULT_MODEL` set (not in `.env`; CI provisions it) —
+  11 local failures are this env class, green on CI.
+- **`tests/unit/observability/test_metrics_collector.py::test_metrics_overhead_is_minimal`**
+  — absolute wall-clock ratio assertion, flakes under concurrent-suite load; green isolated.
+  Pre-existing (no benchmark marker → not deselected). Not shard-introduced.
+- **Shared review worktrees are a trap**: pointing a read-only reviewer + a Bash-capable
+  reviewer at ONE `/tmp/wt-*` worktree let the code-reviewer's neutralization probe mutate
+  it → the security-reviewer read the mutated tree and raised a false "guard un-wired"
+  CRITICAL. Verify contested claims against the COMMITTED blob (`git show <sha>:<path>`).
+- venv shebangs are STALE — always `.venv/bin/python -m <tool>`, never bare `pytest`.
