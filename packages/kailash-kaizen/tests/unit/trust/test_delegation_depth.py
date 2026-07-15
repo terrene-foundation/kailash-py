@@ -259,6 +259,10 @@ class TestDelegationDepthEnforcement:
             authority_registry, key_manager, trust_store, max_delegation_depth=2
         )
 
+        # Isolate CARE-004 depth enforcement from the #1710 chain-integrity gate
+        # (integrity is covered by tests/trust/regression/test_issue_1710_mint_fail_closed.py).
+        trust_ops._verify_source_chain_before_mint = AsyncMock(return_value=None)
+
         # Create delegator chain with depth already at 2 (at the limit)
         genesis = GenesisRecord(
             id="gen-001",
@@ -369,6 +373,10 @@ class TestDelegationDepthEnforcement:
         trust_ops = TrustOperations(
             authority_registry, key_manager, trust_store, max_delegation_depth=2
         )
+
+        # Isolate CARE-004 depth enforcement from the #1710 chain-integrity gate
+        # (integrity is covered by tests/trust/regression/test_issue_1710_mint_fail_closed.py).
+        trust_ops._verify_source_chain_before_mint = AsyncMock(return_value=None)
 
         # Create delegator chain with depth 1 (one below limit)
         genesis = GenesisRecord(

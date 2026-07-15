@@ -515,6 +515,10 @@ class TestDeepChainBeyondMaxDepth:
             max_delegation_depth=3,  # Only allow 3 levels of delegation
         )
 
+        # Isolate CARE-004 depth enforcement from the #1710 chain-integrity gate
+        # (integrity is covered by tests/trust/regression/test_issue_1710_mint_fail_closed.py).
+        trust_ops._verify_source_chain_before_mint = AsyncMock(return_value=None)
+
         import asyncio
 
         loop = asyncio.new_event_loop()
