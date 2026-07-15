@@ -350,6 +350,14 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
 
         server._transport = MockWebSocketTransport()
 
+        # Bind an approving HITL approver so the FORWARD-path tests in this
+        # class exercise dispatch. Sampling fails CLOSED when no approver is
+        # bound (MCP 2025-11-25 HITL, #1712 W4) — a server that accepts
+        # sampling has an approver, the realistic production precondition.
+        # Mirrors the unit-test fixture fix in
+        # tests/unit/mcp_server/test_missing_handlers.py.
+        server.set_sampling_approver(lambda ctx: True)
+
         return server
 
     @pytest.mark.asyncio
