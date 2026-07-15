@@ -8,11 +8,24 @@ import.
 
 ``SelfCorrectingRAGNode`` / ``RAGFusionNode`` / ``HyDENode`` /
 ``StepBackRAGNode`` are ``kailash.nodes.base.Node`` subclasses with a direct
-``run()``. With NO LLM key configured (the realistic deployment of the
-resurrected ``[rag]`` toolkit, which declares no LLM dependency), each node's
-LLM-backed step degrades to a real rule-based fallback inside a
-``try/except`` block — the fallback IS a deterministic implementation, so the
-golden path here is the no-key path and there is nothing to mock.
+``run()``. Each constructs a real ``LLMAgentNode(provider="openai", ...)`` for
+its LLM-backed step (verifier / query-generator / hypothesis-generator /
+abstraction-generator).
+
+Historical note (issue #1736): this docstring previously assumed "no LLM key
+configured is the realistic deployment ... there is nothing to mock." That
+assumption does not hold whenever a real ``OPENAI_API_KEY`` is configured
+(``rules/env-models.md``) — ``LLMAgentNode._provider_llm_response()``
+resolves a real provider via ``kaizen.providers.registry.get_provider()`` and
+attempts a genuine outbound network call, hanging Tier-1 (pytest-timeout's
+signal-based ``--timeout`` did not reliably abort it; 4 of the 5 affected
+tests were 30s-timeout hits). Per ``rules/testing.md`` "3-Tier Testing"
+(Tier 1: mocking allowed, MUST be offline + deterministic), the
+``_stub_llm_provider`` fixture below stubs the provider seam so every test in
+this file runs offline and fast regardless of which real API keys are
+configured in the environment — the LLM-backed steps still execute real
+node/parsing code against a deterministic, well-formed completion; only the
+network boundary is faked.
 
 The shared base workflow every node retrieves through is the
 ``create_hybrid_rag_workflow`` ``WorkflowNode`` (A-S2 of this shard): dense +
@@ -25,6 +38,10 @@ list lengths, score ordering, types, typed raises).
 """
 
 from __future__ import annotations
+
+import json
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from kailash.nodes.logic.workflow import WorkflowNode
@@ -39,6 +56,80 @@ from kaizen.nodes.rag.advanced import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+# A single JSON payload that is a superset of every shape the four LLM-backed
+# steps in this module parse (hypotheses / variations / abstract_query /
+# retrieval+generation quality fields). Each ``_parse_*`` helper extracts only
+# the keys it needs via ``.get(...)``, so one deterministic payload satisfies
+# every call site without per-test/per-node customization.
+_MOCK_CONTENT = json.dumps(
+    {
+        "hypotheses": [
+            "Mocked hypothesis one for deterministic Tier-1 testing (issue #1736).",
+            "Mocked hypothesis two for deterministic Tier-1 testing (issue #1736).",
+        ],
+        "reasoning": "Mocked reasoning for deterministic Tier-1 testing.",
+        "variations": [
+            "Mocked query variation one.",
+            "Mocked query variation two.",
+            "Mocked query variation three.",
+        ],
+        "abstract_query": "What are the general principles related to this topic?",
+        "concepts_identified": ["mocked-concept-a", "mocked-concept-b"],
+        "retrieval_quality": 0.8,
+        "generation_quality": 0.8,
+        "confidence": 0.8,
+        "issues": [],
+        "suggestions": [],
+        "needs_refinement": False,
+    }
+)
+
+
+def _fake_chat_response(**_: Any) -> dict:
+    """A deterministic, well-formed provider ``chat()`` response."""
+    return {
+        "id": "test-1736-mock",
+        "content": _MOCK_CONTENT,
+        "role": "assistant",
+        "model": "mock-model",
+        "created": 0,
+        "tool_calls": [],
+        "finish_reason": "stop",
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
+
+
+def _make_fake_provider(*_args: Any, **_kwargs: Any) -> MagicMock:
+    """Build a fresh fake provider satisfying the ``BaseProvider`` surface."""
+    provider = MagicMock()
+    provider.is_available.return_value = True
+    provider.chat.side_effect = _fake_chat_response
+
+    async def _chat_async(**kwargs: Any) -> dict:
+        return _fake_chat_response(**kwargs)
+
+    provider.chat_async.side_effect = _chat_async
+    return provider
+
+
+@pytest.fixture(autouse=True)
+def _stub_llm_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the kaizen provider registry seam for this module only (issue #1736).
+
+    ``kaizen.nodes.rag.advanced`` constructs ``LLMAgentNode(provider="openai",
+    ...)`` directly for its four LLM-backed steps. ``LLMAgentNode.
+    _provider_llm_response()`` resolves the provider via
+    ``kaizen.providers.registry.get_provider(name)`` and calls
+    ``provider.chat(...)`` — the real network seam. Stubbing it here (module-
+    scoped, NOT a directory-wide conftest) keeps every other file in
+    ``tests/unit/rag/`` byte-for-byte unaffected, per issue #1736 scope.
+    """
+    monkeypatch.setattr(
+        "kaizen.providers.registry.get_provider",
+        _make_fake_provider,
+    )
 
 
 # A small deterministic corpus reused across the node tests. d1/d3 overlap the
