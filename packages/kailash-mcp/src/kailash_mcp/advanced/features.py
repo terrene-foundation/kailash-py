@@ -65,6 +65,7 @@ Examples:
 
 import asyncio
 import base64
+import inspect
 import json
 import logging
 import mimetypes
@@ -766,6 +767,34 @@ class StreamingHandler:
 # § Elicitation — capability-gated). See MCPServer._bind_elicitation_transport.
 CapabilityFn = Callable[[], bool]
 
+# Resolves the client_id an elicitation targets when ``request_input`` is called
+# without an explicit ``client_id`` — bound by MCPServer to read the client of
+# the ``tools/call`` currently executing (FINDING 3 — elicitation client-scoping).
+# Returns None when no client context is active (unscoped, backward compatible).
+ClientIdFn = Callable[[], Optional[str]]
+
+
+def _send_accepts_client_id(send: "SendFn") -> bool:
+    """Report whether the bound transport send-callable accepts a ``client_id``.
+
+    A multi-client transport (``WebSocketServerTransport.send_message``) accepts
+    ``client_id`` so an ``elicitation/create`` can be dispatched to ONE specific
+    client instead of broadcast to every connection (cross-client isolation —
+    FINDING 3). A single-client transport (e.g. stdio) does not, so the caller
+    falls back to the unscoped send.
+    """
+    try:
+        sig = inspect.signature(send)
+    except (TypeError, ValueError):
+        return False
+    for param in sig.parameters.values():
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+        if param.name == "client_id":
+            return True
+    return False
+
+
 # The two elicitation modes defined by MCP 2025-11-25. ``form`` collects a set
 # of flat primitives inline via ``requestedSchema``; ``url`` hands the user off
 # to a server-issued URL so sensitive data is provided OUT-OF-BAND (never inline
@@ -1018,6 +1047,7 @@ class ElicitationSystem:
         *,
         server_identity: Optional[Dict[str, Any]] = None,
         capability_provider: Optional[CapabilityFn] = None,
+        client_id_provider: Optional[ClientIdFn] = None,
     ):
         """Initialize elicitation system.
 
@@ -1040,6 +1070,7 @@ class ElicitationSystem:
         self._send: Optional[SendFn] = send
         self._server_identity: Optional[Dict[str, Any]] = server_identity
         self._capability_provider: Optional[CapabilityFn] = capability_provider
+        self._client_id_provider: Optional[ClientIdFn] = client_id_provider
         self._pending_requests: Dict[str, Dict[str, Any]] = {}
         self._response_callbacks: Dict[str, Callable] = {}
         self._cancel_callbacks: Dict[str, Callable] = {}
@@ -1056,6 +1087,31 @@ class ElicitationSystem:
                 advertises the ``elicitation`` capability.
         """
         self._capability_provider = provider
+
+    def bind_client_id_provider(self, provider: ClientIdFn) -> None:
+        """Bind the resolver for the client a client-less ``request_input`` targets.
+
+        Idempotent. When bound, ``request_input`` called without an explicit
+        ``client_id`` consults it so an elicitation raised from inside a
+        ``tools/call`` inherits the invoking client — the elicitation is then
+        dispatched to, and resolvable ONLY by, that client (FINDING 3). A
+        provider returning None leaves the request unscoped (backward compatible).
+
+        Args:
+            provider: Zero-arg callable returning the current client_id or None.
+        """
+        self._client_id_provider = provider
+
+    def pending_client_id(self, request_id: str) -> Optional[str]:
+        """Return the client_id bound to a pending elicitation, or None.
+
+        The MCPServer response router reads this to enforce that only the client
+        an elicitation was issued to may resolve it (FINDING 3 — cross-client
+        isolation). Returns None for an unknown request_id or an unscoped
+        pending entry (no bound client).
+        """
+        entry = self._pending_requests.get(request_id)
+        return entry.get("client_id") if entry else None
 
     def bind_server_identity(self, server_identity: Dict[str, Any]) -> None:
         """Bind the server-identity descriptor used for ``url``-mode elicitation.
@@ -1217,6 +1273,12 @@ class ElicitationSystem:
                     error_code=MCPErrorCode.INVALID_REQUEST,
                 )
 
+        # Resolve the target client. An explicit ``client_id`` wins; otherwise
+        # inherit the client of the currently-executing ``tools/call`` via the
+        # bound provider (FINDING 3). None → unscoped (backward compatible).
+        if client_id is None and self._client_id_provider is not None:
+            client_id = self._client_id_provider()
+
         request_id = str(uuid.uuid4())
         start_ts = time.monotonic()
         logger.info(
@@ -1256,10 +1318,24 @@ class ElicitationSystem:
         )
 
         try:
-            # Dispatch the elicitation/create request through the bound transport
-            await self._send_elicitation_request(
-                request_id, prompt, input_schema, mode=mode, url=url
-            )
+            # Dispatch the elicitation/create request through the bound
+            # transport, TARGETING ``client_id`` (FINDING 3). Wrap the send so a
+            # transport failure (the client vanished mid-dispatch) surfaces as a
+            # typed MCPError and the ``finally`` below cleans the pending Future /
+            # callbacks — the awaiter is never left hanging until timeout.
+            try:
+                await self._send_elicitation_request(
+                    request_id, prompt, input_schema, mode=mode, url=url,
+                    client_id=client_id,
+                )
+            except MCPError:
+                raise
+            except Exception as exc:
+                raise MCPError(
+                    f"Failed to dispatch elicitation/create request "
+                    f"{request_id}: {exc}",
+                    error_code=MCPErrorCode.INVALID_REQUEST,
+                ) from exc
 
             # Wait for the matching response (or cancel / timeout)
             if timeout:
@@ -1445,6 +1521,7 @@ class ElicitationSystem:
         *,
         mode: str = ELICITATION_MODE_FORM,
         url: Optional[str] = None,
+        client_id: Optional[str] = None,
     ) -> None:
         """Serialize and dispatch an MCP elicitation/create request.
 
@@ -1525,7 +1602,15 @@ class ElicitationSystem:
                 "mode": "real",
             },
         )
-        await self._send(message)
+        # Dispatch to the SPECIFIC target client when one is bound AND the
+        # transport's send-callable accepts ``client_id`` — so elicitation/create
+        # is never broadcast to every connected client (cross-client isolation —
+        # FINDING 3). A single-client transport (no ``client_id`` kwarg) or an
+        # unscoped request falls back to the unscoped send.
+        if client_id is not None and _send_accepts_client_id(self._send):
+            await self._send(message, client_id=client_id)
+        else:
+            await self._send(message)
 
 
 class ProgressReporter:

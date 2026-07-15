@@ -72,9 +72,14 @@ class _CapturingTransport:
         ):
             reply = {"jsonrpc": "2.0", "id": message["id"], **self._roots_reply}
             # Schedule the client's response on the same loop; request_client_roots
-            # is awaiting the pending Future and will resolve when this runs.
+            # is awaiting the pending Future and will resolve when this runs. The
+            # reply carries the responding client_id (the client the roots/list was
+            # dispatched to) — the response router is fail-closed for scoped
+            # requests (W6 FINDING 3), so a None responder would be refused.
             asyncio.get_event_loop().create_task(
-                self._server._route_server_initiated_response(reply["id"], reply)
+                self._server._route_server_initiated_response(
+                    reply["id"], reply, responding_client_id=client_id
+                )
             )
 
 

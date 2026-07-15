@@ -56,6 +56,7 @@ Enhanced Production Usage:
 
 import asyncio
 import base64
+import contextvars
 import functools
 import gzip
 import inspect
@@ -108,6 +109,19 @@ from kailash_mcp.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Client_id of the ``tools/call`` currently executing on this event loop. A tool
+# that raises an elicitation via ``server.elicitation_system.request_input(...)``
+# without an explicit ``client_id`` inherits THIS client, so the elicitation is
+# dispatched to — and resolvable ONLY by — the invoking client (FINDING 3 —
+# elicitation client-scoping). ``_handle_call_tool`` sets it for the tool body's
+# duration; default None → unscoped (backward compatible). An asyncio Task copies
+# the context at creation, so a per-request tool task sees the value set before
+# it was spawned and concurrent tool calls never see each other's client.
+_CURRENT_TOOL_CLIENT: "contextvars.ContextVar[Optional[str]]" = (
+    contextvars.ContextVar("mcp_current_tool_client", default=None)
+)
 
 
 # Supported MCP protocol-handshake revisions, newest first. The server
@@ -1030,6 +1044,10 @@ class MCPServer:
         self.elicitation_system: ElicitationSystem = ElicitationSystem(
             server_identity={"name": self.name},
             capability_provider=self._any_client_advertises_elicitation,
+            # A client-less request_input() (a tool raising an elicitation)
+            # inherits the invoking tools/call's client so the elicitation is
+            # dispatched to — and resolvable only by — that client (FINDING 3).
+            client_id_provider=lambda: _CURRENT_TOOL_CLIENT.get(),
         )
 
         # Human-in-the-loop (HITL) approval callback for sampling/createMessage
@@ -1131,19 +1149,24 @@ class MCPServer:
     ) -> bool:
         """Report whether a response's client fails the client-scope check.
 
-        A server-initiated request records the client it was issued to; only
-        that client may resolve it. Returns True (mismatch → do NOT resolve)
-        only when BOTH ids are known AND they differ. When either is unknown
-        (an internal caller that did not thread the responder, or a request
-        issued without a bound client), the check is a no-op and resolution
-        proceeds — an unscoped request keeps its prior behaviour (FINDING 4 —
-        cross-client isolation on the shared router).
+        FAIL-CLOSED for a SCOPED request (round-2 re-redteam FINDING 3): when a
+        request was issued to a specific client (``expected_client_id`` set),
+        ONLY that exact client may resolve it. A responder that is None/empty OR
+        differs is REFUSED (returns True → do NOT resolve) — a None
+        ``responding_client_id`` can no longer resolve a scoped sampling / roots
+        / elicitation request, closing the cross-client gap (FINDING 3 / F4).
+
+        An UNSCOPED request (``expected_client_id`` None/empty — no bound client)
+        keeps permissive resolution (returns False): an internal / in-process
+        caller that never bound a client is not client-scoped, so any responder
+        (including None) still resolves it (backward compatible).
         """
-        return (
-            responding_client_id is not None
-            and expected_client_id is not None
-            and responding_client_id != expected_client_id
-        )
+        if not expected_client_id:
+            # Unscoped — no bound client to enforce against.
+            return False
+        # Scoped — fail closed: only the exact bound client may resolve it, and
+        # a None/empty responder never can.
+        return responding_client_id != expected_client_id
 
     async def _route_server_initiated_response(
         self,
@@ -1222,7 +1245,7 @@ class MCPServer:
         if rid in self.elicitation_system._pending_requests:
             if self._client_scope_mismatch(
                 responding_client_id,
-                self.elicitation_system._pending_requests[rid].get("client_id"),
+                self.elicitation_system.pending_client_id(rid),
             ):
                 logger.warning(
                     "elicitation.response.cross_client_rejected",
@@ -2965,10 +2988,18 @@ class MCPServer:
         cancel_key = self._cancel_key(client_id, request_id)
 
         async def _run_tool() -> Any:
-            result = self._execute_tool(tool_name, arguments)
-            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
-                result = await result
-            return result
+            # Scope any elicitation this tool raises to the invoking client
+            # (FINDING 3). Set inside the task's own context so it is visible to
+            # request_input() called from the tool body and never leaks to a
+            # concurrent tool call.
+            token = _CURRENT_TOOL_CLIENT.set(client_id)
+            try:
+                result = self._execute_tool(tool_name, arguments)
+                if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                    result = await result
+                return result
+            finally:
+                _CURRENT_TOOL_CLIENT.reset(token)
 
         task = asyncio.ensure_future(_run_tool())
         self._inflight_tasks[cancel_key] = task
