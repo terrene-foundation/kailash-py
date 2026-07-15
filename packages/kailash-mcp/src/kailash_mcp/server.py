@@ -647,6 +647,11 @@ class MCPServer:
         self.client_info: Dict[str, Dict[str, Any]] = {}
         self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
 
+        # Per-session (client_id) set of request ids already used. JSON-RPC
+        # request ids MUST NOT be reused within a session (spec 2025-11-25);
+        # a duplicate id is rejected with an Invalid Request error.
+        self._session_seen_ids: Dict[str, set] = {}
+
         # Resource subscription support
         self.enable_subscriptions = enable_subscriptions
         self.event_store = event_store
@@ -1926,8 +1931,19 @@ class MCPServer:
 
     async def _handle_websocket_message(
         self, request: Dict[str, Any], client_id: str
-    ) -> Dict[str, Any]:
-        """Handle incoming WebSocket message with decompression support."""
+    ) -> Optional[Dict[str, Any]]:
+        """Handle incoming WebSocket message with decompression support.
+
+        Returns ``None`` as a no-send sentinel (notification / ping-as-
+        notification / already-routed response); the transport skips the send.
+        Mirrors ``kailash.trust.mcp.server`` lifecycle handling:
+
+        * A NOTIFICATION (absent ``id``) runs its handler for side effects and
+          sends NOTHING — never a ``-32601`` body.
+        * ``ping`` returns an empty ``{}`` result (base-protocol utility).
+        * A request whose ``id`` was already used in this session is rejected
+          with an Invalid Request error (ids MUST be unique per session).
+        """
         try:
             # Decompress message if needed
             decompressed_request = self._decompress_message(request)
@@ -1958,60 +1974,113 @@ class MCPServer:
                     # Response routed to originating pending request; no
                     # further handler response needed (this is the client
                     # replying to US, not a client-initiated request).
-                    return {}
+                    return None
 
-            # Route to appropriate handler
-            if method == "initialize":
-                return await self._handle_initialize(params, request_id, client_id)
-            elif method == "tools/list":
-                return await self._handle_list_tools(params, request_id)
-            elif method == "tools/call":
-                return await self._handle_call_tool(params, request_id)
-            elif method == "resources/list":
-                return await self._handle_list_resources(params, request_id)
-            elif method == "resources/read":
-                return await self._handle_read_resource(params, request_id, client_id)
-            elif method == "resources/subscribe":
-                return await self._handle_subscribe(params, request_id, client_id)
-            elif method == "resources/unsubscribe":
-                return await self._handle_unsubscribe(params, request_id, client_id)
-            elif method == "resources/batch_subscribe":
-                return await self._handle_batch_subscribe(params, request_id, client_id)
-            elif method == "resources/batch_unsubscribe":
-                return await self._handle_batch_unsubscribe(
-                    params, request_id, client_id
-                )
-            elif method == "prompts/list":
-                return await self._handle_list_prompts(params, request_id)
-            elif method == "prompts/get":
-                return await self._handle_get_prompt(params, request_id)
-            elif method == "logging/setLevel":
-                return await self._handle_logging_set_level(params, request_id)
-            elif method == "roots/list":
-                # Add client_id to params for roots/list handler
-                params_with_client = {**params, "client_id": client_id}
-                return await self._handle_roots_list(params_with_client, request_id)
-            elif method == "completion/complete":
-                return await self._handle_completion_complete(params, request_id)
-            elif method == "sampling/createMessage":
-                # Add client_id to params for sampling handler
-                params_with_client = {**params, "client_id": client_id}
-                return await self._handle_sampling_create_message(
-                    params_with_client, request_id
-                )
+            # ``ping`` (base-protocol utility): a request-form ping gets an
+            # empty result; a notification-form ping (no id) sends nothing.
+            if method == "ping":
+                if request_id is None:
+                    return None
+                return {"jsonrpc": "2.0", "result": {}, "id": request_id}
+
+            # NOTIFICATION (absent id): run the handler for its side effects and
+            # send NOTHING — never a -32601 body, even for an unknown method.
+            if request_id is None:
+                if method:
+                    try:
+                        await self._dispatch_ws_method(method, params, None, client_id)
+                    except Exception as exc:  # notifications expect no response
+                        logger.warning(
+                            "ws.notification.error method=%s error=%s", method, exc
+                        )
+                return None
+
+            # Per-session request-id reuse: an id already used in this session
+            # is an Invalid Request (spec 2025-11-25). Non-hashable ids (a JSON
+            # array id) cannot be tracked and are passed through.
+            seen = self._session_seen_ids.setdefault(client_id, set())
+            try:
+                already_used = request_id in seen
+            except TypeError:
+                already_used = False
             else:
-                return {
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
-                    "id": request_id,
-                }
+                if already_used:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32600,
+                            "message": (
+                                f"Request id already used in this session: "
+                                f"{request_id!r}"
+                            ),
+                        },
+                        "id": request_id,
+                    }
+                seen.add(request_id)
+
+            return await self._dispatch_ws_method(method, params, request_id, client_id)
 
         except Exception as e:
             logger.error(f"Error handling WebSocket message: {e}")
+            # A notification (absent id) never receives a response, even on
+            # internal error.
+            if request.get("id") is None:
+                return None
             return {
                 "jsonrpc": "2.0",
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
                 "id": request.get("id"),
+            }
+
+    async def _dispatch_ws_method(
+        self,
+        method: str,
+        params: Dict[str, Any],
+        request_id: Any,
+        client_id: str,
+    ) -> Dict[str, Any]:
+        """Route a WebSocket JSON-RPC method to its handler."""
+        if method == "initialize":
+            return await self._handle_initialize(params, request_id, client_id)
+        elif method == "tools/list":
+            return await self._handle_list_tools(params, request_id)
+        elif method == "tools/call":
+            return await self._handle_call_tool(params, request_id)
+        elif method == "resources/list":
+            return await self._handle_list_resources(params, request_id)
+        elif method == "resources/read":
+            return await self._handle_read_resource(params, request_id, client_id)
+        elif method == "resources/subscribe":
+            return await self._handle_subscribe(params, request_id, client_id)
+        elif method == "resources/unsubscribe":
+            return await self._handle_unsubscribe(params, request_id, client_id)
+        elif method == "resources/batch_subscribe":
+            return await self._handle_batch_subscribe(params, request_id, client_id)
+        elif method == "resources/batch_unsubscribe":
+            return await self._handle_batch_unsubscribe(params, request_id, client_id)
+        elif method == "prompts/list":
+            return await self._handle_list_prompts(params, request_id)
+        elif method == "prompts/get":
+            return await self._handle_get_prompt(params, request_id)
+        elif method == "logging/setLevel":
+            return await self._handle_logging_set_level(params, request_id)
+        elif method == "roots/list":
+            # Add client_id to params for roots/list handler
+            params_with_client = {**params, "client_id": client_id}
+            return await self._handle_roots_list(params_with_client, request_id)
+        elif method == "completion/complete":
+            return await self._handle_completion_complete(params, request_id)
+        elif method == "sampling/createMessage":
+            # Add client_id to params for sampling handler
+            params_with_client = {**params, "client_id": client_id}
+            return await self._handle_sampling_create_message(
+                params_with_client, request_id
+            )
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": f"Method not found: {method}"},
+                "id": request_id,
             }
 
     async def _handle_initialize(

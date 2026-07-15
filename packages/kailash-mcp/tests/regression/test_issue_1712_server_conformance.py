@@ -331,3 +331,101 @@ async def test_resource_read_valid_but_missing_is_not_found():
     resp = await server._handle_read_resource({"uri": "data://absent"}, request_id=25)
     assert resp["error"]["code"] == -32602
     assert "not found" in resp["error"]["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Group C - live WebSocket lifecycle
+# ---------------------------------------------------------------------------
+
+
+def _ws_msg(method=None, request_id=None, **extra):
+    msg = {"jsonrpc": "2.0", "params": {}}
+    if method is not None:
+        msg["method"] = method
+    if request_id is not None:
+        msg["id"] = request_id
+    msg.update(extra)
+    return msg
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_notification_known_method_sends_nothing():
+    """A notification (absent id) runs side-effects but returns no body."""
+    server = _make_server()
+    resp = await server._handle_websocket_message(
+        _ws_msg(method="tools/list"), "client-a"
+    )
+    assert resp is None
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_notification_unknown_method_sends_nothing():
+    """A notification for an unknown method sends NOTHING, not a -32601 body."""
+    server = _make_server()
+    resp = await server._handle_websocket_message(
+        _ws_msg(method="notifications/somethingUnknown"), "client-a"
+    )
+    assert resp is None
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_ping_request_returns_empty_result():
+    """A request-form ping returns an empty {} result."""
+    server = _make_server()
+    resp = await server._handle_websocket_message(
+        _ws_msg(method="ping", request_id=100), "client-a"
+    )
+    assert resp["result"] == {}
+    assert resp["id"] == 100
+    assert "error" not in resp
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_ping_notification_sends_nothing():
+    """A notification-form ping (no id) sends no response."""
+    server = _make_server()
+    resp = await server._handle_websocket_message(_ws_msg(method="ping"), "client-a")
+    assert resp is None
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_duplicate_request_id_rejected_per_session():
+    """A reused request id in one session -> Invalid Request (-32600)."""
+    server = _make_server()
+
+    first = await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=7), "client-a"
+    )
+    assert "result" in first
+
+    dup = await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=7), "client-a"
+    )
+    assert "result" not in dup
+    assert dup["error"]["code"] == -32600
+    assert dup["id"] == 7
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ws_request_id_reuse_scoped_per_session():
+    """The same id is allowed under a DIFFERENT client session."""
+    server = _make_server()
+    await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=7), "client-a"
+    )
+    # Same id, different session -> accepted.
+    other = await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=7), "client-b"
+    )
+    assert "result" in other
+    # A fresh id in the first session is still accepted.
+    fresh = await server._handle_websocket_message(
+        _ws_msg(method="tools/list", request_id=8), "client-a"
+    )
+    assert "result" in fresh

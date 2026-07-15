@@ -1300,10 +1300,15 @@ class WebSocketServerTransport(BaseTransport):
                             "id": request.get("id"),
                         }
 
-                    # Send response
-                    await websocket.send(json.dumps(response))
-                    self._update_metrics("messages_sent")
-                    self._update_metrics("bytes_sent", len(json.dumps(response)))
+                    # A None response is the no-send sentinel — a notification
+                    # (absent JSON-RPC id) or an already-routed inbound response
+                    # gets NO reply body (MCP lifecycle: notifications expect no
+                    # response). Only send a real response envelope.
+                    if response is not None:
+                        payload = json.dumps(response)
+                        await websocket.send(payload)
+                        self._update_metrics("messages_sent")
+                        self._update_metrics("bytes_sent", len(payload))
 
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON from client {client_id}: {e}")
