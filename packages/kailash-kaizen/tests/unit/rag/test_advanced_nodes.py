@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from kailash.nodes.logic.workflow import WorkflowNode
@@ -111,6 +111,20 @@ def _make_fake_provider(*_args: Any, **_kwargs: Any) -> MagicMock:
         return _fake_chat_response(**kwargs)
 
     provider.chat_async.side_effect = _chat_async
+    return provider
+
+
+def _make_unavailable_provider(*_args: Any, **_kwargs: Any) -> MagicMock:
+    """A provider that reports itself unavailable — the genuine no-LLM deployment.
+
+    ``LLMAgentNode._provider_llm_response`` raises ``RuntimeError`` (before any
+    network call) when ``is_available()`` is False and no per-request api_key is
+    supplied, which drives each advanced-RAG node's ``try/except`` rule-based
+    fallback. Used by the one test whose whole point is the no-LLM path (issue
+    #1736), overriding the module autouse content-stub.
+    """
+    provider = MagicMock()
+    provider.is_available.return_value = False
     return provider
 
 
@@ -450,8 +464,22 @@ class TestHyDENode:
         assert set(result.keys()) == _HYDE_KEYS
 
     def test_run_generates_fallback_hypothesis_when_no_llm(self):
-        """With no LLM key the rule-based fallback yields >=1 hypothesis."""
-        result = HyDENode(num_hypotheses=2).run(documents=_CORPUS, query=_QUERY)
+        """With no LLM available the rule-based fallback yields >=1 hypothesis.
+
+        This test's whole point is the genuine NO-LLM path, so it explicitly
+        overrides the module autouse content-stub with an *unavailable* provider
+        (``is_available()`` -> False). That drives ``_generate_hypotheses``'s
+        ``try/except`` rule-based fallback (the documented behavior) rather than
+        the mocked-completion path the other tests exercise — offline either way,
+        no network (issue #1736).
+        """
+        with patch(
+            "kaizen.providers.registry.get_provider",
+            side_effect=_make_unavailable_provider,
+        ):
+            result = HyDENode(num_hypotheses=2).run(documents=_CORPUS, query=_QUERY)
+        # The rule-based fallback ("A comprehensive answer to '<query>'…") — NOT a
+        # mocked completion — is what produces these hypotheses.
         assert len(result["hypotheses_generated"]) >= 1
         assert result["hyde_metadata"]["method"] == "HyDE"
 

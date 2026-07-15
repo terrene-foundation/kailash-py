@@ -93,9 +93,9 @@ name: Test kailash-kaizen
 #          OllamaModelManager` raises ImportError whenever the optional
 #          client library is absent — this is the declared install matrix,
 #          not a regression.
-#        - [PARTIALLY RESOLVED, issue #1736] tests/unit/rag/test_advanced_
-#          nodes.py — was HANGING (same class as tests/unit/strategies/):
-#          HyDENode / SelfCorrectingRAGNode / StepBackRAGNode construct real
+#        - [RESOLVED, issue #1736] tests/unit/rag/test_advanced_nodes.py —
+#          was HANGING (same class as tests/unit/strategies/): HyDENode /
+#          SelfCorrectingRAGNode / StepBackRAGNode construct real
 #          LLMAgentNode(provider="openai", ...) instances for their four
 #          LLM-backed steps; the SAME registry seam attempted a genuine
 #          network call whenever a real API key was configured. Fixed by a
@@ -103,18 +103,27 @@ name: Test kailash-kaizen
 #          in this test file — NOT a directory-wide conftest, so the other 14
 #          files in tests/unit/rag/ are byte-for-byte unaffected) stubbing
 #          kaizen.providers.registry.get_provider() with a deterministic
-#          completion. 48 of 50 tests now pass in ~4s (was 300s+ hangs); this
-#          file is re-included in the tier above and no longer --ignore'd.
-#          Two tests are excluded via --deselect below (NOT --ignore — the
-#          rest of the file still runs) because they hit a DISTINCT,
-#          genuinely pre-existing src/ bug this test-hygiene-only PR does not
-#          touch (see the --deselect comment for the exact root cause).
-#          Confined to these two node classes — the other rag/ files are
-#          clean once the rag extra (numpy/Pillow/networkx) is installed (see
-#          below).
+#          completion. Mocking then EXPOSED a genuinely pre-existing src/ bug
+#          (out of the original test-hygiene scope but fixed here per
+#          zero-tolerance Rule 1 — found it, own it): every `_parse_*` helper
+#          in kaizen/nodes/rag/advanced.py (_parse_abstract_query,
+#          _parse_hypotheses, _parse_query_variations,
+#          _parse_verification_response) read `response.get("content", "")` on
+#          the FULL envelope LLMAgentNode.execute() returns
+#          (`{"success": ..., "response": {"content": ...}, ...}`) — the real
+#          content is NESTED under "response", so "content" was NEVER a
+#          top-level key and all four parsers always returned empty/[],
+#          silently forcing HyDE/StepBack/SelfCorrecting RAG to their
+#          rule-based fallback on EVERY call. Fixed to unwrap the envelope
+#          (`response.get("response", response).get("content", "")`, flat-dict
+#          tolerant). All 50 tests now pass in ~4s (was 300s+ hangs); the file
+#          is re-included in the tier above and fully gated — NO --deselect.
+#          The one HyDE no-LLM test explicitly stubs an *unavailable* provider
+#          so it genuinely exercises the documented rule-based fallback rather
+#          than the mocked-completion path.
 #
-#      Four flaky/broken tests are excluded via --deselect (NOT --ignore —
-#      the rest of their file still runs):
+#      Two flaky tests are excluded via --deselect (NOT --ignore — the rest
+#      of their file still runs):
 #        - tests/unit/memory/test_semantic_memory.py::
 #          TestSemanticMemorySimilaritySearch::{test_find_similar_basic,
 #          test_find_similar_limit} — the mock simple_embedding_function is
@@ -123,26 +132,6 @@ name: Test kailash-kaizen
 #          on some seeds/versions (passed on 3.14, failed on 3.12 in a local
 #          CI repro). Pre-existing, in code this PR does NOT touch — test-
 #          hygiene follow-up.
-#        - tests/unit/rag/test_advanced_nodes.py::TestStepBackRAGNode::
-#          test_run_generates_abstract_query and ::TestHyDENode::
-#          test_run_generates_fallback_hypothesis_when_no_llm — a genuinely
-#          pre-existing src/ bug in kaizen/nodes/rag/advanced.py: every
-#          `_parse_*` helper (_parse_abstract_query, _parse_hypotheses,
-#          _parse_query_variations, _parse_verification_response) reads
-#          `response.get("content", "")` on the FULL dict LLMAgentNode.
-#          execute() returns (`{"success": ..., "response": {...}, ...}`) —
-#          the real content lives at `response["response"]["content"]`, so
-#          "content" is NEVER a top-level key and these two tests'
-#          non-empty/non-zero-length assertions fail deterministically
-#          (confirmed reproducible on unmodified main with a real API key,
-#          independent of any mocking — issue #1736 investigation). Two of
-#          the four `_parse_*` call sites (_parse_verification_response,
-#          _parse_query_variations) share the identical bug but are not
-#          currently exercised by an assertion that requires non-fallback
-#          content, so no other test in this file is affected. Fixing this
-#          requires a src/ change out of scope for this test-hygiene-only PR
-#          (NO src/ changes, NO version bump/release) — filed as a precise
-#          follow-up; NOT weakened, NOT skipped, NOT deleted.
 #
 #      ALL optional-dep failures (numpy/Pillow/networkx/prometheus/
 #      opentelemetry[+otlp-grpc-exporter]/pynacl/pytz/psutil/qrcode/
@@ -340,6 +329,4 @@ jobs:
             -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
             --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_basic \
             --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_limit \
-            --deselect tests/unit/rag/test_advanced_nodes.py::TestStepBackRAGNode::test_run_generates_abstract_query \
-            --deselect tests/unit/rag/test_advanced_nodes.py::TestHyDENode::test_run_generates_fallback_hypothesis_when_no_llm \
             --timeout=30 --maxfail=50 -q
