@@ -2,6 +2,45 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.3.2] — 2026-07-15 — JWT audience fail-closed + OAuth 2.1 client discovery + server conformance (#1712)
+
+Second MCP 2025-11-25 spec-parity wave. Part of #1712 — the checklist remains open for later waves.
+
+### Security
+
+- **JWT token audience validated fail-closed** (`BearerTokenAuth` / `JWTAuth`, new
+  `expected_audience` option). When set, the `aud` claim is required and matched, so
+  BOTH audience-absent AND foreign-audience tokens are rejected — per the MCP 2025-11-25
+  requirement that servers validate token audience fail-closed. Non-breaking: when
+  `expected_audience` is unset the audience dimension is not validated (prior behaviour)
+  and a one-time construction warning states it is required for spec compliance.
+- **OAuth discovery SSRF hardened** — the RFC 9728 `resource_metadata` URL (carried on an
+  untrusted 401 `WWW-Authenticate` header) is rejected unless same-origin as the connected
+  server, BEFORE the fetch fires; discovery fetches use `allow_redirects=False`. The
+  same-origin PRM constraint transitively closes the rogue-AS redirect path.
+- **WebSocket request-id reuse tracking is bounded and cleared on disconnect** — closes two
+  remotely-triggerable OOM/DoS vectors (an unbounded per-session id set and a per-connection
+  state leak on connection churn).
+
+### Added
+
+- **Client-side OAuth 2.1 discovery** — `WWW-Authenticate` parse + Protected Resource
+  Metadata (RFC 9728, both mechanisms + well-known fallback) + Authorization Server metadata
+  (RFC 8414 with OIDC fallback), PKCE S256 verify-before-proceed (fail-closed when absent),
+  the RFC 8707 `resource` indicator on all four grant requests, and Bearer token binding
+  (expiry-aware) on outbound requests.
+- **Server tool-result / resources/read conformance** — tool-execution failures surface as
+  `isError: true` inside the result (protocol errors stay JSON-RPC); `structuredContent`
+  validated against a tool's `outputSchema`; non-text content passthrough
+  (image / audio / resource / resource_link); `resources/read` gains a base64 `blob` branch
+  for binary content, a `mimeType` on returned contents, and RFC 3986 URI validation
+  (distinct `-32602`).
+
+### Fixed
+
+- **WebSocket lifecycle** — a JSON-RPC notification (absent id) now receives no response;
+  `ping` returns an empty result; a request id reused within a session is rejected (`-32600`).
+
 ## [0.3.1] — 2026-07-15 — fail-closed MCP local-server spawn allowlist + spec-parity fixes (#1712)
 
 ### Security
