@@ -235,3 +235,99 @@ async def test_tools_list_advertises_output_schema_and_annotations():
     assert tool["outputSchema"] == schema
     assert tool["annotations"]["readOnlyHint"] is True
     assert tool["annotations"]["destructiveHint"] is False
+
+
+# ---------------------------------------------------------------------------
+# Group B - resources/read fidelity
+# ---------------------------------------------------------------------------
+
+
+def _register_resource(
+    server: MCPServer, uri: str, content, mime_type: str = "text/plain"
+) -> None:
+    """Insert a resource directly into the registry (real state, no mock)."""
+    server._resource_registry[uri] = {
+        "handler": lambda: content,
+        "original_handler": None,
+        "name": uri,
+        "description": f"Resource: {uri}",
+        "mime_type": mime_type,
+        "created_at": 0.0,
+    }
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_resource_read_bytes_emitted_as_base64_blob():
+    """Raw bytes are base64 blob-encoded, never str()-corrupted into text."""
+    server = _make_server()
+    raw = bytes([0x00, 0x01, 0xFF, 0xFE, 0x80])
+    _register_resource(server, "file://icon", raw, mime_type="application/octet-stream")
+
+    resp = await server._handle_read_resource({"uri": "file://icon"}, request_id=20)
+    item = resp["result"]["contents"][0]
+    assert "text" not in item, "binary content MUST NOT use the text field"
+    assert item["mimeType"] == "application/octet-stream"
+    assert base64.b64decode(item["blob"]) == raw
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_resource_read_non_text_mime_uses_blob_branch():
+    """A non-text mimeType routes str content through the blob branch."""
+    server = _make_server()
+    _register_resource(server, "img://logo", "PNGDATA", mime_type="image/png")
+
+    resp = await server._handle_read_resource({"uri": "img://logo"}, request_id=21)
+    item = resp["result"]["contents"][0]
+    assert "text" not in item
+    assert item["mimeType"] == "image/png"
+    assert base64.b64decode(item["blob"]) == b"PNGDATA"
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_resource_read_text_includes_mime_type():
+    """Text content keeps the text field and echoes the registered mimeType."""
+    server = _make_server()
+    _register_resource(server, "data://note", "hello world", mime_type="text/markdown")
+
+    resp = await server._handle_read_resource({"uri": "data://note"}, request_id=22)
+    item = resp["result"]["contents"][0]
+    assert item["text"] == "hello world"
+    assert item["mimeType"] == "text/markdown"
+    assert "blob" not in item
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_resource_read_json_mime_stays_text():
+    """A structured application/json mimeType is treated as text, not blob."""
+    server = _make_server()
+    _register_resource(server, "data://cfg", '{"a": 1}', mime_type="application/json")
+    resp = await server._handle_read_resource({"uri": "data://cfg"}, request_id=23)
+    item = resp["result"]["contents"][0]
+    assert item["text"] == '{"a": 1}'
+    assert "blob" not in item
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_uri", ["not a uri", "no-scheme-here", "", "  "])
+async def test_resource_read_invalid_uri_is_distinct_error(bad_uri):
+    """A malformed URI -> -32602 with a distinct 'Invalid URI' message."""
+    server = _make_server()
+    resp = await server._handle_read_resource({"uri": bad_uri}, request_id=24)
+    assert "result" not in resp
+    assert resp["error"]["code"] == -32602
+    assert "Invalid URI" in resp["error"]["message"]
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_resource_read_valid_but_missing_is_not_found():
+    """A well-formed but unregistered URI -> not-found (distinct from invalid)."""
+    server = _make_server()
+    resp = await server._handle_read_resource({"uri": "data://absent"}, request_id=25)
+    assert resp["error"]["code"] == -32602
+    assert "not found" in resp["error"]["message"].lower()

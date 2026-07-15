@@ -66,6 +66,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Union
+from urllib.parse import urlparse
 
 from kailash_mcp.advanced.features import (
     ElicitationSystem,
@@ -1461,12 +1462,15 @@ class MCPServer:
 
         return credentials
 
-    def resource(self, uri: str):
+    def resource(self, uri: str, mime_type: str = "text/plain"):
         """
         Add resource with metrics tracking.
 
         Args:
             uri: Resource URI pattern
+            mime_type: MIME type of the resource content. A non-text type (or a
+                handler returning raw bytes) causes resources/read to emit a
+                base64 ``blob`` rather than a ``text`` field (spec 2025-11-25).
 
         Returns:
             Decorated function
@@ -1490,7 +1494,7 @@ class MCPServer:
                 "original_handler": func,
                 "name": uri,
                 "description": func.__doc__ or f"Resource: {uri}",
-                "mime_type": "text/plain",
+                "mime_type": mime_type,
                 "created_at": time.time(),
             }
 
@@ -2288,8 +2292,28 @@ class MCPServer:
     async def _handle_read_resource(
         self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
-        """Handle resources/read request with change detection."""
+        """Handle resources/read request with change detection.
+
+        Spec 2025-11-25 resources/read fidelity:
+
+        * The ``uri`` param is RFC-3986 validated (scheme + no whitespace)
+          BEFORE registry lookup; a malformed URI is a distinct ``-32602``
+          "invalid URI" (not a generic not-found).
+        * Binary content (raw bytes, or a non-text ``mimeType``) is
+          base64-encoded into a ``blob`` — never str()-corrupted into ``text``.
+          ``text`` and ``blob`` are mutually exclusive per content item.
+        * The registered/derived ``mimeType`` is echoed on returned contents.
+        """
         uri = params.get("uri")
+
+        # RFC 3986 validation FIRST — a malformed URI is a distinct -32602,
+        # not a generic not-found (which would mask the real client error).
+        if not self._is_valid_resource_uri(uri):
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": f"Invalid URI: {uri!r}"},
+                "id": request_id,
+            }
 
         # First try exact match
         resource_info = None
@@ -2322,12 +2346,14 @@ class MCPServer:
             else:
                 content = ""
 
+            mime_type = resource_info.get("mime_type", "text/plain")
+
             # Process change detection if subscription manager is available
             if self.subscription_manager:
                 resource_data = {
                     "uri": uri,
                     "text": str(content),
-                    "mimeType": resource_info.get("mime_type", "text/plain"),
+                    "mimeType": mime_type,
                 }
 
                 # Check for changes and notify subscribers
@@ -2338,9 +2364,10 @@ class MCPServer:
                 if change:
                     await self.subscription_manager.process_resource_change(change)
 
+            content_item = self._build_resource_content(uri, content, mime_type)
             return {
                 "jsonrpc": "2.0",
-                "result": {"contents": [{"uri": uri, "text": str(content)}]},
+                "result": {"contents": [content_item]},
                 "id": request_id,
             }
         except Exception as e:
@@ -2349,6 +2376,46 @@ class MCPServer:
                 "error": {"code": -32603, "message": f"Resource read error: {str(e)}"},
                 "id": request_id,
             }
+
+    @staticmethod
+    def _is_valid_resource_uri(uri: Any) -> bool:
+        """RFC-3986 validate a resources/read ``uri`` param.
+
+        Requires a non-empty string carrying a scheme and no whitespace /
+        control characters. A malformed URI is rejected here so it can be
+        reported as a distinct ``-32602`` before registry lookup.
+        """
+        if not uri or not isinstance(uri, str):
+            return False
+        if any(ch.isspace() or ord(ch) < 0x20 for ch in uri):
+            return False
+        try:
+            parsed = urlparse(uri)
+        except (ValueError, TypeError):
+            return False
+        return bool(parsed.scheme)
+
+    def _build_resource_content(
+        self, uri: str, content: Any, mime_type: str
+    ) -> Dict[str, Any]:
+        """Build a single resources/read content item.
+
+        Binary content (raw bytes, or a non-text ``mimeType``) is base64
+        ``blob``-encoded (mirroring advanced/features.BinaryResourceHandler);
+        text content is emitted as ``text``. ``text`` and ``blob`` are mutually
+        exclusive per item; ``mimeType`` is always echoed.
+        """
+        is_binary = isinstance(content, (bytes, bytearray)) or not _is_text_mime(
+            mime_type
+        )
+        if is_binary:
+            if isinstance(content, (bytes, bytearray)):
+                raw = bytes(content)
+            else:
+                raw = str(content).encode("utf-8")
+            blob = base64.b64encode(raw).decode("ascii")
+            return {"uri": uri, "mimeType": mime_type, "blob": blob}
+        return {"uri": uri, "mimeType": mime_type, "text": str(content)}
 
     def _match_resource_template(self, uri: str) -> tuple:
         """Match URI against resource templates and extract parameters."""
