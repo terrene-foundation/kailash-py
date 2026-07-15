@@ -168,6 +168,16 @@ from pact.ml import (
 )
 from pact.work import WorkResult, WorkSubmission
 
+# --- SOC 2 compliance-evidence tooling (issue #1711) ---
+from pact.compliance import (
+    ControlEvidence,
+    CriterionEvidence,
+    EvidenceCollectionError,
+    EvidenceCollector,
+    EvidenceItem,
+    EvidencePackage,
+)
+
 __all__ = [
     # Error hierarchy
     "PactError",
@@ -318,5 +328,12 @@ __all__ = [
     "MLGovernanceContext",
     "check_cross_tenant_op",
     "check_engine_method_clearance",
+    # SOC 2 compliance-evidence tooling (issue #1711)
+    "EvidenceCollector",
+    "EvidencePackage",
+    "ControlEvidence",
+    "CriterionEvidence",
+    "EvidenceItem",
+    "EvidenceCollectionError",
     "check_trial_admission",
 ]
