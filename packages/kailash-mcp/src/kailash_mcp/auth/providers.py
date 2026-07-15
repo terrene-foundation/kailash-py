@@ -231,18 +231,29 @@ class BearerTokenAuth(AuthProvider):
         expected_issuer: When set, JWT validation requires the ``iss`` claim
             to be present AND equal to this value. When ``None`` (default),
             absent-iss tokens are accepted (existing behaviour preserved).
+        expected_audience: The canonical resource URI this MCP server
+            identifies as (a.k.a. the token audience). When set, JWT
+            validation FAILS CLOSED on the audience dimension — it rejects
+            BOTH audience-absent tokens (missing required ``aud``) AND
+            foreign-audience tokens (``aud`` mismatch), per the MCP
+            2025-11-25 spec. When ``None`` (default), audience is NOT
+            validated (existing behaviour preserved) and a one-time WARNING
+            is logged: MCP servers accepting JWTs MUST set
+            ``expected_audience`` for spec compliance — an unconfigured
+            audience cannot be validated against anything.
 
     Examples:
         Simple bearer token:
 
         >>> auth = BearerTokenAuth(tokens=["bearer_token_123"])
 
-        JWT bearer tokens:
+        JWT bearer tokens (spec-compliant, audience fail-closed):
 
         >>> auth = BearerTokenAuth(
         ...     validate_jwt=True,
         ...     jwt_secret="my-secret",
-        ...     jwt_algorithm="HS256"
+        ...     jwt_algorithm="HS256",
+        ...     expected_audience="https://mcp.example.com",
         ... )
     """
 
@@ -253,12 +264,14 @@ class BearerTokenAuth(AuthProvider):
         jwt_secret: Optional[str] = None,
         jwt_algorithm: str = "HS256",
         expected_issuer: Optional[str] = None,
+        expected_audience: Optional[str] = None,
     ):
         """Initialize bearer token authentication."""
         self.validate_jwt = validate_jwt
         self.jwt_secret = jwt_secret
         self.jwt_algorithm = jwt_algorithm
         self.expected_issuer = expected_issuer
+        self.expected_audience = expected_audience
 
         # Normalize tokens
         if tokens is None:
@@ -270,6 +283,21 @@ class BearerTokenAuth(AuthProvider):
 
         if validate_jwt and not jwt_secret:
             raise ValueError("JWT secret required when validate_jwt=True")
+
+        # Spec-compliance guard (MCP 2025-11-25): a JWT-validating server that
+        # does NOT pin an expected audience cannot reject foreign-audience
+        # tokens minted for a different resource. Surface this ONCE, loudly,
+        # at construction — the audience check is fail-closed WHENEVER
+        # expected_audience is set (see _validate_jwt_token) and disabled when
+        # it is not.
+        if validate_jwt and not expected_audience:
+            logger.warning(
+                "JWT auth enabled without expected_audience: token audience "
+                "validation is DISABLED. The MCP 2025-11-25 spec REQUIRES "
+                "servers to validate the token audience fail-closed; set "
+                "expected_audience=<canonical resource URI> to reject "
+                "audience-absent and foreign-audience tokens."
+            )
 
         logger.info(f"Initialized Bearer Token auth (JWT: {validate_jwt})")
 
@@ -314,6 +342,17 @@ class BearerTokenAuth(AuthProvider):
         forged token that OMITS ``iss`` entirely passes the allowlist check
         unless ``iss`` is also added to the required-claims set. The require
         list closes that bypass.
+
+        When ``expected_audience`` is configured, audience validation is
+        FAIL-CLOSED per the MCP 2025-11-25 spec: ``audience=`` is passed to
+        ``jwt.decode`` AND ``"aud"`` is added to the required-claims set, so
+        PyJWT rejects BOTH audience-absent tokens (``MissingRequiredClaimError``)
+        AND foreign-audience tokens (``InvalidAudienceError``). This is the
+        same defence as the ``iss`` bypass above, applied to the ``aud``
+        dimension — a token minted for a DIFFERENT resource, or one that omits
+        ``aud`` entirely, is rejected. When ``expected_audience`` is ``None``
+        the audience dimension is not validated (a WARNING was logged at
+        construction).
         """
         if jwt is None:
             raise AuthenticationError("JWT validation not available")
@@ -321,10 +360,20 @@ class BearerTokenAuth(AuthProvider):
         decode_kwargs: Dict[str, Any] = {
             "algorithms": [self.jwt_algorithm],
         }
+        # Build the required-claims set incrementally so each opted-in
+        # dimension (issuer / audience) contributes its own required claim.
+        required_claims: List[str] = []
         if self.expected_issuer is not None:
             # Layer iss-required + issuer-allowlist when caller opted in.
             decode_kwargs["issuer"] = self.expected_issuer
-            decode_kwargs["options"] = {"require": ["exp", "iss"]}
+            required_claims += ["exp", "iss"]
+        if self.expected_audience is not None:
+            # Layer aud-required + audience-allowlist: rejects audience-absent
+            # (missing required `aud`) AND foreign-audience (`aud` mismatch).
+            decode_kwargs["audience"] = self.expected_audience
+            required_claims.append("aud")
+        if required_claims:
+            decode_kwargs["options"] = {"require": required_claims}
 
         try:
             payload = jwt.decode(  # type: ignore[union-attr]
@@ -341,10 +390,15 @@ class BearerTokenAuth(AuthProvider):
         except jwt.ExpiredSignatureError:
             raise AuthenticationError("Token expired")
         except jwt.MissingRequiredClaimError as e:
-            # PyJWT raises this for absent `iss` when require=["exp", "iss"]
-            # is set. Surface as the same typed AuthenticationError so callers
-            # do not have to distinguish between "no iss" and "wrong iss".
+            # PyJWT raises this for absent `iss` (require=[..,"iss"]) or absent
+            # `aud` (require=[..,"aud"]). The claim NAME is not a secret, so
+            # surface it; the token's actual claim VALUES are never touched.
             raise AuthenticationError(f"Invalid token: {e}")
+        except jwt.InvalidAudienceError:
+            # Foreign-audience token. Do NOT interpolate the exception — the
+            # token's actual `aud` value MUST NOT leak into logs/messages
+            # (security.md "no secrets in logs"). Fixed, typed message only.
+            raise AuthenticationError("Invalid token audience")
         except jwt.InvalidIssuerError as e:
             raise AuthenticationError(f"Invalid token: {e}")
         except jwt.InvalidTokenError as e:
@@ -386,6 +440,8 @@ class BearerTokenAuth(AuthProvider):
                     "validate_jwt": True,
                     "jwt_secret": self.jwt_secret,
                     "jwt_algorithm": self.jwt_algorithm,
+                    "expected_issuer": self.expected_issuer,
+                    "expected_audience": self.expected_audience,
                 }
             )
         else:
@@ -406,11 +462,23 @@ class JWTAuth(BearerTokenAuth):
             issued by :py:meth:`create_token` AND as the ``expected_issuer``
             allowlist on validation. When set, validation REQUIRES ``iss``
             to be present (cross-SDK port of esperie/kailash-rs#599).
+        audience: The canonical resource URI this server identifies as. Used
+            both as the ``aud`` claim on tokens issued by
+            :py:meth:`create_token` AND as the ``expected_audience`` allowlist
+            on validation. When set, validation is FAIL-CLOSED on audience —
+            it REQUIRES ``aud`` to be present AND equal to this value, per the
+            MCP 2025-11-25 spec. When ``None`` (default), audience is not
+            validated and a one-time WARNING is logged; MCP servers SHOULD set
+            it for spec compliance.
 
     Examples:
-        Create JWT auth provider:
+        Create JWT auth provider (spec-compliant, audience fail-closed):
 
-        >>> auth = JWTAuth(secret="my-secret", expiration=3600)
+        >>> auth = JWTAuth(
+        ...     secret="my-secret",
+        ...     expiration=3600,
+        ...     audience="https://mcp.example.com",
+        ... )
         >>> token = auth.create_token({"user": "alice", "permissions": ["read", "write"]})
     """
 
@@ -420,6 +488,7 @@ class JWTAuth(BearerTokenAuth):
         algorithm: str = "HS256",
         expiration: int = 3600,
         issuer: str = "mcp-server",
+        audience: Optional[str] = None,
     ):
         """Initialize JWT authentication."""
         super().__init__(
@@ -427,9 +496,11 @@ class JWTAuth(BearerTokenAuth):
             jwt_secret=secret,
             jwt_algorithm=algorithm,
             expected_issuer=issuer,
+            expected_audience=audience,
         )
         self.expiration = expiration
         self.issuer = issuer
+        self.audience = audience
 
     def create_token(
         self, payload: Dict[str, Any], expiration: Optional[int] = None
@@ -460,8 +531,13 @@ class JWTAuth(BearerTokenAuth):
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(seconds=exp_time)).timestamp()),
             "jti": str(uuid.uuid4()),
-            **payload,
         }
+        # Mint the `aud` claim when an audience is configured so tokens issued
+        # by this provider pass its own fail-closed audience validation. The
+        # caller's payload may override it explicitly.
+        if self.audience is not None:
+            jwt_payload["aud"] = self.audience
+        jwt_payload.update(payload)
 
         return jwt.encode(jwt_payload, self.jwt_secret, algorithm=self.jwt_algorithm)  # type: ignore[union-attr, arg-type]
 
