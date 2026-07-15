@@ -16,6 +16,18 @@ from kailash_mcp.auth.providers import (
     RateLimiter,
 )
 
+# RFC 9728 server-publish surface (PRM builder + WWW-Authenticate challenge +
+# live-transport routes). Pure stdlib — no [auth-oauth] extra required, so these
+# import unconditionally (Starlette in build_well_known_routes is lazy).
+from kailash_mcp.auth.well_known import (
+    WELL_KNOWN_PROTECTED_RESOURCE_SUFFIX,
+    build_well_known_routes,
+    build_www_authenticate_challenge,
+    create_protected_resource_metadata_app,
+    protected_resource_metadata_path,
+    protected_resource_metadata_url,
+)
+
 # OAuth 2.1 — requires the [auth-oauth] extra (aiohttp + PyJWT + cryptography).
 # Gate the import so a base kailash-mcp install still imports `kailash_mcp.auth`
 # cleanly, and raise a descriptive ImportError if a consumer tries to use an
@@ -87,6 +99,13 @@ __all__ = [
     "AuthManager",
     "PermissionManager",
     "RateLimiter",
+    # RFC 9728 server-publish surface (pure stdlib, no extra required)
+    "WELL_KNOWN_PROTECTED_RESOURCE_SUFFIX",
+    "protected_resource_metadata_path",
+    "protected_resource_metadata_url",
+    "build_www_authenticate_challenge",
+    "create_protected_resource_metadata_app",
+    "build_well_known_routes",
     # OAuth 2.1 (requires [auth-oauth])
     *_OAUTH_EXPORTS,
 ]

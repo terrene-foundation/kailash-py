@@ -105,6 +105,10 @@ except ImportError:  # pragma: no cover
     rsa = None  # type: ignore[assignment]
 
 from kailash_mcp.auth.providers import AuthProvider
+from kailash_mcp.auth.well_known import (
+    build_www_authenticate_challenge,
+    protected_resource_metadata_url,
+)
 from kailash_mcp.errors import AuthenticationError, AuthorizationError, MCPError
 
 
@@ -387,11 +391,13 @@ class AuthorizationCode:
                 base64.urlsafe_b64encode(verifier_hash).decode().rstrip("=")
             )
             return verifier_challenge == self.code_challenge
-        elif self.code_challenge_method == "plain":
-            # Plain challenge method
-            return code_verifier == self.code_challenge
-        else:
-            return False
+        # Fail-closed: PKCE "plain" (and any non-S256 method) can NEVER validate.
+        # The AS advertises ``code_challenge_methods_supported == ["S256"]`` and
+        # rejects a non-S256 method at issuance (create_authorization_url /
+        # generate_authorization_code); dropping the "plain" branch here closes
+        # the enforcement-surface gap so a stored "plain" challenge cannot pass
+        # verification even if one were ever persisted (PKCE downgrade defense).
+        return False
 
 
 class ClientStore(ABC):
@@ -722,12 +728,24 @@ class JWTManager:
         Returns:
             Token payload or None if invalid
         """
+        # Audience enforcement belongs to the RESOURCE SERVER, not this shared
+        # token layer: the JWTManager mints tokens for many resources and does
+        # not know which single audience a given verify call expects.
+        # ``ResourceServer.authenticate`` performs the fail-closed audience check
+        # (reject audience-absent AND foreign-audience) against its configured
+        # ``audience``. PyJWT's default, however, REJECTS any ``aud``-bearing
+        # token when no ``audience`` kwarg is supplied — which would reject every
+        # correctly-scoped RFC 8707 token here and leave the resource server's
+        # own audience check unreachable. Disable PyJWT aud-verification so the
+        # resource-server boundary is the sole (and live) audience authority.
+        options: Dict[str, Any] = {"verify_aud": False}
         decode_kwargs: Dict[str, Any] = {
             "algorithms": [self.algorithm],
+            "options": options,
         }
         if self.issuer is not None:
             decode_kwargs["issuer"] = self.issuer
-            decode_kwargs["options"] = {"require": ["exp", "iss"]}
+            options["require"] = ["exp", "iss"]
 
         try:
             payload = jwt.decode(token, self.public_key, **decode_kwargs)  # type: ignore[arg-type]
@@ -1012,6 +1030,15 @@ class AuthorizationServer:
             params["scope"] = scope
         if state:
             params["state"] = state
+        # Fail-closed S256-only enforcement (parity with the S256-only posture
+        # advertised at get_well_known_metadata). Reject any explicitly-supplied
+        # non-S256 method — "plain" is a PKCE downgrade the metadata claims is
+        # unsupported — so the enforcement surface matches the advertisement.
+        if code_challenge_method is not None and code_challenge_method != "S256":
+            raise AuthorizationError(
+                f"unsupported code_challenge_method {code_challenge_method!r}; "
+                f"only 'S256' is supported (PKCE 'plain' is rejected)"
+            )
         if code_challenge:
             params["code_challenge"] = code_challenge
             params["code_challenge_method"] = code_challenge_method or "S256"
@@ -1053,6 +1080,16 @@ class AuthorizationServer:
 
         # Convert scopes list to string
         scope = " ".join(scopes) if scopes else None
+
+        # Fail-closed S256-only enforcement (parity with the S256-only posture
+        # advertised at get_well_known_metadata). A non-S256 method — "plain" is
+        # a PKCE downgrade — is refused at issuance so a "plain" challenge is
+        # never persisted; validate_pkce additionally fails-closed on it.
+        if code_challenge_method is not None and code_challenge_method != "S256":
+            raise AuthorizationError(
+                f"unsupported code_challenge_method {code_challenge_method!r}; "
+                f"only 'S256' is supported (PKCE 'plain' is rejected)"
+            )
 
         # Create authorization code
         auth_code = AuthorizationCode(
@@ -1416,7 +1453,12 @@ class AuthorizationServer:
                 "client_secret_basic",
                 "client_secret_post",
             ],
-            "code_challenge_methods_supported": ["S256", "plain"],
+            # S256-only per the MCP 2025-11-25 posture the client enforces
+            # (OAuth2Client._assert_pkce_s256_supported rejects a flow unless the
+            # AS advertises S256; "plain" is never accepted). Advertising "plain"
+            # here would let a downstream reader believe the downgrade-prone
+            # method is supported — it is not.
+            "code_challenge_methods_supported": ["S256"],
         }
 
 
@@ -1429,6 +1471,10 @@ class ResourceServer:
         audience: str,
         jwt_manager: Optional[JWTManager] = None,
         required_scopes: Optional[List[str]] = None,
+        resource: Optional[str] = None,
+        authorization_servers: Optional[List[str]] = None,
+        bearer_methods_supported: Optional[List[str]] = None,
+        resource_metadata_url: Optional[str] = None,
     ):
         """Initialize resource server.
 
@@ -1437,12 +1483,55 @@ class ResourceServer:
             audience: Expected token audience
             jwt_manager: JWT manager for token verification
             required_scopes: Required scopes for access
+            resource: Canonical RFC 8707 resource identifier this server
+                represents (the ``resource`` field of the RFC 9728 Protected
+                Resource Metadata document). Defaults to ``audience`` — for an
+                OAuth resource server the token audience IS the resource URI.
+            authorization_servers: Authorization-server issuer URLs advertised in
+                the PRM ``authorization_servers`` array. Defaults to
+                ``[issuer]``.
+            bearer_methods_supported: RFC 6750 bearer-token presentation methods
+                the server accepts, advertised in PRM
+                ``bearer_methods_supported``. Defaults to ``["header"]`` (the
+                ``Authorization: Bearer`` header form).
+            resource_metadata_url: Absolute RFC 9728 PRM URL emitted in the
+                ``WWW-Authenticate`` challenge. Defaults to the value derived
+                from ``resource`` per RFC 9728 §3.1.
         """
         _require_oauth_extras()
         self.issuer = issuer
         self.audience = audience
         self.jwt_manager = jwt_manager or JWTManager(issuer=issuer)
         self.required_scopes = required_scopes or []
+        # RFC 8707 resource identifier == token audience for a resource server.
+        # ``resource`` and ``audience`` stay INDEPENDENT: the AS mints ``aud``
+        # from the audience and ``authenticate`` compares the token's ``aud``
+        # against ``self.audience``; only the RFC 9728 PRM URL is derived from
+        # ``self.resource``. That derivation REQUIRES an absolute http(s) URL —
+        # a bare-string audience used as the effective resource (the documented
+        # ``ResourceServer(issuer=..., audience="mcp-api")`` default) would emit
+        # a corrupt PRM doc / route path / challenge (``:///.well-known/...``)
+        # that no RFC 9728 client can bootstrap. Fail loud (mirroring the
+        # double-quote guard in ``build_www_authenticate_challenge``) rather
+        # than serve a silently-broken URL.
+        self.resource = resource or audience
+        _parsed_resource = urlparse(self.resource)
+        if (
+            _parsed_resource.scheme not in ("http", "https")
+            or not _parsed_resource.netloc
+        ):
+            raise ValueError(
+                f"ResourceServer resource identifier must be an absolute "
+                f"http(s) URL for RFC 9728 PRM derivation (scheme http/https + "
+                f"non-empty host); got {self.resource!r}. When 'audience' is a "
+                f'bare token, pass resource="https://<host>/<path>" explicitly '
+                f"(audience and resource remain independent)."
+            )
+        self.authorization_servers = authorization_servers or [issuer]
+        self.bearer_methods_supported = bearer_methods_supported or ["header"]
+        self.resource_metadata_url = resource_metadata_url or (
+            protected_resource_metadata_url(self.resource)
+        )
 
     async def authenticate(
         self, credentials: Union[str, Dict[str, Any]]
@@ -1461,7 +1550,7 @@ class ResourceServer:
         else:
             token = credentials.get("token")
             if not token:
-                raise AuthenticationError("No token provided")
+                raise self._unauthorized("No token provided", error="invalid_request")
 
         # Remove 'Bearer ' prefix if present
         if token.startswith("Bearer "):
@@ -1470,15 +1559,23 @@ class ResourceServer:
         # Verify JWT token
         payload = self.jwt_manager.verify_access_token(token)
         if not payload:
-            raise AuthenticationError("Invalid token")
+            raise self._unauthorized("Invalid token", error="invalid_token")
 
-        # Check audience
+        # Check audience — fail-closed: reject BOTH an audience-absent token
+        # (empty ``aud`` never contains self.audience) AND a foreign-audience
+        # token, so a token minted for a different resource cannot be replayed
+        # here (RFC 8707 / rules/security.md audience fail-closed).
         token_audience = payload.get("aud", [])
         if isinstance(token_audience, str):
             token_audience = [token_audience]
 
         if self.audience not in token_audience:
-            raise AuthorizationError("Invalid token audience")
+            raise self._unauthorized(
+                "Invalid token audience",
+                error="invalid_token",
+                error_description="token audience does not match this resource",
+                exc_type=AuthorizationError,
+            )
 
         # Check required scopes
         token_scope = payload.get("scope", "")
@@ -1486,7 +1583,11 @@ class ResourceServer:
 
         for required_scope in self.required_scopes:
             if required_scope not in token_scopes:
-                raise AuthenticationError(f"Missing required scope: {required_scope}")
+                raise self._unauthorized(
+                    f"Missing required scope: {required_scope}",
+                    error="insufficient_scope",
+                    scope=required_scope,
+                )
 
         return {
             "id": payload.get("sub") or payload.get("client_id"),
@@ -1522,6 +1623,112 @@ class ResourceServer:
             Empty dict as resource server doesn't add headers
         """
         return {}
+
+    def get_protected_resource_metadata(self) -> Dict[str, Any]:
+        """Return this server's RFC 9728 Protected Resource Metadata document.
+
+        Served at ``GET /.well-known/oauth-protected-resource`` (see
+        ``kailash_mcp.auth.well_known``) and referenced by the
+        ``resource_metadata`` param of the 401 ``WWW-Authenticate`` challenge, so
+        a client can discover which authorization server(s) issue tokens for this
+        resource and what scopes it accepts.
+
+        Returns:
+            The RFC 9728 §2 metadata document: ``resource``,
+            ``authorization_servers``, ``scopes_supported``,
+            ``bearer_methods_supported``.
+        """
+        return {
+            "resource": self.resource,
+            "authorization_servers": list(self.authorization_servers),
+            "scopes_supported": list(self.required_scopes),
+            "bearer_methods_supported": list(self.bearer_methods_supported),
+        }
+
+    def www_authenticate_challenge(
+        self,
+        *,
+        scope: Optional[str] = None,
+        error: Optional[str] = None,
+        error_description: Optional[str] = None,
+    ) -> str:
+        """Build this server's ``WWW-Authenticate: Bearer`` challenge value.
+
+        Points a challenged client at this resource's PRM document
+        (``resource_metadata``) per RFC 9728 §5.1, advertising the required
+        scope and (optionally) an RFC 6750 error classification. All values are
+        drawn from this server's configuration — never hard-coded literals.
+
+        Args:
+            scope: Space-delimited scope to advertise; defaults to the server's
+                configured ``required_scopes`` joined by spaces.
+            error: RFC 6750 error code.
+            error_description: RFC 6750 human-readable description.
+
+        Returns:
+            The ``WWW-Authenticate`` header VALUE.
+        """
+        if scope is None and self.required_scopes:
+            scope = " ".join(self.required_scopes)
+        return build_www_authenticate_challenge(
+            resource_metadata_url=self.resource_metadata_url,
+            scope=scope,
+            error=error,
+            error_description=error_description,
+        )
+
+    def _unauthorized(
+        self,
+        message: str,
+        *,
+        error: str,
+        error_description: Optional[str] = None,
+        scope: Optional[str] = None,
+        exc_type: type = AuthenticationError,
+    ) -> AuthenticationError:
+        """Build a typed auth-failure carrying the ``WWW-Authenticate`` header.
+
+        The challenge is attached as the ``www_authenticate`` attribute (and in
+        ``data['www_authenticate']``) so the HTTP/SSE transport can surface it on
+        the 401 response without re-deriving it. The exception is returned (not
+        raised) so the caller keeps a single ``raise`` site.
+        """
+        challenge = self.www_authenticate_challenge(
+            scope=scope, error=error, error_description=error_description
+        )
+        exc = exc_type(message)
+        exc.www_authenticate = challenge
+        exc.data["www_authenticate"] = challenge
+        return exc
+
+    def unauthorized_response(
+        self,
+        *,
+        error: str = "invalid_token",
+        error_description: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a ready-to-emit HTTP 401 challenging with RFC 9728 PRM.
+
+        A transport serving the resource emits this verbatim when a request
+        arrives without a valid token, so an MCP client learns where to obtain
+        one (the RFC 9728 §5 discovery bootstrap).
+
+        Returns:
+            ``{"status": 401, "headers": {"WWW-Authenticate": <challenge>},
+            "body": {"error": <error>, ...}}``.
+        """
+        challenge = self.www_authenticate_challenge(
+            scope=scope, error=error, error_description=error_description
+        )
+        body: Dict[str, Any] = {"error": error}
+        if error_description is not None:
+            body["error_description"] = error_description
+        return {
+            "status": 401,
+            "headers": {"WWW-Authenticate": challenge},
+            "body": body,
+        }
 
 
 class OAuth2Client:
@@ -1732,8 +1939,8 @@ class OAuth2Client:
         # check below runs only AFTER the request has already fired.
         if not self._same_origin(prm_url, server_url):
             raise OAuthDiscoveryError(
-                f"Protected Resource Metadata URL origin does not match the "
-                f"connected server (refusing cross-origin discovery fetch)"
+                "Protected Resource Metadata URL origin does not match the "
+                "connected server (refusing cross-origin discovery fetch)"
             )
 
         prm = await self._fetch_json(prm_url, description="Protected Resource Metadata")

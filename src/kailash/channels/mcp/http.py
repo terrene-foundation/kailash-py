@@ -19,6 +19,16 @@ is passed (intended for trusted internal endpoints).
 HTTP is a request/response transport — :meth:`receive` raises
 :class:`NotImplementedError` because the protocol does not support
 unsolicited server-push.
+
+Transport status (native vs spec-delegated): this ``HttpTransport`` is a
+native internal/legacy client transport (plain JSON-RPC over ``POST``). The
+MCP 2025-11-25 spec-compliant HTTP client path is the upstream-delegated
+``streamable_http_client`` (single-endpoint Streamable HTTP with
+``MCP-Session-Id`` + ``MCP-Protocol-Version`` handling), used by
+``kailash_mcp.client.MCPClient._discover_tools_http`` /
+``_call_tool_http``; and the spec stdio *server* is FastMCP, run via
+``kailash_mcp.server.MCPServerBase.start`` (``self._mcp.run()``). Prefer
+those for interoperability with spec MCP peers.
 """
 
 from __future__ import annotations
@@ -141,6 +151,8 @@ class HttpTransport(Transport):
             try:
                 await self._session.close()
             except Exception:
+                # Expected-failure cleanup (zero-tolerance Rule 3 carve-out):
+                # a session that errors on close is already unusable.
                 pass
             self._session = None
 

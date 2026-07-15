@@ -60,6 +60,7 @@ import functools
 import gzip
 import json
 import logging
+import re
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -109,6 +110,7 @@ logger = logging.getLogger(__name__)
 # newest supported version. A hardcoded/echoed fixed version string is
 # non-compliant.
 SUPPORTED_PROTOCOL_VERSIONS = (
+    "2025-11-25",
     "2025-06-18",
     "2025-03-26",
     "2024-11-05",
@@ -127,6 +129,106 @@ def negotiate_protocol_version(requested: Any) -> str:
     if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
         return requested
     return LATEST_PROTOCOL_VERSION
+
+
+# Server-chosen page size for opaque-cursor list pagination (spec 2025-11-25).
+# The server picks the page size itself: a client does NOT need to send a
+# ``limit`` to receive a ``nextCursor``. Cursors are opaque to clients; an
+# invalid/expired cursor is answered with a ``-32602`` error.
+_DEFAULT_PAGE_SIZE = 100
+
+# MCP logging severity ladder (logging/setLevel + notifications/message,
+# spec 2025-11-25), ordered least→most severe. The rank gates emission: a
+# message below a client's set minimum level is suppressed.
+_MCP_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+_MCP_LOG_LEVEL_RANK = {lvl: idx for idx, lvl in enumerate(_MCP_LOG_LEVELS)}
+
+# Content-redaction patterns for notifications/message ``data`` (security.md —
+# no secrets/PII on an observable surface). A sensitive object KEY has its whole
+# value replaced; every string is scanned for secret/PII token shapes.
+_SECRET_KEY_PATTERN = re.compile(
+    r"(pass(word|wd)?|secret|token|api[_-]?key|apikey|authorization|"
+    r"access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|"
+    r"credential|ssn|session[_-]?id)",
+    re.IGNORECASE,
+)
+# scheme://user:PASS@host — replace the userinfo (user:pass) span, KEEP the
+# scheme and host so the log line stays legible. Handled first (before the
+# token-shape patterns below) so the retained host does not re-trigger a match.
+_URL_USERINFO_PATTERN = re.compile(r"([A-Za-z][A-Za-z0-9+.\-]*://)[^\s:/@]+:[^\s/@]+@")
+_SECRET_VALUE_PATTERNS = (
+    re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"),  # email
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # US SSN
+    re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_\-]{12,}\b"),  # provider API keys
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{8,}\b", re.IGNORECASE),  # bearer
+    re.compile(r"\beyJ[A-Za-z0-9._\-]{10,}\b"),  # JWT (eyJ… header)
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),  # AWS access key id
+    # AWS secret access key: 40-char base64 that INCLUDES a `/` or `+` (which
+    # excludes hex digests like a 40-char SHA-1, so a git SHA is not redacted).
+    re.compile(r"\b(?=[A-Za-z0-9/+]{40}\b)[A-Za-z0-9]*[/+][A-Za-z0-9/+]*\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}\b"),  # GitHub token
+    re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b"),  # Google API key
+    re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}\b"),  # Slack token
+)
+
+_REDACTED = "[REDACTED]"
+
+
+def _completion_rank(candidate: str, partial: str) -> int:
+    """Relevance rank for a completion candidate (lower = more relevant).
+
+    ``0`` exact match, ``1`` prefix match (``startswith``), ``2`` substring
+    match. Case-insensitive. Used to order completion/complete candidates so the
+    100-item cap keeps the most relevant matches (spec 2025-11-25).
+    """
+    cand = candidate.lower()
+    part = partial.lower()
+    if cand == part:
+        return 0
+    if cand.startswith(part):
+        return 1
+    return 2
+
+
+def _redact_log_string(text: str) -> str:
+    """Scrub secret/PII token shapes from a single string."""
+    # Userinfo first: keep scheme + host, redact the user:pass span so a
+    # credential embedded in a connection string does not leak, and the
+    # retained host does not re-trigger a token-shape match below.
+    text = _URL_USERINFO_PATTERN.sub(r"\1" + _REDACTED + "@", text)
+    for pattern in _SECRET_VALUE_PATTERNS:
+        text = pattern.sub(_REDACTED, text)
+    return text
+
+
+def _redact_log_data(value: Any) -> Any:
+    """Recursively scrub secrets/PII from a ``notifications/message`` payload.
+
+    A sensitive object KEY (``password`` / ``api_key`` / ``token`` / …) has its
+    whole value replaced with ``[REDACTED]``; every string value AND every
+    string KEY is additionally scanned for secret/PII token shapes (AWS/GitHub/
+    Google/Slack keys, provider API keys, bearer tokens, JWTs, URL-userinfo
+    credentials, emails, SSNs). Scanning KEYS too closes the gap where a secret
+    lives in the key position (e.g. ``{"AKIA…": "…"}``) — a value-only scrubber
+    would ship it to the notifications wire. Non-container scalars pass through
+    unchanged. Applied to the emitted ``data`` before it leaves the server
+    (security.md § Redactor Contract — no secrets/PII on an observable surface).
+    """
+    if isinstance(value, dict):
+        redacted: Dict[Any, Any] = {}
+        for key, val in value.items():
+            # Scrub secret/PII token shapes embedded in the KEY string itself.
+            out_key = _redact_log_string(key) if isinstance(key, str) else key
+            if isinstance(key, str) and _SECRET_KEY_PATTERN.search(key):
+                redacted[out_key] = _REDACTED
+            else:
+                redacted[out_key] = _redact_log_data(val)
+        return redacted
+    if isinstance(value, (list, tuple)):
+        return [_redact_log_data(item) for item in value]
+    if isinstance(value, str):
+        return _redact_log_string(value)
+    return value
 
 
 # MCP content-block discriminators a tool may return directly (tools/call
@@ -674,6 +776,25 @@ class MCPServer:
                 rate_limiter=getattr(self, "rate_limiter", None),
             )
 
+        # Opaque-cursor pagination store (spec 2025-11-25). Server-owned so
+        # tools/list, prompts/list, resources/list AND resources/templates/list
+        # all page through ONE cursor scheme. Reuse the subscription manager's
+        # instance when subscriptions are enabled so a cursor issued by one
+        # list method validates through the same store.
+        if self.subscription_manager is not None:
+            self._cursor_manager = self.subscription_manager.cursor_manager
+        else:
+            from kailash_mcp.advanced.subscriptions import CursorManager
+
+            self._cursor_manager = CursorManager()
+
+        # MCP logging levels (logging/setLevel + notifications/message,
+        # spec 2025-11-25). Per-client minimum level gates notifications/message
+        # emission — a message below a client's set level is suppressed. Clients
+        # that never call setLevel fall back to ``_log_level_default``.
+        self._client_log_levels: Dict[str, str] = {}
+        self._log_level_default = "INFO"
+
         # Transport instance (for WebSocket and other transports)
         self._transport = None
 
@@ -1042,7 +1163,9 @@ class MCPServer:
                     )
                     try:
                         self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id, tool_name, **rate_limit  # type: ignore[reportCallIssue]
+                            user_id,
+                            tool_name,
+                            **rate_limit,  # type: ignore[reportCallIssue]
                         )
                     except RateLimitError as e:
                         if self.error_aggregator:
@@ -1222,7 +1345,15 @@ class MCPServer:
                         user_info = None
                     else:
                         try:
-                            user_info = self.auth_manager.authenticate_and_authorize(
+                            # Async dispatch context (WebSocket): use the
+                            # async-aware path so an async auth_provider (e.g.
+                            # ResourceServer, whose authenticate() is a
+                            # coroutine) is actually awaited. The sync path
+                            # would leave the coroutine un-awaited and crash
+                            # with an AttributeError -> 500 instead of a clean
+                            # fail-closed AuthorizationError. Sync providers
+                            # work unchanged through this path.
+                            user_info = await self.auth_manager.authenticate_and_authorize_async(
                                 credentials, required_permission
                             )
                             # Add user info to session
@@ -1249,7 +1380,9 @@ class MCPServer:
                     )
                     try:
                         self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id, tool_name, **rate_limit  # type: ignore[reportCallIssue]
+                            user_id,
+                            tool_name,
+                            **rate_limit,  # type: ignore[reportCallIssue]
                         )
                     except RateLimitError as e:
                         if self.error_aggregator:
@@ -2054,8 +2187,7 @@ class MCPServer:
                     "error": {
                         "code": -32600,
                         "message": (
-                            f"Request id already used in this session: "
-                            f"{request_id!r}"
+                            f"Request id already used in this session: {request_id!r}"
                         ),
                     },
                     "id": request_id,
@@ -2091,6 +2223,8 @@ class MCPServer:
             return await self._handle_call_tool(params, request_id)
         elif method == "resources/list":
             return await self._handle_list_resources(params, request_id)
+        elif method == "resources/templates/list":
+            return await self._handle_list_resource_templates(params, request_id)
         elif method == "resources/read":
             return await self._handle_read_resource(params, request_id, client_id)
         elif method == "resources/subscribe":
@@ -2106,7 +2240,10 @@ class MCPServer:
         elif method == "prompts/get":
             return await self._handle_get_prompt(params, request_id)
         elif method == "logging/setLevel":
-            return await self._handle_logging_set_level(params, request_id)
+            # Merge client_id so the level is tracked per-session for
+            # notifications/message gating (spec 2025-11-25).
+            params_with_client = {**params, "client_id": client_id}
+            return await self._handle_logging_set_level(params_with_client, request_id)
         elif method == "roots/list":
             # Add client_id to params for roots/list handler
             params_with_client = {**params, "client_id": client_id}
@@ -2127,7 +2264,10 @@ class MCPServer:
             }
 
     async def _handle_initialize(
-        self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
+        self,
+        params: Dict[str, Any],
+        request_id: Any,
+        client_id: str = None,  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
         """Handle initialize request."""
         # Store client information for capability checks
@@ -2154,10 +2294,16 @@ class MCPServer:
                         "listChanged": self.enable_subscriptions,
                         "batch_subscribe": self.enable_subscriptions,
                         "batch_unsubscribe": self.enable_subscriptions,
+                        # resources/templates/list is served (spec 2025-11-25).
+                        "resourceTemplates": {"listSupported": True},
                     },
                     "prompts": {"listSupported": True, "getSupported": True},
                     "logging": {"setLevel": True},
                     "roots": {"list": True},
+                    # Spec-2025-11-25 top-level completions capability. The
+                    # experimental.completion alias below is retained for
+                    # backward compatibility with older clients.
+                    "completions": {},
                     "experimental": {
                         "progressNotifications": True,
                         "cancellation": True,
@@ -2202,7 +2348,70 @@ class MCPServer:
                     tool_desc["annotations"] = mcp_annotations
                 tools.append(tool_desc)
 
-        return {"jsonrpc": "2.0", "result": {"tools": tools}, "id": request_id}
+        page, next_cursor, error = self._paginate(
+            tools, params.get("cursor"), request_id
+        )
+        if error is not None:
+            return error
+        result: Dict[str, Any] = {"tools": page}
+        if next_cursor:
+            result["nextCursor"] = next_cursor
+        return {"jsonrpc": "2.0", "result": result, "id": request_id}
+
+    def _paginate(
+        self, all_items: List[Any], cursor: Any, request_id: Any
+    ) -> "tuple[Optional[List[Any]], Optional[str], Optional[Dict[str, Any]]]":
+        """Server-chosen opaque-cursor pagination (spec 2025-11-25).
+
+        Returns ``(page, next_cursor, error)``. ``error`` is a ``-32602``
+        JSON-RPC envelope when ``cursor`` is present but invalid/expired (clients
+        treat cursors as opaque); otherwise ``None`` and ``page`` carries this
+        page's items. The server picks the page size (``_DEFAULT_PAGE_SIZE``) —
+        a client does NOT need to send a ``limit`` to receive a ``nextCursor``.
+        """
+        start = 0
+        if cursor is not None:
+            # A cursor is an OPAQUE STRING (spec 2025-11-25). A non-string
+            # cursor (int, list, dict, ...) is a malformed param — return the
+            # -32602 envelope rather than letting an unhashable/typed value
+            # raise an unhandled TypeError deep in the cursor manager. Mirrors
+            # the invalid-string-cursor branch below.
+            if not isinstance(cursor, str):
+                return (
+                    None,
+                    None,
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32602,
+                            "message": "Invalid or expired cursor",
+                        },
+                        "id": request_id,
+                    },
+                )
+            if not self._cursor_manager.is_valid(cursor):
+                return (
+                    None,
+                    None,
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32602,
+                            "message": "Invalid or expired cursor",
+                        },
+                        "id": request_id,
+                    },
+                )
+            start = self._cursor_manager.get_cursor_position(cursor) or 0
+
+        end = start + _DEFAULT_PAGE_SIZE
+        page = all_items[start:end]
+        next_cursor = None
+        if end < len(all_items):
+            next_cursor = self._cursor_manager.create_cursor_for_position(
+                all_items, end
+            )
+        return page, next_cursor, None
 
     async def _handle_call_tool(
         self, params: Dict[str, Any], request_id: Any
@@ -2402,7 +2611,10 @@ class MCPServer:
         return {"jsonrpc": "2.0", "result": {"resources": resources}, "id": request_id}
 
     async def _handle_read_resource(
-        self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
+        self,
+        params: Dict[str, Any],
+        request_id: Any,
+        client_id: str = None,  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
         """Handle resources/read request with change detection.
 
@@ -2469,8 +2681,11 @@ class MCPServer:
                 }
 
                 # Check for changes and notify subscribers
-                change = await self.subscription_manager.resource_monitor.check_for_changes(
-                    uri, resource_data  # type: ignore[reportArgumentType]
+                change = (
+                    await self.subscription_manager.resource_monitor.check_for_changes(
+                        uri,
+                        resource_data,  # type: ignore[reportArgumentType]
+                    )
                 )
 
                 if change:
@@ -2550,7 +2765,7 @@ class MCPServer:
     async def _handle_list_prompts(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle prompts/list request."""
+        """Handle prompts/list request with cursor-based pagination."""
         prompts = []
         for name, info in self._prompt_registry.items():
             prompts.append(
@@ -2561,7 +2776,48 @@ class MCPServer:
                 }
             )
 
-        return {"jsonrpc": "2.0", "result": {"prompts": prompts}, "id": request_id}
+        page, next_cursor, error = self._paginate(
+            prompts, params.get("cursor"), request_id
+        )
+        if error is not None:
+            return error
+        result: Dict[str, Any] = {"prompts": page}
+        if next_cursor:
+            result["nextCursor"] = next_cursor
+        return {"jsonrpc": "2.0", "result": result, "id": request_id}
+
+    async def _handle_list_resource_templates(
+        self, params: Dict[str, Any], request_id: Any
+    ) -> Dict[str, Any]:
+        """Handle resources/templates/list with cursor-based pagination.
+
+        A registered resource whose URI carries a ``{placeholder}`` is a
+        template (the shape ``_match_resource_template`` expands); it is
+        advertised here via its ``uriTemplate`` (spec 2025-11-25). Concrete
+        (placeholder-free) resources stay in resources/list. Pagination reuses
+        the shared opaque-cursor scheme — an invalid cursor -> ``-32602``.
+        """
+        templates = []
+        for uri, info in self._resource_registry.items():
+            if "{" in uri and "}" in uri:
+                templates.append(
+                    {
+                        "uriTemplate": uri,
+                        "name": info.get("name", uri),
+                        "description": info.get("description", ""),
+                        "mimeType": info.get("mime_type", "text/plain"),
+                    }
+                )
+
+        page, next_cursor, error = self._paginate(
+            templates, params.get("cursor"), request_id
+        )
+        if error is not None:
+            return error
+        result: Dict[str, Any] = {"resourceTemplates": page}
+        if next_cursor:
+            result["nextCursor"] = next_cursor
+        return {"jsonrpc": "2.0", "result": result, "id": request_id}
 
     async def _handle_get_prompt(
         self, params: Dict[str, Any], request_id: Any
@@ -2904,7 +3160,7 @@ class MCPServer:
         level = params.get("level", "INFO").upper()
 
         # Validate log level
-        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        valid_levels = list(_MCP_LOG_LEVELS)
         if level not in valid_levels:
             return {
                 "jsonrpc": "2.0",
@@ -2915,7 +3171,17 @@ class MCPServer:
                 "id": request_id,
             }
 
-        # Set the log level
+        # Record the per-session minimum level so notifications/message emission
+        # is gated per client (spec 2025-11-25); a message below this level is
+        # suppressed for this client. Absent a real client_id, update the
+        # server-wide default.
+        client_id = params.get("client_id")
+        if client_id and client_id != "unknown":
+            self._client_log_levels[client_id] = level
+        else:
+            self._log_level_default = level
+
+        # Set the process log level too (existing behaviour).
         logging.getLogger().setLevel(getattr(logging, level))
         logger.info(f"Log level changed to {level}")
 
@@ -2939,6 +3205,65 @@ class MCPServer:
             "result": {"level": level, "levels": valid_levels},
             "id": request_id,
         }
+
+    async def send_log_message(
+        self,
+        level: str,
+        data: Any,
+        *,
+        logger_name: Optional[str] = None,
+        client_id: Optional[str] = None,
+    ) -> int:
+        """Emit an MCP ``notifications/message`` to connected clients.
+
+        The server-to-client logging path required by spec 2025-11-25:
+        ``logging/setLevel`` only sets a level; THIS is how the server actually
+        pushes a log record. Emission is GATED by the per-client minimum level
+        set via ``logging/setLevel`` (falling back to ``_log_level_default``) —
+        a message BELOW a client's level is suppressed for that client. The
+        ``data`` payload is scrubbed of secrets/PII (``_redact_log_data``,
+        security.md) before send.
+
+        Args:
+            level: severity (one of ``_MCP_LOG_LEVELS``); case-insensitive.
+            data: the log payload (dict/str/scalar); redacted before send.
+            logger_name: optional ``logger`` field on the notification.
+            client_id: when given, target ONLY that client (still level-gated);
+                otherwise every initialized client.
+
+        Returns:
+            The number of clients the notification was actually sent to.
+        """
+        norm = str(level).upper()
+        msg_rank = _MCP_LOG_LEVEL_RANK.get(norm)
+        if msg_rank is None:
+            raise ValueError(
+                f"Invalid log level: {level}. Must be one of {list(_MCP_LOG_LEVELS)}"
+            )
+
+        params: Dict[str, Any] = {"level": norm, "data": _redact_log_data(data)}
+        if logger_name is not None:
+            params["logger"] = logger_name
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/message",
+            "params": params,
+        }
+
+        if client_id is not None:
+            targets = [client_id]
+        else:
+            targets = list(self.client_info.keys())
+
+        sent = 0
+        for target in targets:
+            effective = self._client_log_levels.get(target, self._log_level_default)
+            # Suppress messages below this client's configured minimum level.
+            if msg_rank < _MCP_LOG_LEVEL_RANK.get(effective, 0):
+                continue
+            await self._send_websocket_notification(target, notification)
+            sent += 1
+        return sent
 
     async def _handle_roots_list(
         self, params: Dict[str, Any], request_id: Any
@@ -2991,49 +3316,65 @@ class MCPServer:
         partial_value = argument.get("value", "")
 
         try:
-            values = []
+            # Collect (match_key, value) so candidates can be relevance-ranked
+            # BEFORE the 100-item cap, so the cap keeps the TOP matches rather
+            # than an arbitrary registry-order slice (spec 2025-11-25).
+            collected: List["tuple[str, Dict[str, Any]]"] = []
 
             if ref_type == "resource":
                 # Search through registered resources
                 for uri, resource_info in self._resource_registry.items():
-                    if partial_value in uri:  # Simple prefix/substring matching
-                        values.append(
-                            {
-                                "uri": uri,
-                                "name": resource_info.get("name", uri),
-                                "description": resource_info.get("description", ""),
-                            }
+                    if partial_value in uri:  # substring candidate
+                        collected.append(
+                            (
+                                uri,
+                                {
+                                    "uri": uri,
+                                    "name": resource_info.get("name", uri),
+                                    "description": resource_info.get("description", ""),
+                                },
+                            )
                         )
 
             elif ref_type == "prompt":
                 # Search through registered prompts
                 for name, prompt_info in self._prompt_registry.items():
-                    if partial_value in name:  # Simple prefix/substring matching
-                        values.append(
-                            {
-                                "name": name,
-                                "description": prompt_info.get("description", ""),
-                                "arguments": prompt_info.get("arguments", []),
-                            }
+                    if partial_value in name:  # substring candidate
+                        collected.append(
+                            (
+                                name,
+                                {
+                                    "name": name,
+                                    "description": prompt_info.get("description", ""),
+                                    "arguments": prompt_info.get("arguments", []),
+                                },
+                            )
                         )
 
             elif ref_type == "tool":
                 # Search through registered tools
                 for name, tool_info in self._tool_registry.items():
                     if partial_value in name:
-                        values.append(
-                            {
-                                "name": name,
-                                "description": tool_info.get("description", ""),
-                                "inputSchema": tool_info.get("inputSchema", {}),
-                            }
+                        collected.append(
+                            (
+                                name,
+                                {
+                                    "name": name,
+                                    "description": tool_info.get("description", ""),
+                                    "inputSchema": tool_info.get("inputSchema", {}),
+                                },
+                            )
                         )
 
+            # Relevance-rank: exact match first, then prefix, then substring
+            # (stable within a rank). Ranking precedes the cap so the top-100
+            # are the most relevant candidates, not a registry-order prefix.
+            collected.sort(key=lambda pair: _completion_rank(pair[0], partial_value))
+
             # Limit to 100 items and add hasMore flag if needed
-            total_matches = len(values)
+            total_matches = len(collected)
             has_more = total_matches > 100
-            if has_more:
-                values = values[:100]
+            values = [value for _, value in collected[:100]]
 
             result = {
                 "completion": {
