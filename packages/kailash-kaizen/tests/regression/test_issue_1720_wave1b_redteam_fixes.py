@@ -67,13 +67,20 @@ def test_gemini_response_format_text_does_not_force_json():
 
 @pytest.mark.regression
 @pytest.mark.parametrize(
-    "shaper", [openai_chat, anthropic_messages], ids=["openai", "anthropic"]
+    "shaper",
+    [openai_chat, anthropic_messages, google_generate_content],
+    ids=["openai", "anthropic", "google"],
 )
 def test_empty_tools_list_emits_nothing(shaper):
-    """Finding 3 — tools=[] (set but empty) emits no tools + no forced choice."""
+    """Finding 3 (+ round-2 gap) — tools=[] (set but empty) emits no tools +
+    no forced tool-choice/config on ALL THREE adapters. Round-2 caught that the
+    Gemini adapter had missed this same-class guard."""
     payload = shaper.build_request_payload(_req(tools=[]))
     assert "tools" not in payload, "empty tools list must not emit a tools key"
+    # openai/anthropic use `tool_choice`; gemini uses `toolConfig` — neither
+    # forced-selection surface may appear with no tools.
     assert "tool_choice" not in payload, "must not force tool_choice with no tools"
+    assert "toolConfig" not in payload, "must not force toolConfig with no tools"
 
 
 @pytest.mark.regression

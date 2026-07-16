@@ -150,8 +150,12 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         payload["systemInstruction"] = {"parts": system_parts}
 
     # tools -> Gemini top-level `tools` with functionDeclarations, translating
-    # the OpenAI function-schema form to Gemini's shape.
-    if request.tools is not None:
+    # the OpenAI function-schema form to Gemini's shape. Guard on truthiness so
+    # an explicitly-set EMPTY list (`tools=[]`) emits nothing — emitting
+    # `tools:[{functionDeclarations:[]}]` + a forced `toolConfig` mode:ANY would
+    # be a degenerate forced-call-with-no-functions request (matches the
+    # openai/anthropic empty-tools guard).
+    if request.tools:
         payload["tools"] = [
             {
                 "functionDeclarations": [
