@@ -248,9 +248,14 @@ class EmbedOptions(BaseModel):
 class CompletionRequest(BaseModel):
     """Minimal shared-shape completion request.
 
-    Field names mirror the Rust struct; concrete wire adapters translate to
-    each provider's schema. Session 1 shipped the shape; the real chat
-    completion send path landed in #1717 (OpenAI + platform-Anthropic +
+    The base field names mirror the Rust struct; concrete wire adapters
+    translate to each provider's schema. The #1720 Wave-1a additive fields
+    below are sourced from the legacy ``providers/llm/`` layer (Python-side)
+    and are NOT asserted to already exist on the Rust struct — cross-SDK
+    field-shape parity for them is a Wave-1b lockstep concern (tracked with
+    the per-adapter emission), not a Wave-1a claim. Session 1 shipped the
+    shape; the real chat completion send path landed in #1717 (OpenAI +
+    platform-Anthropic +
     Bedrock/Vertex/Google/Cohere/Mistral/Ollama/HF).
 
     The #1720 Wave-1a additive fields below carry agent-facing capabilities

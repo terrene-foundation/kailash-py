@@ -924,6 +924,14 @@ class LlmClient:
         and the per-model temperature floor are all data-driven — no provider
         branch in the caller path.
 
+        #1720 Wave-1a: the ``tools``, ``tool_choice``, ``response_format``,
+        ``seed``, ``logit_bias``, ``frequency_penalty``, ``presence_penalty``,
+        ``n``, and ``top_k`` kwargs are accepted onto the request SHAPE but are
+        NOT yet emitted by any wire — per-adapter emission + parse is Wave 1b.
+        Passing them today is a no-op (no error, no effect); until Wave 1b
+        lands, tool-calling / structured-output agent work goes through the
+        ``kaizen.providers`` layer.
+
         Raises:
             ValueError: ``messages`` empty of a resolvable model, or no
                 deployment configured.
@@ -1089,6 +1097,12 @@ class LlmClient:
         SSE wires (OpenAI / Anthropic / Vertex-Gemini) emit ``data: {json}``
         lines; JSONL wires (Ollama / Bedrock) emit bare JSON objects per line.
         Both are handled: a ``data:`` prefix is stripped when present.
+
+        #1720 Wave-1a: the ``tools`` … ``top_k`` kwargs are accepted onto the
+        request SHAPE but NOT yet emitted by any wire (Wave 1b). They are
+        forwarded unchanged on both the streaming path AND the
+        ``streaming.enabled=False`` buffered-``complete()`` fallback, so the two
+        paths stay at parity when Wave 1b lands emission.
         """
         if self._deployment is None:
             raise ValueError(
@@ -1108,6 +1122,15 @@ class LlmClient:
                 max_tokens=max_tokens,
                 stop=stop,
                 user=user,
+                tools=tools,
+                tool_choice=tool_choice,
+                response_format=response_format,
+                seed=seed,
+                logit_bias=logit_bias,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
+                n=n,
+                top_k=top_k,
                 http_client=http_client,
             )
             yield result

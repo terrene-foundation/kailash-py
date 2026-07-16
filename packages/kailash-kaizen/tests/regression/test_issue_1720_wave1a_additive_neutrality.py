@@ -144,3 +144,53 @@ def test_embedoptions_accepts_wave1a_fields():
     # Neutrality: unset new fields stay None.
     bare = EmbedOptions()
     assert bare.input_type is None and bare.normalize is None
+
+
+@pytest.mark.regression
+def test_stream_streaming_disabled_forwards_wave1a_kwargs():
+    """stream()'s streaming-disabled fallback delegates to complete() and MUST
+    forward every Wave-1a kwarg — else the moment Wave 1b wires emission,
+    ``stream(tools=[...])`` would send tools on the real streaming path but
+    silently DROP them on the streaming.enabled=False path (a complete()/stream()
+    parity gap). Reviewer finding on PR #1775; guards the fallback threading."""
+    import asyncio
+
+    from kaizen.llm import LlmClient
+    from kaizen.llm.deployment import StreamingConfig
+    from kaizen.llm.presets import openai_preset
+
+    dep = openai_preset(api_key="sk-test", model="test-model")
+    dep = dep.model_copy(update={"streaming": StreamingConfig(enabled=False)})
+    client = LlmClient.from_deployment(dep)
+
+    recorded: dict = {}
+
+    async def _recorder(messages, **kwargs):
+        recorded.update(kwargs)
+        return {"text": "ok"}
+
+    client.complete = _recorder  # instance attr shadows the bound method
+
+    async def _drive():
+        async for _ in client.stream(
+            [{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "f", "parameters": {}}}],
+            tool_choice="required",
+            response_format={"type": "json_object"},
+            seed=7,
+            logit_bias={"1": -1.0},
+            frequency_penalty=0.5,
+            presence_penalty=0.25,
+            n=2,
+            top_k=40,
+        ):
+            pass
+
+    asyncio.run(_drive())
+
+    for field in _NEW_COMPLETION_FIELDS:
+        assert field in recorded, (
+            f"stream() streaming-disabled fallback dropped {field!r} when "
+            f"delegating to complete() — Wave-1a threading parity gap."
+        )
+    assert recorded["seed"] == 7 and recorded["top_k"] == 40
