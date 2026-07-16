@@ -44,13 +44,20 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 import httpx
 
+from kaizen.llm.auth import ApiKey, ApiKeyBearer
 from kaizen.llm.deployment import (
     CompletionRequest,
     EmbedOptions,
     LlmDeployment,
     WireProtocol,
 )
-from kaizen.llm.errors import InvalidResponse, ProviderError, RateLimited, Timeout
+from kaizen.llm.errors import (
+    AuthError,
+    InvalidResponse,
+    ProviderError,
+    RateLimited,
+    Timeout,
+)
 from kaizen.llm.http_client import LlmHttpClient
 from kaizen.llm.redaction import redact_messages
 from kaizen.llm.wire_protocols import (
@@ -69,6 +76,33 @@ from kaizen.llm.wire_protocols import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class UnsupportedApiKeyOverride(AuthError):
+    """Raised by ``complete()``/``stream()`` when a per-request ``api_key=``
+    override (#1720 Wave-1b BYOK) is supplied but the deployment's auth
+    strategy has no well-defined "install this raw string instead" semantics.
+
+    Per-request BYOK is supported ONLY for ``ApiKeyBearer``-family
+    deployments — the three header kinds ``Authorization: Bearer`` /
+    ``X-Api-Key`` / ``X-Goog-Api-Key`` (``kaizen.llm.auth.bearer``). Every
+    other auth strategy (``AwsSigV4`` request signing, ``GcpOauth`` /
+    ``AzureEntra`` token refresh, ``AwsBearerToken``, ``StaticNone``,
+    ``Custom``) is REJECTED rather than silently ignored or sent under the
+    deployment's own credential — ``rules/zero-tolerance.md`` Rule 3 (no
+    silent fallbacks): a caller who explicitly asked for a different
+    credential and got the deployment's default instead is a security bug,
+    not a convenience.
+    """
+
+    def __init__(self, auth_strategy_kind: str) -> None:
+        self.auth_strategy_kind = auth_strategy_kind
+        super().__init__(
+            "per-request api_key= override is not supported for this "
+            f"deployment's auth strategy (auth_strategy_kind={auth_strategy_kind!r}); "
+            "only ApiKeyBearer-family deployments (Authorization: Bearer / "
+            "X-Api-Key / X-Goog-Api-Key) accept a per-request BYOK override"
+        )
 
 
 # Wire-protocol dispatch for embed(). Keyed by WireProtocol enum so a
@@ -902,7 +936,12 @@ class LlmClient:
         return payload, url
 
     async def _prepare_auth_headers(
-        self, url: str, body_bytes: bytes, *, stream: bool
+        self,
+        url: str,
+        body_bytes: bytes,
+        *,
+        stream: bool,
+        api_key: Optional[str] = None,
     ) -> tuple[Dict[str, str], Optional[str]]:
         """Run the deployment auth strategy and return (headers, auth_kind).
 
@@ -912,8 +951,34 @@ class LlmClient:
         strategies (AwsSigV4) that canonicalize over those fields work too.
         Endpoint ``required_headers`` (e.g. ``anthropic-version``) merge in
         via ``setdefault`` so auth never clobbers them.
+
+        ``api_key`` (#1720 Wave-1b BYOK): an OPTIONAL per-request credential
+        override. ``CompletionRequest`` deliberately carries no credential
+        field (it is the cross-SDK byte pre-image); BYOK threads through
+        here instead of through the request body. When set, the override is
+        installed via ``ApiKeyBearer.apply()`` — the SAME header-injection
+        mechanism the deployment's own static credential uses — for the
+        deployment's OWN header kind (``Authorization: Bearer`` /
+        ``X-Api-Key`` / ``X-Goog-Api-Key``), never a hand-rolled header name.
+        The deployment's own auth object is never mutated; the override is
+        per-call only. Deployments whose auth strategy is NOT
+        ``ApiKeyBearer`` (``AwsSigV4``, ``GcpOauth``, ``AzureEntra``,
+        ``AwsBearerToken``, ``StaticNone``, ``Custom``) raise
+        :class:`UnsupportedApiKeyOverride` — checked BEFORE the deployment's
+        own ``apply``/``apply_async`` runs, so a rejected override never
+        triggers an unnecessary token refresh (e.g. a live GCP OAuth call)
+        for a credential that would then be discarded. The raw key is never
+        logged: it is threaded directly into ``ApiKeyBearer``/``ApiKey``,
+        whose ``__repr__`` implementations expose only a fingerprint.
         """
         assert self._deployment is not None
+        auth = self._deployment.auth
+        auth_kind = (
+            auth.auth_strategy_kind() if hasattr(auth, "auth_strategy_kind") else None
+        )
+        if api_key is not None and not isinstance(auth, ApiKeyBearer):
+            raise UnsupportedApiKeyOverride(auth_kind or type(auth).__name__)
+
         request: dict = {
             "method": "POST",
             "url": url,
@@ -921,17 +986,19 @@ class LlmClient:
             "body": body_bytes,
             "streaming": stream,
         }
-        auth = self._deployment.auth
-        apply_async = getattr(auth, "apply_async", None)
-        if callable(apply_async):
-            await apply_async(request)
+        if api_key is not None:
+            # isinstance-checked above: `auth` is an ApiKeyBearer, so
+            # `auth.kind` is a valid ApiKeyHeaderKind. Reuse
+            # ApiKeyBearer.apply() — never write the header name directly.
+            ApiKeyBearer(kind=auth.kind, key=ApiKey(api_key)).apply(request)
         else:
-            auth.apply(request)
+            apply_async = getattr(auth, "apply_async", None)
+            if callable(apply_async):
+                await apply_async(request)
+            else:
+                auth.apply(request)
         for k, v in self._deployment.endpoint.required_headers.items():
             request["headers"].setdefault(k, v)
-        auth_kind = (
-            auth.auth_strategy_kind() if hasattr(auth, "auth_strategy_kind") else None
-        )
         return request["headers"], auth_kind
 
     async def complete(
@@ -953,6 +1020,7 @@ class LlmClient:
         presence_penalty: Optional[float] = None,
         n: Optional[int] = None,
         top_k: Optional[int] = None,
+        api_key: Optional[str] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> Dict[str, Any]:
         """Issue a chat completion through the configured deployment.
@@ -983,6 +1051,14 @@ class LlmClient:
         later Wave-1b shard; passing a field to a not-yet-wired provider is a
         no-op for that field.
 
+        ``api_key`` (#1720 Wave-1b BYOK): an OPTIONAL per-request credential
+        override, applied ONLY to this call — the deployment's own
+        credential is untouched for every other call. It is NOT a
+        ``CompletionRequest`` field (that model is the cross-SDK byte
+        pre-image and must carry no secret); it threads straight into the
+        auth-header step. See :meth:`_prepare_auth_headers` for the header-
+        kind contract and the ``UnsupportedApiKeyOverride`` disposition.
+
         Raises:
             ValueError: ``messages`` empty of a resolvable model, or no
                 deployment configured.
@@ -991,6 +1067,8 @@ class LlmClient:
             InvalidResponse / ProviderError / RateLimited / Timeout: wire
                 failures with credential scrubbing.
             InvalidEndpoint: SSRF guard rejected the URL at DNS-resolve time.
+            UnsupportedApiKeyOverride: ``api_key`` was set but the
+                deployment's auth strategy is not ``ApiKeyBearer``.
         """
         if self._deployment is None:
             raise ValueError(
@@ -1034,7 +1112,7 @@ class LlmClient:
 
         try:
             headers, auth_kind = await self._prepare_auth_headers(
-                url, body_bytes, stream=False
+                url, body_bytes, stream=False, api_key=api_key
             )
             logger.info(
                 "llm.complete.start",
@@ -1131,6 +1209,7 @@ class LlmClient:
         presence_penalty: Optional[float] = None,
         n: Optional[int] = None,
         top_k: Optional[int] = None,
+        api_key: Optional[str] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream a chat completion as an async iterator of parsed chunks.
@@ -1154,6 +1233,11 @@ class LlmClient:
         Ollama (Bedrock-native + HuggingFace pending). They are forwarded
         unchanged on both the streaming path AND the ``streaming.enabled=False``
         buffered-``complete()`` fallback, so the two paths stay at parity.
+
+        ``api_key`` (#1720 Wave-1b BYOK): same per-request credential
+        override contract as :meth:`complete` — forwarded unchanged on BOTH
+        the buffered fallback and the real streaming send path, so BYOK
+        stays at parity across both.
         """
         if self._deployment is None:
             raise ValueError(
@@ -1182,6 +1266,7 @@ class LlmClient:
                 presence_penalty=presence_penalty,
                 n=n,
                 top_k=top_k,
+                api_key=api_key,
                 http_client=http_client,
             )
             yield result
@@ -1225,7 +1310,7 @@ class LlmClient:
         shaper = dispatch["shaper"]
         try:
             headers, auth_kind = await self._prepare_auth_headers(
-                url, body_bytes, stream=True
+                url, body_bytes, stream=True, api_key=api_key
             )
             logger.info(
                 "llm.stream.start",
@@ -1285,4 +1370,4 @@ class LlmClient:
             )
 
 
-__all__ = ["LlmClient"]
+__all__ = ["LlmClient", "UnsupportedApiKeyOverride"]
