@@ -56,8 +56,10 @@ from kaizen.llm.redaction import redact_messages
 from kaizen.llm.wire_protocols import (
     anthropic_messages,
     bedrock_invoke,
+    cohere_embeddings,
     cohere_generate,
     google_generate_content,
+    huggingface_embeddings,
     huggingface_inference,
     mistral_chat,
     ollama_embeddings,
@@ -86,6 +88,24 @@ _EMBED_DISPATCH: dict = {
         "path": "/api/embed",
         "shaper": ollama_embeddings,
         "env_model_hint": "OLLAMA_EMBEDDING_MODEL",
+    },
+    # #1720 Wave-1b EMBED-REMAINDER — Cohere speaks its own wire family
+    # (WireProtocol.CohereGenerate) across both chat AND embeddings; the
+    # embed path is a fixed suffix (model travels in the JSON body, not the
+    # URL), same shape as OpenAiChat/OllamaNative above.
+    WireProtocol.CohereGenerate: {
+        "path": "/embed",
+        "shaper": cohere_embeddings,
+        "env_model_hint": "COHERE_EMBEDDING_MODEL",
+    },
+    # HuggingFace's feature-extraction endpoint carries the model in the URL
+    # path, NOT the body (mirrors HuggingFaceInference's chat path_template
+    # in _COMPLETE_DISPATCH below) -- `{model}` is substituted by
+    # `_build_embed_url`.
+    WireProtocol.HuggingFaceInference: {
+        "path": "/models/{model}",
+        "shaper": huggingface_embeddings,
+        "env_model_hint": "HUGGINGFACE_EMBEDDING_MODEL",
     },
 }
 
@@ -669,7 +689,7 @@ class LlmClient:
             if owns_client:
                 await http_client.aclose()
 
-    def _build_embed_url(self, suffix: str) -> str:
+    def _build_embed_url(self, suffix: str, model: Optional[str] = None) -> str:
         """Join ``endpoint.base_url`` + ``endpoint.path_prefix`` + ``suffix``.
 
         Kept explicit (not ``urllib.parse.urljoin``) because ``urljoin``
@@ -677,16 +697,42 @@ class LlmClient:
         ``path_prefix`` when ``suffix`` starts with ``/``. We always
         concatenate with a single separator so the produced URL matches
         the deployment's declared shape.
+
+        ``{model}`` in ``suffix`` is substituted with a fail-closed-validated
+        ``model`` (mirrors ``_build_completion_url``'s ``{model}``
+        substitution + ``_validate_completion_model`` check) -- only
+        HuggingFace's feature-extraction dispatch entry
+        (``"/models/{model}"``) carries the placeholder today, so every
+        other embed wire's ``suffix`` passes through unchanged (byte-
+        identical to the pre-#1720-EMBED-REMAINDER output). Any
+        ``endpoint.query_params`` are appended as a query string (Azure's
+        ``?api-version=`` reaching the embed URL, matching
+        ``_build_completion_url``'s existing behaviour).
         """
         assert self._deployment is not None
         endpoint = self._deployment.endpoint
         base = str(endpoint.base_url).rstrip("/")
         prefix = (endpoint.path_prefix or "").rstrip("/")
-        suffix_norm = suffix if suffix.startswith("/") else "/" + suffix
+        suffix_resolved = suffix
+        if "{model}" in suffix:
+            suffix_resolved = suffix.replace(
+                "{model}", _validate_completion_model(model or "")
+            )
+        suffix_norm = (
+            suffix_resolved
+            if suffix_resolved.startswith("/")
+            else "/" + suffix_resolved
+        )
         if prefix:
             prefix_norm = prefix if prefix.startswith("/") else "/" + prefix
-            return f"{base}{prefix_norm}{suffix_norm}"
-        return f"{base}{suffix_norm}"
+            url = f"{base}{prefix_norm}{suffix_norm}"
+        else:
+            url = f"{base}{suffix_norm}"
+        if endpoint.query_params:
+            from urllib.parse import urlencode
+
+            url = f"{url}?{urlencode(endpoint.query_params)}"
+        return url
 
     # -----------------------------------------------------------------
     # complete() / stream() — chat-completion send-path (#1717)
