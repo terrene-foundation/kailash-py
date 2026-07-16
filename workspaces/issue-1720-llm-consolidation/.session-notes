@@ -31,6 +31,16 @@ Foundation-redteam fixes (merged code the Wave-B cutover would inherit):
 - **BYOK** — `resolve_deployment_for` now validates a caller-supplied `api_key`
   (CRLF/control-char/non-ASCII) at enforcement-surface parity with `complete()`.
 
+## Also shipped (non-gated Wave-B prep, PR #1786 merged)
+
+- **Parity coverage** — plane-B response-parse parity extended to the OpenAI-compat
+  wires **docker + perplexity** (both byte-identical to openai on shared canned
+  bytes). Closes the "extension pending" gap from `04-validate/wave-a-parity-findings.md`.
+  `drive_legacy_openai_family` gained an optional `api_key` passthrough (offline
+  Perplexity credential check).
+- **Cross-SDK BYOK draft** — `cross-sdk-byok-draft-UNFILED.md` (scrubbed, ready to
+  file). See PENDING #2.
+
 ## PENDING — needs the human (surfaced, not done)
 
 1. **Wave-B/C `/todos` structural gate** — approve the plan + 2 decisions:
