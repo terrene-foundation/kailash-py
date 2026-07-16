@@ -2,6 +2,43 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.4.0] — 2026-07-16 — Server-initiated request/response lifecycle hardening (#1712)
+
+Completes the #1712 MCP 2025-11-25 work. The 2025-11-25 wire surface
+(`sampling/createMessage`, `elicitation/create`, `roots/list`, progress,
+cancellation, completion, logging) shipped in the 0.3.x line; this release makes
+the **server-initiated** request/response lifecycle correct and concurrency-safe.
+No new wire methods — the changes harden the existing surface.
+
+### Fixed
+
+- **Single-client server-initiated round-trips no longer deadlock.** The native
+  WebSocket server transport now dispatches each inbound message in its own task,
+  so the read loop keeps draining the socket while a tool handler awaits a
+  server-initiated reply (sampling / elicitation / roots) that arrives on the SAME
+  connection. Previously the handler blocked until its timeout.
+- **A server-initiated reply reaches the original requester.** The model
+  completion / elicitation result / roots list is routed back to the client that
+  owns the pending request (previously the sampling reply could be dropped with a
+  spurious `-32601`).
+- **Replies are client-scoped fail-closed.** A server-initiated result is accepted
+  only from the client that owns the pending request; a mismatched responder is
+  rejected, never silently routed. Tool→client scope is carried via contextvars so
+  it stays correct under concurrent dispatch.
+
+### Security / hardening
+
+Newly reachable once handlers run concurrently:
+
+- Per-client progress tokens are namespaced by request id, so two concurrent calls
+  reusing one `progressToken` value cannot cross-deliver or evict each other's
+  progress.
+- A server-initiated dispatch-send failure drops the pending request from every
+  tracking map and cancels its future — no leaked future or FIFO entry.
+- Every outbound WebSocket send for a client serializes through one per-client
+  lock, so a server-initiated send and a response send cannot interleave frames.
+- The pending-sampling map stays FIFO-bounded and is cleared on client disconnect.
+
 ## [0.3.2] — 2026-07-15 — JWT audience fail-closed + OAuth 2.1 client discovery + server conformance (#1712)
 
 Second MCP 2025-11-25 spec-parity wave. Part of #1712 — the checklist remains open for later waves.

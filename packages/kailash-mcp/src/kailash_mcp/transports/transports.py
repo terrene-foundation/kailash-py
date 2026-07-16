@@ -1185,6 +1185,10 @@ class WebSocketServerTransport(BaseTransport):
         # Server state
         self.server: Optional[websockets.WebSocketServer] = None
         self._clients: Dict[str, Any] = {}  # websockets.WebSocketServerProtocol
+        # round-3 F3: ONE send lock per client_id, shared by the response send
+        # path (_process_and_respond) AND every server-initiated send
+        # (send_message) so concurrent frames on one socket never interleave.
+        self._send_locks: Dict[str, "asyncio.Lock"] = {}
         self._client_sessions: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
 
@@ -1246,6 +1250,14 @@ class WebSocketServerTransport(BaseTransport):
 
         logger.info("WebSocket server stopped")
 
+    def _get_send_lock(self, client_id: str) -> "asyncio.Lock":
+        """Return the per-client send lock, creating it on first use."""
+        lock = self._send_locks.get(client_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._send_locks[client_id] = lock
+        return lock
+
     async def send_message(
         self, message: Dict[str, Any], client_id: Optional[str] = None
     ) -> None:
@@ -1266,7 +1278,8 @@ class WebSocketServerTransport(BaseTransport):
             if client_id:
                 # Send to specific client
                 if client_id in self._clients:
-                    await self._clients[client_id].send(message_data)
+                    async with self._get_send_lock(client_id):
+                        await self._clients[client_id].send(message_data)
                     self._update_metrics("messages_sent")
                     self._update_metrics("bytes_sent", len(message_data))
                 else:
@@ -1277,10 +1290,15 @@ class WebSocketServerTransport(BaseTransport):
             else:
                 # Broadcast to all clients
                 if self._clients:
+
+                    async def _locked_send(cid: str, client: Any) -> None:
+                        async with self._get_send_lock(cid):
+                            await client.send(message_data)
+
                     await asyncio.gather(
                         *[
-                            client.send(message_data)
-                            for client in self._clients.values()
+                            _locked_send(cid, client)
+                            for cid, client in self._clients.items()
                         ],
                         return_exceptions=True,
                     )
@@ -1320,64 +1338,53 @@ class WebSocketServerTransport(BaseTransport):
         logger.info(f"Client {client_id} connected from {websocket.remote_address}")
         self._update_metrics("connections_total")
 
+        # Per-connection outbound send lock. Each inbound message is handled in
+        # its OWN task (below) so a handler that awaits a server-initiated reply
+        # does not block the read loop; those concurrent handlers' response
+        # sends would otherwise interleave on the wire. Serialize every send
+        # through this lock so no two frames corrupt each other (FINDING 2).
+        # round-3 F3: the SHARED per-client lock (also used by every
+        # server-initiated send in send_message) — not a fresh local lock.
+        send_lock = self._get_send_lock(client_id)
+        # In-flight per-message handler tasks — tracked so a disconnect can
+        # cancel + await them instead of orphaning a handler blocked mid-await.
+        inflight: "set" = set()
+
         try:
             async for message in websocket:
-                try:
-                    # Parse message
-                    request = json.loads(message)
+                self._update_metrics("messages_received")
+                self._update_metrics("bytes_received", len(message))
 
-                    # Update metrics
-                    self._update_metrics("messages_received")
-                    self._update_metrics("bytes_received", len(message))
-
-                    # Handle message
-                    if self.message_handler:
-                        response = await self._handle_message_safely(request, client_id)
-                    else:
-                        response = {
-                            "jsonrpc": "2.0",
-                            "error": {
-                                "code": -32601,
-                                "message": "No message handler configured",
-                            },
-                            "id": request.get("id"),
-                        }
-
-                    # A None response is the no-send sentinel — a notification
-                    # (absent JSON-RPC id) or an already-routed inbound response
-                    # gets NO reply body (MCP lifecycle: notifications expect no
-                    # response). Only send a real response envelope.
-                    if response is not None:
-                        payload = json.dumps(response)
-                        await websocket.send(payload)
-                        self._update_metrics("messages_sent")
-                        self._update_metrics("bytes_sent", len(payload))
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"Invalid JSON from client {client_id}: {e}")
-                    self._update_metrics("errors_total")
-
-                    error_response = {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32700,
-                            "message": "Parse error: Invalid JSON",
-                        },
-                        "id": None,
-                    }
-                    await websocket.send(json.dumps(error_response))
-
-                except Exception as e:
-                    logger.error(f"Error handling message from client {client_id}: {e}")
-                    self._update_metrics("errors_total")
+                # Dispatch each inbound message CONCURRENTLY. The read loop MUST
+                # keep draining the socket while a handler awaits a
+                # server-initiated reply (sampling/createMessage,
+                # elicitation/create, roots/list) that arrives as a NEW inbound
+                # frame on THIS SAME connection — the single-client
+                # (target == requester) case. A sequential read loop would never
+                # read that reply until the handler returned, deadlocking the
+                # handler until its timeout (FINDING 2). Spawning a task lets the
+                # loop advance to the reply frame immediately.
+                task = asyncio.ensure_future(
+                    self._process_and_respond(message, client_id, websocket, send_lock)
+                )
+                inflight.add(task)
+                task.add_done_callback(inflight.discard)
 
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client {client_id} disconnected")
         except Exception as e:
             logger.error(f"Error in client handler for {client_id}: {e}")
         finally:
+            # Cancel + await any handler tasks still in flight so none leak past
+            # the connection. A handler blocked awaiting a reply that will now
+            # never arrive is unblocked by the cancel; gather() reaps them.
+            for task in list(inflight):
+                task.cancel()
+            if inflight:
+                await asyncio.gather(*inflight, return_exceptions=True)
             # Clean up the transport's own per-client maps.
             self._clients.pop(client_id, None)
+            self._send_locks.pop(client_id, None)
             self._client_sessions.pop(client_id, None)
             # Let the server release any state it keyed on this client_id
             # (request-id reuse set, client_info, ...) so a churned connection
@@ -1391,6 +1398,66 @@ class WebSocketServerTransport(BaseTransport):
                         client_id,
                         exc,
                     )
+
+    async def _process_and_respond(
+        self, message, client_id: str, websocket, send_lock
+    ) -> None:
+        """Parse, handle, and respond to ONE inbound WS message as its own task.
+
+        Spawned per-message by ``handle_client`` so the read loop keeps draining
+        the socket while this handler awaits a server-initiated reply on the
+        SAME connection (FINDING 2 — single-client server-initiated round-trip).
+        Every outbound send serializes through ``send_lock`` so concurrent
+        handlers' responses never interleave on the wire. A handler exception
+        still yields the JSON-RPC error response / metrics update, exactly as the
+        prior sequential loop did.
+        """
+        try:
+            try:
+                request = json.loads(message)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from client {client_id}: {e}")
+                self._update_metrics("errors_total")
+                error_response = {
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "Parse error: Invalid JSON"},
+                    "id": None,
+                }
+                payload = json.dumps(error_response)
+                async with send_lock:
+                    await websocket.send(payload)
+                return
+
+            if self.message_handler:
+                response = await self._handle_message_safely(request, client_id)
+            else:
+                response = {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32601,
+                        "message": "No message handler configured",
+                    },
+                    "id": request.get("id"),
+                }
+
+            # A None response is the no-send sentinel — a notification (absent
+            # JSON-RPC id) or an already-routed inbound response gets NO reply
+            # body (MCP lifecycle: notifications expect no response). Only send a
+            # real response envelope.
+            if response is not None:
+                payload = json.dumps(response)
+                async with send_lock:
+                    await websocket.send(payload)
+                self._update_metrics("messages_sent")
+                self._update_metrics("bytes_sent", len(payload))
+
+        except asyncio.CancelledError:
+            # Connection tore down while this handler was mid-await; propagate so
+            # handle_client's gather() observes the cancellation cleanly.
+            raise
+        except Exception as e:
+            logger.error(f"Error handling message from client {client_id}: {e}")
+            self._update_metrics("errors_total")
 
     async def _handle_message_safely(
         self, request: Dict[str, Any], client_id: str

@@ -121,12 +121,14 @@ class TestElicitationSystemCallSites:
         """Locks the ElicitationSystem init signature so a future refactor
         toward a different shape fails loudly.
 
-        MCP 2025-11-25 (gap E3) grew the constructor with two BACKWARD-COMPATIBLE
-        keyword-only params — ``server_identity`` (url-mode issuer binding) and
-        ``capability_provider`` (the client-elicitation-capability gate). Cross-SDK
-        parity relies on ``send`` remaining the FIRST POSITIONAL callable
-        (unchanged); the additions are keyword-only so every existing positional
-        caller ``ElicitationSystem(send)`` still binds identically.
+        MCP 2025-11-25 (gap E3) grew the constructor with BACKWARD-COMPATIBLE
+        keyword-only params — ``server_identity`` (url-mode issuer binding),
+        ``capability_provider`` (the client-elicitation-capability gate), and
+        (#1712 W6 FINDING 3) ``client_id_provider`` (resolves the client an
+        elicitation targets when raised from a tools/call). Cross-SDK parity
+        relies on ``send`` remaining the FIRST POSITIONAL callable (unchanged);
+        the additions are keyword-only so every existing positional caller
+        ``ElicitationSystem(send)`` still binds identically.
         """
         from kailash_mcp.advanced.features import ElicitationSystem
 
@@ -136,17 +138,18 @@ class TestElicitationSystemCallSites:
             "send",
             "server_identity",
             "capability_provider",
+            "client_id_provider",
         ], (
             f"ElicitationSystem.__init__ signature drifted: {sig}. "
             f"Cross-SDK parity relies on `send` staying the first positional "
             f"callable with the 2025-11-25 additions keyword-only."
         )
-        # ``send`` MUST remain a positional-or-keyword first param; the 2025-11-25
-        # additions MUST be keyword-only (so ElicitationSystem(send) is unchanged).
+        # ``send`` MUST remain a positional-or-keyword first param; the additions
+        # MUST be keyword-only (so ElicitationSystem(send) is unchanged).
         send_param = sig.parameters["send"]
         assert send_param.kind in (
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             inspect.Parameter.POSITIONAL_ONLY,
         )
-        for name in ("server_identity", "capability_provider"):
+        for name in ("server_identity", "capability_provider", "client_id_provider"):
             assert sig.parameters[name].kind == inspect.Parameter.KEYWORD_ONLY

@@ -56,6 +56,7 @@ Enhanced Production Usage:
 
 import asyncio
 import base64
+import contextvars
 import functools
 import gzip
 import inspect
@@ -108,6 +109,19 @@ from kailash_mcp.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Client_id of the ``tools/call`` currently executing on this event loop. A tool
+# that raises an elicitation via ``server.elicitation_system.request_input(...)``
+# without an explicit ``client_id`` inherits THIS client, so the elicitation is
+# dispatched to — and resolvable ONLY by — the invoking client (FINDING 3 —
+# elicitation client-scoping). ``_handle_call_tool`` sets it for the tool body's
+# duration; default None → unscoped (backward compatible). An asyncio Task copies
+# the context at creation, so a per-request tool task sees the value set before
+# it was spawned and concurrent tool calls never see each other's client.
+_CURRENT_TOOL_CLIENT: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "mcp_current_tool_client", default=None
+)
 
 
 # Supported MCP protocol-handshake revisions, newest first. The server
@@ -921,7 +935,27 @@ class MCPServer:
 
         # Client management for new handlers
         self.client_info: Dict[str, Dict[str, Any]] = {}
+        # Server-initiated ``sampling/createMessage`` (server->client) request
+        # tracking. Maps an outbound sampling id to an entry carrying the
+        # awaiting ``future`` + the ORIGINAL requester's ``original_request_id``
+        # + the TARGET ``client_id`` (the expected responder). The target
+        # client's reply resolves the Future via ``_route_server_initiated_
+        # response`` so the model completion reaches the original requester
+        # (FINDING 1 — the reply was previously dropped with a spurious -32601).
         self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
+        # Maps an outbound sampling id to the TARGET client_id it was dispatched
+        # to, so (a) a disconnecting target's pending sampling Futures can be
+        # cancelled+popped (_on_ws_disconnect) and (b) the response router can
+        # enforce that the RESPONDING client matches the client the request was
+        # sent to — cross-client isolation (FINDING 2 + FINDING 4).
+        self._pending_sampling_clients: Dict[str, str] = {}
+        # FIFO order of pending sampling ids so a stream of never-answered
+        # requests cannot grow the maps without limit (mirrors the
+        # _MAX_SEEN_REQUEST_IDS reuse-set cap) — FINDING 2 (unbounded growth).
+        self._pending_sampling_order: "deque[str]" = deque()
+        # Seconds to await a sampling target's reply before returning a
+        # MCP_SAMPLING_TIMEOUT to the original requester.
+        self._sampling_timeout: float = 30.0
 
         # Server-initiated ``roots/list`` (server->client) request tracking and
         # per-client cached roots (spec 2025-11-25). ``_pending_roots_requests``
@@ -1010,6 +1044,10 @@ class MCPServer:
         self.elicitation_system: ElicitationSystem = ElicitationSystem(
             server_identity={"name": self.name},
             capability_provider=self._any_client_advertises_elicitation,
+            # A client-less request_input() (a tool raising an elicitation)
+            # inherits the invoking tools/call's client so the elicitation is
+            # dispatched to — and resolvable only by — that client (FINDING 3).
+            client_id_provider=lambda: _CURRENT_TOOL_CLIENT.get(),
         )
 
         # Human-in-the-loop (HITL) approval callback for sampling/createMessage
@@ -1106,24 +1144,59 @@ class MCPServer:
             extra={"transport_type": type(self._transport).__name__},
         )
 
+    def _client_scope_mismatch(
+        self, responding_client_id: Optional[str], expected_client_id: Optional[str]
+    ) -> bool:
+        """Report whether a response's client fails the client-scope check.
+
+        FAIL-CLOSED for a SCOPED request (round-2 re-redteam FINDING 3): when a
+        request was issued to a specific client (``expected_client_id`` set),
+        ONLY that exact client may resolve it. A responder that is None/empty OR
+        differs is REFUSED (returns True → do NOT resolve) — a None
+        ``responding_client_id`` can no longer resolve a scoped sampling / roots
+        / elicitation request, closing the cross-client gap (FINDING 3 / F4).
+
+        An UNSCOPED request (``expected_client_id`` None/empty — no bound client)
+        keeps permissive resolution (returns False): an internal / in-process
+        caller that never bound a client is not client-scoped, so any responder
+        (including None) still resolves it (backward compatible).
+        """
+        if not expected_client_id:
+            # Unscoped — no bound client to enforce against.
+            return False
+        # Scoped — fail closed: only the exact bound client may resolve it, and
+        # a None/empty responder never can.
+        return responding_client_id != expected_client_id
+
     async def _route_server_initiated_response(
-        self, request_id: Any, message: Dict[str, Any]
+        self,
+        request_id: Any,
+        message: Dict[str, Any],
+        responding_client_id: Optional[str] = None,
     ) -> bool:
         """Route an inbound JSON-RPC response to its originating pending request.
 
-        Server-initiated JSON-RPC requests (elicitation/create today;
-        sampling/createMessage in the future) expect a matching response
-        from the client. This method inspects `self.elicitation_system._pending_requests`
-        and other pending-request registries, routing the response to the
-        appropriate subsystem.
+        Server-initiated JSON-RPC requests (roots/list, elicitation/create,
+        sampling/createMessage) expect a matching response from the client.
+        This method inspects the per-feature pending-request registries and
+        routes the response to the awaiting Future / callback.
+
+        Every branch is CLIENT-SCOPED: the ``responding_client_id`` (the client
+        that sent this reply) MUST match the client the request was issued to,
+        so a reply from client B can never resolve client A's pending request
+        (FINDING 4). When the responder or the stored client is unknown the
+        scope check is a no-op (back-compat for unscoped requests).
 
         Args:
             request_id: `id` field of the inbound response.
             message: Full inbound message dict (with `result` or `error`).
+            responding_client_id: client_id of the WS connection this reply
+                arrived on (threaded from ``_handle_websocket_message``).
 
         Returns:
             True when a matching pending request existed and was resolved.
-            False when no pending request matched — caller should fall
+            False when no pending request matched OR the responding client did
+            not match the client the request was issued to — caller should fall
             through to the regular request dispatch.
         """
         rid = str(request_id)
@@ -1133,14 +1206,52 @@ class MCPServer:
         # ``request_client_roots`` can distinguish a real roots list from a
         # ``-32601`` "roots unsupported" fallback.
         if rid in self._pending_roots_requests:
+            if self._client_scope_mismatch(
+                responding_client_id, self._pending_roots_clients.get(rid)
+            ):
+                logger.warning(
+                    "roots.response.cross_client_rejected",
+                    extra={"request_id": rid, "responder": responding_client_id},
+                )
+                return False
             fut = self._pending_roots_requests.pop(rid)
             self._pending_roots_clients.pop(rid, None)
             if not fut.done():
                 fut.set_result(message)
             return True
 
+        # Route a server-initiated ``sampling/createMessage`` (server->client)
+        # response back to the awaiting handler so the ORIGINAL requester
+        # receives the model completion (FINDING 1). Client-scoped: only the
+        # client the request was dispatched TO may resolve it (FINDING 4).
+        if rid in self._pending_sampling_requests:
+            if self._client_scope_mismatch(
+                responding_client_id, self._pending_sampling_clients.get(rid)
+            ):
+                logger.warning(
+                    "sampling.response.cross_client_rejected",
+                    extra={"sampling_id": rid, "responder": responding_client_id},
+                )
+                return False
+            entry = self._drop_pending_sampling(rid)
+            fut = entry.get("future")
+            # The FULL message (result OR error) is delivered so the handler can
+            # relay a client error distinctly from a model completion.
+            if fut is not None and not fut.done():
+                fut.set_result(message)
+            return True
+
         # Check pending elicitation requests
         if rid in self.elicitation_system._pending_requests:
+            if self._client_scope_mismatch(
+                responding_client_id,
+                self.elicitation_system.pending_client_id(rid),
+            ):
+                logger.warning(
+                    "elicitation.response.cross_client_rejected",
+                    extra={"request_id": rid, "responder": responding_client_id},
+                )
+                return False
             if "error" in message:
                 # Treat as cancellation with the error message as reason
                 err = message.get("error", {})
@@ -2380,6 +2491,12 @@ class MCPServer:
     # still detected within this most-recent-N window.
     _MAX_SEEN_REQUEST_IDS = 4096
 
+    # Cap on the pending server-initiated sampling map. A stream of sampling
+    # requests whose targets never reply cannot grow the map without limit —
+    # the oldest pending Future is evicted (cancelled) FIFO past this bound
+    # (FINDING 2 — remote-triggerable memory growth).
+    _MAX_PENDING_SAMPLING = 1024
+
     def _mark_request_id_seen(self, client_id: str, request_id: Any) -> bool:
         """Record ``request_id`` for ``client_id`` and report prior use.
 
@@ -2433,6 +2550,31 @@ class MCPServer:
             fut = self._pending_roots_requests.pop(rid, None)
             if fut is not None and not fut.done():
                 fut.cancel()
+
+        # Cancel + drop any pending server->client sampling Futures whose TARGET
+        # (the expected responder) is this disconnecting client. Without this
+        # the entry (and its Future) leaks forever AND the original requester
+        # blocks until the sampling timeout — FINDING 2 (per-client sampling
+        # cleanup). The cancelled Future surfaces to the handler as a
+        # MCP_SAMPLING_REJECTED, so the requester is unblocked immediately.
+        stale_sampling = [
+            sid
+            for sid, cid in self._pending_sampling_clients.items()
+            if cid == client_id
+        ]
+        for sid in stale_sampling:
+            entry = self._drop_pending_sampling(sid)
+            if entry is not None:
+                fut = entry.get("future")
+                if fut is not None and not fut.done():
+                    fut.cancel()
+
+        # Cancel + evict any pending ELICITATION requests targeting this client
+        # so a disconnecting client's awaiting request_input() caller gets a
+        # clean MCP_REQUEST_CANCELLED instead of hanging until timeout —
+        # FINDING 3 (elicitation had no disconnect-eviction path). Unscoped
+        # requests (no bound client_id) are left intact.
+        self.elicitation_system.cancel_requests_for_client(client_id)
 
         # Cancel + drop any in-flight tool tasks for this client. Keys are the
         # (client_id, request_id) composite; the NUL-separated prefix isolates
@@ -2488,7 +2630,7 @@ class MCPServer:
                 )
             ):
                 handled = await self._route_server_initiated_response(
-                    request_id, decompressed_request
+                    request_id, decompressed_request, responding_client_id=client_id
                 )
                 if handled:
                     # Response routed to originating pending request; no
@@ -2829,7 +2971,7 @@ class MCPServer:
 
         # Correlate any progress emitted during this call to the client's
         # ``_meta.progressToken`` (opt-in). Returns None when no token supplied.
-        progress_ctx = self._begin_progress(params, client_id, tool_name)
+        progress_ctx = self._begin_progress(params, client_id, tool_name, request_id)
 
         # FINDING 3 (server-side) — make cancellation REAL, not inert. Run the
         # tool body inside a tracked ``asyncio.Task`` keyed by the CLIENT-SCOPED
@@ -2846,10 +2988,18 @@ class MCPServer:
         cancel_key = self._cancel_key(client_id, request_id)
 
         async def _run_tool() -> Any:
-            result = self._execute_tool(tool_name, arguments)
-            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
-                result = await result
-            return result
+            # Scope any elicitation this tool raises to the invoking client
+            # (FINDING 3). Set inside the task's own context so it is visible to
+            # request_input() called from the tool body and never leaks to a
+            # concurrent tool call.
+            token = _CURRENT_TOOL_CLIENT.set(client_id)
+            try:
+                result = self._execute_tool(tool_name, arguments)
+                if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                    result = await result
+                return result
+            finally:
+                _CURRENT_TOOL_CLIENT.reset(token)
 
         task = asyncio.ensure_future(_run_tool())
         self._inflight_tasks[cancel_key] = task
@@ -2893,7 +3043,11 @@ class MCPServer:
         return {"jsonrpc": "2.0", "result": result_obj, "id": request_id}
 
     def _begin_progress(
-        self, params: Dict[str, Any], client_id: Optional[str], operation_name: str
+        self,
+        params: Dict[str, Any],
+        client_id: Optional[str],
+        operation_name: str,
+        request_id: Any = None,
     ) -> Optional[ProgressToken]:
         """Start progress tracking correlated to the client's progressToken.
 
@@ -2924,7 +3078,11 @@ class MCPServer:
         # ``_finish_progress`` reuses THIS same namespaced token, so completion
         # targets the correct per-client key (security.md — per-client isolation).
         token_obj = ProgressToken(
-            value=f"{client_id}:{client_token}", operation_name=operation_name
+            # round-3: include request_id so two CONCURRENT same-client
+            # calls reusing one progressToken value do not collide in the
+            # process-global ProgressManager (concurrent WS dispatch).
+            value=f"{client_id}:{request_id}:{client_token}",
+            operation_name=operation_name,
         )
         protocol.progress.start_progress(operation_name, progress_token=token_obj)
 
@@ -3898,16 +4056,34 @@ class MCPServer:
         loop = asyncio.get_event_loop()
         fut: "asyncio.Future" = loop.create_future()
         self._pending_roots_requests[req_id] = fut
+        # Record the TARGET client so (a) the response router can enforce that
+        # only THIS client resolves the request (FINDING 4 — cross-client
+        # isolation) and (b) a disconnect of this client cancels+pops the
+        # pending Future (_on_ws_disconnect). Previously this map was declared
+        # but never populated, so both paths were dead.
+        self._pending_roots_clients[req_id] = client_id
 
-        await self._transport.send_message(
-            {"jsonrpc": "2.0", "id": req_id, "method": "roots/list", "params": {}},
-            client_id=client_id,
-        )
+        try:
+            await self._transport.send_message(
+                {"jsonrpc": "2.0", "id": req_id, "method": "roots/list", "params": {}},
+                client_id=client_id,
+            )
+        except Exception as exc:
+            # round-3 F2: a send failure must not leak the pending roots entry.
+            self._pending_roots_requests.pop(req_id, None)
+            self._pending_roots_clients.pop(req_id, None)
+            if not fut.done():
+                fut.cancel()
+            logger.warning(
+                "request_client_roots dispatch failed client=%s: %s", client_id, exc
+            )
+            return []
 
         try:
             message = await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
             self._pending_roots_requests.pop(req_id, None)
+            self._pending_roots_clients.pop(req_id, None)
             logger.warning(
                 "request_client_roots timed out client=%s; treating as no roots",
                 client_id,
@@ -4069,9 +4245,17 @@ class MCPServer:
            fail-closed). A bound approver may approve, decline
            (``MCP_SAMPLING_DECLINED``), time out (``MCP_SAMPLING_TIMEOUT``),
            or raise a specific ``MCPError``.
-        4. **Dispatch**: the approved request is forwarded to the selected
-           sampling client's transport and tracked in
-           ``_pending_sampling_requests``.
+        4. **Dispatch + round-trip**: the approved request is forwarded to the
+           selected sampling client's transport and tracked in
+           ``_pending_sampling_requests`` (a Future keyed by the outbound
+           sampling id + the TARGET client). The handler AWAITS the target
+           client's reply (routed back via
+           ``_route_server_initiated_response``) and returns the model
+           completion (or the client's error) to the ORIGINAL requester — the
+           reply is never dropped with a spurious ``-32601``. A target
+           disconnect (MCP_SAMPLING_REJECTED) or no reply within
+           ``_sampling_timeout`` (MCP_SAMPLING_TIMEOUT) unblocks the requester
+           with a typed error.
         """
         # (1) Content-type + tool_use/tool_result balance validation. Input
         # validation runs FIRST so a malformed request never reaches the HITL
@@ -4130,8 +4314,26 @@ class MCPServer:
                 "id": request_id,
             }
 
-        # Select the target client (first advertised; selection logic may grow).
-        target_client = sampling_clients[0]
+        # (FINDING 4 — cross-client isolation) Route sampling to the REQUESTER's
+        # OWN client, never a blind ``sampling_clients[0]`` pick: that would send
+        # client A's messages to client B's LLM (cross-client content exposure).
+        # The requester's client_id is merged into params by the WS dispatch. If
+        # the requester's own client does not advertise sampling, reject (-32601)
+        # rather than silently fall back to a DIFFERENT client.
+        requester = params.get("client_id")
+        if requester is None or requester not in sampling_clients:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": (
+                        "requesting client does not advertise sampling; a "
+                        "sampling request is routed to the requester's own client"
+                    ),
+                },
+                "id": request_id,
+            }
+        target_client = requester
 
         # (3) Human-in-the-loop approval — the server MUST NOT fulfil a sampling
         # request (model-generated content) without a human-review/approval
@@ -4178,31 +4380,7 @@ class MCPServer:
             "id": f"sampling_{uuid.uuid4().hex[:8]}",
         }
 
-        if self._transport and hasattr(self._transport, "send_message"):
-            await self._transport.send_message(
-                sampling_request, client_id=target_client
-            )
-
-            # Store pending sampling request
-            if not hasattr(self, "_pending_sampling_requests"):
-                self._pending_sampling_requests = {}
-
-            self._pending_sampling_requests[sampling_request["id"]] = {
-                "original_request_id": request_id,
-                "client_id": params.get("client_id"),
-                "timestamp": time.time(),
-            }
-
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "status": "sampling_requested",
-                    "sampling_id": sampling_request["id"],
-                    "target_client": target_client,
-                },
-                "id": request_id,
-            }
-        else:
+        if not (self._transport and hasattr(self._transport, "send_message")):
             return {
                 "jsonrpc": "2.0",
                 "error": {
@@ -4211,6 +4389,151 @@ class MCPServer:
                 },
                 "id": request_id,
             }
+
+        # Register the pending sampling request (Future + provenance) BEFORE
+        # dispatch so a fast reply cannot race ahead of registration. The
+        # awaited completion is routed back through
+        # ``_route_server_initiated_response`` so the ORIGINAL requester
+        # receives the model result, not a spurious ack that dropped the reply
+        # with a -32601 (FINDING 1). Mirrors the roots/list Future pattern.
+        sampling_id = sampling_request["id"]
+        loop = asyncio.get_event_loop()
+        fut: "asyncio.Future" = loop.create_future()
+        self._register_pending_sampling(sampling_id, fut, request_id, target_client)
+
+        try:
+            await self._transport.send_message(
+                sampling_request, client_id=target_client
+            )
+        except Exception as exc:
+            # round-3 F2: the pending entry was registered BEFORE the send; a
+            # send failure MUST NOT leak the entry/Future or seed a dead id into
+            # the FIFO deque (_drop_pending_sampling prunes all three maps).
+            self._drop_pending_sampling(sampling_id)
+            if not fut.done():
+                fut.cancel()
+            logger.warning(
+                "sampling.dispatch_failed",
+                extra={"sampling_id": sampling_id, "error": str(exc)},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"failed to dispatch sampling request: {exc}",
+                },
+                "id": request_id,
+            }
+
+        try:
+            completion = await asyncio.wait_for(fut, self._sampling_timeout)
+        except asyncio.TimeoutError:
+            self._drop_pending_sampling(sampling_id)
+            logger.warning(
+                "sampling.timeout",
+                extra={"sampling_id": sampling_id, "target_client": target_client},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": MCPErrorCode.MCP_SAMPLING_TIMEOUT.value,
+                    "message": (
+                        f"sampling request {sampling_id} timed out after "
+                        f"{self._sampling_timeout}s awaiting client "
+                        f"{target_client}"
+                    ),
+                },
+                "id": request_id,
+            }
+        except asyncio.CancelledError:
+            # Distinguish OUR Future being cancelled (the target disconnected —
+            # `_on_ws_disconnect` cancelled it) from a genuine task cancellation.
+            # Only the former is a sampling failure we translate; a real task
+            # cancel is re-raised so cancellation is not silently swallowed.
+            if fut.cancelled():
+                self._drop_pending_sampling(sampling_id)
+                logger.warning(
+                    "sampling.target_disconnected",
+                    extra={"sampling_id": sampling_id, "target_client": target_client},
+                )
+                return {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": MCPErrorCode.MCP_SAMPLING_REJECTED.value,
+                        "message": (
+                            f"sampling target client {target_client} "
+                            f"disconnected before responding"
+                        ),
+                    },
+                    "id": request_id,
+                }
+            raise
+
+        # The completion is the FULL inbound JSON-RPC message (result OR error).
+        # Relay it back to the ORIGINAL requester under the requester's id so a
+        # client-side error is distinguishable from a real model completion.
+        if isinstance(completion, dict) and "error" in completion:
+            return {
+                "jsonrpc": "2.0",
+                "error": completion["error"],
+                "id": request_id,
+            }
+        result = completion.get("result", {}) if isinstance(completion, dict) else {}
+        return {
+            "jsonrpc": "2.0",
+            "result": result,
+            "id": request_id,
+        }
+
+    def _drop_pending_sampling(self, sampling_id: str) -> Optional[Dict[str, Any]]:
+        """Remove a pending sampling entry from ALL THREE tracking structures.
+
+        Convergence round-2 (FINDING 1): the FIFO-cap deque
+        ``_pending_sampling_order`` MUST be pruned at every resolution site
+        (reply / timeout / disconnect / cancelled) so the cap counts only LIVE
+        entries. Otherwise dead (resolved) ids fill the deque and a genuinely
+        in-flight request is spuriously evicted+cancelled once
+        ``_MAX_PENDING_SAMPLING`` OTHER requests complete.
+        """
+        self._pending_sampling_clients.pop(sampling_id, None)
+        try:
+            self._pending_sampling_order.remove(sampling_id)
+        except ValueError:
+            pass
+        return self._pending_sampling_requests.pop(sampling_id, None)
+
+    def _register_pending_sampling(
+        self,
+        sampling_id: str,
+        fut: "asyncio.Future",
+        original_request_id: Any,
+        target_client: str,
+    ) -> None:
+        """Register a pending server-initiated sampling request.
+
+        Records the awaiting ``fut`` + provenance keyed by ``sampling_id``, the
+        TARGET client (the expected responder, for client-scoped routing +
+        disconnect eviction), and enforces a FIFO cap so a stream of
+        never-answered requests cannot grow the maps without limit (FINDING 2).
+        Past the cap the OLDEST pending Future is cancelled + evicted, which
+        surfaces to its awaiting handler as a MCP_SAMPLING_REJECTED.
+        """
+        self._pending_sampling_requests[sampling_id] = {
+            "future": fut,
+            "original_request_id": original_request_id,
+            "client_id": target_client,
+            "timestamp": time.time(),
+        }
+        self._pending_sampling_clients[sampling_id] = target_client
+        self._pending_sampling_order.append(sampling_id)
+        while len(self._pending_sampling_order) > self._MAX_PENDING_SAMPLING:
+            evicted = self._pending_sampling_order.popleft()
+            self._pending_sampling_clients.pop(evicted, None)
+            entry = self._pending_sampling_requests.pop(evicted, None)
+            if entry is not None:
+                ev_fut = entry.get("future")
+                if ev_fut is not None and not ev_fut.done():
+                    ev_fut.cancel()
 
     async def _evaluate_sampling_approval(
         self, context: Dict[str, Any]

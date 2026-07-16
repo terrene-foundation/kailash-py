@@ -409,22 +409,48 @@ class TestSamplingCreateMessage:
         }
         request_id = "test_123"
 
-        # Call handler
-        result = await server._handle_sampling_create_message(params, request_id)
+        # Under the async round-trip model the handler DISPATCHES to the capable
+        # client and AWAITS the client's reply — no immediate synchronous ack.
+        # Run it as a task, let the request be SENT, then feed the client's reply
+        # back through the response router and assert the completion is delivered
+        # to the ORIGINAL requester.
+        task = asyncio.create_task(
+            server._handle_sampling_create_message(params, request_id)
+        )
+        for _ in range(200):
+            await asyncio.sleep(0)
+            if server._transport.send_message.await_count:
+                break
+        else:
+            task.cancel()
+            raise AssertionError("sampling request was never dispatched")
 
-        # Verify response
-        assert result["jsonrpc"] == "2.0"
-        assert result["id"] == request_id
-        assert "result" in result
-        assert result["result"]["status"] == "sampling_requested"
-        assert "sampling_id" in result["result"]
-        assert result["result"]["target_client"] == client_id
-
-        # Verify message was sent
+        # Verify the request was dispatched to the capable client.
         server._transport.send_message.assert_called_once()
         sent_msg = server._transport.send_message.call_args[0][0]
         assert sent_msg["method"] == "sampling/createMessage"
         assert sent_msg["params"]["messages"] == params["messages"]
+        assert server._transport.send_message.call_args[1]["client_id"] == client_id
+
+        sampling_id = sent_msg["id"]
+        assert sampling_id in server._pending_sampling_requests
+
+        # The target client replies; the router resolves the awaiting Future.
+        completion = {"role": "assistant", "content": {"type": "text", "text": "Hi!"}}
+        handled = await server._route_server_initiated_response(
+            sampling_id,
+            {"jsonrpc": "2.0", "id": sampling_id, "result": completion},
+            responding_client_id=client_id,
+        )
+        assert handled is True
+
+        # The completion is delivered to the ORIGINAL requester and the pending
+        # map is drained.
+        result = await asyncio.wait_for(task, timeout=2)
+        assert result["jsonrpc"] == "2.0"
+        assert result["id"] == request_id
+        assert result["result"] == completion
+        assert sampling_id not in server._pending_sampling_requests
 
     @pytest.mark.asyncio
     async def test_sampling_no_capable_clients(self, server):
@@ -464,18 +490,42 @@ class TestSamplingCreateMessage:
         }
         request_id = "test_123"
 
-        # Call handler
-        result = await server._handle_sampling_create_message(params, request_id)
+        # Under the async round-trip model the pending entry is created WHILE the
+        # handler awaits the client reply (and drained on reply/timeout). Run the
+        # handler as a task, let the request be sent, then assert the tracking
+        # entry exists while the handler is still awaiting.
+        task = asyncio.create_task(
+            server._handle_sampling_create_message(params, request_id)
+        )
+        for _ in range(200):
+            await asyncio.sleep(0)
+            if server._transport.send_message.await_count:
+                break
+        else:
+            task.cancel()
+            raise AssertionError("sampling request was never dispatched")
 
-        # Get sampling ID
-        sampling_id = result["result"]["sampling_id"]
+        sampling_id = server._transport.send_message.call_args[0][0]["id"]
 
-        # Verify request is tracked
+        # Tracked WHILE the handler awaits the client reply.
+        assert not task.done()
         assert sampling_id in server._pending_sampling_requests
         pending = server._pending_sampling_requests[sampling_id]
         assert pending["original_request_id"] == request_id
         assert pending["client_id"] == client_id
         assert "timestamp" in pending
+
+        # Feeding the reply drains the pending entry and completes the handler.
+        completion = {"role": "assistant", "content": {"type": "text", "text": "ok"}}
+        handled = await server._route_server_initiated_response(
+            sampling_id,
+            {"jsonrpc": "2.0", "id": sampling_id, "result": completion},
+            responding_client_id=client_id,
+        )
+        assert handled is True
+        result = await asyncio.wait_for(task, timeout=2)
+        assert result["id"] == request_id
+        assert sampling_id not in server._pending_sampling_requests
 
     @pytest.mark.asyncio
     async def test_sampling_without_transport(self, server):
