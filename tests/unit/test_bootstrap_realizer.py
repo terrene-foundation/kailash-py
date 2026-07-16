@@ -245,14 +245,18 @@ def test_kailash_top_level_binds_bootstrap_callable():
 
 def test_resolve_llm_model_returns_none_when_env_unset(monkeypatch):
     """`_resolve_llm_model_from_env()` returns None when both env vars unset."""
+    import dotenv
+
     from kailash.bootstrap import _resolve_llm_model_from_env
 
-    monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
-    monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
-    # NOTE: load_dotenv() inside the resolver re-reads .env so deletions
-    # alone don't isolate; we set explicit sentinels below to harden.
-    monkeypatch.setenv("OPENAI_PROD_MODEL", "")
-    monkeypatch.setenv("DEFAULT_LLM_MODEL", "")
+    # The resolver calls load_dotenv() internally (bootstrap.py), which would
+    # re-read a developer's real .env and re-populate the vars we delete —
+    # deleting the env vars alone cannot isolate the test. Neutralize
+    # load_dotenv at the source module so the resolver's `from dotenv import
+    # load_dotenv` binds the no-op; the delenv then genuinely simulates an
+    # unset environment. (Passes in CI where no .env exists; this makes it
+    # deterministic locally too, where .env sets OPENAI_PROD_MODEL.)
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: None)
     monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
     monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
@@ -271,8 +275,14 @@ def test_resolve_llm_model_prefers_openai_prod_model(monkeypatch):
 
 def test_resolve_llm_model_falls_back_to_default_llm_model(monkeypatch):
     """When `OPENAI_PROD_MODEL` is unset, `DEFAULT_LLM_MODEL` is used."""
+    import dotenv
+
     from kailash.bootstrap import _resolve_llm_model_from_env
 
+    # Neutralize the resolver's internal load_dotenv so a developer's .env does
+    # not re-populate OPENAI_PROD_MODEL after we delete it (see the env-unset
+    # test above for the full rationale).
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: None)
     monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
     monkeypatch.setenv("DEFAULT_LLM_MODEL", "claude-haiku")
 
@@ -629,6 +639,12 @@ def test_bootstrap_returns_config_honoring_llm_suggestion_when_env_clear(monkeyp
             "resolved_deployment_target": "prod",
         },
     )
+    # Neutralize the resolver's internal load_dotenv so a developer's .env does
+    # not re-populate the model vars after we clear them (see the env-unset
+    # test above for the full rationale).
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: None)
     monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
     monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
