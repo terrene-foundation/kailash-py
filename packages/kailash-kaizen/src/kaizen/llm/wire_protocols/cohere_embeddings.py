@@ -122,13 +122,19 @@ def build_request_payload(
     return payload
 
 
-def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
+def parse_response(payload: Dict[str, Any], options: Any = None) -> Dict[str, Any]:
     """Extract ``{vectors, model, usage}`` from a Cohere ``/v1/embed`` response.
 
     Raises ``InvalidResponse`` with a stable ``reason`` when the payload
     shape violates the documented contract. ``embeddings`` is returned in
     request order (no per-item index field on this endpoint), so no sort
     is applied -- unlike ``openai_embeddings.parse_response``.
+
+    ``options`` is accepted for dispatch symmetry with every embed shaper
+    (the shared ``LlmClient.embed`` call site threads it uniformly, #1720
+    Wave-A parity) and is intentionally IGNORED here: Cohere applies no
+    post-parse normalization. Only ``huggingface_embeddings`` consumes
+    ``options`` at parse time (``EmbedOptions.normalize``).
     """
     if not isinstance(payload, dict):
         raise TypeError(

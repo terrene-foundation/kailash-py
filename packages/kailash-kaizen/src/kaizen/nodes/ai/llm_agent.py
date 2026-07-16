@@ -140,18 +140,20 @@ def _shadow_deployment_for(
     return resolve_deployment_for(provider, model, api_key=api_key, base_url=base_url)
 
 
-def _legacy_tool_choice_default(provider, tools, explicit_choice):
+def _legacy_tool_choice_default(provider, tools, explicit_choice, *, stream=False):
     """Thin wrapper delegating to the shared
     `kaizen.llm.deployment_resolver.legacy_tool_choice_default` (#1720 Wave-A
-    invariant #1) — reproduces the PER-PROVIDER legacy chat ``tool_choice``
-    default (openai -> "required"; azure/docker -> "auto"; others -> none) so
-    the dual-run shadow does not log false divergences on tool-using agents.
-    Kept as a module-level symbol so tests may patch this seam, mirroring
-    `_shadow_deployment_for`.
+    invariant #1) — reproduces the PER-PROVIDER, PER-MODE legacy chat
+    ``tool_choice`` default (openai -> "required" non-stream / "auto" stream;
+    azure/docker -> "auto"; others -> none) so the dual-run shadow does not log
+    false divergences on tool-using agents. ``stream`` threads the live
+    request's streaming mode so openai streaming reproduces legacy
+    ``stream_chat``'s "auto" (not ``chat``'s "required"). Kept as a module-level
+    symbol so tests may patch this seam, mirroring `_shadow_deployment_for`.
     """
     from kaizen.llm.deployment_resolver import legacy_tool_choice_default
 
-    return legacy_tool_choice_default(provider, tools, explicit_choice)
+    return legacy_tool_choice_default(provider, tools, explicit_choice, stream=stream)
 
 
 @dataclass
@@ -1025,6 +1027,7 @@ class LLMAgentNode(Node):
                     generation_config,
                     api_key=per_request_api_key,
                     base_url=per_request_base_url,
+                    streaming=streaming,
                 )
 
             # Handle tool execution if enabled and tools were called
@@ -2321,6 +2324,7 @@ Final Answer: 6 hours"""
         generation_config: dict,
         api_key: str = None,
         base_url: str = None,
+        streaming: bool = False,
     ) -> dict[str, Any]:
         """Generate LLM response using provider architecture.
 
@@ -2386,6 +2390,7 @@ Final Answer: 6 hours"""
                     api_key=api_key,
                     base_url=base_url,
                     legacy_response=response,
+                    streaming=streaming,
                 )
 
             return response
@@ -2413,6 +2418,7 @@ Final Answer: 6 hours"""
         api_key: str | None,
         base_url: str | None,
         legacy_response: dict,
+        streaming: bool = False,
     ) -> "threading.Thread | None":
         """#1720 Wave-2 redteam (HIGH) — fire-and-forget dispatch of
         `_run_llm_dual_run_shadow` onto a daemon background thread.
@@ -2478,6 +2484,7 @@ Final Answer: 6 hours"""
                     "api_key": api_key,
                     "base_url": base_url,
                     "legacy_response": snapshot["legacy_response"],
+                    "streaming": streaming,
                 },
                 daemon=True,
                 name="kaizen-llm-dual-run-shadow",
@@ -2504,6 +2511,7 @@ Final Answer: 6 hours"""
         api_key: str | None,
         base_url: str | None,
         legacy_response: dict,
+        streaming: bool = False,
     ) -> None:
         """#1720 Wave-2 — shadow-run the four-axis `LlmClient` alongside the
         legacy provider response and log divergences.
@@ -2559,7 +2567,7 @@ Final Answer: 6 hours"""
             # path) and emit it only when it is not None.
             explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
             effective_tool_choice = _legacy_tool_choice_default(
-                provider, shadow_tools, explicit_tool_choice
+                provider, shadow_tools, explicit_tool_choice, stream=streaming
             )
             if effective_tool_choice is not None:
                 sampling_kwargs["tool_choice"] = effective_tool_choice

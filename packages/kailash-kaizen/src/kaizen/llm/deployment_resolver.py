@@ -56,13 +56,18 @@ logger = logging.getLogger(__name__)
 
 
 # The legacy tools-present ``tool_choice`` default is PROVIDER-SPECIFIC — the
-# providers do NOT agree, so a provider-agnostic default is wrong:
-#   * ``openai`` (openai.py:258) -> ``default_choice = "required" if tools else "auto"`` -> "required"
-#   * ``azure`` / ``azure_openai`` (azure.py:288/372) -> literal ``"auto"``
-#   * ``docker`` (docker.py:159/249) -> literal ``"auto"``
+# providers do NOT agree, so a provider-agnostic default is wrong. It is ALSO
+# stream-specific for openai (see the ``stream`` kwarg on the function below):
+#   * ``openai`` non-stream chat (``OpenAIProvider.chat``) ->
+#     ``default_choice = "required" if tools else "auto"`` -> "required";
+#     BUT ``openai`` STREAM (``OpenAIProvider.stream_chat``) -> literal "auto".
+#     openai is the ONLY provider whose stream vs non-stream default differs.
+#   * ``azure`` / ``azure_openai`` (``chat`` AND ``stream_chat``) -> "auto" on BOTH paths.
+#   * ``docker`` (``chat`` AND ``stream_chat``) -> "auto" on BOTH paths.
 #   * every other legacy provider (perplexity/pplx, ollama, google/gemini,
 #     anthropic, cohere, huggingface) sets NO ``tool_choice`` at all -> None.
 # A provider absent from this map emits no tool_choice (None), matching legacy.
+# This map holds the NON-STREAM defaults; the ``stream`` kwarg adjusts openai.
 _LEGACY_TOOL_CHOICE_DEFAULTS = {
     "openai": "required",
     "azure": "auto",
@@ -72,21 +77,29 @@ _LEGACY_TOOL_CHOICE_DEFAULTS = {
 
 
 def legacy_tool_choice_default(
-    provider: Any, tools: Any, explicit_choice: Any
+    provider: Any, tools: Any, explicit_choice: Any, *, stream: bool = False
 ) -> Any:
     """Reproduce the legacy ``providers/llm`` chat ``tool_choice`` default.
 
-    The legacy default is PROVIDER-SPECIFIC (see ``_LEGACY_TOOL_CHOICE_DEFAULTS``):
-    only ``openai`` forces ``"required"`` when tools are present and unset;
-    ``azure``/``azure_openai``/``docker`` default to ``"auto"``; every other
-    legacy provider sets no ``tool_choice`` at all. The four-axis
-    ``LlmClient.complete`` defaults ``tool_choice=None`` (emits nothing), so a
-    shadow / live four-axis call that does not reproduce the PER-PROVIDER legacy
-    default diverges from legacy — the Wave-2 dual-run shadow logged FALSE
-    ``llm.dual_run.divergence`` WARNs on openai tool-using agents because of
-    exactly this gap. (A provider-AGNOSTIC ``"required"`` default is equally
-    wrong — it OVER-injects ``"required"`` for azure/docker, whose legacy path
-    sends ``"auto"``.)
+    The legacy default is PROVIDER-SPECIFIC (see ``_LEGACY_TOOL_CHOICE_DEFAULTS``)
+    AND, for openai, STREAM-SPECIFIC: legacy ``OpenAIProvider.chat`` forces
+    ``"required"`` when tools are present and unset, but ``stream_chat`` forces
+    ``"auto"``. ``azure``/``azure_openai``/``docker`` default to ``"auto"`` on
+    BOTH the streaming and non-streaming paths; every other legacy provider sets
+    no ``tool_choice`` at all. The four-axis ``LlmClient.complete`` defaults
+    ``tool_choice=None`` (emits nothing), so a shadow / live four-axis call that
+    does not reproduce the PER-PROVIDER, PER-MODE legacy default diverges from
+    legacy — the Wave-2 dual-run shadow logged FALSE ``llm.dual_run.divergence``
+    WARNs on openai tool-using agents because of exactly this gap. (A
+    provider-AGNOSTIC ``"required"`` default is equally wrong — it OVER-injects
+    ``"required"`` for azure/docker, whose legacy path sends ``"auto"``; and a
+    stream-BLIND ``"required"`` over-injects on openai streaming, whose legacy
+    ``stream_chat`` path sends ``"auto"``.)
+
+    Args:
+        stream: whether the call is a STREAMING completion. Only affects openai
+            (whose legacy ``stream_chat`` default is ``"auto"`` vs ``chat``'s
+            ``"required"``); azure/azure_openai/docker are ``"auto"`` regardless.
 
     Returns:
 
@@ -94,8 +107,10 @@ def legacy_tool_choice_default(
     * ``None`` — when no tools are present (legacy skips the ``tool_choice``
       block entirely when there are no tools), OR when the provider sets no
       legacy ``tool_choice`` default;
-    * the provider's legacy default (``"required"`` for openai, ``"auto"`` for
-      azure/azure_openai/docker) — when tools are present and unset.
+    * ``"auto"`` — for openai when ``stream=True`` (legacy ``stream_chat``);
+    * the provider's non-stream legacy default (``"required"`` for openai,
+      ``"auto"`` for azure/azure_openai/docker) — when tools are present, unset,
+      and not the openai-stream case above.
 
     Shared home (this resolver module) so BOTH the Wave-2 dual-run shadow and
     the future Wave-B live-path migration import the SAME semantics rather
@@ -105,7 +120,14 @@ def legacy_tool_choice_default(
         return None
     if explicit_choice is not None:
         return explicit_choice
-    return _LEGACY_TOOL_CHOICE_DEFAULTS.get((provider or "").strip().lower())
+    key = (provider or "").strip().lower()
+    # openai is the ONLY provider whose legacy STREAM default ("auto",
+    # OpenAIProvider.stream_chat) differs from its non-stream chat default
+    # ("required"). azure/azure_openai/docker send "auto" on both paths, so the
+    # ``stream`` flag changes only the openai result.
+    if stream and key == "openai":
+        return "auto"
+    return _LEGACY_TOOL_CHOICE_DEFAULTS.get(key)
 
 
 class UnsupportedDeploymentProvider(ValueError):
@@ -268,6 +290,26 @@ def resolve_deployment_for(
     before giving up.
     """
     provider_key = (provider or "").strip().lower()
+
+    # #1720 Wave-A security parity (enforcement-surface parity,
+    # rules/security.md § Enforcement-Surface Parity): a per-request BYOK
+    # ``api_key`` supplied HERE is installed directly into an HTTP header via
+    # ``ApiKeyBearer.apply`` (through the preset / azure builders below) with NO
+    # further sanitization — the SAME CRLF/control-char header-injection surface
+    # that ``LlmClient.complete(api_key=)`` guards at its own entry
+    # (``_validate_api_key_override``). This is the sibling BYOK entry point, so
+    # it MUST route the caller-supplied override through the SAME shared
+    # restrictiveness function; without it a ``\r\n``-bearing key reaches a
+    # header on this path while the complete() path rejects it (a fail-open
+    # parity gap the fix itself would otherwise leave). Env-derived keys
+    # (``api_key is None`` here) are resolved downstream and are NOT
+    # caller-per-request overrides — matching complete()'s override-only
+    # validation. Lazy import: ``client`` does not import this module, so there
+    # is no cycle; the import runs only when a per-request key is present.
+    if api_key is not None:
+        from kaizen.llm.client import _validate_api_key_override
+
+        api_key = _validate_api_key_override(api_key)
 
     if provider_key in _UNSUPPORTED_PROVIDERS:
         raise UnsupportedDeploymentProvider(provider_key)
