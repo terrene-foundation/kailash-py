@@ -34,10 +34,12 @@ stay in lockstep across releases.
 Provider capability vs client emission (IMPORTANT): these rows report what
 the **provider / wire protocol** supports — they do NOT assert that this
 SDK's four-axis ``LlmClient.complete()`` / ``stream()`` currently EMITS the
-feature. The four-axis completion client sends only the shared
-``CompletionRequest`` fields today; it does not yet emit ``tools`` /
-structured-output / batch / caching / audio request features (tracked in the
-legacy→four-axis consolidation, issue #1720). So ``tools=True`` here means
+feature. As of #1720 Wave-1a the ``CompletionRequest`` SHAPE carries the
+additive fields (``tools`` / ``tool_choice`` / ``response_format`` / extended
+sampling), but the wire adapters do not yet EMIT them — ``complete()`` /
+``stream()`` still send only the base fields to every wire. Per-adapter
+emission + parse is Wave 1b (legacy→four-axis consolidation, issue #1720). So
+``tools=True`` here means
 "the provider supports tool-calling", NOT "``complete()`` will send tools".
 Callers needing those features today use the ``kaizen.providers`` layer. The
 rows stay provider-scoped (not client-scoped) BECAUSE they are the cross-SDK

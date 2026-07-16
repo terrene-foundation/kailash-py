@@ -40,7 +40,7 @@ import json
 import logging
 import re
 from types import TracebackType
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 import httpx
 
@@ -770,8 +770,23 @@ class LlmClient:
         stop: Optional[List[str]],
         user: Optional[str],
         stream: bool,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        seed: Optional[int] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        n: Optional[int] = None,
+        top_k: Optional[int] = None,
     ) -> "CompletionRequest":
-        """Redact messages, resolve the model, build the CompletionRequest."""
+        """Redact messages, resolve the model, build the CompletionRequest.
+
+        The #1720 Wave-1a completion-shaping fields (``tools`` … ``top_k``) are
+        threaded through UNCHANGED; each defaults to ``None`` so a call that
+        sets none of them builds a CompletionRequest identical to the
+        pre-#1720 shape (the additive-neutrality invariant).
+        """
         assert self._deployment is not None
         if not isinstance(messages, list):
             raise TypeError(
@@ -799,6 +814,15 @@ class LlmClient:
             stop=stop,
             stream=stream,
             user=user,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            seed=seed,
+            logit_bias=logit_bias,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            n=n,
+            top_k=top_k,
         )
 
     def _build_completion_payload_and_url(
@@ -874,6 +898,15 @@ class LlmClient:
         max_tokens: Optional[int] = None,
         stop: Optional[List[str]] = None,
         user: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        seed: Optional[int] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        n: Optional[int] = None,
+        top_k: Optional[int] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> Dict[str, Any]:
         """Issue a chat completion through the configured deployment.
@@ -915,6 +948,15 @@ class LlmClient:
             stop=stop,
             user=user,
             stream=False,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            seed=seed,
+            logit_bias=logit_bias,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            n=n,
+            top_k=top_k,
         )
         payload, url = self._build_completion_payload_and_url(request, stream=False)
         body_bytes = json.dumps(payload).encode("utf-8")
@@ -1021,6 +1063,15 @@ class LlmClient:
         max_tokens: Optional[int] = None,
         stop: Optional[List[str]] = None,
         user: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        seed: Optional[int] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        n: Optional[int] = None,
+        top_k: Optional[int] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream a chat completion as an async iterator of parsed chunks.
@@ -1071,6 +1122,15 @@ class LlmClient:
             stop=stop,
             user=user,
             stream=True,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            seed=seed,
+            logit_bias=logit_bias,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            n=n,
+            top_k=top_k,
         )
         payload, url = self._build_completion_payload_and_url(request, stream=True)
         body_bytes = json.dumps(payload).encode("utf-8")
