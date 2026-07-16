@@ -85,7 +85,61 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         payload["stream"] = True
     if request.user is not None:
         payload["user"] = request.user
+
+    # --- #1720 Wave-1b completion-shaping emission (OpenAI is the canonical shape) ---
+    # Tool / function calling: `tools` is already the OpenAI function-schema list,
+    # emitted verbatim. When tools are present, `tool_choice` defaults to the
+    # legacy "required" semantics (a pinned Wave-1a decision) unless the caller
+    # set it explicitly; when no tools are present, `tool_choice` is emitted only
+    # if the caller set it.
+    if request.tools is not None:
+        payload["tools"] = list(request.tools)
+        payload["tool_choice"] = (
+            request.tool_choice if request.tool_choice is not None else "required"
+        )
+    elif request.tool_choice is not None:
+        payload["tool_choice"] = request.tool_choice
+    # Structured output: OpenAI-native, verbatim passthrough.
+    if request.response_format is not None:
+        payload["response_format"] = request.response_format
+    # Extended sampling: each passthrough under the same key name when set.
+    if request.seed is not None:
+        payload["seed"] = request.seed
+    if request.logit_bias is not None:
+        payload["logit_bias"] = request.logit_bias
+    if request.frequency_penalty is not None:
+        payload["frequency_penalty"] = request.frequency_penalty
+    if request.presence_penalty is not None:
+        payload["presence_penalty"] = request.presence_penalty
+    if request.n is not None:
+        payload["n"] = request.n
+    # top_k: intentionally NOT emitted — the OpenAI chat completions API does not
+    # support top_k (it is an Anthropic/Google/Cohere/Mistral/Ollama family field).
     return payload
+
+
+def _normalize_tool_call(tc: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce one OpenAI ``message.tool_calls`` entry into the canonical shape.
+
+    The canonical normalized shape (shared with the anthropic/google shards) is::
+
+        {"id": <str>, "type": "function",
+         "function": {"name": <str>, "arguments": <str: JSON-encoded>}}
+
+    OpenAI already returns this shape (``arguments`` is already a JSON string),
+    so this rebuilds a plain, JSON-serializable dict from the response entry —
+    guaranteeing no provider SDK object leaks into the parsed result.
+    """
+    function = tc.get("function")
+    function = function if isinstance(function, dict) else {}
+    return {
+        "id": tc.get("id"),
+        "type": tc.get("type", "function"),
+        "function": {
+            "name": function.get("name"),
+            "arguments": function.get("arguments"),
+        },
+    }
 
 
 def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,6 +154,7 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
     choices = payload.get("choices", []) or []
     text = ""
     finish_reason: Any = None
+    tool_calls: Any = None
     if choices and isinstance(choices[0], dict):
         first = choices[0]
         finish_reason = first.get("finish_reason")
@@ -111,8 +166,21 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
             content = message.get("content")
             if isinstance(content, str):
                 text = content
+            # #1720 Wave-1b: surface tool calls. OpenAI already returns
+            # `message.tool_calls` in the canonical normalized shape
+            # ([{"id", "type": "function", "function": {"name", "arguments"}}]
+            # with `arguments` a JSON-encoded string), shared with the
+            # anthropic/google shards. Pass through as plain JSON-serializable
+            # dicts (never SDK objects), only when present.
+            raw_tool_calls = message.get("tool_calls")
+            if isinstance(raw_tool_calls, list) and raw_tool_calls:
+                tool_calls = [
+                    _normalize_tool_call(tc)
+                    for tc in raw_tool_calls
+                    if isinstance(tc, dict)
+                ]
     usage = payload.get("usage", {}) or {}
-    return {
+    result: Dict[str, Any] = {
         "text": text,
         "usage": {
             "input_tokens": usage.get("prompt_tokens"),
@@ -122,6 +190,9 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
         "stop_reason": finish_reason,
         "model": payload.get("model"),
     }
+    if tool_calls:
+        result["tool_calls"] = tool_calls
+    return result
 
 
 __all__ = ["build_request_payload", "parse_response"]
