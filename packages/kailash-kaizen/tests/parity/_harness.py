@@ -288,8 +288,17 @@ def drive_legacy_openai_family(
     messages: List[Dict[str, Any]],
     tools: Optional[List[Dict[str, Any]]] = None,
     generation_config: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Drive an openai-SDK-based legacy provider (openai / docker / perplexity)."""
+    """Drive an openai-SDK-based legacy provider (openai / docker / perplexity).
+
+    ``api_key`` is an OPTIONAL per-request override forwarded to ``chat()``.
+    It is only needed for providers whose ``chat()`` resolves a credential
+    (e.g. Perplexity reads ``PERPLEXITY_API_KEY`` BEFORE building the — here
+    mocked — ``openai.OpenAI`` client, so an offline parity run must supply a
+    dummy). The key is never sent on the wire (the client is stubbed); it
+    exists only to reach the parse path. openai/docker do not require it.
+    """
     from openai.types.chat import ChatCompletion
 
     recorder = _Captured(ChatCompletion.model_validate(canned))
@@ -303,14 +312,18 @@ def drive_legacy_openai_family(
     class _StubClient:
         chat = _Chat()
 
+    chat_kwargs: Dict[str, Any] = dict(
+        messages=messages,
+        model=model,
+        generation_config=generation_config or {},
+        tools=tools or [],
+    )
+    if api_key is not None:
+        chat_kwargs["api_key"] = api_key
+
     provider = provider_cls()
     with mock.patch("openai.OpenAI", return_value=_StubClient()):
-        legacy = provider.chat(
-            messages=messages,
-            model=model,
-            generation_config=generation_config or {},
-            tools=tools or [],
-        )
+        legacy = provider.chat(**chat_kwargs)
     return legacy, recorder.kwargs
 
 
