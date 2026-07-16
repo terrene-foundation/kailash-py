@@ -46,6 +46,7 @@ from __future__ import annotations
 
 from kaizen.llm.auth.bearer import StaticNone
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
+from kaizen.llm.testing.mock_transport import MockLlmHttpClient, UnsupportedMockRequest
 
 
 def mock_preset(model: str = "mock-model") -> LlmDeployment:
@@ -94,4 +95,4 @@ def mock_preset(model: str = "mock-model") -> LlmDeployment:
     )
 
 
-__all__ = ["mock_preset"]
+__all__ = ["mock_preset", "MockLlmHttpClient", "UnsupportedMockRequest"]
