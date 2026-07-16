@@ -104,42 +104,58 @@ const perDim = await pipeline(
     }
     return { dim, review }
   },
-  // Verify each finding adversarially (independent skeptic, default-to-refuted)
+  // Verify each finding adversarially (independent skeptic, default-to-refuted).
+  // EVIDENCE GATE: a throttled/errored verify is ZERO evidence — retry once, and
+  // if still unresolved SURFACE it as `unverified` (NEVER silently drop it, the
+  // round-1 false-convergence bug).
   ({ dim, review }) => {
     const findings = (review && review.findings) || []
-    if (!findings.length) return { dim, ran: review && review.ran === true, confirmed: [] }
-    return parallel(findings.map((f) => () =>
-      agent(`Adversarially VERIFY this #1720 Wave-A finding. Default to real=false unless you can reproduce it against the actual code at /Users/esperie/repos/kailash/build/kailash-py (packages/kailash-kaizen). Read the cited file, run the repro if you can.
+    if (!findings.length)
+      return { dim, ran: review && review.ran === true, confirmed: [], unverified: [] }
+    const verifyPrompt = (f, retry) =>
+      `Adversarially VERIFY this #1720 Wave-A finding. Default to real=false unless you can reproduce it against the actual code at /Users/esperie/repos/kailash/build/kailash-py (packages/kailash-kaizen). Read the cited file, run the repro if you can.
 
 Finding [${f.severity}] ${f.file} ${f.symbol || ''}: ${f.summary}
 Failure scenario: ${f.failure_scenario}
 
-Is this a REAL defect in the ${base}...${head} diff, or a false positive? ${scope}`,
+Is this a REAL defect in the ${base}...${head} diff, or a false positive? ${scope}${retry ? '\n\n[RE-RUN: prior verify returned empty/errored; you MUST actually read the code and set ran=true.]' : ''}`
+    return parallel(findings.map((f) => async () => {
+      let v = await agent(verifyPrompt(f, false),
         { label: `verify:${dim}:${(f.file || '').split('/').pop()}`, phase: 'Verify', schema: VERDICT_SCHEMA })
-        .then((v) => ({ finding: f, verdict: v }))
-    )).then((verds) => ({
-      dim,
-      ran: review.ran === true,
-      confirmed: verds.filter(Boolean)
+      if (!v || v.ran !== true) {
+        v = await agent(verifyPrompt(f, true),
+          { label: `verify:${dim}:${(f.file || '').split('/').pop()}:rerun`, phase: 'Verify', schema: VERDICT_SCHEMA })
+      }
+      return { finding: f, verdict: v }
+    })).then((verds) => {
+      const confirmed = verds
         .filter((x) => x.verdict && x.verdict.ran === true && x.verdict.real === true && x.verdict.corrected_severity !== 'NOT_A_BUG')
-        .map((x) => ({ ...x.finding, severity: x.verdict.corrected_severity, verify_reasoning: x.verdict.reasoning })),
-    }))
+        .map((x) => ({ ...x.finding, severity: x.verdict.corrected_severity, verify_reasoning: x.verdict.reasoning }))
+      const unverified = verds
+        .filter((x) => !x.verdict || x.verdict.ran !== true)
+        .map((x) => ({ ...x.finding, note: 'verify errored/throttled after retry — UNVERIFIED, not clean' }))
+      return { dim, ran: review.ran === true, confirmed, unverified }
+    })
   }
 )
 
 const results = perDim.filter(Boolean)
 const allRan = results.every((r) => r.ran === true)
 const confirmed = results.flatMap((r) => r.confirmed || [])
+const unverified = results.flatMap((r) => r.unverified || [])
 const sevRank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
 confirmed.sort((a, b) => (sevRank[a.severity] ?? 9) - (sevRank[b.severity] ?? 9))
 
-log(`Round ${round}: allReviewersRan=${allRan}, confirmed findings=${confirmed.length}`)
+log(`Round ${round}: allReviewersRan=${allRan}, confirmed=${confirmed.length}, unverified=${unverified.length}`)
 
+// A round is clean ONLY when every reviewer ran, zero confirmed findings, AND
+// zero findings left unverified (an unverified finding is not evidence of clean).
 return {
   round,
   base,
   head,
   allReviewersRan: allRan,
-  clean: allRan && confirmed.length === 0,
+  clean: allRan && confirmed.length === 0 && unverified.length === 0,
   confirmed,
+  unverified,
 }
