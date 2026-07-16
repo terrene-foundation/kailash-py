@@ -87,16 +87,28 @@ def test_tool_choice_not_emitted_when_no_tools_and_unset():
 
 
 @pytest.mark.unit
-def test_tool_choice_emitted_when_set_without_tools():
-    """An explicitly-set tool_choice is emitted even when tools is None."""
-    request = CompletionRequest(
-        model="test-model",
-        messages=_base_messages(),
-        tool_choice="none",
-    )
-    payload = openai_chat.build_request_payload(request)
-    assert payload["tool_choice"] == "none"
-    assert "tools" not in payload
+def test_tool_choice_not_emitted_without_tools():
+    """tool_choice is meaningless without tools — emitted ONLY alongside a
+    non-empty tools list, matching the anthropic/google adapters (four-axis
+    consistency). A standalone tool_choice (even the benign 'none') is dropped;
+    a forced 'required'/named choice with no tools would be an invalid request.
+    (Round-3 convergence fix on PR #1776.)"""
+    for choice in (
+        "none",
+        "required",
+        "auto",
+        {"type": "function", "function": {"name": "f"}},
+    ):
+        request = CompletionRequest(
+            model="test-model",
+            messages=_base_messages(),
+            tool_choice=choice,
+        )
+        payload = openai_chat.build_request_payload(request)
+        assert (
+            "tool_choice" not in payload
+        ), f"tool_choice={choice!r} leaked without tools"
+        assert "tools" not in payload
 
 
 @pytest.mark.unit

@@ -90,18 +90,17 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     # --- #1720 Wave-1b completion-shaping emission (OpenAI is the canonical shape) ---
     # Tool / function calling: `tools` is already the OpenAI function-schema list,
     # emitted verbatim. Guard on truthiness so an explicitly-set EMPTY list
-    # (`tools=[]`) emits nothing — emitting `"tools": []` + `tool_choice:
-    # "required"` would be an invalid request (required with no tools → 400).
-    # When tools are present, `tool_choice` defaults to the legacy "required"
-    # semantics (a pinned Wave-1a decision) unless the caller set it explicitly;
-    # when no tools are present, `tool_choice` is emitted only if the caller set it.
+    # (`tools=[]`) emits nothing. `tool_choice` is meaningless without tools (a
+    # forced `"required"`/named choice with no tools is an invalid request), so
+    # it is emitted ONLY alongside a non-empty tools list — matching the
+    # anthropic/google adapters (the four-axis consistency contract). When tools
+    # are present, `tool_choice` defaults to the legacy "required" semantics (a
+    # pinned Wave-1a decision) unless the caller set it explicitly.
     if request.tools:
         payload["tools"] = list(request.tools)
         payload["tool_choice"] = (
             request.tool_choice if request.tool_choice is not None else "required"
         )
-    elif request.tool_choice is not None:
-        payload["tool_choice"] = request.tool_choice
     # Structured output: OpenAI-native, verbatim passthrough.
     if request.response_format is not None:
         payload["response_format"] = request.response_format

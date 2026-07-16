@@ -84,6 +84,24 @@ def test_empty_tools_list_emits_nothing(shaper):
 
 
 @pytest.mark.regression
+@pytest.mark.parametrize(
+    "shaper",
+    [openai_chat, anthropic_messages, google_generate_content],
+    ids=["openai", "anthropic", "google"],
+)
+@pytest.mark.parametrize("tools", [None, []], ids=["none", "empty"])
+def test_tool_choice_set_without_tools_emits_no_forced_selection(shaper, tools):
+    """Round-3 gap — a tool_choice/forced selection with tools unset OR empty
+    must NOT be emitted on ANY adapter (tool_choice is meaningless without
+    tools; a forced 'required' with no tools is an invalid request). All three
+    adapters MUST agree — the four-axis consistency contract."""
+    payload = shaper.build_request_payload(_req(tools=tools, tool_choice="required"))
+    assert "tool_choice" not in payload, "tool_choice leaked without tools"
+    assert "toolConfig" not in payload, "toolConfig leaked without tools"
+    assert "tools" not in payload
+
+
+@pytest.mark.regression
 def test_openai_coerces_dict_arguments_to_json_string():
     """Finding 4 — an OpenAI-compatible provider returning arguments as a dict
     is coerced to a JSON string (canonical contract holds fleet-wide)."""
