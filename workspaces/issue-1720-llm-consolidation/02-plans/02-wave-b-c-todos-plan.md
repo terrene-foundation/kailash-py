@@ -131,10 +131,24 @@ parity harness green across the dual-mappable matrix. Three parallel shards
   default, and the streaming path. Folds Decision-1A (google finish_reason map).
   `azure_ai_foundry` scoped out per Decision-2A. Invariants ≈ 6.
 - **B1b — `EmbeddingGeneratorNode._generate_provider_embedding` cutover.** Move
-  to `resolve_deployment_for`→`LlmClient.embed`. Close the 2 real gaps: add a
-  `timeout` kwarg to `embed()` (legacy passes one) and confirm cohere
-  `input_type` / hf `use_api` are honored by the four-axis shapers (F2 already
-  makes `normalize` work). Preserve the ImportError fallback. Invariants ≈ 5.
+  to `resolve_deployment_for`→`LlmClient.embed`. Close the gaps: add a `timeout`
+  kwarg to `embed()` (legacy passes one) and confirm cohere `input_type` / hf
+  `use_api` are honored by the four-axis shapers (F2 already makes `normalize`
+  work on the HF wire). Preserve the ImportError fallback. Invariants ≈ 5.
+  Value-anchor: retires the legacy embedding path onto four-axis — the #1720
+  program goal for embeddings; without it `providers/llm/` cannot be deleted.
+  - **Folded in — F2-MEDIUM (deferred from the foundation redteam, tracked
+    here):** `EmbedOptions.normalize` is a documented "cross-provider-shared"
+    field but is still a silent no-op on the ollama/cohere/openai embed wires
+    (only HF applies it, post-F2). The redteam graded this MEDIUM/non-blocking
+    (pre-existing; the foundation fix closed the specific HF finding). The
+    3c-clean disposition (per the reviewer) is to apply the L2 normalize
+    UNIFORMLY for every wire — a single client-side implementation in
+    `LlmClient.embed` (pure math), removing the per-shaper copy. Do it here,
+    where all-wire embed semantics are the shard's focus, so the embedding
+    cutover ships with `normalize` actually honored on every provider it
+    migrates. Value-anchor: a consumer asking for normalized embeddings gets
+    them regardless of provider — the documented contract the field promises.
 - **B1c — `BaseAgent._simple_execute_async` cutover.** openai-only; direct
   `OpenAIProvider` → `resolve_deployment_for("openai",…)`→`complete`. Lowest
   risk. Invariants ≈ 3.
