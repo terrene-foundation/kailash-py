@@ -16,7 +16,10 @@ import pytest
 from kaizen.llm.deployment import CompletionRequest
 from kaizen.llm.wire_protocols import (
     anthropic_messages,
+    cohere_generate,
     google_generate_content,
+    mistral_chat,
+    ollama_native,
     openai_chat,
 )
 
@@ -68,8 +71,15 @@ def test_gemini_response_format_text_does_not_force_json():
 @pytest.mark.regression
 @pytest.mark.parametrize(
     "shaper",
-    [openai_chat, anthropic_messages, google_generate_content],
-    ids=["openai", "anthropic", "google"],
+    [
+        openai_chat,
+        anthropic_messages,
+        google_generate_content,
+        mistral_chat,
+        cohere_generate,
+        ollama_native,
+    ],
+    ids=["openai", "anthropic", "google", "mistral", "cohere", "ollama"],
 )
 def test_empty_tools_list_emits_nothing(shaper):
     """Finding 3 (+ round-2 gap) — tools=[] (set but empty) emits no tools +
@@ -86,8 +96,15 @@ def test_empty_tools_list_emits_nothing(shaper):
 @pytest.mark.regression
 @pytest.mark.parametrize(
     "shaper",
-    [openai_chat, anthropic_messages, google_generate_content],
-    ids=["openai", "anthropic", "google"],
+    [
+        openai_chat,
+        anthropic_messages,
+        google_generate_content,
+        mistral_chat,
+        cohere_generate,
+        ollama_native,
+    ],
+    ids=["openai", "anthropic", "google", "mistral", "cohere", "ollama"],
 )
 @pytest.mark.parametrize("tools", [None, []], ids=["none", "empty"])
 def test_tool_choice_set_without_tools_emits_no_forced_selection(shaper, tools):
@@ -104,8 +121,15 @@ def test_tool_choice_set_without_tools_emits_no_forced_selection(shaper, tools):
 @pytest.mark.regression
 @pytest.mark.parametrize(
     "shaper",
-    [openai_chat, anthropic_messages, google_generate_content],
-    ids=["openai", "anthropic", "google"],
+    [
+        openai_chat,
+        anthropic_messages,
+        google_generate_content,
+        mistral_chat,
+        cohere_generate,
+        ollama_native,
+    ],
+    ids=["openai", "anthropic", "google", "mistral", "cohere", "ollama"],
 )
 def test_empty_collection_fields_emit_nothing(shaper):
     """Round-4 observation B — a set-but-empty collection field (``response_format={}``,
