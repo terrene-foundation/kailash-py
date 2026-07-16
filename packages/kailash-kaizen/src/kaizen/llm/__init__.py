@@ -29,7 +29,10 @@ from kaizen.llm.deployment import (
     StreamingConfig,
     WireProtocol,
 )
-from kaizen.llm.deployment_resolver import resolve_deployment_for
+from kaizen.llm.deployment_resolver import (
+    UnsupportedDeploymentProvider,
+    resolve_deployment_for,
+)
 from kaizen.llm.errors import (
     AuthError,
     EndpointError,
@@ -88,6 +91,7 @@ __all__ = [
     "LlmClient",
     # Provider-name → deployment resolution (#1720 Wave-A)
     "resolve_deployment_for",
+    "UnsupportedDeploymentProvider",
     # Model-identifier → provider resolution (#1609)
     "LlmProvider",
     "UnknownModelProvider",

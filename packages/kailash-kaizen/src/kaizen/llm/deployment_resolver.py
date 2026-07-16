@@ -19,10 +19,19 @@ The mapping is preserved byte-for-byte from the original shadow resolver:
   credential returns ``None`` (skip).
 * **base-url providers** (``ollama`` / ``docker``): require a ``base_url``;
   a missing one returns ``None`` (skip).
-* **unmapped providers**: return ``None`` (skip).
-
-(Azure providers and the known-but-unsupported ``azure_ai_foundry`` blocker
-are added in #1720 Wave-A invariant #3, layered on this promotion.)
+* **azure providers** (``azure`` / ``azure_openai``): resolve endpoint +
+  api-key (+ api-version) from the per-request overrides else the canonical
+  ``AZURE_*`` env vars, and build an ``OpenAiChat``-wire deployment with an
+  ``AzureEntra`` api-key auth strategy (``api-key: <KEY>`` header) — Azure
+  OpenAI speaks the same on-wire JSON as OpenAI-direct; only the URL + auth
+  header differ. A missing endpoint or api-key returns ``None`` (skip).
+* **known-but-unsupported providers** (``azure_ai_foundry``): raise
+  :class:`UnsupportedDeploymentProvider` — a DOCUMENTED Wave-B blocker
+  (no confirmed four-axis wire), NOT a silent ``None`` fallback
+  (``rules/zero-tolerance.md`` Rule 3).
+* **unmapped providers**: return ``None`` (skip) — a provider name this
+  resolver has never heard of is a best-effort skip, distinct from a KNOWN
+  provider we deliberately decline to map.
 
 ``resolve_deployment_for`` does NOT guarantee never-raises for the mapped
 providers: the preset factories (``openai_preset`` etc.) and the Azure
@@ -44,6 +53,108 @@ import os
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+
+class UnsupportedDeploymentProvider(ValueError):
+    """A KNOWN provider has no confirmed four-axis ``LlmDeployment`` mapping.
+
+    Raised by :func:`resolve_deployment_for` for a provider the resolver
+    recognises but deliberately declines to map because it has no confirmed
+    four-axis wire (currently ``azure_ai_foundry``). This is a DOCUMENTED
+    blocker for the Wave-B cutover — surfacing it as a typed error rather
+    than a silent ``None`` is the ``rules/zero-tolerance.md`` Rule 3
+    (no silent fallbacks) disposition: a Wave-B implementer wiring this
+    provider hits a clear signal instead of a shadow that silently never runs.
+    """
+
+    def __init__(self, provider: str) -> None:
+        self.provider = provider
+        super().__init__(
+            f"provider {provider!r} has no confirmed four-axis LlmDeployment "
+            "mapping (no confirmed wire); it cannot be resolved for the "
+            "four-axis path. This is a DOCUMENTED Wave-B blocker, not a silent "
+            "fallback (rules/zero-tolerance.md Rule 3) — add a confirmed wire "
+            "mapping in kaizen.llm.deployment_resolver to enable it."
+        )
+
+
+# Legacy provider names that map onto an Azure-OpenAI four-axis deployment.
+_AZURE_PROVIDERS = frozenset({"azure", "azure_openai"})
+
+# KNOWN providers the resolver deliberately declines to map (no confirmed
+# four-axis wire) — resolving one raises UnsupportedDeploymentProvider rather
+# than silently returning None (rules/zero-tolerance.md Rule 3).
+_UNSUPPORTED_PROVIDERS = frozenset({"azure_ai_foundry"})
+
+
+def _resolve_azure_deployment(
+    model: str, api_key: Optional[str], base_url: Optional[str]
+):
+    """Build an ``OpenAiChat``-wire Azure-OpenAI deployment (#1720 Wave-A #3).
+
+    Azure OpenAI speaks the same on-wire JSON as OpenAI-direct; only the URL
+    (``/openai/deployments/{deployment}/...?api-version=``) and the auth
+    header (``api-key: <KEY>`` via ``AzureEntra`` api-key variant) differ —
+    mirrors ``kaizen.llm.presets.azure_openai_preset``'s endpoint shape,
+    sourcing the resource host from ``base_url`` and the deployment name from
+    ``model`` instead of separate ``resource_name`` / ``deployment_name``
+    args (the shadow/live callers only carry ``provider, model, api_key,
+    base_url``).
+
+    Credentials mirror the legacy Azure backend's own resolution
+    (``kaizen.nodes.ai.azure_detection.resolve_azure_env``): the per-request
+    override wins, else the canonical ``AZURE_*`` env vars (legacy
+    ``AZURE_OPENAI_*`` names still resolve with a DeprecationWarning). A
+    missing endpoint or api-key returns ``None`` (skip), matching the
+    base-url family's missing-credential contract.
+    """
+    from kaizen.llm.auth.azure import AzureEntra
+    from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
+    from kaizen.llm.grammar.azure_openai import AzureOpenAIGrammar
+    from kaizen.llm.presets import AZURE_OPENAI_DEFAULT_API_VERSION
+    from kaizen.nodes.ai.azure_detection import resolve_azure_env
+
+    resolved_endpoint = base_url or resolve_azure_env(
+        "AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT"
+    )
+    if not resolved_endpoint:
+        logger.debug(
+            "llm.dual_run.shadow_skipped",
+            extra={"provider": "azure", "reason": "missing_base_url"},
+        )
+        return None
+    resolved_key = api_key or resolve_azure_env("AZURE_API_KEY", "AZURE_OPENAI_API_KEY")
+    if not resolved_key:
+        logger.debug(
+            "llm.dual_run.shadow_skipped",
+            extra={"provider": "azure", "reason": "missing_api_key"},
+        )
+        return None
+    api_version = (
+        resolve_azure_env("AZURE_API_VERSION", "AZURE_OPENAI_API_VERSION")
+        or AZURE_OPENAI_DEFAULT_API_VERSION
+    )
+
+    # The deployment name is interpolated into the URL path; validate it
+    # through the canonical Azure grammar (fail-closed on path-control chars)
+    # BEFORE the f-string interpolation below — the same validator
+    # azure_openai_preset uses.
+    resolved_deployment = AzureOpenAIGrammar().resolve(model)
+
+    endpoint = Endpoint(
+        base_url=resolved_endpoint,
+        path_prefix=f"/openai/deployments/{resolved_deployment}",
+        # Azure REQUIRES ?api-version= on EVERY request URL; both
+        # _build_completion_url and _build_embed_url append query_params.
+        query_params={"api-version": api_version},
+    )
+    return LlmDeployment(
+        wire=WireProtocol.OpenAiChat,
+        endpoint=endpoint,
+        auth=AzureEntra(api_key=resolved_key),
+        default_model=resolved_deployment,
+        preset_name="azure_openai",
+    )
 
 
 # Providers whose four-axis preset is keyed on an API key + the env var the
@@ -94,7 +205,9 @@ def resolve_deployment_for(
     onto the matching four-axis preset builder. Returns ``None`` when the
     provider has no four-axis mapping, or a required credential / base_url
     cannot be resolved -- callers treat ``None`` as "skip, already logged at
-    DEBUG".
+    DEBUG". Raises :class:`UnsupportedDeploymentProvider` for a KNOWN provider
+    with no confirmed wire (``azure_ai_foundry``) — a documented Wave-B
+    blocker, not a silent fallback.
 
     ``api_key`` mirrors the legacy provider's own resolution: when the caller
     did not pass a per-request override, the same ``<PROVIDER>_API_KEY`` env
@@ -102,6 +215,12 @@ def resolve_deployment_for(
     before giving up.
     """
     provider_key = (provider or "").strip().lower()
+
+    if provider_key in _UNSUPPORTED_PROVIDERS:
+        raise UnsupportedDeploymentProvider(provider_key)
+
+    if provider_key in _AZURE_PROVIDERS:
+        return _resolve_azure_deployment(model, api_key, base_url)
 
     api_key_map = _api_key_preset_map()
     if provider_key in api_key_map:
@@ -136,4 +255,4 @@ def resolve_deployment_for(
     return None
 
 
-__all__ = ["resolve_deployment_for"]
+__all__ = ["resolve_deployment_for", "UnsupportedDeploymentProvider"]
