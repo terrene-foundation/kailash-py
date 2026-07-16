@@ -51,8 +51,13 @@ def _content_to_str(content: Any) -> str:
     """Flatten a message's ``content`` into a plain string.
 
     Cohere's chat_history entries take a single string per turn; content
-    blocks (vision) are not supported on this endpoint, so we concatenate
-    any text blocks and drop non-text blocks with a debug log.
+    blocks (vision, e.g. an OpenAI-shaped ``image_url`` part) are NOT
+    supported on this endpoint (Cohere v1 ``/chat`` is text-only) — we
+    concatenate any text blocks and drop non-text blocks. #1720 Wave-1b:
+    the drop is a WARNING (never DEBUG/silent) — a caller that sent an
+    image expects it to be seen; silently downgrading to DEBUG would hide
+    a real capability gap. See ``rules/observability.md`` Rule 7 /
+    zero-tolerance Rule 3 (no silent fallback).
     """
     if isinstance(content, str):
         return content
@@ -64,9 +69,13 @@ def _content_to_str(content: Any) -> str:
             elif isinstance(block, str):
                 parts.append(block)
             else:
-                logger.debug(
+                block_type = block.get("type") if isinstance(block, dict) else None
+                logger.warning(
                     "cohere_generate.non_text_block_dropped",
-                    extra={"block_type": type(block).__name__},
+                    extra={
+                        "block_type": type(block).__name__,
+                        "content_type": block_type,
+                    },
                 )
         return "".join(parts)
     return str(content)

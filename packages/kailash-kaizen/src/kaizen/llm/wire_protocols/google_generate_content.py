@@ -21,6 +21,7 @@ import logging
 from typing import Any, Dict, List
 
 from kaizen.llm.deployment import CompletionRequest
+from kaizen.llm.wire_protocols import _content_parts
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,13 @@ def _extract_text_parts(content: Any) -> List[Dict[str, Any]]:
     """Turn a message's ``content`` field into Gemini ``parts`` list.
 
     OpenAI messages carry either a string or a list of content blocks;
-    Gemini expects a list of ``{text}`` / ``{inlineData}`` / etc. parts.
-    We pass through text blocks as ``{"text": ...}`` and leave non-text
-    block types unchanged (callers may inject ``inlineData`` for vision).
+    Gemini expects a list of ``{text}`` / ``{inlineData}`` / ``{fileData}``
+    / etc. parts. Text blocks pass through as ``{"text": ...}``. An
+    ``image_url`` block (OpenAI's canonical multimodal shape — a base64
+    data-URI or a remote http(s) url) is translated via ``_content_parts``
+    into Gemini's native ``inlineData`` (data-URI) / ``fileData`` (remote
+    url) part (#1720 Wave-1b). Any other block type is left unchanged
+    (callers may inject an already-Gemini-shaped part directly).
     """
     if isinstance(content, str):
         return [{"text": content}]
@@ -59,8 +64,15 @@ def _extract_text_parts(content: Any) -> List[Dict[str, Any]]:
         parts: List[Dict[str, Any]] = []
         for block in content:
             if isinstance(block, dict):
-                if block.get("type") == "text":
+                block_type = block.get("type")
+                if block_type == "text":
                     parts.append({"text": block.get("text", "")})
+                elif block_type == "image_url":
+                    part = _content_parts.parse_content_part(block)
+                    if isinstance(part, _content_parts.ImagePart):
+                        parts.append(_content_parts.to_gemini_part(part))
+                    else:
+                        parts.append(block)
                 else:
                     parts.append(block)
             elif isinstance(block, str):

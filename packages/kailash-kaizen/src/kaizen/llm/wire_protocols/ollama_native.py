@@ -25,9 +25,13 @@ See https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-compl
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, List
 
 from kaizen.llm.deployment import CompletionRequest
+from kaizen.llm.wire_protocols import _content_parts
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_json_schema(response_format: Dict[str, Any]) -> Dict[str, Any] | None:
@@ -44,6 +48,70 @@ def _extract_json_schema(response_format: Dict[str, Any]) -> Dict[str, Any] | No
         if isinstance(schema, dict):
             return schema
     return None
+
+
+def _translate_message_to_ollama(msg: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate one OpenAI-shaped message into Ollama-native's shape.
+
+    Ollama's ``/api/chat`` message is ``{role, content: <str>, images:
+    [<base64>, ...]}`` — image parts live in a SEPARATE per-message field
+    as bare base64 strings, NOT inline in ``content`` (#1720 Wave-1b).
+
+    A message with NO ``image_url`` part in its content — a bare string,
+    OR a content-part list containing only text/other blocks — passes
+    through UNCHANGED (same object) so a text-only request stays
+    byte-identical to the pre-Wave-1b output. A message WITH >=1
+    ``image_url`` part has its text blocks joined into a single
+    ``content`` string and its data-URI image parts moved to the
+    ``images`` field.
+
+    A remote (non-data-URI) ``image_url`` cannot be translated without a
+    network fetch, which is out of scope for this pure wire shaper (see
+    ``_content_parts.to_ollama_images``); it is dropped from the request
+    with a WARNING log — never silently — per
+    ``rules/observability.md`` Rule 7 / zero-tolerance Rule 3.
+    """
+    content = msg.get("content")
+    if not isinstance(content, list):
+        return msg
+    has_image_url = any(
+        isinstance(block, dict) and block.get("type") == "image_url"
+        for block in content
+    )
+    if not has_image_url:
+        return msg
+
+    text_parts: List[str] = []
+    image_parts: List[_content_parts.ImagePart] = []
+    remote_url_count = 0
+    for block in content:
+        part = _content_parts.parse_content_part(block)
+        if isinstance(part, _content_parts.TextPart):
+            text_parts.append(part.text)
+        elif isinstance(part, _content_parts.ImagePart):
+            if part.is_data_uri:
+                image_parts.append(part)
+            else:
+                remote_url_count += 1
+        elif isinstance(block, str):
+            text_parts.append(block)
+        # An unrecognized block (parse_content_part returned None and the
+        # block is not a bare str) has no Ollama-native slot and is
+        # dropped from `content` — only text + image blocks are
+        # representable in Ollama's message shape.
+
+    if remote_url_count:
+        logger.warning(
+            "ollama_native.remote_image_url_not_translated",
+            extra={"count": remote_url_count},
+        )
+
+    new_msg = dict(msg)
+    new_msg["content"] = "".join(text_parts)
+    images = _content_parts.to_ollama_images(image_parts)
+    if images:
+        new_msg["images"] = images
+    return new_msg
 
 
 def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
@@ -106,7 +174,9 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
 
     payload: Dict[str, Any] = {
         "model": request.model,
-        "messages": list(request.messages),
+        # Wave-1b multimodal translation: move image_url parts OUT of
+        # `content` into the per-message `images` field Ollama expects.
+        "messages": [_translate_message_to_ollama(msg) for msg in request.messages],
         # Ollama defaults `stream=True` server-side; we always pass the
         # caller's explicit choice so the HTTP client can pick the correct
         # reader (streaming JSONL vs single-JSON response).
