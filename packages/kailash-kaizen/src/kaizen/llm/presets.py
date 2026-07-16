@@ -516,6 +516,59 @@ def huggingface_preset(
     )
 
 
+def huggingface_chat_preset(
+    api_key: str,
+    model: str,
+    *,
+    base_url: str = "https://router.huggingface.co",
+    path_prefix: str = "",
+) -> LlmDeployment:
+    """HuggingFace router — OpenAI-compatible chat-completions schema (#1720 F3).
+
+    Wire:     `HuggingFaceInference`
+    Endpoint: `https://router.huggingface.co/v1/chat/completions` (the HF
+              Inference-Providers router's OpenAI-compatible chat endpoint;
+              the model travels in the JSON BODY, not the URL path — unlike the
+              classic `huggingface_preset`, whose `/models/{model}` endpoint
+              carries the model in the path)
+    Auth:     `Authorization: Bearer <key>`
+
+    Unlike the classic `huggingface_preset` (text-generation
+    `{inputs, parameters}` body, NO tool-calling surface), this preset sets
+    `completion_routing.use_chat_schema=True` so `LlmClient.complete()` /
+    `stream()` shape the OpenAI chat body (`model` + `messages` +
+    `tools`/`tool_choice`). Use this preset for TGI / Inference-Endpoint chat
+    servers that speak the OpenAI schema and honour tool calls; a caller who
+    passes `tools=` to a classic `huggingface_preset` deployment reaches ONLY
+    the tool-less classic path (the drop is logged at WARNING, never silent).
+
+    `preset_name` is `"huggingface"` (same as the classic preset) so the
+    provider capability-matrix row is shared — both presets describe the same
+    HuggingFace provider; only the on-wire route + body schema differ.
+    """
+    _validate_required_str(api_key, name="huggingface_chat_preset.api_key")
+    _validate_required_str(
+        model,
+        name="huggingface_chat_preset.model",
+        env_hint="HUGGINGFACE_PROD_MODEL",
+    )
+
+    endpoint = Endpoint(base_url=base_url, path_prefix=path_prefix)
+    auth = ApiKeyBearer(kind=ApiKeyHeaderKind.Authorization_Bearer, key=ApiKey(api_key))
+    return LlmDeployment(
+        wire=WireProtocol.HuggingFaceInference,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=model,
+        preset_name="huggingface",
+        completion_routing=CompletionRouting(
+            path_template="/v1/chat/completions",
+            streaming_path_template="/v1/chat/completions",
+            use_chat_schema=True,
+        ),
+    )
+
+
 def ollama_preset(
     base_url: str,
     model: str,
@@ -890,6 +943,7 @@ def _register_and_attach_session_2_presets() -> None:
         ("mistral", mistral_preset),
         ("perplexity", perplexity_preset),
         ("huggingface", huggingface_preset),
+        ("huggingface_chat", huggingface_chat_preset),
         ("groq", groq_preset),
         ("together", together_preset),
         ("fireworks", fireworks_preset),
@@ -2205,6 +2259,7 @@ __all__ = [
     "mistral_preset",
     "perplexity_preset",
     "huggingface_preset",
+    "huggingface_chat_preset",
     "ollama_preset",
     "docker_model_runner_preset",
     "groq_preset",

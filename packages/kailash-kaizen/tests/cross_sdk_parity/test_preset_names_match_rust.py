@@ -97,6 +97,26 @@ _PYTHON_CONVENIENCE_PRESETS = frozenset(
 )
 
 
+# Presets NEW to the Python SDK whose Rust sibling is a PENDING cross-repo issue
+# (rules/cross-sdk-inspection.md Rule 1). These are NOT drift/leaks — they are a
+# genuine capability the Python SDK gained first; the Rust equivalent MUST be
+# filed against the Rust SDK BUILD repo (surfaced by the orchestrator for user
+# authorization — this session does NOT self-file cross-repo). Each entry names
+# the originating issue; the entry moves into RUST_PRESET_NAMES once the Rust
+# sibling lands with a byte-identical preset name.
+#
+#   * `huggingface_chat` (#1720 F3) — HuggingFace router OpenAI-compatible
+#     chat-completions schema routing (`/v1/chat/completions` + `use_chat_schema`
+#     body transform), reaching tool-calling that the classic `huggingface`
+#     preset's `/models/{model}` text-generation path drops. Rust sibling: a
+#     PENDING HF chat-schema-routing preset on the Rust SDK.
+_PENDING_RUST_PARITY_PRESETS = frozenset(
+    {
+        "huggingface_chat",
+    }
+)
+
+
 def test_every_rust_preset_is_registered_in_python() -> None:
     """Every preset in the Rust literal is registered in the Python SDK."""
     py_presets = set(list_presets())
@@ -117,27 +137,36 @@ def test_no_unexpected_presets_leak_public_surface() -> None:
     Python-only leak that would silently break on Rust port.
     """
     py_presets = set(list_presets())
-    accounted = RUST_PRESET_NAMES | _PYTHON_CONVENIENCE_PRESETS
+    accounted = (
+        RUST_PRESET_NAMES | _PYTHON_CONVENIENCE_PRESETS | _PENDING_RUST_PARITY_PRESETS
+    )
     unexpected = py_presets - accounted
     assert not unexpected, (
         f"Python SDK has {len(unexpected)} UNEXPECTED preset(s) accounted for "
-        f"in neither RUST_PRESET_NAMES nor _PYTHON_CONVENIENCE_PRESETS: "
-        f"{sorted(unexpected)}. Add to the Rust catalog + RUST_PRESET_NAMES, or "
-        f"to the documented convenience family (+ its sibling parity test), or "
-        f"remove from Python."
+        f"in none of RUST_PRESET_NAMES / _PYTHON_CONVENIENCE_PRESETS / "
+        f"_PENDING_RUST_PARITY_PRESETS: {sorted(unexpected)}. Add to the Rust "
+        f"catalog + RUST_PRESET_NAMES, or to the documented convenience family "
+        f"(+ its sibling parity test), or to the pending-Rust-parity set (+ a "
+        f"filed cross-repo issue), or remove from Python."
     )
 
 
 def test_preset_registry_size_matches_catalog() -> None:
-    """Strict count check — the two accounted-for sets are disjoint and their
-    union is the full registry (no silent add/remove of any preset)."""
+    """Strict count check — the three accounted-for sets are pairwise disjoint
+    and their union is the full registry (no silent add/remove of any preset)."""
     assert len(RUST_PRESET_NAMES) == 24
     assert len(_PYTHON_CONVENIENCE_PRESETS) == 18
+    assert len(_PENDING_RUST_PARITY_PRESETS) == 1
     assert not (
         RUST_PRESET_NAMES & _PYTHON_CONVENIENCE_PRESETS
     ), "a preset appears in BOTH the byte-identical and convenience sets"
-    assert len(list_presets()) == len(RUST_PRESET_NAMES) + len(
-        _PYTHON_CONVENIENCE_PRESETS
+    assert not (
+        (RUST_PRESET_NAMES | _PYTHON_CONVENIENCE_PRESETS) & _PENDING_RUST_PARITY_PRESETS
+    ), "a pending-Rust-parity preset also appears in an accounted-for set"
+    assert len(list_presets()) == (
+        len(RUST_PRESET_NAMES)
+        + len(_PYTHON_CONVENIENCE_PRESETS)
+        + len(_PENDING_RUST_PARITY_PRESETS)
     )
 
 
