@@ -102,6 +102,21 @@ def test_tool_choice_set_without_tools_emits_no_forced_selection(shaper, tools):
 
 
 @pytest.mark.regression
+@pytest.mark.parametrize(
+    "shaper",
+    [openai_chat, anthropic_messages, google_generate_content],
+    ids=["openai", "anthropic", "google"],
+)
+def test_empty_collection_fields_emit_nothing(shaper):
+    """Round-4 observation B — a set-but-empty collection field (``response_format={}``,
+    ``logit_bias={}``) must NOT emit a degenerate key on any adapter (same
+    empty-collection discipline as the tools guard; the emptiness leak class)."""
+    payload = shaper.build_request_payload(_req(response_format={}, logit_bias={}))
+    assert "response_format" not in payload
+    assert "logit_bias" not in payload
+
+
+@pytest.mark.regression
 def test_openai_coerces_dict_arguments_to_json_string():
     """Finding 4 — an OpenAI-compatible provider returning arguments as a dict
     is coerced to a JSON string (canonical contract holds fleet-wide)."""

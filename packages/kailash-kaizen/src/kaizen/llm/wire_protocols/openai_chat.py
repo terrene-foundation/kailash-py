@@ -101,13 +101,17 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         payload["tool_choice"] = (
             request.tool_choice if request.tool_choice is not None else "required"
         )
-    # Structured output: OpenAI-native, verbatim passthrough.
-    if request.response_format is not None:
+    # Structured output: OpenAI-native, verbatim passthrough. Truthiness guard so
+    # an empty ``response_format={}`` (set but degenerate — no ``type``) emits
+    # nothing rather than a malformed key (same empty-collection discipline as
+    # the tools guard).
+    if request.response_format:
         payload["response_format"] = request.response_format
     # Extended sampling: each passthrough under the same key name when set.
     if request.seed is not None:
         payload["seed"] = request.seed
-    if request.logit_bias is not None:
+    # Truthiness guard: an empty ``logit_bias={}`` is a no-op — emit nothing.
+    if request.logit_bias:
         payload["logit_bias"] = request.logit_bias
     if request.frequency_penalty is not None:
         payload["frequency_penalty"] = request.frequency_penalty
