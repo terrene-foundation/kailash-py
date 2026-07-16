@@ -41,9 +41,24 @@ from kaizen.llm.wire_protocols import openai_chat
 
 @pytest.mark.parametrize(
     "model",
-    ["o1", "o1-mini", "o1-preview", "o3", "o3-mini", "O1-MINI", "O3"],
+    [
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3",
+        "o3-mini",
+        "O1-MINI",
+        "O3",
+        # /redteam Round-1 (#1720 Wave-1b): o4-mini is an o-series reasoning
+        # model that rejects temperature/top_p just like o1/o3 — it was
+        # previously (wrongly) asserted FALSE here, letting every o4-mini
+        # call through with a live HTTP 400 on the wire.
+        "o4",
+        "o4-mini",
+        "O4-MINI",
+    ],
 )
-def test_is_reasoning_model_true_for_o1_o3_family(model: str) -> None:
+def test_is_reasoning_model_true_for_o1_o3_o4_family(model: str) -> None:
     assert is_reasoning_model(model) is True
 
 
@@ -56,7 +71,6 @@ def test_is_reasoning_model_true_for_o1_o3_family(model: str) -> None:
         "gpt-5-mini",
         "claude-3-5-sonnet",
         "",
-        "o4-mini",
     ],
 )
 def test_is_reasoning_model_false_for_non_o1_o3(model: str) -> None:
@@ -204,6 +218,20 @@ def test_openai_chat_payload_drops_sampling_for_o1_o3(model: str) -> None:
     # unrelated fields still emitted.
     assert payload["max_completion_tokens"] == 64
     assert payload["model"] == model
+
+
+def test_openai_chat_payload_drops_sampling_for_o4_mini() -> None:
+    """/redteam Round-1 (#1720 Wave-1b) regression: o4-mini is an o-series
+    reasoning model (openai_chat._MAX_COMPLETION_TOKENS_MODEL_PREFIXES
+    includes "o4") that rejects temperature/top_p with a live HTTP 400 —
+    before the `^o4` pattern was added, this payload would have carried
+    `temperature`/`top_p` straight through to the wire."""
+    req = _req("o4-mini", temperature=0.7, top_p=0.9, max_tokens=64)
+    payload = openai_chat.build_request_payload(req)
+    assert "temperature" not in payload
+    assert "top_p" not in payload
+    assert payload["max_completion_tokens"] == 64
+    assert payload["model"] == "o4-mini"
 
 
 @pytest.mark.parametrize("model", ["gpt-5", "gpt-5-mini", "gpt-5.6-sol"])

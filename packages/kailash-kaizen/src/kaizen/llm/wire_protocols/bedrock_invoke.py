@@ -161,6 +161,16 @@ def _build_mistral(request: CompletionRequest, prompt: str) -> Dict[str, Any]:
     # body — this is the one native family with a documented structured
     # tools field. Guard on truthiness so an explicitly-set EMPTY list
     # (`tools=[]`) emits nothing (matches the sibling wire adapters).
+    #
+    # /redteam Round-1 (#1720 Wave-1b, documentation only, cross-provider-
+    # shape verify item): this `tools`/`tool_choice` body shape targets
+    # Mistral's OWN documented function-calling format, carried verbatim
+    # through Bedrock's InvokeModel body. Whether Bedrock actually routes
+    # tool-use for the mistral.* family via InvokeModel (this body) vs
+    # requires the separate Converse API is NOT independently verified
+    # against live AWS docs in this shard — flagged for verification before
+    # production reliance. No behavior change; no consumer of this path
+    # exists yet in this shard.
     if request.tools:
         body["tools"] = list(request.tools)
         tool_choice = request.tool_choice

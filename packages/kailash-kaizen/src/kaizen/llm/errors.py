@@ -204,6 +204,33 @@ class Expired(AuthError):
         super().__init__("credential expired; refresh required")
 
 
+class InvalidApiKeyOverride(AuthError):
+    """Raised when a per-request ``api_key=`` override (#1720 Wave-1b BYOK)
+    fails fail-closed validation BEFORE it is installed into a header.
+
+    /redteam Round-1 (#1720 Wave-1b security finding): a per-request
+    ``api_key`` containing a control character (``\\r`` / ``\\n`` / ``\\x00``
+    / any other C0 control) is a CRLF-header-injection surface --
+    :class:`kaizen.llm.auth.bearer.ApiKeyBearer` installs the raw string
+    directly into an HTTP header value with no sanitization, and the
+    offline ``MockLlmHttpClient`` test path never exercises real header
+    parsing, so the injection was previously untested and unguarded. This
+    mirrors ``client._validate_completion_model``'s fail-closed shape:
+    reject BEFORE the value reaches anything that could act on it.
+
+    Only the fingerprint (never the raw key) appears in any human-visible
+    field, matching :class:`Invalid` above.
+    """
+
+    def __init__(self, raw_credential: str) -> None:
+        self.fingerprint = _fingerprint(raw_credential)
+        super().__init__(
+            "per-request api_key= override rejected: contains a control "
+            f"character (\\r, \\n, \\x00, or other C0 control); refusing to "
+            f"install it into a request header (fingerprint={self.fingerprint})"
+        )
+
+
 class MissingCredential(AuthError):
     """No credential was discovered for the deployment.
 
@@ -348,6 +375,7 @@ __all__ = [
     "InvalidResponse",
     "AuthError",
     "Invalid",
+    "InvalidApiKeyOverride",
     "Expired",
     "MissingCredential",
     "ConfigError",

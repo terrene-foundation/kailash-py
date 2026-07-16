@@ -21,7 +21,11 @@ from kaizen.llm import LlmClient
 from kaizen.llm.auth.azure import AzureEntra
 from kaizen.llm.deployment import EmbedOptions, WireProtocol
 from kaizen.llm.errors import InvalidResponse
-from kaizen.llm.presets import AZURE_OPENAI_DEFAULT_API_VERSION, azure_openai_preset
+from kaizen.llm.presets import (
+    AZURE_OPENAI_DEFAULT_API_VERSION,
+    azure_openai_preset,
+    huggingface_preset,
+)
 from kaizen.llm.wire_protocols import cohere_embeddings, huggingface_embeddings
 
 # ---------------------------------------------------------------------------
@@ -178,3 +182,27 @@ def test_non_azure_embed_url_has_no_query_string() -> None:
     client = LlmClient.from_deployment(dep)
     url = client._build_embed_url("/embeddings")
     assert "?" not in url
+
+
+# ---------------------------------------------------------------------------
+# /redteam Round-1 FIX 1 (CRITICAL) — HuggingFace embed 100% broken:
+# `_build_embed_url` was called with no `model=`, so the HuggingFace wire's
+# `"/models/{model}"` path suffix substituted an EMPTY string, and
+# `_validate_completion_model("")` raised ValueError on EVERY hf embed call.
+# This pins the exact call-site shape `embed()` now uses.
+# ---------------------------------------------------------------------------
+
+
+def test_hf_embed_url_carries_model_in_path() -> None:
+    dep = huggingface_preset(
+        api_key="hf_x", model="sentence-transformers/all-MiniLM-L6-v2"
+    )
+    client = LlmClient.from_deployment(dep)
+    # No ValueError — the exact regression: _build_embed_url called with no
+    # model= substituted "" into "{model}" and _validate_completion_model("")
+    # raised on every hf embed call.
+    url = client._build_embed_url(
+        "/models/{model}", model="sentence-transformers/all-MiniLM-L6-v2"
+    )
+    assert "sentence-transformers/all-MiniLM-L6-v2" in url
+    assert "{model}" not in url

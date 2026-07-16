@@ -53,6 +53,7 @@ from kaizen.llm.deployment import (
 )
 from kaizen.llm.errors import (
     AuthError,
+    InvalidApiKeyOverride,
     InvalidResponse,
     ProviderError,
     RateLimited,
@@ -232,6 +233,29 @@ def _validate_completion_model(model: str) -> str:
             "'..' or '//'); refusing to build the request URL"
         )
     return model
+
+
+# A per-request ``api_key=`` BYOK override (#1720 Wave-1b) is installed
+# directly into an HTTP header value via ``ApiKeyBearer.apply()`` with no
+# further sanitization. Any C0 control character (``\r`` / ``\n`` / ``\x00``
+# / 0x01-0x1F, excluding none) in that string is a CRLF-header-injection
+# surface — a caller-controlled ``\r\nX-Injected: value`` could smuggle an
+# extra header onto the outbound request. /redteam Round-1 (#1720 Wave-1b
+# security finding): the offline ``MockLlmHttpClient`` test path never
+# exercises real HTTP header parsing, so this was previously untested and
+# unguarded.
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f]")
+
+
+def _validate_api_key_override(api_key: str) -> str:
+    """Fail-closed validation of a per-request ``api_key=`` override before
+    it is installed into a header. Raises :class:`InvalidApiKeyOverride` on
+    any control character. Mirrors ``_validate_completion_model``'s
+    fail-closed shape. Byte-preserving for valid keys (no transformation —
+    the provider sees the exact key)."""
+    if _CONTROL_CHAR_RE.search(api_key):
+        raise InvalidApiKeyOverride(api_key)
+    return api_key
 
 
 def _parse_stream_line(line: str, shaper: Any) -> Optional[Dict[str, Any]]:
@@ -582,9 +606,10 @@ class LlmClient:
         if dispatch is None:
             raise NotImplementedError(
                 f"LlmClient.embed does not yet support wire={wire.name!r}. "
-                "Supported: OpenAiChat (openai, groq, etc.), OllamaNative. "
-                "File an issue at terrene-foundation/kailash-py referencing "
-                "#462 to request another provider."
+                "Supported: OpenAiChat (openai, groq, etc.), OllamaNative, "
+                "CohereGenerate, HuggingFaceInference. File an issue at "
+                "terrene-foundation/kailash-py referencing #462 to request "
+                "another provider."
             )
 
         resolved_model = model or self._deployment.default_model
@@ -599,7 +624,7 @@ class LlmClient:
         path = dispatch["path"]
         payload = shaper.build_request_payload(texts, resolved_model, options)
 
-        url = self._build_embed_url(path)
+        url = self._build_embed_url(path, model=resolved_model)
 
         # LlmHttpClient owns SSRF (via SafeDnsResolver) + structured
         # logging. NEVER construct httpx.AsyncClient directly here.
@@ -970,12 +995,27 @@ class LlmClient:
         for a credential that would then be discarded. The raw key is never
         logged: it is threaded directly into ``ApiKeyBearer``/``ApiKey``,
         whose ``__repr__`` implementations expose only a fingerprint.
+
+        /redteam Round-1 (#1720 Wave-1b security finding): before ANY of the
+        above, ``api_key`` is fail-closed-validated for control characters
+        (``\\r`` / ``\\n`` / ``\\x00`` / other C0 controls) via
+        :func:`_validate_api_key_override`, raising
+        :class:`kaizen.llm.errors.InvalidApiKeyOverride` on a match — closing
+        a CRLF-header-injection surface that was previously untested on the
+        offline ``MockLlmHttpClient`` path.
         """
         assert self._deployment is not None
         auth = self._deployment.auth
         auth_kind = (
             auth.auth_strategy_kind() if hasattr(auth, "auth_strategy_kind") else None
         )
+        if api_key is not None:
+            # /redteam Round-1 (#1720 Wave-1b security finding): fail-closed
+            # control-char validation BEFORE anything else runs — a
+            # CRLF-header-injection surface must be rejected before the
+            # unnecessary-refresh-avoidance check below, and long before
+            # ApiKeyBearer.apply() installs the raw string into a header.
+            _validate_api_key_override(api_key)
         if api_key is not None and not isinstance(auth, ApiKeyBearer):
             raise UnsupportedApiKeyOverride(auth_kind or type(auth).__name__)
 

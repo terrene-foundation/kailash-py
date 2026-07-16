@@ -84,6 +84,7 @@ def _translate_message_to_ollama(msg: Dict[str, Any]) -> Dict[str, Any]:
     text_parts: List[str] = []
     image_parts: List[_content_parts.ImagePart] = []
     remote_url_count = 0
+    dropped_block_count = 0
     for block in content:
         part = _content_parts.parse_content_part(block)
         if isinstance(part, _content_parts.TextPart):
@@ -95,15 +96,27 @@ def _translate_message_to_ollama(msg: Dict[str, Any]) -> Dict[str, Any]:
                 remote_url_count += 1
         elif isinstance(block, str):
             text_parts.append(block)
-        # An unrecognized block (parse_content_part returned None and the
-        # block is not a bare str) has no Ollama-native slot and is
-        # dropped from `content` — only text + image blocks are
-        # representable in Ollama's message shape.
+        else:
+            # An unrecognized/malformed block (parse_content_part returned
+            # None and the block is not a bare str -- e.g. an unknown
+            # `type`, or a malformed `image_url` sub-dict missing `url`) has
+            # no Ollama-native slot and is dropped from `content` -- only
+            # text + image blocks are representable in Ollama's message
+            # shape. /redteam Round-1 (#1720 Wave-1b): this branch
+            # previously fell through with NO log; counted + WARNed here,
+            # never silent, per rules/observability.md Rule 7 /
+            # zero-tolerance Rule 3.
+            dropped_block_count += 1
 
     if remote_url_count:
         logger.warning(
             "ollama_native.remote_image_url_not_translated",
             extra={"count": remote_url_count},
+        )
+    if dropped_block_count:
+        logger.warning(
+            "ollama_native.content_block_dropped",
+            extra={"count": dropped_block_count},
         )
 
     new_msg = dict(msg)

@@ -31,11 +31,17 @@ from __future__ import annotations
 import re
 from typing import Any, Dict
 
-# Reasoning models that DON'T support `temperature` at all (o1, o3 families).
-# Ported verbatim from `OpenAIProvider._REASONING_MODEL_PATTERNS`.
+# Reasoning models that DON'T support `temperature` at all (o1, o3, o4
+# families). `^o4` added at /redteam Round-1 (#1720 Wave-1b) — o4-mini is an
+# o-series reasoning model (see `openai_chat._MAX_COMPLETION_TOKENS_MODEL_PREFIXES
+# = ("gpt-5", "o1", "o3", "o4")`) that rejects `temperature`/`top_p` outright
+# just like o1/o3; the original `_REASONING_MODEL_PATTERNS` (ported from the
+# legacy per-instance helper) omitted it, so every o4-mini call carrying a
+# caller-set `temperature` took a live HTTP 400.
 _REASONING_MODEL_PATTERNS = [
     r"^o1",
     r"^o3",
+    r"^o4",
 ]
 
 # Models that REQUIRE `temperature=1.0` (GPT-5 family).

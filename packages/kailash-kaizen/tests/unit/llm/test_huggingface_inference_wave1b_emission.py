@@ -210,6 +210,74 @@ def test_classic_path_omits_tools_even_when_set():
 
 
 @pytest.mark.unit
+def test_classic_path_tools_dropped_logs_warning_not_silent(caplog):
+    """/redteam Round-1 (#1720 Wave-1b): LlmClient has NO production
+    mechanism to reach the chat schema (see module docstring "Known scoped
+    limitation") -- every tools= call against an hf deployment lands on this
+    classic path. The drop MUST be observable (WARN), never silent, per
+    rules/observability.md Rule 7 / zero-tolerance Rule 3."""
+    request = CompletionRequest(
+        model="test-model",
+        messages=_base_messages(),
+        tools=_tools(),
+    )
+    with caplog.at_level(
+        logging.WARNING, logger="kaizen.llm.wire_protocols.huggingface_inference"
+    ):
+        payload = huggingface_inference.build_request_payload(
+            request, use_chat_schema=False
+        )
+
+    assert "tools" not in payload
+    assert any(
+        r.levelno == logging.WARNING
+        and "huggingface_inference.tools_dropped_classic_path" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.unit
+def test_classic_path_response_format_dropped_logs_warning(caplog):
+    """Same drop-is-observable contract for response_format on the classic
+    path (no structured-output surface on {inputs, parameters})."""
+    request = CompletionRequest(
+        model="test-model",
+        messages=_base_messages(),
+        response_format={"type": "json_object"},
+    )
+    with caplog.at_level(
+        logging.WARNING, logger="kaizen.llm.wire_protocols.huggingface_inference"
+    ):
+        payload = huggingface_inference.build_request_payload(
+            request, use_chat_schema=False
+        )
+
+    assert "response_format" not in payload
+    assert any(
+        r.levelno == logging.WARNING
+        and "huggingface_inference.response_format_dropped_classic_path" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.unit
+def test_classic_path_no_tools_no_response_format_emits_no_warning(caplog):
+    """Byte-neutral: a plain classic-path call with no tools/response_format
+    emits neither warning."""
+    request = CompletionRequest(model="test-model", messages=_base_messages())
+    with caplog.at_level(
+        logging.WARNING, logger="kaizen.llm.wire_protocols.huggingface_inference"
+    ):
+        huggingface_inference.build_request_payload(request, use_chat_schema=False)
+
+    assert not any(
+        "tools_dropped_classic_path" in r.message
+        or "response_format_dropped_classic_path" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.unit
 def test_classic_path_default_use_chat_schema_is_false():
     """build_request_payload defaults to the classic shape (use_chat_schema
     unset)."""

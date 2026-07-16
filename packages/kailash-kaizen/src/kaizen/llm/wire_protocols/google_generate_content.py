@@ -146,8 +146,12 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     # supports JSON mode via responseMimeType, plus an optional responseSchema.
     # ONLY force JSON mode for the JSON response types — an OpenAI
     # ``{"type": "text"}`` must NOT be coerced into JSON (Gemini defaults to
-    # text, so emit nothing for it).
-    if request.response_format is not None:
+    # text, so emit nothing for it). /redteam Round-1 (#1720 Wave-1b):
+    # truthiness guard (not `is not None`) matches every sibling wire
+    # (openai_chat / anthropic_messages / ollama_native / etc.) — an
+    # explicitly-set EMPTY `response_format={}` emits nothing, same as an
+    # unset one.
+    if request.response_format:
         rf_type = request.response_format.get("type")
         if rf_type in ("json_object", "json_schema"):
             generation_config["responseMimeType"] = "application/json"

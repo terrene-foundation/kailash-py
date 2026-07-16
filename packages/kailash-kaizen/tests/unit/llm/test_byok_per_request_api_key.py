@@ -39,6 +39,7 @@ from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKeyHeaderKind
 from kaizen.llm.client import UnsupportedApiKeyOverride
 from kaizen.llm.deployment import CompletionRequest, StreamingConfig
+from kaizen.llm.errors import InvalidApiKeyOverride
 from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver
 from kaizen.llm.presets import (
     anthropic_preset,
@@ -244,6 +245,101 @@ async def test_prepare_auth_headers_rejects_override_for_gcp_oauth_without_refre
         await http.aclose()
     assert exc_info.value.auth_strategy_kind == "gcp_oauth"
     assert calls["n"] == 0  # never attempted a token refresh
+
+
+# ---------------------------------------------------------------------------
+# /redteam Round-1 FIX 5 (security) — control-char validation, fail-closed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prepare_auth_headers_rejects_crlf_control_char_in_api_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A per-request api_key= containing \\r\\n is a CRLF-header-injection
+    surface: ApiKeyBearer.apply() installs the raw string into a header
+    with no sanitization. This MUST raise InvalidApiKeyOverride BEFORE the
+    header is ever constructed, and the raw key MUST NOT leak into the
+    exception message or the logs (fingerprint/type only)."""
+    dep = openai_preset(_DEPLOYMENT_KEY, "gpt-4o")
+    client, http = _client(dep)
+    injected_key = "sk-x\r\nX-Injected: v"
+    caplog.set_level(logging.DEBUG)
+    try:
+        with pytest.raises(InvalidApiKeyOverride) as exc_info:
+            await client._prepare_auth_headers(
+                "https://api.openai.com/v1/chat/completions",
+                b"{}",
+                stream=False,
+                api_key=injected_key,
+            )
+    finally:
+        await http.aclose()
+    assert injected_key not in str(exc_info.value)
+    assert "\r" not in str(exc_info.value)
+    assert "\n" not in str(exc_info.value)
+    for record in caplog.records:
+        assert injected_key not in record.getMessage()
+        assert injected_key not in repr(record.args)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("control_char", ["\r", "\n", "\x00", "\x01", "\x1f"], ids=repr)
+async def test_prepare_auth_headers_rejects_every_c0_control_char(
+    control_char: str,
+) -> None:
+    dep = openai_preset(_DEPLOYMENT_KEY, "gpt-4o")
+    client, http = _client(dep)
+    try:
+        with pytest.raises(InvalidApiKeyOverride):
+            await client._prepare_auth_headers(
+                "https://api.openai.com/v1/chat/completions",
+                b"{}",
+                stream=False,
+                api_key=f"sk-x{control_char}rest",
+            )
+    finally:
+        await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_prepare_auth_headers_control_char_check_precedes_unsupported_check() -> (
+    None
+):
+    """A control char is caught even for a non-ApiKeyBearer deployment —
+    the validation runs before the auth-strategy-support check, so a
+    malformed override never falls through to (or is masked by)
+    UnsupportedApiKeyOverride."""
+    dep = bedrock_claude_preset(_DEPLOYMENT_KEY, "us-east-1", "claude-sonnet-4-6")
+    client, http = _client(dep)
+    try:
+        with pytest.raises(InvalidApiKeyOverride):
+            await client._prepare_auth_headers(
+                "https://bedrock-runtime.us-east-1.amazonaws.com/model/x/invoke",
+                b"{}",
+                stream=False,
+                api_key="sk-x\r\nX-Injected: v",
+            )
+    finally:
+        await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_prepare_auth_headers_accepts_key_with_no_control_chars() -> None:
+    """Byte-neutral: a normal (control-char-free) override is unaffected by
+    the new validation."""
+    dep = openai_preset(_DEPLOYMENT_KEY, "gpt-4o")
+    client, http = _client(dep)
+    try:
+        headers, _ = await client._prepare_auth_headers(
+            "https://api.openai.com/v1/chat/completions",
+            b"{}",
+            stream=False,
+            api_key=_BYOK_KEY,
+        )
+    finally:
+        await http.aclose()
+    assert headers["Authorization"] == f"Bearer {_BYOK_KEY}"
 
 
 # ---------------------------------------------------------------------------

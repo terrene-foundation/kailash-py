@@ -29,6 +29,26 @@ Response (text-generation): ``[{"generated_text": "..."}]``.
 Response (chat): OpenAI-style ``{"choices": [{"message": {"content": ...}}]}``.
 
 See https://huggingface.co/docs/api-inference/detailed_parameters.
+
+**Known scoped limitation (/redteam Round-1, #1720 Wave-1b):** the chat-schema
+branch of ``build_request_payload`` (``use_chat_schema=True``) fully
+implements ``tools``/``tool_choice`` emission and is directly unit-tested.
+However, ``LlmClient`` ALWAYS calls this shaper with
+``use_chat_schema=False`` (the classic ``{inputs, parameters}`` path) --
+there is currently NO production mechanism (no HF chat-endpoint routing) for
+``LlmClient.complete()`` to reach the chat schema. Full chat-schema routing
+(resolving the HF router's dedicated chat-completions URL) is a separate,
+future shard and is deliberately NOT wired here.
+
+Until that routing lands, a caller who passes ``tools=`` (or
+``response_format=``) to a HuggingFace deployment through ``LlmClient``
+reaches ONLY the classic path, which has no OpenAI-shaped tool-calling or
+structured-output surface. Per ``rules/zero-tolerance.md`` Rule 3 (no silent
+fallbacks) / ``rules/observability.md`` Rule 7, dropping either field on the
+classic path emits a WARNING (never silently) -- the caller gets the
+classic tool-less/format-less body, not a hard failure, mirroring the
+image-content-block-drop pattern elsewhere in this module. Tracked follow-up:
+HF chat-endpoint routing so ``tools=`` reaches the chat schema in production.
 """
 
 from __future__ import annotations
@@ -155,6 +175,23 @@ def build_request_payload(
     # set. Callers that need tool calling against a TGI-backed model MUST
     # use `use_chat_schema=True` (TGI / Inference Endpoints), which DOES
     # emit them above.
+    #
+    # /redteam Round-1 (#1720 Wave-1b): `LlmClient` has NO production
+    # mechanism to reach the chat schema today (see module docstring "Known
+    # scoped limitation"), so a caller passing `tools=`/`response_format=`
+    # against an hf deployment silently lost them on this path. WARN — never
+    # silent — per rules/observability.md Rule 7 / zero-tolerance Rule 3.
+    if request.tools:
+        logger.warning(
+            "huggingface_inference.tools_dropped_classic_path",
+            extra={"tool_count": len(request.tools)},
+        )
+    if request.response_format:
+        logger.warning(
+            "huggingface_inference.response_format_dropped_classic_path",
+            extra={"response_format_type": request.response_format.get("type")},
+        )
+
     parameters: Dict[str, Any] = {}
     if request.temperature is not None:
         parameters["temperature"] = request.temperature

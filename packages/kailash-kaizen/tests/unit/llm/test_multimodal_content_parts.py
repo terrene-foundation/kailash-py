@@ -437,6 +437,52 @@ class TestOllamaMultimodalTranslation:
             for r in caplog.records
         )
 
+    def test_malformed_image_url_block_dropped_with_warning(self, caplog):
+        """/redteam Round-1 (#1720 Wave-1b): a malformed image_url block
+        (missing `url`) has no Ollama-native slot and is dropped -- this
+        branch previously fell through with NO log. Must WARN, never
+        silent, per rules/observability.md Rule 7."""
+        malformed_block = {"type": "image_url", "image_url": {}}
+        req = _base_request(
+            [
+                {
+                    "role": "user",
+                    "content": [_text_block("describe"), malformed_block],
+                }
+            ]
+        )
+        with caplog.at_level(
+            logging.WARNING, logger="kaizen.llm.wire_protocols.ollama_native"
+        ):
+            payload = ollama_native.build_request_payload(req)
+        msg = payload["messages"][0]
+        assert msg["content"] == "describe"
+        assert "images" not in msg
+        assert any(
+            r.levelno == logging.WARNING
+            and "ollama_native.content_block_dropped" in r.message
+            for r in caplog.records
+        )
+
+    def test_no_malformed_block_no_content_block_dropped_warning(self, caplog):
+        """Byte-neutral: a data-URI-only message emits no
+        content_block_dropped warning."""
+        req = _base_request(
+            [
+                {
+                    "role": "user",
+                    "content": [_text_block("hi"), _data_uri_image_block()],
+                }
+            ]
+        )
+        with caplog.at_level(
+            logging.WARNING, logger="kaizen.llm.wire_protocols.ollama_native"
+        ):
+            ollama_native.build_request_payload(req)
+        assert not any(
+            "ollama_native.content_block_dropped" in r.message for r in caplog.records
+        )
+
 
 # ===========================================================================
 # cohere_generate — text-only wire; drop now WARNs (was DEBUG)
