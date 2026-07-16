@@ -140,6 +140,19 @@ def _shadow_deployment_for(
     return resolve_deployment_for(provider, model, api_key=api_key, base_url=base_url)
 
 
+def _legacy_tool_choice_default(tools, explicit_choice):
+    """Thin wrapper delegating to the shared
+    `kaizen.llm.deployment_resolver.legacy_tool_choice_default` (#1720 Wave-A
+    invariant #1) — reproduces the legacy chat ``tool_choice="required"``
+    default so the dual-run shadow does not log false divergences on
+    tool-using agents. Kept as a module-level symbol so tests may patch this
+    seam, mirroring `_shadow_deployment_for`.
+    """
+    from kaizen.llm.deployment_resolver import legacy_tool_choice_default
+
+    return legacy_tool_choice_default(tools, explicit_choice)
+
+
 @dataclass
 class TokenUsage:
     """Token usage statistics."""
@@ -2534,6 +2547,21 @@ Final Answer: 6 hours"""
             client = LlmClient.from_deployment_sync(deployment)
             sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
             shadow_tools = tools if tools else None
+
+            # #1720 Wave-A invariant #1 — reproduce the legacy chat
+            # tool_choice default so the shadow does NOT log false
+            # divergences on tool-using agents. Legacy injects
+            # tool_choice="required" when tools are present and the caller
+            # gave no explicit choice; the four-axis complete() defaults to
+            # None (emits nothing -> provider "auto"). Resolve the effective
+            # choice through the shared helper (reused by the Wave-B live
+            # path) and emit it only when it is not None.
+            explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
+            effective_tool_choice = _legacy_tool_choice_default(
+                shadow_tools, explicit_tool_choice
+            )
+            if effective_tool_choice is not None:
+                sampling_kwargs["tool_choice"] = effective_tool_choice
 
             async def _call_shadow():
                 return await asyncio.wait_for(

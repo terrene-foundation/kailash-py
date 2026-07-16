@@ -55,6 +55,37 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 
+def legacy_tool_choice_default(tools: Any, explicit_choice: Any) -> Any:
+    """Reproduce the legacy ``providers/llm`` chat ``tool_choice`` default.
+
+    The legacy provider chat path (``providers/llm/openai.py``, also
+    ``azure.py`` / ``docker.py``) sets ``default_choice = "required" if tools
+    else "auto"`` and injects ``tool_choice="required"`` when tools are
+    present AND the caller did not specify a choice. The four-axis
+    ``LlmClient.complete`` defaults ``tool_choice=None`` (emits nothing ->
+    the provider defaults to ``"auto"``), so a shadow / live four-axis call
+    that does NOT reproduce this diverges from legacy on every tool-using
+    agent — the Wave-2 dual-run shadow logged FALSE ``llm.dual_run.divergence``
+    WARNs because of exactly this gap.
+
+    Returns:
+
+    * ``"required"`` — when ``tools`` are present AND no explicit choice was
+      given (the legacy tools-present default);
+    * the explicit choice — whenever the caller gave one (honored verbatim);
+    * ``None`` — when no tools are present and no explicit choice was given
+      (emit nothing, matching legacy, which skips the ``tool_choice`` block
+      entirely when there are no tools).
+
+    Shared home (this resolver module) so BOTH the Wave-2 dual-run shadow and
+    the future Wave-B live-path migration import the SAME semantics rather
+    than re-deriving them (which would let the two copies drift).
+    """
+    if tools and explicit_choice is None:
+        return "required"
+    return explicit_choice
+
+
 class UnsupportedDeploymentProvider(ValueError):
     """A KNOWN provider has no confirmed four-axis ``LlmDeployment`` mapping.
 
@@ -255,4 +286,8 @@ def resolve_deployment_for(
     return None
 
 
-__all__ = ["resolve_deployment_for", "UnsupportedDeploymentProvider"]
+__all__ = [
+    "resolve_deployment_for",
+    "UnsupportedDeploymentProvider",
+    "legacy_tool_choice_default",
+]
