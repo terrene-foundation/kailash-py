@@ -168,6 +168,135 @@ def test_diff_tool_calls_parity_when_both_present_and_equal_count():
     assert not any(d.startswith("tool_calls:") for d in divergences)
 
 
+# ---------------------------------------------------------------------------
+# #1720 Wave-2 redteam FIX 5 — hashed tool-name comparison.
+#
+# Same tool_calls COUNT with a DIFFERENT selected tool previously
+# false-reported parity (only presence + count were compared). The hash
+# comparison catches the divergence WITHOUT embedding the tool name itself
+# in the divergence string.
+# ---------------------------------------------------------------------------
+
+
+def test_diff_detects_tool_name_hash_mismatch_at_same_count():
+    legacy = dict(
+        _BASE_LEGACY,
+        tool_calls=[
+            {
+                "id": "1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": "{}"},
+            }
+        ],
+    )
+    mapped = dict(
+        _BASE_MAPPED,
+        tool_calls=[
+            {
+                "id": "1",
+                "type": "function",
+                "function": {"name": "send_email", "arguments": "{}"},
+            }
+        ],
+    )
+    divergences = diff_legacy_vs_fouraxis(legacy, mapped)
+    assert any(d.startswith("tool_calls: name hash mismatch") for d in divergences)
+
+
+def test_diff_tool_name_hash_parity_when_names_match_regardless_of_arguments():
+    legacy = dict(
+        _BASE_LEGACY,
+        tool_calls=[
+            {
+                "id": "1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": "{}"},
+            }
+        ],
+    )
+    mapped = dict(
+        _BASE_MAPPED,
+        tool_calls=[
+            {
+                "id": "2",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"unit": "c"}'},
+            }
+        ],
+    )
+    divergences = diff_legacy_vs_fouraxis(legacy, mapped)
+    assert not any(d.startswith("tool_calls:") for d in divergences)
+
+
+def test_diff_tool_name_hash_parity_is_order_insensitive():
+    legacy = dict(
+        _BASE_LEGACY,
+        tool_calls=[
+            {"function": {"name": "a_tool"}},
+            {"function": {"name": "b_tool"}},
+        ],
+    )
+    mapped = dict(
+        _BASE_MAPPED,
+        tool_calls=[
+            {"function": {"name": "b_tool"}},
+            {"function": {"name": "a_tool"}},
+        ],
+    )
+    divergences = diff_legacy_vs_fouraxis(legacy, mapped)
+    assert not any(d.startswith("tool_calls:") for d in divergences)
+
+
+def test_diff_tool_name_hash_mismatch_divergence_string_leaks_only_hashes():
+    """Governance no-leak proof for FIX 5: the divergence string for a
+    name-hash mismatch carries 8-hex-char hashes and NEVER the raw tool
+    names (which may themselves be schema-revealing / sensitive)."""
+    legacy = {
+        "content": "pong",
+        "finish_reason": "stop",
+        "tool_calls": [
+            {
+                "id": "1",
+                "type": "function",
+                "function": {
+                    "name": "delete_production_database",
+                    "arguments": "{}",
+                },
+            }
+        ],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+    }
+    mapped = {
+        "content": "pong",
+        "finish_reason": "stop",
+        "tool_calls": [
+            {
+                "id": "1",
+                "type": "function",
+                "function": {"name": "get_weather_forecast", "arguments": "{}"},
+            }
+        ],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+    }
+
+    divergences = diff_legacy_vs_fouraxis(legacy, mapped)
+    name_hash_divergences = [
+        d for d in divergences if d.startswith("tool_calls: name hash mismatch")
+    ]
+    assert len(name_hash_divergences) == 1
+
+    joined = "\n".join(divergences)
+    assert "delete_production_database" not in joined
+    assert "get_weather_forecast" not in joined
+
+    # The hashes themselves ARE present -- 8 lowercase-hex-char tokens.
+    import re
+
+    hash_tokens = re.findall(r"\b[0-9a-f]{8}\b", name_hash_divergences[0])
+    assert len(hash_tokens) == 2
+    assert hash_tokens[0] != hash_tokens[1]
+
+
 def test_diff_detects_finish_reason_mismatch():
     mapped = dict(_BASE_MAPPED, finish_reason="length")
     divergences = diff_legacy_vs_fouraxis(_BASE_LEGACY, mapped)

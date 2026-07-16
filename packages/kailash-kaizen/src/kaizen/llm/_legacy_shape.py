@@ -31,6 +31,7 @@ booleans, lengths, and counts.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, List
 
 
@@ -98,6 +99,33 @@ def _safe_len(value: Any) -> int:
         return 1 if value else 0
 
 
+def _tool_call_name_hashes(tool_calls: Any) -> List[str]:
+    """Return a sorted list of short (8-hex-char) SHA-256 hashes of each
+    tool call's function ``name`` -- NEVER the raw name or arguments.
+
+    Used ONLY to detect a same-count-but-different-tool divergence (a
+    shadow selecting a different tool than the legacy path, with the same
+    call count, would otherwise false-report parity). The hash is a
+    one-way fingerprint: it lets ``diff_legacy_vs_fouraxis`` report "the
+    tool selection differs" without embedding the tool name itself in the
+    divergence description (``rules/observability.md`` § 8; this Wave's
+    governance -- no raw generated content/arguments/schema-revealing
+    identifiers in log output). Defensive on non-list / malformed entries.
+    """
+    hashes: List[str] = []
+    if not isinstance(tool_calls, list):
+        return hashes
+    for entry in tool_calls:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        name = function.get("name") if isinstance(function, dict) else None
+        if not isinstance(name, str) or not name:
+            continue
+        hashes.append(hashlib.sha256(name.encode("utf-8")).hexdigest()[:8])
+    return sorted(hashes)
+
+
 def diff_legacy_vs_fouraxis(
     legacy: Dict[str, Any], mapped_fouraxis: Dict[str, Any]
 ) -> List[str]:
@@ -150,6 +178,19 @@ def diff_legacy_vs_fouraxis(
                 "tool_calls: count mismatch "
                 f"(legacy_count={legacy_count}, four_axis_count={mapped_count})"
             )
+        else:
+            # Same count can still hide a divergence: the shadow may have
+            # selected a genuinely DIFFERENT tool. Compare hashed function
+            # names (never the raw name) so a different-tool selection is
+            # caught without leaking the tool name or its arguments into
+            # the divergence description / logs.
+            legacy_hashes = _tool_call_name_hashes(legacy_tool_calls)
+            mapped_hashes = _tool_call_name_hashes(mapped_tool_calls)
+            if legacy_hashes != mapped_hashes:
+                divergences.append(
+                    "tool_calls: name hash mismatch "
+                    f"(legacy_hashes={legacy_hashes}, four_axis_hashes={mapped_hashes})"
+                )
 
     # --- finish_reason ---------------------------------------------------
     if legacy.get("finish_reason") != mapped_fouraxis.get("finish_reason"):
