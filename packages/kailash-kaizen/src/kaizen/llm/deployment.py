@@ -465,21 +465,19 @@ class LlmDeployment(BaseModel):
         .. warning::
 
            This matrix reports the **provider / wire-protocol** capability
-           (for cross-SDK negotiation) — NOT what this SDK's four-axis
-           ``LlmClient.complete()`` / ``stream()`` currently EMITS. As of
-           #1720 Wave-1a the ``CompletionRequest`` SHAPE carries the additive
-           fields (``tools``, ``tool_choice``, ``response_format``, ``seed``,
-           ``logit_bias``, ``frequency_penalty``, ``presence_penalty``, ``n``,
-           ``top_k``), but the wire adapters do NOT yet EMIT them:
-           ``complete()`` / ``stream()`` still send only the base fields
-           (model, messages, temperature, top_p, max_tokens, stop, stream,
-           user) to every wire. Per-adapter emission + parse of the additive
-           fields is Wave 1b. So ``supports()["tools"] is True`` means "the
-           provider supports tool-calling", NOT "``complete()`` will send my
-           tools". Full request-feature emission is tracked in the
-           legacy→four-axis consolidation (issue #1720); until Wave 1b lands,
-           tool / structured-output / multimodal agent work goes through the
-           ``kaizen.providers`` layer.
+           (for cross-SDK negotiation) — NOT necessarily what this SDK's
+           four-axis ``LlmClient.complete()`` / ``stream()`` EMITS on a given
+           wire. As of #1720 the ``CompletionRequest`` SHAPE carries the
+           additive fields (``tools``, ``tool_choice``, ``response_format``,
+           ``seed``, ``logit_bias``, ``frequency_penalty``, ``presence_penalty``,
+           ``n``, ``top_k``), and per-wire EMISSION + tool_call PARSE is LIVE
+           (Wave 1b) for OpenAI/Anthropic/Google/Mistral/Cohere/Ollama; each
+           wire emits only the fields that provider supports (unsupported ones
+           are omitted, never faked). Emission for the remaining wires
+           (Bedrock-native families, HuggingFace) is a later Wave-1b shard. So
+           ``supports()["tools"] is True`` means "the provider supports
+           tool-calling", NOT necessarily "``complete()`` will send tools on
+           THIS wire yet" — check the wire against the Wave-1b rollout.
 
         Fail-closed default (``rules/security.md`` § Fail-Closed Security
         Defaults): manual constructions whose ``preset_name`` is ``None``

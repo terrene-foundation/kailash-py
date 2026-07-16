@@ -244,6 +244,13 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     #   top_k              -> `k`  (Cohere names top_k `k`, top_p `p`)
     if request.seed is not None:
         payload["seed"] = request.seed
+    # frequency_penalty / presence_penalty: Cohere v1 accepts a 0.0-1.0 range vs
+    # the OpenAI/Mistral -2.0..2.0 range. The adapter SHAPE-translates (field
+    # name) but does NOT value-translate/clamp — consistent with every other
+    # field (temperature ranges also differ across providers and are passed
+    # through unclamped); silently rescaling a caller's value would be a
+    # surprising per-field special case. An out-of-range value is the caller's
+    # to reconcile, not the wire adapter's to mutate.
     if request.frequency_penalty is not None:
         payload["frequency_penalty"] = request.frequency_penalty
     if request.presence_penalty is not None:
