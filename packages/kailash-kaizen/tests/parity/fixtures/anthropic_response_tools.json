@@ -1,0 +1,16 @@
+{
+  "id": "msg_parity_anthropic_tools",
+  "type": "message",
+  "role": "assistant",
+  "model": "parity-claude",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_parity_1",
+      "name": "get_weather",
+      "input": { "city": "Paris" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "usage": { "input_tokens": 10, "output_tokens": 5 }
+}

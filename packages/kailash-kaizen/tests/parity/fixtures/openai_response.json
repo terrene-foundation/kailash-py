@@ -1,0 +1,17 @@
+{
+  "id": "chatcmpl-parity-openai",
+  "object": "chat.completion",
+  "created": 1701234567,
+  "model": "parity-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19 }
+}

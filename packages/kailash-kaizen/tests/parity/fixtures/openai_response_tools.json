@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-parity-openai-tools",
+  "object": "chat.completion",
+  "created": 1701234567,
+  "model": "parity-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_parity_1",
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"city\": \"Paris\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+}
