@@ -31,7 +31,7 @@ Invariants enforced at type level:
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional, Union
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
@@ -237,14 +237,40 @@ class EmbedOptions(BaseModel):
 
     dimensions: Optional[int] = None
     user: Optional[str] = None
+    # #1720 Wave-1a additive embed-parity fields (legacy providers/llm parity).
+    # Cohere v3 embed REQUIRES an input_type; HuggingFace feature-extraction takes
+    # a unit-normalization toggle. Both default None => byte-identical to today for
+    # every embed wire that does not consume them.
+    input_type: Optional[str] = None
+    normalize: Optional[bool] = None
 
 
 class CompletionRequest(BaseModel):
     """Minimal shared-shape completion request.
 
-    Field names mirror the Rust struct; concrete wire adapters translate to
-    each provider's schema. Session 1 ships the shape; wiring to real chat
-    completion lands in S2 (OpenAI) and subsequent sessions.
+    The base field names mirror the Rust struct; concrete wire adapters
+    translate to each provider's schema. The #1720 Wave-1a additive fields
+    below are sourced from the legacy ``providers/llm/`` layer (Python-side)
+    and are NOT asserted to already exist on the Rust struct — cross-SDK
+    field-shape parity for them is a Wave-1b lockstep concern (tracked with
+    the per-adapter emission), not a Wave-1a claim. Session 1 shipped the
+    shape; the real chat completion send path landed in #1717 (OpenAI +
+    platform-Anthropic +
+    Bedrock/Vertex/Google/Cohere/Mistral/Ollama/HF).
+
+    The #1720 Wave-1a additive fields below carry agent-facing capabilities
+    (tool-calling, structured output, extended sampling) that the legacy
+    ``providers/llm/`` layer already has. EVERY new field defaults to ``None``
+    (or the pre-existing default) so a request that sets none of them shapes
+    a payload BYTE-IDENTICAL to the pre-#1720 output for every wire — the
+    additive-neutrality invariant the wave-1a pin tests enforce. The per-wire
+    ``build_request_payload`` shapers (Wave 1b) translate a SET field into the
+    provider's native shape; an UNSET field is never emitted.
+
+    ``api_key`` is deliberately NOT a field here: the request model is the
+    cross-SDK byte pre-image and must carry no per-call credential. Per-request
+    BYOK threads through ``complete()``/``stream()`` into the auth headers
+    (Wave 1b byok shard), never into this pre-image.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -257,6 +283,23 @@ class CompletionRequest(BaseModel):
     stop: Optional[list[str]] = None
     stream: bool = False
     user: Optional[str] = None
+    # --- #1720 Wave-1a additive completion-parity fields (all default None) ---
+    # Tool / function calling: OpenAI function-schema list, verbatim passthrough.
+    tools: Optional[list[dict[str, Any]]] = None
+    # 'auto' | 'required' | 'none' | provider forced-tool dict. Only emitted when
+    # tools is set; wire shapers preserve legacy "required"-when-tools semantics.
+    tool_choice: Optional[Union[str, dict[str, Any]]] = None
+    # Structured output: OpenAI-native {"type": "json_object"} or
+    # {"type": "json_schema", "json_schema": {...}}; wires translate per provider.
+    response_format: Optional[dict[str, Any]] = None
+    # Extended sampling (legacy openai.py parity).
+    seed: Optional[int] = None
+    logit_bias: Optional[dict[str, float]] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    n: Optional[int] = None
+    # top_k: Anthropic/Google/Cohere/Mistral/Ollama families (not emitted by OpenAI).
+    top_k: Optional[int] = None
 
 
 class StreamingConfig(BaseModel):
@@ -423,17 +466,20 @@ class LlmDeployment(BaseModel):
 
            This matrix reports the **provider / wire-protocol** capability
            (for cross-SDK negotiation) — NOT what this SDK's four-axis
-           ``LlmClient.complete()`` / ``stream()`` currently EMITS. As of this
-           release the four-axis completion client sends only the shared
-           ``CompletionRequest`` fields (model, messages, temperature, top_p,
-           max_tokens, stop, stream, user); it does NOT yet emit ``tools`` /
-           function-calling, structured output (``response_format``), batch,
-           prompt-caching, or audio request features. So ``supports()["tools"]
-           is True`` means "the provider supports tool-calling", NOT
-           "``complete()`` will send my tools". Wiring these request features
-           into the four-axis client is tracked in the legacy→four-axis
-           consolidation (issue #1720); until then, tool / structured-output /
-           multimodal agent work goes through the ``kaizen.providers`` layer.
+           ``LlmClient.complete()`` / ``stream()`` currently EMITS. As of
+           #1720 Wave-1a the ``CompletionRequest`` SHAPE carries the additive
+           fields (``tools``, ``tool_choice``, ``response_format``, ``seed``,
+           ``logit_bias``, ``frequency_penalty``, ``presence_penalty``, ``n``,
+           ``top_k``), but the wire adapters do NOT yet EMIT them:
+           ``complete()`` / ``stream()`` still send only the base fields
+           (model, messages, temperature, top_p, max_tokens, stop, stream,
+           user) to every wire. Per-adapter emission + parse of the additive
+           fields is Wave 1b. So ``supports()["tools"] is True`` means "the
+           provider supports tool-calling", NOT "``complete()`` will send my
+           tools". Full request-feature emission is tracked in the
+           legacy→four-axis consolidation (issue #1720); until Wave 1b lands,
+           tool / structured-output / multimodal agent work goes through the
+           ``kaizen.providers`` layer.
 
         Fail-closed default (``rules/security.md`` § Fail-Closed Security
         Defaults): manual constructions whose ``preset_name`` is ``None``

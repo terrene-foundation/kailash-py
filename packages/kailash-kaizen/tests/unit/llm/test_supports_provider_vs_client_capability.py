@@ -3,9 +3,16 @@
 
 """Contract: `deployment.supports()` reports PROVIDER/wire capability (cross-SDK
 negotiation, byte-parity with Rust) — NOT what the four-axis `LlmClient` currently
-EMITS. This pins the honest reconciliation the docstrings now state and acts as a
-tripwire: when #1720 wires tool/structured-output emission into the client, the
-`extra="forbid"` assertions below flip and force the docstring caveat to be updated.
+EMITS.
+
+#1720 Wave-1a note: `CompletionRequest` now ACCEPTS the additive completion-shaping
+fields (tools/tool_choice/response_format/seed/...) — that is the request SHAPE. The
+per-wire EMISSION + PARSE of those fields is Wave 1b (per-adapter), pinned by
+`tests/regression/test_issue_1720_wave1a_additive_neutrality.py`
+(`test_unset_new_fields_never_appear_in_payload`). So "the client cannot emit tools
+today" is now split: the shape accepts them, no wire emits them yet. A genuinely
+unsupported kwarg (`functions`, the legacy deprecated form) is still rejected by
+`extra="forbid"`.
 """
 
 from __future__ import annotations
@@ -25,20 +32,32 @@ def test_supports_reports_provider_capability_for_tools() -> None:
     assert dep.supports()["vision"] is True
 
 
-@pytest.mark.parametrize("feature_kwarg", ["tools", "response_format", "functions"])
-def test_completion_request_does_not_yet_accept_client_emission_features(
-    feature_kwarg: str,
-) -> None:
-    """The four-axis client CANNOT emit tools/structured-output today —
-    `CompletionRequest` (`extra="forbid"`) rejects the kwargs entirely. This is
-    the client-emission gap the supports() docstring warns about. If a future
-    #1720 change adds one of these fields, this test flips and the docstring
-    caveat MUST be updated in the same change."""
+def test_completion_request_now_accepts_wave1a_shaping_fields() -> None:
+    """#1720 Wave-1a: `CompletionRequest` ACCEPTS the additive completion-shaping
+    fields (the request SHAPE). Wire EMISSION is Wave 1b — see
+    `tests/regression/test_issue_1720_wave1a_additive_neutrality.py`."""
+    req = CompletionRequest(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[{"type": "function", "function": {"name": "f", "parameters": {}}}],
+        response_format={"type": "json_object"},
+    )
+    assert req.tools is not None
+    assert req.response_format == {"type": "json_object"}
+
+
+def test_completion_request_still_rejects_unsupported_kwarg() -> None:
+    """A genuinely unsupported kwarg (`functions`, the legacy deprecated form —
+    never a four-axis field) is still rejected by `extra="forbid"`. This remains
+    the tripwire: if `functions` is ever added, this flips and forces a review."""
+    # bare-dict annotation keeps the static checker from mapping the unpack onto
+    # the real params; extra="forbid" rejects `functions` at runtime.
+    unsupported_kwargs: dict = {"functions": []}
     with pytest.raises(ValidationError):
         CompletionRequest(
             model="gpt-4o",
             messages=[{"role": "user", "content": "hi"}],
-            **{feature_kwarg: []},
+            **unsupported_kwargs,
         )
 
 
