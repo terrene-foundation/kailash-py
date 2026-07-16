@@ -1,58 +1,45 @@
-# Session Notes — 2026-07-16 (Wave A)
+# Session Notes — 2026-07-16 (Wave A merged)
 
 ## Where we are
 
-#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 DONE
-and merged** (main @ `15b62c4fa`). **Wave A (foundation + F3 + parity harness) CONVERGED**
-on branch `feat/1720-wave-a-foundation` (17 commits) — redteam 2 consecutive clean rounds.
-Wave B (consumer cutover) + Wave C (delete) remain HUMAN-GATED at `/todos`.
+#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 + A DONE and
+merged** (main @ `25afb9a39`, Wave A = PR #1783). Wave A = foundation bug-fixes + F3 HF
+chat routing + offline parity harness; redteam converged (4 rounds). Wave B (consumer
+cutover) + Wave C (delete) remain HUMAN-GATED at `/todos`. Next: draft the Wave-B `/todos` plan.
 
 ## Read first
 
-1. `02-plans/01-wave3-refined-decomposition.md` — refined wave plan (post-mapping)
-2. `04-validate/wave-a-parity-findings.md` — parity harness Wave-B gate evidence (3 findings)
-3. `02-plans/00-architecture-and-waves.md` — original wave decomposition + gate structure
-4. GH **#1720**
+1. `workspaces/issue-1720-llm-consolidation/02-plans/01-wave3-refined-decomposition.md` — refined wave plan
+2. `workspaces/issue-1720-llm-consolidation/04-validate/wave-a-parity-findings.md` — Wave-B gate evidence (3 findings)
+3. `workspaces/issue-1720-llm-consolidation/02-plans/00-architecture-and-waves.md` — original gate structure
+4. `packages/kailash-kaizen/tests/parity/` — the parity harness (shared-canned-bytes); GH #1720
 
-## Wave A — what landed (branch feat/1720-wave-a-foundation, 17 commits, 2660 tests pass)
+## In-flight state
 
-- **Shadow tool_choice bug-fix** — PER-PROVIDER `legacy_tool_choice_default(provider, tools, choice)`
-  (openai→"required", azure/azure_openai/docker→"auto", others→none). Redteam R1 caught the
-  original provider-AGNOSTIC "required" as a HIGH (over-injected on azure/docker).
-- **Shared `kaizen.llm.deployment_resolver`** — promoted `_shadow_deployment_for`; `resolve_deployment_for`,
-  `legacy_tool_choice_default`, `UnsupportedDeploymentProvider`. +azure/azure_openai mapping.
-- **F3 HF chat routing** — `CompletionRouting.use_chat_schema` + client dispatch guard +
-  `huggingface_chat_preset` (→ `router.huggingface.co/v1/chat/completions`). Classic path byte-neutral.
-  Redteam R2 caught silent `response_format` drop on the chat branch (MEDIUM) — fixed (now emits it).
-- **`EmbedOptions.input_type`** — already shipped Wave-1a/1b; added regression pin.
-- **Offline parity harness** (`tests/parity/`, 40 tests) — shared-canned-bytes injection into BOTH
-  stacks; plane B response-parse parity (openai/anthropic/google), tool_choice invariant, documented deltas.
+- Local branch was `feat/1720-wave-a-foundation` (now merged + deleted on remote) — run `git checkout main && git pull`.
+- Wave-B is unstarted: no `todos/active/` entries for it yet (approved to draft; deferred to fresh session).
 
-## Redteam convergence (holistic, workflow `redteam-round.mjs`)
+## Executed this session
 
-R1: HIGH tool_choice + MEDIUM docstring + LOW(refuted) → fixed · R2: MEDIUM response_format → fixed ·
-R3: clean · R4: clean. Workflow hardened mid-run to surface unverified (throttled-verify) findings
-rather than false-converge (R1 exposed that bug in the workflow itself).
+- Filed **esperie-enterprise/kailash-rs#1869** (`cross-sdk`) — Rust HF chat-schema routing parity for F3. Journaled in `cross-repo-authorization-1720-f3.md`.
 
-## In-flight / decisions needed
+## Outstanding ledger (forest)
 
-- **Wave A PR**: pushed, awaiting merge decision (BUILD-repo main merge). CI must be green.
-- **`/release` DEFERRED** to the Wave-3 milestone per prior user call (kaizen Waves 1–2 also merged-not-released).
-- **Wave B (`/todos` human gate)** — consumer cutover. Gated on the parity evidence + resolving:
-  - **Finding #1**: legacy Anthropic tool-calling BROKEN (four-axis fixes it) — migration is a behavior improvement.
-  - **Finding #2**: Google finish_reason casing (legacy lowercases, four-axis raw) — recommend normalizing four-axis.
-  - **BLOCKER**: `azure_ai_foundry` has NO four-axis wire (typed UnsupportedDeploymentProvider). Enumerate consumers.
-- **Wave C (delete)** — IRREVERSIBLE, held for explicit user go + release-gate.
+| ID  | Item                                                                 | Value-anchor (MUST-1 source)                                       | Status                         |
+| --- | -------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
+| F1  | Wave 3/B — migrate 5 consumers off legacy onto LlmClient (behind parity) | #1720 plan Wave-3; delete-gate needs zero residual `kaizen.providers` imports | queued (human `/todos` gate)   |
+| F2  | Wave 4/C — DELETE legacy `providers/llm/` + `base.py` + `registry.py` (IRREVERSIBLE) | #1720 plan Wave-4; gated on F1 + release-pipeline green            | BLOCKED on F1 + release-gate    |
 
-## PENDING cross-repo (needs user authorization)
+Wave-B prep folded into F1: (a) normalize four-axis Google `finish_reason` casing (Finding #2); (b) enumerate `azure_ai_foundry` consumers — NO four-axis wire (blocker); Finding #1 (legacy Anthropic tools broken) needs no action, four-axis fixes it.
+Closed this session: `F3` (HF `complete()` chat-schema routing) → PR #1783 · cross-SDK sibling → rs#1869.
 
-- Rust SDK sibling issue for F3 HF chat-schema routing parity (`huggingface_chat` preset +
-  `/v1/chat/completions` + byte-vector). NOT self-filed (repo-scope-discipline). Ask before filing.
+## Unreleased packages
+
+- **kailash-kaizen**: Waves 1–2 + A merged to main, NOT released to PyPI. `/release` DEFERRED to the Wave-3 milestone (user call). Recommend after Wave-3 cutover.
 
 ## Traps
 
-- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`.
-- Local verify MUST include `tests/cross_sdk_parity/` AND `tests/parity/`.
-- Persistent server-side throttling this session — delegated agents died 3×; parity harness completed
-  by the orchestrator directly (commit per wire/module is the mitigation).
-- pyright shows a false-positive storm for kaizen.llm.* imports (stale index) — runtime + pytest are authoritative.
+- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`. Local verify MUST include `tests/cross_sdk_parity/` AND `tests/parity/`.
+- Persistent server-side throttling this session — delegated agents died 3×; commit-per-module is the mitigation.
+- pyright shows a false-positive storm for `kaizen.llm.*` imports (stale index) — runtime + pytest are authoritative.
+- redteam workflow at `redteam-round.mjs` surfaces unverified (throttled-verify) findings — do NOT read `clean:true` without checking `unverified:[]`.

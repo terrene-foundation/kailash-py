@@ -1,48 +1,45 @@
-# Session Notes — 2026-07-15
+# Session Notes — 2026-07-16
 
 ## Where we are
 
-Drove Wave 1 of #1712 (MCP 2025-11-25 spec-parity) to merged + released + clean-venv-verified:
-**kailash-mcp 0.3.2** (JWT audience fail-closed · client OAuth 2.1 discovery · server tool-result/
-resources/lifecycle conformance). #1712 stays OPEN — ~4–5 waves remain. main clean, tree clean.
+Cleared the actionable in-repo backlog after evidence-first verification (the prior
+notes' "F2–F6 all blocked / nothing actionable" was STALE). Shipped **#1771** (MCP
+integration-test modernization across 4 server refactors) + 2 red-CI fixes via
+**PR #1774 (merged, e36c5d709)**. main clean. Next workstream: **#1720** (retire legacy
+LLM → four-axis) — user greenlit a fresh `/analyze`→`/todos` planning pass.
 
 ## Read first
 
-1. GH #1712 — the checklist + my two progress comments (what's met vs remaining waves)
-2. `workspaces/sdk-backlog/1712-shard-plan.md` — wave/shard plan + file-conflict serialization
-3. `.claude/rules/agents.md` § "Holistic Post-Multi-Wave Redteam" — MANDATORY before declaring #1712 converged
+1. GH **#1720** — the retire-legacy-`providers/llm`-onto-four-axis-`LlmClient` program (next workstream; user-approved)
+2. `workspaces/issue-1717-vertex-claude/journal/0002-parity-delta-legacy-vs-four-axis.md` — the parity delta #1720 builds on
+3. This ledger (below) — the live forest
 4. `CLAUDE.md` — project directives
 
 ## In-flight state
 
-- None uncommitted — all merged + released, worktrees pruned. Fresh start on remaining waves.
+- main @ e36c5d709. Working tree carries `.session-notes` + two
+  `cross-repo-authorization-*.md` receipts (untracked workspace state) — leave as-is.
+- #1720 NOT started; user approved a dedicated `/analyze`→`/todos` shard-planning pass (it is a 6–10 session program).
 
 ## Executed this session
 
-- Released **kailash-mcp 0.3.2** to PyPI (tag `mcp-v0.3.2`, publish-pypi run success) + GitHub Release;
-  clean-venv install/import verified. (External — not recoverable from this repo's git log.)
+- Filed the cross-SDK **#1727** sibling on the Rust SDK BUILD repo (**rs#1853**) — authorized + journaled (`cross-repo-authorization-1727.md`); SDK-API-only body.
+- Closed GH **#1721** (resolved on main by `54ed7e297`).
 
 ## Outstanding ledger (forest)
 
-| ID | Item | Value-anchor (MUST-1 source) | Status |
-| -- | ---- | ---------------------------- | ------ |
-| F1 | #1712 remaining waves: server-side OAuth PRM/WWW-Auth · Streamable HTTP transport (+MCP-Protocol-Version/Session-Id) · pagination · completions ranking · logging notifications/message · sampling/roots/elicitation · stdio wire-format | user-filed #1712 checklist | queued — Wave 1 released; waves 2–6 open |
-| F2 | loom onboarding-suite cluster (#1694 follow-on) — stranded on loom `/sync` surfaces | #1694 (user-filed) | BLOCKED — loom Gate-1 re-ingestion, NOT a BUILD edit |
-| F3 | #1720 retire legacy→four-axis LLM redundancy | #1720 (user's #1717 follow-on) | BLOCKED — co-owner scope call |
-| F4 | #1721 py preset-registry drift vs Rust fixture | #1721 (cross-SDK contract) | BLOCKED — co-owner scope call |
-| F5 | FVERT Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in `.env` |
-| F6 | #1727 openai_chat max_completion_tokens — rs sibling | #1727 (cross-SDK) | BLOCKED — py side landed; rs sibling only (cross-repo) |
+| ID  | Item                                                      | Value-anchor (MUST-1 source)     | Status                                                              |
+| --- | -------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
+| F2  | loom onboarding-suite cluster (#1694 follow-on)          | #1694 (user-filed)               | BLOCKED — loom Gate-1 re-ingestion, NOT a BUILD edit               |
+| F3  | #1720 retire legacy `providers/llm` → four-axis LlmClient | #1720 + user in-session approval | QUEUED — user approved `/analyze`→`/todos` next session (6–10 sessions) |
+| F5  | FVERT Vertex-Claude/Gemini LIVE validation               | #1717 headline path              | BLOCKED — GCP creds not in `.env`                                  |
 
-Closed this session: `#1712-wave1` → kailash-mcp 0.3.2 (PRs #1765/#1766/#1767 + release #1768; tag mcp-v0.3.2). #1712 itself stays open (F1).
+Closed this session: `F4` (#1721) → `54ed7e297` + issue closed; `F6` (#1727 rs sibling) → rs#1853 filed; #1771 (MCP fixtures + bootstrap-env + sampling-hang fixes) → PR #1774 / `e36c5d709`.
 
 ## Traps
 
-- kailash-mcp is NOT editable-installed in `.venv`. Run its tests as `PYTHONPATH=packages/kailash-mcp/src .venv/bin/python -m pytest`. Bare/global `python` has fastmcp 2.12.4 → `@mcp.tool()` non-callable → spurious #1708 failures; canonical `.venv` passes.
-- Worktree/main LSP split: pyright "No parameter named X" / "unknown attribute" on test files = LSP reading main's pre-merge copy, NOT real; clears on merge.
-- `release/*` branches auto-skip the PR-gate matrix (all checks "skipping" — correct); feature PRs run the full matrix + emit DUPLICATE `pull_request` runs — pin head SHA when reading checks.
-- PyPI cache lag: `uv pip install --refresh "<pkg>==<ver>"` may fail attempt 1 ("unsatisfiable") right after publish; retry (succeeded attempt 2).
-- Remaining #1712 waves serialize on server.py / transports.py / client.py — can't fully parallelize; see shard-plan.
-
-## Open questions for the human
-
-- None pressing — remaining waves queued + value-anchored on #1712; recommend a fresh session for the Streamable HTTP transport + holistic redteam.
+- kailash-mcp NOT editable-installed → run its tests as `PYTHONPATH=packages/kailash-mcp/src .venv/bin/python -m pytest`.
+- `.venv/bin/pre-commit` / `black` have stale shebangs → use `.venv/bin/python -m pre_commit` / `-m black`.
+- MCP sampling is server-initiated round-trip now (#1712): tests must dispatch-as-task → inject reply via `_route_server_initiated_response` → await. A direct `await _handle_sampling_create_message(...)` with no reply HANGS to the sampling timeout.
+- env-model resolver tests: `_resolve_llm_model_from_env()` calls `load_dotenv()` internally — neutralize it (`monkeypatch.setattr(dotenv, "load_dotenv", noop)`) or a real `.env` defeats `delenv`.
+- `gh pr checks --watch` exits 0 even when checks are RED — verify each required check SUCCESS on the pinned head SHA before merging (git.md).
