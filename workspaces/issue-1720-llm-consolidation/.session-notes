@@ -1,45 +1,62 @@
-# Session Notes — 2026-07-16 (Wave A merged)
+# Session Notes — 2026-07-17 (foundation redteam converged + Wave-B plan drafted)
 
 ## Where we are
 
-#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 + A DONE and
-merged** (main @ `25afb9a39`, Wave A = PR #1783). Wave A = foundation bug-fixes + F3 HF
-chat routing + offline parity harness; redteam converged (4 rounds). Wave B (consumer
-cutover) + Wave C (delete) remain HUMAN-GATED at `/todos`. Next: draft the Wave-B `/todos` plan.
+#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 + A
+merged.** This session: a **holistic redteam of the merged foundation** (before
+drafting Wave-B) found + fixed **3 defects** in already-shipped code, converged
+(reviewer + security-reviewer; round-1 found an F1 HIGH, round-2 CLEAN), and
+shipped as **PR #1784 (merged, main @ `923709a83`)**. Also drafted the **Wave-B/C
+`/todos` plan** — awaiting the human structural gate.
+
+Wave B (consumer cutover) + Wave C (delete legacy) remain HUMAN-GATED at `/todos`.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/02-plans/01-wave3-refined-decomposition.md` — refined wave plan
-2. `workspaces/issue-1720-llm-consolidation/04-validate/wave-a-parity-findings.md` — Wave-B gate evidence (3 findings)
-3. `workspaces/issue-1720-llm-consolidation/02-plans/00-architecture-and-waves.md` — original gate structure
-4. `packages/kailash-kaizen/tests/parity/` — the parity harness (shared-canned-bytes); GH #1720
+1. `02-plans/02-wave-b-c-todos-plan.md` — the Wave-B/C plan + 2 decisions (THIS is the gate)
+2. `02-plans/01-wave3-refined-decomposition.md` — the original refined wave plan
+3. `packages/kailash-kaizen/tests/regression/test_issue_1720_wave_a_foundation_redteam.py` — the 17 redteam regression tests
+4. `04-validate/wave-a-parity-findings.md` — earlier parity gate evidence
 
-## In-flight state
+## Shipped this session (PR #1784)
 
-- Local branch was `feat/1720-wave-a-foundation` (now merged + deleted on remote) — run `git checkout main && git pull`.
-- Wave-B is unstarted: no `todos/active/` entries for it yet (approved to draft; deferred to fresh session).
+Foundation-redteam fixes (merged code the Wave-B cutover would inherit):
+- **F1** — `legacy_tool_choice_default` made stream-aware (kept for Wave-B). Redteam
+  HIGH: threading it into the dual-run **shadow** was wrong (the node always calls
+  legacy `.chat()`, never `stream_chat`, so the shadow must reproduce `.chat()`'s
+  "required") — shadow threading reverted; helper retained.
+- **F2** — `EmbedOptions.normalize` now reaches the HF embed wire via `client.embed`
+  (was a silent no-op, zero-tolerance 3c). Uniform-normalize on ollama/cohere/openai
+  DEFERRED → tracked in the plan as B1b.
+- **BYOK** — `resolve_deployment_for` now validates a caller-supplied `api_key`
+  (CRLF/control-char/non-ASCII) at enforcement-surface parity with `complete()`.
 
-## Executed this session
+## PENDING — needs the human (surfaced, not done)
 
-- Filed **esperie-enterprise/kailash-rs#1869** (`cross-sdk`) — Rust HF chat-schema routing parity for F3. Journaled in `cross-repo-authorization-1720-f3.md`.
+1. **Wave-B/C `/todos` structural gate** — approve the plan + 2 decisions:
+   - **Google `finish_reason`**: recommend full legacy VALUE-MAP parity (the parity
+     finding's "lowercase" was mis-scoped — legacy value-maps STOP→stop,
+     MAX_TOKENS→length, SAFETY→content_filter). Folded into B1a.
+   - **`azure_ai_foundry`**: recommend SCOPE-OUT (partial Wave-C) vs building a
+     four-axis Foundry wire. Confirm if a Foundry wire is wanted.
+2. **Cross-SDK BYOK filing (needs authorization)**: the BYOK header-injection parity
+   gap is a likely Rust SDK four-axis parity surface. PENDING cross-repo filing —
+   needs the five `repo-scope-discipline` conditions (user-initiated + explicit +
+   confirmed + journaled + scoped). NOT auto-filed. Authorize → I draft a scrubbed
+   body + journal the grant + file.
+3. **PR #1782** (loom Gate-2 governance-artifact sync) — open, green, mergeable.
+   Held deliberately (rewrites the rule corpus mid-session). Merge at your call.
 
-## Outstanding ledger (forest)
+## Unreleased
 
-| ID  | Item                                                                 | Value-anchor (MUST-1 source)                                       | Status                         |
-| --- | -------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
-| F1  | Wave 3/B — migrate 5 consumers off legacy onto LlmClient (behind parity) | #1720 plan Wave-3; delete-gate needs zero residual `kaizen.providers` imports | queued (human `/todos` gate)   |
-| F2  | Wave 4/C — DELETE legacy `providers/llm/` + `base.py` + `registry.py` (IRREVERSIBLE) | #1720 plan Wave-4; gated on F1 + release-pipeline green            | BLOCKED on F1 + release-gate    |
-
-Wave-B prep folded into F1: (a) normalize four-axis Google `finish_reason` casing (Finding #2); (b) enumerate `azure_ai_foundry` consumers — NO four-axis wire (blocker); Finding #1 (legacy Anthropic tools broken) needs no action, four-axis fixes it.
-Closed this session: `F3` (HF `complete()` chat-schema routing) → PR #1783 · cross-SDK sibling → rs#1869.
-
-## Unreleased packages
-
-- **kailash-kaizen**: Waves 1–2 + A merged to main, NOT released to PyPI. `/release` DEFERRED to the Wave-3 milestone (user call). Recommend after Wave-3 cutover.
+- **kailash-kaizen**: Waves 1–2 + A + this foundation-fix set merged, NOT released to
+  PyPI. `/release` DEFERRED to the Wave-3 milestone (prior user call).
 
 ## Traps
 
-- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`. Local verify MUST include `tests/cross_sdk_parity/` AND `tests/parity/`.
-- Persistent server-side throttling this session — delegated agents died 3×; commit-per-module is the mitigation.
-- pyright shows a false-positive storm for `kaizen.llm.*` imports (stale index) — runtime + pytest are authoritative.
-- redteam workflow at `redteam-round.mjs` surfaces unverified (throttled-verify) findings — do NOT read `clean:true` without checking `unverified:[]`.
+- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`.
+- `iterative_llm_agent` MCP-discovery tests HANG offline (need a live MCP server) —
+  exclude with `-k "not mcp and not discover"`; unrelated to LLM-consolidation.
+- pyright shows a false-positive storm for `kaizen.llm.*` imports (stale index) —
+  runtime + pytest are authoritative.
+- `cd` persists across Bash calls in this harness; use absolute paths or re-`cd`.
