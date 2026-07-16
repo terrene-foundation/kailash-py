@@ -38,22 +38,26 @@ _TOOLS = [{"type": "function", "function": {"name": "get_weather"}}]
 
 
 @pytest.mark.regression
-def test_helper_tools_present_no_explicit_returns_required():
-    assert legacy_tool_choice_default(_TOOLS, None) == "required"
+def test_helper_openai_tools_present_no_explicit_returns_required():
+    # Only openai forces "required"; azure/docker default "auto"; others None.
+    assert legacy_tool_choice_default("openai", _TOOLS, None) == "required"
+    assert legacy_tool_choice_default("azure", _TOOLS, None) == "auto"
+    assert legacy_tool_choice_default("docker", _TOOLS, None) == "auto"
+    assert legacy_tool_choice_default("cohere", _TOOLS, None) is None
 
 
 @pytest.mark.regression
 def test_helper_explicit_choice_is_honored():
-    assert legacy_tool_choice_default(_TOOLS, "auto") == "auto"
-    assert legacy_tool_choice_default(_TOOLS, "none") == "none"
+    assert legacy_tool_choice_default("openai", _TOOLS, "auto") == "auto"
+    assert legacy_tool_choice_default("azure", _TOOLS, "none") == "none"
     forced = {"type": "function", "function": {"name": "get_weather"}}
-    assert legacy_tool_choice_default(_TOOLS, forced) == forced
+    assert legacy_tool_choice_default("openai", _TOOLS, forced) == forced
 
 
 @pytest.mark.regression
 def test_helper_no_tools_returns_none():
-    assert legacy_tool_choice_default(None, None) is None
-    assert legacy_tool_choice_default([], None) is None
+    assert legacy_tool_choice_default("openai", None, None) is None
+    assert legacy_tool_choice_default("openai", [], None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -85,9 +89,9 @@ def _capture_complete_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict:
     return captured
 
 
-def _run_shadow(agent, *, tools, generation_config):
+def _run_shadow(agent, *, tools, generation_config, provider="openai"):
     agent._run_llm_dual_run_shadow(
-        provider="openai",
+        provider=provider,
         model="m",
         messages=[{"role": "user", "content": "hi"}],
         tools=tools,
@@ -99,13 +103,28 @@ def _run_shadow(agent, *, tools, generation_config):
 
 
 @pytest.mark.regression
-def test_shadow_emits_required_when_tools_present_and_no_explicit_choice(monkeypatch):
-    """THE bug fix: tools present + no explicit choice -> the four-axis
+def test_shadow_emits_required_when_openai_tools_present_and_no_explicit_choice(
+    monkeypatch,
+):
+    """THE bug fix: openai tools present + no explicit choice -> the four-axis
     complete() receives tool_choice="required" (legacy parity), not None."""
     captured = _capture_complete_kwargs(monkeypatch)
     agent = LLMAgentNode()
-    _run_shadow(agent, tools=_TOOLS, generation_config={})
+    _run_shadow(agent, tools=_TOOLS, generation_config={}, provider="openai")
     assert captured.get("tool_choice") == "required"
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("provider", ["azure", "docker"])
+def test_shadow_emits_auto_for_azure_docker_not_required(monkeypatch, provider):
+    """Redteam fix: azure/docker legacy default to tool_choice="auto", NOT
+    "required". The provider-agnostic helper over-injected "required" here — the
+    shadow must reproduce the azure/docker "auto" default so it does not
+    introduce a NEW divergence on azure/docker tool-using agents."""
+    captured = _capture_complete_kwargs(monkeypatch)
+    agent = LLMAgentNode()
+    _run_shadow(agent, tools=_TOOLS, generation_config={}, provider=provider)
+    assert captured.get("tool_choice") == "auto"
 
 
 @pytest.mark.regression

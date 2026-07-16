@@ -55,35 +55,57 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 
-def legacy_tool_choice_default(tools: Any, explicit_choice: Any) -> Any:
+# The legacy tools-present ``tool_choice`` default is PROVIDER-SPECIFIC — the
+# providers do NOT agree, so a provider-agnostic default is wrong:
+#   * ``openai`` (openai.py:258) -> ``default_choice = "required" if tools else "auto"`` -> "required"
+#   * ``azure`` / ``azure_openai`` (azure.py:288/372) -> literal ``"auto"``
+#   * ``docker`` (docker.py:159/249) -> literal ``"auto"``
+#   * every other legacy provider (perplexity/pplx, ollama, google/gemini,
+#     anthropic, cohere, huggingface) sets NO ``tool_choice`` at all -> None.
+# A provider absent from this map emits no tool_choice (None), matching legacy.
+_LEGACY_TOOL_CHOICE_DEFAULTS = {
+    "openai": "required",
+    "azure": "auto",
+    "azure_openai": "auto",
+    "docker": "auto",
+}
+
+
+def legacy_tool_choice_default(
+    provider: Any, tools: Any, explicit_choice: Any
+) -> Any:
     """Reproduce the legacy ``providers/llm`` chat ``tool_choice`` default.
 
-    The legacy provider chat path (``providers/llm/openai.py``, also
-    ``azure.py`` / ``docker.py``) sets ``default_choice = "required" if tools
-    else "auto"`` and injects ``tool_choice="required"`` when tools are
-    present AND the caller did not specify a choice. The four-axis
-    ``LlmClient.complete`` defaults ``tool_choice=None`` (emits nothing ->
-    the provider defaults to ``"auto"``), so a shadow / live four-axis call
-    that does NOT reproduce this diverges from legacy on every tool-using
-    agent — the Wave-2 dual-run shadow logged FALSE ``llm.dual_run.divergence``
-    WARNs because of exactly this gap.
+    The legacy default is PROVIDER-SPECIFIC (see ``_LEGACY_TOOL_CHOICE_DEFAULTS``):
+    only ``openai`` forces ``"required"`` when tools are present and unset;
+    ``azure``/``azure_openai``/``docker`` default to ``"auto"``; every other
+    legacy provider sets no ``tool_choice`` at all. The four-axis
+    ``LlmClient.complete`` defaults ``tool_choice=None`` (emits nothing), so a
+    shadow / live four-axis call that does not reproduce the PER-PROVIDER legacy
+    default diverges from legacy — the Wave-2 dual-run shadow logged FALSE
+    ``llm.dual_run.divergence`` WARNs on openai tool-using agents because of
+    exactly this gap. (A provider-AGNOSTIC ``"required"`` default is equally
+    wrong — it OVER-injects ``"required"`` for azure/docker, whose legacy path
+    sends ``"auto"``.)
 
     Returns:
 
-    * ``"required"`` — when ``tools`` are present AND no explicit choice was
-      given (the legacy tools-present default);
     * the explicit choice — whenever the caller gave one (honored verbatim);
-    * ``None`` — when no tools are present and no explicit choice was given
-      (emit nothing, matching legacy, which skips the ``tool_choice`` block
-      entirely when there are no tools).
+    * ``None`` — when no tools are present (legacy skips the ``tool_choice``
+      block entirely when there are no tools), OR when the provider sets no
+      legacy ``tool_choice`` default;
+    * the provider's legacy default (``"required"`` for openai, ``"auto"`` for
+      azure/azure_openai/docker) — when tools are present and unset.
 
     Shared home (this resolver module) so BOTH the Wave-2 dual-run shadow and
     the future Wave-B live-path migration import the SAME semantics rather
     than re-deriving them (which would let the two copies drift).
     """
-    if tools and explicit_choice is None:
-        return "required"
-    return explicit_choice
+    if not tools:
+        return None
+    if explicit_choice is not None:
+        return explicit_choice
+    return _LEGACY_TOOL_CHOICE_DEFAULTS.get((provider or "").strip().lower())
 
 
 class UnsupportedDeploymentProvider(ValueError):

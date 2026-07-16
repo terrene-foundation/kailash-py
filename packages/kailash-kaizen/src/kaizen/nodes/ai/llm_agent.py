@@ -140,17 +140,18 @@ def _shadow_deployment_for(
     return resolve_deployment_for(provider, model, api_key=api_key, base_url=base_url)
 
 
-def _legacy_tool_choice_default(tools, explicit_choice):
+def _legacy_tool_choice_default(provider, tools, explicit_choice):
     """Thin wrapper delegating to the shared
     `kaizen.llm.deployment_resolver.legacy_tool_choice_default` (#1720 Wave-A
-    invariant #1) — reproduces the legacy chat ``tool_choice="required"``
-    default so the dual-run shadow does not log false divergences on
-    tool-using agents. Kept as a module-level symbol so tests may patch this
-    seam, mirroring `_shadow_deployment_for`.
+    invariant #1) — reproduces the PER-PROVIDER legacy chat ``tool_choice``
+    default (openai -> "required"; azure/docker -> "auto"; others -> none) so
+    the dual-run shadow does not log false divergences on tool-using agents.
+    Kept as a module-level symbol so tests may patch this seam, mirroring
+    `_shadow_deployment_for`.
     """
     from kaizen.llm.deployment_resolver import legacy_tool_choice_default
 
-    return legacy_tool_choice_default(tools, explicit_choice)
+    return legacy_tool_choice_default(provider, tools, explicit_choice)
 
 
 @dataclass
@@ -2558,7 +2559,7 @@ Final Answer: 6 hours"""
             # path) and emit it only when it is not None.
             explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
             effective_tool_choice = _legacy_tool_choice_default(
-                shadow_tools, explicit_tool_choice
+                provider, shadow_tools, explicit_tool_choice
             )
             if effective_tool_choice is not None:
                 sampling_kwargs["tool_choice"] = effective_tool_choice

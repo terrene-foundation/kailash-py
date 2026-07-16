@@ -6,12 +6,12 @@ live dual-run canary — see `_harness.py` docstring). 14 tests, all green.
 
 ## Parity CONFIRMED (safe to migrate — behavior-neutral)
 
-| Wire                   | Plane B (response parse)    | Notes                                                                            |
-| ---------------------- | --------------------------- | -------------------------------------------------------------------------------- |
-| openai                 | ✅ plain + tools            | tool_calls round-trip byte-identical                                             |
-| anthropic              | ✅ plain                    | tool-calling is a divergence (Finding #1)                                        |
-| google                 | ✅ content/tool_calls/usage | finish_reason casing diverges (Finding #2)                                       |
-| tool_choice="required" | ✅ invariant pinned         | `legacy_tool_choice_default` reproduces legacy OpenAI-family forced-tool-calling |
+| Wire                       | Plane B (response parse)    | Notes                                                                                                                                                                                                                                                    |
+| -------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| openai                     | ✅ plain + tools            | tool_calls round-trip byte-identical                                                                                                                                                                                                                     |
+| anthropic                  | ✅ plain                    | tool-calling is a divergence (Finding #1)                                                                                                                                                                                                                |
+| google                     | ✅ content/tool_calls/usage | finish_reason casing diverges (Finding #2)                                                                                                                                                                                                               |
+| tool_choice (per-provider) | ✅ invariant pinned         | `legacy_tool_choice_default(provider, tools, choice)` reproduces the PER-PROVIDER legacy default: openai→"required", azure/azure_openai/docker→"auto", others→none. A provider-agnostic "required" was a Wave-A bug the holistic redteam caught + fixed. |
 
 ## Wave-B FINDINGS (genuine divergences the cutover MUST decide on)
 
