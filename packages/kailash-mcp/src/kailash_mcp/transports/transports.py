@@ -1290,6 +1290,7 @@ class WebSocketServerTransport(BaseTransport):
             else:
                 # Broadcast to all clients
                 if self._clients:
+
                     async def _locked_send(cid: str, client: Any) -> None:
                         async with self._get_send_lock(cid):
                             await client.send(message_data)

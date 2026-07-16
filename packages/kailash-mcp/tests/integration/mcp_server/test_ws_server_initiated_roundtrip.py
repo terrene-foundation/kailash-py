@@ -65,7 +65,9 @@ async def test_single_client_sampling_roundtrip_no_deadlock():
     server-initiated sampling/createMessage on the SAME socket; the requester's
     original request receives the model completion within a short timeout — NOT
     a -32811 sampling timeout (FINDING 2 — WS single-client deadlock)."""
-    server = MCPServer("ws-roundtrip-sampling", enable_cache=False, enable_metrics=False)
+    server = MCPServer(
+        "ws-roundtrip-sampling", enable_cache=False, enable_metrics=False
+    )
     server.set_sampling_approver(lambda ctx: True)
     # Short timeout: a REGRESSED sequential loop would surface as a fast -32811,
     # not a 30s hang — the test fails loud within seconds either way.
@@ -108,9 +110,7 @@ async def test_single_client_sampling_roundtrip_no_deadlock():
                             "jsonrpc": "2.0",
                             "id": "req-1",
                             "method": "sampling/createMessage",
-                            "params": {
-                                "messages": [{"role": "user", "content": "hi"}]
-                            },
+                            "params": {"messages": [{"role": "user", "content": "hi"}]},
                         }
                     )
                 )

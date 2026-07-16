@@ -119,8 +119,8 @@ logger = logging.getLogger(__name__)
 # duration; default None → unscoped (backward compatible). An asyncio Task copies
 # the context at creation, so a per-request tool task sees the value set before
 # it was spawned and concurrent tool calls never see each other's client.
-_CURRENT_TOOL_CLIENT: "contextvars.ContextVar[Optional[str]]" = (
-    contextvars.ContextVar("mcp_current_tool_client", default=None)
+_CURRENT_TOOL_CLIENT: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "mcp_current_tool_client", default=None
 )
 
 

@@ -566,7 +566,10 @@ async def test_sampling_full_round_trip_delivers_completion_no_32601():
 
     task = asyncio.create_task(
         server._handle_sampling_create_message(
-            {"messages": [{"role": "user", "content": "summarize"}], "client_id": "client-1"},
+            {
+                "messages": [{"role": "user", "content": "summarize"}],
+                "client_id": "client-1",
+            },
             "orig-req",
         )
     )

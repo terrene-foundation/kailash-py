@@ -1325,7 +1325,11 @@ class ElicitationSystem:
             # callbacks — the awaiter is never left hanging until timeout.
             try:
                 await self._send_elicitation_request(
-                    request_id, prompt, input_schema, mode=mode, url=url,
+                    request_id,
+                    prompt,
+                    input_schema,
+                    mode=mode,
+                    url=url,
                     client_id=client_id,
                 )
             except MCPError:
