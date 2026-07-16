@@ -226,8 +226,9 @@ class InvalidApiKeyOverride(AuthError):
         self.fingerprint = _fingerprint(raw_credential)
         super().__init__(
             "per-request api_key= override rejected: contains a control "
-            f"character (\\r, \\n, \\x00, or other C0 control); refusing to "
-            f"install it into a request header (fingerprint={self.fingerprint})"
+            "character (\\r, \\n, \\x00, other C0, or DEL) or a non-ASCII "
+            "character; refusing to install it into a request header "
+            f"(fingerprint={self.fingerprint})"
         )
 
 

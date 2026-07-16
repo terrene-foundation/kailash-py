@@ -244,16 +244,26 @@ def _validate_completion_model(model: str) -> str:
 # security finding): the offline ``MockLlmHttpClient`` test path never
 # exercises real HTTP header parsing, so this was previously untested and
 # unguarded.
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f]")
+# C0 controls (\x00-\x1f) AND \x7f (DEL) — all outside RFC 7230 field-vchar
+# (VCHAR = 0x21-0x7e). \r/\n/\x00 are the CRLF-header-injection primitive; the
+# rest are rejected for completeness so this guard is the strict superset of the
+# transport's own header-grammar check (/redteam Round-2 completeness).
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _validate_api_key_override(api_key: str) -> str:
     """Fail-closed validation of a per-request ``api_key=`` override before
     it is installed into a header. Raises :class:`InvalidApiKeyOverride` on
-    any control character. Mirrors ``_validate_completion_model``'s
-    fail-closed shape. Byte-preserving for valid keys (no transformation —
-    the provider sees the exact key)."""
-    if _CONTROL_CHAR_RE.search(api_key):
+    any control character (C0 + DEL) OR any non-ASCII character. Mirrors
+    ``_validate_completion_model``'s fail-closed shape. Byte-preserving for
+    valid keys (no transformation — the provider sees the exact key).
+
+    Non-ASCII is rejected here (rather than letting it fall through to an
+    opaque ``UnicodeEncodeError`` when httpx ascii-encodes the header value)
+    so EVERY malformed override surfaces as the SAME typed, fingerprint-only
+    error — an HTTP header value MUST be ASCII, so a non-ASCII api_key can
+    never be a valid credential (/redteam Round-2 completeness)."""
+    if _CONTROL_CHAR_RE.search(api_key) or not api_key.isascii():
         raise InvalidApiKeyOverride(api_key)
     return api_key
 
