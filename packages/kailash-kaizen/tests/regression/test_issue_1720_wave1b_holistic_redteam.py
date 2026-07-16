@@ -25,8 +25,7 @@ import pytest
 import respx
 
 from kaizen.llm import LlmClient
-from kaizen.llm.client import _validate_api_key_override
-from kaizen.llm.errors import InvalidApiKeyOverride
+from kaizen.llm.client import InvalidApiKeyOverride, _validate_api_key_override
 from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver
 from kaizen.llm.presets import anthropic_preset, huggingface_preset
 

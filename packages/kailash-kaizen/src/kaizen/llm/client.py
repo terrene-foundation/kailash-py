@@ -53,11 +53,11 @@ from kaizen.llm.deployment import (
 )
 from kaizen.llm.errors import (
     AuthError,
-    InvalidApiKeyOverride,
     InvalidResponse,
     ProviderError,
     RateLimited,
     Timeout,
+    _fingerprint,
 )
 from kaizen.llm.http_client import LlmHttpClient
 from kaizen.llm.redaction import redact_messages
@@ -103,6 +103,36 @@ class UnsupportedApiKeyOverride(AuthError):
             f"deployment's auth strategy (auth_strategy_kind={auth_strategy_kind!r}); "
             "only ApiKeyBearer-family deployments (Authorization: Bearer / "
             "X-Api-Key / X-Goog-Api-Key) accept a per-request BYOK override"
+        )
+
+
+class InvalidApiKeyOverride(AuthError):
+    """Raised when a per-request ``api_key=`` override (#1720 Wave-1b BYOK)
+    fails fail-closed validation BEFORE it is installed into a header.
+
+    /redteam Round-1/2 (#1720 Wave-1b security finding): a per-request
+    ``api_key`` containing a control character (``\\r`` / ``\\n`` / ``\\x00``
+    / other C0 / DEL) or a non-ASCII character is a CRLF-header-injection /
+    malformed-header surface -- :class:`kaizen.llm.auth.bearer.ApiKeyBearer`
+    installs the raw string directly into an HTTP header value with no
+    sanitization, and the offline ``MockLlmHttpClient`` test path never
+    exercises real header parsing, so the injection was previously untested
+    and unguarded. Mirrors ``_validate_completion_model``'s fail-closed
+    shape: reject BEFORE the value reaches anything that could act on it.
+
+    Co-located here (NOT in ``kaizen.llm.errors``) beside its sibling
+    :class:`UnsupportedApiKeyOverride` — both are client-layer BYOK-override
+    guards, not part of the cross-SDK-mirrored ``errors`` taxonomy. Only the
+    fingerprint (never the raw key) appears in any human-visible field.
+    """
+
+    def __init__(self, raw_credential: str) -> None:
+        self.fingerprint = _fingerprint(raw_credential)
+        super().__init__(
+            "per-request api_key= override rejected: contains a control "
+            "character (\\r, \\n, \\x00, other C0, or DEL) or a non-ASCII "
+            "character; refusing to install it into a request header "
+            f"(fingerprint={self.fingerprint})"
         )
 
 
@@ -1008,10 +1038,10 @@ class LlmClient:
 
         /redteam Round-1 (#1720 Wave-1b security finding): before ANY of the
         above, ``api_key`` is fail-closed-validated for control characters
-        (``\\r`` / ``\\n`` / ``\\x00`` / other C0 controls) via
+        (``\\r`` / ``\\n`` / ``\\x00`` / other C0 / DEL) or non-ASCII via
         :func:`_validate_api_key_override`, raising
-        :class:`kaizen.llm.errors.InvalidApiKeyOverride` on a match — closing
-        a CRLF-header-injection surface that was previously untested on the
+        :class:`InvalidApiKeyOverride` on a match — closing a
+        CRLF-header-injection surface that was previously untested on the
         offline ``MockLlmHttpClient`` path.
         """
         assert self._deployment is not None

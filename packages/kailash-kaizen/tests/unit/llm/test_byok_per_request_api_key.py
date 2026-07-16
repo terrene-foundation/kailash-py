@@ -37,9 +37,8 @@ import respx
 from kaizen.llm import LlmClient
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKeyHeaderKind
-from kaizen.llm.client import UnsupportedApiKeyOverride
+from kaizen.llm.client import InvalidApiKeyOverride, UnsupportedApiKeyOverride
 from kaizen.llm.deployment import CompletionRequest, StreamingConfig
-from kaizen.llm.errors import InvalidApiKeyOverride
 from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver
 from kaizen.llm.presets import (
     anthropic_preset,
