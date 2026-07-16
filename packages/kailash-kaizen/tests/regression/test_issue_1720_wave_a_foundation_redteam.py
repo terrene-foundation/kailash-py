@@ -60,8 +60,10 @@ def test_openai_stream_tool_choice_is_auto_non_stream_is_required():
 
 
 def test_azure_docker_tool_choice_auto_regardless_of_stream():
-    """azure/azure_openai/docker send "auto" on BOTH the chat and stream_chat
-    paths — the stream flag must NOT change their result."""
+    """The helper returns "auto" for azure/azure_openai/docker regardless of
+    ``stream``: "auto" is their legacy non-stream chat default, and their
+    ``stream_chat`` does not support tools (docker drops them, azure builds
+    none), so the stream flag correctly does NOT change their result."""
     for provider in ("azure", "azure_openai", "docker"):
         assert (
             legacy_tool_choice_default(provider, _TOOLS, None, stream=False) == "auto"
@@ -86,15 +88,21 @@ def test_no_tools_returns_none_even_when_streaming():
     assert legacy_tool_choice_default("openai", [], None, stream=True) is None
 
 
-def test_llm_agent_wrapper_threads_stream():
-    """The node-level seam ``_legacy_tool_choice_default`` (patched by the
-    shadow) must thread ``stream`` to the shared helper."""
-    assert _legacy_tool_choice_default("openai", _TOOLS, None, stream=True) == "auto"
-    assert (
-        _legacy_tool_choice_default("openai", _TOOLS, None, stream=False) == "required"
-    )
-    # default remains non-stream
+def test_llm_agent_wrapper_uses_non_stream_default_matching_legacy_chat():
+    """The node-level seam ``_legacy_tool_choice_default`` (the dual-run shadow's
+    patch point) reproduces the NON-STREAM legacy ``.chat()`` default. The node's
+    live legacy path ALWAYS calls ``provider_instance.chat()`` (never
+    ``stream_chat``), so the shadow diffs against ``.chat()``'s output and MUST
+    NOT thread a streaming mode — openai -> "required" (matching ``chat()``), not
+    "auto". Regression guard for the redteam HIGH: the wrapper deliberately
+    exposes NO ``stream`` kwarg (the stream-aware contract lives on the shared
+    helper for the Wave-B live cutover, not on the shadow seam)."""
+    import inspect
+
     assert _legacy_tool_choice_default("openai", _TOOLS, None) == "required"
+    assert _legacy_tool_choice_default("azure", _TOOLS, None) == "auto"
+    assert _legacy_tool_choice_default("cohere", _TOOLS, None) is None
+    assert "stream" not in inspect.signature(_legacy_tool_choice_default).parameters
 
 
 # ---------------------------------------------------------------------------
@@ -191,3 +199,24 @@ def test_resolve_deployment_accepts_valid_byok_key():
     """A clean ASCII key still resolves — no false rejection, byte-preserving."""
     dep = resolve_deployment_for("openai", "gpt-x", api_key="sk-valid-ASCII-key-123")
     assert dep is not None
+
+
+def test_byok_surfaces_share_one_validator(monkeypatch):
+    """Enforcement-surface parity (security.md § Enforcement-Surface Parity)
+    requires ONE shared restrictiveness function across both BYOK entry points,
+    not two copies that could drift. Pin it behaviorally: patch the client-side
+    validator and confirm `resolve_deployment_for` routes through THAT exact
+    callable (its local import re-fetches from the client module), so a future
+    second/inline copy on the resolver side would fail this test."""
+    import kaizen.llm.client as client_mod
+
+    seen = {}
+    real = client_mod._validate_api_key_override
+
+    def spy(key):
+        seen["key"] = key
+        return real(key)
+
+    monkeypatch.setattr(client_mod, "_validate_api_key_override", spy)
+    resolve_deployment_for("openai", "gpt-x", api_key="sk-shared-validator-probe")
+    assert seen.get("key") == "sk-shared-validator-probe"

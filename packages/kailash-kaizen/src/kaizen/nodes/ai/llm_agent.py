@@ -140,20 +140,20 @@ def _shadow_deployment_for(
     return resolve_deployment_for(provider, model, api_key=api_key, base_url=base_url)
 
 
-def _legacy_tool_choice_default(provider, tools, explicit_choice, *, stream=False):
+def _legacy_tool_choice_default(provider, tools, explicit_choice):
     """Thin wrapper delegating to the shared
     `kaizen.llm.deployment_resolver.legacy_tool_choice_default` (#1720 Wave-A
-    invariant #1) — reproduces the PER-PROVIDER, PER-MODE legacy chat
-    ``tool_choice`` default (openai -> "required" non-stream / "auto" stream;
-    azure/docker -> "auto"; others -> none) so the dual-run shadow does not log
-    false divergences on tool-using agents. ``stream`` threads the live
-    request's streaming mode so openai streaming reproduces legacy
-    ``stream_chat``'s "auto" (not ``chat``'s "required"). Kept as a module-level
-    symbol so tests may patch this seam, mirroring `_shadow_deployment_for`.
+    invariant #1) — reproduces the PER-PROVIDER legacy chat ``tool_choice``
+    default (openai -> "required"; azure/docker -> "auto"; others -> none) so
+    the dual-run shadow does not log false divergences on tool-using agents.
+    The shadow ALWAYS mirrors legacy ``.chat()`` (never ``stream_chat``), so it
+    does NOT thread a streaming mode here; the helper's ``stream`` kwarg exists
+    for the Wave-B live cutover. Kept as a module-level symbol so tests may
+    patch this seam, mirroring `_shadow_deployment_for`.
     """
     from kaizen.llm.deployment_resolver import legacy_tool_choice_default
 
-    return legacy_tool_choice_default(provider, tools, explicit_choice, stream=stream)
+    return legacy_tool_choice_default(provider, tools, explicit_choice)
 
 
 @dataclass
@@ -1027,7 +1027,6 @@ class LLMAgentNode(Node):
                     generation_config,
                     api_key=per_request_api_key,
                     base_url=per_request_base_url,
-                    streaming=streaming,
                 )
 
             # Handle tool execution if enabled and tools were called
@@ -2324,7 +2323,6 @@ Final Answer: 6 hours"""
         generation_config: dict,
         api_key: str = None,
         base_url: str = None,
-        streaming: bool = False,
     ) -> dict[str, Any]:
         """Generate LLM response using provider architecture.
 
@@ -2390,7 +2388,6 @@ Final Answer: 6 hours"""
                     api_key=api_key,
                     base_url=base_url,
                     legacy_response=response,
-                    streaming=streaming,
                 )
 
             return response
@@ -2418,7 +2415,6 @@ Final Answer: 6 hours"""
         api_key: str | None,
         base_url: str | None,
         legacy_response: dict,
-        streaming: bool = False,
     ) -> "threading.Thread | None":
         """#1720 Wave-2 redteam (HIGH) — fire-and-forget dispatch of
         `_run_llm_dual_run_shadow` onto a daemon background thread.
@@ -2484,7 +2480,6 @@ Final Answer: 6 hours"""
                     "api_key": api_key,
                     "base_url": base_url,
                     "legacy_response": snapshot["legacy_response"],
-                    "streaming": streaming,
                 },
                 daemon=True,
                 name="kaizen-llm-dual-run-shadow",
@@ -2511,7 +2506,6 @@ Final Answer: 6 hours"""
         api_key: str | None,
         base_url: str | None,
         legacy_response: dict,
-        streaming: bool = False,
     ) -> None:
         """#1720 Wave-2 — shadow-run the four-axis `LlmClient` alongside the
         legacy provider response and log divergences.
@@ -2563,11 +2557,21 @@ Final Answer: 6 hours"""
             # tool_choice="required" when tools are present and the caller
             # gave no explicit choice; the four-axis complete() defaults to
             # None (emits nothing -> provider "auto"). Resolve the effective
-            # choice through the shared helper (reused by the Wave-B live
-            # path) and emit it only when it is not None.
+            # choice through the shared helper and emit it only when not None.
+            #
+            # NON-STREAM default (stream=False) is CORRECT here even for a
+            # streaming request: the legacy live path `_provider_llm_response`
+            # ALWAYS calls `provider_instance.chat(...)` (never `stream_chat`),
+            # so `legacy_response` — the thing the shadow diffs against — is
+            # always the `.chat()` output, whose openai default is "required".
+            # Threading the request's `streaming` flag here would make the
+            # shadow send "auto" and diverge from the "required" legacy_response
+            # (a FALSE divergence WARN). The helper's `stream` kwarg exists for
+            # the Wave-B live cutover IF/when it routes streaming -> a streaming
+            # four-axis call; the Wave-2 shadow always mirrors `.chat()`.
             explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
             effective_tool_choice = _legacy_tool_choice_default(
-                provider, shadow_tools, explicit_tool_choice, stream=streaming
+                provider, shadow_tools, explicit_tool_choice
             )
             if effective_tool_choice is not None:
                 sampling_kwargs["tool_choice"] = effective_tool_choice

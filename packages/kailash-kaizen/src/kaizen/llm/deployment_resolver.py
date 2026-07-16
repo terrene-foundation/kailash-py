@@ -61,13 +61,19 @@ logger = logging.getLogger(__name__)
 #   * ``openai`` non-stream chat (``OpenAIProvider.chat``) ->
 #     ``default_choice = "required" if tools else "auto"`` -> "required";
 #     BUT ``openai`` STREAM (``OpenAIProvider.stream_chat``) -> literal "auto".
-#     openai is the ONLY provider whose stream vs non-stream default differs.
-#   * ``azure`` / ``azure_openai`` (``chat`` AND ``stream_chat``) -> "auto" on BOTH paths.
-#   * ``docker`` (``chat`` AND ``stream_chat``) -> "auto" on BOTH paths.
+#     openai is the ONLY provider whose stream vs non-stream default differs,
+#     so it is the ONLY provider the ``stream`` kwarg below adjusts.
+#   * ``azure`` / ``azure_openai`` non-stream chat -> "auto"; their
+#     ``stream_chat`` builds NO tools and sets NO ``tool_choice`` (streaming
+#     tool-calling unsupported), so their streaming tool_choice is moot.
+#   * ``docker`` non-stream chat -> "auto"; its ``stream_chat`` DROPS tools
+#     (``docker.stream_chat.tools_ignored``) and sets NO ``tool_choice``, so
+#     its streaming tool_choice is likewise moot.
 #   * every other legacy provider (perplexity/pplx, ollama, google/gemini,
 #     anthropic, cohere, huggingface) sets NO ``tool_choice`` at all -> None.
 # A provider absent from this map emits no tool_choice (None), matching legacy.
-# This map holds the NON-STREAM defaults; the ``stream`` kwarg adjusts openai.
+# This map holds the NON-STREAM chat defaults; the ``stream`` kwarg only
+# adjusts openai (azure/docker do not stream tools, so their entry is unchanged).
 _LEGACY_TOOL_CHOICE_DEFAULTS = {
     "openai": "required",
     "azure": "auto",
