@@ -29,7 +29,9 @@ from kaizen.llm.wire_protocols import (
     google_generate_content,
     openai_chat,
 )
+from kaizen.providers.llm.docker import DockerModelRunnerProvider
 from kaizen.providers.llm.openai import OpenAIProvider
+from kaizen.providers.llm.perplexity import PerplexityProvider
 
 from ._harness import (
     drive_legacy_anthropic,
@@ -59,6 +61,32 @@ _PLAIN_CELLS = [
         anthropic_messages,
         lambda c: drive_legacy_anthropic(c, model="parity-claude", messages=_MSGS),
         id="anthropic-plain",
+    ),
+    # OpenAI-compat wires (#1720 Wave-B gate-coverage extension): docker +
+    # perplexity legacy providers drive the openai SDK (`openai.OpenAI`,
+    # `client.chat.completions.create`) and their four-axis preset maps to the
+    # `OpenAiChat` wire, so plain-completion parse MUST be byte-identical to
+    # openai on the shared canned bytes. Closes the plane-B coverage gap the
+    # Wave-A parity findings flagged as "extension pending" for these wires.
+    pytest.param(
+        "openai_response",
+        openai_chat,
+        lambda c: drive_legacy_openai_family(
+            DockerModelRunnerProvider, c, model="parity-model", messages=_MSGS
+        ),
+        id="docker-plain",
+    ),
+    pytest.param(
+        "openai_response",
+        openai_chat,
+        lambda c: drive_legacy_openai_family(
+            PerplexityProvider,
+            c,
+            model="parity-model",
+            messages=_MSGS,
+            api_key="parity-dummy-key",  # offline: reaches parse path; never sent
+        ),
+        id="perplexity-plain",
     ),
 ]
 
