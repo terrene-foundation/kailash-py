@@ -78,9 +78,7 @@ def build_request_payload(
         )
     for idx, t in enumerate(texts):
         if not isinstance(t, str):
-            raise TypeError(
-                f"texts[{idx}] must be str; got {type(t).__name__}"
-            )
+            raise TypeError(f"texts[{idx}] must be str; got {type(t).__name__}")
     if not isinstance(model, str) or not model:
         raise ValueError(
             "build_request_payload requires a non-empty model string — "
@@ -103,12 +101,19 @@ def build_request_payload(
     return payload
 
 
-def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
+def parse_response(payload: Dict[str, Any], options: Any = None) -> Dict[str, Any]:
     """Extract ``{vectors, model, usage}`` from an OpenAI embeddings response.
 
     Raises ``InvalidResponse`` with a stable ``reason`` when the payload
     shape violates the documented contract. The ``reason`` strings are
     caller-controlled constants (not user-supplied) and are safe to log.
+
+    ``options`` is accepted for dispatch symmetry with every embed shaper
+    (the shared ``LlmClient.embed`` call site threads it uniformly, #1720
+    Wave-A parity) and is intentionally IGNORED here: OpenAI honors
+    ``dimensions`` at the request level and applies no post-parse
+    normalization. Only ``huggingface_embeddings`` consumes ``options`` at
+    parse time (``EmbedOptions.normalize``).
     """
     if not isinstance(payload, dict):
         raise TypeError(
@@ -123,15 +128,11 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         data_sorted = sorted(data, key=lambda item: int(item.get("index", 0)))
     except (TypeError, ValueError):
-        raise InvalidResponse(
-            "openai_embeddings: 'data' entry has non-integer 'index'"
-        )
+        raise InvalidResponse("openai_embeddings: 'data' entry has non-integer 'index'")
     vectors: List[List[float]] = []
     for item in data_sorted:
         if not isinstance(item, dict):
-            raise InvalidResponse(
-                "openai_embeddings: 'data' entry is not a dict"
-            )
+            raise InvalidResponse("openai_embeddings: 'data' entry is not a dict")
         embedding = item.get("embedding")
         if not isinstance(embedding, list):
             raise InvalidResponse(

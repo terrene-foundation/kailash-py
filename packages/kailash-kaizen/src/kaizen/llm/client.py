@@ -768,7 +768,13 @@ class LlmClient:
                 raise InvalidResponse(
                     f"{wire.name.lower()}_embeddings: response was not valid JSON"
                 ) from exc
-            parsed = shaper.parse_response(payload_json)
+            # #1720 Wave-A parity (F2): thread ``options`` into the embed
+            # shaper so ``EmbedOptions.normalize`` is honored. Only
+            # ``huggingface_embeddings`` consumes it (L2-normalizes the
+            # returned vectors); openai/cohere/ollama accept-and-ignore it for
+            # dispatch symmetry. Previously omitted here -> normalize was a
+            # silent no-op on the HuggingFace embed wire (zero-tolerance 3c).
+            parsed = shaper.parse_response(payload_json, options)
             vectors = parsed["vectors"]
             if not isinstance(vectors, list):
                 raise InvalidResponse(

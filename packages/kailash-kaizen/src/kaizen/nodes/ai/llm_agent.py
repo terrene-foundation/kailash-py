@@ -146,8 +146,10 @@ def _legacy_tool_choice_default(provider, tools, explicit_choice):
     invariant #1) — reproduces the PER-PROVIDER legacy chat ``tool_choice``
     default (openai -> "required"; azure/docker -> "auto"; others -> none) so
     the dual-run shadow does not log false divergences on tool-using agents.
-    Kept as a module-level symbol so tests may patch this seam, mirroring
-    `_shadow_deployment_for`.
+    The shadow ALWAYS mirrors legacy ``.chat()`` (never ``stream_chat``), so it
+    does NOT thread a streaming mode here; the helper's ``stream`` kwarg exists
+    for the Wave-B live cutover. Kept as a module-level symbol so tests may
+    patch this seam, mirroring `_shadow_deployment_for`.
     """
     from kaizen.llm.deployment_resolver import legacy_tool_choice_default
 
@@ -2555,8 +2557,18 @@ Final Answer: 6 hours"""
             # tool_choice="required" when tools are present and the caller
             # gave no explicit choice; the four-axis complete() defaults to
             # None (emits nothing -> provider "auto"). Resolve the effective
-            # choice through the shared helper (reused by the Wave-B live
-            # path) and emit it only when it is not None.
+            # choice through the shared helper and emit it only when not None.
+            #
+            # NON-STREAM default (stream=False) is CORRECT here even for a
+            # streaming request: the legacy live path `_provider_llm_response`
+            # ALWAYS calls `provider_instance.chat(...)` (never `stream_chat`),
+            # so `legacy_response` — the thing the shadow diffs against — is
+            # always the `.chat()` output, whose openai default is "required".
+            # Threading the request's `streaming` flag here would make the
+            # shadow send "auto" and diverge from the "required" legacy_response
+            # (a FALSE divergence WARN). The helper's `stream` kwarg exists for
+            # the Wave-B live cutover IF/when it routes streaming -> a streaming
+            # four-axis call; the Wave-2 shadow always mirrors `.chat()`.
             explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
             effective_tool_choice = _legacy_tool_choice_default(
                 provider, shadow_tools, explicit_tool_choice

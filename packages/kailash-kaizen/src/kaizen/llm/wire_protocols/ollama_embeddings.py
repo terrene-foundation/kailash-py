@@ -72,9 +72,7 @@ def build_request_payload(
         )
     for idx, t in enumerate(texts):
         if not isinstance(t, str):
-            raise TypeError(
-                f"texts[{idx}] must be str; got {type(t).__name__}"
-            )
+            raise TypeError(f"texts[{idx}] must be str; got {type(t).__name__}")
     if not isinstance(model, str) or not model:
         raise ValueError(
             "build_request_payload requires a non-empty model string — "
@@ -82,9 +80,7 @@ def build_request_payload(
         )
 
     if options is not None and not isinstance(options, EmbedOptions):
-        raise TypeError(
-            f"options must be EmbedOptions; got {type(options).__name__}"
-        )
+        raise TypeError(f"options must be EmbedOptions; got {type(options).__name__}")
 
     payload: Dict[str, Any] = {
         "model": model,
@@ -95,11 +91,17 @@ def build_request_payload(
     return payload
 
 
-def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
+def parse_response(payload: Dict[str, Any], options: Any = None) -> Dict[str, Any]:
     """Extract ``{vectors, model, usage}`` from an Ollama embeddings response.
 
     Raises ``InvalidResponse`` with a stable ``reason`` when the payload
     shape violates the documented contract.
+
+    ``options`` is accepted for dispatch symmetry with every embed shaper
+    (the shared ``LlmClient.embed`` call site threads it uniformly, #1720
+    Wave-A parity) and is intentionally IGNORED here: Ollama applies no
+    post-parse normalization. Only ``huggingface_embeddings`` consumes
+    ``options`` at parse time (``EmbedOptions.normalize``).
     """
     if not isinstance(payload, dict):
         raise TypeError(
@@ -107,15 +109,11 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
     embeddings = payload.get("embeddings")
     if not isinstance(embeddings, list):
-        raise InvalidResponse(
-            "ollama_embeddings: missing or non-list 'embeddings'"
-        )
+        raise InvalidResponse("ollama_embeddings: missing or non-list 'embeddings'")
     vectors: List[List[float]] = []
     for item in embeddings:
         if not isinstance(item, list):
-            raise InvalidResponse(
-                "ollama_embeddings: 'embeddings' entry is not a list"
-            )
+            raise InvalidResponse("ollama_embeddings: 'embeddings' entry is not a list")
         for v in item:
             if not isinstance(v, (int, float)) or isinstance(v, bool):
                 raise InvalidResponse(
