@@ -142,6 +142,40 @@ km.register(result, name="demo")  # RuntimeError: This event loop is already run
 
 Origin: kailash-ml-audit session 2026-04-23 — W33c async/sync inconsistency caught by end-to-end README regression test.
 
+## Shadow / Dual-Run / Canary Paths Are Fire-And-Forget (MUST)
+
+When a primary code path is instrumented with a SECOND implementation running alongside it to COMPARE or MEASURE — a dual-run shadow, a canary, a migration parity check, an A/B validation — the shadow MUST be **fire-and-forget**: dispatched on a `daemon=True` thread the primary NEVER joins, awaits, or blocks on. The shadow MUST NOT be able to add latency to, delay, or break the primary path. It MUST (a) read a `copy.deepcopy` SNAPSHOT of the inputs/result taken on the caller thread (never the live object the primary returns, which the caller may mutate), (b) bound its own work with a timeout INSIDE the thread, (c) catch `BaseException` (re-raising only `KeyboardInterrupt`/`SystemExit`) so every failure only logs, and (d) be flag-gated OFF by default. The comparison/divergence log MUST carry only field names, counts/lengths, and hashes — never raw content or credentials.
+
+```python
+# DO — fire-and-forget: the primary returns immediately; the shadow can't touch it
+def primary(self, *args) -> dict:
+    result = self._legacy(*args)              # live path, unchanged
+    if _shadow_enabled():
+        snap = copy.deepcopy({"args": args, "result": result})   # snapshot on caller thread
+        threading.Thread(target=self._shadow_worker, kwargs=snap,
+                         daemon=True).start()  # NEVER joined
+    return result                              # returns NOW, zero shadow latency
+
+# DO NOT — synchronous shadow blocks the live return for the shadow round-trip
+def primary(self, *args) -> dict:
+    result = self._legacy(*args)
+    fut = pool.submit(self._shadow_async, *args)
+    fut.result(timeout=30)                     # BLOCKS the caller up to 30s (×N in a loop)
+    return result
+```
+
+**BLOCKED rationalizations:**
+
+- "The shadow has a timeout, so it's bounded" (a bounded BLOCK is still a block — 30s × N loop rounds on the live path)
+- "It runs alongside, so it's non-blocking" ("alongside" means a separate thread the caller does NOT await — a joined future is sequential)
+- "The shadow needs the result, so I have to wait for it" (deepcopy the result into the thread; the caller never waits)
+- "A ThreadPoolExecutor is cleaner" (its workers are non-daemon and block process exit at shutdown; a fire-and-forget daemon thread does not)
+- "`except Exception` is enough" (`asyncio.CancelledError` is a `BaseException`, not an `Exception` — it escapes and can reach the caller)
+
+**Why:** A shadow that blocks the primary is no longer a shadow — it imports the shadow's full round-trip latency (multiplied by every loop iteration) into the production path, the exact opposite of the zero-primary-impact the design promises. Fire-and-forget on a daemon thread reading a deepcopy snapshot is the only shape where a hung, slow, or crashing shadow provably cannot affect the live return.
+
+Origin: kaizen #1720 Wave-2 dual-run redteam (2026-07-16) — a four-axis-vs-legacy shadow was dispatched synchronously with `future.result(timeout=30s)`, adding up to 30s × 5 tool-loop rounds of latency to live LLM responses; the redteam HIGH was fixed by the fire-and-forget daemon-thread refactor (proven by a hung-shadow live-return-latency test).
+
 ## Callable Module + Subpackage Coexistence (MUST — PEP 562)
 
 When a package exports BOTH a top-level callable (`pkg.foo` imported from `_wrappers` or similar) AND contains a subpackage of the same name (`pkg/foo/`), Python's import machinery unconditionally sets `pkg.foo` to the subpackage module the moment ANYTHING runs `from pkg.foo import <X>` — silently shadowing the callable. In test-collection order, this surfaces as `AssertionError: pkg.foo MUST be callable (got module)` after an unrelated test imports the subpackage.
