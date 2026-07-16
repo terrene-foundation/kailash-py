@@ -23,7 +23,10 @@ import pytest
 
 from kaizen.llm.wire_protocols import (
     anthropic_messages,
+    cohere_generate,
     google_generate_content,
+    mistral_chat,
+    ollama_native,
     openai_chat,
 )
 
@@ -81,10 +84,55 @@ _GOOGLE_RESPONSE = {
     "modelVersion": "test-model",
 }
 
+# Mistral: OpenAI-compatible choices[].message.tool_calls (arguments is a JSON string).
+_MISTRAL_RESPONSE = {
+    "choices": [
+        {
+            "message": {
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_mistral_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": json.dumps({"city": "SF"}),
+                        },
+                    }
+                ],
+            },
+            "finish_reason": "tool_calls",
+        }
+    ],
+    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    "model": "test-model",
+}
+
+# Cohere v1 /chat: top-level tool_calls [{name, parameters}] — no per-call id, params is a dict.
+_COHERE_RESPONSE = {
+    "tool_calls": [{"name": "get_weather", "parameters": {"city": "SF"}}],
+    "finish_reason": "COMPLETE",
+}
+
+# Ollama /api/chat: message.tool_calls [{function:{name, arguments}}] — arguments a dict, no id.
+_OLLAMA_RESPONSE = {
+    "message": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {"function": {"name": "get_weather", "arguments": {"city": "SF"}}}
+        ],
+    },
+    "done": True,
+}
+
 _CASES = [
     ("openai_chat", openai_chat, _OPENAI_RESPONSE),
     ("anthropic_messages", anthropic_messages, _ANTHROPIC_RESPONSE),
     ("google_generate_content", google_generate_content, _GOOGLE_RESPONSE),
+    ("mistral_chat", mistral_chat, _MISTRAL_RESPONSE),
+    ("cohere_generate", cohere_generate, _COHERE_RESPONSE),
+    ("ollama_native", ollama_native, _OLLAMA_RESPONSE),
 ]
 
 

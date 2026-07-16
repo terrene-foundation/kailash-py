@@ -924,13 +924,18 @@ class LlmClient:
         and the per-model temperature floor are all data-driven — no provider
         branch in the caller path.
 
-        #1720 Wave-1a: the ``tools``, ``tool_choice``, ``response_format``,
-        ``seed``, ``logit_bias``, ``frequency_penalty``, ``presence_penalty``,
-        ``n``, and ``top_k`` kwargs are accepted onto the request SHAPE but are
-        NOT yet emitted by any wire — per-adapter emission + parse is Wave 1b.
-        Passing them today is a no-op (no error, no effect); until Wave 1b
-        lands, tool-calling / structured-output agent work goes through the
-        ``kaizen.providers`` layer.
+        #1720 completion-shaping kwargs (``tools``, ``tool_choice``,
+        ``response_format``, ``seed``, ``logit_bias``, ``frequency_penalty``,
+        ``presence_penalty``, ``n``, ``top_k``): the request SHAPE carries them
+        (Wave 1a) and per-wire EMISSION + tool_call PARSE is LIVE (Wave 1b) for
+        OpenAI (+ OpenAI-compatible), Anthropic (direct / Vertex / Bedrock),
+        Google Gemini (direct / Vertex), Mistral, Cohere, and Ollama. Each wire
+        emits only the fields the provider supports (unsupported fields are
+        omitted, never faked) and parses tool calls back into one canonical
+        shape ``[{id, type:"function", function:{name, arguments}}]``. Emission
+        for the remaining wires (Bedrock native families, HuggingFace) is a
+        later Wave-1b shard; passing a field to a not-yet-wired provider is a
+        no-op for that field.
 
         Raises:
             ValueError: ``messages`` empty of a resolvable model, or no
@@ -1098,11 +1103,11 @@ class LlmClient:
         lines; JSONL wires (Ollama / Bedrock) emit bare JSON objects per line.
         Both are handled: a ``data:`` prefix is stripped when present.
 
-        #1720 Wave-1a: the ``tools`` … ``top_k`` kwargs are accepted onto the
-        request SHAPE but NOT yet emitted by any wire (Wave 1b). They are
-        forwarded unchanged on both the streaming path AND the
-        ``streaming.enabled=False`` buffered-``complete()`` fallback, so the two
-        paths stay at parity when Wave 1b lands emission.
+        #1720 completion-shaping kwargs (``tools`` … ``top_k``): per-wire
+        emission is LIVE (Wave 1b) for OpenAI/Anthropic/Google/Mistral/Cohere/
+        Ollama (Bedrock-native + HuggingFace pending). They are forwarded
+        unchanged on both the streaming path AND the ``streaming.enabled=False``
+        buffered-``complete()`` fallback, so the two paths stay at parity.
         """
         if self._deployment is None:
             raise ValueError(

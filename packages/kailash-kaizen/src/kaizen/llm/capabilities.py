@@ -34,14 +34,13 @@ stay in lockstep across releases.
 Provider capability vs client emission (IMPORTANT): these rows report what
 the **provider / wire protocol** supports — they do NOT assert that this
 SDK's four-axis ``LlmClient.complete()`` / ``stream()`` currently EMITS the
-feature. As of #1720 Wave-1a the ``CompletionRequest`` SHAPE carries the
-additive fields (``tools`` / ``tool_choice`` / ``response_format`` / extended
-sampling), but the wire adapters do not yet EMIT them — ``complete()`` /
-``stream()`` still send only the base fields to every wire. Per-adapter
-emission + parse is Wave 1b (legacy→four-axis consolidation, issue #1720). So
-``tools=True`` here means
-"the provider supports tool-calling", NOT "``complete()`` will send tools".
-Callers needing those features today use the ``kaizen.providers`` layer. The
+feature. As of #1720 the ``CompletionRequest`` SHAPE carries the additive
+fields (``tools`` / ``tool_choice`` / ``response_format`` / extended sampling),
+and per-wire EMISSION + tool_call PARSE is LIVE for OpenAI/Anthropic/Google/
+Mistral/Cohere/Ollama (Wave 1b); Bedrock-native + HuggingFace emission is a
+later shard. So ``tools=True`` here means
+"the provider supports tool-calling", NOT necessarily "``complete()`` will send
+tools on THIS wire yet" (check the wire against the Wave-1b rollout above). The
 rows stay provider-scoped (not client-scoped) BECAUSE they are the cross-SDK
 negotiation contract above — narrowing them to client-emission status would
 break the Rust byte-parity lock.
