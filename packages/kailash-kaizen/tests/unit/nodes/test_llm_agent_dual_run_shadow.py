@@ -633,8 +633,11 @@ def test_dual_run_shadow_unmapped_provider_skips_without_warning(
     _patch_stub_provider(monkeypatch)
 
     agent = LLMAgentNode()
+    # The provider->deployment resolution (and its shadow_skipped DEBUG log)
+    # was promoted to `kaizen.llm.deployment_resolver` in #1720 Wave-A; the
+    # skip line now emits under that module's logger, not llm_agent's.
     with caplog.at_level(logging.DEBUG, logger=agent.logger.name):
-        with caplog.at_level(logging.DEBUG, logger="kaizen.nodes.ai.llm_agent"):
+        with caplog.at_level(logging.DEBUG, logger="kaizen.llm.deployment_resolver"):
             response, threads = _call_and_join_shadow(
                 agent,
                 _shadow_dispatch_capture,

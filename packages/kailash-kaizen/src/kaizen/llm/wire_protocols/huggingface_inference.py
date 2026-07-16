@@ -30,25 +30,32 @@ Response (chat): OpenAI-style ``{"choices": [{"message": {"content": ...}}]}``.
 
 See https://huggingface.co/docs/api-inference/detailed_parameters.
 
-**Known scoped limitation (/redteam Round-1, #1720 Wave-1b):** the chat-schema
-branch of ``build_request_payload`` (``use_chat_schema=True``) fully
-implements ``tools``/``tool_choice`` emission and is directly unit-tested.
-However, ``LlmClient`` ALWAYS calls this shaper with
-``use_chat_schema=False`` (the classic ``{inputs, parameters}`` path) --
-there is currently NO production mechanism (no HF chat-endpoint routing) for
-``LlmClient.complete()`` to reach the chat schema. Full chat-schema routing
-(resolving the HF router's dedicated chat-completions URL) is a separate,
-future shard and is deliberately NOT wired here.
+**Chat-schema routing (resolved, #1720 F3):** the chat-schema branch of
+``build_request_payload`` (``use_chat_schema=True``) fully implements
+``tools``/``tool_choice`` emission and is directly unit-tested, AND is now
+REACHABLE in production. ``LlmClient._build_completion_payload_and_url``
+reads the deployment's ``completion_routing.use_chat_schema`` (a typed
+``CompletionRouting`` field, see :mod:`kaizen.llm.deployment`) and passes it
+to ``build_request_payload(..., use_chat_schema=...)`` for the
+``HuggingFaceInference`` wire. The ``huggingface_chat_preset``
+(:mod:`kaizen.llm.presets`) sets ``use_chat_schema=True`` plus the router's
+``/v1/chat/completions`` route, so ``LlmClient.complete()`` / ``stream()``
+against a chat deployment emit the OpenAI-shaped ``model`` + ``messages`` +
+``tools`` + ``tool_choice`` body and normalize ``choices[0].message.tool_calls``
+on the way back.
 
-Until that routing lands, a caller who passes ``tools=`` (or
-``response_format=``) to a HuggingFace deployment through ``LlmClient``
-reaches ONLY the classic path, which has no OpenAI-shaped tool-calling or
-structured-output surface. Per ``rules/zero-tolerance.md`` Rule 3 (no silent
-fallbacks) / ``rules/observability.md`` Rule 7, dropping either field on the
-classic path emits a WARNING (never silently) -- the caller gets the
-classic tool-less/format-less body, not a hard failure, mirroring the
-image-content-block-drop pattern elsewhere in this module. Tracked follow-up:
-HF chat-endpoint routing so ``tools=`` reaches the chat schema in production.
+The classic ``huggingface_preset`` is UNCHANGED: its deployment carries no
+``completion_routing`` override (or ``use_chat_schema=False``), so this shaper
+still emits the byte-identical classic ``{inputs, parameters}`` text-generation
+body. A caller who passes ``tools=`` (or ``response_format=``) to a CLASSIC
+HuggingFace deployment reaches ONLY the classic path, which has no OpenAI-shaped
+tool-calling or structured-output surface. Per ``rules/zero-tolerance.md`` Rule
+3 (no silent fallbacks) / ``rules/observability.md`` Rule 7, dropping either
+field on the classic path emits a WARNING (never silently) -- the caller gets
+the classic tool-less/format-less body, not a hard failure, mirroring the
+image-content-block-drop pattern elsewhere in this module. To reach tool
+calling in production, use ``huggingface_chat_preset`` (TGI / Inference
+Endpoints speaking the OpenAI chat schema).
 """
 
 from __future__ import annotations
@@ -164,6 +171,17 @@ def build_request_payload(
             payload["tool_choice"] = (
                 request.tool_choice if request.tool_choice is not None else "auto"
             )
+
+        # response_format (structured output): the OpenAI-compatible chat schema
+        # (TGI / Inference Endpoints) accepts response_format verbatim, exactly
+        # like openai_chat.py. Emit it so a huggingface_chat_preset caller
+        # requesting structured output actually gets it on the wire. The classic
+        # text-generation branch below CANNOT carry it and WARNs
+        # (huggingface_inference.response_format_dropped_classic_path); the chat
+        # branch CAN, so it must NOT silently drop it (zero-tolerance Rule 3 /
+        # observability Rule 7 — #1720 F3 holistic-redteam MEDIUM).
+        if request.response_format:
+            payload["response_format"] = request.response_format
         return payload
 
     # Classic text-generation schema: NO tools concept. TGI's classic
@@ -176,11 +194,13 @@ def build_request_payload(
     # use `use_chat_schema=True` (TGI / Inference Endpoints), which DOES
     # emit them above.
     #
-    # /redteam Round-1 (#1720 Wave-1b): `LlmClient` has NO production
-    # mechanism to reach the chat schema today (see module docstring "Known
-    # scoped limitation"), so a caller passing `tools=`/`response_format=`
-    # against an hf deployment silently lost them on this path. WARN — never
-    # silent — per rules/observability.md Rule 7 / zero-tolerance Rule 3.
+    # #1720 F3: the chat schema is now reachable in production via
+    # `huggingface_chat_preset` (`CompletionRouting.use_chat_schema=True`, see
+    # module docstring "Chat-schema routing"). A caller who instead targets a
+    # CLASSIC hf deployment with `tools=`/`response_format=` still lands here,
+    # where those fields have no wire surface — WARN (never silent) per
+    # rules/observability.md Rule 7 / zero-tolerance Rule 3 so the drop is
+    # observable, and steer the caller to the chat preset.
     if request.tools:
         logger.warning(
             "huggingface_inference.tools_dropped_classic_path",

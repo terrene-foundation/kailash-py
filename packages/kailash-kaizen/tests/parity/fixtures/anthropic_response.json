@@ -1,0 +1,9 @@
+{
+  "id": "msg_parity_anthropic",
+  "type": "message",
+  "role": "assistant",
+  "model": "parity-claude",
+  "content": [{ "type": "text", "text": "The capital of France is Paris." }],
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 12, "output_tokens": 7 }
+}

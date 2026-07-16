@@ -339,6 +339,18 @@ class CompletionRouting(BaseModel):
       the Anthropic body and inserts ``anthropic_version``. Left ``None`` for
       Anthropic-direct so its body stays byte-identical to the pre-#1717
       output.
+    * ``use_chat_schema`` — routing discriminator for wires that expose BOTH a
+      classic text-generation schema AND an OpenAI-compatible chat schema on
+      different URLs (HuggingFace: classic ``/models/{model}`` vs the router's
+      ``/v1/chat/completions``). ``False`` (default) keeps the classic body
+      shape; ``True`` selects the chat body (``model`` + ``messages`` +
+      ``tools``/``tool_choice``) that TGI / Inference-Endpoint chat servers
+      accept. Like ``anthropic_version_body``, this drives a per-deployment
+      body transform from a typed config field the caller sets by choosing a
+      preset (``huggingface_chat_preset``), NOT keyword-matching on user input
+      (``rules/agent-reasoning.md``). The client passes it to the HuggingFace
+      shaper's ``build_request_payload(..., use_chat_schema=...)``; it is a
+      no-op for every other wire (whose shapers do not accept the kwarg).
 
     Cross-SDK parity: the routing pieces mirror the Rust adapter's per-preset
     URL + platform-body handling; a fixed deployment produces the same URL +
@@ -350,6 +362,7 @@ class CompletionRouting(BaseModel):
     path_template: Optional[str] = None
     streaming_path_template: Optional[str] = None
     anthropic_version_body: Optional[str] = None
+    use_chat_schema: bool = False
 
 
 class RetryConfig(BaseModel):

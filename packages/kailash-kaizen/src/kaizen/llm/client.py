@@ -991,7 +991,26 @@ class LlmClient:
                 "request another provider."
             )
         shaper = dispatch["shaper"]
-        payload = shaper.build_request_payload(request)
+        # HuggingFace is the only wire whose shaper exposes BOTH a classic
+        # text-generation body AND an OpenAI chat body on different routes; the
+        # deployment's `completion_routing.use_chat_schema` (set by
+        # `huggingface_chat_preset`) selects the chat body so `tools`/
+        # `tool_choice` reach the wire instead of being dropped on the classic
+        # path (#1720 F3). Guard by the typed wire enum -- every other shaper's
+        # `build_request_payload` does NOT accept `use_chat_schema`, so it is
+        # NEVER passed universally. This is structural dispatch on a typed
+        # deployment-config value (rules/agent-reasoning.md permits it), not
+        # keyword-matching on user content. When routing is absent or
+        # `use_chat_schema=False` (every classic HF deployment), the shaper
+        # emits the byte-identical classic `{inputs, parameters}` body.
+        if wire is WireProtocol.HuggingFaceInference:
+            routing = self._deployment.completion_routing
+            use_chat_schema = routing.use_chat_schema if routing is not None else False
+            payload = shaper.build_request_payload(
+                request, use_chat_schema=use_chat_schema
+            )
+        else:
+            payload = shaper.build_request_payload(request)
         # Platform-Anthropic body transform (Vertex / Bedrock Claude). No-op
         # for every other wire and for Anthropic-direct.
         if wire is WireProtocol.AnthropicMessages:

@@ -11,7 +11,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Literal
+from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -120,82 +120,38 @@ def _shadow_deployment_for(
 ):
     """Resolve a four-axis `LlmDeployment` for the #1720 Wave-2 dual-run shadow.
 
-    Maps the legacy `provider` name (`kaizen.providers.registry.PROVIDERS`)
-    onto the matching four-axis preset builder in `kaizen.llm.presets`.
-    Returns `None` when the provider has no four-axis mapping, or a
-    required credential/base_url cannot be resolved — the caller treats
-    `None` as "shadow skipped, already logged at DEBUG".
+    Thin wrapper that delegates to the shared
+    `kaizen.llm.deployment_resolver.resolve_deployment_for` (#1720 Wave-A
+    promotion) so the shadow AND the Wave-B consumer cutover resolve the
+    provider->deployment mapping through ONE surface. Kept as a module-level
+    symbol here (unchanged signature) so the existing dual-run shadow tests
+    that `monkeypatch.setattr(llm_agent, "_shadow_deployment_for", ...)`
+    continue to patch the shadow's resolution seam without change.
 
-    This function does NOT guarantee never-raises: the preset factories
-    (`openai_preset`, `anthropic_preset`, etc.) validate their own
-    arguments and MAY raise (e.g. `ValueError` on an invalid model name or
-    a malformed `api_key`). Callers MUST NOT rely on `None` as the only
-    failure signal — `_run_llm_dual_run_shadow`'s outer
-    `except BaseException` around this call is what actually makes the
-    shadow non-load-bearing, not this function's own contract.
-
-    `api_key` mirrors the legacy provider's own resolution: when the caller
-    did not pass a per-request override, the same `<PROVIDER>_API_KEY` env
-    var the legacy provider itself reads (`rules/env-models.md`) is tried
-    before giving up.
+    Returns `None` when the provider has no four-axis mapping, or a required
+    credential/base_url cannot be resolved — the caller treats `None` as
+    "shadow skipped, already logged at DEBUG". Does NOT guarantee
+    never-raises: the resolver's preset factories validate their own
+    arguments and MAY raise; `_run_llm_dual_run_shadow`'s outer
+    `except BaseException` is what makes the shadow non-load-bearing.
     """
-    from kaizen.llm.presets import (
-        anthropic_preset,
-        cohere_preset,
-        docker_model_runner_preset,
-        google_preset,
-        huggingface_preset,
-        ollama_preset,
-        openai_preset,
-        perplexity_preset,
-    )
+    from kaizen.llm.deployment_resolver import resolve_deployment_for
 
-    provider_key = (provider or "").strip().lower()
+    return resolve_deployment_for(provider, model, api_key=api_key, base_url=base_url)
 
-    api_key_preset_map: dict[str, tuple[Callable[..., Any], str]] = {
-        "openai": (openai_preset, "OPENAI_API_KEY"),
-        "anthropic": (anthropic_preset, "ANTHROPIC_API_KEY"),
-        "google": (google_preset, "GOOGLE_API_KEY"),
-        "gemini": (google_preset, "GOOGLE_API_KEY"),
-        "cohere": (cohere_preset, "COHERE_API_KEY"),
-        "huggingface": (huggingface_preset, "HUGGINGFACE_API_KEY"),
-        "perplexity": (perplexity_preset, "PERPLEXITY_API_KEY"),
-        "pplx": (perplexity_preset, "PERPLEXITY_API_KEY"),
-    }
-    base_url_preset_map: dict[str, Callable[..., Any]] = {
-        "ollama": ollama_preset,
-        "docker": docker_model_runner_preset,
-    }
 
-    if provider_key in api_key_preset_map:
-        factory, env_var = api_key_preset_map[provider_key]
-        resolved_key = api_key or os.environ.get(env_var, "").strip() or None
-        if not resolved_key:
-            logger.debug(
-                "llm.dual_run.shadow_skipped",
-                extra={"provider": provider, "reason": "missing_api_key"},
-            )
-            return None
-        kwargs: dict[str, Any] = {}
-        if base_url:
-            kwargs["base_url"] = base_url
-        return factory(resolved_key, model, **kwargs)
+def _legacy_tool_choice_default(provider, tools, explicit_choice):
+    """Thin wrapper delegating to the shared
+    `kaizen.llm.deployment_resolver.legacy_tool_choice_default` (#1720 Wave-A
+    invariant #1) — reproduces the PER-PROVIDER legacy chat ``tool_choice``
+    default (openai -> "required"; azure/docker -> "auto"; others -> none) so
+    the dual-run shadow does not log false divergences on tool-using agents.
+    Kept as a module-level symbol so tests may patch this seam, mirroring
+    `_shadow_deployment_for`.
+    """
+    from kaizen.llm.deployment_resolver import legacy_tool_choice_default
 
-    if provider_key in base_url_preset_map:
-        if not base_url:
-            logger.debug(
-                "llm.dual_run.shadow_skipped",
-                extra={"provider": provider, "reason": "missing_base_url"},
-            )
-            return None
-        factory = base_url_preset_map[provider_key]
-        return factory(base_url, model)
-
-    logger.debug(
-        "llm.dual_run.shadow_skipped",
-        extra={"provider": provider, "reason": "unmapped_provider"},
-    )
-    return None
+    return legacy_tool_choice_default(provider, tools, explicit_choice)
 
 
 @dataclass
@@ -2592,6 +2548,21 @@ Final Answer: 6 hours"""
             client = LlmClient.from_deployment_sync(deployment)
             sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
             shadow_tools = tools if tools else None
+
+            # #1720 Wave-A invariant #1 — reproduce the legacy chat
+            # tool_choice default so the shadow does NOT log false
+            # divergences on tool-using agents. Legacy injects
+            # tool_choice="required" when tools are present and the caller
+            # gave no explicit choice; the four-axis complete() defaults to
+            # None (emits nothing -> provider "auto"). Resolve the effective
+            # choice through the shared helper (reused by the Wave-B live
+            # path) and emit it only when it is not None.
+            explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
+            effective_tool_choice = _legacy_tool_choice_default(
+                provider, shadow_tools, explicit_tool_choice
+            )
+            if effective_tool_choice is not None:
+                sampling_kwargs["tool_choice"] = effective_tool_choice
 
             async def _call_shadow():
                 return await asyncio.wait_for(
