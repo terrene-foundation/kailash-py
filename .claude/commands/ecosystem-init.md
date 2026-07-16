@@ -12,6 +12,15 @@ The three share ZERO write-authority: `/onboard` writes nothing, `/enroll` write
 
 **Usage**: `/ecosystem-init` (no args; runs in the current fork's loom checkout)
 
+**Strictly dependency-ordered BEFORE this command, for a client fork:** `/clean-instantiate` — the
+once-per-clone CLEAR ceremony (`.claude/commands/clean-instantiate.md`) — MUST have run to a `0`-exit
+fail-closed assert-zero gate on any repo templated or cloned FROM canon. C3 below re-anchors genesis to
+the CLIENT's owner; it MUST NOT run over a clone that still carries canon's trust-identity (roster,
+journal, `ecosystem.json`) at rest — re-anchoring on top of un-cleared identity leaves canon's substrate
+readable underneath the new root. Canon itself (never cloned FROM anything) has no such precursor and
+runs `/ecosystem-init` directly. For a client whose clone is not yet clear, `/ecosystem-init` is NOT the
+first command to run — `/clean-instantiate` is.
+
 Strictly dependency-ordered after this command: an operator runs `/enroll` (identity), then `/onboard`
 (reads each session). `/ecosystem-init` does NOT silently enroll the initiating operator — it hands off
 to `/enroll` (C5). Procedure detail (input prompts, the D6 schema field set, the disclosure-scan
@@ -34,7 +43,9 @@ invocation shape, the genesis-ceremony call) lives in `.claude/skills/43-ecosyst
 3. **Genesis trust-root is established via the EXISTING ceremony.** C3 invokes
    `.claude/hooks/lib/genesis-ceremony.js::runEnrollmentCeremony` (the org-owned-bootstrap path,
    `multi-operator-coordination.md` §6 + §1 issue-#358 relaxation) — it does NOT re-implement genesis.
-   Owner-class gate; fail-CLOSED (any failed gh-api verification refuses to anchor).
+   Owner-class gate; fail-CLOSED (any failed gh-api verification refuses to anchor). On a client fork,
+   C3 MUST NOT run until `/clean-instantiate`'s fail-closed assert-zero gate has exited 0 (see above) —
+   the CLEAR precedes the establish-new-root step it gates.
 4. **C5 does NOT silently enroll the initiating operator.** The ceremony ends by handing off to
    `/enroll`; enrolling the operator is `/enroll`'s job, gated separately (`knowledge-convergence.md`
    MUST-5 forbids `/onboard`-class commands auto-running roster/genesis writes for an operator).
@@ -94,6 +105,11 @@ owner gate for the genesis anchor. On a fresh fork the default posture is `L5_DE
 ceremony's owner-class gate is independent of posture.
 
 ## Implementation notes
+
+The client-fork precondition (see above) is the CLEAR ceremony `.claude/commands/clean-instantiate.md`,
+engine `.claude/bin/clean-instantiate.mjs` — a distinct command this one does NOT invoke; it is a
+prerequisite gate, checked by the operator/orchestrator before running `/ecosystem-init`, not by this
+command's own code path.
 
 The D6 config schema + accessor contract is `.claude/bin/lib/ecosystem-config.mjs` (reader) +
 `.claude/bin/lib/loom-links.mjs` (the local⊕remote join); the synthetic companion is

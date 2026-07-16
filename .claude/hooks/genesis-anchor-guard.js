@@ -45,10 +45,18 @@ const TIMEOUT_MS = 5000;
 // {continue: true} — a hook-internal hang MUST NOT block the agent forever.
 // The fail-CLOSED behavior of THIS hook is a deliberate exit 2 below; the
 // timeout is the safety net for that path's pathology.
-const fallback = setTimeout(() => {
-  process.stdout.write(JSON.stringify({ continue: true }) + "\n");
-  process.exit(1);
-}, TIMEOUT_MS);
+// `fallback` arms ONLY when the guard runs as the process entry point
+// (`require.main === module`, wired at the bottom). On a test-time `require()`
+// it stays null so importing the module for unit tests does NOT start a dangling
+// 5s exit-timer; `clearTimeout(null)` in passthrough() is a safe no-op. The
+// timing when run as a hook is unchanged (armed immediately before main()).
+let fallback = null;
+function armFallback() {
+  fallback = setTimeout(() => {
+    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    process.exit(1);
+  }, TIMEOUT_MS);
+}
 
 const fs = require("fs");
 const path = require("path");
@@ -253,12 +261,25 @@ function loadRoster(rosterPath) {
 // narrow this to genesis-anchor-only — that would let a partially-written log
 // read as `length === 0` (fresh) on a roster-absent repo, weakening the
 // discriminator toward fail-OPEN. (security-reviewer LOW-1, journal/0176.)
+// Ceiling on the number of records the guard folds from the LOCAL log, mirroring
+// the materializer's DEFAULT_MAX_RECORDS (genesis-materializer.js). foldChain
+// signature-verifies each genesis-anchor, so an UNBOUNDED read of a pathologically
+// large local log could exceed the guard's 5s setTimeout budget → passthrough →
+// fail-OPEN on the block path (T5 security LOW-1). Bounding the fold cost closes
+// that corner. The cap reads from the HEAD, where the trust-root chain (anchor
+// seq 0 + migration seq 1) lives, so it never drops the trust root; and because a
+// bounded read of a nonzero log stays nonzero, the F72 `records.length === 0`
+// fresh-vs-enrolled discriminator (above) is preserved fail-CLOSED — truncation
+// keeps count > 0 (enrolled→block), never flips a nonzero log to fresh→advisory.
+const MAX_LOG_RECORDS = 50000;
+
 function loadLogRecords(logPath) {
   if (!fs.existsSync(logPath)) return [];
   const text = fs.readFileSync(logPath, "utf8");
   const lines = text.split("\n").filter((l) => l.trim());
   const records = [];
   for (const line of lines) {
+    if (records.length >= MAX_LOG_RECORDS) break; // bound the fold's verify cost
     try {
       const rec = JSON.parse(line);
       records.push(rec);
@@ -350,7 +371,7 @@ function foldChain(records, roster) {
 
 // ---- main -------------------------------------------------------------------
 
-(async function main() {
+async function main() {
   try {
     const payload = await readStdinBounded();
     // PreToolUse event names: CC uses "PreToolUse". Codex/Gemini variants
@@ -648,4 +669,14 @@ function foldChain(records, roster) {
     }
     passthrough();
   }
-})();
+}
+
+// Run as the hook entry point; skip on `require()` so unit tests can import
+// loadLogRecords / MAX_LOG_RECORDS without executing the guard (which reads
+// stdin, arms the timeout, and process.exit()s).
+if (require.main === module) {
+  armFallback();
+  main();
+}
+
+module.exports = { loadLogRecords, MAX_LOG_RECORDS };

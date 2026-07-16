@@ -161,35 +161,106 @@ function readLocalChain(repoDir) {
  * <url>` is not a configured remote → non-zero) — enforcing todo Invariant 1
  * ("resolves via the repo's OWN origin remote — NEVER a literal/canon URL").
  *
- * @returns {{ok: true, originUrl: string} | {ok: false, reason: string}}
+ * BOTH the PUSH url (`get-url --push`, what `git push <remote>` actually
+ * targets, honoring `remote.<name>.pushurl`) AND the FETCH url (`get-url`)
+ * MUST equal origin's respective url. Checking only the fetch url leaves a
+ * pushurl-divergence bypass: a repo with `remote.origin.pushurl = <canon>`
+ * would pass a fetch-url==fetch-url compare while the push lands on canon —
+ * the exact fork→canon leak this fence exists to block (T5 MED-1).
+ *
+ * @returns {{ok: true, originUrl: string, originPushUrl: string} | {ok: false, reason: string}}
  */
-function assertOwnOriginTarget({ repoDir, remote, git }) {
-  const originRes = git({ args: ["remote", "get-url", "origin"], repoDir });
-  if (!originRes || !originRes.ok) {
+function resolveRemoteUrl({ repoDir, remote, git, push }) {
+  const args = push
+    ? ["remote", "get-url", "--push", remote]
+    : ["remote", "get-url", remote];
+  const res = git({ args, repoDir });
+  if (!res || !res.ok) {
     return {
       ok: false,
-      reason: `cannot resolve origin URL (git remote get-url origin failed): ${originRes && originRes.stderr ? originRes.stderr : "unknown"}`,
+      stderr: res && res.stderr ? res.stderr : "unknown",
     };
   }
-  const originUrl = String(originRes.stdout || "").trim();
+  return { ok: true, url: String(res.stdout || "").trim() };
+}
+
+function assertOwnOriginTarget({ repoDir, remote, git }) {
+  // Resolve origin's fetch + push urls (the destination we are allowed to write).
+  const originFetch = resolveRemoteUrl({
+    repoDir,
+    remote: "origin",
+    git,
+    push: false,
+  });
+  if (!originFetch.ok) {
+    return {
+      ok: false,
+      reason: `cannot resolve origin URL (git remote get-url origin failed): ${originFetch.stderr}`,
+    };
+  }
+  const originUrl = originFetch.url;
   if (!originUrl) {
     return { ok: false, reason: "origin remote URL is empty" };
   }
-  const targetRes = git({ args: ["remote", "get-url", remote], repoDir });
-  if (!targetRes || !targetRes.ok) {
+  const originPush = resolveRemoteUrl({
+    repoDir,
+    remote: "origin",
+    git,
+    push: true,
+  });
+  if (!originPush.ok) {
     return {
       ok: false,
-      reason: `cannot resolve target remote '${remote}' URL (git remote get-url ${remote} failed — not a configured remote?): ${targetRes && targetRes.stderr ? targetRes.stderr : "unknown"}`,
+      reason: `cannot resolve origin PUSH URL (git remote get-url --push origin failed): ${originPush.stderr}`,
     };
   }
-  const targetUrl = String(targetRes.stdout || "").trim();
+  const originPushUrl = originPush.url;
+
+  // Resolve the target remote's fetch + push urls.
+  const targetFetch = resolveRemoteUrl({ repoDir, remote, git, push: false });
+  if (!targetFetch.ok) {
+    return {
+      ok: false,
+      reason: `cannot resolve target remote '${remote}' URL (git remote get-url ${remote} failed — not a configured remote?): ${targetFetch.stderr}`,
+    };
+  }
+  const targetUrl = targetFetch.url;
+  const targetPush = resolveRemoteUrl({ repoDir, remote, git, push: true });
+  if (!targetPush.ok) {
+    return {
+      ok: false,
+      reason: `cannot resolve target remote '${remote}' PUSH URL (git remote get-url --push ${remote} failed): ${targetPush.stderr}`,
+    };
+  }
+  const targetPushUrl = targetPush.url;
+
+  // THE fence: the ACTUAL push destination (`git push <remote>` targets the
+  // remote's push url, honoring `remote.<name>.pushurl`) MUST equal this repo's
+  // OWN canonical identity — origin's FETCH url, the url this repo was cloned
+  // from. Comparing the push destination against origin's fetch identity closes
+  // BOTH bypasses at once:
+  //   (a) a foreign remote NAME whose push url is canon (push != origin-fetch);
+  //   (b) a `remote.origin.pushurl = <canon>` REDIRECT with `--remote origin`
+  //       (push url is canon while fetch url is origin — the T5 MED-1 attack;
+  //       a target-vs-origin push-url compare would MISS it, since target IS
+  //       origin there and both sides are trivially equal).
+  // Fail-CLOSED: a divergent push destination (incl. a legit split
+  // ssh-push/https-fetch config) is REFUSED — for a rare, owner-gated,
+  // one-time trust-root push the safe default is to refuse-and-surface, not to
+  // trust a push url that does not resolve to the repo's own clone identity.
+  if (targetPushUrl !== originUrl) {
+    return {
+      ok: false,
+      reason: `I3 FENCE: the push destination for remote '${remote}' (${targetPushUrl}) does NOT equal this repo's own origin identity (${originUrl}); refusing fork→canon push. A repo's trust-root chain is pushed ONLY to its own origin's url (a divergent remote.<name>.pushurl is refused).`,
+    };
+  }
   if (targetUrl !== originUrl) {
     return {
       ok: false,
-      reason: `I3 FENCE: target remote '${remote}' URL (${targetUrl}) does NOT equal this repo's own origin URL (${originUrl}); refusing fork→canon push. A repo's trust-root chain is pushed ONLY to its own origin.`,
+      reason: `I3 FENCE: target remote '${remote}' fetch URL (${targetUrl}) does NOT equal this repo's own origin fetch URL (${originUrl}); refusing fork→canon push. A repo's trust-root chain is pushed ONLY to its own origin.`,
     };
   }
-  return { ok: true, originUrl };
+  return { ok: true, originUrl, originPushUrl };
 }
 
 /**

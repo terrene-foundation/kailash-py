@@ -7,7 +7,7 @@
  * (issue #584 AC-1). It wires lib/cross-ecosystem-disclosure-guard.js into the
  * canonical instruct-and-wait emit shape (hook-output-discipline.md MUST-1).
  *
- * REGISTERED (F3 Level-1, 2026-06-25, journal/0335) BUT DORMANT-UNTIL-#576:
+ * REGISTERED (F3 Level-1, 2026-06-25, journal/0335) — ITS BLOCK BRANCH DORMANT:
  *   This file IS registered in settings.json on the Edit|Write|NotebookEdit
  *   PreToolUse matcher, so it RUNS live on every mutation — but its BLOCK branch
  *   is DORMANT until a write DECLARES a target ecosystem. Two gates send every
@@ -21,8 +21,9 @@
  *         ecosystem.json) getUpstreamCanon() is null → recognizeBoundary returns
  *         intra-ecosystem → passthrough. The BLOCK branch only fires in a FORK
  *         (upstream_canon set) whose write DECLARES the canon target.
- *   The ONLY consumer that declares a target is the DEFERRED sync-from-canon
- *   driver (#576 / AC-2, UNBUILT). Separately, the AUTONOMOUS cross-ecosystem
+ *   The consumer that would declare a target is the sync-from-canon driver's
+ *   AC-2 intake-path routing (#576's driver SHIPPED, but its AC-2 routing — which
+ *   would invoke THIS guard on the pulled surface — is UNBUILT). Separately, the AUTONOMOUS cross-ecosystem
  *   write-DETECTION an always-on fence needs (catching an ad-hoc fork->canon
  *   push) is Level-2, depending on the deferred ecosystem-remote resolver
  *   (cross-repo.md § "Ecosystem-Scoped Remote Links (design contract)" — not yet
@@ -45,8 +46,9 @@
  *   recognizeBoundary() classifies "intra-ecosystem" → silent passthrough. The
  *   guard's BLOCK branch fires ONLY when the session has DECLARED a fork->canon
  *   target via the COC_XECO_TARGET_ECOSYSTEM env (the destination ecosystem of
- *   the write — e.g. a cross-repo grant naming canon, or the future
- *   sync-from-canon reverse direction once #576 lands). Absent that declaration
+ *   the write — e.g. a cross-repo grant naming canon, or the sync-from-canon
+ *   driver's AC-2 intake-path routing (driver shipped #576; that guard-routing
+ *   UNBUILT)). Absent that declaration
  *   the hook is a no-op, so it never blocks ordinary in-fork edits.
  *
  * SEVERITY (once activated): `block`. The boundary is computed STRUCTURALLY from
@@ -192,7 +194,7 @@ function parseMaybeJson(raw) {
 
     // The fork->canon write SURFACE to disclosure-scan (the AC-2 production path,
     // #576 Shard D). Supplied via the COC_XECO_SCAN_CONTENT env — the channel the
-    // deferred sync-from-canon driver (#576) uses to thread the pulled surface
+    // sync-from-canon driver (#576, shipped; its AC-2 guard-routing UNBUILT) would use to thread the pulled surface
     // through the guard, mirroring how every other guard opt is injected here
     // (see the hook header's ENV OVERRIDES note). ABSENT it, no scannable surface
     // reaches the guard and the lib's default scanFn returns ran:false ->

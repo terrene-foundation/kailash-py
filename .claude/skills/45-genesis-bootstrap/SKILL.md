@@ -11,11 +11,12 @@ genesis owner, no folded `genesis-anchor`. This is the step that PRECEDES `/enro
 `/ecosystem-init`'s genesis step on a truly fresh BUILD/USE repo.
 
 **The gap this fills.** The authoritative end-to-end runbook
-(`guides/co-setup/11-genesis-ceremony.md`) lives at **loom only** and is absent from BUILD/USE
-repos. The shipped commands (`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the
-sibling skills (`41-onboard`, `43-ecosystem-init`, `44-enroll`) reference that loom guide for
-the operational depth. This skill reconstructs that depth IN the repo, plus the five hard-won
-guard traps that block a naive first run.
+(`guides/co-setup/11-genesis-ceremony.md`) lives at **loom and cascades to BUILD repos, but is
+deliberately excluded from USE templates** (`use_exclude` / `use_obsoleted`). The shipped commands
+(`/whoami --enroll-genesis`, `/ecosystem-init`, `/enroll`) and the sibling skills (`41-onboard`,
+`43-ecosystem-init`, `44-enroll`) reference that guide for the operational depth. This skill
+reconstructs that depth IN the repo — the reconstruction USE consumers rely on in place of the
+excluded guide — plus the five hard-won guard traps that block a naive first run.
 
 ## Where bootstrap sits among the onboarding surfaces
 
@@ -54,12 +55,9 @@ for them) and starts each session with `/onboard`.
    ```
    (`COC_OPERATOR_KEY_PATH=""` or `COC_SIGNING_MUTATION_GUARD_FORCE_DEGRADED=1` force degraded —
    never set these during a ceremony.)
-2. **On a codify branch.** `integrity-guard.js` permits writes to watched paths — the wired
-   `DIRECT` set is 8 files (`operators.roster.json`, `operators.roster.schema.json`,
-   `coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `observations.jsonl`,
-   `coordination-mode.json`, `learning-codified.json`) plus 3 subtree predicates
-   (`team-memory/**`, `journal/**`, `workspaces/<name>/journal/**`); the wired `DIRECT` set +
-   subtree predicates at `.claude/hooks/integrity-guard.js` are authoritative —
+2. **On a codify branch.** `integrity-guard.js` permits writes to watched paths
+   (`operators.roster.json`, `operators.roster.schema.json`, `coordination-log.jsonl`,
+   `posture.json`, `violations.jsonl`, `observations.jsonl`, `team-memory/**`, `journal/**`)
    ONLY on a branch matching `^codify/<display_id>-YYYY-MM-DD$` (the date-terminal predicate at
    `.claude/hooks/integrity-guard.js`; suffixed names like `…-b` are rejected). Cut it from
    `main` (branch protection rejects a direct roster push to `main`):
@@ -105,8 +103,7 @@ runEnrollmentCeremony({ ..., transportAppend })`. Passing the factory-return OBJ
    `.claude/learning/coordination-log.jsonl` cache (`localAppend`). Seeding the ref is what lets
    a FRESH CLONE fetch-then-fold its trust root instead of fail-CLOSED-blocking at its first
    commit (loom#879). A ref-append failure returns a typed error and does NOT write the local
-   surface (no half-write). Returns `{ ok, record?, error?, reason?, step? }` (`record` on the
-   success path; `error`/`reason`/`step` on failure), fail-CLOSED. (The same path
+   surface (no half-write). Returns `{ ok, error?, reason?, step? }`, fail-CLOSED. (The same path
    `/whoami --enroll-genesis` drives — see `commands/whoami.md`.)
 5. **Verify** (next section).
 
@@ -144,10 +141,8 @@ person whose `github_login` resolves to that login, bound to the signing key's f
 Bash command — a three-layer detector (its docstring at `validate-bash-command.js`:
 "redirects, file utilities, **interpreter -c/-e/-m bodies**") that BLOCKS (severity: block) any
 command whose body MUTATES a watched state file. `STATE_PATH_RX` matches `posture.json`,
-`violations.jsonl`, `observations.jsonl`, `coordination-log.jsonl`, `presence-mechanism.json`,
-`.initialized`, the heartbeat/session-end caches, and `operators.roster.json` /
-`operators.roster.schema.json` (among others; the wired `STATE_PATH_RX` at
-`.claude/hooks/validate-bash-command.js` is authoritative). So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
+`violations.jsonl`, `coordination-log.jsonl`, `.initialized`, the heartbeat/session-end caches,
+and `operators.roster.json`. So a `node -e '…fs.writeFileSync(".claude/operators.roster.json"…)'`
 roster write is blocked — the state-file path is on the command line the detector scans. (This
 is why the illustrative `node -e` in `commands/whoami.md` § `--register` is blocked in practice;
 that command's "Implementation notes" name the "ceremony-script-by-path constraint.")

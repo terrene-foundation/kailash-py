@@ -201,6 +201,42 @@ done   # each receipt: {loom_sha, base_sha, target, branch, manifest{added,modif
 
 **Why:** The per-target version row (Rule 2) answers "did the target reach the bumped version?"; only the exact per-file manifest answers "which files moved, and from which worktree base?" — the audit question a post-incident review or a partial-sync diagnosis needs. Capturing the engine's `buildReceipt` (derived from the worktree's own `git status`) makes the manifest a deterministic record, not a hand-typed reconstruction that drifts from what actually landed.
 
+### 8. Multi-CLI Targets Re-Emit The Full Derived CLI Tree, Not Just The Scaffold
+
+For any USE template whose `template_type` resolves to `multi-cli` (per `sync-manifest.yaml::multi_cli_overlays`), EVERY `/sync-to-use` MUST re-emit the target's FULL derived CLI tree — NOT only the post-distribute _scaffold_ (the symlinks + conditional manifest of MUST Rule 5 / `coc-sync.md` Step 4.6). The derived tree spans three emitters (the orchestration — scratch `--out` dir → placement into the target — is owned by `coc-sync.md` Steps 6.5–6.7 (the emitter half — a distinct set of steps from Step 4.6's symlink+manifest scaffold; the two write DISJOINT file sets and carry no ordering dependency on each other, so the DO block below MAY present them in either order) + `commands/sync-to-use.md` step 6, REFERENCED here per `specs-authority.md` Rule 9, not restated):
+
+- the per-CLI artifact trees `.codex/**` + `.gemini/**` — `node .claude/bin/emit-cli-artifacts.mjs --target <lang> --out <dir>` (Step 6.6);
+- the unified `.coc/**` tree — `node .claude/bin/emit-coc.mjs --target <lang> --out <dir>` (Step 6.7);
+- the repo-root CLI baselines `AGENTS.md` + `GEMINI.md` — `node .claude/bin/emit.mjs --all --lang <lang> --out <dir>` (Step 6.5).
+
+Emitting the scaffold and treating it as the WHOLE multi-CLI obligation — skipping the derived-tree re-emit — is BLOCKED. (Flag asymmetry, verified against each tool's `parseArgs`: the two CLI-tree emitters take `--target`; `emit.mjs` takes `--lang`. The two CLI-tree emitters REQUIRE `--out`; `emit.mjs` defaults `--out` to a throwaway tmp dir — so the sync flow MUST always pass `--out` to place the derived tree into the target.) The emitters are deterministic, so re-emitting when nothing changed is a safe no-op — the unconditional mandate removes the change-detection judgment the scaffold-only reading got wrong.
+
+```bash
+# DO — multi-cli target: re-emit the full derived tree, THEN the scaffold
+# $LANG is the /sync-to-use <lang> invocation's language variant (py/rs — fixed per invocation, per Rule 1);
+# $OUT is the target's scratch/worktree out-dir. Run these three emits for EACH manifest-enumerated target (Rule 1):
+node .claude/bin/emit-cli-artifacts.mjs --target "$LANG" --out "$OUT"   # .codex/** + .gemini/**
+node .claude/bin/emit-coc.mjs           --target "$LANG" --out "$OUT"   # .coc/**
+node .claude/bin/emit.mjs --all         --lang   "$LANG" --out "$OUT"   # AGENTS.md + GEMINI.md
+# place the derived trees into the target (coc-sync.md Steps 6.5–6.7), THEN the symlinks + manifest (Step 4.6 / MUST-5)
+
+# DO NOT — scaffold only (symlinks + manifest), skip the derived-tree re-emit
+# → 19 changed commands/skills ship stale .codex/.gemini for the multi-cli target (coc-rs #48, 67-file gap)
+```
+
+**Post-emit idempotency verification (MUST):** after the re-emit lands in the target, a SECOND emit of the same trees into a scratch dir MUST produce zero further `git status` changes at the target — the emitters are deterministic, so a non-empty second-pass diff means the first re-emit did not run OR ran against stale composition. This is the USE-lane analogue (in intent) of the BUILD-lane `sync-tier-aware.mjs --build <target> --verify` gate (F11) — mechanically performable (deterministic emit + `git status`) but, unlike the wired BUILD-lane exit-1 check, not yet an exit-code gate (Phase-2 detector deferred per the Rule 8 Wiring below; Phase-1 enforcement is the manual gate-review sweep) — the check that was ABSENT when two `coc-sync` agents diverged into complementary partials.
+
+**BLOCKED rationalizations:**
+
+- "The step is titled 'scaffold', so symlinks + manifest IS the whole obligation"
+- "The derived CLI trees are a /migrate-time concern, not a /sync-to-use one"
+- "Only the CC tree (`.claude/**`) changed; the codex/gemini/.coc trees can lag one cycle"
+- "The consumer's /sync-from-template will refresh the top-level overlays later"
+- "The other coc-sync agent already re-emitted; mine can mirror just the scaffold"
+- "19 changed commands is a small delta; the stale derived trees are close enough"
+
+**Why:** every loom cycle that touches a composed source (`.claude/rules/`, `commands/`, `skills/`, `agents/`) changes what the multi-CLI derived trees (`.codex/**`, `.gemini/**`, `.coc/**`, `AGENTS.md`, `GEMINI.md`) should contain; a multi-cli target that receives only the scaffold ships STALE Codex/Gemini/`.coc` artifacts that silently diverge from the CC source the same cycle. This has a SECURITY dimension: `AGENTS.md` / `GEMINI.md` are the Codex/Gemini SECURITY baselines (they carry the emitted `security.md` / `zero-tolerance.md` MUST clauses), so a scaffold-only sync leaves them stale — a newly-landed security MUST clause silently never reaches the Codex/Gemini lanes, while the CC lane enforces it. (The codex-mcp-guard policy-tree — the `../.codex-mcp-guard` symlink target — is the sibling half, covered by MUST-5.) "Scaffold" reads as "symlinks + manifest only" — the literal reading that made the rs `coc-sync` agent skip the re-emit and ship 67 stale files (coc-rs #48). The unconditional re-emit + the idempotency check convert an agent-judgment call into a structural obligation with a mechanical verification.
+
 ## MUST NOT
 
 - **Run `/sync-to-*` without first parsing `sync-manifest.yaml::sync_targets[].templates[].repo` into a variable.**
@@ -223,9 +259,13 @@ done   # each receipt: {loom_sha, base_sha, target, branch, manifest{added,modif
 
 **Why:** A swallowed artifact lands on disk now but a fresh clone never tracks it — the tracked importer throws at runtime (loom#676). The re-include + the swallowed-gate are the only structural defense.
 
+- **Ship a multi-CLI `/sync-to-use` that emits only the scaffold (symlinks + manifest) and skips the full derived-CLI-tree re-emit (`.codex/**`, `.gemini/**`, `.coc/**`, `AGENTS.md`, `GEMINI.md`).**
+
+**Why:** The scaffold is not the tree; a scaffold-only multi-cli sync ships stale Codex/Gemini/`.coc` artifacts that silently diverge from the CC source the same cycle (coc-rs #48, 67-file gap).
+
 ## Trust Posture Wiring
 
-The four MUST Rules above carry three independent Trust Posture Wiring profiles, partitioned by signal carrier: Rules 1/2(version-stale)/4 use `halt-and-report` lexical detection, Rule 3 uses `block` structural-JSON detection, and Rule 2(headroom-floor) uses `block` exit-code detection from the v6.2 validator. Only the headroom-floor sub-section binds a two-tier receipt band — it is the only MUST clause with a continuous numeric metric (`headroom_pct`) where the breach can be foreseen rather than only observed.
+MUST Rules 1–4 above carry three independent Trust Posture Wiring profiles, partitioned by signal carrier: Rules 1/2(version-stale)/4 use `halt-and-report` lexical detection, Rule 3 uses `block` structural-JSON detection, and Rule 2(headroom-floor) uses `block` exit-code detection from the v6.2 validator. (MUST Rules 5–8 each carry their own canonical 8-field Wiring block below.) Only the headroom-floor sub-section binds a two-tier receipt band — it is the only MUST clause with a continuous numeric metric (`headroom_pct`) where the breach can be foreseen rather than only observed.
 
 ### Rules 1, 2 (version-stale ✗ row), 4 — enumeration + table + count discipline
 
@@ -285,6 +325,19 @@ The v6.2 plan ((loom-internal reference)) Shards 1+2 (merged PR #218, commit `75
 - **Violation scope:** MUST Rule 7 (per-target exact-manifest receipt) fires the Wiring.
 - **Origin:** Directive 1 (2026-07-03, co-owner-directed origination `journal/0403`) — the worktree-from-remote-main Gate-2 model's per-target manifest-receipt requirement; see the Origin line below.
 
-Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates. Rule 5 added 2026-06-27 (journal/0352, co-owner-directed origination) — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left the external `../.codex-mcp-guard` target stale. Rule 7 added 2026-07-03 (journal/0403, Directive 1 co-owner-directed origination) — the worktree-from-remote-main Gate-2 model requires capturing the engine's `buildReceipt` per-file manifest per enumerated target, the distribution-completeness companion to `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking".
+### Rule 8 — multi-CLI full-derived-tree re-emit
+
+- **Severity:** `halt-and-report` at gate-review (cc-architect / reviewer at `/codify` confirms every multi-cli `/sync-to-use` re-emitted the full derived tree — `.codex/**` + `.gemini/**` + `.coc/**` + `AGENTS.md` + `GEMINI.md` — not only the scaffold, and that the post-emit idempotency check ran). `advisory` at the hook layer (a full-tree-re-emit property is judgment-bearing over the session's sync sequence, not a single structural tool-call signal, per `hook-output-discipline.md` MUST-2).
+- **Grace period:** 7 days from rule landing (2026-07-11 → 2026-07-18).
+- **Cumulative posture impact:** same-class violations (a multi-cli target that received the scaffold but not the full derived-tree re-emit) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** any same-class violation within 7 days routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — no dedicated trigger key, so no self-referential `trust-posture.md` edit is required.
+- **Receipt requirement:** SessionStart `[ack: sync-completeness]` IFF `posture.json::pending_verification` includes this rule_id (shared with the rule's existing ack; soft-gate).
+- **Detection mechanism:** Phase 1 — `cc-architect` / reviewer mechanical sweep at `/codify`: any session transcript citing `/sync-to-use` to a multi-cli target MUST show the three derived-tree emit invocations (`grep`-stable on `emit-cli-artifacts.mjs --target`, `emit-coc.mjs --target`, `emit.mjs --all --lang`) AND the post-emit idempotency check; a completion claim showing only the scaffold (symlinks + manifest) is a HIGH finding. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — audit fixtures land with the detector at `.claude/audit-fixtures/sync-completeness-multi-cli-reemit/` per `cc-artifacts.md` Rule 9.
+- **Violation scope:** MUST Rule 8 (multi-CLI full-derived-tree re-emit) fires the Wiring.
+- **Origin:** journal/0465 (2026-07-11, co-owner-directed `/govern` origination) — see Rule 8's Origin line below.
+
+Origin: 2026-05-06 (Rules 1–4) — see guide § "Origin — full prose" for the rb-missed-sync + schema-drift incident. v6.2 extension 2026-05-15 — F5 cc-architect R1 LOW from `journal/0073` closes the Trust Posture Wiring gap on the new headroom-floor BLOCK condition; cycle-2 (same-day) flipped `--strict-headroom` from opt-in to opt-out default per plan §5.1 invariant 5 (mirrors v2.13.0 `--strict-budget` rollout) after the v2.31.0 /sync-to-use cycle confirmed zero false-positive blocks across all 5 USE templates. Rule 5 added 2026-06-27 (journal/0352, co-owner-directed origination) — a downstream `/sync-from-template` consumer reported `extract-policies.mjs` was a no-op after a `.claude/`-only sync left the external `../.codex-mcp-guard` target stale. Rule 7 added 2026-07-03 (journal/0403, Directive 1 co-owner-directed origination) — the worktree-from-remote-main Gate-2 model requires capturing the engine's `buildReceipt` per-file manifest per enumerated target, the distribution-completeness companion to `artifact-flow.md` § "Exact Gate-1 / Gate-2 Tracking". Rule 8 added 2026-07-11 (journal/0465, co-owner-directed `/govern` origination) — the F2 divergence where two `coc-sync` agents split: the rs agent read the step-6 "scaffold" wording literally and skipped the derived-CLI-tree re-emit for a multi-cli target (67-file gap, coc-rs #48); the USE-lane analogue of the F11 BUILD-lane `--verify` completeness gate.
+
+**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body exceeds the 200-line guidance. Named rationale: **sync-distribution-completeness scope** — the rule codifies eight MUST rules spanning the full `/sync-to-*` completeness contract (enumerate-every-template, per-target version + headroom-floor, structural-JSON manifest, verified-command session-notes counts, external-symlink-target trees, gitignore-swallowed-artifact tracked-ness, the per-target exact-manifest receipt, and the multi-CLI full-derived-tree re-emit), each carrying the DO/DO-NOT + `**Why:**` `rules/rule-authoring.md` MUST-3/4 require, plus seven Trust-Posture-Wiring blocks (Rules 1–4 share three signal-carrier-partitioned profiles per § Trust Posture Wiring; Rules 5–8 each carry their own canonical 8-field block — Rule 8's being the `trust-posture.md` MUST-8-compliant post-cutoff one). The rule is `priority: 10` + `scope: path-scoped`, so it pays NO baseline-emission cost (loaded only in sessions matching its `paths:` globs) and `rules/rule-authoring.md` Rule 10's proximity-band gate does NOT fire. Splitting the eight completeness invariants across sibling rules would fragment the "every template reached, every landing verified" contract and force cross-rule lookups at every `/sync-to-*`. Per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines": overage is permitted with named rationale anchored at Origin. Sibling precedent: `artifact-flow.md` + `upstream-issue-hygiene.md` length rationales.
 
 <!-- /slot:neutral-body -->
