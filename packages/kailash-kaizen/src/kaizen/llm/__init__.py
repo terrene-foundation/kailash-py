@@ -31,6 +31,7 @@ from kaizen.llm.deployment import (
 )
 from kaizen.llm.deployment_resolver import (
     UnsupportedDeploymentProvider,
+    legacy_tool_choice_default,
     resolve_deployment_for,
 )
 from kaizen.llm.errors import (
@@ -91,6 +92,7 @@ __all__ = [
     "LlmClient",
     # Provider-name → deployment resolution (#1720 Wave-A)
     "resolve_deployment_for",
+    "legacy_tool_choice_default",
     "UnsupportedDeploymentProvider",
     # Model-identifier → provider resolution (#1609)
     "LlmProvider",
