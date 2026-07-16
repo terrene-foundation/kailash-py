@@ -1,16 +1,14 @@
 """Integration tests for MCP missing handlers with real infrastructure."""
 
 import asyncio
-import json
 import logging
 import time
-import uuid
 from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
 
-from kailash_mcp.auth.providers import AuthManager
+from kailash_mcp.auth.providers import APIKeyAuth
 from kailash_mcp.protocol.protocol import get_protocol_manager
 from kailash_mcp.server import MCPServer
 from kailash.middleware.gateway.event_store import EventStore
@@ -110,18 +108,30 @@ class TestRootsListIntegration(DockerIntegrationTestBase):
     """Integration tests for roots/list handler."""
 
     @pytest_asyncio.fixture
-    async def server_with_auth(self, postgres_conn):
-        """Create server with real auth manager."""
-        # Create auth manager
-        auth_manager = AuthManager(secret_key="test_secret", db_pool=postgres_conn)
+    async def server_with_auth(self):
+        """Create server with a real auth manager (provider-model API).
 
-        # Create test user
-        await auth_manager.create_user(
-            username="test_user", password="test_pass", organization_id="org_123"
+        The roots-filtering assertions set the user context directly on
+        ``server.client_info`` below, so the auth manager only needs to be a
+        valid ``AuthProvider``-backed manager — an in-memory API-key provider
+        is real (no mocking) and requires no database.
+        """
+        # Real in-memory API-key provider (provider-model API). MCPServer
+        # consumes an AuthProvider directly; the roots-filtering assertions set
+        # the user context on server.client_info below, so no user store is
+        # needed — the provider only has to be a valid AuthProvider.
+        auth_provider = APIKeyAuth(
+            keys={
+                "test_user_key": {
+                    "permissions": ["read", "write"],
+                    "user_id": "test_user",
+                    "organization_id": "org_123",
+                }
+            }
         )
 
         # Create server
-        server = MCPServer("test_server", auth_provider=auth_manager)
+        server = MCPServer("test_server", auth_provider=auth_provider)
 
         # Add some roots
         protocol_mgr = get_protocol_manager()
@@ -244,9 +254,9 @@ class TestCompletionCompleteIntegration(DockerIntegrationTestBase):
             """Review code in specified language."""
             return f"Review this {language} code: {code}"
 
-        # Initialize completion providers
-        await server._initialize_completion_providers()
-
+        # Completion is served directly off the registered resource/prompt
+        # registries by _handle_completion_complete — no separate provider-init
+        # step is required (provider-model refactor).
         return server
 
     @pytest.mark.asyncio
@@ -360,18 +370,43 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
 
         return server
 
+    async def _await_dispatch(self, server, timeout_iters: int = 500):
+        """Yield the event loop until at least one sampling request has been
+        dispatched to the mock transport, or fail loudly.
+
+        Under the MCP 2025-11-25 server-initiated model, the handler DISPATCHES
+        to the target client and AWAITS the client's reply — it does not return
+        synchronously — so tests run it as a task and drive the reply back in.
+        """
+        for _ in range(timeout_iters):
+            await asyncio.sleep(0)
+            if server._transport.sent_messages:
+                return
+        raise AssertionError("sampling request was never dispatched")
+
+    async def _reply(self, server, sampling_id, responding_client_id):
+        """Feed a client completion back through the response router."""
+        completion = {"role": "assistant", "content": {"type": "text", "text": "ok"}}
+        return await server._route_server_initiated_response(
+            sampling_id,
+            {"jsonrpc": "2.0", "id": sampling_id, "result": completion},
+            responding_client_id=responding_client_id,
+        )
+
     @pytest.mark.asyncio
-    async def test_sampling_multi_client_routing(self, server_with_websocket):
-        """Test sampling routes to correct client."""
+    async def test_sampling_routes_to_requesters_own_client(
+        self, server_with_websocket
+    ):
+        """Sampling routes to the REQUESTER's OWN client; a requester that does
+        not advertise sampling is rejected rather than routed to a different
+        client's LLM (FINDING-4 cross-client isolation, #1712 W6)."""
         server = server_with_websocket
 
-        # Initialize multiple clients with different capabilities
         clients = [
             ("client_no_sampling", {"roots": {"list": True}}),
             ("client_with_sampling_1", {"experimental": {"sampling": True}}),
             ("client_with_sampling_2", {"experimental": {"sampling": True}}),
         ]
-
         for client_id, capabilities in clients:
             await server._handle_initialize(
                 {
@@ -384,32 +419,55 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
             )
             server._transport.clients[client_id] = True
 
-        # Request sampling
-        result = await server._handle_sampling_create_message(
+        # A requester WITHOUT the sampling capability is rejected and NOT routed
+        # to a capable sibling client — no message is dispatched.
+        rejected = await server._handle_sampling_create_message(
             {
                 "messages": [{"role": "user", "content": "Test message"}],
                 "temperature": 0.7,
-                "client_id": "client_no_sampling",  # Requesting client
+                "client_id": "client_no_sampling",
             },
-            "req_123",
+            "req_reject",
         )
+        assert "error" in rejected
+        assert "does not advertise sampling" in rejected["error"]["message"]
+        assert server._transport.sent_messages == []
 
-        # Should succeed and route to first capable client
-        assert result["result"]["status"] == "sampling_requested"
-        assert result["result"]["target_client"] == "client_with_sampling_1"
+        # A capable requester dispatches to its OWN client and round-trips.
+        task = asyncio.create_task(
+            server._handle_sampling_create_message(
+                {
+                    "messages": [{"role": "user", "content": "Test message"}],
+                    "temperature": 0.7,
+                    "client_id": "client_with_sampling_1",
+                },
+                "req_ok",
+            )
+        )
+        await self._await_dispatch(server)
 
-        # Verify message was sent
         assert len(server._transport.sent_messages) == 1
         sent = server._transport.sent_messages[0]
         assert sent["client_id"] == "client_with_sampling_1"
         assert sent["message"]["method"] == "sampling/createMessage"
+        sampling_id = sent["message"]["id"]
+        assert sampling_id in server._pending_sampling_requests
+
+        assert await self._reply(server, sampling_id, "client_with_sampling_1") is True
+        result = await asyncio.wait_for(task, timeout=2)
+        assert result["id"] == "req_ok"
+        assert result["result"]["content"]["text"] == "ok"
+        assert sampling_id not in server._pending_sampling_requests
 
     @pytest.mark.asyncio
-    async def test_sampling_request_timeout_tracking(self, server_with_websocket):
-        """Test sampling requests are tracked with timeout info."""
+    async def test_sampling_requests_are_tracked_with_timeout_info(
+        self, server_with_websocket
+    ):
+        """Concurrent server-initiated sampling requests are each tracked in
+        _pending_sampling_requests with provenance + timestamp until the target
+        client replies."""
         server = server_with_websocket
 
-        # Initialize sampling client
         client_id = "sampling_client"
         await server._handle_initialize(
             {
@@ -422,33 +480,46 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
         )
         server._transport.clients[client_id] = True
 
-        # Send multiple sampling requests
-        request_ids = []
-        for i in range(3):
-            result = await server._handle_sampling_create_message(
-                {
-                    "messages": [{"role": "user", "content": f"Message {i}"}],
-                    "client_id": "requester",
-                },
-                f"req_{i}",
+        # Dispatch three concurrent requests; each awaits its own reply.
+        tasks = [
+            asyncio.create_task(
+                server._handle_sampling_create_message(
+                    {
+                        "messages": [{"role": "user", "content": f"Message {i}"}],
+                        "client_id": client_id,
+                    },
+                    f"req_{i}",
+                )
             )
-            request_ids.append(result["result"]["sampling_id"])
+            for i in range(3)
+        ]
+        for _ in range(500):
+            await asyncio.sleep(0)
+            if len(server._pending_sampling_requests) == 3:
+                break
+        else:
+            for t in tasks:
+                t.cancel()
+            raise AssertionError("not all sampling requests were tracked")
 
-        # All should be tracked
-        assert len(server._pending_sampling_requests) == 3
-
-        # Verify each has timestamp
-        for req_id in request_ids:
-            pending = server._pending_sampling_requests[req_id]
+        # Each pending entry carries a recent timestamp + the target client.
+        for pending in server._pending_sampling_requests.values():
             assert "timestamp" in pending
-            assert time.time() - pending["timestamp"] < 1.0
+            assert time.time() - pending["timestamp"] < 5.0
+            assert pending["client_id"] == client_id
+
+        # Drain: reply to each so no task is left awaiting.
+        for sampling_id in list(server._pending_sampling_requests):
+            await self._reply(server, sampling_id, client_id)
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+        assert len(server._pending_sampling_requests) == 0
 
     @pytest.mark.asyncio
     async def test_sampling_with_model_preferences(self, server_with_websocket):
-        """Test sampling with complex model preferences."""
+        """Complex model preferences + system prompt + metadata are forwarded
+        to the target client in the dispatched sampling request."""
         server = server_with_websocket
 
-        # Initialize client
         client_id = "model_test_client"
         await server._handle_initialize(
             {
@@ -461,10 +532,10 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
         )
         server._transport.clients[client_id] = True
 
-        # Complex model preferences
+        # Complex model preferences (opaque client-provided forwarding payload).
         model_prefs = {
-            "model": "gpt-4",
-            "provider": "openai",
+            "model": "test-model",
+            "provider": "test-provider",
             "temperature": 0.7,
             "top_p": 0.9,
             "frequency_penalty": 0.5,
@@ -473,24 +544,30 @@ class TestSamplingCreateMessageIntegration(DockerIntegrationTestBase):
             "max_retries": 3,
         }
 
-        # Request with preferences
-        result = await server._handle_sampling_create_message(
-            {
-                "messages": [{"role": "user", "content": "Complex request"}],
-                "modelPreferences": model_prefs,
-                "systemPrompt": "You are an expert assistant",
-                "metadata": {"session_id": "abc123", "user_tier": "premium"},
-                "client_id": "requester",
-            },
-            "req_123",
+        task = asyncio.create_task(
+            server._handle_sampling_create_message(
+                {
+                    "messages": [{"role": "user", "content": "Complex request"}],
+                    "modelPreferences": model_prefs,
+                    "systemPrompt": "You are an expert assistant",
+                    "metadata": {"session_id": "abc123", "user_tier": "premium"},
+                    "client_id": client_id,
+                },
+                "req_123",
+            )
         )
+        await self._await_dispatch(server)
 
-        # Verify all parameters were forwarded correctly
+        # Verify all parameters were forwarded correctly (snake_case wire shape).
         sent_msg = server._transport.sent_messages[0]["message"]
         params = sent_msg["params"]
         assert params["model_preferences"] == model_prefs
         assert params["system_prompt"] == "You are an expert assistant"
         assert params["metadata"]["user_tier"] == "premium"
+
+        # Drain the awaiting handler.
+        await self._reply(server, sent_msg["id"], client_id)
+        await asyncio.wait_for(task, timeout=2)
 
 
 @pytest.mark.integration
@@ -503,11 +580,12 @@ class TestCompleteIntegrationFlow(DockerIntegrationTestBase):
         # Create all components
         event_store = EventStore(postgres_conn)
 
-        auth_manager = AuthManager(secret_key="test_secret", db_pool=postgres_conn)
+        # Real in-memory API-key provider (provider-model API)
+        auth_provider = APIKeyAuth(keys=["test_full_server_key"])
 
         # Create server
         server = MCPServer(
-            "test_server", event_store=event_store, auth_provider=auth_manager
+            "test_server", event_store=event_store, auth_provider=auth_provider
         )
 
         # Add roots
@@ -574,10 +652,11 @@ class TestCompleteIntegrationFlow(DockerIntegrationTestBase):
         )
         assert len(completion_result["result"]["completion"]["values"]) > 0
 
-        # 4. Check events were logged
+        # 4. Check events were logged (read the in-memory event buffer by the
+        # log handler's request id, matching the get_events(request_id=...) API)
         if server.event_store:
-            events = await server.event_store.query_events(limit=10)
-            assert any(e["type"] == "log_level_changed" for e in events)
+            events = await server.event_store.get_events(request_id="log_req")
+            assert any(e.data.get("type") == "log_level_changed" for e in events)
 
 
 if __name__ == "__main__":

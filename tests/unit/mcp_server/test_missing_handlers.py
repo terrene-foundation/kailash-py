@@ -575,8 +575,22 @@ class TestSamplingCreateMessage:
         }
         request_id = "test_123"
 
-        # Call handler
-        result = await server._handle_sampling_create_message(params, request_id)
+        # Under the server-initiated model the handler DISPATCHES to the capable
+        # client and AWAITS the client's reply — it does not return synchronously.
+        # Run it as a task, let the request be sent, assert the forwarded params,
+        # then feed a reply back so the handler completes (mirrors
+        # test_sampling_with_capable_client above; without the reply this test
+        # blocks to the sampling timeout).
+        task = asyncio.create_task(
+            server._handle_sampling_create_message(params, request_id)
+        )
+        for _ in range(200):
+            await asyncio.sleep(0)
+            if server._transport.send_message.await_count:
+                break
+        else:
+            task.cancel()
+            raise AssertionError("sampling request was never dispatched")
 
         # Verify all parameters were forwarded
         sent_msg = server._transport.send_message.call_args[0][0]
@@ -586,6 +600,22 @@ class TestSamplingCreateMessage:
         assert sent_params["temperature"] == params["temperature"]
         assert sent_params["max_tokens"] == params["maxTokens"]
         assert sent_params["metadata"] == params["metadata"]
+
+        # Feed the client's reply so the awaiting handler completes.
+        sampling_id = sent_msg["id"]
+        await server._route_server_initiated_response(
+            sampling_id,
+            {
+                "jsonrpc": "2.0",
+                "id": sampling_id,
+                "result": {
+                    "role": "assistant",
+                    "content": {"type": "text", "text": "ok"},
+                },
+            },
+            responding_client_id=client_id,
+        )
+        await asyncio.wait_for(task, timeout=2)
 
 
 class TestCapabilityAdvertisement:
