@@ -1,14 +1,201 @@
 """Advanced LLM Agent node with LangChain integration and MCP support."""
 
+import asyncio
+import copy
+import hashlib
 import json
+import logging
+import os
+import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal
+from typing import Any, Callable, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# #1720 Wave-2 — dual-run shadow validation (KAIZEN_LLM_DUAL_RUN)
+#
+# Runs the four-axis `kaizen.llm.client.LlmClient` in SHADOW alongside the
+# legacy provider path in `LLMAgentNode._provider_llm_response`, compares
+# outputs, and logs divergences — while the legacy result is STILL what gets
+# returned. Zero user-visible change; de-risks the Wave-3 cutover. Additive +
+# reversible: gated entirely behind the `KAIZEN_LLM_DUAL_RUN` env var
+# (falsey/unset by default), and every failure mode in the shadow path is
+# caught and logged, never propagated to the caller.
+#
+# Fire-and-forget: the shadow is dispatched onto a daemon background thread
+# (`LLMAgentNode._dispatch_dual_run_shadow`) and the LIVE legacy response
+# returns immediately — the live path NEVER blocks on the shadow's network
+# call or its bounded timeout. See `LLMAgentNode._run_llm_dual_run_shadow`
+# for the worker itself (kept directly callable for unit tests).
+#
+# SECURITY / COST NOTE: enabling this flag fires a SECOND real outbound LLM
+# call per gated request (the shadow's `LlmClient.complete()`). Fire-and-
+# forget removes the shadow from the live path's LATENCY budget, but the
+# doubled COST and doubled token usage against the upstream provider remain
+# — this is opt-in validation-only traffic, not a free observability tap.
+# ---------------------------------------------------------------------------
+
+_DUAL_RUN_ENV_VAR = "KAIZEN_LLM_DUAL_RUN"
+# Matches the truthy-token set already used by KaizenConfig._parse_bool.
+_DUAL_RUN_TRUTHY_VALUES = frozenset({"true", "1", "yes", "on", "enabled"})
+_DUAL_RUN_TIMEOUT_SECONDS = 30.0
+
+# Cheap observability signal: how many dual-run shadow comparisons have
+# logged a divergence since process start. Not persisted; a metrics hook can
+# be wired in later without changing the call site. The shadow now runs on
+# a daemon thread per request, so increments are genuinely concurrent —
+# guarded by `_dual_run_divergence_lock` (redteam MED finding).
+_dual_run_divergence_count = 0
+_dual_run_divergence_lock = threading.Lock()
+
+# generation_config keys that map 1:1 onto LlmClient.complete() sampling
+# kwargs (both shapes were designed against the same #1720 Wave-1a field
+# set — see tests/regression/test_issue_1720_wave1a_additive_neutrality.py).
+_GENERATION_CONFIG_SAMPLING_KEYS = (
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "stop",
+    "user",
+    "tool_choice",
+    "response_format",
+    "seed",
+    "logit_bias",
+    "frequency_penalty",
+    "presence_penalty",
+    "n",
+    "top_k",
+)
+
+
+def _dual_run_enabled() -> bool:
+    """True when the #1720 Wave-2 dual-run shadow is enabled.
+
+    Falsey/unset by default. The shadow path this gate wraps NEVER changes
+    the live response — see `LLMAgentNode._run_llm_dual_run_shadow`. The
+    shadow is dispatched fire-and-forget on a daemon thread
+    (`LLMAgentNode._dispatch_dual_run_shadow`), so enabling this flag adds
+    NO latency to the live response path.
+
+    SECURITY / COST: enabling this flag fires a SECOND real outbound LLM
+    call per gated request (the four-axis shadow's `LlmClient.complete()`
+    against the SAME upstream provider). The doubled latency budget is off
+    the live path, but the doubled COST and doubled token usage are not —
+    this is opt-in validation-only traffic; do not enable in cost-sensitive
+    production traffic without accounting for 2x spend.
+    """
+    raw = os.environ.get(_DUAL_RUN_ENV_VAR, "")
+    return raw.strip().lower() in _DUAL_RUN_TRUTHY_VALUES
+
+
+def _sampling_kwargs_from_generation_config(
+    generation_config: dict | None,
+) -> dict[str, Any]:
+    """Map the legacy `generation_config` dict onto `LlmClient.complete()`
+    sampling kwargs — only keys both shapes recognise AND that are actually
+    set. Pure, defensive on a non-dict input.
+    """
+    if not isinstance(generation_config, dict):
+        return {}
+    return {
+        key: generation_config[key]
+        for key in _GENERATION_CONFIG_SAMPLING_KEYS
+        if generation_config.get(key) is not None
+    }
+
+
+def _shadow_deployment_for(
+    provider: str,
+    model: str,
+    api_key: str | None,
+    base_url: str | None,
+):
+    """Resolve a four-axis `LlmDeployment` for the #1720 Wave-2 dual-run shadow.
+
+    Maps the legacy `provider` name (`kaizen.providers.registry.PROVIDERS`)
+    onto the matching four-axis preset builder in `kaizen.llm.presets`.
+    Returns `None` when the provider has no four-axis mapping, or a
+    required credential/base_url cannot be resolved — the caller treats
+    `None` as "shadow skipped, already logged at DEBUG".
+
+    This function does NOT guarantee never-raises: the preset factories
+    (`openai_preset`, `anthropic_preset`, etc.) validate their own
+    arguments and MAY raise (e.g. `ValueError` on an invalid model name or
+    a malformed `api_key`). Callers MUST NOT rely on `None` as the only
+    failure signal — `_run_llm_dual_run_shadow`'s outer
+    `except BaseException` around this call is what actually makes the
+    shadow non-load-bearing, not this function's own contract.
+
+    `api_key` mirrors the legacy provider's own resolution: when the caller
+    did not pass a per-request override, the same `<PROVIDER>_API_KEY` env
+    var the legacy provider itself reads (`rules/env-models.md`) is tried
+    before giving up.
+    """
+    from kaizen.llm.presets import (
+        anthropic_preset,
+        cohere_preset,
+        docker_model_runner_preset,
+        google_preset,
+        huggingface_preset,
+        ollama_preset,
+        openai_preset,
+        perplexity_preset,
+    )
+
+    provider_key = (provider or "").strip().lower()
+
+    api_key_preset_map: dict[str, tuple[Callable[..., Any], str]] = {
+        "openai": (openai_preset, "OPENAI_API_KEY"),
+        "anthropic": (anthropic_preset, "ANTHROPIC_API_KEY"),
+        "google": (google_preset, "GOOGLE_API_KEY"),
+        "gemini": (google_preset, "GOOGLE_API_KEY"),
+        "cohere": (cohere_preset, "COHERE_API_KEY"),
+        "huggingface": (huggingface_preset, "HUGGINGFACE_API_KEY"),
+        "perplexity": (perplexity_preset, "PERPLEXITY_API_KEY"),
+        "pplx": (perplexity_preset, "PERPLEXITY_API_KEY"),
+    }
+    base_url_preset_map: dict[str, Callable[..., Any]] = {
+        "ollama": ollama_preset,
+        "docker": docker_model_runner_preset,
+    }
+
+    if provider_key in api_key_preset_map:
+        factory, env_var = api_key_preset_map[provider_key]
+        resolved_key = api_key or os.environ.get(env_var, "").strip() or None
+        if not resolved_key:
+            logger.debug(
+                "llm.dual_run.shadow_skipped",
+                extra={"provider": provider, "reason": "missing_api_key"},
+            )
+            return None
+        kwargs: dict[str, Any] = {}
+        if base_url:
+            kwargs["base_url"] = base_url
+        return factory(resolved_key, model, **kwargs)
+
+    if provider_key in base_url_preset_map:
+        if not base_url:
+            logger.debug(
+                "llm.dual_run.shadow_skipped",
+                extra={"provider": provider, "reason": "missing_base_url"},
+            )
+            return None
+        factory = base_url_preset_map[provider_key]
+        return factory(base_url, model)
+
+    logger.debug(
+        "llm.dual_run.shadow_skipped",
+        extra={"provider": provider, "reason": "unmapped_provider"},
+    )
+    return None
 
 
 @dataclass
@@ -2221,6 +2408,30 @@ Final Answer: 6 hours"""
                     completion = usage.get("completion_tokens") or 0
                     usage["total_tokens"] = prompt + completion
 
+            # #1720 Wave-2 — dispatch the four-axis LlmClient shadow
+            # fire-and-forget alongside the legacy response above, for
+            # validation. Gated behind KAIZEN_LLM_DUAL_RUN (falsey/unset by
+            # default); the flag-OFF path above this line is completely
+            # untouched and this call is a pure no-op when the flag is off
+            # (`_dual_run_enabled()` short-circuits before any four-axis
+            # code runs). The dispatch starts a DAEMON thread and returns
+            # IMMEDIATELY without `.join()`/`.result()` — the shadow NEVER
+            # adds latency to the `response` returned below (redteam HIGH:
+            # a synchronous shadow call here previously added up to
+            # `_DUAL_RUN_TIMEOUT_SECONDS` of latency to the LIVE response,
+            # x5 inside the tool-execution loop in `run()`).
+            if _dual_run_enabled():
+                self._dispatch_dual_run_shadow(
+                    provider=provider,
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    generation_config=generation_config,
+                    api_key=api_key,
+                    base_url=base_url,
+                    legacy_response=response,
+                )
+
             return response
 
         except ImportError:
@@ -2234,6 +2445,218 @@ Final Answer: 6 hours"""
 
             self.logger.error("Provider %s error: %s", provider, e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, provider)) from e
+
+    def _dispatch_dual_run_shadow(
+        self,
+        *,
+        provider: str,
+        model: str,
+        messages: list[dict],
+        tools: list[dict],
+        generation_config: dict,
+        api_key: str | None,
+        base_url: str | None,
+        legacy_response: dict,
+    ) -> "threading.Thread | None":
+        """#1720 Wave-2 redteam (HIGH) — fire-and-forget dispatch of
+        `_run_llm_dual_run_shadow` onto a daemon background thread.
+
+        Starts the shadow worker and returns IMMEDIATELY — never
+        `.join()`-ed, never `.result()`-ed here. The live legacy response
+        `_provider_llm_response` already computed is NEVER delayed by the
+        shadow's network call or its bounded `_DUAL_RUN_TIMEOUT_SECONDS`
+        timeout. Previously the shadow ran synchronously inline before
+        `return response`, and `_run_coro_in_isolated_thread` inside it did
+        a blocking `future.result(timeout=30s)` — adding up to 30s of
+        latency to the LIVE response (x5 inside the tool-execution loop).
+        That defeated the entire shadow design; this method is the fix.
+
+        Every mutable argument the daemon thread will read is
+        `copy.deepcopy()`'d on THIS (caller) thread BEFORE the thread
+        starts. This matters because the caller mutates the SAME objects
+        immediately after `_provider_llm_response` returns —
+        `LLMAgentNode.run()`'s tool-execution loop appends to the very
+        `messages` list passed in here, and sets
+        `response["tool_execution_rounds"]` on the very dict passed in as
+        `legacy_response`. Without the deep copy, the daemon thread's read
+        could race those mutations. The snapshot makes the daemon thread's
+        view a frozen point-in-time copy that can never observe — or be
+        corrupted by — a mutation the live path makes after this method
+        returns.
+
+        `daemon=True` is intentional (redteam MED-3): an in-flight shadow
+        thread MUST NOT block interpreter shutdown the way a non-daemon
+        thread would.
+
+        Dispatch itself (the deep copy, the `Thread` construction) is
+        wrapped in the same non-load-bearing contract as the shadow worker
+        — any `BaseException` here (other than `KeyboardInterrupt` /
+        `SystemExit`) is caught, logged, and swallowed so a dispatch-time
+        failure can never propagate into `_provider_llm_response`'s
+        `return response`.
+
+        Returns the started `Thread` (or `None` if dispatch itself failed)
+        for test observability — e.g. asserting `.daemon is True` or
+        `.join()`-ing to wait for completion deterministically. The
+        production call site in `_provider_llm_response` discards the
+        return value; NOT joining it is precisely what makes this
+        fire-and-forget.
+        """
+        try:
+            snapshot = copy.deepcopy(
+                {
+                    "messages": messages,
+                    "tools": tools,
+                    "generation_config": generation_config,
+                    "legacy_response": legacy_response,
+                }
+            )
+            thread = threading.Thread(
+                target=self._run_llm_dual_run_shadow,
+                kwargs={
+                    "provider": provider,
+                    "model": model,
+                    "messages": snapshot["messages"],
+                    "tools": snapshot["tools"],
+                    "generation_config": snapshot["generation_config"],
+                    "api_key": api_key,
+                    "base_url": base_url,
+                    "legacy_response": snapshot["legacy_response"],
+                },
+                daemon=True,
+                name="kaizen-llm-dual-run-shadow",
+            )
+            thread.start()
+            return thread
+        except BaseException as exc:
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.logger.warning(
+                "llm.dual_run.dispatch_error",
+                extra={"provider": provider, "error_class": type(exc).__name__},
+            )
+            return None
+
+    def _run_llm_dual_run_shadow(
+        self,
+        *,
+        provider: str,
+        model: str,
+        messages: list[dict],
+        tools: list[dict],
+        generation_config: dict,
+        api_key: str | None,
+        base_url: str | None,
+        legacy_response: dict,
+    ) -> None:
+        """#1720 Wave-2 — shadow-run the four-axis `LlmClient` alongside the
+        legacy provider response and log divergences.
+
+        Runs on the daemon thread `_dispatch_dual_run_shadow` starts
+        (production path) — kept directly callable (synchronous, blocking)
+        for unit tests exercising the comparison logic without the
+        threading indirection. This method NEVER raises, NEVER mutates
+        `legacy_response`, and NEVER changes what `_provider_llm_response`
+        already returned to its caller — every failure mode (unmapped
+        provider, missing credential, wire error, timeout, even a
+        `BaseException` like `asyncio.CancelledError`) is caught and
+        logged, never propagated. De-risks the Wave-3 cutover by
+        validating the four-axis path produces equivalent output for real
+        traffic before it becomes load-bearing.
+
+        Runs `LlmClient.complete()` via `asyncio.run()` on whichever thread
+        this method executes on. In production that thread is always the
+        fresh daemon thread `_dispatch_dual_run_shadow` just started, which
+        has no ambient event loop, so a bare `asyncio.run()` here is always
+        safe — even though `_provider_llm_response` itself may have been
+        called from inside an already-running event loop
+        (`rules/patterns.md` § async/sync). The daemon-thread dispatch IS
+        the isolation; this method no longer needs a nested
+        thread-in-thread helper for it. The coroutine itself is bounded by
+        `asyncio.wait_for(..., timeout=_DUAL_RUN_TIMEOUT_SECONDS)` so a
+        hung provider is cancelled near the timeout instead of riding the
+        HTTP client's own (potentially longer) timeout.
+        """
+        global _dual_run_divergence_count
+        correlation_id = uuid.uuid4().hex
+        try:
+            deployment = _shadow_deployment_for(
+                provider=provider, model=model, api_key=api_key, base_url=base_url
+            )
+            if deployment is None:
+                # Already logged a DEBUG shadow_skipped reason.
+                return
+
+            from kaizen.llm.client import LlmClient
+
+            client = LlmClient.from_deployment_sync(deployment)
+            sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
+            shadow_tools = tools if tools else None
+
+            async def _call_shadow():
+                return await asyncio.wait_for(
+                    client.complete(
+                        messages,
+                        model=model,
+                        tools=shadow_tools,
+                        **sampling_kwargs,
+                    ),
+                    timeout=_DUAL_RUN_TIMEOUT_SECONDS,
+                )
+
+            four_axis_response = asyncio.run(_call_shadow())
+
+            from kaizen.llm._legacy_shape import (
+                diff_legacy_vs_fouraxis,
+                to_legacy_shape,
+            )
+
+            mapped = to_legacy_shape(four_axis_response)
+            divergences = diff_legacy_vs_fouraxis(legacy_response, mapped)
+
+            if divergences:
+                with _dual_run_divergence_lock:
+                    _dual_run_divergence_count += 1
+                self.logger.warning(
+                    "llm.dual_run.divergence",
+                    extra={
+                        "provider": provider,
+                        "model": model,
+                        "divergences": divergences,
+                        "correlation_id": correlation_id,
+                    },
+                )
+            else:
+                self.logger.debug(
+                    "llm.dual_run.parity",
+                    extra={
+                        "provider": provider,
+                        "model": model,
+                        "correlation_id": correlation_id,
+                    },
+                )
+        except BaseException as exc:
+            # Non-load-bearing: the shadow's only job is to observe. A
+            # failure here MUST NEVER affect the live legacy response the
+            # caller already computed — the live path's own error handling
+            # (the except blocks around _provider_llm_response) is
+            # completely untouched by anything that happens in this
+            # method. Caught as BaseException (not Exception) so that
+            # asyncio.CancelledError (a BaseException subclass, NOT an
+            # Exception subclass) and any other BaseException only log and
+            # never escape this daemon thread. KeyboardInterrupt/SystemExit
+            # are structural process-control signals, not shadow-path
+            # failures — re-raise them.
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.logger.warning(
+                "llm.dual_run.shadow_error",
+                extra={
+                    "provider": provider,
+                    "error_class": type(exc).__name__,
+                    "correlation_id": correlation_id,
+                },
+            )
 
     def _fallback_llm_response(
         self,
