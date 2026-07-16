@@ -171,6 +171,17 @@ def build_request_payload(
             payload["tool_choice"] = (
                 request.tool_choice if request.tool_choice is not None else "auto"
             )
+
+        # response_format (structured output): the OpenAI-compatible chat schema
+        # (TGI / Inference Endpoints) accepts response_format verbatim, exactly
+        # like openai_chat.py. Emit it so a huggingface_chat_preset caller
+        # requesting structured output actually gets it on the wire. The classic
+        # text-generation branch below CANNOT carry it and WARNs
+        # (huggingface_inference.response_format_dropped_classic_path); the chat
+        # branch CAN, so it must NOT silently drop it (zero-tolerance Rule 3 /
+        # observability Rule 7 — #1720 F3 holistic-redteam MEDIUM).
+        if request.response_format:
+            payload["response_format"] = request.response_format
         return payload
 
     # Classic text-generation schema: NO tools concept. TGI's classic

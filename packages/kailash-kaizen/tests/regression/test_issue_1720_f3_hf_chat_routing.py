@@ -175,6 +175,52 @@ async def test_client_reaches_chat_schema_with_tools_and_route() -> None:
 
 @pytest.mark.regression
 @pytest.mark.asyncio
+async def test_client_chat_schema_emits_response_format() -> None:
+    """CLIENT-LEVEL: an HF chat deployment given response_format= must serialize
+    it on the wire — the OpenAI-compatible chat schema supports structured output
+    verbatim (same as openai_chat.py). The classic text-generation path CANNOT
+    carry it and WARNs; the chat path must NOT silently drop it (#1720 F3
+    holistic-redteam MEDIUM — zero-tolerance Rule 3 / observability Rule 7)."""
+    dep = huggingface_chat_preset(api_key="hf_test_key", model=_HF_CHAT_MODEL)
+    client = LlmClient.from_deployment(dep)
+    transport = _CapturingHfTransport()
+    try:
+        await client.complete(
+            [{"role": "user", "content": "give me json"}],
+            response_format={"type": "json_object"},
+            http_client=transport,
+            max_tokens=32,
+        )
+    finally:
+        await transport.aclose()
+
+    _method, url, body = transport.last
+    assert url == "https://router.huggingface.co/v1/chat/completions"
+    assert body["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_client_chat_schema_omits_response_format_when_unset() -> None:
+    """Byte-neutral: no response_format requested -> no response_format key emitted."""
+    dep = huggingface_chat_preset(api_key="hf_test_key", model=_HF_CHAT_MODEL)
+    client = LlmClient.from_deployment(dep)
+    transport = _CapturingHfTransport()
+    try:
+        await client.complete(
+            [{"role": "user", "content": "hi"}],
+            http_client=transport,
+            max_tokens=32,
+        )
+    finally:
+        await transport.aclose()
+
+    _method, _url, body = transport.last
+    assert "response_format" not in body
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
 async def test_client_stream_reaches_chat_schema_with_tools_and_route() -> None:
     """STREAMING variant: stream() shares _build_completion_payload_and_url, so
     the chat body + route MUST also reach the wire on the streaming path."""
