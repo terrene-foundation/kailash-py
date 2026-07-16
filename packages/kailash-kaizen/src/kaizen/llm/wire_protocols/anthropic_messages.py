@@ -21,6 +21,7 @@ import logging
 from typing import Any, Dict, List
 
 from kaizen.llm.deployment import CompletionRequest
+from kaizen.llm.wire_protocols import _content_parts
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,51 @@ def _partition_messages(
     return system, rest
 
 
+def _translate_content_to_anthropic(content: Any) -> Any:
+    """Translate an OpenAI-shaped ``content`` field into Anthropic blocks.
+
+    A bare string passes through unchanged (Anthropic accepts a plain
+    string exactly like OpenAI). A content-part LIST is walked; any
+    ``image_url`` part is translated via ``_content_parts`` into
+    Anthropic's native ``image`` block (base64 ``source`` for a data-URI,
+    ``url`` ``source`` for a remote http(s) url); every other block
+    (``text``, or any block this translator does not recognize) passes
+    through unchanged. Returns the ORIGINAL ``content`` object when no
+    ``image_url`` part is present, so a text-only message stays
+    byte-identical to the pre-Wave-1b (multimodal) shape.
+    """
+    if not isinstance(content, list):
+        return content
+    translated: List[Any] = []
+    changed = False
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "image_url":
+            part = _content_parts.parse_content_part(block)
+            if isinstance(part, _content_parts.ImagePart):
+                translated.append(_content_parts.to_anthropic_block(part))
+                changed = True
+                continue
+        translated.append(block)
+    return translated if changed else content
+
+
+def _translate_message_to_anthropic(msg: Dict[str, Any]) -> Dict[str, Any]:
+    """Return ``msg`` with its ``content`` translated for Anthropic.
+
+    Returns the ORIGINAL message dict (not a copy) when translation makes
+    no change, so a text-only request's message list stays identical
+    (same object identity for unchanged messages) to the pre-Wave-1b
+    output.
+    """
+    content = msg.get("content")
+    translated_content = _translate_content_to_anthropic(content)
+    if translated_content is content:
+        return msg
+    new_msg = dict(msg)
+    new_msg["content"] = translated_content
+    return new_msg
+
+
 def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     """Build the ``/v1/messages`` request body for Anthropic.
 
@@ -118,6 +164,9 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         raise TypeError("build_request_payload expects a CompletionRequest")
 
     system, rest = _partition_messages(request.messages)
+    # Wave-1b multimodal translation (image_url -> Anthropic image block),
+    # BEFORE setting payload["messages"] below (per the four-axis contract).
+    rest = [_translate_message_to_anthropic(msg) for msg in rest]
 
     max_tokens = (
         request.max_tokens if request.max_tokens is not None else _DEFAULT_MAX_TOKENS

@@ -20,6 +20,8 @@ fails loudly here.
 from __future__ import annotations
 
 import importlib
+import re
+from pathlib import Path
 
 import pytest
 
@@ -209,3 +211,71 @@ def test_no_mock_aliased_classmethod_under_alternate_names(name: str) -> None:
         or not callable(getattr(LlmDeployment, name, None))
         or name not in {"mock", "Mock", "MOCK", "mock_preset"}
     ), f"LlmDeployment.{name} MUST NOT be a callable mock surface"
+
+
+# ---------------------------------------------------------------------------
+# Transport isolation (#1720 Wave-1b MOCK) -- MockLlmHttpClient extends the
+# same physical-separation invariant mock_preset() established: production
+# code under src/kaizen/ MUST NOT import kaizen.llm.testing (housing BOTH
+# mock_preset AND MockLlmHttpClient), and MockLlmHttpClient MUST be absent
+# from the production entry points (kaizen.llm.client / kaizen.llm.http_client
+# / kaizen.llm.presets) a downstream app would import for real HTTP traffic.
+# ---------------------------------------------------------------------------
+
+
+def test_grep_finds_no_production_importer_of_kaizen_llm_testing() -> None:
+    """Structural invariant: `kaizen.llm.testing` MUST NOT be imported from
+    any production module under `src/kaizen/`. The ONLY legitimate
+    self-references are files inside the `testing/` package itself. Mirrors
+    the module docstring's claim that this is `grep`-able
+    (`grep -rn 'kaizen.llm.testing' src/kaizen/`) -- this test IS that grep,
+    run mechanically instead of by hand.
+    """
+    src_root = Path(__file__).resolve().parents[3] / "src" / "kaizen"
+    assert src_root.is_dir(), f"expected src root at {src_root}"
+
+    pattern = re.compile(r"\bkaizen\.llm\.testing\b")
+    violations: list[str] = []
+    for path in sorted(src_root.rglob("*.py")):
+        rel = path.relative_to(src_root)
+        # The testing/ package's own files are allowed to self-reference
+        # (docstrings, __init__ exports, intra-package imports).
+        if rel.parts[:2] == ("llm", "testing"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        if pattern.search(text):
+            violations.append(str(rel))
+
+    assert not violations, (
+        "Production modules under src/kaizen/ MUST NOT reference "
+        f"kaizen.llm.testing (found in: {violations})"
+    )
+
+
+def test_mock_llm_http_client_absent_from_production_import_surface() -> None:
+    """MockLlmHttpClient MUST NOT be reachable as an attribute of
+    kaizen.llm.client, kaizen.llm.http_client, or kaizen.llm.presets -- the
+    production entry points a downstream app imports for real LLM /
+    real-transport traffic. Test code that wants the deterministic offline
+    transport imports it explicitly from kaizen.llm.testing.
+    """
+    import kaizen.llm.client as client_module
+    import kaizen.llm.http_client as http_client_module
+    import kaizen.llm.presets as presets_module
+
+    for module in (client_module, http_client_module, presets_module):
+        assert not hasattr(module, "MockLlmHttpClient"), (
+            f"{module.__name__} MUST NOT expose MockLlmHttpClient "
+            "(test-only transport; import from kaizen.llm.testing instead)"
+        )
+
+
+def test_mock_llm_http_client_importable_only_from_testing_module() -> None:
+    """Sanity + red-flag-path assertion: the ONE legitimate import path for
+    MockLlmHttpClient is `kaizen.llm.testing` (re-exporting
+    `kaizen.llm.testing.mock_transport.MockLlmHttpClient`).
+    """
+    from kaizen.llm.testing import MockLlmHttpClient
+    from kaizen.llm.testing.mock_transport import MockLlmHttpClient as DirectImport
+
+    assert MockLlmHttpClient is DirectImport

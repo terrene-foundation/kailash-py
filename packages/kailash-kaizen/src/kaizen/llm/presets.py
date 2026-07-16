@@ -1748,6 +1748,13 @@ def azure_openai_preset(
     endpoint = Endpoint(
         base_url=f"https://{endpoint_host}",
         path_prefix=path_prefix,
+        # Azure REQUIRES ?api-version= on EVERY request URL — completion AND
+        # embed. Wiring it into endpoint.query_params (rather than only the
+        # completion adapter's docstring-promised append) means both
+        # _build_completion_url and _build_embed_url emit it, since both now
+        # append endpoint.query_params (#1720 Wave-1b embed-remainder). Without
+        # this an azure embed() call hits /embeddings with no api-version -> 400.
+        query_params={"api-version": api_version},
     )
     deployment = LlmDeployment(
         wire=WireProtocol.OpenAiChat,

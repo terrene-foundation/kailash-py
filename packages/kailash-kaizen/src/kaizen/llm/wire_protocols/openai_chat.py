@@ -39,9 +39,13 @@ to its Rust counterpart's OpenAI chat payload builder.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict
 
 from kaizen.llm.deployment import CompletionRequest
+from kaizen.llm.reasoning_filter import filter_reasoning_model_params
+
+logger = logging.getLogger(__name__)
 
 # OpenAI's GPT-5 family and the o-series reasoning models REJECT `max_tokens`
 # with a hard HTTP 400 ("'max_tokens' is not supported with this model; use
@@ -66,6 +70,15 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     Emits the canonical OpenAI chat shape. Optional fields are written only
     when the caller set them so callers relying on server defaults do NOT
     get a silent override.
+
+    #1720 Wave-1b reasoning-model filter: before any sampling field is
+    written to the payload, ``temperature`` / ``top_p`` / ``frequency_penalty``
+    / ``presence_penalty`` are routed through
+    :func:`kaizen.llm.reasoning_filter.filter_reasoning_model_params`. o1/o3
+    reasoning models reject these fields outright (HTTP 400); gpt-5 requires
+    ``temperature == 1.0`` and rejects the others. Every other model family
+    is a byte-neutral passthrough — this shaper's output for a fixed
+    non-reasoning-model input is unchanged from before this filter existed.
     """
     if not isinstance(request, CompletionRequest):
         raise TypeError("build_request_payload expects a CompletionRequest")
@@ -74,10 +87,34 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         "model": request.model,
         "messages": list(request.messages),
     }
+
+    # Collect the caller-set sampling fields, THEN filter by model family —
+    # insertion into `payload` still happens at each field's ORIGINAL
+    # position below, so key order (and therefore JSON byte output) is
+    # unchanged for every model the filter leaves untouched.
+    sampling: Dict[str, Any] = {}
     if request.temperature is not None:
-        payload["temperature"] = request.temperature
+        sampling["temperature"] = request.temperature
     if request.top_p is not None:
-        payload["top_p"] = request.top_p
+        sampling["top_p"] = request.top_p
+    if request.frequency_penalty is not None:
+        sampling["frequency_penalty"] = request.frequency_penalty
+    if request.presence_penalty is not None:
+        sampling["presence_penalty"] = request.presence_penalty
+    filtered_sampling = filter_reasoning_model_params(request.model, sampling)
+    if filtered_sampling != sampling:
+        logger.debug(
+            "openai_chat.reasoning_model_params_filtered",
+            extra={
+                "before_keys": sorted(sampling),
+                "after_keys": sorted(filtered_sampling),
+            },
+        )
+
+    if "temperature" in filtered_sampling:
+        payload["temperature"] = filtered_sampling["temperature"]
+    if "top_p" in filtered_sampling:
+        payload["top_p"] = filtered_sampling["top_p"]
     if request.max_tokens is not None:
         payload[_token_limit_field(request.model)] = request.max_tokens
     if request.stop:
@@ -113,10 +150,14 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     # Truthiness guard: an empty ``logit_bias={}`` is a no-op — emit nothing.
     if request.logit_bias:
         payload["logit_bias"] = request.logit_bias
-    if request.frequency_penalty is not None:
-        payload["frequency_penalty"] = request.frequency_penalty
-    if request.presence_penalty is not None:
-        payload["presence_penalty"] = request.presence_penalty
+    # #1720 Wave-1b: frequency_penalty / presence_penalty already went through
+    # the reasoning-model filter above (dropped for o1/o3/gpt-5); emit here
+    # under their ORIGINAL key position so non-reasoning-model payloads keep
+    # byte-identical field order.
+    if "frequency_penalty" in filtered_sampling:
+        payload["frequency_penalty"] = filtered_sampling["frequency_penalty"]
+    if "presence_penalty" in filtered_sampling:
+        payload["presence_penalty"] = filtered_sampling["presence_penalty"]
     if request.n is not None:
         payload["n"] = request.n
     # top_k: intentionally NOT emitted — the OpenAI chat completions API does not

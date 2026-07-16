@@ -140,6 +140,19 @@ def test_response_format_json_schema_sets_response_schema():
     assert gen["responseSchema"] == schema
 
 
+def test_response_format_empty_dict_emits_no_generation_config_keys():
+    """/redteam Round-1 FIX 6a (#1720 Wave-1b): truthiness guard (not `is not
+    None`) matches every sibling wire — an explicitly-set EMPTY
+    `response_format={}` MUST emit nothing, same as an unset one."""
+    req = CompletionRequest(
+        model="test-model",
+        messages=_base_messages(),
+        response_format={},
+    )
+    payload = gg.build_request_payload(req)
+    assert "generationConfig" not in payload
+
+
 def test_sampling_fields_merge_into_generation_config_without_clobber():
     req = CompletionRequest(
         model="test-model",

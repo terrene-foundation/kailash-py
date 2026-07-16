@@ -14,7 +14,13 @@ response shape and asserts every adapter emits the identical canonical
 structure — same keys, same types, same logical name + parsed arguments,
 ``arguments`` always a JSON STRING. If any adapter drifts (e.g. returns
 ``arguments`` as a dict, or omits ``id``/``type``), this fails loudly — the
-cross-shard contract the three Wave-1b shards each implemented independently.
+cross-shard contract every Wave-1b adapter shard implemented independently.
+
+Covers all EIGHT tool-capable completion wires: openai_chat, anthropic_messages,
+google_generate_content, mistral_chat, cohere_generate, ollama_native, plus the
+two remainder adapters whose tool support is family/mode-conditional —
+bedrock_invoke (native tools only for the ``mistral.*`` Bedrock family) and
+huggingface_inference (tools only on the OpenAI-compatible chat schema).
 """
 
 import json
@@ -23,8 +29,10 @@ import pytest
 
 from kaizen.llm.wire_protocols import (
     anthropic_messages,
+    bedrock_invoke,
     cohere_generate,
     google_generate_content,
+    huggingface_inference,
     mistral_chat,
     ollama_native,
     openai_chat,
@@ -126,6 +134,52 @@ _OLLAMA_RESPONSE = {
     "done": True,
 }
 
+# Bedrock (native InvokeModel, mistral.* family): outputs[0].tool_calls, OpenAI-shaped
+# (arguments a JSON string). Only the mistral family carries native tools; meta/amazon/
+# cohere InvokeModel bodies have no tools surface (omitted, not faked).
+_BEDROCK_RESPONSE = {
+    "outputs": [
+        {
+            "text": "",
+            "stop_reason": "tool_calls",
+            "tool_calls": [
+                {
+                    "id": "call_bedrock_1",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": json.dumps({"city": "SF"}),
+                    },
+                }
+            ],
+        }
+    ]
+}
+
+# HuggingFace (OpenAI-compatible chat schema / TGI): choices[0].message.tool_calls.
+_HUGGINGFACE_RESPONSE = {
+    "choices": [
+        {
+            "message": {
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_hf_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": json.dumps({"city": "SF"}),
+                        },
+                    }
+                ],
+            },
+            "finish_reason": "tool_calls",
+        }
+    ],
+    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    "model": "test-model",
+}
+
 _CASES = [
     ("openai_chat", openai_chat, _OPENAI_RESPONSE),
     ("anthropic_messages", anthropic_messages, _ANTHROPIC_RESPONSE),
@@ -133,6 +187,8 @@ _CASES = [
     ("mistral_chat", mistral_chat, _MISTRAL_RESPONSE),
     ("cohere_generate", cohere_generate, _COHERE_RESPONSE),
     ("ollama_native", ollama_native, _OLLAMA_RESPONSE),
+    ("bedrock_invoke", bedrock_invoke, _BEDROCK_RESPONSE),
+    ("huggingface_inference", huggingface_inference, _HUGGINGFACE_RESPONSE),
 ]
 
 
@@ -169,8 +225,8 @@ def test_each_adapter_emits_canonical_tool_call_shape(name, shaper, response):
 
 
 @pytest.mark.regression
-def test_all_three_adapters_agree_on_normalized_shape():
-    """The three adapters produce STRUCTURALLY IDENTICAL normalized tool_calls
+def test_all_adapters_agree_on_normalized_shape():
+    """ALL adapters produce STRUCTURALLY IDENTICAL normalized tool_calls
     (ignoring the provider-specific id value) for the same logical call."""
     normalized = {}
     for name, shaper, response in _CASES:
@@ -186,6 +242,7 @@ def test_all_three_adapters_agree_on_normalized_shape():
             },
         }
     shapes = list(normalized.values())
-    assert (
-        shapes[0] == shapes[1] == shapes[2]
+    # Every adapter (all 8) must agree — not just the first three.
+    assert all(
+        s == shapes[0] for s in shapes
     ), f"cross-adapter normalized-shape divergence: {normalized}"
