@@ -132,11 +132,16 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
 
     # response_format -> Gemini structured-output on generationConfig. Gemini
     # supports JSON mode via responseMimeType, plus an optional responseSchema.
+    # ONLY force JSON mode for the JSON response types — an OpenAI
+    # ``{"type": "text"}`` must NOT be coerced into JSON (Gemini defaults to
+    # text, so emit nothing for it).
     if request.response_format is not None:
-        generation_config["responseMimeType"] = "application/json"
-        schema = _extract_json_schema(request.response_format)
-        if schema is not None:
-            generation_config["responseSchema"] = schema
+        rf_type = request.response_format.get("type")
+        if rf_type in ("json_object", "json_schema"):
+            generation_config["responseMimeType"] = "application/json"
+            schema = _extract_json_schema(request.response_format)
+            if schema is not None:
+                generation_config["responseSchema"] = schema
 
     payload: Dict[str, Any] = {"contents": contents}
     if generation_config:
@@ -159,11 +164,11 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
                 ]
             }
         ]
-        # tool_choice -> Gemini tool_config.function_calling_config.mode. Only
+        # tool_choice -> Gemini toolConfig.functionCallingConfig.mode. Only
         # emitted when tools are set (a mode with no tools is meaningless).
         tool_config = _tool_config_from_choice(request.tool_choice)
         if tool_config is not None:
-            payload["tool_config"] = tool_config
+            payload["toolConfig"] = tool_config
 
     return payload
 
@@ -189,7 +194,7 @@ def _tool_config_from_choice(tool_choice: Any) -> Dict[str, Any] | None:
     OpenAI ``"auto"``/``"required"``/``"none"`` map to Gemini modes
     ``AUTO``/``ANY``/``NONE``. A forced-tool dict
     (``{"type": "function", "function": {"name": ...}}``) maps to ``ANY`` plus
-    ``allowed_function_names``. When tools are set but ``tool_choice`` is unset,
+    ``allowedFunctionNames``. When tools are set but ``tool_choice`` is unset,
     the default is ``ANY`` (legacy "required" semantics).
     """
     if isinstance(tool_choice, dict):
@@ -197,13 +202,13 @@ def _tool_config_from_choice(tool_choice: Any) -> Dict[str, Any] | None:
         name = fn.get("name") if isinstance(fn, dict) else None
         config: Dict[str, Any] = {"mode": "ANY"}
         if name is not None:
-            config["allowed_function_names"] = [name]
-        return {"function_calling_config": config}
+            config["allowedFunctionNames"] = [name]
+        return {"functionCallingConfig": config}
     if isinstance(tool_choice, str):
         mode = _TOOL_CHOICE_MODE.get(tool_choice, "ANY")
-        return {"function_calling_config": {"mode": mode}}
+        return {"functionCallingConfig": {"mode": mode}}
     # tool_choice is None but tools are set -> default to ANY (required).
-    return {"function_calling_config": {"mode": "ANY"}}
+    return {"functionCallingConfig": {"mode": "ANY"}}
 
 
 def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:

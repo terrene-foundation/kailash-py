@@ -153,8 +153,10 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     # tools: the shared CompletionRequest carries the OpenAI function-schema form
     # ``[{"type": "function", "function": {"name", "description", "parameters"}}]``;
     # Anthropic's ``/v1/messages`` expects ``[{"name", "description",
-    # "input_schema"}]``. Translate field-by-field only when tools is set.
-    if request.tools is not None:
+    # "input_schema"}]``. Guard on truthiness so an explicitly-set EMPTY list
+    # (``tools=[]``) emits nothing rather than an empty ``tools`` + a forced
+    # ``tool_choice`` the API would reject.
+    if request.tools:
         payload["tools"] = [
             {
                 "name": f["function"]["name"],

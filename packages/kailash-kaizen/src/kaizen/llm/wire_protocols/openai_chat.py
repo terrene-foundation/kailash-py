@@ -38,6 +38,7 @@ to its Rust counterpart's OpenAI chat payload builder.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict
 
 from kaizen.llm.deployment import CompletionRequest
@@ -88,11 +89,13 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
 
     # --- #1720 Wave-1b completion-shaping emission (OpenAI is the canonical shape) ---
     # Tool / function calling: `tools` is already the OpenAI function-schema list,
-    # emitted verbatim. When tools are present, `tool_choice` defaults to the
-    # legacy "required" semantics (a pinned Wave-1a decision) unless the caller
-    # set it explicitly; when no tools are present, `tool_choice` is emitted only
-    # if the caller set it.
-    if request.tools is not None:
+    # emitted verbatim. Guard on truthiness so an explicitly-set EMPTY list
+    # (`tools=[]`) emits nothing — emitting `"tools": []` + `tool_choice:
+    # "required"` would be an invalid request (required with no tools → 400).
+    # When tools are present, `tool_choice` defaults to the legacy "required"
+    # semantics (a pinned Wave-1a decision) unless the caller set it explicitly;
+    # when no tools are present, `tool_choice` is emitted only if the caller set it.
+    if request.tools:
         payload["tools"] = list(request.tools)
         payload["tool_choice"] = (
             request.tool_choice if request.tool_choice is not None else "required"
@@ -129,15 +132,23 @@ def _normalize_tool_call(tc: Dict[str, Any]) -> Dict[str, Any]:
     OpenAI already returns this shape (``arguments`` is already a JSON string),
     so this rebuilds a plain, JSON-serializable dict from the response entry —
     guaranteeing no provider SDK object leaks into the parsed result.
+
+    Defensive: this wire also serves OpenAI-COMPATIBLE providers (Groq,
+    Together, Fireworks, OpenRouter, DeepSeek, …). A non-conformant one may
+    return ``arguments`` as a dict rather than a JSON string; coerce it so the
+    canonical "arguments is a JSON string" invariant holds across the fleet.
     """
     function = tc.get("function")
     function = function if isinstance(function, dict) else {}
+    arguments = function.get("arguments")
+    if isinstance(arguments, (dict, list)):
+        arguments = json.dumps(arguments)
     return {
         "id": tc.get("id"),
         "type": tc.get("type", "function"),
         "function": {
             "name": function.get("name"),
-            "arguments": function.get("arguments"),
+            "arguments": arguments,
         },
     }
 

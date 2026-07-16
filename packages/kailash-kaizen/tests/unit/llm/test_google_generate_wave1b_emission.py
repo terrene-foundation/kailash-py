@@ -68,7 +68,7 @@ def test_tool_config_default_any_when_tools_set_no_choice():
         tools=[{"type": "function", "function": {"name": "f"}}],
     )
     payload = gg.build_request_payload(req)
-    assert payload["tool_config"] == {"function_calling_config": {"mode": "ANY"}}
+    assert payload["toolConfig"] == {"functionCallingConfig": {"mode": "ANY"}}
 
 
 def test_tool_choice_string_modes_map_to_gemini():
@@ -84,7 +84,7 @@ def test_tool_choice_string_modes_map_to_gemini():
             tool_choice=openai_choice,
         )
         payload = gg.build_request_payload(req)
-        assert payload["tool_config"]["function_calling_config"]["mode"] == gemini_mode
+        assert payload["toolConfig"]["functionCallingConfig"]["mode"] == gemini_mode
 
 
 def test_forced_tool_dict_maps_to_any_with_allowed_names():
@@ -95,9 +95,9 @@ def test_forced_tool_dict_maps_to_any_with_allowed_names():
         tool_choice={"type": "function", "function": {"name": "get_weather"}},
     )
     payload = gg.build_request_payload(req)
-    cfg = payload["tool_config"]["function_calling_config"]
+    cfg = payload["toolConfig"]["functionCallingConfig"]
     assert cfg["mode"] == "ANY"
-    assert cfg["allowed_function_names"] == ["get_weather"]
+    assert cfg["allowedFunctionNames"] == ["get_weather"]
 
 
 def test_tool_config_absent_when_no_tools():
@@ -109,7 +109,7 @@ def test_tool_config_absent_when_no_tools():
     )
     payload = gg.build_request_payload(req)
     assert "tools" not in payload
-    assert "tool_config" not in payload
+    assert "toolConfig" not in payload
 
 
 def test_response_format_json_object_sets_response_mime_type():
@@ -213,7 +213,7 @@ def test_full_wave1b_request_shapes_all_surfaces():
     # Gemini-shaped tools.
     assert payload["tools"][0]["functionDeclarations"][0]["name"] == "f"
     # Default ANY tool_config.
-    assert payload["tool_config"]["function_calling_config"]["mode"] == "ANY"
+    assert payload["toolConfig"]["functionCallingConfig"]["mode"] == "ANY"
     gen = payload["generationConfig"]
     assert gen["temperature"] == 0.3  # not clobbered
     assert gen["responseMimeType"] == "application/json"
