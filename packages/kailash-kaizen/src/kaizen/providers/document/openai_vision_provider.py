@@ -29,6 +29,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
     ExtractionResult,
@@ -194,8 +195,12 @@ class OpenAIVisionProvider(BaseDocumentProvider):
                 temperature=self.temperature,
             )
         except openai.APIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise RuntimeError(f"OpenAI Vision API call failed: {e}")
+            # OpenAI SDK error can carry the Authorization/api-key header via
+            # .request/.response — sanitize before log AND re-raise
+            # (#1720 creds-in-logs sweep; rules/security.md "No secrets in logs").
+            sanitized = sanitize_provider_error(e, "OpenAI Vision")
+            logger.error("OpenAI Vision API error: %s", sanitized)
+            raise RuntimeError(f"OpenAI Vision API call failed: {sanitized}")
 
         # Parse response
         raw_content = response.choices[0].message.content

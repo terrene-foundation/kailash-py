@@ -67,7 +67,9 @@ class CohereProvider(EmbeddingProvider):
                 "Cohere library not installed. Install with: pip install cohere"
             )
         except Exception as e:
-            logger.error("Cohere embedding error: %s", e, exc_info=True)
+            logger.error(
+                "Cohere embedding error: %s", sanitize_provider_error(e, "Cohere")
+            )
             raise RuntimeError(sanitize_provider_error(e, "Cohere"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from kaizen.agent_config import AgentConfig
 from kaizen.agent_types import get_agent_type_preset
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.rich_output import RichOutputManager
 from kaizen.smart_defaults import SmartDefaultsManager
 
@@ -260,7 +261,11 @@ class Agent:
             self.logger.info("BaseAgent initialized successfully")
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize BaseAgent: {e}")
+            # Init failure can carry a base_url/api_key from client construction.
+            self.logger.error(
+                "Failed to initialize BaseAgent: %s",
+                sanitize_provider_error(e, "BaseAgent init"),
+            )
             self.logger.warning("Agent will operate in limited mode")
 
     def _convert_to_base_agent_config(self) -> dict:
@@ -342,7 +347,13 @@ class Agent:
             return result
 
         except Exception as e:
-            self.logger.error(f"Execution failed: {e}", exc_info=True)
+            # exc_info=True would dump the raw provider exception via the
+            # implicit __context__/__cause__ chain even though the wrapper `e`
+            # is sanitized — drop it and log the sanitized message only
+            # (#1720 creds-in-logs sweep; rules/security.md "No secrets in logs").
+            self.logger.error(
+                "Execution failed: %s", sanitize_provider_error(e, "Agent execution")
+            )
             self.rich_output.show_error(e)
             raise
 

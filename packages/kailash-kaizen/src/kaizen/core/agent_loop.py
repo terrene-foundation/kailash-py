@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -411,7 +413,9 @@ class AgentLoop:
             try:
                 run_async_hook(agent.discover_mcp_tools())
             except Exception as e:
-                logger.warning("MCP auto-discovery failed: %s", e)
+                logger.warning(
+                    "MCP auto-discovery failed: %s", sanitize_provider_error(e, "MCP")
+                )
 
         session_id = inputs.pop("session_id", None)
 

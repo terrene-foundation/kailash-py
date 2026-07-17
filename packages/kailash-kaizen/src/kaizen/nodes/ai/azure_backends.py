@@ -14,6 +14,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 # Default API version for Azure OpenAI
@@ -299,7 +301,9 @@ class AzureOpenAIBackend(AzureBackend):
             response = client.chat.completions.create(**request_params)
             return self._format_response(response)
         except Exception as e:
-            logger.error("Azure OpenAI chat failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure OpenAI chat failed: %s", sanitize_provider_error(e, "Azure")
+            )
             raise RuntimeError(
                 "Azure OpenAI chat request failed. Check logs for details."
             ) from e
@@ -341,7 +345,10 @@ class AzureOpenAIBackend(AzureBackend):
         except (KeyboardInterrupt, asyncio.CancelledError):
             raise
         except Exception as e:
-            logger.error("Azure OpenAI async chat failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure OpenAI async chat failed: %s",
+                sanitize_provider_error(e, "Azure"),
+            )
             raise RuntimeError(
                 "Azure OpenAI async chat request failed. Check logs for details."
             ) from e
@@ -361,7 +368,9 @@ class AzureOpenAIBackend(AzureBackend):
             response = client.embeddings.create(**request_params)
             return [item.embedding for item in response.data]
         except Exception as e:
-            logger.error("Azure OpenAI embedding failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure OpenAI embedding failed: %s", sanitize_provider_error(e, "Azure")
+            )
             raise RuntimeError(
                 "Azure OpenAI embedding request failed. Check logs for details."
             ) from e
@@ -643,7 +652,9 @@ class AzureAIFoundryBackend(AzureBackend):
             response = self._sync_chat_client.complete(**request_params)
             return self._format_response(response)
         except Exception as e:
-            logger.error("Azure AI Foundry chat failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure AI Foundry chat failed: %s", sanitize_provider_error(e, "Azure")
+            )
             raise RuntimeError(
                 "Azure AI Foundry chat request failed. Check logs for details."
             ) from e
@@ -694,7 +705,10 @@ class AzureAIFoundryBackend(AzureBackend):
         except (KeyboardInterrupt, asyncio.CancelledError):
             raise
         except Exception as e:
-            logger.error("Azure AI Foundry async chat failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure AI Foundry async chat failed: %s",
+                sanitize_provider_error(e, "Azure"),
+            )
             raise RuntimeError(
                 "Azure AI Foundry async chat request failed. Check logs for details."
             ) from e
@@ -719,7 +733,10 @@ class AzureAIFoundryBackend(AzureBackend):
             response = self._sync_embed_client.embed(**request_params)
             return [item.embedding for item in response.data]
         except Exception as e:
-            logger.error("Azure AI Foundry embedding failed: %s", e, exc_info=True)
+            logger.error(
+                "Azure AI Foundry embedding failed: %s",
+                sanitize_provider_error(e, "Azure"),
+            )
             raise RuntimeError(
                 "Azure AI Foundry embedding request failed. Check logs for details."
             ) from e

@@ -318,7 +318,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference azure-identity"
             )
         except Exception as e:
-            logger.error("Azure AI Foundry error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Azure AI Foundry"))
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     async def chat_async(
@@ -402,7 +402,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference azure-identity"
             )
         except Exception as e:
-            logger.error("Azure AI Foundry async error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Azure AI Foundry"))
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     # ------------------------------------------------------------------
@@ -494,7 +494,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 usage=last_usage,
             )
         except Exception as exc:  # pragma: no cover
-            logger.error("azure.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Azure AI Foundry"))
             raise RuntimeError(sanitize_provider_error(exc, "Azure AI Foundry"))
         finally:
             try:
@@ -523,7 +523,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Azure AI Inference library not installed. Install with: pip install azure-ai-inference"
             )
         except Exception as e:
-            logger.error("Azure AI Foundry embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Azure AI Foundry"))
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     async def embed_async(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -547,7 +547,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Azure AI Inference library not installed. Install with: pip install azure-ai-inference"
             )
         except Exception as e:
-            logger.error("Azure AI Foundry async embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Azure AI Foundry"))
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

@@ -8,6 +8,7 @@ through multiple channels (email, Slack, webhook).
 import asyncio
 import json
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from typing import Dict, List
@@ -15,6 +16,19 @@ from typing import Dict, List
 from .analytics_aggregator import AnalyticsAggregator
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_webhook_url(value: str) -> str:
+    """Strip the credential-bearing path from a webhook URL for safe logging.
+
+    Slack/Discord/generic webhook auth tokens live in the URL PATH
+    (``https://hooks.slack.com/services/T.../B.../<secret>``), so
+    ``sanitize_provider_error`` (which redacts ``user:pass@`` userinfo) does NOT
+    cover them. This keeps the scheme+host for diagnosability and replaces the
+    path with a ``[REDACTED]`` sentinel. Also scrubs a webhook URL embedded in
+    an arbitrary string (e.g. an aiohttp connection-error message).
+    """
+    return re.sub(r"(https?://[^/\s]+)/\S*", r"\1/[REDACTED]", value)
 
 
 class NotificationChannel(ABC):
@@ -133,7 +147,7 @@ class SlackNotificationChannel(NotificationChannel):
                 await session.post(self.webhook_url, json=payload)
             logger.info("Sent Slack alert")
         except Exception as e:
-            logger.error(f"Failed to send Slack alert: {e}")
+            logger.error("Failed to send Slack alert: %s", _mask_webhook_url(str(e)))
 
 
 class WebhookNotificationChannel(NotificationChannel):
@@ -160,9 +174,9 @@ class WebhookNotificationChannel(NotificationChannel):
         try:
             async with aiohttp.ClientSession() as session:
                 await session.post(self.webhook_url, json=alert)
-            logger.info(f"Sent webhook alert to {self.webhook_url}")
+            logger.info("Sent webhook alert to %s", _mask_webhook_url(self.webhook_url))
         except Exception as e:
-            logger.error(f"Failed to send webhook alert: {e}")
+            logger.error("Failed to send webhook alert: %s", _mask_webhook_url(str(e)))
 
 
 class AlertManager:
@@ -321,7 +335,11 @@ class AlertManager:
             try:
                 await channel.send(alert)
             except Exception as e:
-                logger.error(f"Failed to send alert via {channel}: {e}")
+                logger.error(
+                    "Failed to send alert via %s: %s",
+                    type(channel).__name__,
+                    _mask_webhook_url(str(e)),
+                )
 
     def _is_duplicate_alert(self, alert: Dict) -> bool:
         """

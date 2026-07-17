@@ -181,7 +181,9 @@ class HuggingFaceProvider(EmbeddingProvider):
                 "Transformers library not installed. Install with: pip install transformers torch"
             )
         except Exception as e:
-            logger.error("HuggingFace local error: %s", e, exc_info=True)
+            logger.error(
+                "HuggingFace local error: %s", sanitize_provider_error(e, "HuggingFace")
+            )
             raise RuntimeError(sanitize_provider_error(e, "HuggingFace"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

@@ -27,6 +27,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.credentials import get_credential_store
 
 from kaizen.core.config import BaseAgentConfig
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.signatures import Signature
 
 # from .config import BaseAgentConfig
@@ -371,7 +372,9 @@ class WorkflowGenerator:
                         f"Added {len(provider_tools)} MCP tools to LLMAgentNode config"
                     )
             except Exception as e:
-                logger.warning(f"Failed to discover MCP tools: {e}")
+                logger.warning(
+                    f"Failed to discover MCP tools: {sanitize_provider_error(e, 'MCP')}"
+                )
 
         # Add the LLMAgentNode to workflow
         workflow.add_node("LLMAgentNode", "agent_exec", node_config)

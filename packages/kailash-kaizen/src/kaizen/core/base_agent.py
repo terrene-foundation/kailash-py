@@ -341,9 +341,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         from kaizen.llm._legacy_shape import to_legacy_shape
         from kaizen.llm.client import LlmClient
         from kaizen.llm.deployment_resolver import resolve_deployment_for
-        from kaizen.nodes.ai.llm_agent import (
-            _sampling_kwargs_from_generation_config,
-        )
+        from kaizen.nodes.ai.llm_agent import _sampling_kwargs_from_generation_config
 
         messages = []
         system_prompt = self._generate_system_prompt()
@@ -953,7 +951,9 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                 if hasattr(self._mcp_server, "stop"):
                     self._mcp_server.stop()
             except Exception as e:
-                logger.warning(f"Error stopping MCP server: {e}")
+                logger.warning(
+                    f"Error stopping MCP server: {sanitize_provider_error(e, 'MCP')}"
+                )
             self._mcp_server = None
 
         if hasattr(self, "_mcp_registrar") and self._mcp_registrar is not None:
@@ -961,7 +961,9 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                 if hasattr(self._mcp_registrar, "unregister"):
                     self._mcp_registrar.unregister()
             except Exception as e:
-                logger.warning(f"Error unregistering from MCP discovery: {e}")
+                logger.warning(
+                    f"Error unregistering from MCP discovery: {sanitize_provider_error(e, 'MCP')}"
+                )
             self._mcp_registrar = None
 
         if hasattr(self, "shared_memory") and self.shared_memory is not None:

@@ -447,7 +447,7 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            logger.error("Google Gemini error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Google Gemini"))
             raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     async def chat_async(
@@ -513,7 +513,7 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            logger.error("Google Gemini async error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Google Gemini"))
             raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     # ------------------------------------------------------------------
@@ -659,7 +659,7 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 usage=last_usage,
             )
         except Exception as exc:  # pragma: no cover - re-raise sanitised
-            logger.error("google.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Google Gemini"))
             raise RuntimeError(sanitize_provider_error(exc, "Google Gemini"))
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -693,7 +693,7 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            logger.error("Google Gemini embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Google Gemini"))
             raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     async def embed_async(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -727,7 +727,7 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            logger.error("Google Gemini async embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Google Gemini"))
             raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

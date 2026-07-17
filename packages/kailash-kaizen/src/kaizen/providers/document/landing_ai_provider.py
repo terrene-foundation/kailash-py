@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
     ExtractionResult,
@@ -220,15 +221,19 @@ class LandingAIProvider(BaseDocumentProvider):
                 result_json = response.json()
 
             except httpx.HTTPStatusError as e:
-                logger.error(f"Landing AI API error: {e}")
+                # httpx error can echo the request URL + Authorization/api-key
+                # header — sanitize before log AND re-raise (#1720 sweep).
+                sanitized = sanitize_provider_error(e, "Landing AI")
+                logger.error("Landing AI API error: %s", sanitized)
                 if e.response.status_code == 401:
                     raise ValueError("Invalid Landing AI API key")
                 elif e.response.status_code == 429:
                     raise RuntimeError("Landing AI API rate limit exceeded")
-                raise RuntimeError(f"Landing AI API call failed: {e}")
+                raise RuntimeError(f"Landing AI API call failed: {sanitized}")
             except Exception as e:
-                logger.error(f"Landing AI request failed: {e}")
-                raise RuntimeError(f"Landing AI request failed: {e}")
+                sanitized = sanitize_provider_error(e, "Landing AI")
+                logger.error("Landing AI request failed: %s", sanitized)
+                raise RuntimeError(f"Landing AI request failed: {sanitized}")
 
         # Parse response
         extracted_text, markdown, tables, bounding_boxes = self._parse_api_response(

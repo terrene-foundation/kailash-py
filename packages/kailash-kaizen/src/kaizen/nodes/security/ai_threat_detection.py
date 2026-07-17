@@ -17,6 +17,7 @@ from kailash.nodes.base import Node
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
 
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
@@ -323,13 +324,18 @@ Your analysis should help security teams understand:
             }
 
         except Exception as e:
-            logger.error(f"LLM threat intelligence failed: {e}", exc_info=True)
+            # Sanitize before logging AND before returning — an LLM provider
+            # error can carry an api_key/URL credential, and exc_info=True would
+            # resurface the raw original via the implicit exception-context chain
+            # (#1720 creds-in-logs sweep; rules/security.md "No secrets in logs").
+            sanitized = sanitize_provider_error(e, "LLM threat intelligence")
+            logger.error("LLM threat intelligence failed: %s", sanitized)
             return {
                 "ai_available": False,
-                "narrative": f"AI intelligence failed: {str(e)}",
+                "narrative": f"AI intelligence failed: {sanitized}",
                 "intelligence": {},
                 "recommendations": [],
-                "error": str(e),
+                "error": sanitized,
             }
 
     def get_parameters(self) -> Dict[str, Any]:
