@@ -1,60 +1,66 @@
-# Session Notes — 2026-07-17 (release cycle)
+# Session Notes — 2026-07-17 (creds-in-logs security sweep → 2.34.1)
 
 ## Where we are
 
-#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). Waves 1‑2‑A‑B1‑B2
-were merged-but-UNRELEASED at session start. **This session RELEASED them:
-`kailash-kaizen 2.34.0` is live on PyPI, verified.** Wave C (the irreversible
-legacy delete) is **SOAK-DEFERRED by user decision** — run it as a dedicated next
-cycle after 2.34.0's deprecation shims soak a real cadence.
+Continued #1720. This session ran an **adversarial creds-in-logs redteam to
+convergence** (6 rounds of parallelized workflows) — the MED-1 sibling class the
+2.34.0 release fix only partially closed — and prepared **kaizen 2.34.1**.
 
 ## Executed this session (durable receipts)
 
-- **Released kaizen 2.34.0** — PR **#1795** merged (main @ `6193f451b`), tag
-  **`kaizen-v2.34.0`** pushed, publish-pypi run **29560106753** (sha `6193f451b`)
-  SUCCESS. Clean-venv `pip install kailash-kaizen==2.34.0` verified: version 2.34.0,
-  B2 barrel deprecation shim fires, `_fallback_llm_response` removed.
-  (Superseded PR #1794 — metadata-only `release/*` branch — closed; it would have
-  skipped CI on the code fixes.)
-- **2 MEDIUM pre-release security fixes** landed IN-CYCLE (not deferred; same bug
-  class as the release's embedding-path fixes): MED-2 silent fabricated-completion
-  on the four-axis ImportError branch → now raises loudly + `_fallback_llm_response`
-  deleted; MED-1 creds-in-logs on 2 provider log sites + 1 MCP sibling → sanitized.
-  4 regression tests in `tests/regression/test_issue_1720_release_2340_redteam.py`.
-- **Gates:** reviewer PASS, security-reviewer APPROVE (2 rounds), full matrix green
-  (Py 3.11–3.14 + kaizen LLM/parity + DataFlow + PACT + CodeQL, 0 failures).
-- No sibling package drift — kaizen was the only release.
+- **Creds-in-logs class CLOSED across the whole package.** 22 source files, 85
+  sanitize/mask sites, 10 behavioral regression tests
+  (`tests/regression/test_issue_1720_creds_in_logs_sweep.py`). Every
+  credential-bearing exception log + URL log routes through
+  `sanitize_provider_error` / new `_mask_redis_url` / new `_mask_webhook_url`;
+  `exc_info=True` dropped on provider/MCP/connection paths (it resurfaced the raw
+  provider exception via the implicit `__context__` chain).
+- **Redteam CONVERGED** — 6 rounds (task IDs in
+  `journal/creds-in-logs-convergence.md`). Final round: 0 findings across
+  verify-all-fixes + exc-info-chain + return/metric lenses. Exhaustive grep over
+  all 54 credential-bearing modules → zero remaining raw-exception logs.
+- **Gate review done** — reviewer + security-reviewer both ran; found 3 real
+  issues (registry.py return/log-asymmetry sibling; `_mask_webhook_url` userinfo
+  + query leak; `_mask_redis_url` multi-URL leak) — ALL fixed + 2 more regression
+  tests. async_single_shot LLM-gen error also sanitized.
+- **PR #1797** open (branch `fix/1720-creds-in-logs-sweep`, 3 commits: fix +
+  review-fixes + `release: kailash-kaizen 2.34.1`). Version bumped atomically
+  (pyproject 2.34.1 + `__init__` 2.34.1). pre-commit clean.
 
 ## Read first (next session)
 
-1. `02-plans/02-wave-b-c-todos-plan.md` § "Wave-C delete/keep boundary — CODE-VERIFIED"
-   — the surgical prune/keep map (NOT a bulk delete) + 3 OPEN pruning questions.
-2. Task #10 (Wave C) — soak-deferred, value-anchored, re-pickup gate.
+1. **`04-validate/sweep-2026-07-17.md`** — the full repo-wide /sweep + the
+   **clustered wave plan** (Wave 1 parallel / Wave 2 provider-surface / Wave 3
+   soak-gated Wave C). START HERE for next-session scope.
+2. `journal/creds-in-logs-convergence.md` — the 6-round convergence receipt.
+3. This file's "Outstanding" below.
 
-## Outstanding ledger (forest)
+## Wave plan (from the 2026-07-17 /sweep — value-ranked, clustered for parallel)
+
+- **WAVE 1 (parallel, run now):** 1A example-gallery/doc test fixes ·
+  1B fastapi eager-import hygiene · 1C spec-drift triage (harden sweep-redteam
+  allowlist) · 1D #1779 governance-egress `/analyze`-only. 1A/1B/1C file-disjoint
+  → true parallel (cap 3); 1D is analysis-only.
+- **WAVE 2 (provider surface, serial, after W1):** 2A #1727 max_completion_tokens
+  (VERIFY-then-fix — may be no-op) · 2B #1779 impl (per 1D design).
+- **WAVE 3 (soak-gated, own cycle):** #1720 Wave C legacy-providers delete —
+  subsumes the ollama test cleanup. Only after 2.34.1 shims soak.
+
+## Outstanding (in priority order)
 
 | ID | Item | Status |
 | -- | ---- | ------ |
-| F1 | **Wave C** — partial delete of legacy `providers/llm/` (Decision-2A, keep azure_ai_foundry), redteam to convergence, release as 2.35.0 | SOAK-DEFERRED (user 2026-07-17). Value-anchor: #1720 terminal goal. Irreversible → re-confirm at fire point. SURGICAL: prune base.py/registry.py + provider_names parity assert; resolve 3 OPEN Qs; ~35-69 test-file sweep; migrate internal barrel-importers. Own analyze→shard→redteam mini-cycle. |
-| F2 | kaizen release carrying Waves 1–2/A/B1/B2 | **DONE ✓ — 2.34.0 on PyPI, verified.** |
-| F3 | azure_ai_foundry four-axis wire (Decision-2B) → makes Wave C a 100% delete | queued (optional). NO Foundry integration test infra — needs real infra before building (Tier-2/3 no-mock). |
-| F4 | PR #1782 (loom Gate-2 governance-artifact sync) | OPEN, user's call — CI green, modifies `.claude/` rules; not auto-merged. |
-
-## Non-blocking follow-ups (surfaced this session, NOT fixed in the release)
-
-- **Observability f-string hygiene:** 3 raw-`{e}` error logs on the tool-execution
-  path (`llm_agent.py` ~3019/3081/3105) — lower-risk than the connection paths
-  (not connection strings), part of a file-wide f-string-logging pattern. Deferred
-  to a dedicated observability sweep (or fold into Wave C cleanup). NOT the MED-1
-  credential-leak class the security review scoped.
-- Internal tests importing via the deprecated barrels emit the intended
-  DeprecationWarning (shim working) — migrate to canonical imports as part of
-  Wave C (where the barrels are deleted and importers MUST move).
+| R1-R3 | **PR #1797 merged + kaizen 2.34.1 released** | **DONE ✓** — merged (main `920003b3c`), tag `kaizen-v2.34.1`, publish-pypi run 29572288787 SUCCESS. Clean-venv `pip install kailash-kaizen==2.34.1` + import verified; fix surface (redis/webhook mask, provider sanitizer, 0 raw exc_info in shipped providers/llm) confirmed in the wheel. Sibling-drift sweep clean (all pkgs main==pypi). |
+| R4 | **Cross-SDK issue** — Rust SDK creds-in-logs sibling | **DONE ✓** — user approved; filed `esperie-enterprise/kailash-rs#1908` (2026-07-17). Grant receipt: `cross-repo-authorization-1720-creds-in-logs.md` (all 5 conditions, journaled before acting). Advisory MUST-NOT-1 tripwire fired post-hoc, adjudicated in-scope (same as byok rs#1881). |
+| PRE-EXISTING NOTE | `fastapi` eager-import in `kaizen/monitoring/__init__` → `dashboard` | Pre-existing (2.34.0 had it); `import kaizen.monitoring` fails on clean venv w/o fastapi. NOT from this PR. Candidate for a `deployment.md` eager-transitive-dep follow-up (monitoring optional-extra vs core dep). |
+| F1 | **Wave C** — partial delete of legacy `providers/llm/` | SOAK-DEFERRED (unchanged; 2.34.0 released today, zero soak). |
+| PRE | **8 pre-existing test failures** (ollama vision-setup, example-gallery docs) | Confirmed failing on clean HEAD; outside CI gate; unrelated to this PR. Separate shard. |
 
 ## Traps
 
 - kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ... -k "not mcp and not discover"`.
-- pyright false-positive storm for `kaizen.*` (possibly-unbound, None-arg) — pytest authoritative.
-- framework-first hook emits a FALSE "raw SQL detected" on `llm_agent.py` edits — no SQL present.
-- CI duplicate `pull_request` runs saturate self-hosted runners → Python 3.11/3.12 lag ~5-8 min; check-then-merge as SEPARATE steps pinned to the head SHA (git.md).
-- Release branch naming: a release carrying CODE must NOT use `release/*` (that auto-skips the PR-gate matrix) — use `fix/`/`feat/` so the matrix runs on the code.
+- pre-commit shim has a stale interpreter path — invoke via `.venv/bin/python -m pre_commit run --files <files>`.
+- pyright false-positive storm for kaizen.* (possibly-unbound, dict-vs-str, Node.execute override) — pytest authoritative.
+- framework-first hook emits FALSE "raw SQL detected" on `llm_agent.py` edits — no SQL.
+- Release branch carrying CODE must NOT use `release/*` (auto-skips PR-gate matrix) — this PR is on `fix/`.
+- CI-check + merge are SEPARATE steps pinned to head SHA (git.md).
