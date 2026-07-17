@@ -27,12 +27,11 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
 
-from kaizen_agents.agents.specialized.pev import PEVAgent, PEVAgentConfig
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import MemoryTransport
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager, HookResult
+from kaizen_agents.agents.specialized.pev import PEVAgent, PEVAgentConfig
 
 
 class PerformanceMetricsHook:
@@ -114,7 +113,7 @@ class ContentCreator:
         print(f"📊 Performance Metrics: {enable_metrics}")
         print("=" * 60 + "\n")
 
-    async def create_content(self, task: str, context: Dict = None) -> Dict:
+    async def create_content(self, task: str, context: dict = None) -> dict:
         """
         Create content with iterative refinement.
 
@@ -276,6 +275,10 @@ class ContentCreator:
 
             elif fmt == "html":
                 # Simple HTML wrapper
+                # Join outside the f-string: Python 3.11 forbids a backslash in
+                # an f-string expression part, and "\n" is one (allowed only on
+                # 3.12+ via PEP 701).
+                content_body = "<br>".join(content.split("\n"))
                 html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -288,7 +291,7 @@ class ContentCreator:
     </style>
 </head>
 <body>
-    {"<br>".join(content.split("\n"))}
+    {content_body}
 </body>
 </html>"""
                 file_path = output_dir / f"content_{timestamp}.html"
