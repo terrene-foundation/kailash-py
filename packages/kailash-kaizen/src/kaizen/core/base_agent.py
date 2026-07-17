@@ -329,10 +329,21 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         return await AgentLoop.run_async(self, **inputs)
 
     async def _simple_execute_async(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Simple async execution using direct provider call (fallback)."""
-        from kaizen.providers.llm.openai import OpenAIProvider
+        """Simple async execution via the four-axis ``LlmClient`` (fallback).
 
-        provider = OpenAIProvider(use_async=True)
+        #1720 Wave-B1c: cut over from the legacy ``OpenAIProvider`` to the
+        four-axis path — ``resolve_deployment_for("openai", ...)`` ->
+        ``LlmClient.from_deployment(...)`` -> ``await client.complete(...)``.
+        The multimodal-input detection, the system-prompt prepend, the
+        config->env model resolution, and the return shape are unchanged;
+        the legacy ``response["content"]`` is read via ``to_legacy_shape``.
+        """
+        from kaizen.llm._legacy_shape import to_legacy_shape
+        from kaizen.llm.client import LlmClient
+        from kaizen.llm.deployment_resolver import resolve_deployment_for
+        from kaizen.nodes.ai.llm_agent import (
+            _sampling_kwargs_from_generation_config,
+        )
 
         messages = []
         system_prompt = self._generate_system_prompt()
@@ -367,23 +378,44 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
         messages.append({"role": "user", "content": user_content})
 
-        response = await provider.chat_async(
-            messages=messages,
-            model=self.config.model
+        # Model resolution unchanged: config -> DEFAULT_LLM_MODEL -> OPENAI_PROD_MODEL.
+        model = (
+            self.config.model
             or os.environ.get("DEFAULT_LLM_MODEL")
-            or os.environ.get("OPENAI_PROD_MODEL"),
-            generation_config={
+            or os.environ.get("OPENAI_PROD_MODEL")
+        )
+
+        # Four-axis path: resolve the OpenAI deployment (BYOK config.api_key /
+        # config.base_url honored; env OPENAI_API_KEY otherwise), then complete.
+        deployment = resolve_deployment_for(
+            "openai",
+            model=model,
+            api_key=self.config.api_key,
+            base_url=self.config.base_url,
+        )
+        if deployment is None:
+            raise ValueError(
+                "_simple_execute_async: could not resolve an OpenAI four-axis "
+                "deployment; set OPENAI_API_KEY (or pass config.api_key)."
+            )
+        client = LlmClient.from_deployment(deployment)
+
+        # generation_config temperature/max_tokens -> four-axis sampling kwargs.
+        sampling_kwargs = _sampling_kwargs_from_generation_config(
+            {
                 "temperature": self.config.temperature or 0.7,
                 "max_tokens": self.config.max_tokens or 500,
-            },
+            }
         )
+        result = await client.complete(messages, model=model, **sampling_kwargs)
+        content = to_legacy_shape(result)["content"]
 
         if self.signature:
             output_fields = list(self.signature.output_fields.keys())
             if output_fields:
-                return {output_fields[0]: response["content"]}
+                return {output_fields[0]: content}
 
-        return {"response": response["content"]}
+        return {"response": content}
 
     def _simple_execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback when no strategy is configured."""
