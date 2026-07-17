@@ -45,9 +45,35 @@ registry (docstring mentions only; they use local frozensets). Only `metrics.py`
 - Pre-existing `structured_output_mode='auto'` FutureWarning (`async_single_shot.py`)
   — separate structured-output deprecation workstream.
 
-**NEXT:** Wave B2 (delete-gate prep — B2a barrel shims + B2b name-registry
-extraction + B2c LLMProvider subclass re-basing), then its own inter-wave gate,
-then surface Wave C (DELETE) for the human structural gate (irreversible).
+## Wave-B2 — DELIVERED + CONVERGED (2026-07-17)
+
+Wave B2 (delete-gate prep) shipped as two parallel-worktree shards (B2a barrel
+DeprecationWarning shims + B2b name-registry extraction), integrated on
+`feat/1720-wave-b2`, redteam-CONVERGED (2 consecutive clean rounds, ZERO
+findings), merged as **PR #1791** (main @ `4d0f8a310`). B2c (re-base LLMProvider
+subclassers) was re-sequenced into the Wave-C delete PR (it only matters at
+delete time). **Emergent win:** B2a + B2b TOGETHER decouple `metrics.py` (and
+bare `import kaizen`) from the registry at runtime — pinned by a subprocess
+invariant.
+
+**Refined Wave-C residual (closure-verified — SMALLER than the B1-plan implied):**
+the ONLY live-path coupling to the delete target is (A) `azure_ai_foundry` legacy
+fallback (`llm_agent.py::_legacy_provider_chat`, Decision-2A) + (B) the barrels'
+own shim maps (deleted with the barrels). `metrics.py` is now decoupled;
+`embedding_generator._fallback_provider_embedding` confirmed NOT coupled (ollama
+uses `import ollama`; non-ollama raises).
+
+## Wave C — HELD (irreversible human gate + release-cycle gate)
+
+Wave C DELETE is gated on BOTH: (1) explicit user go-ahead on the irreversible
+delete, AND (2) B2 shipping in a kaizen PyPI release FIRST — zero-tolerance 6a
+requires the B2 deprecation shims to live through ≥1 minor release before removal
+(else external consumers hard-break with no deprecation cycle). kaizen is
+UNRELEASED; a release is the prerequisite. Wave C is therefore a LATER milestone,
+not immediate. Scope at execution: DELETE `providers/llm/*` + `base.py::LLMProvider`
++ `registry.py` + the 2 barrels; KEEP the azure_ai_foundry path (Decision-2A,
+~90% delete); sweep the ~35 legacy-surface test files (orphan-detection Rule 4);
+re-base the LLMProvider subclassers (folded-in B2c).
 
 Grounded in a code-verified census of the merged Waves 1+2+A foundation
 (main @ `25afb9a39`, re-verified at HEAD after the foundation-redteam fixes).

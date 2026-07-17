@@ -1,73 +1,73 @@
-# Session Notes — 2026-07-17 (Wave B1 DELIVERED + CONVERGED + MERGED)
+# Session Notes — 2026-07-17 (Waves B1 + B2 DELIVERED; Wave C = held human gate)
 
 ## Where we are
 
-#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 + A
-merged. Wave B1 (consumer cutover) MERGED this session** as **PR #1789**
-(main @ `7ba9caf1f`). Three parallel-worktree shards (B1a/B1b/B1c), holistic
-redteam CONVERGED (2 consecutive clean rounds), post-merge re-verified from main
-(72 regression+parity green).
+#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1+2+A, B1,
+and B2 all MERGED.** The live LLM/embed paths are fully consolidated onto the
+four-axis client (except the `azure_ai_foundry` scope-out). Wave C (DELETE) is a
+HELD irreversible human gate — see below.
 
-## Shipped this session — Wave B1 (PR #1789)
+- **Wave B1** (consumer cutover) — PR #1789, main-merged. Redteam CONVERGED (2 clean
+  rounds); 1 HIGH (silent-mock embed) + 2 MED sanitize-parity + 3 LOW fixed.
+- **Wave B2** (delete-gate prep) — PR #1791, main-merged (main @ `4d0f8a310`).
+  Redteam CONVERGED (2 clean rounds, zero findings). Barrel DeprecationWarning shims
+  + name-registry extraction; metrics now decoupled from `providers.registry` at
+  runtime (pinned by a subprocess invariant). Docs: PR #1790 (B1) + this note.
 
-- **B1a** — `LLMAgentNode._provider_llm_response` promoted the four-axis shadow to
-  the PRIMARY live path (`resolve_deployment_for`→`complete`→`to_legacy_shape`);
-  shadow dispatch removed from the success path; folded Decision-1A (full legacy
-  google `finish_reason` value-map into the four-axis google wire). `azure_ai_foundry`
-  scoped OUT (routes legacy `_legacy_provider_chat`).
-- **B1b** — `EmbeddingGeneratorNode._generate_provider_embedding` → `LlmClient.embed`;
-  added `timeout` kwarg; `EmbedOptions.normalize` now UNIFORM client-side (removed
-  HF-only copy). ollama/docker embed stays legacy fallback (needs node `base_url`/`api_key`).
-- **B1c** — `BaseAgent._simple_execute_async` → four-axis (openai-only).
-- **Redteam fixes (`d87ecf799`)** — HIGH: embed silently returned a MOCK on an
-  unresolvable credential provider → restored legacy loud raise (sanctioned mock
-  path stays `provider=="mock"` only). 2× MED: sanitize-provider-error parity on
-  embed + base_agent paths. LOW: google `_map_finish_reason(None)`→"stop"; 3 sibling
-  embed-shaper docstrings corrected.
+## Wave C — HELD (irreversible human structural gate)
 
-## NEXT SESSION — start here (Wave B2, then surface Wave C)
+**Do NOT execute without explicit user confirmation.** Two conditions gate it:
+1. **User go-ahead** on the irreversible delete.
+2. **B2 must ship in a kaizen PyPI release first** — zero-tolerance 6a requires the
+   B2 deprecation shims to live through ≥1 minor release before removal, else
+   external consumers hard-break with no deprecation cycle. kaizen is currently
+   UNRELEASED (release deferred to the Wave-3 milestone per prior user call). So
+   Wave C is naturally a LATER milestone, after a B2-carrying release.
 
-Per `02-plans/02-wave-b-c-todos-plan.md` (updated with the B1-delivered status +
-precise residual list). Wave B2 = delete-gate prep, three shards:
-- **B2a** — `nodes/ai/__init__` + `providers/__init__` barrels → DeprecationWarning
-  shims (≥1 minor cycle) + CHANGELOG migration entry (zero-tolerance 6a). No hard drop.
-- **B2b** — extract the provider-name registry (`PROVIDERS` + `_MODEL_PREFIX_MAP`)
-  off `providers/registry.py` so `production/metrics.py` no longer imports it.
-  (Coupling is LESS than the census implies — only metrics.py + barrels + azure
-  fallback import the registry; `llm/deployment_resolver.py` + `llm/client.py` do NOT.)
-- **B2c** — re-base `providers/base.py::LLMProvider` subclassers
-  (`unified_azure_provider`, cohere/hf embedding providers) before the base is deleted.
-Run the inter-wave gate (redteam→converge) after B2, THEN surface Wave C.
+**Precise Wave-C scope (closure-verified at B2 merge — smaller than the original plan):**
+DELETE `providers/llm/*` + `providers/base.py::LLMProvider` + `providers/registry.py`
++ the 2 deprecation-shim barrels. The ONLY live-path residual:
+- **(A)** `azure_ai_foundry` legacy chat fallback (`llm_agent.py::_legacy_provider_chat`)
+  — KEPT per Decision-2A. Wave C is a ~90% delete, not 100%.
+- **(B)** the barrels' own `_LEGACY_PROVIDER_MODULES` shim maps — deleted with the barrels.
+- Sweep the ~35 legacy-surface test files (orphan-detection Rule 4) + B2c: re-base
+  `providers/base.py::LLMProvider` subclassers (`unified_azure_provider`, cohere/hf
+  embedding providers) at delete time.
+- CONFIRMED NOT coupled (no Wave-C work): `embedding_generator._fallback_provider_embedding`
+  (ollama uses `import ollama`; non-ollama raises); `llm/deployment_resolver.py` +
+  `llm/client.py` (docstring mentions only); `metrics.py` (B2b decoupled it).
 
-**Wave C (DELETE) is a HUMAN structural gate — IRREVERSIBLE.** Residual after B2:
-azure_ai_foundry chat + ollama/docker embed fallback (both documented partial-delete
-residuals) + 35 test files to sweep (orphan-detection Rule 4). Do NOT execute Wave C
-without explicit user confirmation.
-
-## Non-blocking follow-ups (surfaced by B1 redteam, NOT introduced by B1)
+## Non-blocking follow-ups (surfaced by the redteams, NOT introduced)
 
 - Legacy `azure_ai_foundry` `.chat()` lacks the CRLF/non-ASCII api_key guard the
-  four-axis path now has (enforcement-parity asymmetry, one legacy provider). Fold
-  into the Foundry four-axis-wire capability item.
+  four-axis path has (enforcement-parity asymmetry, one legacy provider). Fold into
+  the Foundry four-axis-wire capability item (Decision-2B → would make Wave C a full delete).
 - `_run_async_in_sync_context` (unchanged since 2026-03-11) latent RuntimeError-remap
   edge; B1a grows its risk surface but unreachable (LLM taxonomy is Exception-based).
 - Pre-existing `structured_output_mode='auto'` FutureWarning (`async_single_shot.py`)
   — separate structured-output deprecation workstream.
+- ~34 non-fatal DeprecationWarnings in the suite are the intended B2 barrel-deprecation
+  signal from legacy-provider TEST files (Wave-C sweep set); Deferred to Wave C.
 
 ## STILL OPEN — user's call
 
 - **PR #1782** (loom Gate-2 governance-artifact sync) — open, left to the user.
+- **Wave C** — held per above (user go-ahead + B2-carrying release).
 
 ## Unreleased
 
-- **kailash-kaizen**: Waves 1–2 + A + B1 merged, NOT released to PyPI. `/release`
-  DEFERRED to the Wave-3 milestone (prior user call).
+- **kailash-kaizen**: Waves 1–2 + A + B1 + B2 merged, NOT released to PyPI. A release
+  is the prerequisite for Wave C (deprecation-cycle gate). `/release` DEFERRED to the
+  Wave-3 milestone (prior user call).
 
 ## Traps
 
-- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`.
-- Exclude MCP-discovery hangs with `-k "not mcp and not discover"`.
-- pyright false-positive storm for `kaizen.llm.*` + line drift — runtime + pytest authoritative.
-- Worktree editable-install gotcha: the shared `.venv` resolves `kaizen` to the MAIN
-  checkout; run worktree tests with `PYTHONPATH=<wt>/packages/kailash-kaizen/src` OR
-  verify post-merge from main (worktree-isolation Rule 2a/3a).
+- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`;
+  exclude MCP-discovery hangs with `-k "not mcp and not discover"`.
+- Worktree editable-install gotcha: shared `.venv` resolves `kaizen` to MAIN checkout;
+  run worktree tests with `PYTHONPATH=<wt>/packages/kailash-kaizen/src` OR verify
+  post-merge from main (worktree-isolation 2a/3a).
+- pyright false-positive storm for `kaizen.llm.*`/`kaizen.providers.*` + merge-pending
+  import-resolution noise — runtime + pytest authoritative.
+- CI duplicate `pull_request` runs saturate self-hosted runners → 3.11/3.12 queue
+  latency; check-then-merge as SEPARATE steps pinned to the head SHA (git.md).
