@@ -47,7 +47,7 @@ from prometheus_client import Counter as PromCounter
 from prometheus_client import Histogram as PromHistogram
 from prometheus_client import generate_latest
 
-from kaizen.providers.registry import _MODEL_PREFIX_MAP, PROVIDERS
+from kaizen.providers.provider_names import MODEL_PREFIX_MAP, PROVIDER_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +84,11 @@ _DEFAULT_DURATION_BUCKETS: Sequence[float] = (
     60.0,
 )
 
-# Canonical bounded provider enum — reuses the SAME registry the provider
-# resolver uses (kaizen.providers.registry.PROVIDERS) so this module carries
-# no parallel provider-name list.
-_BOUNDED_PROVIDERS = frozenset(PROVIDERS.keys())
+# Canonical bounded provider enum — reuses the SAME pure-data name registry
+# the provider resolver is built on (kaizen.providers.provider_names) so this
+# pure-Prometheus module carries no parallel provider-name list AND does not
+# transitively eager-load any provider class.
+_BOUNDED_PROVIDERS = PROVIDER_NAMES
 
 
 def _bound_provider_label(provider: str) -> str:
@@ -108,15 +109,16 @@ def _bound_model_label(model: str) -> str:
     """Bound the ``model`` label to a known model-family prefix.
 
     Reuses the canonical model-prefix -> provider-family table from
-    ``kaizen.providers.registry`` (the same structural mapping the provider
-    resolver uses) so this module carries no parallel model-family list.
-    Arbitrary/unknown model strings — and raw per-release model identifiers
-    that would otherwise be unbounded cardinality — collapse to ``_other``.
+    ``kaizen.providers.provider_names`` (the same structural mapping the
+    provider resolver is built on) so this module carries no parallel
+    model-family list. Arbitrary/unknown model strings — and raw per-release
+    model identifiers that would otherwise be unbounded cardinality — collapse
+    to ``_other``.
     """
     if not model:
         return _OTHER_LABEL
     normalized = model.strip().lower()
-    for prefixes, family in _MODEL_PREFIX_MAP:
+    for prefixes, family in MODEL_PREFIX_MAP:
         if normalized.startswith(prefixes):
             return family
     return _OTHER_LABEL

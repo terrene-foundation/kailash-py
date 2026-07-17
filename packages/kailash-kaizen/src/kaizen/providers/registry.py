@@ -33,6 +33,11 @@ from kaizen.providers.llm.mock import MockProvider
 from kaizen.providers.llm.ollama import OllamaProvider
 from kaizen.providers.llm.openai import OpenAIProvider
 from kaizen.providers.llm.perplexity import PerplexityProvider
+from kaizen.providers.provider_names import (
+    _MODEL_PREFIX_MAP,
+    MODEL_PREFIX_MAP,
+    PROVIDER_NAMES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,40 +74,22 @@ PROVIDERS: dict[str, type | str] = {
 }
 
 
-# SPEC-02 §3.1 — model-name prefix dispatch.
-#
-# This is a declared structural mapping, NOT a classification of user intent.
-# Every tuple on the left is a set of model-id prefixes owned by the provider
-# on the right. New providers extend this table; the function below is a
-# pure prefix scan with no keyword reasoning.
-_MODEL_PREFIX_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("gpt-", "o1-", "o3-", "o4-", "o1", "o3", "o4-mini", "ft:gpt"), "openai"),
-    (("claude-",), "anthropic"),
-    (("gemini-",), "google"),
-    (
-        (
-            "llama",
-            "mistral",
-            "mixtral",
-            "qwen",
-            "phi-",
-            "phi3",
-            "phi4",
-            "codellama",
-            "deepseek",
-        ),
-        "ollama",
-    ),
-    (("ai/",), "docker"),
-    (
-        (
-            "sonar",
-            "sonar-",
-        ),
-        "perplexity",
-    ),
-    (("mock-", "mock"), "mock"),
+# Drift tripwire: the pure-data name registry (kaizen.providers.provider_names)
+# and this name -> class dict MUST enumerate the SAME provider names. A plain
+# assert over declared config data (NOT agent reasoning) — if a provider is
+# added to one and not the other, fail loudly at import instead of silently
+# diverging the metrics label bound (which reuses PROVIDER_NAMES) from the
+# resolver's actual class map.
+assert set(PROVIDERS.keys()) == PROVIDER_NAMES, (
+    "provider name drift: kaizen.providers.registry.PROVIDERS keys "
+    f"{sorted(PROVIDERS.keys())} != kaizen.providers.provider_names.PROVIDER_NAMES "
+    f"{sorted(PROVIDER_NAMES)}"
 )
+
+
+# SPEC-02 §3.1 model-name prefix dispatch (_MODEL_PREFIX_MAP / MODEL_PREFIX_MAP)
+# is the single source in kaizen.providers.provider_names, imported above. It
+# is a declared structural mapping, NOT a classification of user intent.
 
 
 def _resolve_provider_class(name: str) -> type:
