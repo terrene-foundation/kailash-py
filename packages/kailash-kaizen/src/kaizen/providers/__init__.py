@@ -16,15 +16,16 @@ Legacy Ollama-specific providers (OllamaProvider from the older
 # Base classes and types
 # ---------------------------------------------------------------------------
 
+import importlib
+import warnings
+from typing import TYPE_CHECKING
+
 from kaizen.providers.base import (
     BaseAIProvider,
     EmbeddingProvider,
-    LLMProvider,
     UnifiedAIProvider,
 )
 from kaizen.providers.cost import CostConfig, CostTracker, ModelPricing
-from kaizen.providers.embedding.cohere import CohereProvider
-from kaizen.providers.embedding.huggingface import HuggingFaceProvider
 from kaizen.providers.errors import (
     AuthenticationError,
     CapabilityNotSupportedError,
@@ -34,15 +35,6 @@ from kaizen.providers.errors import (
     RateLimitError,
     UnknownProviderError,
 )
-from kaizen.providers.llm.anthropic import AnthropicProvider
-from kaizen.providers.llm.azure import AzureAIFoundryProvider
-from kaizen.providers.llm.docker import DockerModelRunnerProvider
-from kaizen.providers.llm.google import GoogleGeminiProvider
-from kaizen.providers.llm.mock import MockProvider
-from kaizen.providers.llm.ollama import OllamaProvider
-from kaizen.providers.llm.openai import OpenAIProvider
-from kaizen.providers.llm.perplexity import PerplexityProvider
-from kaizen.providers.registry import PROVIDERS, get_available_providers, get_provider
 from kaizen.providers.types import (
     ChatResponse,
     Message,
@@ -51,6 +43,72 @@ from kaizen.providers.types import (
     TokenUsage,
     ToolCall,
 )
+
+# ---------------------------------------------------------------------------
+# Legacy provider re-exports — deprecated (#1720; removed in Wave-C).
+#
+# The provider classes and registry accessors below used to be eagerly
+# re-exported here from their canonical ``kaizen.providers.*`` submodules
+# (SPEC-02). They are now lazy DeprecationWarning shims (PEP 562
+# ``__getattr__``): attribute ACCESS warns and resolves the real symbol, while
+# a bare ``import kaizen.providers`` does NOT warn. Import providers from their
+# canonical modules (``kaizen.providers.llm.<mod>``,
+# ``kaizen.providers.embedding.<mod>``, ``kaizen.providers.base`` for the
+# ``LLMProvider`` base, ``kaizen.providers.registry`` for the accessors)
+# instead.
+# ---------------------------------------------------------------------------
+_LEGACY_PROVIDER_MODULES: dict[str, str] = {
+    "LLMProvider": "kaizen.providers.base",
+    "OpenAIProvider": "kaizen.providers.llm.openai",
+    "AnthropicProvider": "kaizen.providers.llm.anthropic",
+    "GoogleGeminiProvider": "kaizen.providers.llm.google",
+    "OllamaProvider": "kaizen.providers.llm.ollama",
+    "DockerModelRunnerProvider": "kaizen.providers.llm.docker",
+    "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
+    "PerplexityProvider": "kaizen.providers.llm.perplexity",
+    "MockProvider": "kaizen.providers.llm.mock",
+    "CohereProvider": "kaizen.providers.embedding.cohere",
+    "HuggingFaceProvider": "kaizen.providers.embedding.huggingface",
+    "PROVIDERS": "kaizen.providers.registry",
+    "get_provider": "kaizen.providers.registry",
+    "get_available_providers": "kaizen.providers.registry",
+}
+
+if TYPE_CHECKING:
+    # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
+    # autodoc still resolve the legacy names kept in ``__all__`` below.
+    from kaizen.providers.base import LLMProvider
+    from kaizen.providers.embedding.cohere import CohereProvider
+    from kaizen.providers.embedding.huggingface import HuggingFaceProvider
+    from kaizen.providers.llm.anthropic import AnthropicProvider
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+    from kaizen.providers.llm.docker import DockerModelRunnerProvider
+    from kaizen.providers.llm.google import GoogleGeminiProvider
+    from kaizen.providers.llm.mock import MockProvider
+    from kaizen.providers.llm.ollama import OllamaProvider
+    from kaizen.providers.llm.openai import OpenAIProvider
+    from kaizen.providers.llm.perplexity import PerplexityProvider
+    from kaizen.providers.registry import (
+        PROVIDERS,
+        get_available_providers,
+        get_provider,
+    )
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolve deprecated legacy provider re-exports (PEP 562)."""
+    module_path = _LEGACY_PROVIDER_MODULES.get(name)
+    if module_path is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"Importing {name} from {__name__} is deprecated and will be removed "
+        f"in a future release (#1720); import from {module_path} instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    module = importlib.import_module(module_path)
+    return getattr(module, name)
+
 
 # ---------------------------------------------------------------------------
 # Provider implementations

@@ -2,6 +2,31 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased]
+
+### Deprecated
+
+- **Legacy provider re-exports from the `kaizen.nodes.ai` and `kaizen.providers`
+  barrels are deprecated (#1720).** The provider classes `LLMProvider`,
+  `AnthropicProvider`, `AzureAIFoundryProvider`, `DockerModelRunnerProvider`,
+  `GoogleGeminiProvider`, `MockProvider`, `OllamaProvider`, `OpenAIProvider`,
+  `PerplexityProvider` (plus the embedding providers `CohereProvider`,
+  `HuggingFaceProvider` on the `kaizen.providers` barrel) and the registry
+  accessors `PROVIDERS`, `get_provider`, `get_available_providers` are no longer
+  eagerly re-exported from these two barrels. They are now lazy PEP 562
+  `__getattr__` shims: importing any of them from the barrel (e.g.
+  `from kaizen.nodes.ai import OpenAIProvider` or
+  `from kaizen.providers import OpenAIProvider`) now emits a `DeprecationWarning`
+  and resolves the real class. A bare `import kaizen.nodes.ai` /
+  `import kaizen.providers` does **not** warn — only attribute access does.
+  Migrate to the canonical module imports: provider classes from
+  `kaizen.providers.llm.<mod>` (e.g. `from kaizen.providers.llm.openai import
+OpenAIProvider`) and `kaizen.providers.embedding.<mod>`, the `LLMProvider`
+  base from `kaizen.providers.base`, and the registry accessors from
+  `kaizen.providers.registry`. The symbols remain in each barrel's `__all__`
+  (the public contract is unchanged — only the access path warns). Removal is
+  scheduled for Wave-C of #1720.
+
 ## [2.33.1] — 2026-07-15 — RAG verification-parse hardening (#1755)
 
 ### Fixed
@@ -9,7 +34,7 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 - **`SelfCorrectingRAGNode` crashed or looped on ill-formed LLM confidence
   (#1755).** Post-2.33.0 the RAG advanced-node parsers consume real LLM output,
   so `_parse_verification_response` sits on a live path. It validated field
-  *presence* only: a `confidence` returned as a string raised an uncaught
+  _presence_ only: a `confidence` returned as a string raised an uncaught
   `TypeError` at the numeric gate in `run()`, and a `NaN` confidence
   (`json.loads` accepts the bare `NaN` literal) never met the gate — forcing the
   self-correction loop to run to `max_corrections` every time. Every score field
