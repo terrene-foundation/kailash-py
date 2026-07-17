@@ -1207,10 +1207,14 @@ class LLMAgentNode(Node):
             # If hook didn't raise, return error response
             from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
-            self.logger.error("LLM agent error: %s", e, exc_info=True)
+            sanitized = sanitize_provider_error(e, provider)
+            # Log the SANITIZED message (not raw ``e`` / ``exc_info``) — the raw
+            # exception can echo a URL-embedded credential onto the log surface
+            # (rules/security.md "No secrets in logs"; #1720 release redteam MED-1).
+            self.logger.error("LLM agent error [%s]: %s", type(e).__name__, sanitized)
             return {
                 "success": False,
-                "error": sanitize_provider_error(e, provider),
+                "error": sanitized,
                 "error_type": type(e).__name__,
                 "provider": provider,
                 "model": model,
@@ -2438,17 +2442,31 @@ Final Answer: 6 hours"""
 
             return response
 
-        except ImportError:
-            # Four-axis (or legacy) provider stack unavailable — mock fallback.
-            return self._fallback_llm_response(
-                provider, model, messages, tools, generation_config
-            )
+        except ImportError as e:
+            # An import failure in the four-axis / legacy provider stack is a
+            # real environment error, NOT a reason to fabricate a completion.
+            # Surface it loudly — parity with the embedding path's
+            # unresolvable-provider raise; no silent mock returned as a real
+            # answer (rules/zero-tolerance.md Rule 2/3; #1720 release redteam
+            # MED-2).
+            raise RuntimeError(
+                f"LLM provider stack unavailable for provider {provider!r}: {e}"
+            ) from e
         except Exception as e:
-            # Re-raise provider errors with sanitized message
+            # Re-raise provider errors with a sanitized message. Log the
+            # SANITIZED message (not raw ``e`` / ``exc_info``) — a raw provider
+            # exception or its chained cause can echo a URL-embedded credential
+            # onto the log surface (rules/security.md "No secrets in logs";
+            # #1720 release redteam MED-1). The sanitized message + exception
+            # class name are enough to triage without the credential-bearing
+            # traceback.
             from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
-            self.logger.error("Provider %s error: %s", provider, e, exc_info=True)
-            raise RuntimeError(sanitize_provider_error(e, provider)) from e
+            sanitized = sanitize_provider_error(e, provider)
+            self.logger.error(
+                "Provider %s error [%s]: %s", provider, type(e).__name__, sanitized
+            )
+            raise RuntimeError(sanitized) from e
 
     def _legacy_provider_chat(
         self,
@@ -2743,31 +2761,6 @@ Final Answer: 6 hours"""
                     "correlation_id": correlation_id,
                 },
             )
-
-    def _fallback_llm_response(
-        self,
-        provider: str,
-        model: str,
-        messages: list[dict],
-        tools: list[dict],
-        generation_config: dict,
-    ) -> dict[str, Any]:
-        """Generate LLM response using direct API calls (mock implementation)."""
-        return {
-            "id": "fallback_response_456",
-            "content": f"Direct API response from {provider} {model}",
-            "role": "assistant",
-            "model": model,
-            "provider": provider,
-            "langchain_used": False,
-            "tool_calls": [],
-            "finish_reason": "stop",
-            "usage": {
-                "prompt_tokens": 200,
-                "completion_tokens": 50,
-                "total_tokens": 250,
-            },
-        }
 
     def _update_conversation_memory(
         self,

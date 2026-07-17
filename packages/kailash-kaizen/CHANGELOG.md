@@ -80,6 +80,15 @@ OpenAIProvider`) and `kaizen.providers.embedding.<mod>`, the `LLMProvider`
   `provider == "mock"` mode only). (5) Google `finish_reason` value-map parity
   (`STOP`→`stop`, `MAX_TOKENS`→`length`, `SAFETY`→`content_filter`, tool→`tool_calls`)
   is preserved on the four-axis google wire.
+- **Pre-release red-team fixes (#1720 2.34.0).** (6) `LLMAgentNode` no longer
+  returns a fabricated completion when the provider stack fails to import — the
+  `ImportError` branch now raises loudly (parity with the embedding path's
+  unresolvable-provider raise; no silent mock returned as a real answer). The
+  fabricating `_fallback_llm_response` method was removed. (7) Provider errors
+  are now routed through `sanitize_provider_error` before reaching the LOG
+  surface on the completion path (previously logged raw via `exc_info=True`) —
+  a URL-embedded credential in a raw provider exception can no longer leak into
+  server logs.
 
 ## [2.33.1] — 2026-07-15 — RAG verification-parse hardening (#1755)
 
