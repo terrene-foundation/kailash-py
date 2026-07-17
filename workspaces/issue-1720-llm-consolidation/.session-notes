@@ -1,66 +1,82 @@
-# Session Notes — 2026-07-17 (creds-in-logs security sweep → 2.34.1)
+# Session Notes — 2026-07-17 (Wave 1 code-health → converged, merged, kaizen 2.34.2 released)
 
 ## Where we are
 
-Continued #1720. This session ran an **adversarial creds-in-logs redteam to
-convergence** (6 rounds of parallelized workflows) — the MED-1 sibling class the
-2.34.0 release fix only partially closed — and prepared **kaizen 2.34.1**.
+Ran the 2026-07-17 `/sweep` **Wave 1** (4 parallel worktree shards) → holistic
+redteam to convergence (reviewer + security-reviewer + pact-specialist) →
+**PR #1799 merged** (main `43b429929`) → **kaizen 2.34.2 released to PyPI +
+clean-venv verified**. Wave 2 and Wave 3 are teed up (below).
 
 ## Executed this session (durable receipts)
 
-- **Creds-in-logs class CLOSED across the whole package.** 22 source files, 85
-  sanitize/mask sites, 10 behavioral regression tests
-  (`tests/regression/test_issue_1720_creds_in_logs_sweep.py`). Every
-  credential-bearing exception log + URL log routes through
-  `sanitize_provider_error` / new `_mask_redis_url` / new `_mask_webhook_url`;
-  `exc_info=True` dropped on provider/MCP/connection paths (it resurfaced the raw
-  provider exception via the implicit `__context__` chain).
-- **Redteam CONVERGED** — 6 rounds (task IDs in
-  `journal/creds-in-logs-convergence.md`). Final round: 0 findings across
-  verify-all-fixes + exc-info-chain + return/metric lenses. Exhaustive grep over
-  all 54 credential-bearing modules → zero remaining raw-exception logs.
-- **Gate review done** — reviewer + security-reviewer both ran; found 3 real
-  issues (registry.py return/log-asymmetry sibling; `_mask_webhook_url` userinfo
-  + query leak; `_mask_redis_url` multi-URL leak) — ALL fixed + 2 more regression
-  tests. async_single_shot LLM-gen error also sanitized.
-- **PR #1797** open (branch `fix/1720-creds-in-logs-sweep`, 3 commits: fix +
-  review-fixes + `release: kailash-kaizen 2.34.1`). Version bumped atomically
-  (pyproject 2.34.1 + `__init__` 2.34.1). pre-commit clean.
+- **PR #1799 merged** (main `43b429929`), branch deleted, 3 worktrees pruned.
+- **kaizen 2.34.2 published** — tag `kaizen-v2.34.2` (`e0eea6c05`), publish-pypi
+  run `29588984423` SUCCESS. Clean-venv bare install (`pip install
+  kailash-kaizen==2.34.2`, NO `[server]` extra) verified: `import
+  kaizen.monitoring` now succeeds (was `ModuleNotFoundError: fastapi`);
+  `create_dashboard_app()` raises typed `MonitoringDependencyError` naming the
+  remedy. Sibling-drift sweep clean (all 8 packages main==PyPI).
+- **1A** — #75 orphaned `test_example_validation.py` (dangling `EXAMPLES_DIR`,
+  all 23 failing, not 3). `git mv`d to `kaizen-agents` (where the examples live).
+  23/23 green, CI-wired.
+- **1B** — kaizen monitoring lazy-fastapi (`create_dashboard_app()` factory +
+  PEP-562 `__getattr__`, typed `MonitoringDependencyError`). Fixed 2 pre-existing
+  dashboard integration failures (`/metrics`→PlainTextResponse; stale ws:// test
+  assertion). → 2.34.2.
+- **1C** — sweep-redteam allowlist hardened 222→54 orphans. Redteam caught an
+  over-suppression (CapWords-tail contract refs wrongly skipped, tool's own unit
+  test regressed) — fixed by extending "CapWords=contract" to the tail; 8/8 unit
+  suite, repo-wide orphan total 52.
+- **Spec drift** — `kailash_pact.*`→`pact.*` (12 occ, 5 specs) + 4 deeper
+  submodule paths (`pact.GovernanceEngine`, `pact.ml.fingerprint_payload()`,
+  `pact.PactError`, de-nested `CostDelta`), each re-derived vs pact source.
+- **CI fix (pre-existing red-on-main since Apr 2026)** — `Validate Autonomy
+  Examples (3.11)` failed on `content_creator.py` f-string-backslash (invalid on
+  3.11). Hoisted the join out of the f-string; full autonomy sweep clean on 3.11.
 
 ## Read first (next session)
 
-1. **`04-validate/sweep-2026-07-17.md`** — the full repo-wide /sweep + the
-   **clustered wave plan** (Wave 1 parallel / Wave 2 provider-surface / Wave 3
-   soak-gated Wave C). START HERE for next-session scope.
-2. `journal/creds-in-logs-convergence.md` — the 6-round convergence receipt.
+1. `04-validate/sweep-2026-07-17.md` — the clustered wave plan (Wave 2/3 below).
+2. `01-analysis/1779-governance-egress-analysis.md` — the #1779 impl design
+   (Wave-2 ready). Gate at construction/selection, NOT in `providers/llm/openai.py`.
 3. This file's "Outstanding" below.
 
-## Wave plan (from the 2026-07-17 /sweep — value-ranked, clustered for parallel)
+## Wave plan (remaining)
 
-- **WAVE 1 (parallel, run now):** 1A example-gallery/doc test fixes ·
-  1B fastapi eager-import hygiene · 1C spec-drift triage (harden sweep-redteam
-  allowlist) · 1D #1779 governance-egress `/analyze`-only. 1A/1B/1C file-disjoint
-  → true parallel (cap 3); 1D is analysis-only.
-- **WAVE 2 (provider surface, serial, after W1):** 2A #1727 max_completion_tokens
-  (VERIFY-then-fix — may be no-op) · 2B #1779 impl (per 1D design).
-- **WAVE 3 (soak-gated, own cycle):** #1720 Wave C legacy-providers delete —
-  subsumes the ollama test cleanup. Only after 2.34.1 shims soak.
+- **WAVE 2 (provider surface — run next):** 2A #1727 `max_completion_tokens`
+  (VERIFY-then-fix, may be no-op — `providers/llm/openai.py` already has
+  `_filter_reasoning_model_params`/`_requires_temperature_1`) · 2B #1779
+  `governance_required` posture (per 1D design, ~205 LOC, 7 invariants, 1 shard).
+  **1D confirmed 2A + 2B are PARALLEL-SAFE — zero shared file** (#1779 gates at
+  core `trust/pact` + `kaizen/llm/client.py` + `kaizen/agent.py`, never inside
+  `openai.py`'s `chat()`). Both can run as one parallel wave.
+- **WAVE 3 (soak-gated, own cycle):** #1720 Wave C legacy `providers/llm/` prune
+  (keep `azure_ai_foundry`). Fires only after 2.34.x shims soak a real cadence.
+  Subsumes the ollama test cleanup. Re-confirm the irreversible delete at fire.
 
-## Outstanding (in priority order)
+## Outstanding / handoffs
 
-| ID | Item | Status |
-| -- | ---- | ------ |
-| R1-R3 | **PR #1797 merged + kaizen 2.34.1 released** | **DONE ✓** — merged (main `920003b3c`), tag `kaizen-v2.34.1`, publish-pypi run 29572288787 SUCCESS. Clean-venv `pip install kailash-kaizen==2.34.1` + import verified; fix surface (redis/webhook mask, provider sanitizer, 0 raw exc_info in shipped providers/llm) confirmed in the wheel. Sibling-drift sweep clean (all pkgs main==pypi). |
-| R4 | **Cross-SDK issue** — Rust SDK creds-in-logs sibling | **DONE ✓** — user approved; filed `esperie-enterprise/kailash-rs#1908` (2026-07-17). Grant receipt: `cross-repo-authorization-1720-creds-in-logs.md` (all 5 conditions, journaled before acting). Advisory MUST-NOT-1 tripwire fired post-hoc, adjudicated in-scope (same as byok rs#1881). |
-| PRE-EXISTING NOTE | `fastapi` eager-import in `kaizen/monitoring/__init__` → `dashboard` | Pre-existing (2.34.0 had it); `import kaizen.monitoring` fails on clean venv w/o fastapi. NOT from this PR. Candidate for a `deployment.md` eager-transitive-dep follow-up (monitoring optional-extra vs core dep). |
-| F1 | **Wave C** — partial delete of legacy `providers/llm/` | SOAK-DEFERRED (unchanged; 2.34.0 released today, zero soak). |
-| PRE | **8 pre-existing test failures** (ollama vision-setup, example-gallery docs) | Confirmed failing on clean HEAD; outside CI gate; unrelated to this PR. Separate shard. |
+| ID | Item | Disposition |
+| -- | ---- | ----------- |
+| #1779 Rust mirror | EATP D6 cross-SDK parity | **Surface a specific cross-repo ASK when Wave-2 ships #1779** (not before — premature until built). Needs user authorization per repo-scope-discipline (all 5 conditions). |
+| ML-tracking 1.0.0 gaps | `specs/ml-tracking.md` mandates `SQLiteStorageDriver` (`_storage/sqlite_driver.py`) + `TrackerMCPServer` (×8) not in code | **Owner architecture decision** (aspirational-spec vs build-it) — kailash-ml 1.0.0 workstream. `SQLiteTrackerBackend` correctly documented as DELETED. |
+| pact impl-tracking | `pact.costs.CostDelta` referenced (correct form) but pact.costs exports only CostTracker; `pact.ml.fingerprint_payload` accessible but not in `pact.ml.__all__` | kailash-pact implementation items for the ML/PACT integration workstream (forward-refs / public-API promotion). |
+| Dashboard security (pre-existing) | monitoring `/metrics`/`/ws` unauthenticated + plotly CDN no-SRI | Optional hardening follow-up; NOT introduced by this wave. |
+| #1727 | may be partially/fully closed already | VERIFY-FIRST in Wave 2 before implementing. |
 
 ## Traps
 
-- kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ... -k "not mcp and not discover"`.
-- pre-commit shim has a stale interpreter path — invoke via `.venv/bin/python -m pre_commit run --files <files>`.
-- pyright false-positive storm for kaizen.* (possibly-unbound, dict-vs-str, Node.execute override) — pytest authoritative.
-- framework-first hook emits FALSE "raw SQL detected" on `llm_agent.py` edits — no SQL.
-- Release branch carrying CODE must NOT use `release/*` (auto-skips PR-gate matrix) — this PR is on `fix/`.
-- CI-check + merge are SEPARATE steps pinned to head SHA (git.md).
+- kaizen tests per-package: `cd packages/<pkg> && ../../.venv/bin/python -m pytest ...`.
+  A COMBINED cross-package pytest over kaizen-agents + kailash-kaizen hits
+  `ImportPathMismatchError` (both ship `tests/conftest.py`) — rootdir artifact,
+  NOT a defect; CI runs each package in its own working-directory.
+- pre-commit shim stale interpreter → invoke via `.venv/bin/python -m pre_commit run --files <files>`.
+  isort/ruff/black auto-fix (report "Failed" on modify) → re-stage + re-run to idempotency.
+- `python-use-type-annotations` pygrep hook matches the literal `# type` comment
+  fragment — reword comments to avoid `# type` (git.md).
+- pyright resolves `kaizen.*` against the installed wheel (stale) → false
+  "unknown import symbol"; pytest via editable `.venv` is authoritative.
+- Autonomy examples must compile on Python 3.11 (no f-string-backslash; 3.12+ only).
+- uv index-cache lag on fresh PyPI publish → `uv pip install --refresh`, else
+  pip `--no-cache-dir` fallback (build-repo-release-discipline Rule 2).
+- Release tag convention: `kaizen-v<X.Y.Z>` triggers `publish-pypi.yml`.
