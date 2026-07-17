@@ -5,6 +5,50 @@ cutover) is HIGH-blast (prod LLM path swap); Wave C (delete legacy) is
 IRREVERSIBLE. Both are human-gated per `commands/todos.md` + the plan in
 `02-plans/01-wave3-refined-decomposition.md`.
 
+## Wave-B1 — DELIVERED + CONVERGED (2026-07-17)
+
+Wave B1 (consumer cutover) shipped as three disjoint-file parallel-worktree
+shards (B1a/B1b/B1c), integrated on `feat/1720-wave-b1`, redteam-CONVERGED
+(2 consecutive clean rounds across reviewer + security-reviewer + closure-parity;
+round-1 found 1 HIGH + 2 MED + 3 LOW, all fixed in `d87ecf799`), and opened as
+**PR #1789**. Full suite green from integrated main (666 parity+regression;
+14,691 collected). The redteam HIGH: the embed cutover had silently returned a
+MOCK embedding on an unresolvable credential provider — restored the legacy loud
+raise (the sanctioned mock path stays the explicit `provider=="mock"` mode only).
+
+**Precise Wave-C legacy-coupling residual (closure-verified at `d87ecf799`):**
+
+1. `azure_ai_foundry` legacy chat fallback — `nodes/ai/llm_agent.py::_legacy_provider_chat` (Decision-2A scope-out).
+2. ollama/docker embed fallback — `nodes/ai/embedding_generator.py::_fallback_provider_embedding` (needs `base_url`/`api_key` node params to migrate; a SECOND documented residual alongside azure_ai_foundry).
+3. `production/metrics.py` name-registry import (`_MODEL_PREFIX_MAP`, `PROVIDERS`) — B2b.
+4. The 2 re-export barrels — `nodes/ai/__init__.py`, `providers/__init__.py` — B2a.
+
+**Test-file sweep budget for Wave C: 35 files** reference the legacy surface
+(was estimated 30; +5 drift, collection-clean now, swept in the delete PR per
+orphan-detection Rule 4).
+
+**Note — B2b coupling is LESS than the census below implies:** the four-axis
+`llm/deployment_resolver.py` and `llm/client.py` do NOT import the legacy
+registry (docstring mentions only; they use local frozensets). Only `metrics.py`
+
+- the barrels + the azure fallback import `providers.registry`.
+
+**Non-blocking follow-ups (surfaced by the B1 redteam, NOT introduced by B1):**
+
+- Legacy `azure_ai_foundry` `.chat()` lacks the CRLF/non-ASCII api_key guard the
+  four-axis path now has (enforcement-surface-parity asymmetry, confined to the
+  one legacy provider). Fold into the `azure_ai_foundry` four-axis-wire capability
+  item (Decision-2B if the user wants a Foundry wire).
+- `_run_async_in_sync_context` (`llm_agent.py`, unchanged since 2026-03-11) has a
+  latent RuntimeError-remap edge; B1a grows its risk surface but it is unreachable
+  on the live path (LLM error taxonomy is Exception-based, not RuntimeError).
+- Pre-existing `structured_output_mode='auto'` FutureWarning (`async_single_shot.py`)
+  — separate structured-output deprecation workstream.
+
+**NEXT:** Wave B2 (delete-gate prep — B2a barrel shims + B2b name-registry
+extraction + B2c LLMProvider subclass re-basing), then its own inter-wave gate,
+then surface Wave C (DELETE) for the human structural gate (irreversible).
+
 Grounded in a code-verified census of the merged Waves 1+2+A foundation
 (main @ `25afb9a39`, re-verified at HEAD after the foundation-redteam fixes).
 Citations are grep-stable symbols — re-resolve before building.
