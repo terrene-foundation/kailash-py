@@ -88,7 +88,10 @@ OpenAIProvider`) and `kaizen.providers.embedding.<mod>`, the `LLMProvider`
   are now routed through `sanitize_provider_error` before reaching the LOG
   surface on the completion path (previously logged raw via `exc_info=True`) —
   a URL-embedded credential in a raw provider exception can no longer leak into
-  server logs.
+  server logs. (8) Same-class sibling on the MCP retrieval path: the
+  `_retrieve_mcp_context` connection-failure log lines now route through
+  `sanitize_provider_error` (they previously logged the raw exception while a
+  sanitized copy was computed for the return).
 
 ## [2.33.1] — 2026-07-15 — RAG verification-parse hardening (#1755)
 

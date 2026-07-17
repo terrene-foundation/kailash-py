@@ -1572,15 +1572,19 @@ class LLMAgentNode(Node):
                         )
                     except Exception as e:
                         error_type = type(e).__name__
+                        # Sanitize before logging — an MCP transport error can
+                        # echo a URL-embedded credential onto the log surface
+                        # (rules/security.md "No secrets in logs"; #1720 release
+                        # redteam MED-1 sibling on the MCP path).
+                        sanitized_msg = sanitize_provider_error(e, "MCP")
                         self.logger.error(
                             "MCP server '%s' connection failed (%s): %s",
                             server_config.get("name", "unknown"),
                             error_type,
-                            e,
+                            sanitized_msg,
                         )
 
                         # Provide helpful error messages based on exception type
-                        sanitized_msg = sanitize_provider_error(e, "MCP")
                         if "coroutine" in str(e).lower() and "await" in str(e).lower():
                             self.logger.error(
                                 "This appears to be an async/await issue. Please report this bug to the Kailash SDK team."
@@ -1613,7 +1617,9 @@ class LLMAgentNode(Node):
                 pass
             except Exception as e:
                 self.logger.error(
-                    f"Unexpected error in MCP retrieval: {type(e).__name__}: {e}"
+                    "Unexpected error in MCP retrieval [%s]: %s",
+                    type(e).__name__,
+                    sanitize_provider_error(e, "MCP"),
                 )
                 self.logger.info("Falling back to mock MCP implementation.")
 

@@ -90,3 +90,35 @@ def test_provider_error_log_is_sanitized_no_credential_leak(monkeypatch, caplog)
     # AND the log surface carries no raw credential (the MED-1 fix — the log
     # previously used raw ``e`` + ``exc_info=True``).
     assert secret not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# MED-1 sibling — the MCP retrieval path sanitizes its connection-error log.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_mcp_connection_error_log_is_sanitized_no_credential_leak(caplog):
+    """The MCP per-server connection-failure path (``_retrieve_mcp_context``) was
+    the same-class sibling of MED-1: it logged the raw exception while a
+    sanitized copy was computed two lines later for the return. Confirm a
+    URL-embedded credential in an MCP transport error does not reach the log."""
+    secret = "MCPSECRETCANARY0123456789"
+
+    class _FakeMCPClient:
+        async def list_resources(self, server_config):
+            raise RuntimeError(f"connect failed at https://user:{secret}@mcp.host/v1")
+
+    node = LLMAgentNode()
+    # Setting ``_mcp_client`` makes ``use_real_mcp`` True and supplies the client,
+    # so ``list_resources`` drives the per-server ``except Exception`` log path.
+    node._mcp_client = _FakeMCPClient()
+
+    with caplog.at_level(logging.ERROR):
+        node._retrieve_mcp_context(
+            [{"name": "s1", "transport": "http", "url": "https://mcp.host"}],
+            ["resource://x/y"],
+            {},
+        )
+
+    assert secret not in caplog.text
