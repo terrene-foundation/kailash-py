@@ -327,6 +327,24 @@ def _parse_stream_line(line: str, shaper: Any) -> Optional[Dict[str, Any]]:
     return shaper.parse_response(obj)
 
 
+def _l2_normalize_vector(vector: List[float]) -> List[float]:
+    """Return a unit-L2-norm copy of ``vector`` (pure math).
+
+    This is the SINGLE client-side unit-normalization implementation. It is
+    applied UNIFORMLY across every embed wire by :meth:`LlmClient.embed` when
+    ``EmbedOptions.normalize`` is True (#1720 Wave-B1b, the folded F2-MEDIUM):
+    divide each component by the vector's L2 norm. A zero vector (norm == 0)
+    is returned UNCHANGED so normalization never divides by zero. There is no
+    per-shaper normalize copy — the HuggingFace shaper's former in-``parse_response``
+    normalize was removed so this is the only place normalization happens
+    (no double-normalize).
+    """
+    norm = sum(v * v for v in vector) ** 0.5
+    if norm == 0.0:
+        return list(vector)
+    return [v / norm for v in vector]
+
+
 class LlmClient:
     """Uniform client over an `LlmDeployment`.
 
@@ -566,6 +584,7 @@ class LlmClient:
         *,
         model: Optional[str] = None,
         options: Optional[EmbedOptions] = None,
+        timeout: Optional[float] = None,
         http_client: Optional[LlmHttpClient] = None,
     ) -> List[List[float]]:
         """Generate embedding vectors for ``texts`` via the configured deployment.
@@ -585,10 +604,20 @@ class LlmClient:
                 ``rules/env-models.md`` callers SHOULD read the model
                 from the environment (``OPENAI_EMBEDDING_MODEL``,
                 ``OLLAMA_EMBEDDING_MODEL``) rather than hardcoding.
-            options: Optional ``EmbedOptions`` (``dimensions`` / ``user``).
-                Accepted for every wire; individual wires may ignore
-                fields they do not support (Ollama ignores ``dimensions``
-                per its documented contract).
+            options: Optional ``EmbedOptions`` (``dimensions`` / ``user`` /
+                ``input_type`` / ``normalize``). Accepted for every wire;
+                individual wires may ignore fields they do not support
+                (Ollama ignores ``dimensions`` per its documented contract).
+                ``normalize=True`` L2-unit-normalizes every returned vector
+                UNIFORMLY, client-side, for EVERY wire (#1720 Wave-B1b); a
+                zero vector is returned unchanged. ``normalize`` unset / False
+                leaves the raw wire vectors byte-identical.
+            timeout: Optional per-request wire-call timeout, in seconds. When
+                set, it bounds THIS embedding request (threaded into the
+                underlying ``LlmHttpClient`` request the same way ``complete()``
+                bounds its send). When ``None`` (default), the transport's own
+                client-level timeout applies — byte-identical to the
+                pre-``timeout`` behavior.
             http_client: Optional pre-constructed ``LlmHttpClient`` — for
                 tests / advanced callers who want to share an HTTP pool
                 across multiple ``embed()`` calls. When ``None``, a
@@ -723,11 +752,19 @@ class LlmClient:
                 },
             )
 
+            # #1720 Wave-B1b: a caller-supplied ``timeout`` bounds THIS wire
+            # call (legacy embed passed ``timeout`` through to the provider);
+            # thread it into the httpx request only when set so an unset
+            # timeout is byte-identical to the transport's client-level default.
+            post_kwargs: dict = {}
+            if timeout is not None:
+                post_kwargs["timeout"] = timeout
             resp = await http_client.post(
                 url,
                 headers=request["headers"],
                 json=payload,
                 auth_strategy_kind=auth_kind,
+                **post_kwargs,
             )
         except httpx.TimeoutException as exc:
             logger.error(
@@ -768,18 +805,28 @@ class LlmClient:
                 raise InvalidResponse(
                     f"{wire.name.lower()}_embeddings: response was not valid JSON"
                 ) from exc
-            # #1720 Wave-A parity (F2): thread ``options`` into the embed
-            # shaper so ``EmbedOptions.normalize`` is honored. Only
-            # ``huggingface_embeddings`` consumes it (L2-normalizes the
-            # returned vectors); openai/cohere/ollama accept-and-ignore it for
-            # dispatch symmetry. Previously omitted here -> normalize was a
-            # silent no-op on the HuggingFace embed wire (zero-tolerance 3c).
+            # ``options`` is threaded into every embed shaper for dispatch
+            # symmetry; the shapers consume the REQUEST-shaping fields
+            # (openai ``dimensions``/``user``, cohere ``input_type``) and
+            # ignore the rest. ``EmbedOptions.normalize`` is NOT a per-shaper
+            # concern anymore: it is applied UNIFORMLY below, client-side, for
+            # EVERY wire (#1720 Wave-B1b, folded F2-MEDIUM) — the former
+            # HuggingFace-only in-``parse_response`` normalize was removed so
+            # there is ONE normalize implementation and no double-normalize.
             parsed = shaper.parse_response(payload_json, options)
             vectors = parsed["vectors"]
             if not isinstance(vectors, list):
                 raise InvalidResponse(
                     f"{wire.name.lower()}_embeddings: parse_response returned non-list vectors"
                 )
+            # #1720 Wave-B1b: single, uniform, client-side L2 unit-normalization
+            # for EVERY wire when ``normalize=True``. Pure math (divide each
+            # vector by its L2 norm); a zero vector is returned unchanged.
+            # ``normalize`` unset / False -> vectors are byte-identical to the
+            # raw wire output (zero-tolerance Rule 3c: the documented kwarg is
+            # consumed by this branch, never accepted-and-dropped).
+            if options is not None and options.normalize:
+                vectors = [_l2_normalize_vector(v) for v in vectors]
             logger.info(
                 "llm.embed.ok",
                 extra={

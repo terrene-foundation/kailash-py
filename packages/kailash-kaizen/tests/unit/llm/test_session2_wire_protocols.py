@@ -128,7 +128,10 @@ def test_google_parse_response_extracts_first_candidate_text() -> None:
     parsed = google_generate_content.parse_response(raw)
     assert parsed["text"] == "hi there"
     assert parsed["usage"]["input_tokens"] == 5
-    assert parsed["stop_reason"] == "STOP"
+    # #1720 Wave-B1a — the wire value-maps the raw Gemini finishReason onto the
+    # legacy lowercase form ('STOP' -> 'stop'), matching
+    # kaizen.providers.llm.google (behaviour-neutral cutover, DECISION-1A).
+    assert parsed["stop_reason"] == "stop"
 
 
 def test_google_payload_rejects_non_request() -> None:

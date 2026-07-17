@@ -13,8 +13,6 @@ shape) per rules/testing.md; no source-grep-as-assertion.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from kaizen.llm import LlmClient
@@ -115,13 +113,19 @@ def test_hf_parse_unpooled_mean_pools_tokens() -> None:
     assert out["vectors"] == [[1.0, 3.0]]
 
 
-def test_hf_parse_normalizes_when_option_set() -> None:
+def test_hf_parse_does_not_normalize_normalize_moved_to_client() -> None:
+    """#1720 Wave-B1b: the HuggingFace-only in-``parse_response`` normalize was
+    REMOVED. ``EmbedOptions.normalize`` is now applied UNIFORMLY, client-side,
+    by ``LlmClient.embed`` for every wire (one implementation, no
+    double-normalize). The shaper therefore returns RAW vectors even when
+    ``normalize=True`` is passed -- ``options`` is accepted for dispatch-
+    signature symmetry only."""
     out = huggingface_embeddings.parse_response(
         [[3.0, 4.0]], EmbedOptions(normalize=True)
     )
-    v = out["vectors"][0]
-    assert math.isclose(math.sqrt(v[0] ** 2 + v[1] ** 2), 1.0, rel_tol=1e-9)
-    # Without normalize, the raw vector passes through.
+    # RAW passthrough — the shaper no longer normalizes (the client does).
+    assert out["vectors"] == [[3.0, 4.0]]
+    # Byte-identical to the no-options path.
     out_raw = huggingface_embeddings.parse_response([[3.0, 4.0]])
     assert out_raw["vectors"] == [[3.0, 4.0]]
 

@@ -272,8 +272,10 @@ def test_parse_function_call_to_canonical_tool_calls():
     # arguments MUST be a JSON-encoded STRING, not a dict.
     assert isinstance(call["function"]["arguments"], str)
     assert json.loads(call["function"]["arguments"]) == {"city": "Paris", "unit": "c"}
-    # Existing parsed keys unchanged.
-    assert parsed["stop_reason"] == "STOP"
+    # #1720 Wave-B1a — the wire now value-maps the raw Gemini finishReason onto
+    # the legacy lowercase form ('STOP' -> 'stop'), matching
+    # kaizen.providers.llm.google (behaviour-neutral cutover, DECISION-1A).
+    assert parsed["stop_reason"] == "stop"
     assert parsed["usage"]["total_tokens"] == 13
 
 

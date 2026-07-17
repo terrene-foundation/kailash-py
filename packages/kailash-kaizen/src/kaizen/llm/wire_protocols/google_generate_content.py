@@ -29,6 +29,36 @@ logger = logging.getLogger(__name__)
 _TOOL_CHOICE_MODE = {"auto": "AUTO", "required": "ANY", "none": "NONE"}
 
 
+def _map_finish_reason(raw: Any) -> Any:
+    """Value-map a Gemini ``finishReason`` onto the legacy lowercase form.
+
+    #1720 Wave-B1a — behavior-neutral migration of the FULL legacy value-map
+    from ``kaizen.providers.llm.google.GoogleGeminiProvider`` (which lowercases
+    the raw Gemini reason and buckets it): ``tool``/``function`` -> ``"tool_calls"``,
+    ``max``/``length`` -> ``"length"``, ``safety`` -> ``"content_filter"``, and
+    every other recognised reason (``STOP`` etc.) -> ``"stop"``. Matching the
+    legacy substring-on-lowercase logic exactly means a consumer testing
+    ``finish_reason == "stop"`` sees the SAME value on both the legacy and the
+    four-axis path (the pre-cutover divergence was the raw ``"STOP"`` casing).
+
+    A ``None`` finishReason (no candidate / field absent) maps to ``"stop"`` —
+    legacy ``GoogleGeminiProvider`` initialises ``finish_reason = "stop"`` and
+    never emits ``None`` (including on the streaming path), so ``"stop"`` is the
+    faithful legacy floor for an absent reason (#1720 Wave-B1 redteam LOW —
+    full finish_reason parity).
+    """
+    if raw is None:
+        return "stop"
+    fr = str(raw).lower()
+    if "tool" in fr or "function" in fr:
+        return "tool_calls"
+    if "max" in fr or "length" in fr:
+        return "length"
+    if "safety" in fr:
+        return "content_filter"
+    return "stop"
+
+
 def _role_from_openai(role: str) -> str:
     """Map OpenAI role names to Gemini role names.
 
@@ -285,7 +315,11 @@ def parse_response(payload: Dict[str, Any]) -> Dict[str, Any]:
             "output_tokens": usage.get("candidatesTokenCount"),
             "total_tokens": usage.get("totalTokenCount"),
         },
-        "stop_reason": finish_reason,
+        # #1720 Wave-B1a — value-map the raw Gemini finishReason onto the legacy
+        # lowercase form ('STOP' -> 'stop', 'MAX_TOKENS' -> 'length', 'SAFETY' ->
+        # 'content_filter', tool/function -> 'tool_calls'), behaviour-neutral with
+        # kaizen.providers.llm.google. Previously emitted the raw provider value.
+        "stop_reason": _map_finish_reason(finish_reason),
         "model": payload.get("modelVersion"),
     }
     # Only surface tool_calls when ≥1 functionCall part is present; a
