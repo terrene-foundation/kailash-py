@@ -102,16 +102,17 @@ def test_plain_completion_parse_parity(fixture, wire, legacy_driver):
     ), f"{fixture}: four-axis parse diverges from legacy parse on shared bytes"
 
 
-def test_google_parse_parity_documents_finish_reason_casing_delta():
-    """Google plain-completion: content + tool_calls + usage parse identically,
-    but finish_reason CASING diverges (WAVE-B FINDING #2).
+def test_google_parse_parity_finish_reason_value_map():
+    """Google plain-completion parses IDENTICALLY on both stacks, finish_reason
+    INCLUDED (#1720 Wave-B1a — the DECISION-1A value-map cutover).
 
-    Legacy ``GoogleGeminiProvider.chat`` lowercases the Gemini ``finishReason``
-    ('STOP' -> 'stop'); the four-axis ``google_generate_content`` wire preserves
-    the raw provider value ('STOP'). A consumer testing ``finish_reason == "stop"``
-    would break for Gemini on four-axis. This pins the CURRENT divergence so the
-    Wave-B cutover consciously decides: normalize four-axis to lowercase
-    (behavior-neutral) OR accept the raw-value change. NOT a harness bug.
+    Previously the four-axis ``google_generate_content`` wire emitted the RAW
+    Gemini ``finishReason`` ('STOP') while legacy ``GoogleGeminiProvider.chat``
+    value-mapped it to the lowercase legacy form ('stop') — a documented Wave-B
+    finish_reason divergence. Wave-B1a ports the FULL legacy value-map
+    (STOP -> 'stop', MAX_TOKENS/length -> 'length', SAFETY -> 'content_filter',
+    tool/function -> 'tool_calls') into the wire's parse step, so both stacks now
+    yield the SAME value. This asserts that parity (was: documented the delta).
     """
     canned = load_fixture("google_response")
     four_axis = four_axis_normalized(google_generate_content, canned)
@@ -119,13 +120,11 @@ def test_google_parse_parity_documents_finish_reason_casing_delta():
         drive_legacy_google(canned, model="parity-gemini", messages=_MSGS)[0]
     )
 
-    # Everything EXCEPT finish_reason matches on the shared bytes.
-    assert four_axis["content"] == legacy["content"]
-    assert four_axis["tool_calls"] == legacy["tool_calls"]
-    assert four_axis["usage"] == legacy["usage"]
-    # The pinned casing divergence — fails loudly if either side changes.
-    assert legacy["finish_reason"] == "stop"  # legacy lowercases
-    assert four_axis["finish_reason"] == "STOP"  # four-axis preserves raw
+    # Full parse-contract parity on the shared bytes — finish_reason included.
+    assert four_axis == legacy
+    # Explicit: both value-map the raw 'STOP' onto the legacy lowercase 'stop'.
+    assert legacy["finish_reason"] == "stop"
+    assert four_axis["finish_reason"] == "stop"
 
 
 # Tool-bearing cells where the LEGACY provider genuinely parses tool_calls

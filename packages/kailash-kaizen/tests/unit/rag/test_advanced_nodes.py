@@ -114,32 +114,56 @@ def _make_fake_provider(*_args: Any, **_kwargs: Any) -> MagicMock:
     return provider
 
 
-def _make_unavailable_provider(*_args: Any, **_kwargs: Any) -> MagicMock:
-    """A provider that reports itself unavailable — the genuine no-LLM deployment.
+def _fake_four_axis_response(**_: Any) -> dict:
+    """A deterministic four-axis ``LlmClient.complete()`` response.
 
-    ``LLMAgentNode._provider_llm_response`` raises ``RuntimeError`` (before any
-    network call) when ``is_available()`` is False and no per-request api_key is
-    supplied, which drives each advanced-RAG node's ``try/except`` rule-based
-    fallback. Used by the one test whose whole point is the no-LLM path (issue
-    #1736), overriding the module autouse content-stub.
+    ``kaizen.llm._legacy_shape.to_legacy_shape`` maps ``text`` -> ``content``, so
+    this yields the same normalized shape ``_fake_chat_response`` did on the
+    legacy path (issue #1736 offline determinism, preserved across the #1720
+    Wave-B1a four-axis cutover of ``LLMAgentNode._provider_llm_response``).
     """
-    provider = MagicMock()
-    provider.is_available.return_value = False
-    return provider
+    return {
+        "text": _MOCK_CONTENT,
+        "stop_reason": "stop",
+        "model": "mock-model",
+        "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+    }
+
+
+def _make_fake_four_axis_client(*_args: Any, **_kwargs: Any) -> MagicMock:
+    """A fake ``LlmClient`` whose async ``complete()`` returns the canned dict."""
+    client = MagicMock()
+
+    async def _complete(*_a: Any, **_kw: Any) -> dict:
+        return _fake_four_axis_response()
+
+    client.complete = _complete
+    return client
 
 
 @pytest.fixture(autouse=True)
 def _stub_llm_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stub the kaizen provider registry seam for this module only (issue #1736).
+    """Stub the four-axis LLM seam for this module only (issue #1736).
 
     ``kaizen.nodes.rag.advanced`` constructs ``LLMAgentNode(provider="openai",
-    ...)`` directly for its four LLM-backed steps. ``LLMAgentNode.
-    _provider_llm_response()`` resolves the provider via
-    ``kaizen.providers.registry.get_provider(name)`` and calls
-    ``provider.chat(...)`` — the real network seam. Stubbing it here (module-
-    scoped, NOT a directory-wide conftest) keeps every other file in
-    ``tests/unit/rag/`` byte-for-byte unaffected, per issue #1736 scope.
+    ...)`` directly for its four LLM-backed steps. Since the #1720 Wave-B1a live
+    cutover, ``LLMAgentNode._provider_llm_response()`` resolves a four-axis
+    deployment via ``kaizen.llm.deployment_resolver.resolve_deployment_for`` and
+    calls ``kaizen.llm.client.LlmClient.complete(...)`` — the real network seam.
+    Stubbing it here (module-scoped, NOT a directory-wide conftest) with a
+    sentinel deployment + fake client keeps every other file in
+    ``tests/unit/rag/`` byte-for-byte unaffected, per issue #1736 scope. The
+    legacy ``get_provider`` seam is also stubbed for the one no-LLM test that
+    overrides the four-axis resolver.
     """
+    monkeypatch.setattr(
+        "kaizen.llm.deployment_resolver.resolve_deployment_for",
+        lambda *a, **kw: object(),
+    )
+    monkeypatch.setattr(
+        "kaizen.llm.client.LlmClient.from_deployment_sync",
+        classmethod(_make_fake_four_axis_client),
+    )
     monkeypatch.setattr(
         "kaizen.providers.registry.get_provider",
         _make_fake_provider,
@@ -467,15 +491,18 @@ class TestHyDENode:
         """With no LLM available the rule-based fallback yields >=1 hypothesis.
 
         This test's whole point is the genuine NO-LLM path, so it explicitly
-        overrides the module autouse content-stub with an *unavailable* provider
-        (``is_available()`` -> False). That drives ``_generate_hypotheses``'s
-        ``try/except`` rule-based fallback (the documented behavior) rather than
-        the mocked-completion path the other tests exercise — offline either way,
-        no network (issue #1736).
+        overrides the module autouse four-axis stub with an UNRESOLVABLE
+        deployment (``resolve_deployment_for`` -> ``None``). Since the #1720
+        Wave-B1a cutover, that is the four-axis equivalent of legacy
+        ``is_available() is False``: ``LLMAgentNode._provider_llm_response``
+        raises ``RuntimeError`` (before any network call), which drives
+        ``_generate_hypotheses``'s ``try/except`` rule-based fallback (the
+        documented behavior) rather than the mocked-completion path the other
+        tests exercise — offline either way, no network (issue #1736).
         """
         with patch(
-            "kaizen.providers.registry.get_provider",
-            side_effect=_make_unavailable_provider,
+            "kaizen.llm.deployment_resolver.resolve_deployment_for",
+            return_value=None,
         ):
             result = HyDENode(num_hypotheses=2).run(documents=_CORPUS, query=_QUERY)
         # The rule-based fallback ("A comprehensive answer to '<query>'…") — NOT a
