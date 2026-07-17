@@ -803,6 +803,19 @@ class EmbeddingGeneratorNode(Node):
         max_retries: int,
     ) -> list[float]:
         """Fallback implementation for backward compatibility."""
+        # #1779 governance_required posture: the ollama branch below egresses
+        # DIRECTLY (ollama.embeddings) with no four-axis LlmClient, so the
+        # construction gate cannot cover it — gate explicitly here, mirroring
+        # LLMAgentNode._legacy_provider_chat (enforcement-surface parity;
+        # security.md § Enforcement-Surface Parity; redteam round-4). mock
+        # exempt; ungoverned honored; OFF posture is a no-op (byte-identical).
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=(provider == "mock"),
+            ungoverned=getattr(self, "_ungoverned", False),
+            surface="EmbeddingGeneratorNode",
+        )
         # Handle Ollama provider
         if provider == "ollama":
             try:

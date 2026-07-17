@@ -453,3 +453,50 @@ async def test_base_agent_simple_execute_propagates_typed_refusal(
     base = BaseAgent(config={"model": _MODEL})
     with pytest.raises(UngovernedEgressRefused):
         await base._simple_execute_async({"query": "hi"})
+
+
+# --------------------------------------------------------------------------- #
+# Round-4 — EmbeddingGeneratorNode ollama legacy fallback (the last non-four-axis
+# egress chokepoint) must be gated (enforcement-surface parity with _legacy_provider_chat)
+# --------------------------------------------------------------------------- #
+
+
+def test_embedding_fallback_ollama_refused_under_posture_on() -> None:
+    """The ollama fallback (_fallback_provider_embedding) egresses directly via
+    ollama.embeddings with NO four-axis LlmClient, so it needs its own explicit
+    gate — the sibling of the LLMAgentNode._legacy_provider_chat fix."""
+    kailash.set_governance_required(True)
+    node = _make_embedding_node()  # _ungoverned unset => default False
+    with pytest.raises(UngovernedEgressRefused):
+        node._fallback_provider_embedding(
+            "hello", "ollama", "nomic-embed-text", None, 60, 3
+        )
+
+
+def test_embedding_fallback_ollama_ungoverned_bypasses() -> None:
+    kailash.set_governance_required(True)
+    node = _make_embedding_node()
+    node._ungoverned = True
+    try:
+        node._fallback_provider_embedding(
+            "hello", "ollama", "nomic-embed-text", None, 60, 3
+        )
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the ollama fallback gate")
+    except Exception:
+        pass  # ollama-not-installed / provider error is acceptable
+
+
+def test_embedding_fallback_off_posture_byte_identical() -> None:
+    # OFF posture: the gate is a no-op; the method proceeds to its normal
+    # (ollama-not-installed) RuntimeError, NOT UngovernedEgressRefused.
+    kailash.set_governance_required(None)
+    node = _make_embedding_node()
+    try:
+        node._fallback_provider_embedding(
+            "hello", "ollama", "nomic-embed-text", None, 60, 3
+        )
+    except UngovernedEgressRefused:
+        raise AssertionError("OFF posture must not gate")
+    except Exception:
+        pass
