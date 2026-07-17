@@ -656,45 +656,111 @@ class EmbeddingGeneratorNode(Node):
         timeout: int,
         max_retries: int,
     ) -> list[float]:
-        """Generate embedding using external provider."""
+        """Generate an embedding via the four-axis ``LlmClient`` (#1720 Wave-B1b).
+
+        Resolves the legacy ``provider`` name to a four-axis ``LlmDeployment``
+        through the shared ``resolve_deployment_for`` surface, then issues a
+        real embedding request via ``LlmClient.from_deployment_sync(...).embed``
+        and returns the first (and only) vector.
+
+        Provider-specific fields the legacy path set are threaded through
+        ``EmbedOptions``: ``dimensions`` (openai only), and ``input_type`` set
+        to ``"search_document"`` for cohere (Cohere v3 embed requires it). The
+        four-axis HuggingFace embed wire already targets its feature-extraction
+        API path (``/models/{model}``), so no per-request ``use_api`` toggle is
+        needed. ``timeout`` bounds the wire call (legacy semantics).
+
+        When the resolver returns ``None`` (no four-axis mapping, or a required
+        credential / base_url could not be resolved -- already logged at DEBUG
+        by the resolver, e.g. ollama with no base_url on this node), the legacy
+        ``_fallback_provider_embedding`` path is used so those providers keep
+        working. The ``except ImportError`` fallback and the ``except Exception``
+        -> ``RuntimeError`` wrapper are preserved from the legacy contract.
+        """
         try:
-            from kaizen.providers.registry import get_provider
+            from kaizen.llm import LlmClient, resolve_deployment_for
+            from kaizen.llm.deployment import EmbedOptions
 
-            # Get the provider instance
-            provider_instance = get_provider(provider, "embeddings")
-
-            # Check if provider is available
-            if not provider_instance.is_available():
-                raise RuntimeError(
-                    f"Provider {provider} is not available. Check dependencies and configuration."
+            deployment = resolve_deployment_for(provider, model)
+            if deployment is None:
+                # No four-axis mapping / unresolved credential (resolver already
+                # logged a DEBUG reason). Preserve legacy coverage for providers
+                # the four-axis path cannot resolve from the node's inputs.
+                return self._fallback_provider_embedding(
+                    text, provider, model, dimensions, timeout, max_retries
                 )
 
-            # Prepare kwargs for the provider
-            kwargs = {"model": model, "timeout": timeout}
-
-            # Add dimensions if specified and provider supports it
-            if dimensions and provider in ["openai"]:
-                kwargs["dimensions"] = dimensions
-
-            # Provider-specific parameters
+            option_kwargs: dict[str, Any] = {}
+            # dimensions is only honored by openai (mirrors the legacy path).
+            if dimensions and provider == "openai":
+                option_kwargs["dimensions"] = dimensions
+            # Cohere v3 embed REQUIRES an input_type; legacy set search_document.
             if provider == "cohere":
-                kwargs["input_type"] = "search_document"
-            elif provider == "huggingface":
-                kwargs["use_api"] = True  # Default to API for consistency
+                option_kwargs["input_type"] = "search_document"
+            options = EmbedOptions(**option_kwargs) if option_kwargs else None
 
-            # Generate embedding
-            embeddings = provider_instance.embed([text], **kwargs)
+            client = LlmClient.from_deployment_sync(deployment)
 
-            # Return the first (and only) embedding
-            return embeddings[0] if embeddings else []
+            async def _call_embed() -> list[list[float]]:
+                return await client.embed(
+                    [text], model=model, options=options, timeout=float(timeout)
+                )
+
+            vectors = self._run_embed_coro(_call_embed())
+            return vectors[0] if vectors else []
 
         except ImportError:
-            # Fallback to the original implementation if ai_providers not available
+            # Fallback to the original implementation if the four-axis LLM
+            # layer is not importable.
             return self._fallback_provider_embedding(
                 text, provider, model, dimensions, timeout, max_retries
             )
         except Exception as e:
             raise RuntimeError(f"Provider {provider} error: {str(e)}") from e
+
+    def _run_embed_coro(self, coro):
+        """Run an async ``LlmClient.embed`` coroutine from this sync node method.
+
+        ``LlmClient.embed`` is async (``rules/patterns.md`` § async/sync); the
+        node's ``run()`` is the synchronous Node interface and may be invoked
+        from a sync runtime OR from inside an already-running event loop (an
+        async runtime). A bare ``asyncio.run`` raises "event loop is already
+        running" in the latter case, so this bridge runs the coroutine on a
+        fresh loop in a dedicated thread when a loop is already running, and
+        uses ``asyncio.run`` only when there is none -- the same shape
+        ``llm_agent._run_async_in_sync_context`` uses. Errors are re-raised on
+        the calling thread (never swallowed).
+        """
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running event loop on this thread -- safe to own one here.
+            return asyncio.run(coro)
+
+        # A loop is already running; run the coroutine on a fresh loop in a
+        # separate thread so event loops are never nested.
+        import threading
+
+        box: dict[str, Any] = {}
+
+        def _run_in_thread() -> None:
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                box["result"] = new_loop.run_until_complete(coro)
+            except BaseException as exc:  # re-raised below; never swallowed
+                box["error"] = exc
+            finally:
+                new_loop.close()
+
+        thread = threading.Thread(target=_run_in_thread)
+        thread.start()
+        thread.join()
+        if "error" in box:
+            raise box["error"]
+        return box["result"]
 
     def _fallback_provider_embedding(
         self,
