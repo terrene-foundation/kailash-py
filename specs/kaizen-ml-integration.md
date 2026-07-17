@@ -409,7 +409,7 @@ class CostDelta:
         )
 ```
 
-`pact.costs.CostTracker.CostDelta` MUST use the IDENTICAL schema. A `CostDelta` serialized by Kaizen MUST deserialize by PACT and vice versa.
+`pact.costs.CostDelta` MUST use the IDENTICAL schema. A `CostDelta` serialized by Kaizen MUST deserialize by PACT and vice versa.
 
 ### 4.3 Migration for 2.11.x users
 
@@ -584,7 +584,7 @@ Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side Kaizen surfa
 2.11.x users:
 
 - `AgentDiagnostics.__init__` — gains `tracker=` kwarg as OPTIONAL. Existing calls continue to work.
-- `CostTracker.CostDelta.cents` → DeprecationWarning shim for one release cycle (see §4.3). Removed at Kaizen 3.0 per approved-decisions.md Decision 11 analogy.
+- `CostDelta.cents` → DeprecationWarning shim for one release cycle (see §4.3). Removed at Kaizen 3.0 per approved-decisions.md Decision 11 analogy.
 - `TraceExporter()` default sink — was `NoOpSink`, now `SQLiteSink(ambient store)` IF an ambient tracker exists. Pure-NoOp mode still available via `TraceExporter(sink=NoOpSink())` explicit.
 - `LLMDiagnostics` — NEW class, no migration.
 - `InterpretabilityDiagnostics.__init__` — gains `tracker=` kwarg.

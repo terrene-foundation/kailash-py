@@ -47,7 +47,7 @@ All three methods:
 
 ## 2. Public API
 
-All three methods live on `pact.engines.GovernanceEngine` (re-exported from `pact.GovernanceEngine`).
+All three methods live on `pact.GovernanceEngine` (the pact top-level re-export of the `kailash.trust.pact` `GovernanceEngine`).
 
 ### 2.1 `check_trial_admission`
 
@@ -91,7 +91,7 @@ class AdmissionDecision:
 - Fails CLOSED: if any constraint-probe raises, returns `AdmissionDecision(admitted=False, reason=f"probe exception: {type(e).__name__}", binding_constraint=None, ...)`. The exception is NEVER swallowed silently — it is logged at WARN with the fingerprint, and the returned `reason` string identifies the probe that raised.
 - Audit row is appended BEFORE the return statement, under the lock.
 - `decision_id` is a fresh UUID4 per call — callers that want to correlate to a trial log the id.
-- `trial_config` MUST NOT appear verbatim in the audit row — classified fields in the config are hashed to `sha256:<8hex>` via `pact.classification.fingerprint()`.
+- `trial_config` MUST NOT appear verbatim in the audit row — classified fields in the config are hashed to `sha256:<8hex>` via `pact.ml.fingerprint_payload()`.
 
 ### 2.2 `check_engine_method_clearance`
 
@@ -184,7 +184,7 @@ class CrossTenantDecision:
 
 ## 3. Error Taxonomy
 
-All errors inherit from `pact.exceptions.PactError` — the existing base. New errors:
+All errors inherit from `pact.PactError` — the existing base (the pact top-level re-export; class defined at `kailash.trust.pact.exceptions.PactError`). New errors:
 
 ```python
 class PactError(Exception):
