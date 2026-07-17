@@ -11,7 +11,6 @@ These tests DO NOT execute examples (that's in integration tests).
 They only validate structure and basic validity.
 """
 
-import importlib.util
 from pathlib import Path
 
 import pytest
@@ -239,9 +238,9 @@ class TestREADMEQuality:
             assert readme_path.exists(), f"Missing README: {readme_path}"
             content = readme_path.read_text()
             line_count = len(content.splitlines())
-            assert line_count >= 100, (
-                f"README too short ({line_count} lines): {readme_path.name}"
-            )
+            assert (
+                line_count >= 100
+            ), f"README too short ({line_count} lines): {readme_path.name}"
 
     def test_all_readmes_have_expected_sections(self):
         """Verify READMEs have standard sections."""
@@ -268,9 +267,9 @@ class TestREADMEQuality:
             ]
 
             for pattern in expected_patterns:
-                assert pattern in content, (
-                    f"README missing '{pattern}': {readme_path.name}"
-                )
+                assert (
+                    pattern in content
+                ), f"README missing '{pattern}': {readme_path.name}"
 
 
 class TestPythonSyntax:
@@ -321,7 +320,7 @@ class TestPythonSyntax:
             assert example_file.exists(), f"Missing file: {example_file}"
 
             # Test that file can be compiled (syntax check)
-            with open(example_file, "r") as f:
+            with open(example_file) as f:
                 code = f.read()
 
             try:
