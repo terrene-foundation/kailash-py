@@ -112,8 +112,9 @@ def parse_response(payload: Dict[str, Any], options: Any = None) -> Dict[str, An
     (the shared ``LlmClient.embed`` call site threads it uniformly, #1720
     Wave-A parity) and is intentionally IGNORED here: OpenAI honors
     ``dimensions`` at the request level and applies no post-parse
-    normalization. Only ``huggingface_embeddings`` consumes ``options`` at
-    parse time (``EmbedOptions.normalize``).
+    normalization. NO embed shaper consumes ``EmbedOptions.normalize`` at
+    parse time — ``LlmClient.embed`` applies L2 normalization uniformly,
+    client-side, for every wire (#1720 Wave-B1).
     """
     if not isinstance(payload, dict):
         raise TypeError(

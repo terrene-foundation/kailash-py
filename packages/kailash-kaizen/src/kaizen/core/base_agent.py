@@ -407,7 +407,17 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                 "max_tokens": self.config.max_tokens or 500,
             }
         )
-        result = await client.complete(messages, model=model, **sampling_kwargs)
+        try:
+            result = await client.complete(messages, model=model, **sampling_kwargs)
+        except Exception as e:
+            # #1720 Wave-B1 redteam MED — sanitize provider errors at
+            # enforcement-surface parity with the B1a live path
+            # (llm_agent._provider_llm_response). A raw wire exception can echo
+            # a user-supplied config.base_url; scrub before it reaches
+            # _handle_error's logger / returned {"error": ...} surface.
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise RuntimeError(sanitize_provider_error(e, "openai")) from e
         content = to_legacy_shape(result)["content"]
 
         if self.signature:

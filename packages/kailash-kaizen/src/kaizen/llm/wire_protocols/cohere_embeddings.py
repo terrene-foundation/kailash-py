@@ -133,8 +133,9 @@ def parse_response(payload: Dict[str, Any], options: Any = None) -> Dict[str, An
     ``options`` is accepted for dispatch symmetry with every embed shaper
     (the shared ``LlmClient.embed`` call site threads it uniformly, #1720
     Wave-A parity) and is intentionally IGNORED here: Cohere applies no
-    post-parse normalization. Only ``huggingface_embeddings`` consumes
-    ``options`` at parse time (``EmbedOptions.normalize``).
+    post-parse normalization. NO embed shaper consumes
+    ``EmbedOptions.normalize`` at parse time — ``LlmClient.embed`` applies L2
+    normalization uniformly, client-side, for every wire (#1720 Wave-B1).
     """
     if not isinstance(payload, dict):
         raise TypeError(

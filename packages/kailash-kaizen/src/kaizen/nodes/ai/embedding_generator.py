@@ -716,7 +716,14 @@ class EmbeddingGeneratorNode(Node):
                 text, provider, model, dimensions, timeout, max_retries
             )
         except Exception as e:
-            raise RuntimeError(f"Provider {provider} error: {str(e)}") from e
+            # #1720 Wave-B1 redteam MED — sanitize provider errors at
+            # enforcement-surface parity with the B1a live completion path
+            # (llm_agent._provider_llm_response). The four-axis embed wire
+            # re-raises a raw httpx exception whose text can echo a
+            # user-supplied base_url; scrub before it reaches the caller.
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise RuntimeError(sanitize_provider_error(e, provider)) from e
 
     def _run_embed_coro(self, coro):
         """Run an async ``LlmClient.embed`` coroutine from this sync node method.
@@ -786,22 +793,19 @@ class EmbeddingGeneratorNode(Node):
             except Exception as e:
                 raise RuntimeError(f"Ollama embedding error: {str(e)}")
 
-        # Default dimensions for other providers
-        default_dimensions = {
-            "openai": {"text-embedding-3-large": 3072, "text-embedding-3-small": 1536},
-            "huggingface": {"all-MiniLM-L6-v2": 384, "all-mpnet-base-v2": 768},
-            "azure": {"text-embedding-3-large": 3072},
-            "cohere": {"embed-english-v3.0": 1024},
-        }
-
-        actual_dimensions = dimensions or default_dimensions.get(provider, {}).get(
-            model, 1536
-        )
-
-        # For now, other providers use mock embeddings
-        # In real implementation, this would call the actual provider APIs
-        return self._generate_mock_embedding(
-            f"{provider}:{model}:{text}", actual_dimensions
+        # A non-ollama provider reaching this fallback means its four-axis
+        # deployment could NOT be resolved (missing/unavailable credential) or
+        # the four-axis LLM layer failed to import. Legacy raised here rather
+        # than returning data — #1720 Wave-B1 redteam HIGH: a silent mock
+        # embedding fed into a similarity / RAG pipeline is fake data reported
+        # as a real provider result (zero-tolerance Rule 2 + observability
+        # Rule 3 `mode=fake`). Restore the loud raise, matching the B1a/B1c
+        # None-deployment disposition (both raise). The explicit `provider ==
+        # "mock"` mode (handled by the caller, not this fallback) is the only
+        # sanctioned mock-embedding path.
+        raise RuntimeError(
+            f"Provider {provider} is not available. Check dependencies and "
+            f"configuration."
         )
 
     def _chunk_text(self, text: str, chunk_size: int) -> list[str]:

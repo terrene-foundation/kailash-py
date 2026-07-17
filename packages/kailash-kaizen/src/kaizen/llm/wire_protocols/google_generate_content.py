@@ -41,11 +41,14 @@ def _map_finish_reason(raw: Any) -> Any:
     ``finish_reason == "stop"`` sees the SAME value on both the legacy and the
     four-axis path (the pre-cutover divergence was the raw ``"STOP"`` casing).
 
-    A ``None`` finishReason (no candidate / field absent) passes through as
-    ``None`` — the wire only had a value to map when the provider sent one.
+    A ``None`` finishReason (no candidate / field absent) maps to ``"stop"`` —
+    legacy ``GoogleGeminiProvider`` initialises ``finish_reason = "stop"`` and
+    never emits ``None`` (including on the streaming path), so ``"stop"`` is the
+    faithful legacy floor for an absent reason (#1720 Wave-B1 redteam LOW —
+    full finish_reason parity).
     """
     if raw is None:
-        return None
+        return "stop"
     fr = str(raw).lower()
     if "tool" in fr or "function" in fr:
         return "tool_calls"
