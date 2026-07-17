@@ -299,6 +299,9 @@ class Agent:
             "model": self.config.model,
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
+            # #1779 opt-out: thread the Agent's ungoverned flag into BaseAgent so
+            # the four-axis + LLMAgentNode egress LlmClient constructions honor it.
+            "ungoverned": self._ungoverned,
         }
 
     # =========================================================================

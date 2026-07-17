@@ -349,6 +349,9 @@ class LLMAgentNode(Node):
         self.history_limit = kwargs.get("history_limit", 1000)
         self.custom_pricing = kwargs.get("custom_pricing")
         self.cost_multiplier = kwargs.get("cost_multiplier", 1.0)
+        # #1779 governance_required posture opt-out (threaded from
+        # Agent(ungoverned=True) via BaseAgent node_config). Fail-closed False.
+        self._ungoverned = kwargs.get("ungoverned", False)
 
         # Usage tracking (only if monitoring enabled)
         if self.enable_monitoring:
@@ -461,6 +464,16 @@ class LLMAgentNode(Node):
                 required=False,
                 default=3,
                 description="Maximum retry attempts for failed requests",
+            ),
+            # #1779 governance_required posture opt-out. When True, this node's
+            # egress (four-axis LlmClient primary path + legacy provider-chat
+            # fallback) is exempt from the posture gate. Default False (fail-closed).
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's egress",
             ),
             # Monitoring parameters
             "enable_monitoring": NodeParameter(
@@ -2417,7 +2430,11 @@ Final Answer: 6 hours"""
             from kaizen.llm._legacy_shape import to_legacy_shape
             from kaizen.llm.client import LlmClient
 
-            client = LlmClient.from_deployment_sync(deployment)
+            # #1779: honor the node's governance opt-out at the four-axis
+            # chokepoint (posture gate lives in LlmClient.__init__).
+            client = LlmClient.from_deployment_sync(
+                deployment, ungoverned=self._ungoverned
+            )
             sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
             four_axis_tools = tools if tools else None
 
@@ -2511,6 +2528,20 @@ Final Answer: 6 hours"""
         caller's ``except ImportError`` / ``except Exception`` handlers (invariants
         #5 and #6).
         """
+        # #1779 governance_required posture: this is the ONLY legacy egress that
+        # does NOT route through the four-axis LlmClient (providers with no
+        # four-axis wire, e.g. azure_ai_foundry), so the LlmClient construction
+        # gate cannot cover it. Enforce the posture explicitly at this
+        # chokepoint, BEFORE any real egress. Mock exempt; ungoverned= honored;
+        # OFF posture is a no-op (byte-identical to pre-#1779). Redteam Cluster-C.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=(provider == "mock"),
+            ungoverned=self._ungoverned,
+            surface="LLMAgentNode",
+        )
+
         from kaizen.providers.registry import get_provider
 
         provider_instance = get_provider(provider)
@@ -2690,7 +2721,11 @@ Final Answer: 6 hours"""
 
             from kaizen.llm.client import LlmClient
 
-            client = LlmClient.from_deployment_sync(deployment)
+            # #1779: honor the node's governance opt-out at the four-axis
+            # chokepoint (posture gate lives in LlmClient.__init__).
+            client = LlmClient.from_deployment_sync(
+                deployment, ungoverned=self._ungoverned
+            )
             sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
             shadow_tools = tools if tools else None
 

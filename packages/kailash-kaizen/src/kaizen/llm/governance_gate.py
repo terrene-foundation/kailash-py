@@ -15,13 +15,21 @@ Exemptions (any one short-circuits the refusal):
 * mock / deterministic — a mock-preset deployment (``preset_name == "mock"``)
   or an ``Agent(llm_provider="mock")``; also an injected mock transport
   (marked ``is_mock_transport``) at the lazy binding check.
-* a process-global interceptor is installed (``active_interceptor() is not
-  None``) — the client carries its own governance pair.
 * the posture is OFF (default) — byte-identical to pre-#1779 behaviour.
 
+NO interceptor-presence exemption. The four-axis ``LlmClient`` does NOT route
+its egress through the process-global outbound interceptor (``embed`` /
+``complete`` / ``stream`` call ``http_client.post`` directly), so a merely
+INSTALLED interceptor does NOT govern this client's egress — exempting on
+``active_interceptor() is not None`` would be FAIL-OPEN (it would waive the
+refusal without the egress actually being governed). Wiring the four-axis
+client into the outbound seam is a separate follow-up (the #1517 seam applied
+to ``LlmClient``); until then the only opt-out is ``ungoverned=True``, and the
+governed path is the legacy ``GovernedProvider`` wrapper (which genuinely wraps
+egress). Removing this exemption is the #1779 redteam CRITICAL fix.
+
 Fail-closed (invariant 5): if the posture reader errors, treat the posture as
-ACTIVE; if the interceptor check errors, treat the pair as ABSENT — either way,
-refuse rather than silently allow ungoverned egress.
+ACTIVE — refuse rather than silently allow ungoverned egress.
 
 All ``kailash`` imports are function-local: the module is imported by the LLM
 client + agent hot path, and a module-scope ``import kailash`` would add a
@@ -79,8 +87,10 @@ def enforce_governance_posture(
             (``"LlmClient"`` / ``"Agent"``). No secret is interpolated.
 
     Raises:
-        kailash.trust.pact.UngovernedEgressRefused: when the posture is active,
-            the call is not exempt, and no governance pair is attached.
+        kailash.trust.pact.UngovernedEgressRefused: when the posture is active
+            and the call is not exempt (not ungoverned, not mock). There is no
+            interceptor-presence exemption (see module docstring — it would be
+            fail-open for the four-axis client).
     """
     if ungoverned or is_mock:
         return
@@ -99,20 +109,11 @@ def enforce_governance_posture(
     if not active:
         return
 
-    # Carries its own governance pair? A process-global interceptor governs
-    # every outbound effect in the process. Fail-closed: if the check errors we
-    # cannot confirm a pair, so we fall through to the refusal.
-    try:
-        from kailash.trust.pact import active_interceptor
-
-        if active_interceptor() is not None:
-            return
-    except Exception:
-        logger.warning(
-            "governance_gate.interceptor_check_failed_fail_closed",
-            extra={"surface": surface},
-        )
-
+    # NO interceptor-presence exemption: the four-axis LlmClient does not route
+    # egress through the process-global interceptor, so a merely-installed
+    # interceptor does not govern it — exempting on it would be fail-open (the
+    # #1779 redteam CRITICAL). The only exemptions are ungoverned=True, mock,
+    # and the OFF posture, all handled above.
     from kailash.trust.pact import UngovernedEgressRefused
 
     raise UngovernedEgressRefused(surface)

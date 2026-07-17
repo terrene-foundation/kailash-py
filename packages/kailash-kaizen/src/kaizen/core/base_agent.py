@@ -396,7 +396,10 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                 "_simple_execute_async: could not resolve an OpenAI four-axis "
                 "deployment; set OPENAI_API_KEY (or pass config.api_key)."
             )
-        client = LlmClient.from_deployment(deployment)
+        # #1779: honor the agent's governance opt-out at the four-axis chokepoint.
+        client = LlmClient.from_deployment(
+            deployment, ungoverned=self.config.ungoverned
+        )
 
         # generation_config temperature/max_tokens -> four-axis sampling kwargs.
         sampling_kwargs = _sampling_kwargs_from_generation_config(
@@ -607,6 +610,8 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             node_config["provider_config"] = self.config.provider_config
         if self.config.response_format is not None:
             node_config["response_format"] = self.config.response_format
+        # #1779: thread the governance opt-out into the LLMAgentNode egress path.
+        node_config["ungoverned"] = self.config.ungoverned
 
         workflow.add_node("LLMAgentNode", "agent", node_config)
 

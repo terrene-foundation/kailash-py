@@ -80,7 +80,9 @@ def test_on_real_client_refused_at_construction() -> None:
     with pytest.raises(UngovernedEgressRefused) as ei:
         LlmClient.from_deployment(_real())
     msg = str(ei.value)
-    assert "ungoverned=True" in msg and "install_interceptor" in msg
+    # Both remedies named; must NOT falsely promise install_interceptor (CRITICAL fix).
+    assert "ungoverned=True" in msg and "GovernedProvider" in msg
+    assert "install_interceptor(" not in msg
 
 
 def test_on_direct_init_with_real_deployment_refused() -> None:
@@ -143,11 +145,16 @@ def test_on_mock_preset_exempt() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# (e) posture ON + installed interceptor pair → allowed (not re-gated)
+# (e) posture ON + installed interceptor does NOT exempt (redteam CRITICAL fix)
 # --------------------------------------------------------------------------- #
 
 
-def test_on_installed_interceptor_exempt() -> None:
+def test_on_installed_interceptor_does_NOT_exempt() -> None:
+    """Redteam CRITICAL (PACT-1779-01): a merely-installed process-global
+    interceptor does NOT govern the four-axis LlmClient (its egress calls
+    http_client.post directly, never routing through the interceptor). So
+    interceptor-presence MUST NOT waive the refusal — that was fail-open.
+    The only opt-out is ungoverned=True."""
     from kailash.trust.pact import (
         EffectGovernor,
         OutboundEffect,
@@ -158,25 +165,32 @@ def test_on_installed_interceptor_exempt() -> None:
     )
 
     class _AllowGovernor(EffectGovernor):
-        """Minimal allow-everything governor — the gate only checks that an
-        interceptor is installed (a governance pair is present), never runs it."""
-
         def evaluate(self, effect: OutboundEffect) -> OutboundVerdict:
             return OutboundVerdict(
-                allowed=True,
-                level="auto_approved",
-                reason="test",
-                effect=effect,
+                allowed=True, level="auto_approved", reason="test", effect=effect
             )
 
     kailash.set_governance_required(True)
     install_interceptor(OutboundEffectInterceptor(_AllowGovernor()))
     try:
-        # A real deployment that would normally be refused is exempt because a
-        # process-global interceptor carries the governance pair.
-        assert LlmClient.from_deployment(_real()) is not None
+        # Fail-closed: a bare real client is STILL refused despite the
+        # installed interceptor (it does not govern the four-axis client).
+        with pytest.raises(UngovernedEgressRefused):
+            LlmClient.from_deployment(_real())
+        # The working opt-out remains available.
+        assert LlmClient.from_deployment(_real(), ungoverned=True) is not None
     finally:
         clear_interceptor()
+
+
+def test_error_message_does_not_promise_install_interceptor() -> None:
+    """The message must not tell users install_interceptor fixes a four-axis
+    refusal (it does not — redteam CRITICAL). ungoverned=True is the opt-out."""
+    err = UngovernedEgressRefused("LlmClient")
+    msg = str(err)
+    assert "ungoverned=True" in msg
+    assert "does NOT govern" in msg  # explicit non-coverage disclosure
+    assert "install_interceptor(" not in msg
 
 
 # --------------------------------------------------------------------------- #
@@ -258,6 +272,76 @@ def test_agent_on_ungoverned_optout_allowed() -> None:
     kailash.set_governance_required(True)
     agent = Agent(model=_MODEL, ungoverned=True, show_startup_banner=False)
     assert agent is not None
+
+
+def test_agent_ungoverned_is_threaded_not_dead_state() -> None:
+    """Redteam HIGH (F1/PACT-1779-02/spec-F1): Agent._ungoverned MUST reach the
+    egressing BaseAgent config (it was dead state — written, never read). This
+    is the compositional proof the opt-out works end-to-end: config.ungoverned
+    is True, and LlmClient.from_deployment(..., ungoverned=True) is proven
+    not-refused by test_on_ungoverned_optout_allowed_all_constructors."""
+    kailash.set_governance_required(None)
+    a = Agent(model=_MODEL, ungoverned=True, show_startup_banner=False)
+    assert a.base_agent is not None
+    assert a.base_agent.config.ungoverned is True
+    b = Agent(model=_MODEL, show_startup_banner=False)
+    assert b.base_agent.config.ungoverned is False
+
+
+# --------------------------------------------------------------------------- #
+# Fix C — legacy _legacy_provider_chat fallback (no-four-axis-wire providers)
+# is gated (the only legacy egress not routed through the four-axis LlmClient)
+# --------------------------------------------------------------------------- #
+
+
+def _make_llm_agent_node(**kw):
+    from kaizen.nodes.ai.llm_agent import LLMAgentNode
+
+    return LLMAgentNode(**kw)
+
+
+def test_llm_agent_node_ungoverned_param_stored() -> None:
+    assert _make_llm_agent_node(ungoverned=True)._ungoverned is True
+    assert _make_llm_agent_node()._ungoverned is False
+
+
+def test_legacy_provider_chat_refused_under_posture_on() -> None:
+    """azure_ai_foundry (no four-axis wire) egresses via _legacy_provider_chat,
+    which does NOT construct an LlmClient — so it needs its own explicit gate."""
+    kailash.set_governance_required(True)
+    node = _make_llm_agent_node()
+    with pytest.raises(UngovernedEgressRefused):
+        node._legacy_provider_chat(
+            "azure_ai_foundry", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        )
+
+
+def test_legacy_provider_chat_ungoverned_bypasses_gate() -> None:
+    kailash.set_governance_required(True)
+    node = _make_llm_agent_node(ungoverned=True)
+    # The gate must NOT raise UngovernedEgressRefused; any downstream error
+    # (provider unavailable) is fine — we only assert the gate is bypassed.
+    try:
+        node._legacy_provider_chat(
+            "azure_ai_foundry", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        )
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the legacy gate")
+    except Exception:
+        pass  # provider-unavailable / import error is acceptable here
+
+
+def test_legacy_provider_chat_mock_exempt() -> None:
+    kailash.set_governance_required(True)
+    node = _make_llm_agent_node()
+    try:
+        node._legacy_provider_chat(
+            "mock", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        )
+    except UngovernedEgressRefused:
+        raise AssertionError("mock provider must be exempt at the legacy gate")
+    except Exception:
+        pass
 
 
 def test_agent_off_real_provider_constructs() -> None:

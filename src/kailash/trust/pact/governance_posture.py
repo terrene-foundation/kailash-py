@@ -28,6 +28,25 @@ Resolution (most-specific wins):
 
 The state mirrors the exact shape of ``_active_interceptor`` / ``_active_lock``
 in :mod:`kailash.trust.pact.outbound`: a module-global guarded by a lock.
+
+Coverage (what an ACTIVE posture gates) — enforced from Kaizen:
+
+* the four-axis ``LlmClient`` — every constructor + a defense-in-depth re-check
+  at real-transport binding (``embed`` / ``complete`` / ``stream``);
+* ``kaizen.agent.Agent`` construction, and ``BaseAgent`` egress (both the
+  four-axis path AND the ``LLMAgentNode`` primary path, which routes through the
+  four-axis ``LlmClient``);
+* the ``LLMAgentNode`` legacy provider-chat fallback (providers with no
+  four-axis wire, e.g. ``azure_ai_foundry``) — gated explicitly at that
+  chokepoint.
+
+NON-coverage (the posture does NOT gate): RAW direct use of the deprecated
+``kaizen.providers.llm.*`` providers (calling a provider's ``.chat()`` yourself
+OUTSIDE ``LLMAgentNode``). That raw-provider surface is retiring in #1720
+Wave C; an operator relying on the posture for a hard egress boundary should
+not call the deprecated providers directly. An installed process-global
+interceptor does NOT waive the posture for the four-axis ``LlmClient`` (it does
+not route through the interceptor — see ``kaizen.llm.governance_gate``).
 """
 
 from __future__ import annotations

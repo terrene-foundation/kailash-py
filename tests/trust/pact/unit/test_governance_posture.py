@@ -97,9 +97,12 @@ def test_ungoverned_egress_refused_shape() -> None:
     msg = str(err)
     # Names BOTH remedies verbatim (invariant 7: no secret interpolated).
     assert "ungoverned=True" in msg
-    assert "install_interceptor" in msg
     assert "GovernedProvider" in msg
     assert "LlmClient" in msg
+    # Redteam CRITICAL: must NOT promise install_interceptor governs the
+    # four-axis client (it does not); the message discloses the non-coverage.
+    assert "install_interceptor(" not in msg
+    assert "does NOT govern" in msg
     # Surface name is the only interpolation.
     assert UngovernedEgressRefused("Agent").args[0].count("Agent") >= 1
 

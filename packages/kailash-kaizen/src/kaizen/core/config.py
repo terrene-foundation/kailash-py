@@ -60,6 +60,11 @@ class BaseAgentConfig:
     )
     api_key: Optional[str] = None  # Per-request API key override for BYOK
     base_url: Optional[str] = None  # Per-request base URL override
+    # #1779 governance_required posture opt-out: when True, the four-axis
+    # LlmClient constructions this agent drives (BaseAgent four-axis path AND
+    # the LLMAgentNode primary path) are exempt from the posture gate. Threaded
+    # down from Agent(ungoverned=True). Fail-closed default False.
+    ungoverned: bool = False
 
     # Async LLM Configuration (for production FastAPI/async workflows)
     use_async_llm: bool = False  # Enable AsyncOpenAI client for non-blocking operations
@@ -320,6 +325,7 @@ class BaseAgentConfig:
                 structured_output_mode=config.get("structured_output_mode", "auto"),
                 api_key=config.get("api_key"),
                 base_url=config.get("base_url"),
+                ungoverned=config.get("ungoverned", False),
                 use_async_llm=config.get("use_async_llm", False),
                 strategy_type=config.get("strategy_type", "single_shot"),
                 max_cycles=config.get("max_cycles", 5),
@@ -348,6 +354,8 @@ class BaseAgentConfig:
             kwargs["api_key"] = getattr(config, "api_key")
         if hasattr(config, "base_url"):
             kwargs["base_url"] = getattr(config, "base_url")
+        if hasattr(config, "ungoverned"):
+            kwargs["ungoverned"] = getattr(config, "ungoverned")
 
         # Async config
         if hasattr(config, "use_async_llm"):

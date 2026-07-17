@@ -53,10 +53,10 @@ class UngovernedEgressRefused(PactError):
     un-governed client/agent would make a real LLM call with no governance
     attached (#1779, EATP D6 parity).
 
-    The message names BOTH remedies verbatim — attach a governance pair, or
-    opt out with ``ungoverned=True``. It interpolates ONLY the construction
-    surface name (``LlmClient`` / ``Agent``); no URL, API key, or model is
-    ever placed in the message (invariant 7: no secrets in the error).
+    The message names BOTH remedies verbatim — route egress through a governed
+    path, or opt out with ``ungoverned=True``. It interpolates ONLY the
+    construction surface name (``LlmClient`` / ``Agent``); no URL, API key, or
+    model is ever placed in the message (invariant 7: no secrets in the error).
     """
 
     def __init__(
@@ -67,9 +67,10 @@ class UngovernedEgressRefused(PactError):
     ) -> None:
         super().__init__(
             f"KAILASH_GOVERNANCE_REQUIRED is active and this {surface} would make "
-            "a real LLM call with no governance attached. Either (1) attach a "
-            "governance pair — install_interceptor(...) or wrap the provider "
-            "with GovernedProvider — or (2) pass ungoverned=True to explicitly "
-            "opt out.",
+            "a real LLM call with no governance attached. Either (1) route egress "
+            "through a governed path — wrap the provider with GovernedProvider — "
+            "or (2) pass ungoverned=True to explicitly opt out. (An installed "
+            "process-global interceptor does NOT govern the four-axis LlmClient "
+            "and does not waive this refusal.)",
             details=details,
         )
