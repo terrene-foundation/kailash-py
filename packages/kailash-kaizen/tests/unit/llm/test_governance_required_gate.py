@@ -285,18 +285,30 @@ def test_agent_on_ungoverned_optout_allowed() -> None:
     assert agent is not None
 
 
-def test_agent_ungoverned_is_threaded_not_dead_state() -> None:
-    """Redteam HIGH (F1/PACT-1779-02/spec-F1): Agent._ungoverned MUST reach the
-    egressing BaseAgent config (it was dead state — written, never read). This
-    is the compositional proof the opt-out works end-to-end: config.ungoverned
-    is True, and LlmClient.from_deployment(..., ungoverned=True) is proven
-    not-refused by test_on_ungoverned_optout_allowed_all_constructors."""
+def test_agent_ungoverned_reaches_runpath_node_config() -> None:
+    """Redteam round-5 F1/F2: the PRIMARY agent run path builds its LLMAgentNode
+    node_config via workflow_generator (NOT base_agent.to_workflow). This test
+    asserts ungoverned reaches THAT node_config — the config-only assertion the
+    round-1 test used masked the broken wiring for four rounds."""
     kailash.set_governance_required(None)
     a = Agent(model=_MODEL, ungoverned=True, show_startup_banner=False)
-    assert a.base_agent is not None
     assert a.base_agent.config.ungoverned is True
+    # The real run path: strategy -> workflow_generator.generate_signature_workflow.
+    wf = a.base_agent.workflow_generator.generate_signature_workflow()
+    assert wf.nodes["agent_exec"]["config"].get("ungoverned") is True
+    # Default agent (no opt-out): node_config carries ungoverned=False.
     b = Agent(model=_MODEL, show_startup_banner=False)
-    assert b.base_agent.config.ungoverned is False
+    wfb = b.base_agent.workflow_generator.generate_signature_workflow()
+    assert wfb.nodes["agent_exec"]["config"].get("ungoverned") is False
+
+
+def test_agent_ungoverned_reaches_fallback_node_config() -> None:
+    """The fallback builder (generate_fallback_workflow) is the second run-path
+    node_config surface — it must thread ungoverned too (round-5 F1)."""
+    kailash.set_governance_required(None)
+    a = Agent(model=_MODEL, ungoverned=True, show_startup_banner=False)
+    wf = a.base_agent.workflow_generator.generate_fallback_workflow()
+    assert wf.nodes["agent_fallback"]["config"].get("ungoverned") is True
 
 
 # --------------------------------------------------------------------------- #
