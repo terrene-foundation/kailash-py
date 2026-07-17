@@ -591,9 +591,18 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
         # module falls through to the orphan finding below (real drift). A
         # Capitalized root (`RegisterResult.artifact_uris`) is a ClassName.member
         # reference — kept as an orphan (the tool cannot resolve a class as a
-        # module, but the contract is genuine, not illustrative).
+        # module, but the contract is genuine, not illustrative). Likewise a
+        # Capitalized TAIL (`myapp.missing.Vanished`, `pkg.mod.SomeClass`) names a
+        # class/type CONTRACT the spec promises — kept as an orphan; every
+        # illustrative false-positive above has a lowercase tail (`.family`,
+        # `.register`, `.changed`), so the CapWords-tail carve-out preserves the
+        # false-positive suppression while restoring genuine missing-symbol drift.
         root = symbol.name.split(".")[0]
-        if root[:1].islower() and not root.startswith(_KAILASH_FAMILY_PREFIXES):
+        if (
+            root[:1].islower()
+            and not root.startswith(_KAILASH_FAMILY_PREFIXES)
+            and not tail[:1].isupper()
+        ):
             return []
         return [
             Finding(
