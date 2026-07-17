@@ -4,6 +4,29 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.34.2] — 2026-07-17 — monitoring installability fix
+
+### Fixed
+
+- **`import kaizen.monitoring` now works on a bare `pip install kailash-kaizen`
+  (no `[server]` extra).** `monitoring/dashboard.py` eagerly imported `fastapi`
+  at module scope and built a module-level `app = FastAPI(...)`, and
+  `monitoring/__init__.py` eagerly imported that `app`, so the very first
+  `import kaizen.monitoring` hard-failed with `ModuleNotFoundError: No module
+named 'fastapi'` unless the optional `server` extra was installed — taking
+  down metrics collection, analytics, and alerting even though only the
+  dashboard needs FastAPI. The FastAPI surface is now built lazily: a new
+  `create_dashboard_app()` factory and the module-level `app` (resolved via PEP
+  562 `__getattr__`) import FastAPI only when actually used, raising a typed
+  `MonitoringDependencyError` (an `ImportError` subclass) naming the remedy
+  (`pip install 'kailash-kaizen[server]'`) instead of failing at import. The
+  dashboard is byte-for-byte functional when FastAPI is present.
+- Two pre-existing monitoring dashboard integration-test failures the
+  restructure surfaced: `/metrics` now returns `PlainTextResponse` (Prometheus
+  scrapers reject the `application/json` FastAPI applied to the bare `str`
+  return), and a stale `ws://`-literal test assertion updated to match the
+  deployment-agnostic dynamic WebSocket URL the HTML already builds.
+
 ## [2.34.1] — 2026-07-17 — #1720 creds-in-logs security sweep (MED-1 sibling class)
 
 ### Security
