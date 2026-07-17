@@ -1,18 +1,69 @@
 """AI and ML nodes for the Kailash SDK."""
 
-# Import A2A communication nodes
-# Import from canonical provider locations (SPEC-02)
-from kaizen.providers.base import LLMProvider
-from kaizen.providers.llm.anthropic import AnthropicProvider
-from kaizen.providers.llm.azure import AzureAIFoundryProvider
-from kaizen.providers.llm.docker import DockerModelRunnerProvider
-from kaizen.providers.llm.google import GoogleGeminiProvider
-from kaizen.providers.llm.mock import MockProvider
-from kaizen.providers.llm.ollama import OllamaProvider
-from kaizen.providers.llm.openai import OpenAIProvider
-from kaizen.providers.llm.perplexity import PerplexityProvider
-from kaizen.providers.registry import PROVIDERS, get_available_providers, get_provider
+import importlib
+import warnings
+from typing import TYPE_CHECKING
 
+# ---------------------------------------------------------------------------
+# Legacy provider re-exports — deprecated (#1720; removed in Wave-C).
+#
+# These provider classes and registry accessors used to be eagerly re-exported
+# here from their canonical ``kaizen.providers.*`` locations (SPEC-02). They are
+# now lazy DeprecationWarning shims (PEP 562 ``__getattr__``): attribute ACCESS
+# warns and resolves the real symbol, while a bare ``import kaizen.nodes.ai``
+# does NOT warn. Import providers from ``kaizen.providers.llm.<mod>`` /
+# ``kaizen.providers.registry`` (or the ``kaizen.providers`` barrel) instead.
+# ---------------------------------------------------------------------------
+_LEGACY_PROVIDER_MODULES: dict[str, str] = {
+    "LLMProvider": "kaizen.providers.base",
+    "AnthropicProvider": "kaizen.providers.llm.anthropic",
+    "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
+    "DockerModelRunnerProvider": "kaizen.providers.llm.docker",
+    "GoogleGeminiProvider": "kaizen.providers.llm.google",
+    "MockProvider": "kaizen.providers.llm.mock",
+    "OllamaProvider": "kaizen.providers.llm.ollama",
+    "OpenAIProvider": "kaizen.providers.llm.openai",
+    "PerplexityProvider": "kaizen.providers.llm.perplexity",
+    "PROVIDERS": "kaizen.providers.registry",
+    "get_available_providers": "kaizen.providers.registry",
+    "get_provider": "kaizen.providers.registry",
+}
+
+if TYPE_CHECKING:
+    # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
+    # autodoc still resolve the legacy names kept in ``__all__`` below.
+    from kaizen.providers.base import LLMProvider
+    from kaizen.providers.llm.anthropic import AnthropicProvider
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+    from kaizen.providers.llm.docker import DockerModelRunnerProvider
+    from kaizen.providers.llm.google import GoogleGeminiProvider
+    from kaizen.providers.llm.mock import MockProvider
+    from kaizen.providers.llm.ollama import OllamaProvider
+    from kaizen.providers.llm.openai import OpenAIProvider
+    from kaizen.providers.llm.perplexity import PerplexityProvider
+    from kaizen.providers.registry import (
+        PROVIDERS,
+        get_available_providers,
+        get_provider,
+    )
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolve deprecated legacy provider re-exports (PEP 562)."""
+    module_path = _LEGACY_PROVIDER_MODULES.get(name)
+    if module_path is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"Importing {name} from {__name__} is deprecated and will be removed "
+        f"in a future release (#1720); import from {module_path} instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    module = importlib.import_module(module_path)
+    return getattr(module, name)
+
+
+# Import A2A communication nodes
 from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
 from .embedding_generator import EmbeddingGeneratorNode
