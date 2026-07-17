@@ -23,6 +23,17 @@ from .dashboard import (
 )
 from .metrics_collector import MetricsCollector
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # ``app`` is provided at runtime via the module ``__getattr__`` (PEP 562)
+    # and requires the optional ``server`` (FastAPI) extra. This analyzer-only
+    # binding satisfies ``reportUnsupportedDunderAll`` without eagerly importing
+    # FastAPI on a bare install (orphan-detection.md Rule 6b).
+    from fastapi import FastAPI
+
+    app: FastAPI
+
 __all__ = [
     "MetricsCollector",
     "AnalyticsAggregator",

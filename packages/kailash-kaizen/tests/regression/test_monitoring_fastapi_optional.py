@@ -154,5 +154,5 @@ def test_dashboard_functional_when_fastapi_present():
 
     app = create_dashboard_app()
     # FastAPI app exposes the dashboard routes registered by the factory.
-    paths = {route.path for route in app.routes}
+    paths = {getattr(route, "path", None) for route in app.routes}
     assert {"/", "/ws", "/metrics", "/health"} <= paths, paths
