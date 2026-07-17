@@ -2329,36 +2329,106 @@ Final Answer: 6 hours"""
         Args:
             api_key: Optional per-request API key override for BYOK scenarios.
             base_url: Optional per-request base URL override.
+
+        #1720 Wave-B1a — LIVE CUTOVER. This method now returns the four-axis
+        ``kaizen.llm.client.LlmClient`` result (mapped onto the legacy shape via
+        ``kaizen.llm._legacy_shape.to_legacy_shape``) as the PRIMARY response.
+        The provider->deployment mapping is resolved through the shared
+        ``kaizen.llm.deployment_resolver.resolve_deployment_for`` (the same
+        surface the Wave-2 dual-run shadow and the parity harness use), and the
+        BYOK ``api_key`` / ``base_url`` per-request overrides thread straight
+        into it (the resolver validates control-char/CRLF/non-ASCII keys —
+        ``rules/security.md`` § Enforcement-Surface Parity). ``azure_ai_foundry``
+        has NO confirmed four-axis wire (``resolve_deployment_for`` raises
+        ``UnsupportedDeploymentProvider``), so it falls back to the legacy
+        ``get_provider(...).chat(...)`` path for that provider ONLY; every other
+        provider goes four-axis. The now-redundant dual-run shadow dispatch was
+        removed from this success path (the four-axis path is now load-bearing,
+        so a second four-axis call would be a pure duplicate); the shadow
+        worker/dispatch/resolver definitions are retained for their direct unit
+        tests.
         """
         try:
-            from kaizen.providers.registry import get_provider
+            from kaizen.llm.deployment_resolver import (
+                UnsupportedDeploymentProvider,
+                resolve_deployment_for,
+            )
 
-            # Get the provider instance
-            provider_instance = get_provider(provider)
-
-            # Check if provider is available (skip if per-request key provided)
-            if not api_key and not provider_instance.is_available():
-                raise RuntimeError(
-                    f"Provider {provider} is not available. Check dependencies and configuration."
+            # SCOPE-OUT (#1720 Wave-B1a): azure_ai_foundry has no confirmed
+            # four-axis wire; resolve_deployment_for raises
+            # UnsupportedDeploymentProvider for it. Keep that provider ONLY on
+            # the legacy get_provider(...).chat(...) path until a wire lands.
+            # BYOK overrides are validated inside resolve_deployment_for (the
+            # sibling enforcement surface to LlmClient.complete's api_key guard).
+            try:
+                deployment = resolve_deployment_for(
+                    provider, model, api_key=api_key, base_url=base_url
+                )
+            except UnsupportedDeploymentProvider:
+                return self._legacy_provider_chat(
+                    provider,
+                    model,
+                    messages,
+                    tools,
+                    generation_config,
+                    api_key=api_key,
+                    base_url=base_url,
                 )
 
-            # Build chat kwargs with optional per-request overrides
-            chat_kwargs = {
-                "messages": messages,
-                "model": model,
-                "generation_config": generation_config,
-                "tools": tools,
-            }
-            if api_key:
-                chat_kwargs["api_key"] = api_key
-            if base_url:
-                chat_kwargs["base_url"] = base_url
+            # is_available() gate parity (invariant #1): a None deployment means
+            # the credential / base_url could not be resolved — the four-axis
+            # equivalent of legacy ``is_available() is False``. Match legacy:
+            # raise the same RuntimeError rather than silently succeeding.
+            # resolve_deployment_for already tried the per-request api_key
+            # override AND the provider's own env var before returning None, so
+            # this branch is exactly "no credential AND no per-request key".
+            if deployment is None:
+                raise RuntimeError(
+                    f"Provider {provider} is not available. "
+                    "Check dependencies and configuration."
+                )
 
-            # Call the provider
-            response = provider_instance.chat(**chat_kwargs)
+            from kaizen.llm._legacy_shape import to_legacy_shape
+            from kaizen.llm.client import LlmClient
 
-            # Ensure usage totals are calculated. Custom providers may emit
-            # None counters (see issue #487); coerce to 0 before arithmetic.
+            client = LlmClient.from_deployment_sync(deployment)
+            sampling_kwargs = _sampling_kwargs_from_generation_config(generation_config)
+            four_axis_tools = tools if tools else None
+
+            # Stream-aware per-provider tool_choice default (invariant #3).
+            # Legacy ``.chat()`` injects tool_choice="required" for openai (and
+            # "auto" for azure/docker) when tools are present and unset; the
+            # four-axis complete() defaults to None. Reproduce the legacy default
+            # through the shared helper and emit it only when not None. stream is
+            # left at the helper's False default — this method has ALWAYS driven
+            # the legacy non-streaming ``.chat()`` path (never ``stream_chat``),
+            # so keeping the non-stream default (openai -> "required") preserves
+            # the current streaming behavior exactly.
+            explicit_tool_choice = sampling_kwargs.pop("tool_choice", None)
+            effective_tool_choice = _legacy_tool_choice_default(
+                provider, four_axis_tools, explicit_tool_choice
+            )
+            if effective_tool_choice is not None:
+                sampling_kwargs["tool_choice"] = effective_tool_choice
+
+            async def _call_complete():
+                return await client.complete(
+                    messages,
+                    model=model,
+                    tools=four_axis_tools,
+                    **sampling_kwargs,
+                )
+
+            # complete() is async; this Node.run path is sync and MAY be invoked
+            # from inside an already-running event loop (rules/patterns.md
+            # async/sync). The shared helper runs the coroutine on a fresh thread
+            # when a loop is active, else via asyncio.run().
+            four_axis_response = self._run_async_in_sync_context(_call_complete())
+            response = to_legacy_shape(four_axis_response)
+
+            # #487 usage total-coercion (invariant #2): when total_tokens is
+            # falsy, derive it from the coerced parts. to_legacy_shape always
+            # emits a usage dict with the three keys, so this coercion applies.
             if response.get("usage"):
                 usage = response["usage"]
                 if not usage.get("total_tokens"):
@@ -2366,34 +2436,10 @@ Final Answer: 6 hours"""
                     completion = usage.get("completion_tokens") or 0
                     usage["total_tokens"] = prompt + completion
 
-            # #1720 Wave-2 — dispatch the four-axis LlmClient shadow
-            # fire-and-forget alongside the legacy response above, for
-            # validation. Gated behind KAIZEN_LLM_DUAL_RUN (falsey/unset by
-            # default); the flag-OFF path above this line is completely
-            # untouched and this call is a pure no-op when the flag is off
-            # (`_dual_run_enabled()` short-circuits before any four-axis
-            # code runs). The dispatch starts a DAEMON thread and returns
-            # IMMEDIATELY without `.join()`/`.result()` — the shadow NEVER
-            # adds latency to the `response` returned below (redteam HIGH:
-            # a synchronous shadow call here previously added up to
-            # `_DUAL_RUN_TIMEOUT_SECONDS` of latency to the LIVE response,
-            # x5 inside the tool-execution loop in `run()`).
-            if _dual_run_enabled():
-                self._dispatch_dual_run_shadow(
-                    provider=provider,
-                    model=model,
-                    messages=messages,
-                    tools=tools,
-                    generation_config=generation_config,
-                    api_key=api_key,
-                    base_url=base_url,
-                    legacy_response=response,
-                )
-
             return response
 
         except ImportError:
-            # Fallback to the original fallback method
+            # Four-axis (or legacy) provider stack unavailable — mock fallback.
             return self._fallback_llm_response(
                 provider, model, messages, tools, generation_config
             )
@@ -2403,6 +2449,63 @@ Final Answer: 6 hours"""
 
             self.logger.error("Provider %s error: %s", provider, e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, provider)) from e
+
+    def _legacy_provider_chat(
+        self,
+        provider: str,
+        model: str,
+        messages: list[dict],
+        tools: list[dict],
+        generation_config: dict,
+        api_key: str = None,
+        base_url: str = None,
+    ) -> dict[str, Any]:
+        """Legacy provider-registry chat path (#1720 Wave-B1a).
+
+        Retained ONLY for providers with no confirmed four-axis wire — currently
+        ``azure_ai_foundry`` (which ``resolve_deployment_for`` rejects with
+        ``UnsupportedDeploymentProvider``). Every other provider is served by the
+        four-axis ``LlmClient`` in ``_provider_llm_response``. Preserves the
+        legacy ``is_available()`` gate (invariant #1) and the #487 usage
+        total-coercion (invariant #2) byte-for-byte. Exceptions propagate to the
+        caller's ``except ImportError`` / ``except Exception`` handlers (invariants
+        #5 and #6).
+        """
+        from kaizen.providers.registry import get_provider
+
+        provider_instance = get_provider(provider)
+
+        # Check if provider is available (skip if per-request key provided)
+        if not api_key and not provider_instance.is_available():
+            raise RuntimeError(
+                f"Provider {provider} is not available. Check dependencies and configuration."
+            )
+
+        # Build chat kwargs with optional per-request overrides
+        chat_kwargs = {
+            "messages": messages,
+            "model": model,
+            "generation_config": generation_config,
+            "tools": tools,
+        }
+        if api_key:
+            chat_kwargs["api_key"] = api_key
+        if base_url:
+            chat_kwargs["base_url"] = base_url
+
+        # Call the provider
+        response = provider_instance.chat(**chat_kwargs)
+
+        # Ensure usage totals are calculated. Custom providers may emit
+        # None counters (see issue #487); coerce to 0 before arithmetic.
+        if response.get("usage"):
+            usage = response["usage"]
+            if not usage.get("total_tokens"):
+                prompt = usage.get("prompt_tokens") or 0
+                completion = usage.get("completion_tokens") or 0
+                usage["total_tokens"] = prompt + completion
+
+        return response
 
     def _dispatch_dual_run_shadow(
         self,
