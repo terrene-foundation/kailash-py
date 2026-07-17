@@ -238,3 +238,31 @@ def test_mask_webhook_url_strips_path_token():
     # also scrubs a webhook URL embedded in an arbitrary error string
     embedded = _mask_webhook_url(f"POST to {url} timed out")
     assert secret not in embedded
+    assert "timed out" in embedded  # trailing text after the URL survives
+
+
+def test_mask_webhook_url_strips_userinfo_and_query():
+    """A webhook secret can live in the userinfo (basic-auth) or the query
+    string, not only the path — all three must be redacted (security-review
+    MEDIUM: the host-portion regex previously kept ``user:pass@``)."""
+    from kaizen.monitoring.alert_manager import _mask_webhook_url
+
+    # userinfo (self-hosted basic-auth webhook)
+    m1 = _mask_webhook_url("https://alertbot:s3cr3tPASSWORD@webhooks.internal/notify")
+    assert "s3cr3tPASSWORD" not in m1
+    assert "webhooks.internal" in m1
+    # query-string token with NO path segment
+    m2 = _mask_webhook_url("https://hooks.example.com?token=QUERYSECRET")
+    assert "QUERYSECRET" not in m2
+    # bare host with no credential stays intact
+    assert _mask_webhook_url("https://hooks.example.com") == "https://hooks.example.com"
+
+
+def test_mask_redis_url_masks_every_url_in_multi_url_string():
+    """A redis error message can list multiple credentialed node URLs (cluster);
+    every ``user:pass@`` must be masked, not only the first (security-review
+    LOW: the bare-URL branch reconstructed ``parsed.path`` verbatim)."""
+    from kaizen.governance.rate_limiter import _mask_redis_url
+
+    masked = _mask_redis_url("redis://u:p1@h1:6379/0 fallback redis://u:p2@h2:6379/0")
+    assert "p1" not in masked and "p2" not in masked

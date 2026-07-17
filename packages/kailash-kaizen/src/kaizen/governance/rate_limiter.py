@@ -91,12 +91,14 @@ def _mask_redis_url(url: str) -> str:
         parsed = urlparse(url)
     except Exception:
         return "<unparseable redis url>"
-    if not parsed.scheme or not parsed.hostname:
-        # Not a bare URL (e.g. a connection-error message) — scrub any
-        # embedded user:pass@ credentials in place, canonical form.
-        return re.sub(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^@\s/]+@", r"\1***@", url)
-    port = f":{parsed.port}" if parsed.port else ""
-    return f"{parsed.scheme}://***@{parsed.hostname}{port}{parsed.path}"
+    # Bare single-URL branch ONLY when the whole string is one URL: a second
+    # credentialed URL hiding in ``parsed.path`` (multi-URL error message) must
+    # fall through to the global userinfo scrub, which masks every occurrence.
+    if parsed.scheme and parsed.hostname and "://" not in parsed.path:
+        port = f":{parsed.port}" if parsed.port else ""
+        return f"{parsed.scheme}://***@{parsed.hostname}{port}{parsed.path}"
+    # Non-URL / embedded / multi-URL string — scrub every user:pass@ in place.
+    return re.sub(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^@\s/]+@", r"\1***@", url)
 
 
 class RateLimitError(Exception):

@@ -16,6 +16,7 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 from kaizen.core.deprecation import deprecated
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +346,11 @@ class AsyncSingleShotStrategy:
             return workflow
         except Exception as e:
             # FIX BUG #2: Log workflow generation failures instead of silently returning None
-            logger.error(f"Workflow generation failed: {e}", exc_info=True)
+            # (workflow generation can invoke an LLM whose error carries a
+            # credential; sanitize + drop exc_info — #1720 creds-in-logs sweep).
+            logger.error(
+                "Workflow generation failed: %s", sanitize_provider_error(e, "LLM")
+            )
             return None
 
     @deprecated(

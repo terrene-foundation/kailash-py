@@ -19,16 +19,21 @@ logger = logging.getLogger(__name__)
 
 
 def _mask_webhook_url(value: str) -> str:
-    """Strip the credential-bearing path from a webhook URL for safe logging.
+    """Redact every credential-bearing component of a webhook URL for logging.
 
-    Slack/Discord/generic webhook auth tokens live in the URL PATH
-    (``https://hooks.slack.com/services/T.../B.../<secret>``), so
-    ``sanitize_provider_error`` (which redacts ``user:pass@`` userinfo) does NOT
-    cover them. This keeps the scheme+host for diagnosability and replaces the
-    path with a ``[REDACTED]`` sentinel. Also scrubs a webhook URL embedded in
-    an arbitrary string (e.g. an aiohttp connection-error message).
+    A webhook auth secret can live in THREE places: the ``user:pass@`` userinfo
+    (self-hosted basic-auth webhooks), the URL PATH (Slack/Discord token —
+    ``https://hooks.slack.com/services/T.../B.../<secret>``), and the query
+    string (``?token=...``). This keeps only scheme+host for diagnosability and
+    redacts all three. Also scrubs a webhook URL embedded in an arbitrary string
+    (e.g. an aiohttp connection-error message). ``\\S*`` stops at whitespace so a
+    trailing message after the URL survives.
     """
-    return re.sub(r"(https?://[^/\s]+)/\S*", r"\1/[REDACTED]", value)
+    # 1) userinfo (user:pass@) — the host-portion regex below would otherwise
+    #    keep it, since `@`/`:` are not path/query delimiters.
+    value = re.sub(r"(https?://)[^/@\s]+@", r"\1[REDACTED]@", value)
+    # 2) path / query / fragment after scheme+host (token-bearing).
+    return re.sub(r"(https?://[^/?#\s]+)[/?#]\S*", r"\1/[REDACTED]", value)
 
 
 class NotificationChannel(ABC):

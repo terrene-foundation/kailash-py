@@ -250,8 +250,13 @@ def get_available_providers(
                 ),
             }
         except Exception as e:
+            # A provider is_available() check can surface an auth/connection
+            # exception embedding an api_key or user:pass@ URL — sanitize the log
+            # to match the already-sanitized return (return/log parity; #1720).
             logger.error(
-                "Provider %s availability check failed: %s", name, e, exc_info=True
+                "Provider %s availability check failed: %s",
+                name,
+                sanitize_provider_error(e, name),
             )
             results[name] = {
                 "available": False,
