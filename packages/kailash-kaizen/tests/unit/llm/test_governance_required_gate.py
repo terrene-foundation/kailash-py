@@ -425,3 +425,31 @@ def test_embedding_node_ungoverned_bypasses_gate(
         raise AssertionError("ungoverned=True must bypass the embed gate")
     except Exception:
         pass  # downstream provider/network error is acceptable here
+
+
+# --------------------------------------------------------------------------- #
+# Round-3 — BaseAgent four-axis path (third T1 sibling): a lazy-re-check
+# refusal from complete() must propagate UNWRAPPED, not re-typed to RuntimeError
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_base_agent_simple_execute_propagates_typed_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_PROD_MODEL", _MODEL)
+    # Posture OFF at construction (line 400 passes); simulate the lazy re-check
+    # refusal by making complete() raise the typed error, then assert the
+    # except block re-raises it unwrapped (not RuntimeError).
+    kailash.set_governance_required(None)
+    from kaizen.core.base_agent import BaseAgent
+    from kaizen.llm.client import LlmClient
+
+    async def _raise_refusal(self, *a, **k):
+        raise UngovernedEgressRefused("LlmClient")
+
+    monkeypatch.setattr(LlmClient, "complete", _raise_refusal)
+    base = BaseAgent(config={"model": _MODEL})
+    with pytest.raises(UngovernedEgressRefused):
+        await base._simple_execute_async({"query": "hi"})
