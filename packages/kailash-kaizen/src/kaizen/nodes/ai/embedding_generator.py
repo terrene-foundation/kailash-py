@@ -219,10 +219,23 @@ class EmbeddingGeneratorNode(Node):
                 default=3,
                 description="Maximum retry attempts for failed requests",
             ),
+            # #1779 governance_required posture opt-out for this node's four-axis
+            # embed egress (mirrors LLMAgentNode). Default False (fail-closed).
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
+            ),
         }
 
     def run(self, **kwargs) -> dict[str, Any]:
         operation = kwargs["operation"]
+        # #1779 governance_required posture opt-out. Stored run-scoped so the
+        # four-axis embed egress (_generate_provider_embedding) can honor it,
+        # mirroring LLMAgentNode. Fail-closed default False.
+        self._ungoverned = kwargs.get("ungoverned", False)
         provider = kwargs.get("provider", "mock")
         model = kwargs.get("model", "default")
         input_text = kwargs.get("input_text")
@@ -699,7 +712,11 @@ class EmbeddingGeneratorNode(Node):
                 option_kwargs["input_type"] = "search_document"
             options = EmbedOptions(**option_kwargs) if option_kwargs else None
 
-            client = LlmClient.from_deployment_sync(deployment)
+            # #1779: honor the node's governance opt-out at the four-axis embed
+            # chokepoint (posture gate lives in LlmClient.__init__).
+            client = LlmClient.from_deployment_sync(
+                deployment, ungoverned=getattr(self, "_ungoverned", False)
+            )
 
             async def _call_embed() -> list[list[float]]:
                 return await client.embed(
@@ -716,6 +733,13 @@ class EmbeddingGeneratorNode(Node):
                 text, provider, model, dimensions, timeout, max_retries
             )
         except Exception as e:
+            # #1779: propagate a governance refusal UNWRAPPED (invariant 4:
+            # single typed error) rather than re-typing to RuntimeError
+            # (redteam round-2 F2). Must precede the sanitize/re-wrap below.
+            from kailash.trust.pact import UngovernedEgressRefused
+
+            if isinstance(e, UngovernedEgressRefused):
+                raise
             # #1720 Wave-B1 redteam MED — sanitize provider errors at
             # enforcement-surface parity with the B1a live completion path
             # (llm_agent._provider_llm_response). The four-axis embed wire

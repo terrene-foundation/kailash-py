@@ -416,9 +416,10 @@ class LlmClient:
         # #1779 governance_required posture: refuse a bare un-governed client
         # that would make REAL egress, at CONSTRUCTION. A deployment-less client
         # cannot egress (complete/embed/stream need a deployment), so it is not
-        # gated here; mock/deterministic deployments, ungoverned=True, an
-        # installed interceptor, and the OFF posture are all exempt (see
-        # governance_gate). The lazy defense-in-depth re-check in
+        # gated here; mock/deterministic deployments, ungoverned=True, and the
+        # OFF posture are the ONLY exemptions (an installed interceptor does NOT
+        # exempt — the four-axis client never routes through it; redteam
+        # CRITICAL). See governance_gate. The lazy defense-in-depth re-check in
         # embed()/complete()/stream() closes the posture-flipped-after-
         # construction hole (and the inject-a-real-transport-at-call path).
         # Runs LAST so every instance attribute __del__ touches is already set.
@@ -483,8 +484,9 @@ class LlmClient:
         ``is_mock_transport`` class marker so production code never imports the
         test-only transport package). A ``None`` ``http_client`` means a real
         ``LlmHttpClient`` is about to be constructed, so it is NOT exempt here;
-        mock/deterministic deployment, ``ungoverned=True``, an installed
-        interceptor, and the OFF posture are all handled inside the gate.
+        mock/deterministic deployment, ``ungoverned=True``, and the OFF posture
+        are handled inside the gate (an installed interceptor does NOT exempt —
+        redteam CRITICAL).
         """
         if http_client is not None and getattr(http_client, "is_mock_transport", False):
             return

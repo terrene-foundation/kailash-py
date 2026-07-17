@@ -68,9 +68,10 @@ class UngovernedEgressRefused(PactError):
         super().__init__(
             f"KAILASH_GOVERNANCE_REQUIRED is active and this {surface} would make "
             "a real LLM call with no governance attached. Either (1) route egress "
-            "through a governed path — wrap the provider with GovernedProvider — "
-            "or (2) pass ungoverned=True to explicitly opt out. (An installed "
-            "process-global interceptor does NOT govern the four-axis LlmClient "
-            "and does not waive this refusal.)",
+            "through a governed path — the legacy GovernedProvider wrapper governs "
+            "the legacy provider API — or (2) pass ungoverned=True to explicitly "
+            "opt out (the concrete opt-out for the four-axis LlmClient / Agent / "
+            "LLMAgentNode surface). An installed process-global interceptor does "
+            "NOT govern the four-axis LlmClient and does not waive this refusal.",
             details=details,
         )

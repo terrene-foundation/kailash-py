@@ -218,17 +218,28 @@ async def test_lazy_exempt_with_injected_mock_transport() -> None:
     assert result is not None
 
 
-@pytest.mark.asyncio
-async def test_lazy_exempt_when_ungoverned() -> None:
+def test_lazy_exempt_when_ungoverned_real_transport_path() -> None:
+    """Redteam round-2 spec-F3: exercise the ungoverned lazy exemption on the
+    REAL-transport path (http_client=None), NOT via the mock-transport marker
+    short-circuit — so the test actually proves the lazy check honors
+    self._ungoverned. Calls the lazy gate directly to avoid real network."""
     kailash.set_governance_required(None)
     client = LlmClient.from_deployment(_real(), ungoverned=True)
     kailash.set_governance_required(True)
-    # ungoverned client stays exempt at the lazy check too (mock transport
-    # keeps it offline)
-    result = await client.complete(
-        [{"role": "user", "content": "hi"}], http_client=MockLlmHttpClient()
-    )
-    assert result is not None
+    # http_client=None => real-transport branch; must NOT raise because the
+    # client is ungoverned. (Bare real client here WOULD raise — see
+    # test_lazy_refuses_when_posture_flipped_after_construction.)
+    client._enforce_lazy_governance(None)  # no exception == pass
+
+
+def test_lazy_refuses_real_transport_when_not_ungoverned() -> None:
+    """Companion to the above: the same real-transport lazy check DOES refuse a
+    non-ungoverned real client (proves the exemption above is load-bearing)."""
+    kailash.set_governance_required(None)
+    client = LlmClient.from_deployment(_real())
+    kailash.set_governance_required(True)
+    with pytest.raises(UngovernedEgressRefused):
+        client._enforce_lazy_governance(None)
 
 
 def test_mock_transport_carries_marker() -> None:
@@ -348,3 +359,69 @@ def test_agent_off_real_provider_constructs() -> None:
     kailash.set_governance_required(None)
     agent = Agent(model=_MODEL, show_startup_banner=False)
     assert agent is not None
+
+
+# --------------------------------------------------------------------------- #
+# Round-2 T1 — the node egress must propagate UngovernedEgressRefused UNWRAPPED
+# (not re-typed to RuntimeError by the broad except; invariant 4)
+# --------------------------------------------------------------------------- #
+
+
+def test_provider_llm_response_propagates_typed_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_PROD_MODEL", _MODEL)
+    kailash.set_governance_required(True)
+    node = _make_llm_agent_node()
+    # The four-axis construction inside _provider_llm_response raises the typed
+    # refusal; the broad `except Exception` must re-raise it, NOT wrap as RuntimeError.
+    with pytest.raises(UngovernedEgressRefused):
+        node._provider_llm_response(
+            "openai", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Round-2 T2 — EmbeddingGeneratorNode (sibling four-axis egress) honors the
+# posture + carries an ungoverned opt-out (parity with LLMAgentNode)
+# --------------------------------------------------------------------------- #
+
+
+def _make_embedding_node():
+    from kaizen.nodes.ai.embedding_generator import EmbeddingGeneratorNode
+
+    return EmbeddingGeneratorNode()
+
+
+def test_embedding_node_declares_ungoverned_param() -> None:
+    assert "ungoverned" in _make_embedding_node().get_parameters()
+
+
+def test_embedding_node_real_provider_refused_and_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    kailash.set_governance_required(True)
+    node = _make_embedding_node()  # _ungoverned unset => getattr default False
+    with pytest.raises(UngovernedEgressRefused):
+        node._generate_provider_embedding(
+            "hello", "openai", "text-embedding-3-small", None, 60, 3
+        )
+
+
+def test_embedding_node_ungoverned_bypasses_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    kailash.set_governance_required(True)
+    node = _make_embedding_node()
+    node._ungoverned = True  # run() sets this from the node param
+    try:
+        node._generate_provider_embedding(
+            "hello", "openai", "text-embedding-3-small", None, 60, 3
+        )
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the embed gate")
+    except Exception:
+        pass  # downstream provider/network error is acceptable here

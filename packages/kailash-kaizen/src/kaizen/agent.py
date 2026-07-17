@@ -172,11 +172,12 @@ class Agent:
         # #1779 governance_required posture: an Agent builds its OWN LLM client
         # from env, so it is gated at construction. Exempt when
         # llm_provider="mock" (the mock discriminator), ungoverned=True (the
-        # explicit opt-out), an interceptor is installed, or the posture is OFF
-        # (default) — all handled inside enforce_governance_posture. Fail-closed
-        # (invariant 5): when llm_provider is None under an ACTIVE posture the
-        # intent is a real client, so it is refused unless the caller opts out;
-        # the error names both remedies.
+        # explicit opt-out), or the posture is OFF (default) — all handled inside
+        # enforce_governance_posture. (An installed interceptor does NOT exempt —
+        # the four-axis client does not route through it; redteam CRITICAL.)
+        # Fail-closed (invariant 5): when llm_provider is None under an ACTIVE
+        # posture the intent is a real client, so it is refused unless the caller
+        # opts out; the ungoverned flag is threaded to BaseAgent egress.
         self._ungoverned = ungoverned
         from kaizen.llm.governance_gate import enforce_governance_posture
 

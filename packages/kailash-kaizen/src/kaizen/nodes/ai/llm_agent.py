@@ -2492,6 +2492,14 @@ Final Answer: 6 hours"""
                 f"LLM provider stack unavailable for provider {provider!r}: {e}"
             ) from e
         except Exception as e:
+            # #1779: a governance refusal is a typed contract signal, NOT a
+            # provider error — propagate it UNWRAPPED (invariant 4: single typed
+            # error) instead of re-typing to RuntimeError. Must run before the
+            # sanitize/re-wrap below (redteam round-2 F1).
+            from kailash.trust.pact import UngovernedEgressRefused
+
+            if isinstance(e, UngovernedEgressRefused):
+                raise
             # Re-raise provider errors with a sanitized message. Log the
             # SANITIZED message (not raw ``e`` / ``exc_info``) — a raw provider
             # exception or its chained cause can echo a URL-embedded credential
