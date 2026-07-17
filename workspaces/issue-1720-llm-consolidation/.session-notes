@@ -9,7 +9,10 @@ drafting Wave-B) found + fixed **3 defects** in already-shipped code, converged
 shipped as **PR #1784 (merged, main @ `923709a83`)**. Also drafted the **Wave-B/C
 `/todos` plan** — awaiting the human structural gate.
 
-Wave B (consumer cutover) + Wave C (delete legacy) remain HUMAN-GATED at `/todos`.
+**User APPROVED the Wave-B/C plan (2026-07-17)** with both recommended decisions —
+Google `finish_reason` full value-map parity, and `azure_ai_foundry` scoped OUT
+(partial Wave-C). **The fresh session starts Wave B1** (see `02-plans/02-wave-b-c-todos-plan.md`).
+The cross-SDK BYOK issue was filed (rs#1881). PR #1782 left to the user.
 
 ## Read first
 
@@ -38,24 +41,33 @@ Foundation-redteam fixes (merged code the Wave-B cutover would inherit):
   bytes). Closes the "extension pending" gap from `04-validate/wave-a-parity-findings.md`.
   `drive_legacy_openai_family` gained an optional `api_key` passthrough (offline
   Perplexity credential check).
-- **Cross-SDK BYOK draft** — `cross-sdk-byok-draft-UNFILED.md` (scrubbed, ready to
-  file). See PENDING #2.
+- **Cross-SDK BYOK issue FILED** — esperie-enterprise/kailash-rs#1881 (`cross-sdk`),
+  filed 2026-07-17 under the User-Authorized Exception (grant receipt:
+  `cross-repo-authorization-1720-byok.md`). Requests the Rust four-axis client
+  validate per-request BYOK keys for header-injection at parity across both BYOK
+  entry points. `cross-sdk-byok-draft-UNFILED.md` is the scrubbed source body.
 
-## PENDING — needs the human (surfaced, not done)
+## NEXT SESSION — start here (Wave B1, APPROVED)
 
-1. **Wave-B/C `/todos` structural gate** — approve the plan + 2 decisions:
-   - **Google `finish_reason`**: recommend full legacy VALUE-MAP parity (the parity
-     finding's "lowercase" was mis-scoped — legacy value-maps STOP→stop,
-     MAX_TOKENS→length, SAFETY→content_filter). Folded into B1a.
-   - **`azure_ai_foundry`**: recommend SCOPE-OUT (partial Wave-C) vs building a
-     four-axis Foundry wire. Confirm if a Foundry wire is wanted.
-2. **Cross-SDK BYOK filing (needs authorization)**: the BYOK header-injection parity
-   gap is a likely Rust SDK four-axis parity surface. PENDING cross-repo filing —
-   needs the five `repo-scope-discipline` conditions (user-initiated + explicit +
-   confirmed + journaled + scoped). NOT auto-filed. Authorize → I draft a scrubbed
-   body + journal the grant + file.
-3. **PR #1782** (loom Gate-2 governance-artifact sync) — open, green, mergeable.
-   Held deliberately (rewrites the rule corpus mid-session). Merge at your call.
+The user approved the Wave-B/C plan. Begin Wave B1 (consumer cutover) per
+`02-plans/02-wave-b-c-todos-plan.md`, with the two ratified decisions baked in:
+- **Google `finish_reason`**: apply the FULL legacy value-map in the four-axis
+  google wire (STOP→stop, MAX_TOKENS→length, SAFETY→content_filter, tool→tool_calls) —
+  NOT a bare lowercase. Folded into B1a.
+- **`azure_ai_foundry`**: SCOPED OUT of the cutover. Keep legacy
+  `AzureAIFoundryProvider` alive; Wave-C is a PARTIAL delete (everything EXCEPT the
+  azure_ai_foundry path + its registry entry). No four-axis Foundry wire this program.
+
+Wave B1 shards (parallel, behind the parity harness): B1a `LLMAgentNode._provider_llm_response`
+(promote shadow to primary + google value-map) ‖ B1b `EmbeddingGeneratorNode._generate_provider_embedding`
+(+ uniform-normalize F2-MEDIUM + timeout kwarg) ‖ B1c `BaseAgent._simple_execute_async` (openai-only).
+Run the wave-loop inter-wave gate (redteam→converge→feed-forward) before Wave B2 (delete-gate prep) / Wave C.
+Wave C (DELETE) stays a separate human gate (irreversible).
+
+## STILL OPEN — user's call
+
+- **PR #1782** (loom Gate-2 governance-artifact sync) — open, green, mergeable.
+  Left to the user (rewrites the rule corpus). Merge at your discretion.
 
 ## Unreleased
 
