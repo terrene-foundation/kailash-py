@@ -64,7 +64,16 @@ from kailash.trust.pact.envelopes import (
     default_envelope_for_posture,
     intersect_envelopes,
 )
-from kailash.trust.pact.exceptions import DeserializationError, PactError
+from kailash.trust.pact.exceptions import (
+    DeserializationError,
+    PactError,
+    UngovernedEgressRefused,
+)
+from kailash.trust.pact.governance_posture import (
+    GOVERNANCE_REQUIRED_ENV_VAR,
+    is_governance_required,
+    set_governance_required,
+)
 from kailash.trust.pact.explain import (
     describe_address,
     explain_access,
@@ -164,6 +173,11 @@ __all__ = [
     # Error hierarchy (Ref-18, M5 convention compliance)
     "PactError",
     "DeserializationError",
+    "UngovernedEgressRefused",
+    # governance_required posture — direct LLM egress (#1779, EATP D6 parity)
+    "GOVERNANCE_REQUIRED_ENV_VAR",
+    "is_governance_required",
+    "set_governance_required",
     # Addressing (Ref-1001)
     "Address",
     "AddressError",
