@@ -1,44 +1,60 @@
-# Session Notes — 2026-07-17
+# Session Notes — 2026-07-17 (release cycle)
 
 ## Where we are
 
-#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). Waves 1+2+A, **B1
-(consumer cutover) and B2 (delete-gate prep) all MERGED to main**. Live LLM/embed
-paths fully consolidated (except the `azure_ai_foundry` scope-out). Phase 05-codify.
-Wave C (DELETE) is a HELD irreversible human gate — user approved the hold this session.
+#1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). Waves 1‑2‑A‑B1‑B2
+were merged-but-UNRELEASED at session start. **This session RELEASED them:
+`kailash-kaizen 2.34.0` is live on PyPI, verified.** Wave C (the irreversible
+legacy delete) is **SOAK-DEFERRED by user decision** — run it as a dedicated next
+cycle after 2.34.0's deprecation shims soak a real cadence.
 
-## Read first
+## Executed this session (durable receipts)
 
-1. `02-plans/02-wave-b-c-todos-plan.md` — Wave-B1/B2 DELIVERED sections + refined Wave-C scope + hold conditions
-2. `packages/kailash-kaizen/src/kaizen/nodes/ai/llm_agent.py::_legacy_provider_chat` — the SOLE azure_ai_foundry live residual for Wave C
-3. `packages/kailash-kaizen/tests/regression/test_issue_1720_b2_metrics_registry_decoupled.py` — B2 runtime-decoupling invariant (Wave-C delete-safety)
+- **Released kaizen 2.34.0** — PR **#1795** merged (main @ `6193f451b`), tag
+  **`kaizen-v2.34.0`** pushed, publish-pypi run **29560106753** (sha `6193f451b`)
+  SUCCESS. Clean-venv `pip install kailash-kaizen==2.34.0` verified: version 2.34.0,
+  B2 barrel deprecation shim fires, `_fallback_llm_response` removed.
+  (Superseded PR #1794 — metadata-only `release/*` branch — closed; it would have
+  skipped CI on the code fixes.)
+- **2 MEDIUM pre-release security fixes** landed IN-CYCLE (not deferred; same bug
+  class as the release's embedding-path fixes): MED-2 silent fabricated-completion
+  on the four-axis ImportError branch → now raises loudly + `_fallback_llm_response`
+  deleted; MED-1 creds-in-logs on 2 provider log sites + 1 MCP sibling → sanitized.
+  4 regression tests in `tests/regression/test_issue_1720_release_2340_redteam.py`.
+- **Gates:** reviewer PASS, security-reviewer APPROVE (2 rounds), full matrix green
+  (Py 3.11–3.14 + kaizen LLM/parity + DataFlow + PACT + CodeQL, 0 failures).
+- No sibling package drift — kaizen was the only release.
 
-## In-flight state
+## Read first (next session)
 
-- Nothing uncommitted; all session work merged (PRs #1789–#1792).
-
-## Executed this session
-
-- None — no external actions this session (all PRs are in this repo's `git log`).
+1. `02-plans/02-wave-b-c-todos-plan.md` § "Wave-C delete/keep boundary — CODE-VERIFIED"
+   — the surgical prune/keep map (NOT a bulk delete) + 3 OPEN pruning questions.
+2. Task #10 (Wave C) — soak-deferred, value-anchored, re-pickup gate.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item | Value-anchor (MUST-1 source) | Status |
-| --- | ---- | ---------------------------- | ------ |
-| F1 | Wave C — DELETE `providers/llm/` + `registry.py` + `base.py` + barrels (KEEP azure_ai_foundry); sweep ~35 legacy test files; re-base LLMProvider subclassers (folded B2c) | #1720 program goal (terminal delete); user-approved Wave-B/C plan | BLOCKED on user go-ahead + F2 |
-| F2 | kaizen PyPI release carrying Waves 1–2/A/B1/B2 | zero-tolerance 6a — B2 deprecation shims MUST ship ≥1 minor before Wave C; prior "release deferred to Wave-3" user call | queued (prereq for F1) |
-| F3 | azure_ai_foundry four-axis wire (Decision-2B) + extend CRLF/non-ASCII api_key guard to its legacy `.chat()` | plan Decision-2 (2A ratified; 2B optional → makes Wave C a full delete) | queued (optional) |
-| F4 | PR #1782 (loom Gate-2 governance-artifact sync) | rule-corpus sync; explicitly left to user | in-flight, user's call |
+| ID | Item | Status |
+| -- | ---- | ------ |
+| F1 | **Wave C** — partial delete of legacy `providers/llm/` (Decision-2A, keep azure_ai_foundry), redteam to convergence, release as 2.35.0 | SOAK-DEFERRED (user 2026-07-17). Value-anchor: #1720 terminal goal. Irreversible → re-confirm at fire point. SURGICAL: prune base.py/registry.py + provider_names parity assert; resolve 3 OPEN Qs; ~35-69 test-file sweep; migrate internal barrel-importers. Own analyze→shard→redteam mini-cycle. |
+| F2 | kaizen release carrying Waves 1–2/A/B1/B2 | **DONE ✓ — 2.34.0 on PyPI, verified.** |
+| F3 | azure_ai_foundry four-axis wire (Decision-2B) → makes Wave C a 100% delete | queued (optional). NO Foundry integration test infra — needs real infra before building (Tier-2/3 no-mock). |
+| F4 | PR #1782 (loom Gate-2 governance-artifact sync) | OPEN, user's call — CI green, modifies `.claude/` rules; not auto-merged. |
 
-Closed this session: `F-waveB1` → PR #1789; `F-waveB2` → PR #1791; wave-close docs → #1790, #1792.
+## Non-blocking follow-ups (surfaced this session, NOT fixed in the release)
 
-## Unreleased packages
-
-- kailash-kaizen — Waves 1–2 + A + B1 + B2 merged, NOT on PyPI. A release is the F1 prerequisite; recommend `/release` before Wave C.
+- **Observability f-string hygiene:** 3 raw-`{e}` error logs on the tool-execution
+  path (`llm_agent.py` ~3019/3081/3105) — lower-risk than the connection paths
+  (not connection strings), part of a file-wide f-string-logging pattern. Deferred
+  to a dedicated observability sweep (or fold into Wave C cleanup). NOT the MED-1
+  credential-leak class the security review scoped.
+- Internal tests importing via the deprecated barrels emit the intended
+  DeprecationWarning (shim working) — migrate to canonical imports as part of
+  Wave C (where the barrels are deleted and importers MUST move).
 
 ## Traps
 
 - kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ... -k "not mcp and not discover"`.
-- Worktree editable-install: shared `.venv` resolves `kaizen` to MAIN checkout; use `PYTHONPATH=<wt>/packages/kailash-kaizen/src` or verify post-merge from main.
-- pyright false-positive storm for `kaizen.llm.*`/`kaizen.providers.*` + merge-pending import noise — pytest is authoritative.
-- CI duplicate `pull_request` runs saturate self-hosted runners → Python 3.11/3.12 queue latency; check-then-merge as SEPARATE steps pinned to the head SHA.
+- pyright false-positive storm for `kaizen.*` (possibly-unbound, None-arg) — pytest authoritative.
+- framework-first hook emits a FALSE "raw SQL detected" on `llm_agent.py` edits — no SQL present.
+- CI duplicate `pull_request` runs saturate self-hosted runners → Python 3.11/3.12 lag ~5-8 min; check-then-merge as SEPARATE steps pinned to the head SHA (git.md).
+- Release branch naming: a release carrying CODE must NOT use `release/*` (that auto-skips the PR-gate matrix) — use `fix/`/`feat/` so the matrix runs on the code.

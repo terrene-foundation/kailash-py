@@ -251,6 +251,39 @@ quickstart green (NOTE: the quickstart example currently drives the LIVE legacy
 30 test files reference the legacy surface and must be swept in the delete PR
 (orphan-detection Rule 4). Requires explicit user confirmation.
 
+#### Wave-C delete/keep boundary — CODE-VERIFIED (2026-07-17, corrects the headline)
+
+Decision-2A (keep `azure_ai_foundry`) makes Wave C **surgical, not a bulk
+delete** — `base.py` and `registry.py` are PRUNED, not removed. Verified against
+merged main (grep-stable symbol anchors):
+
+- **KEEP (azure_ai_foundry needs them):** `providers/base.py::UnifiedAIProvider`
+  + `providers/base.py::ProviderCapability` + `providers/base.py::BaseAIProvider`
+  + `providers/types` — `AzureAIFoundryProvider` (`providers/llm/azure.py`)
+  subclasses `UnifiedAIProvider`, NOT `LLMProvider`. Keep `providers/llm/azure.py`.
+- **PRUNE `providers/registry.py` to azure-only:** it imports every provider
+  module at module scope and maps them in the `PROVIDERS` dict, guarded by a
+  module-scope `assert set(PROVIDERS.keys()) == PROVIDER_NAMES`. Removing the
+  deleted providers requires editing BOTH the imports + `PROVIDERS` dict AND
+  `providers/provider_names.py::PROVIDER_NAMES` in the same shard, or the assert
+  fails at import. The legacy azure path (`llm_agent.py::_legacy_provider_chat`)
+  calls `registry.get_provider("azure_ai_foundry")`, so `get_provider` + the
+  azure entry survive.
+- **OPEN (verify at Wave-C /analyze):** (a) are the `"azure"` / `"azure_openai"`
+  → `_unified_azure` registry entries (`unified_azure_provider.UnifiedAzureProvider`)
+  still needed, or does Wave-A's `resolve_deployment_for` azure mapping fully
+  cover them (→ also prunable)? (b) are the embedding providers
+  `providers/embedding/{cohere,huggingface}` reached only via the legacy registry
+  (deletable) or by four-axis code (keep)? (c) `base.py::LLMProvider` (272) —
+  delete only if no kept code subclasses it.
+- **DELETE:** `providers/llm/{anthropic,docker,google,mock,ollama,openai,perplexity}.py`
+  + the 2 barrel shims (`nodes/ai/__init__`, `providers/__init__`).
+
+Invariant surface (wave-loop sizing): registry↔provider_names parity assert +
+UnifiedAIProvider retention + azure legacy `.chat()` path + barrel removal +
+~35-file test sweep. This is ≥5 tracked invariants → Wave C is its own
+analyze→todos→implement→redteam mini-cycle, not a single delete commit.
+
 ## Cross-SDK (surface, do not auto-file — `handoff-completion`)
 
 The BYOK header-injection parity gap fixed this session (control-char api_key on
