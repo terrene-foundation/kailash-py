@@ -311,7 +311,7 @@ Every quota is a hard gate. Crossing raises a typed error from the pertinent eng
 
 ### E9.1 `actor_id` → Clearance Lookup
 
-Every mutation method calls `kailash_pact.GovernanceEngine.check_clearance(actor_id, resource, operation)` before acting. A denied clearance raises `ClearanceDeniedError(actor_id=, resource=, operation=, reason=)`.
+Every mutation method calls `pact.GovernanceEngine.check_clearance(actor_id, resource, operation)` before acting. A denied clearance raises `ClearanceDeniedError(actor_id=, resource=, operation=, reason=)`.
 
 ### E9.2 D/T/R Declaration Per Method
 

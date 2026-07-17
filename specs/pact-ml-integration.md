@@ -47,7 +47,7 @@ All three methods:
 
 ## 2. Public API
 
-All three methods live on `kailash_pact.engines.GovernanceEngine` (re-exported from `kailash_pact.GovernanceEngine`).
+All three methods live on `pact.engines.GovernanceEngine` (re-exported from `pact.GovernanceEngine`).
 
 ### 2.1 `check_trial_admission`
 
@@ -91,7 +91,7 @@ class AdmissionDecision:
 - Fails CLOSED: if any constraint-probe raises, returns `AdmissionDecision(admitted=False, reason=f"probe exception: {type(e).__name__}", binding_constraint=None, ...)`. The exception is NEVER swallowed silently — it is logged at WARN with the fingerprint, and the returned `reason` string identifies the probe that raised.
 - Audit row is appended BEFORE the return statement, under the lock.
 - `decision_id` is a fresh UUID4 per call — callers that want to correlate to a trial log the id.
-- `trial_config` MUST NOT appear verbatim in the audit row — classified fields in the config are hashed to `sha256:<8hex>` via `kailash_pact.classification.fingerprint()`.
+- `trial_config` MUST NOT appear verbatim in the audit row — classified fields in the config are hashed to `sha256:<8hex>` via `pact.classification.fingerprint()`.
 
 ### 2.2 `check_engine_method_clearance`
 
@@ -184,7 +184,7 @@ class CrossTenantDecision:
 
 ## 3. Error Taxonomy
 
-All errors inherit from `kailash_pact.exceptions.PactError` — the existing base. New errors:
+All errors inherit from `pact.exceptions.PactError` — the existing base. New errors:
 
 ```python
 class PactError(Exception):
@@ -346,7 +346,7 @@ This spec is ONE of SEVEN in the kailash-ml 1.0.0 "wave release":
 3. kailash-align 0.5.0 — depends on kailash-ml's `RLLifecycleProtocol`, which is a kailash-ml symbol — so align depends on ml.
 4. kailash-ml 1.0.0 — depends on kailash-pact 0.10.0 + kailash-kaizen 2.12.0 + kailash-dataflow 2.1.0 + kailash 2.9.0.
 
-**Parallel-worktree package ownership coordination** (`rules/agents.md` MUST rule): kailash-pact 0.10.0 version bump + CHANGELOG owner is the pact-specialist agent; every other agent's prompt MUST exclude `packages/kailash-pact/pyproject.toml`, `packages/kailash-pact/src/kailash_pact/__init__.py::__version__`, and `packages/kailash-pact/CHANGELOG.md` from their edit scope.
+**Parallel-worktree package ownership coordination** (`rules/agents.md` MUST rule): kailash-pact 0.10.0 version bump + CHANGELOG owner is the pact-specialist agent; every other agent's prompt MUST exclude `packages/kailash-pact/pyproject.toml`, `packages/kailash-pact/src/pact/__init__.py::__version__`, and `packages/kailash-pact/CHANGELOG.md` from their edit scope.
 
 ---
 

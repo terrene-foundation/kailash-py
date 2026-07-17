@@ -14,7 +14,7 @@ Each entry names the adapter class, its package / import path, the primitives it
 | `InterpretabilityDiagnostics` | `kaizen.interpretability`                | `Diagnostic`                  | `packages/kailash-kaizen/tests/integration/interpretability/test_interpretability_wiring.py`   | [kaizen-interpretability.md](kaizen-interpretability.md)   | #4     |
 | `LLMJudge` / `LLMDiagnostics` | `kaizen.judges`                          | `JudgeCallable`, `Diagnostic` | `packages/kailash-kaizen/tests/integration/judges/test_judges_wiring.py`                       | [kaizen-judges.md](kaizen-judges.md)                       | #5     |
 | **`AgentDiagnostics`**        | **`kaizen.observability`**               | **`Diagnostic`**              | **`packages/kailash-kaizen/tests/integration/observability/test_agent_diagnostics_wiring.py`** | **[kaizen-observability.md](kaizen-observability.md)**     | **#6** |
-| `GovernanceEngine` extensions | `kailash_pact.governance` (method-level) | native PACT                   | `packages/kailash-pact/tests/integration/governance/test_absorb_capabilities_wiring.py`        | [pact-absorb-capabilities.md](pact-absorb-capabilities.md) | #7     |
+| `GovernanceEngine` extensions | `pact.governance` (method-level) | native PACT                   | `packages/kailash-pact/tests/integration/governance/test_absorb_capabilities_wiring.py`        | [pact-absorb-capabilities.md](pact-absorb-capabilities.md) | #7     |
 
 ## Cross-SDK TraceEvent Producers
 

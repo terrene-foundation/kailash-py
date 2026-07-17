@@ -8,7 +8,7 @@ Supersedes: none — this spec adds tracker-kwarg propagation + shared-store con
 Parent domain: Kailash Kaizen (AI agent framework).
 Sibling specs: `specs/kaizen-observability.md` (AgentDiagnostics + TraceExporter), `specs/kaizen-evaluation.md`, `specs/kaizen-interpretability.md`, `specs/kaizen-judges.md`, `specs/kaizen-core.md`, `specs/kaizen-providers.md`, `specs/kaizen-advanced.md` (CostTracker).
 
-Origin: round-1 theme T2 (engine↔tracker wiring is 0/13 auto). Kaizen ships three Diagnostic adapters (`AgentDiagnostics`, `LLMDiagnostics`, `InterpretabilityDiagnostics`) that satisfy `kailash.diagnostics.protocols.Diagnostic` at runtime but do NOT emit to `km.track()`. Symmetric treatment with `DLDiagnostics` (kailash-ml) is required so a single `km.track()` run captures ml+kaizen telemetry in ONE dashboard. Also: CostTrackers in `kaizen.cost` and `kailash_pact.costs` currently use different integer units; kailash-ml's budget gate needs a single wire format. Finally: `TraceExporter`'s durable sink MUST write to the same `~/.kailash_ml/ml.db` store (or a compatible SQLite adapter) so kaizen agent traces appear in the same dashboard as ML runs.
+Origin: round-1 theme T2 (engine↔tracker wiring is 0/13 auto). Kaizen ships three Diagnostic adapters (`AgentDiagnostics`, `LLMDiagnostics`, `InterpretabilityDiagnostics`) that satisfy `kailash.diagnostics.protocols.Diagnostic` at runtime but do NOT emit to `km.track()`. Symmetric treatment with `DLDiagnostics` (kailash-ml) is required so a single `km.track()` run captures ml+kaizen telemetry in ONE dashboard. Also: CostTrackers in `kaizen.cost` and `pact.costs` currently use different integer units; kailash-ml's budget gate needs a single wire format. Finally: `TraceExporter`'s durable sink MUST write to the same `~/.kailash_ml/ml.db` store (or a compatible SQLite adapter) so kaizen agent traces appear in the same dashboard as ML runs.
 
 ---
 
@@ -20,7 +20,7 @@ Four integration surfaces Kaizen 2.12.0 ships:
 
 1. **`tracker=` kwarg on every diagnostic adapter** — `AgentDiagnostics`, `LLMDiagnostics`, `InterpretabilityDiagnostics` each accept `tracker: Optional[ExperimentRun] = None`. Default `None` reads the ambient `km.track()` run via `kailash_ml.tracking.get_current_run()` (via the compat layer — same pattern as Nexus contextvars). Symmetric with `DLDiagnostics` in kailash-ml.
 2. **Auto-emission from every `record_*` / `track_*` method** — when an ambient tracker is present, every event-capture method MUST emit `tracker.log_metric(...)` or `tracker.log_param(...)` or `tracker.log_artifact(...)` as appropriate. No opt-in, no configuration flag — if there's a tracker, metrics flow.
-3. **Shared CostTracker wire format** — `kaizen.cost.tracker.CostTracker` and `kailash_pact.costs.CostTracker` MUST both serialize cost deltas as integer microdollars (`microdollars: int = usd * 1_000_000`). Both sides implement `to_dict()` / `from_dict()` with identical key names.
+3. **Shared CostTracker wire format** — `kaizen.cost.tracker.CostTracker` and `pact.costs.CostTracker` MUST both serialize cost deltas as integer microdollars (`microdollars: int = usd * 1_000_000`). Both sides implement `to_dict()` / `from_dict()` with identical key names.
 4. **TraceExporter → shared SQLite store** — `TraceExporter` gains a `SQLiteSink` option that writes to the canonical `~/.kailash_ml/ml.db` store (or any SQLAlchemy URL). The schema is `agent_traces` + `agent_trace_events` tables inside the same DB `ExperimentTracker` uses.
 
 ### 1.2 Out of Scope (Owned By Sibling Specs)
@@ -189,7 +189,7 @@ class BaseAgent:
         if self._tenant_id is None:
             return engines
         # Tenant-scoped filter: every EngineInfo.clearance_level tuple is checked
-        # against the tenant's PACT envelope via kailash_pact.check_clearance(...).
+        # against the tenant's PACT envelope via pact.check_clearance(...).
         # Each ClearanceRequirement(axis, min_level) pair is validated independently;
         # an engine is admissible only if EVERY requirement in its tuple holds for
         # the tenant. The envelope decides which engines are exposed to the LLM.
@@ -358,7 +358,7 @@ If `self._active_tracker is None`, the adapter skips the emission silently and c
 
 ### 4.1 Problem statement
 
-Kaizen (`kaizen.cost.tracker.CostTracker`) historically uses `cents: int = usd * 100`. PACT (`kailash_pact.costs.CostTracker`) uses `microdollars: int = usd * 1_000_000` for finer precision (OpenAI GPT-4 embedding = $0.00013/1k tokens — resolves to 130 microdollars, but 0.013 cents truncates to 0). kailash-ml's `AutoMLEngine` and `GuardrailConfig` (per `ml-automl-draft.md`) mandate `microdollars` because sub-cent precision is required for LLM cost gating.
+Kaizen (`kaizen.cost.tracker.CostTracker`) historically uses `cents: int = usd * 100`. PACT (`pact.costs.CostTracker`) uses `microdollars: int = usd * 1_000_000` for finer precision (OpenAI GPT-4 embedding = $0.00013/1k tokens — resolves to 130 microdollars, but 0.013 cents truncates to 0). kailash-ml's `AutoMLEngine` and `GuardrailConfig` (per `ml-automl-draft.md`) mandate `microdollars` because sub-cent precision is required for LLM cost gating.
 
 ### 4.2 Parity clause
 
@@ -409,7 +409,7 @@ class CostDelta:
         )
 ```
 
-`kailash_pact.costs.CostTracker.CostDelta` MUST use the IDENTICAL schema. A `CostDelta` serialized by Kaizen MUST deserialize by PACT and vice versa.
+`pact.costs.CostTracker.CostDelta` MUST use the IDENTICAL schema. A `CostDelta` serialized by Kaizen MUST deserialize by PACT and vice versa.
 
 ### 4.3 Migration for 2.11.x users
 
