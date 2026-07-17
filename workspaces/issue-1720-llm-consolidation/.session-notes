@@ -1,84 +1,73 @@
-# Session Notes — 2026-07-17 (foundation redteam converged + Wave-B plan drafted)
+# Session Notes — 2026-07-17 (Wave B1 DELIVERED + CONVERGED + MERGED)
 
 ## Where we are
 
 #1720 (retire legacy `providers/llm/` → four-axis `LlmClient`). **Waves 1 + 2 + A
-merged.** This session: a **holistic redteam of the merged foundation** (before
-drafting Wave-B) found + fixed **3 defects** in already-shipped code, converged
-(reviewer + security-reviewer; round-1 found an F1 HIGH, round-2 CLEAN), and
-shipped as **PR #1784 (merged, main @ `923709a83`)**. Also drafted the **Wave-B/C
-`/todos` plan** — awaiting the human structural gate.
+merged. Wave B1 (consumer cutover) MERGED this session** as **PR #1789**
+(main @ `7ba9caf1f`). Three parallel-worktree shards (B1a/B1b/B1c), holistic
+redteam CONVERGED (2 consecutive clean rounds), post-merge re-verified from main
+(72 regression+parity green).
 
-**User APPROVED the Wave-B/C plan (2026-07-17)** with both recommended decisions —
-Google `finish_reason` full value-map parity, and `azure_ai_foundry` scoped OUT
-(partial Wave-C). **The fresh session starts Wave B1** (see `02-plans/02-wave-b-c-todos-plan.md`).
-The cross-SDK BYOK issue was filed (rs#1881). PR #1782 left to the user.
+## Shipped this session — Wave B1 (PR #1789)
 
-## Read first
+- **B1a** — `LLMAgentNode._provider_llm_response` promoted the four-axis shadow to
+  the PRIMARY live path (`resolve_deployment_for`→`complete`→`to_legacy_shape`);
+  shadow dispatch removed from the success path; folded Decision-1A (full legacy
+  google `finish_reason` value-map into the four-axis google wire). `azure_ai_foundry`
+  scoped OUT (routes legacy `_legacy_provider_chat`).
+- **B1b** — `EmbeddingGeneratorNode._generate_provider_embedding` → `LlmClient.embed`;
+  added `timeout` kwarg; `EmbedOptions.normalize` now UNIFORM client-side (removed
+  HF-only copy). ollama/docker embed stays legacy fallback (needs node `base_url`/`api_key`).
+- **B1c** — `BaseAgent._simple_execute_async` → four-axis (openai-only).
+- **Redteam fixes (`d87ecf799`)** — HIGH: embed silently returned a MOCK on an
+  unresolvable credential provider → restored legacy loud raise (sanctioned mock
+  path stays `provider=="mock"` only). 2× MED: sanitize-provider-error parity on
+  embed + base_agent paths. LOW: google `_map_finish_reason(None)`→"stop"; 3 sibling
+  embed-shaper docstrings corrected.
 
-1. `02-plans/02-wave-b-c-todos-plan.md` — the Wave-B/C plan + 2 decisions (THIS is the gate)
-2. `02-plans/01-wave3-refined-decomposition.md` — the original refined wave plan
-3. `packages/kailash-kaizen/tests/regression/test_issue_1720_wave_a_foundation_redteam.py` — the 17 redteam regression tests
-4. `04-validate/wave-a-parity-findings.md` — earlier parity gate evidence
+## NEXT SESSION — start here (Wave B2, then surface Wave C)
 
-## Shipped this session (PR #1784)
+Per `02-plans/02-wave-b-c-todos-plan.md` (updated with the B1-delivered status +
+precise residual list). Wave B2 = delete-gate prep, three shards:
+- **B2a** — `nodes/ai/__init__` + `providers/__init__` barrels → DeprecationWarning
+  shims (≥1 minor cycle) + CHANGELOG migration entry (zero-tolerance 6a). No hard drop.
+- **B2b** — extract the provider-name registry (`PROVIDERS` + `_MODEL_PREFIX_MAP`)
+  off `providers/registry.py` so `production/metrics.py` no longer imports it.
+  (Coupling is LESS than the census implies — only metrics.py + barrels + azure
+  fallback import the registry; `llm/deployment_resolver.py` + `llm/client.py` do NOT.)
+- **B2c** — re-base `providers/base.py::LLMProvider` subclassers
+  (`unified_azure_provider`, cohere/hf embedding providers) before the base is deleted.
+Run the inter-wave gate (redteam→converge) after B2, THEN surface Wave C.
 
-Foundation-redteam fixes (merged code the Wave-B cutover would inherit):
-- **F1** — `legacy_tool_choice_default` made stream-aware (kept for Wave-B). Redteam
-  HIGH: threading it into the dual-run **shadow** was wrong (the node always calls
-  legacy `.chat()`, never `stream_chat`, so the shadow must reproduce `.chat()`'s
-  "required") — shadow threading reverted; helper retained.
-- **F2** — `EmbedOptions.normalize` now reaches the HF embed wire via `client.embed`
-  (was a silent no-op, zero-tolerance 3c). Uniform-normalize on ollama/cohere/openai
-  DEFERRED → tracked in the plan as B1b.
-- **BYOK** — `resolve_deployment_for` now validates a caller-supplied `api_key`
-  (CRLF/control-char/non-ASCII) at enforcement-surface parity with `complete()`.
+**Wave C (DELETE) is a HUMAN structural gate — IRREVERSIBLE.** Residual after B2:
+azure_ai_foundry chat + ollama/docker embed fallback (both documented partial-delete
+residuals) + 35 test files to sweep (orphan-detection Rule 4). Do NOT execute Wave C
+without explicit user confirmation.
 
-## Also shipped (non-gated Wave-B prep, PR #1786 merged)
+## Non-blocking follow-ups (surfaced by B1 redteam, NOT introduced by B1)
 
-- **Parity coverage** — plane-B response-parse parity extended to the OpenAI-compat
-  wires **docker + perplexity** (both byte-identical to openai on shared canned
-  bytes). Closes the "extension pending" gap from `04-validate/wave-a-parity-findings.md`.
-  `drive_legacy_openai_family` gained an optional `api_key` passthrough (offline
-  Perplexity credential check).
-- **Cross-SDK BYOK issue FILED** — esperie-enterprise/kailash-rs#1881 (`cross-sdk`),
-  filed 2026-07-17 under the User-Authorized Exception (grant receipt:
-  `cross-repo-authorization-1720-byok.md`). Requests the Rust four-axis client
-  validate per-request BYOK keys for header-injection at parity across both BYOK
-  entry points. `cross-sdk-byok-draft-UNFILED.md` is the scrubbed source body.
-
-## NEXT SESSION — start here (Wave B1, APPROVED)
-
-The user approved the Wave-B/C plan. Begin Wave B1 (consumer cutover) per
-`02-plans/02-wave-b-c-todos-plan.md`, with the two ratified decisions baked in:
-- **Google `finish_reason`**: apply the FULL legacy value-map in the four-axis
-  google wire (STOP→stop, MAX_TOKENS→length, SAFETY→content_filter, tool→tool_calls) —
-  NOT a bare lowercase. Folded into B1a.
-- **`azure_ai_foundry`**: SCOPED OUT of the cutover. Keep legacy
-  `AzureAIFoundryProvider` alive; Wave-C is a PARTIAL delete (everything EXCEPT the
-  azure_ai_foundry path + its registry entry). No four-axis Foundry wire this program.
-
-Wave B1 shards (parallel, behind the parity harness): B1a `LLMAgentNode._provider_llm_response`
-(promote shadow to primary + google value-map) ‖ B1b `EmbeddingGeneratorNode._generate_provider_embedding`
-(+ uniform-normalize F2-MEDIUM + timeout kwarg) ‖ B1c `BaseAgent._simple_execute_async` (openai-only).
-Run the wave-loop inter-wave gate (redteam→converge→feed-forward) before Wave B2 (delete-gate prep) / Wave C.
-Wave C (DELETE) stays a separate human gate (irreversible).
+- Legacy `azure_ai_foundry` `.chat()` lacks the CRLF/non-ASCII api_key guard the
+  four-axis path now has (enforcement-parity asymmetry, one legacy provider). Fold
+  into the Foundry four-axis-wire capability item.
+- `_run_async_in_sync_context` (unchanged since 2026-03-11) latent RuntimeError-remap
+  edge; B1a grows its risk surface but unreachable (LLM taxonomy is Exception-based).
+- Pre-existing `structured_output_mode='auto'` FutureWarning (`async_single_shot.py`)
+  — separate structured-output deprecation workstream.
 
 ## STILL OPEN — user's call
 
-- **PR #1782** (loom Gate-2 governance-artifact sync) — open, green, mergeable.
-  Left to the user (rewrites the rule corpus). Merge at your discretion.
+- **PR #1782** (loom Gate-2 governance-artifact sync) — open, left to the user.
 
 ## Unreleased
 
-- **kailash-kaizen**: Waves 1–2 + A + this foundation-fix set merged, NOT released to
-  PyPI. `/release` DEFERRED to the Wave-3 milestone (prior user call).
+- **kailash-kaizen**: Waves 1–2 + A + B1 merged, NOT released to PyPI. `/release`
+  DEFERRED to the Wave-3 milestone (prior user call).
 
 ## Traps
 
 - kaizen tests: `cd packages/kailash-kaizen && ../../.venv/bin/python -m pytest ...`.
-- `iterative_llm_agent` MCP-discovery tests HANG offline (need a live MCP server) —
-  exclude with `-k "not mcp and not discover"`; unrelated to LLM-consolidation.
-- pyright shows a false-positive storm for `kaizen.llm.*` imports (stale index) —
-  runtime + pytest are authoritative.
-- `cd` persists across Bash calls in this harness; use absolute paths or re-`cd`.
+- Exclude MCP-discovery hangs with `-k "not mcp and not discover"`.
+- pyright false-positive storm for `kaizen.llm.*` + line drift — runtime + pytest authoritative.
+- Worktree editable-install gotcha: the shared `.venv` resolves `kaizen` to the MAIN
+  checkout; run worktree tests with `PYTHONPATH=<wt>/packages/kailash-kaizen/src` OR
+  verify post-merge from main (worktree-isolation Rule 2a/3a).
