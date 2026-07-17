@@ -4,6 +4,43 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.34.0] — 2026-07-17 — #1720 LLM consolidation: live paths on four-axis `LlmClient`
+
+### Changed
+
+- **Live LLM chat and embedding paths now route through the four-axis `LlmClient`
+  instead of the legacy `providers/llm/` registry (#1720 Wave-B1, PR #1789).**
+  `LLMAgentNode._provider_llm_response`, `EmbeddingGeneratorNode._generate_provider_embedding`,
+  and `BaseAgent._simple_execute_async` were cut over from
+  `providers.registry.get_provider(...).chat/embed(...)` to
+  `resolve_deployment_for(...)` → `LlmClient.complete` / `LlmClient.embed` →
+  `to_legacy_shape`. The cutover is behavior-neutral, gated by an offline parity
+  harness across the dual-mappable provider matrix. `azure_ai_foundry`
+  intentionally remains on the legacy `.chat()` path (Decision-2A); every other
+  provider now runs on the consolidated four-axis client.
+- **`production/metrics.py` no longer imports `providers.registry` (#1720 Wave-B2b,
+  PR #1791).** The provider-name registry (`PROVIDERS` frozenset + model-prefix
+  map) was extracted to a registry-independent module (`providers/provider_names.py`),
+  decoupling the Prometheus metrics label-bounding (and a bare `import kaizen`)
+  from the legacy registry at runtime.
+
+### Added
+
+- **Four-axis embedding wires and the legacy-shape bridge (#1720 Waves 1–2/A).**
+  New `LlmClient` embedding wire protocols for cohere and HuggingFace
+  (`wire_protocols/cohere_embeddings.py`, `wire_protocols/huggingface_embeddings.py`);
+  a `to_legacy_shape` adapter (`llm/_legacy_shape.py`) reproducing the legacy
+  provider response envelope so the cutover is behavior-neutral; a shared
+  `resolve_deployment_for` deployment resolver (`llm/deployment_resolver.py`) with
+  azure / azure_openai mapping; and an offline `mock_transport` harness
+  (`llm/testing/mock_transport.py`) that drives the parity matrix without live
+  credentials. Existing chat wires (openai, bedrock, google, mistral, ollama,
+  HuggingFace inference, cohere generate) were extended to complete the
+  consolidated provider matrix.
+- **`LlmClient.embed` accepts a `timeout` kwarg** at parity with the legacy
+  embedding path, and applies `EmbedOptions.normalize` uniformly across every
+  embedding wire (previously a silent no-op on all wires except HuggingFace).
+
 ### Deprecated
 
 - **Legacy provider re-exports from the `kaizen.nodes.ai` and `kaizen.providers`
@@ -25,7 +62,36 @@ OpenAIProvider`) and `kaizen.providers.embedding.<mod>`, the `LLMProvider`
   base from `kaizen.providers.base`, and the registry accessors from
   `kaizen.providers.registry`. The symbols remain in each barrel's `__all__`
   (the public contract is unchanged — only the access path warns). Removal is
-  scheduled for Wave-C of #1720.
+  scheduled for Wave-C of #1720 (a following minor release, so these shims live
+  through ≥1 published minor cycle first).
+
+### Fixed
+
+- **Foundation and Wave-B1 red-team fixes (#1720).** (1) The legacy per-provider
+  `tool_choice` default is now stream-aware — the dual-run shadow threads the live
+  `streaming` mode so the four-axis streaming tool path reproduces legacy
+  `stream_chat`'s per-provider `"auto"`/`"required"` value. (2) `EmbedOptions.normalize`
+  now reaches the HuggingFace embed wire through `LlmClient.embed`. (3) BYOK
+  hardening: `resolve_deployment_for` validates a caller-supplied `api_key`
+  (control-char / CRLF / non-ASCII) at parity with `LlmClient.complete`, closing a
+  header-injection surface on the promoted live path. (4) The embedding cutover no
+  longer silently returns a mock embedding on an unresolvable credential provider —
+  the legacy loud raise is restored (the sanctioned mock path stays the explicit
+  `provider == "mock"` mode only). (5) Google `finish_reason` value-map parity
+  (`STOP`→`stop`, `MAX_TOKENS`→`length`, `SAFETY`→`content_filter`, tool→`tool_calls`)
+  is preserved on the four-axis google wire.
+- **Pre-release red-team fixes (#1720 2.34.0).** (6) `LLMAgentNode` no longer
+  returns a fabricated completion when the provider stack fails to import — the
+  `ImportError` branch now raises loudly (parity with the embedding path's
+  unresolvable-provider raise; no silent mock returned as a real answer). The
+  fabricating `_fallback_llm_response` method was removed. (7) Provider errors
+  are now routed through `sanitize_provider_error` before reaching the LOG
+  surface on the completion path (previously logged raw via `exc_info=True`) —
+  a URL-embedded credential in a raw provider exception can no longer leak into
+  server logs. (8) Same-class sibling on the MCP retrieval path: the
+  `_retrieve_mcp_context` connection-failure log lines now route through
+  `sanitize_provider_error` (they previously logged the raw exception while a
+  sanitized copy was computed for the return).
 
 ## [2.33.1] — 2026-07-15 — RAG verification-parse hardening (#1755)
 
