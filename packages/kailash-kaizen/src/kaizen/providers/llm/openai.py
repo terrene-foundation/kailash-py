@@ -293,7 +293,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except openai.BadRequestError as e:
-            logger.error("OpenAI BadRequestError: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             if "max_tokens" in str(e):
                 raise RuntimeError(
                     "This OpenAI provider requires models that support max_completion_tokens. "
@@ -302,7 +302,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 )
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
         except Exception as e:
-            logger.error("OpenAI error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     # ------------------------------------------------------------------
@@ -430,7 +430,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except openai.BadRequestError as e:
-            logger.error("OpenAI BadRequestError: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             if "max_tokens" in str(e):
                 raise RuntimeError(
                     "This OpenAI provider requires models that support max_completion_tokens. "
@@ -439,7 +439,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 )
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
         except Exception as e:
-            logger.error("OpenAI error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     # ------------------------------------------------------------------
@@ -605,7 +605,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 usage=last_usage,
             )
         except Exception as exc:  # pragma: no cover - re-raise sanitised
-            logger.error("openai.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "OpenAI"))
             raise RuntimeError(sanitize_provider_error(exc, "OpenAI"))
 
     # ------------------------------------------------------------------
@@ -637,7 +637,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("OpenAI embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     async def embed_async(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -667,7 +667,7 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("OpenAI embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "OpenAI"))
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

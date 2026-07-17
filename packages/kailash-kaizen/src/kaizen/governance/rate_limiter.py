@@ -56,6 +56,7 @@ Example:
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -72,6 +73,32 @@ except ImportError:
     ConnectionPool = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_redis_url(url: str) -> str:
+    """Mask credentials in a redis URL for safe logging.
+
+    Emits the canonical ``scheme://***@host[:port]/path`` form
+    (observability.md Rule 6.2) so a grep for ``***@`` finds every
+    credential-masking site, and a distinct ``<unparseable redis url>``
+    sentinel on parse failure (Rule 6.1) so a bailed mask is never mistaken
+    for a successful one. Also masks any URL-with-auth embedded in an
+    arbitrary string (e.g. a redis connection-error message).
+    """
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "<unparseable redis url>"
+    # Bare single-URL branch ONLY when the whole string is one URL: a second
+    # credentialed URL hiding in ``parsed.path`` (multi-URL error message) must
+    # fall through to the global userinfo scrub, which masks every occurrence.
+    if parsed.scheme and parsed.hostname and "://" not in parsed.path:
+        port = f":{parsed.port}" if parsed.port else ""
+        return f"{parsed.scheme}://***@{parsed.hostname}{port}{parsed.path}"
+    # Non-URL / embedded / multi-URL string — scrub every user:pass@ in place.
+    return re.sub(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^@\s/]+@", r"\1***@", url)
 
 
 class RateLimitError(Exception):
@@ -261,10 +288,14 @@ class ExternalAgentRateLimiter:
             self._initialized = True
 
             logger.info(
-                f"ExternalAgentRateLimiter initialized with Redis: {self.redis_url}"
+                "ExternalAgentRateLimiter initialized with Redis: %s",
+                _mask_redis_url(self.redis_url),
             )
         except Exception as e:
-            logger.error(f"Failed to initialize Redis connection: {e}")
+            logger.error(
+                "Failed to initialize Redis connection: %s",
+                _mask_redis_url(str(e)),
+            )
             if not self.config.fail_open_on_error:
                 raise
             logger.warning(
@@ -446,7 +477,7 @@ class ExternalAgentRateLimiter:
             )
 
         except Exception as e:
-            logger.error(f"Rate limit check failed: {e}", exc_info=True)
+            logger.error("Rate limit check failed: %s", _mask_redis_url(str(e)))
 
             if self.metrics:
                 self.metrics.redis_errors_total += 1
@@ -503,7 +534,7 @@ class ExternalAgentRateLimiter:
             logger.debug(f"Recorded invocation for scope: {scope_key}")
 
         except Exception as e:
-            logger.error(f"Failed to record invocation: {e}")
+            logger.error("Failed to record invocation: %s", _mask_redis_url(str(e)))
             # Don't raise - recording failure shouldn't block invocation
 
     def _build_scope_key(

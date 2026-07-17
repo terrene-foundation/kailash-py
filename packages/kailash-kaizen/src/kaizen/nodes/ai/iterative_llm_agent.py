@@ -8,6 +8,7 @@ from typing import Any
 
 from kailash.nodes.base import NodeParameter, register_node
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
@@ -375,7 +376,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     iteration_state.end_time = time.time()
 
                     if enable_detailed_logging:
-                        self.logger.error(f"Iteration {iteration_num} failed: {e}")
+                        self.logger.error(
+                            f"Iteration {iteration_num} failed: {sanitize_provider_error(e, 'iteration')}"
+                        )
 
                 iterations.append(iteration_state)
 
@@ -511,7 +514,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 )
 
             except Exception as e:
-                self.logger.debug(f"Discovery failed for server {server_id}: {e}")
+                self.logger.debug(
+                    f"Discovery failed for server {server_id}: {sanitize_provider_error(e, 'MCP')}"
+                )
                 discoveries["new_servers"].append(
                     {
                         "id": server_id,
@@ -569,7 +574,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return discovered_tools[:max_tools]
 
         except Exception as e:
-            self.logger.debug(f"Tool discovery failed: {e}")
+            self.logger.debug(
+                f"Tool discovery failed: {sanitize_provider_error(e, 'MCP')}"
+            )
             return []
 
     def _discover_server_resources(
@@ -604,7 +611,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return default_resources[:max_resources]
 
         except Exception as e:
-            self.logger.debug(f"Resource discovery failed: {e}")
+            self.logger.debug(
+                f"Resource discovery failed: {sanitize_provider_error(e, 'MCP')}"
+            )
             return []
 
     def _analyze_tool_capability(
@@ -946,10 +955,15 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     tool_results.append(f"Tool {tool_name} failed: {error_msg}")
 
             except Exception as e:
-                error_msg = str(e)
+                # MCP call_tool transport error can carry a URL-embedded
+                # credential; sanitize before it flows into outputs + log
+                # (return/log parity; mirrors llm_agent._execute_mcp_tool_call).
+                error_msg = sanitize_provider_error(e, "tool")
                 step_result["tool_outputs"][tool_name] = f"Error: {error_msg}"
                 tool_results.append(f"Tool {tool_name} failed: {error_msg}")
-                self.logger.error(f"Tool execution failed for {tool_name}: {e}")
+                self.logger.error(
+                    "Tool execution failed for %s: %s", tool_name, error_msg
+                )
 
         # Combine all tool outputs
         if tool_results:
@@ -1002,7 +1016,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
                     step_result["success"] = False
             except Exception as e:
-                self.logger.error(f"LLM fallback failed for action {action}: {e}")
+                self.logger.error(
+                    f"LLM fallback failed for action {action}: {sanitize_provider_error(e, 'LLM')}"
+                )
                 step_result["output"] = f"Error executing {action}: {str(e)}"
                 step_result["success"] = False
 
@@ -1046,7 +1062,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         f"Translated platform MCP servers: {len(mcp_servers)} servers"
                     )
             except Exception as e:
-                self.logger.warning(f"Failed to translate platform MCP config: {e}")
+                self.logger.warning(
+                    f"Failed to translate platform MCP config: {sanitize_provider_error(e, 'MCP')}"
+                )
                 # Continue with original mcp_servers
 
         # Create fallback server config if we have mcp_servers
@@ -1669,7 +1687,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 if base_response.get("success") and base_response.get("response"):
                     return base_response["response"].get("content", "")
             except Exception as e:
-                self.logger.warning(f"Base LLM fallback failed: {e}")
+                self.logger.warning(
+                    f"Base LLM fallback failed: {sanitize_provider_error(e, 'LLM')}"
+                )
 
         # Create synthesized response using LLM
         synthesis_messages = [
@@ -1707,7 +1727,9 @@ provide your best analysis of the query directly.""",
             if synthesis_response.get("success") and synthesis_response.get("response"):
                 return synthesis_response["response"].get("content", "")
         except Exception as e:
-            self.logger.warning(f"LLM synthesis failed: {e}")
+            self.logger.warning(
+                f"LLM synthesis failed: {sanitize_provider_error(e, 'LLM')}"
+            )
 
         # Fallback to basic synthesis if LLM fails
         synthesis = f"## Analysis Results for: {user_query}\n\n"

@@ -337,7 +337,7 @@ class PerplexityProvider(LLMProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("Perplexity error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Perplexity"))
             if "api_key" in str(e).lower():
                 raise RuntimeError(
                     "Perplexity API key invalid or not set. "
@@ -381,7 +381,7 @@ class PerplexityProvider(LLMProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("Perplexity error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Perplexity"))
             if "api_key" in str(e).lower():
                 raise RuntimeError(
                     "Perplexity API key invalid or not set. "
@@ -462,7 +462,7 @@ class PerplexityProvider(LLMProvider):
                 usage=last_usage,
             )
         except Exception as exc:  # pragma: no cover
-            logger.error("perplexity.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Perplexity"))
             raise RuntimeError(sanitize_provider_error(exc, "Perplexity"))
 
     def get_supported_models(self) -> dict:

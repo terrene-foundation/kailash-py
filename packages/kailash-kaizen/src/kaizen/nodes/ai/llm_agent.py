@@ -1527,7 +1527,13 @@ class LLMAgentNode(Node):
                                         }
                                     )
                             except Exception as e:
-                                self.logger.debug(f"Failed to read resource {uri}: {e}")
+                                # MCP resource-read transport error can echo a
+                                # URL-embedded credential — sanitize before log.
+                                self.logger.debug(
+                                    "Failed to read resource %s: %s",
+                                    uri,
+                                    sanitize_provider_error(e, "MCP"),
+                                )
 
                         # Auto-discover and include relevant resources
                         if resources and isinstance(resources, list):
@@ -1726,13 +1732,22 @@ class LLMAgentNode(Node):
                                 )
 
                     except TimeoutError as e:
+                        # Sanitize before logging — an MCP transport error can
+                        # echo a URL-embedded credential onto the log surface
+                        # (#1720 release redteam MED-1 sibling on the MCP
+                        # discovery branch; mirrors _retrieve_mcp_context).
                         self.logger.warning(
-                            f"Tool discovery timed out for MCP server '{server_config.get('name', 'unknown')}': {e}"
+                            "Tool discovery timed out for MCP server '%s': %s",
+                            server_config.get("name", "unknown"),
+                            sanitize_provider_error(e, "MCP"),
                         )
                     except Exception as e:
                         error_type = type(e).__name__
                         self.logger.error(
-                            f"Failed to discover tools from '{server_config.get('name', 'unknown')}' ({error_type}): {e}"
+                            "Failed to discover tools from '%s' (%s): %s",
+                            server_config.get("name", "unknown"),
+                            error_type,
+                            sanitize_provider_error(e, "MCP"),
                         )
 
             except ImportError:
@@ -1743,7 +1758,8 @@ class LLMAgentNode(Node):
                 pass
             except Exception as e:
                 self.logger.error(
-                    f"Unexpected error in MCP tool discovery: {type(e).__name__}: {e}"
+                    "Unexpected error in MCP tool discovery: %s",
+                    sanitize_provider_error(e, "MCP"),
                 )
                 self.logger.info("Using mock tools as fallback.")
 
@@ -3016,7 +3032,11 @@ Final Answer: 6 hours"""
             }
 
         except Exception as e:
-            self.logger.error(f"MCP tool execution failed: {e}")
+            # MCP call_tool transport error can carry a URL-embedded credential;
+            # the return sanitizes below — the log MUST match (return/log parity).
+            self.logger.error(
+                "MCP tool execution failed: %s", sanitize_provider_error(e, "tool")
+            )
             return {
                 "error": sanitize_provider_error(e, "tool"),
                 "success": False,
@@ -3102,7 +3122,12 @@ Final Answer: 6 hours"""
             except Exception as e:
                 # Handle other execution errors
                 # Tool info was already extracted successfully if we got here
-                self.logger.error(f"Tool execution failed for {tool_name}: {e}")
+                # (return sanitizes below — log MUST match for return/log parity)
+                self.logger.error(
+                    "Tool execution failed for %s: %s",
+                    tool_name,
+                    sanitize_provider_error(e, "tool"),
+                )
                 tool_results.append(
                     {
                         "tool_call_id": tool_id,

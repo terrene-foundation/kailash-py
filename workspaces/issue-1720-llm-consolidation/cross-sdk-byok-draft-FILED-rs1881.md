@@ -1,10 +1,12 @@
-# DRAFT — Cross-SDK issue for the Rust SDK four-axis LLM client (NOT YET FILED)
+# Cross-SDK issue for the Rust SDK four-axis LLM client — FILED
 
-**Status: UNFILED.** Filing needs explicit user authorization + the five
-`repo-scope-discipline` conditions (user-initiated + explicit+specific +
-confirmed + journaled-before-acting + scoped). This is the scrubbed body,
-ready to file on the word "go". Target repo resolves via `build.rs`
-(`loom-links.local.json`), label `cross-sdk`.
+**Status: FILED as esperie-enterprise/kailash-rs#1881** (2026-07-17, per the
+authorization receipt `cross-repo-authorization-1720-byok.md`, all five
+`repo-scope-discipline` User-Authorized-Exception conditions met). This file is
+retained as the scrubbed body of record. The `#1881` number is carried forward
+from last session's receipt — re-verify with `gh issue view` before citing it as
+current fact externally (`handoff-completion` MUST-2). The scrubbed body below
+was what was filed.
 
 Scrubbed per `upstream-issue-hygiene.md` MUST-2: SDK-API surface only — no
 downstream/consumer context, internal paths, workspace IDs, or finding tags.

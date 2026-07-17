@@ -4,7 +4,28 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
-## [2.34.0] — 2026-07-17 — #1720 LLM consolidation: live paths on four-axis `LlmClient`
+## [2.34.1] — 2026-07-17 — #1720 creds-in-logs security sweep (MED-1 sibling class)
+
+### Security
+
+- **Closed the creds-in-logs vulnerability class across every LLM / provider /
+  MCP / redis / webhook path (#1720).** The 2.34.0 MED-1 fix sanitized a single
+  MCP connection-error log; an adversarial redteam sweep to convergence found the
+  same class open package-wide. Every credential-bearing exception log and URL
+  log now routes through `sanitize_provider_error`, a canonical `_mask_redis_url`,
+  or a new `_mask_webhook_url`. `exc_info=True` is dropped on provider / MCP /
+  connection error paths — it resurfaced the raw provider exception (carrying an
+  api-key or a `user:pass@` URL) via the implicit exception-context chain even
+  when the re-raised message was already sanitized. Fixes span the LLM /
+  embedding / vision / document providers, the Azure backends, the redis rate
+  limiter (which logged its connection URL verbatim on the success path), the MCP
+  discovery / tool-execution paths across every agent implementation, the webhook
+  alerter (Slack/Discord auth token lives in the URL path — a class the provider
+  sanitizer does not cover), and the LLM security nodes (which logged **and
+  returned** raw provider exceptions). 22 source files; verified by a six-round
+  adversarial sweep to convergence plus 10 behavioral regression tests, and an
+  exhaustive grep across all 54 credential-bearing modules confirming zero
+  remaining raw-exception logs.
 
 ### Changed
 

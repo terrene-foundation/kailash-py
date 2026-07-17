@@ -194,7 +194,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("Docker Model Runner error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Docker Model Runner"))
             raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     async def chat_async(
@@ -284,7 +284,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("Docker Model Runner async error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Docker Model Runner"))
             raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     # ------------------------------------------------------------------
@@ -380,7 +380,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 usage=last_usage,
             )
         except Exception as exc:  # pragma: no cover
-            logger.error("docker.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Docker Model Runner"))
             raise RuntimeError(sanitize_provider_error(exc, "Docker Model Runner"))
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -400,7 +400,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error("Docker Model Runner embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Docker Model Runner"))
             raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     async def embed_async(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
@@ -422,9 +422,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            logger.error(
-                "Docker Model Runner async embedding error: %s", e, exc_info=True
-            )
+            logger.error("%s", sanitize_provider_error(e, "Docker Model Runner"))
             raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:

@@ -205,7 +205,7 @@ class AnthropicProvider(LLMProvider):
                 "Anthropic library not installed. Install with: pip install anthropic"
             )
         except Exception as e:
-            logger.error("Anthropic error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Anthropic"))
             raise RuntimeError(sanitize_provider_error(e, "Anthropic"))
 
     async def chat_async(
@@ -272,7 +272,7 @@ class AnthropicProvider(LLMProvider):
                 "Anthropic library not installed. Install with: pip install anthropic"
             )
         except Exception as e:
-            logger.error("Anthropic async error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Anthropic"))
             raise RuntimeError(sanitize_provider_error(e, "Anthropic"))
 
     # ------------------------------------------------------------------
@@ -379,5 +379,5 @@ class AnthropicProvider(LLMProvider):
                 usage=usage,
             )
         except Exception as exc:  # pragma: no cover - re-raise sanitised
-            logger.error("anthropic.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Anthropic"))
             raise RuntimeError(sanitize_provider_error(exc, "Anthropic"))

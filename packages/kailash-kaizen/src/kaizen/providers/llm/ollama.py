@@ -174,7 +174,7 @@ class OllamaProvider(UnifiedAIProvider):
                 "Ollama library not installed. Install with: pip install ollama"
             )
         except Exception as e:
-            logger.error("Ollama error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Ollama"))
             raise RuntimeError(sanitize_provider_error(e, "Ollama"))
 
     # ------------------------------------------------------------------
@@ -278,7 +278,7 @@ class OllamaProvider(UnifiedAIProvider):
                 },
             )
         except Exception as exc:  # pragma: no cover - re-raise sanitised
-            logger.error("ollama.stream_chat.error error=%s", exc, exc_info=True)
+            logger.error("%s", sanitize_provider_error(exc, "Ollama"))
             raise RuntimeError(sanitize_provider_error(exc, "Ollama"))
 
     def _process_messages(self, messages: List[Message]) -> list:
@@ -356,7 +356,7 @@ class OllamaProvider(UnifiedAIProvider):
                 "Ollama library not installed. Install with: pip install ollama"
             )
         except Exception as e:
-            logger.error("Ollama embedding error: %s", e, exc_info=True)
+            logger.error("%s", sanitize_provider_error(e, "Ollama"))
             raise RuntimeError(sanitize_provider_error(e, "Ollama"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
