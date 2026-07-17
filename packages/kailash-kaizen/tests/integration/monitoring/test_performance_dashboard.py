@@ -76,9 +76,12 @@ class TestPerformanceDashboardHTTPEndpoints:
 
         html = response.text
 
-        # Should contain WebSocket connection
-        assert "WebSocket" in html
-        assert "ws://" in html or "wss://" in html
+        # Should contain WebSocket connection code. The URL is built dynamically
+        # (`${wsProtocol}//${wsHost}/ws`, choosing wss:/ws: from the page
+        # protocol) so it works in any deployment — assert the constructor and
+        # the scheme literals rather than a hard-coded `ws://` origin.
+        assert "new WebSocket(" in html
+        assert "ws:" in html or "wss:" in html
 
     def test_metrics_endpoint_prometheus_format(self):
         """Test /metrics endpoint returns Prometheus format."""
@@ -287,9 +290,9 @@ class TestPerformanceDashboardRefreshLatency:
         aggregator._running = False
 
         # Should complete in <1s
-        assert duration < 1.0, (
-            f"Dashboard refresh took {duration:.3f}s, exceeds 1s target"
-        )
+        assert (
+            duration < 1.0
+        ), f"Dashboard refresh took {duration:.3f}s, exceeds 1s target"
 
 
 class TestPerformanceDashboardVisualization:

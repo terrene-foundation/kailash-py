@@ -23,7 +23,7 @@ This spec is authoritative for the AutoML primitives that ship in `kailash_ml.au
 - **`AutoMLEngine`** (canonical, at `kailash_ml.automl.engine:AutoMLEngine`) — orchestrates one search-strategy implementation over a user-supplied `ParamSpec` list, enforces a microdollar cost budget, consults PACT admission, persists a tenant-scoped audit row per trial.
 - **Four search strategies** at `kailash_ml.automl.strategies` — `GridSearchStrategy`, `RandomSearchStrategy`, `BayesianSearchStrategy`, `SuccessiveHalvingStrategy`.
 - **`CostTracker`** (microdollar-granularity budget accounting) at `kailash_ml.automl.cost_budget:CostTracker`.
-- **PACT admission wire-through** at `kailash_ml.automl.admission:check_trial_admission` — degrades gracefully when `kailash_pact` is absent or its `GovernanceEngine.check_trial_admission` is unimplemented.
+- **PACT admission wire-through** at `kailash_ml.automl.admission:check_trial_admission` — degrades gracefully when `pact` is absent or its `GovernanceEngine.check_trial_admission` is unimplemented.
 - **`MLEngine.compare()`** at `kailash_ml.engine:MLEngine.compare` — the documented entry point for "train and rank candidate families." It does NOT delegate to `AutoMLEngine` and is documented in `specs/ml-engines.md`; this spec only references it.
 
 ### 1.2 Out of Scope

@@ -96,6 +96,151 @@ _BACKTICK_FILELINE = re.compile(r"`([A-Za-z0-9_./-]+\.py):(\d+)`")
 _STUB_COMMENT = re.compile(r"#\s*(TODO|FIXME|HACK|XXX)\b")
 
 
+# --- Allowlist: false-positive symbol classes -------------------------------
+#
+# The MUST-symbol extraction (a backticked dotted token near "MUST") greedily
+# matches many dotted strings that are NOT verifiable kailash source symbols.
+# Each class below is a documented FALSE-POSITIVE family the extractor MUST
+# skip so the residual surfaces genuine "declared in spec but absent in
+# source" drift instead of burying it under external-lib / filename / example-
+# variable noise.
+#
+# CONSERVATISM GUARD: none of these classes can match a genuine kailash package
+# symbol. Real kailash roots (kailash*, kaizen, dataflow, nexus) resolve to a
+# source file and are verified via AST; a genuinely-missing kailash-family
+# module (real drift) is explicitly protected in class (d) below.
+
+# (a) stdlib module roots — a stdlib name is never a kailash source symbol
+# (`hmac.compare_digest`, `secrets.compare_digest`, `asyncio.run`, `sys.modules`).
+_STDLIB_ROOTS = frozenset(sys.stdlib_module_names)
+
+# (a) third-party package roots (+ common import aliases). Documented external
+# deps referenced in spec prose (`torch.distributed`, `polars.DataFrame`,
+# `pytorch_lightning.Trainer`, `L.Trainer`); none is a kailash symbol.
+_THIRD_PARTY_ROOTS = frozenset(
+    {
+        "torch",
+        "polars",
+        "pl",
+        "pandas",
+        "pd",
+        "numpy",
+        "np",
+        "scipy",
+        "sklearn",
+        "transformers",
+        "pytorch_lightning",
+        "lightning",
+        "L",
+        "stable_baselines3",
+        "sb3",
+        "sb3_contrib",
+        "pettingzoo",
+        "gymnasium",
+        "gym",
+        "accelerate",
+        "jax",
+        "tensorflow",
+        "tf",
+        "xgboost",
+        "lightgbm",
+        "catboost",
+        "mlflow",
+        "ray",
+        "onnx",
+        "onnxruntime",
+        "ort",
+        "datasets",
+        "trl",
+        "peft",
+        "PIL",
+        "plotly",
+        "matplotlib",
+        "seaborn",
+        "pydantic",
+        "fastapi",
+        "starlette",
+        "uvicorn",
+        "aiohttp",
+        "httpx",
+        "sqlalchemy",
+        "psycopg2",
+        "aiosqlite",
+        "redis",
+        "boto3",
+        "click",
+        "yaml",
+        "jsonschema",
+        "structlog",
+        "opentelemetry",
+        "prometheus_client",
+        "websockets",
+        "cryptography",
+        "jwt",
+        "com",
+        "param",
+    }
+)
+
+# (b) file/config references — a dotted token whose tail is a file suffix is a
+# filename (`pytest.ini`, `conftest.py`, `pyproject.toml`, `observability.md`,
+# `last.ckpt`, `plotly.min.js`), NOT a `Module.Symbol`.
+_FILE_SUFFIXES = frozenset(
+    {
+        "py",
+        "pyi",
+        "md",
+        "ini",
+        "toml",
+        "cfg",
+        "js",
+        "mjs",
+        "cjs",
+        "json",
+        "yaml",
+        "yml",
+        "txt",
+        "ckpt",
+        "sh",
+        "lock",
+        "rs",
+        "rb",
+    }
+)
+
+# (c) instance-attribute roots — `self.x` / `cls.x` in a code fence is an
+# attribute access on an instance, never an importable module path.
+_INSTANCE_ROOTS = frozenset({"self", "cls"})
+
+# (d) genuine kailash top-level package prefixes — a symbol whose ROOT starts
+# with one of these is NEVER treated as an illustrative local-var (class (d) in
+# verify_symbol), even when it fails to resolve, so a genuinely-missing
+# kailash-family module stays flagged as real drift.
+_KAILASH_FAMILY_PREFIXES = ("kailash", "kaizen", "dataflow", "nexus")
+
+
+def _lexical_allowlist_class(name: str) -> str | None:
+    """Return the false-positive class label for a symbol skippable by lexical
+    shape alone (classes a/b/c), or None if it must be verified.
+
+    Class (d) — illustrative lowercase local-vars / event-keys — needs source
+    resolution and is handled in `verify_symbol` (only fires when no candidate
+    source module exists).
+    """
+    parts = name.split(".")
+    root = parts[0]
+    tail = parts[-1]
+    if root in _INSTANCE_ROOTS:
+        return "instance-attr(self/cls)"
+    if tail in _FILE_SUFFIXES:
+        return "file-reference"
+    if root in _STDLIB_ROOTS:
+        return "stdlib-module"
+    if root in _THIRD_PARTY_ROOTS:
+        return "third-party-module"
+    return None
+
+
 @dataclass(frozen=True)
 class SpecSymbol:
     """One MUST symbol mention extracted from a spec file."""
@@ -161,18 +306,72 @@ def extract_symbols(spec_path: Path) -> list[SpecSymbol]:
             continue
         for m in _BACKTICK_SYMBOL.finditer(line):
             name = m.group(1)
+            # Skip lexical false-positive classes (a/b/c) — stdlib / third-party
+            # module refs, filename references, and self./cls. instance-attribute
+            # accesses are never verifiable kailash source symbols.
+            if _lexical_allowlist_class(name) is not None:
+                continue
             if name not in seen:
                 seen[name] = SpecSymbol(
                     name=name, spec_path=spec_path, spec_line=line_no
                 )
         for m in _BACKTICK_FILELINE.finditer(line):
-            ref = f"{m.group(1)}:{m.group(2)}"
+            path = m.group(1)
+            # Bare-basename line citations (`errors.py:722`) are illustrative —
+            # the canonical resolvable shape is `path/to/file.py:NNN` (a path
+            # with a directory component that resolves against the repo root).
+            # A basename alone cannot be resolved and is prose, not drift.
+            if "/" not in path:
+                continue
+            ref = f"{path}:{m.group(2)}"
             if ref not in seen:
                 seen[ref] = SpecSymbol(name=ref, spec_path=spec_path, spec_line=line_no)
     return list(seen.values())
 
 
 # --- Source verification ----------------------------------------------------
+
+
+def _source_roots() -> list[Path]:
+    """Every import root: `src/` plus each `packages/*/src/`."""
+    roots: list[Path] = []
+    src = ROOT / "src"
+    if src.is_dir():
+        roots.append(src)
+    pkg_dir = ROOT / "packages"
+    if pkg_dir.is_dir():
+        for pkg in sorted(pkg_dir.iterdir()):
+            if pkg.is_dir() and (pkg / "src").is_dir():
+                roots.append(pkg / "src")
+    return roots
+
+
+def _dotted_path_is_module(symbol: str) -> bool:
+    """True if the FULL dotted path names an importable module or package on disk.
+
+    A spec reference whose tail is itself a submodule / subpackage
+    (`kailash_ml.features`, `kaizen.judges`, `kailash.trust.envelope`,
+    `dataflow.adapters.dialect`) resolves to a directory or `.py` file, NOT to a
+    class/func/assign inside a parent module. The tail-symbol AST walk looks for
+    a symbol NAMED after the directory and falsely reports the module absent.
+    This check recognizes the module/package as present. It resolves ONLY real
+    on-disk paths — a genuinely-missing module returns False and stays flagged as
+    drift, so it never masks true drift. Also matches the sub-package rename
+    convention (`kailash.align` module dir living at `src/kailash_align/`).
+    """
+    parts = symbol.split(".")
+    rel = Path(*parts)
+    variants = [rel]
+    # sub-package convention: `kailash.<sub>....` may live at `kailash_<sub>/...`
+    if len(parts) >= 2 and parts[0] == "kailash":
+        variants.append(Path(f"kailash_{parts[1]}", *parts[2:]))
+    for root in _source_roots():
+        for v in variants:
+            if (root / v).is_dir() and (root / v / "__init__.py").is_file():
+                return True
+            if (root / v.with_suffix(".py")).is_file():
+                return True
+    return False
 
 
 def candidate_source_files(symbol: str) -> list[Path]:
@@ -252,6 +451,24 @@ def find_symbol_in_ast(tree: ast.AST, tail_name: str) -> ast.stmt | None:
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == tail_name:
                     return node
+        # Re-export: `from .submodule import Name [as Alias]`. Facade / package
+        # __init__.py modules expose public symbols by RE-EXPORT, not local def;
+        # matching only ClassDef/FunctionDef/Assign misses every re-exported
+        # symbol and reports a present-but-re-exported public API (e.g.
+        # `kailash_ml.errors.ParamValueError`) as a false orphan. The bound name
+        # is `asname or name`. A genuinely-absent symbol has no such binding, so
+        # this only recognizes real presence — it never masks true drift.
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if (alias.asname or alias.name) == tail_name:
+                    return node
+        # Annotated assignment: `NAME: T = value` / `NAME: T` (module-level
+        # constants like `__version__: str = "..."`, dataclass fields). ast.Assign
+        # does NOT cover ast.AnnAssign, so annotated definitions were falsely
+        # reported absent.
+        if isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == tail_name:
+                return node
     return None
 
 
@@ -348,11 +565,45 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
         # Existence is enough — line refs do not get coverage/stub checks
         return []
 
+    # Module / package reference — the full dotted path names an importable
+    # module or package on disk (`kailash_ml.features`, `kaizen.judges`,
+    # `kailash.trust.envelope`). The tail is a directory / file, not an in-file
+    # symbol; existence of the module IS the answer. Checked before the
+    # tail-symbol AST walk, which would otherwise search the PARENT module for a
+    # symbol named after the directory and falsely report the module absent.
+    if _dotted_path_is_module(symbol.name):
+        return []
+
     findings: list[Finding] = []
     tail = symbol.name.split(".")[-1]
     candidates = candidate_source_files(symbol.name)
 
     if not candidates:
+        # (d) Illustrative local-variable / event-key / prose-alias reference.
+        # A LOWERCASE root that resolves to NO source module — and is not a
+        # kailash-family package — is an attribute access on an example instance
+        # (`device.family`, `result.device`, `engine.tenant_id`), a dotted
+        # event/metric/log key (`server.signature.changed`,
+        # `rl.policy.kl_from_ref`, `feature_store.erase_tenant.ok`), or a prose
+        # API-alias mention (`km.register`, `ml.runs.get`) — never a verifiable
+        # kailash source symbol. Kailash-family roots (`kailash*`, `kaizen`,
+        # `dataflow`, `nexus`) are PROTECTED: a genuinely-missing kailash-family
+        # module falls through to the orphan finding below (real drift). A
+        # Capitalized root (`RegisterResult.artifact_uris`) is a ClassName.member
+        # reference — kept as an orphan (the tool cannot resolve a class as a
+        # module, but the contract is genuine, not illustrative). Likewise a
+        # Capitalized TAIL (`myapp.missing.Vanished`, `pkg.mod.SomeClass`) names a
+        # class/type CONTRACT the spec promises — kept as an orphan; every
+        # illustrative false-positive above has a lowercase tail (`.family`,
+        # `.register`, `.changed`), so the CapWords-tail carve-out preserves the
+        # false-positive suppression while restoring genuine missing-symbol drift.
+        root = symbol.name.split(".")[0]
+        if (
+            root[:1].islower()
+            and not root.startswith(_KAILASH_FAMILY_PREFIXES)
+            and not tail[:1].isupper()
+        ):
+            return []
         return [
             Finding(
                 category="orphan",
