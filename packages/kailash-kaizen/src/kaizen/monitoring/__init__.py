@@ -8,6 +8,8 @@ This module provides real-time performance monitoring with:
 - PerformanceDashboard: Web-based visualization
 """
 
+from typing import TYPE_CHECKING
+
 from .alert_manager import (
     AlertManager,
     EmailNotificationChannel,
@@ -22,8 +24,6 @@ from .dashboard import (
     create_dashboard_app,
 )
 from .metrics_collector import MetricsCollector
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # ``app`` is provided at runtime via the module ``__getattr__`` (PEP 562)
