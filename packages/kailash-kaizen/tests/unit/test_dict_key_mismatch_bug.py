@@ -143,112 +143,14 @@ class TestDictKeyMismatchBug:
         assert has_special, "Output with 'response' should have bypass key"
 
 
-class TestReasoningModelTemperature:
-    """
-    Test Issue 2: GPT-5/o3 temperature restriction fix.
-
-    Problem: GPT-5 and o3 models only support temperature=1.0.
-    Fix: OpenAI provider now detects reasoning models and filters params.
-    """
-
-    def test_is_reasoning_model_gpt5_is_temperature1_not_reasoning(self):
-        """GPT-5 is classified as a ``temperature=1`` model (NOT a reasoning
-        model like o1/o3). Reasoning models reject temperature entirely;
-        gpt-5 accepts temperature but forces it to 1.0."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        gpt5_variants = ["gpt-5", "GPT-5", "gpt-5-turbo", "gpt5"]
-        for model in gpt5_variants:
-            assert not provider._is_reasoning_model(
-                model
-            ), f"{model} must NOT be classified as reasoning (o1/o3 only)"
-            assert provider._requires_temperature_1(
-                model
-            ), f"{model} must be classified as temperature=1 model"
-
-    def test_is_reasoning_model_o1(self):
-        """o1 models should be detected as reasoning models."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        reasoning_models = ["o1", "o1-preview", "o1-mini"]
-        for model in reasoning_models:
-            assert provider._is_reasoning_model(
-                model
-            ), f"{model} should be detected as reasoning model"
-
-    def test_is_reasoning_model_o3(self):
-        """o3 models should be detected as reasoning models."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        reasoning_models = ["o3", "o3-mini", "o3-preview"]
-        for model in reasoning_models:
-            assert provider._is_reasoning_model(
-                model
-            ), f"{model} should be detected as reasoning model"
-
-    def test_non_reasoning_models_not_detected(self):
-        """Regular models should NOT be detected as reasoning models."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        regular_models = ["gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o4-mini"]
-        for model in regular_models:
-            assert not provider._is_reasoning_model(
-                model
-            ), f"{model} should NOT be detected as reasoning model"
-
-    def test_filter_forces_temperature_1_and_strips_other_params_for_gpt5(self):
-        """GPT-5 accepts temperature but forces it to 1.0; top_p,
-        frequency_penalty, and presence_penalty are stripped entirely."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "frequency_penalty": 0.5,
-            "presence_penalty": 0.5,
-            "max_completion_tokens": 1000,
-        }
-
-        filtered = provider._filter_reasoning_model_params("gpt-5", generation_config)
-
-        # Temperature is FORCED to 1.0 (not removed)
-        assert filtered.get("temperature") == 1.0
-        # Unsupported sampling params are stripped
-        assert "top_p" not in filtered
-        assert "frequency_penalty" not in filtered
-        assert "presence_penalty" not in filtered
-
-        # Other params should be preserved
-        assert filtered.get("max_completion_tokens") == 1000
-
-    def test_filter_preserves_params_for_regular_models(self):
-        """All params should be preserved for regular models."""
-        from kaizen.providers import OpenAIProvider
-
-        provider = OpenAIProvider()
-
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "max_completion_tokens": 1000,
-        }
-
-        filtered = provider._filter_reasoning_model_params("gpt-4o", generation_config)
-
-        # All params should be preserved for regular models
-        assert filtered.get("temperature") == 0.7
-        assert filtered.get("top_p") == 0.9
-        assert filtered.get("max_completion_tokens") == 1000
+# NOTE: The former ``TestReasoningModelTemperature`` class exercised
+# ``OpenAIProvider._is_reasoning_model`` / ``_requires_temperature_1`` /
+# ``_filter_reasoning_model_params`` on the legacy ``kaizen.providers.llm.openai``
+# provider, which #1720 Wave-2 retired and DELETED. That reasoning-model param
+# filtering now lives in the four-axis ``kaizen.llm.reasoning_filter`` module and
+# is covered by ``tests/unit/llm/test_reasoning_filter.py`` (o1/o3/o4 drop
+# temperature; gpt-5 forces temperature=1.0; regular models pass through). The
+# class was removed here rather than ported to avoid duplicating that coverage.
 
 
 class TestIntegration:

@@ -36,7 +36,6 @@ import logging
 import pytest
 
 _SECRET = "SUPERSECRETCRED0123456789"
-_SK_KEY = "sk-CANARYKEY0123456789ABCDEFGH"  # matches the sanitizer's sk- pattern
 
 
 # ---------------------------------------------------------------------------
@@ -74,49 +73,14 @@ def test_mask_redis_url_localhost_no_credentials_is_stable():
 
 
 # ---------------------------------------------------------------------------
-# provider error logs — sanitized before the log surface (MED-1 asymmetry).
+# provider error logs — the legacy providers/llm/{openai,anthropic,google,
+# perplexity} chat/stream/embed error handlers were retired + DELETED in #1720
+# Wave-2, so their raw-``{e}`` log sites no longer exist. The four-axis error
+# surface's no-credential-leak contract is covered by
+# tests/unit/llm/test_errors_no_credential_leak.py (sk- keys / URLs not echoed
+# on the error path). The former legacy-provider sanitization test was removed
+# here — its code-under-test no longer exists.
 # ---------------------------------------------------------------------------
-
-
-class _RaisingCompletions:
-    def create(self, *args, **kwargs):
-        raise RuntimeError(f"401 Unauthorized: Incorrect API key provided: {_SK_KEY}")
-
-
-class _RaisingChat:
-    completions = _RaisingCompletions()
-
-
-class _RaisingOpenAIClient:
-    def __init__(self, *args, **kwargs):
-        self.chat = _RaisingChat()
-
-
-@pytest.mark.regression
-def test_openai_provider_error_log_sanitized_no_key_leak(monkeypatch, caplog):
-    """A generic provider error whose message embeds an ``sk-`` key must be
-    sanitized on the LOG surface, not only in the re-raised ``RuntimeError``.
-    Drives the BYOK per-request path so no real key/network is needed."""
-    import openai
-
-    from kaizen.providers.llm.openai import OpenAIProvider
-
-    monkeypatch.setattr(openai, "OpenAI", _RaisingOpenAIClient)
-
-    provider = OpenAIProvider()
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError) as excinfo:
-            provider.chat(
-                [{"role": "user", "content": "hi"}],
-                model="test-model-mock",  # irrelevant: the mocked client raises first
-                # unique per-request key routes through the BYOK factory (mocked)
-                api_key=_SK_KEY,
-                base_url="https://proxy.internal/v1",
-            )
-
-    # Both the caller-facing raise AND the server log are sanitized.
-    assert _SK_KEY not in str(excinfo.value)
-    assert _SK_KEY not in caplog.text
 
 
 # ---------------------------------------------------------------------------

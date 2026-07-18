@@ -23,8 +23,10 @@ weakening any behavioral assertion (cycle counts, dict shape, tool-call
 handling, termination logic all still exercise real strategy code against a
 real, deterministic completion).
 
-Three independent call paths reach a live provider from this test directory
-and are all stubbed:
+Two independent call paths reach a live provider from this test directory
+and are both stubbed (the third, a legacy direct-instantiation of
+``kaizen.providers.llm.openai.OpenAIProvider``, was removed when #1720 Wave-2
+retired that provider and cut ``BaseAgent`` fully onto the four-axis path):
 
 1. **Four-axis path (#1720 Wave-B1a live cutover)** --
    ``LLMAgentNode._provider_llm_response()`` now resolves a four-axis
@@ -37,9 +39,6 @@ and are all stubbed:
 2. **Registry path** -- ``kaizen.providers.registry.get_provider(name)`` ->
    ``provider.chat(...)``. Retained for the azure_ai_foundry legacy branch and
    any other code path still resolving through the registry.
-3. **Legacy direct-instantiation path** -- ``BaseAgent._simple_execute_async``
-   imports ``kaizen.providers.llm.openai.OpenAIProvider`` directly and calls
-   ``.chat_async()``, bypassing the registry entirely.
 
 Tests that already mock their own network boundary (e.g.
 ``test_single_shot_mcp.py`` patches ``kaizen.strategies.single_shot.
@@ -145,14 +144,3 @@ def _stub_llm_provider(monkeypatch: pytest.MonkeyPatch) -> None:
         "kaizen.providers.registry.get_provider",
         _make_fake_provider,
     )
-
-    from kaizen.providers.llm.openai import OpenAIProvider
-
-    async def _openai_chat_async(self: Any, **kwargs: Any) -> dict:
-        return _fake_chat_response(**kwargs)
-
-    monkeypatch.setattr(OpenAIProvider, "is_available", lambda self: True)
-    monkeypatch.setattr(
-        OpenAIProvider, "chat", lambda self, **kwargs: _fake_chat_response(**kwargs)
-    )
-    monkeypatch.setattr(OpenAIProvider, "chat_async", _openai_chat_async)
