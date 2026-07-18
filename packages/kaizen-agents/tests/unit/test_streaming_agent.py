@@ -26,7 +26,10 @@ from kaizen_agents.events import (
     TextDelta,
     TurnComplete,
 )
-from kaizen_agents.streaming_agent import StreamingAgent
+from kaizen_agents.streaming_agent import (
+    StreamingAgent,
+    _resolve_streaming_client,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -207,3 +210,126 @@ class TestToWorkflow:
         streaming = StreamingAgent(agent, mcp_servers=[])
         with pytest.raises(NotImplementedError, match="TAOD loop is dynamic"):
             streaming.to_workflow()
+
+
+# ---------------------------------------------------------------------------
+# Four-axis LlmClient streaming cutover (#1720 Wave-2b)
+# ---------------------------------------------------------------------------
+
+
+class _ConfiguredAgent(BaseAgent):
+    """Inner agent with a config that resolves to an OpenAiChat deployment.
+
+    ``llm_provider="openai"`` + a model + a (placeholder, non-secret) api_key
+    is exactly what ``_resolve_streaming_client`` needs to build a four-axis
+    ``LlmClient`` via ``resolve_deployment_for``. The model literal follows the
+    established ``mock-model`` test convention; the transport is the offline
+    deterministic ``MockLlmHttpClient`` so no network I/O and no real key are
+    involved.
+    """
+
+    def __init__(self, **kw: Any) -> None:
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="mock-model",
+            api_key="sk-test-not-a-real-key",
+            temperature=0.0,
+        )
+        super().__init__(config=config, mcp_servers=[], **kw)
+
+    def run(self, **inputs: Any) -> dict[str, Any]:
+        raise RuntimeError("streaming path should not call run()")
+
+    async def run_async(self, **inputs: Any) -> dict[str, Any]:
+        raise RuntimeError("streaming path should not call run_async()")
+
+
+def _mock_transport() -> Any:
+    from kaizen.llm.testing import MockLlmHttpClient
+
+    return MockLlmHttpClient()
+
+
+class TestFourAxisStreaming:
+    def test_resolve_streaming_client_none_without_model(self) -> None:
+        # BaseAgentConfig() has no model -> no client -> batch fallback path.
+        agent = _BatchAgent()
+        assert _resolve_streaming_client(agent) is None
+
+    def test_resolve_streaming_client_builds_llmclient(self) -> None:
+        from kaizen.llm.client import LlmClient
+
+        agent = _ConfiguredAgent()
+        client = _resolve_streaming_client(agent)
+        assert isinstance(client, LlmClient)
+        # The deployment is a real OpenAiChat wire (NOT the mock preset) — the
+        # cutover goes through the production resolution path.
+        assert client.deployment is not None
+        assert client.deployment.preset_name != "mock"
+
+    async def test_streams_tokens_incrementally(self) -> None:
+        # "step by step" triggers the multi-line reasoning response in the
+        # deterministic transport, split into many whitespace-preserving
+        # pieces -> many TextDelta events (real streaming, not one blob).
+        agent = _ConfiguredAgent()
+        streaming = StreamingAgent(agent, mcp_servers=[], http_client=_mock_transport())
+
+        events = []
+        async for event in streaming.run_stream(
+            prompt="explain your reasoning step by step"
+        ):
+            events.append(event)
+
+        text_deltas = [e for e in events if isinstance(e, TextDelta)]
+        # Real token streaming: MANY deltas, not a single accumulated blob.
+        assert len(text_deltas) > 1
+
+        turn = next(e for e in events if isinstance(e, TurnComplete))
+        # Concatenation of every delta reconstructs the full turn text.
+        assert "".join(d.text for d in text_deltas) == turn.text
+        assert turn.text != ""
+        # The final chunk carried usage through to TurnComplete.
+        assert turn.usage.get("total_tokens")
+
+    async def test_stream_via_client_sets_inner_called(self) -> None:
+        agent = _ConfiguredAgent()
+        streaming = StreamingAgent(agent, mcp_servers=[], http_client=_mock_transport())
+        events = [e async for e in streaming.run_stream(prompt="hello there")]
+        assert any(isinstance(e, TurnComplete) for e in events)
+        assert getattr(streaming, "_inner_called", False) is True
+
+    async def test_run_async_collects_streamed_text(self) -> None:
+        agent = _ConfiguredAgent()
+        streaming = StreamingAgent(agent, mcp_servers=[], http_client=_mock_transport())
+        result = await streaming.run_async(prompt="explain step by step please")
+        assert result["text"] != ""
+        assert result.get("usage")
+
+    async def test_stream_error_event_scrubs_credentials(self) -> None:
+        """#1720 Wave-2b security: a stream transport error whose message embeds
+        a credential (e.g. a base_url with userinfo, rendered by a raw
+        httpx.HTTPError) MUST be scrubbed via sanitize_provider_error before it
+        reaches the user-facing ErrorEvent — parity with the batch path."""
+        from kaizen.llm.testing import MockLlmHttpClient
+
+        class _CredLeakTransport(MockLlmHttpClient):
+            async def stream_lines(self, *args: Any, **kwargs: Any):
+                raise RuntimeError(
+                    "connection to https://svc:supersecretpw@proxy.internal/v1 failed"
+                )
+                yield  # pragma: no cover - makes this an async generator
+
+        agent = _ConfiguredAgent()
+        streaming = StreamingAgent(
+            agent, mcp_servers=[], http_client=_CredLeakTransport()
+        )
+        events = [e async for e in streaming.run_stream(prompt="hello")]
+
+        errors = [e for e in events if isinstance(e, ErrorEvent)]
+        assert errors, "an ErrorEvent should be emitted on transport failure"
+        joined = " ".join(e.error for e in errors)
+        # The credential must NOT survive into the user-facing stream.
+        assert "supersecretpw" not in joined
+        assert "svc:supersecretpw@" not in joined
+        # It went through sanitize_provider_error (scrubbed form).
+        assert "[REDACTED]" in joined

@@ -5,6 +5,54 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-07-19 — StreamingAgent token-streaming cutover to the four-axis LlmClient (#1720 Wave-2b)
+
+### Changed
+
+- **`StreamingAgent.run_stream()` now streams tokens through the four-axis
+  `kaizen.llm.LlmClient` (#1720 Wave-2b).** Wave-2a retired
+  `kaizen.providers.registry.get_provider_for_model` (it now raises for every
+  input), which silently broke `StreamingAgent`'s legacy provider resolution:
+  `_resolve_streaming_provider` caught the raise, returned `None`, and every
+  stream fell back to BATCH execution — losing incremental token streaming for
+  anyone on `kailash-kaizen>=2.36.0`. Streaming now resolves the innermost
+  agent's config (`model` / `llm_provider` / `api_key` / `base_url` /
+  `ungoverned`) to an `LlmDeployment` via `resolve_deployment_for` — the SAME
+  chokepoint `BaseAgent._simple_execute_async` uses for `complete()` — and
+  streams via `LlmClient.stream(...)`, mapping each parsed chunk
+  (`{text, usage, stop_reason, model, tool_calls?}`) onto the typed
+  `TextDelta` / `ToolCallStart` / `ToolCallEnd` / `TurnComplete` events. The
+  `#1779` governance posture is honored unchanged (the agent's own `ungoverned`
+  flag is passed through; a `governance_required` refusal propagates, never
+  silently downgrades to batch). The batch fallback now fires ONLY in the
+  genuine "no model / no four-axis deployment for the inner provider" case and
+  logs at WARN.
+- `StreamingAgent.__init__` gains an optional `http_client=` parameter
+  (mirroring `LlmClient`'s own transport seam) for advanced callers / offline
+  deterministic tests (`kaizen.llm.testing.MockLlmHttpClient`).
+
+### Fixed
+
+- **Circular import that downgraded `kaizen.Agent` to the sync `CoreAgent`.**
+  `kaizen/__init__.py` eagerly ran `from kaizen_agents import Agent`; when
+  `kaizen` was first imported THROUGH `kaizen_agents`
+  (`kaizen_agents/__init__` → `Delegate` → `kaizen.core.base_agent` →
+  `kaizen`), `kaizen_agents` was only partially initialized, the import raised
+  `ImportError: cannot import name 'Agent' from partially initialized module
+'kaizen_agents'`, and it silently fell through to `CoreAgent`. `kaizen.Agent`
+  is now resolved lazily via PEP 562 `__getattr__`, so the canonical async
+  `Agent` resolves correctly regardless of import order. Paired with making
+  `kaizen.core.agent_loop`'s `error_sanitizer` import lazy so the base import
+  surface no longer drags in the `kaizen.nodes.ai.a2a` subtree — restoring
+  graceful degradation when a2a (or a `[rag]` extra it needs) is unavailable
+  (`kailash-kaizen` change, released together).
+
+### Dependencies
+
+- **Requires `kailash-kaizen>=2.36.0`** (was `>=2.35.0`). This release depends
+  on the Wave-2a retired registry + the four-axis `LlmClient.stream` surface,
+  both of which land in kaizen 2.36.0.
+
 ## [0.10.0] — 2026-07-18 — governance_required posture on the orchestration egress chokepoint (#1779)
 
 ### Added

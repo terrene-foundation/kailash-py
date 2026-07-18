@@ -161,18 +161,17 @@ def get_provider_for_model(model: str) -> BaseProvider:
     )
 
 
-def get_streaming_provider(name_or_model: str) -> StreamingProvider:
-    """Resolve a name or model id to a provider that implements StreamingProvider.
+def get_streaming_provider(name: str) -> StreamingProvider:
+    """Resolve a provider NAME to a provider that implements StreamingProvider.
 
-    Tries the provider registry first; falls back to model-prefix dispatch.
-    Raises :class:`CapabilityNotSupportedError` if the resolved provider does
-    not satisfy the :class:`StreamingProvider` protocol (i.e. has no real
+    Model-id dispatch was retired in #1720 Wave-2 (see
+    :func:`get_provider_for_model`); resolution is by explicit registry NAME
+    via :func:`get_provider`, which raises for an unknown name. Raises
+    :class:`CapabilityNotSupportedError` if the resolved provider does not
+    satisfy the :class:`StreamingProvider` protocol (i.e. has no real
     ``stream_chat`` method).
     """
-    if name_or_model.lower() in PROVIDERS:
-        provider = get_provider(name_or_model)
-    else:
-        provider = get_provider_for_model(name_or_model)
+    provider = get_provider(name)
 
     if not isinstance(provider, StreamingProvider):
         raise CapabilityNotSupportedError(

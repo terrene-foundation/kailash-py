@@ -10,16 +10,61 @@ __version__ = "2.36.0"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-# UNIFIED AGENT API (ADR-020) - Primary user-facing agent
-# Async Agent from kaizen-agents is canonical; falls back to CoreAgent
-try:
-    from kaizen_agents import Agent  # Full async Agent (requires kaizen-agents)
-except ImportError:
-    from kaizen.core.agents import (
-        Agent,  # type: ignore[assignment]  # CoreAgent fallback
-    )
+# UNIFIED AGENT API (ADR-020) - Primary user-facing agent.
+#
+# ``Agent`` is resolved LAZILY via the module ``__getattr__`` below — the async
+# ``kaizen_agents.Agent`` is canonical, with the sync ``kaizen.core.agents.Agent``
+# (``CoreAgent``) as the fallback when kaizen-agents is absent.
+#
+# It MUST NOT be a module-scope ``from kaizen_agents import Agent`` here: that
+# creates a kaizen <-> kaizen_agents import cycle. When ``kaizen`` is first
+# imported THROUGH ``kaizen_agents`` (``kaizen_agents/__init__`` ->
+# ``Delegate`` -> ``kaizen.core.base_agent`` -> ``kaizen``), ``kaizen_agents`` is
+# only PARTIALLY initialized, so the eager import raised
+# ``ImportError: cannot import name 'Agent' from partially initialized module
+# 'kaizen_agents'`` and silently fell through to ``CoreAgent`` — downgrading the
+# canonical ``kaizen.Agent`` to the sync agent for every consumer that imported
+# via kaizen-agents first. Deferring resolution to first attribute access breaks
+# the cycle: by the time anything reads ``kaizen.Agent``, ``kaizen_agents`` has
+# finished initializing and the async ``Agent`` resolves correctly.
+if TYPE_CHECKING:
+    # Analyzer-only import so pyright / CodeQL py/undefined-export / Sphinx
+    # autodoc resolve ``Agent`` (kept in ``__all__``); runtime is lazy.
+    from kaizen_agents import Agent
+
+
+def __getattr__(name: str) -> object:
+    """PEP 562 lazy resolution for ``Agent`` (breaks the kaizen<->kaizen_agents
+    import cycle; see the block above)."""
+    if name == "Agent":
+        try:
+            from kaizen_agents import Agent as _Agent  # canonical async Agent
+        except ImportError:
+            # kaizen_agents INSTALLED but its async Agent failed to import is a
+            # genuine breakage (broken transitive dep) — surface it at WARN
+            # rather than silently downgrading to the sync CoreAgent
+            # (zero-tolerance Rule 3). The not-installed case is expected and
+            # stays quiet: find_spec is None there.
+            import importlib.util as _ilu
+
+            if _ilu.find_spec("kaizen_agents") is not None:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "kaizen.Agent: kaizen_agents is installed but its async Agent "
+                    "could not be imported; falling back to the sync CoreAgent. "
+                    "This usually indicates a broken kaizen_agents dependency.",
+                    exc_info=True,
+                )
+            from kaizen.core.agents import Agent as _Agent  # CoreAgent fallback
+        # Cache on the module so subsequent access is a plain attribute lookup
+        # (``__getattr__`` fires only for missing attributes).
+        globals()["Agent"] = _Agent
+        return _Agent
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Import nodes module to trigger agent registration
 # Agent nodes are registered when kaizen-agents is installed

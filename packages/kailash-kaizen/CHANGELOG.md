@@ -2,7 +2,7 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [Unreleased]
+## [2.36.0] — 2026-07-19 — #1720 Wave-2 legacy-provider retirement + StreamingAgent circular-import fix
 
 ### Removed
 
@@ -47,6 +47,18 @@ kaizen.providers import OpenAIProvider` now raises `AttributeError`.
 
 ### Fixed
 
+- **Circular-import downgrade of the canonical `kaizen.Agent` (#1720 Wave-2b).**
+  `kaizen/__init__.py` resolved `Agent` via an eager module-scope
+  `from kaizen_agents import Agent`. When `kaizen` was first imported THROUGH
+  `kaizen_agents` (`kaizen_agents → Delegate → kaizen.core.base_agent → kaizen`),
+  `kaizen_agents` was only partially initialized, so the eager import raised
+  `ImportError` and silently fell through to the sync `CoreAgent` — downgrading
+  the canonical async `kaizen.Agent` for every consumer that imported via
+  kaizen-agents first. Resolution is now deferred to a PEP 562 module
+  `__getattr__` (with a `TYPE_CHECKING` analyzer-only import so `Agent` stays in
+  `__all__` for pyright / CodeQL / Sphinx), breaking the cycle. Also made the
+  `agent_loop` `error_sanitizer` import lazy and fixed a pre-existing
+  `base_agent.cleanup()` `NameError`.
 - **CI/tests:** swept the legacy-provider test surface after the #1720 Wave-2
   retirement — removed tests of the deleted providers, updated the barrel
   deprecation-contract test to assert the retired names now raise
