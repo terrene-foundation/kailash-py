@@ -41,17 +41,31 @@ Coverage (what an ACTIVE posture gates) — enforced from Kaizen:
   chokepoint;
 * ``EmbeddingGeneratorNode`` — four-axis embed path AND the ollama legacy
   fallback;
-* the ``kaizen-agents`` orchestration subsystem (planner / recovery / protocols
-  / monitor / context) — gated at its ``kaizen_agents.llm.LLMClient``
-  construction chokepoint (every orchestration component injects one client).
+* the ``kaizen_agents.llm.LLMClient`` construction chokepoint — the orchestration
+  components (planner / recovery / protocols / monitor / context) that INJECT
+  that client are covered through it.
 
-NON-coverage (the posture does NOT gate): RAW direct use of the deprecated
-``kaizen.providers.llm.*`` providers (calling a provider's ``.chat()`` yourself
-OUTSIDE ``LLMAgentNode``). That raw-provider surface is retiring in #1720
-Wave C; an operator relying on the posture for a hard egress boundary should
-not call the deprecated providers directly. An installed process-global
-interceptor does NOT waive the posture for the four-axis ``LlmClient`` (it does
-not route through the interceptor — see ``kaizen.llm.governance_gate``).
+NON-coverage (the posture does NOT gate — an operator relying on the posture as a
+hard egress boundary MUST NOT treat these as governed):
+
+* RAW direct use of the deprecated ``kaizen.providers.llm.*`` providers (calling
+  a provider's ``.chat()`` yourself OUTSIDE ``LLMAgentNode``) — retiring in
+  #1720 Wave C.
+* **The ``kaizen-agents`` DELEGATE / adapter egress layer** — ``delegate/loop.py``,
+  ``delegate/adapters/*`` (openai / openai_stream / google / ollama),
+  ``orchestration/adapters.py`` structured adapters, and ``runtime_adapters/*``
+  (openai_codex / gemini_cli) construct provider clients (``AsyncOpenAI`` /
+  ``anthropic`` / ``genai`` / ``httpx``) DIRECTLY, bypassing both the four-axis
+  ``LlmClient`` and ``kaizen_agents.llm.LLMClient``. This is the flagship
+  ``Delegate`` primitive's own execution path and is a decentralized 9-file /
+  ~19-site adapter architecture. Gating it comprehensively (each construction
+  site + an ``ungoverned`` opt-out threaded through ``Delegate`` / ``AgentLoop``)
+  is tracked as a dedicated follow-up (NOT covered by this landing). Until then,
+  do NOT rely on the posture to gate direct ``Delegate`` / adapter egress.
+
+An installed process-global interceptor does NOT waive the posture for the
+four-axis ``LlmClient`` (it does not route through the interceptor — see
+``kaizen.llm.governance_gate``).
 """
 
 from __future__ import annotations
