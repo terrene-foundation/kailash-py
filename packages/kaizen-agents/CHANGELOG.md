@@ -9,17 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`governance_required` posture enforcement for the orchestration subsystem
-  (#1779, EATP D6 parity).** The orchestration components (planner / recovery /
-  protocols / monitor / context) egress via `kaizen_agents.llm.LLMClient` (the
-  raw OpenAI SDK), NOT the gated four-axis `kaizen.llm.LlmClient`. `LLMClient`
-  now enforces the core `kailash.is_governance_required()` posture at its
-  construction chokepoint: when the posture is ACTIVE, a bare client is refused
+- **`governance_required` posture enforcement across the ENTIRE kaizen-agents
+  direct-LLM-egress surface (#1779, EATP D6 parity).** kaizen-agents constructs
+  provider clients directly (not through the four-axis `kaizen.llm.LlmClient`) in
+  several places; all are now gated on the core `kailash.is_governance_required()`
+  posture. When the posture is ACTIVE, a bare un-governed construction is refused
   fail-closed with `kailash.trust.pact.UngovernedEgressRefused` unless
-  constructed with `ungoverned=True`. Because every orchestration component
-  INJECTS a single `LLMClient` (dependency injection), this one chokepoint +
-  the `ungoverned` opt-out covers all orchestration egress. OFF by default —
-  byte-identical to prior behavior.
+  `ungoverned=True` is passed; OFF by default (byte-identical to prior behavior).
+  Gated surfaces:
+  - `kaizen_agents.llm.LLMClient` (the orchestration DI chokepoint — planner /
+    recovery / protocols / monitor / context inject it);
+  - the flagship `Delegate` primitive's execution path: `AgentLoop`'s client
+    factory + every streaming adapter (`OpenAIStreamAdapter`,
+    `AnthropicStreamAdapter`, `GoogleStreamAdapter`, `OllamaStreamAdapter`,
+    `OllamaEmbeddingAdapter`);
+  - the orchestration structured adapters (`OpenAIStructuredAdapter`,
+    `AnthropicStructuredAdapter`);
+  - the runtime adapters (`OpenAICodexAdapter`, `GeminiCLIAdapter`).
+
+  The `ungoverned` opt-out is threaded top-down through `Delegate` → `AgentLoop`
+  → the adapter registry (`get_adapter` / `get_adapter_for_model` /
+  `get_embedding_adapter`) → each adapter, so `Delegate(..., ungoverned=True)`
+  disables the gate for its whole egress chain.
 
 ## [0.9.11] — 2026-06-17 — Gemini adapters on supported google-genai SDK; provider SDKs are runtime deps
 

@@ -39,6 +39,7 @@ def get_adapter(
     base_url: str | None = None,
     temperature: float = 0.4,
     max_tokens: int = 16384,
+    ungoverned: bool = False,
     **kwargs: Any,
 ) -> StreamingChatAdapter:
     """Create a streaming adapter for the named provider.
@@ -58,6 +59,10 @@ def get_adapter(
         Default sampling temperature.
     max_tokens:
         Default max tokens.
+    ungoverned:
+        #1779 opt-out threaded into the constructed adapter's governance gate.
+        Default False (fail-closed): under the ``governance_required`` posture,
+        a real adapter refuses construction unless ``ungoverned=True``.
     **kwargs:
         Extra keyword arguments forwarded to the adapter constructor.
 
@@ -69,6 +74,9 @@ def get_adapter(
     ------
     ValueError:
         If the provider name is not recognised.
+    kailash.trust.pact.UngovernedEgressRefused:
+        If the ``governance_required`` posture is active and the adapter would
+        make real egress (unless ``ungoverned=True``).
     """
     provider = provider.lower().strip()
 
@@ -81,6 +89,7 @@ def get_adapter(
             default_model=model,
             default_temperature=temperature,
             default_max_tokens=max_tokens,
+            ungoverned=ungoverned,
             **kwargs,
         )
 
@@ -94,6 +103,7 @@ def get_adapter(
             default_model=model,
             default_temperature=temperature,
             default_max_tokens=max_tokens,
+            ungoverned=ungoverned,
             **kwargs,
         )
 
@@ -105,6 +115,7 @@ def get_adapter(
             default_model=model,
             default_temperature=temperature,
             default_max_tokens=max_tokens,
+            ungoverned=ungoverned,
             **kwargs,
         )
 
@@ -116,6 +127,7 @@ def get_adapter(
             default_model=model,
             default_temperature=temperature,
             default_max_tokens=max_tokens,
+            ungoverned=ungoverned,
             **kwargs,
         )
 
@@ -130,6 +142,7 @@ def get_embedding_adapter(
     *,
     model: str = "",
     base_url: str | None = None,
+    ungoverned: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Create an embedding adapter for the named provider.
@@ -164,7 +177,7 @@ def get_embedding_adapter(
             OllamaEmbeddingAdapter,
         )
 
-        adapter_kwargs: dict[str, Any] = {}
+        adapter_kwargs: dict[str, Any] = {"ungoverned": ungoverned}
         if base_url:
             adapter_kwargs["base_url"] = base_url
         if model:
@@ -182,6 +195,7 @@ def get_adapter_for_model(
     model: str,
     *,
     provider: str = "",
+    ungoverned: bool = False,
     **kwargs: Any,
 ) -> StreamingChatAdapter:
     """Auto-detect the provider from a model name and create an adapter.
@@ -196,6 +210,9 @@ def get_adapter_for_model(
         The model name (e.g., ``"claude-sonnet-4-6"``, ``"gemini-2.0-flash"``).
     provider:
         Optional explicit provider override.
+    ungoverned:
+        #1779 opt-out threaded into the constructed adapter's governance gate.
+        Default False (fail-closed).
     **kwargs:
         Forwarded to :func:`get_adapter`.
 
@@ -204,7 +221,7 @@ def get_adapter_for_model(
     A :class:`StreamingChatAdapter` instance.
     """
     if provider:
-        return get_adapter(provider, model=model, **kwargs)
+        return get_adapter(provider, model=model, ungoverned=ungoverned, **kwargs)
 
     # Auto-detect from model name prefix
     for prefix, detected_provider in _MODEL_PREFIX_MAP:
@@ -214,7 +231,9 @@ def get_adapter_for_model(
                 detected_provider,
                 prefix,
             )
-            return get_adapter(detected_provider, model=model, **kwargs)
+            return get_adapter(
+                detected_provider, model=model, ungoverned=ungoverned, **kwargs
+            )
 
     # Default to OpenAI
-    return get_adapter("openai", model=model, **kwargs)
+    return get_adapter("openai", model=model, ungoverned=ungoverned, **kwargs)

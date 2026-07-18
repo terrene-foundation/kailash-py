@@ -51,6 +51,7 @@ class OpenAIStreamAdapter:
         default_model: str = "",
         default_temperature: float = 0.4,
         default_max_tokens: int = 16384,
+        ungoverned: bool = False,
     ) -> None:
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not resolved_key:
@@ -62,6 +63,22 @@ class OpenAIStreamAdapter:
         self._default_model = default_model
         self._default_temperature = default_temperature
         self._default_max_tokens = default_max_tokens
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # the OpenAI SDK (stream_chat -> self._client.chat.completions.create),
+        # NOT through the gated four-axis kaizen.llm.LlmClient, so the four-axis
+        # construction gate cannot cover it. Gate at construction, fail-closed:
+        # there is no mock path here (always a real AsyncOpenAI client), so
+        # is_mock=False; the only exemption is ungoverned=True (or posture OFF).
+        # Runs BEFORE building the client so a refusal wastes no transport.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.OpenAIStreamAdapter",
+        )
 
         # Lazy import
         try:

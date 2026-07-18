@@ -72,6 +72,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         max_output_tokens: int = 8192,
         timeout_seconds: float = 300,
         safety_settings: dict[str, str] | None = None,
+        ungoverned: bool = False,
     ):
         """Initialize the GeminiCLIAdapter.
 
@@ -88,6 +89,13 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             max_output_tokens: Maximum tokens in response.
             timeout_seconds: Execution timeout.
             safety_settings: Custom safety settings. Default allows most content.
+            ungoverned: #1779 opt-out. When True, this adapter is exempt from the
+                    governance_required posture gate. Default False (fail-closed).
+
+        Raises:
+            kailash.trust.pact.UngovernedEgressRefused: If the
+                governance_required posture is active and this un-governed
+                adapter would make real egress (unless ungoverned=True).
         """
         super().__init__()
 
@@ -99,6 +107,21 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         self.max_output_tokens = max_output_tokens
         self.timeout_seconds = timeout_seconds
         self.safety_settings = safety_settings
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # the google-genai SDK (the genai.Client built lazily in
+        # ensure_initialized), NOT through the gated four-axis kaizen.llm.
+        # LlmClient. Gate at construction, fail-closed and BEFORE the lazy
+        # client is ever built: no mock path here (always a real client), so
+        # is_mock=False; the only exemption is ungoverned=True (or posture OFF).
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.GeminiCliAdapter",
+        )
 
         # Gemini client (lazily initialized)
         self._client: Any | None = None

@@ -120,6 +120,7 @@ class OpenAIStructuredAdapter:
         base_url: str | None = None,
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        ungoverned: bool = False,
     ) -> None:
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not resolved_key:
@@ -135,6 +136,21 @@ class OpenAIStructuredAdapter:
         )
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # the OpenAI SDK (complete -> self._client.chat.completions.create), NOT
+        # through the gated four-axis kaizen.llm.LlmClient. Gate at construction,
+        # fail-closed: no mock path here (always a real OpenAI client), so
+        # is_mock=False; the only exemption is ungoverned=True (or posture OFF).
+        # Runs BEFORE building the client so a refusal wastes no transport.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.OpenAIStructuredAdapter",
+        )
 
         try:
             from openai import OpenAI
@@ -265,6 +281,7 @@ class AnthropicStructuredAdapter:
         model: str | None = None,
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        ungoverned: bool = False,
     ) -> None:
         resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not resolved_key:
@@ -278,6 +295,21 @@ class AnthropicStructuredAdapter:
         )
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # the anthropic SDK (complete -> self._client.messages.create), NOT
+        # through the gated four-axis kaizen.llm.LlmClient. Gate at construction,
+        # fail-closed: no mock path here (always a real Anthropic client), so
+        # is_mock=False; the only exemption is ungoverned=True (or posture OFF).
+        # Runs BEFORE building the client so a refusal wastes no transport.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.AnthropicStructuredAdapter",
+        )
 
         try:
             import anthropic

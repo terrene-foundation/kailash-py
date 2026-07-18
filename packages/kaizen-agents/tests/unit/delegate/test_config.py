@@ -105,7 +105,18 @@ class TestEffortLevel:
         # Other fields unchanged
         assert preset.temperature == 0.2
 
-    def test_temperature_override(self) -> None:
+    def test_temperature_override(self, monkeypatch: Any) -> None:
+        # Deterministic fallback: clear the model env vars (+ reset the preset
+        # cache) so the asserted "gpt-4o" fallback holds regardless of the
+        # operator's .env (DEFAULT_LLM_MODEL etc.) — mirrors the sibling preset
+        # tests above. Without this the assertion is env-coupled and fails on
+        # any machine whose .env sets DEFAULT_LLM_MODEL.
+        import kaizen_agents.delegate.config.effort as effort_mod
+
+        monkeypatch.setattr(effort_mod, "_PRESETS", None)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
         preset = get_effort_preset(EffortLevel.MEDIUM, temperature_override=0.9)
         assert preset.temperature == 0.9
         assert preset.model == "gpt-4o"
