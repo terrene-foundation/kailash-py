@@ -30,38 +30,15 @@ Every specialist delegation prompt MUST include relevant spec file content from 
 
 ## Parallel Execution
 
-When multiple independent operations are needed, launch agents in parallel via the CLI's delegation primitive, wait for all, aggregate results. MUST NOT run sequentially when parallel is possible.
+Launch independent operations in parallel via the CLI's delegation primitive, wait for all, aggregate. MUST NOT run sequentially when parallel is possible — the always-on form of the § Triad clause below (under time-pressure framings, parallelization IS the throughput response — `rules/time-pressure-discipline.md`).
 
-**Why:** Sequential execution of independent operations wastes the autonomous execution multiplier, turning a 1-session task into a multi-session bottleneck. (Under time-pressure framings, parallelization IS the throughput response — `rules/time-pressure-discipline.md`.)
+### MUST: The Default Execution Mode Is The Triad — Parallelize + /autonomize + /redteam-to-convergence
 
-### MUST: Decompose Onto The Parallel Primitive By Default When The Work Earns It
-
-When the work surface is **≥3 independent items** OR has a **multi-stage shape**, the orchestrator MUST decompose onto the runtime's parallel orchestration primitive by DEFAULT — not only under `/autonomize`. A genuinely serial single-item task MUST stay serial. Governance per `rules/governed-throughput.md`; throttle-aware per `rules/worktree-isolation.md` Rule 4.
-
-```text
-# DO — 3 independent shards → one parallel wave
-# DO NOT — 1 serial rewrite → stay serial
-```
-
-**BLOCKED rationalizations:** "parallel-by-default needs `/autonomize`" / "serial is simpler, I'll decompose later" / "the ≥3-item trigger is my call each session".
-
-**Why:** Parallel decomposition is the baseline throughput response, not a per-session opt-in; the serial-single-item gate prevents over-decomposing sequential work.
+**The default execution mode for every actionable input is the TRIAD, each DEFAULT-ON (not only under `/autonomize`, not serial/inline):** (1) **parallelize** — decompose onto the parallel primitive wherever the input has **≥2 independent sub-parts OR a multi-stage shape**; (2) **/autonomize** — execute autonomously under the permission envelope (`commands/autonomize.md`); (3) **/redteam-to-convergence** — adversarially verify every substantive change to 2 consecutive clean rounds before "done" (reinforces § Quality Gates + § Holistic Post-Multi-Wave Redteam + `rules/self-referential-codify.md` Rule 1). Drops to serial/inline ONLY for a genuinely-atomic single-item task OR a factual/confirmation/recommendation reply. Executing a decomposable input inline-serially, or idling while independent work is dispatchable, is BLOCKED. The triad FILLS the default posture, NEVER overrides a gate — BOUNDED by the same gates as `rules/wave-loop.md` MUST-6; `/autonomize` is self-bounding. **DO/DO-NOT, full BLOCKED corpus, bounding-gate enumeration, Why: `skills/30-claude-code-patterns/parallel-dispatch-default.md`; CLI dispatch syntax → the `examples` slot.**
 
 ### MUST: Parallel Brief-Claim Verification When Issue Count ≥ 3
 
-When `/analyze` runs against a brief covering ≥ 3 distinct issues, the orchestrator MUST launch parallel deep-dive verification agents — one per claim cluster — to independently re-grep / re-read every factual claim. Inaccuracies MUST be recorded in the workspace journal AND the plan's "Brief corrections" section AS THE GATE before `/todos`. Single-agent analysis on a ≥3-issue brief is BLOCKED. (Example 1 = CLI-specific dispatch syntax.)
-
-**BLOCKED rationalizations:**
-
-- "The brief was authored by the user, it must be accurate"
-- "Sequential single-agent analysis catches inaccuracies anyway"
-- "Three parallel agents triple the cost for the same conclusion"
-- "I'll spot-check a couple of claims, that's good enough"
-- "Brief verification is /redteam's job, not /analyze's"
-- "The brief's claims are 'mostly correct', the rounding errors don't change the plan"
-- "If a claim turns out wrong, /todos can correct it"
-
-**Why:** Briefs reflect the author's mental model, which decays as code evolves; single-agent analysis cannot resist the brief's framing without independent reading. Parallel deep-dive verification is the structural defense — N agents, N claim-clusters, one wall-clock unit.
+When `/analyze` runs against a brief covering ≥ 3 distinct issues, the orchestrator MUST launch parallel deep-dive verification agents — one per claim cluster — to independently re-grep / re-read every factual claim; inaccuracies recorded in the workspace journal AND the plan's "Brief corrections" section AS THE GATE before `/todos`. Single-agent analysis on a ≥3-issue brief is BLOCKED. BLOCKED corpus + Why: `skills/30-claude-code-patterns/parallel-dispatch-default.md` § 2. (Example 1 = dispatch syntax.)
 
 ## Quality Gates (MUST — Gate-Level Review)
 
@@ -69,13 +46,13 @@ Reviews happen at COC phase boundaries, not per-edit. Skip only when explicitly 
 
 **Why:** Skipped gate reviews let gaps propagate downstream where they are far more expensive to fix. (Example 2 = background-dispatch pattern.)
 
-**BLOCKED responses when skipping MUST gates:** "Skipping review to save time" / "Reviews will happen in a follow-up session" / "The changes are straightforward, no review needed" / "Already reviewed informally during implementation".
+**BLOCKED responses when skipping MUST gates:** full corpus in guide § "Quality Gates — BLOCKED responses".
 
 ### MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep
 
 Every gate-level reviewer prompt MUST include explicit mechanical sweeps that verify ABSOLUTE state (not only the diff) — LLM-judgment review catches what's wrong with new code; sweeps catch what's missing from OLD code the spec also touched. (Example 3 = mechanical-sweep prompt.)
 
-**BLOCKED rationalizations:** "The reviewer is smart enough to spot orphans" / "Mechanical sweeps are /redteam's job" / "Adding sweeps is repetitive".
+**BLOCKED rationalizations:** guide § "Reviewer Prompts … — BLOCKED rationalizations".
 
 **Why:** Reviewers are constrained by the diff; the `orphan-detection.md` §1 failure mode is invisible at diff-level. A 4-second `grep -c` catches what LLM judgment misses.
 
@@ -87,9 +64,7 @@ A plan shipped across ≥3 sharded waves MUST run ONE holistic redteam round acr
 
 ### MUST: Redteam Reviewer Dispatch — Errored/Empty Is Zero Evidence, Never A Clean Round
 
-A `/redteam` round dispatches reviewers in PARALLEL; rate-limiting can throttle the fan-out so an agent returns errored/empty, reading as "0 findings" → false convergence. Two axes: **(1) EVIDENCE GATE** — every dispatched reviewer MUST return a ran/evidence signal; an errored/empty/timed-out return is ZERO evidence (per `rules/evidence-first-claims.md` MUST-3), MUST be re-run, and MUST NOT count clean; convergence is claimable ONLY when EVERY agent genuinely ran. **(2) CONCURRENCY BACK-OFF** — on a throttle signal, reduce dispatch concurrency (per `rules/worktree-isolation.md` Rule 4's adaptive model) and re-run the throttled reviewers. COMPLEMENTS parallel-by-default; does NOT override it. DO/DO-NOT + BLOCKED corpus + Wiring: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
-
-**Why:** An errored agent and a genuinely-clean agent are indistinguishable in a "0 findings" tally yet opposite in meaning; counting the errored return as clean ships an un-reviewed shard under a converged banner.
+A `/redteam` round dispatches reviewers in PARALLEL; a throttled fan-out can return errored/empty, reading as "0 findings" → false convergence. **(1) EVIDENCE GATE** — every dispatched reviewer MUST return a ran/evidence signal; an errored/empty/timed-out return is ZERO evidence (`rules/evidence-first-claims.md` MUST-3), MUST be re-run, MUST NOT count clean; convergence is claimable ONLY when EVERY agent genuinely ran. **(2) CONCURRENCY BACK-OFF** — on a throttle signal, reduce concurrency (`rules/worktree-isolation.md` Rule 4) and re-run the throttled reviewers. Complements parallel-by-default, does not override it. DO/DO-NOT + BLOCKED corpus + Wiring + Why: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
 
 ## Zero-Tolerance
 
@@ -101,9 +76,11 @@ Pre-existing failures MUST be fixed (`rules/zero-tolerance.md` Rule 1). No worka
 
 When delegating IMPLEMENTATION work (file edits, commits, build/test invocation, version bumps), the orchestrator MUST select a specialist whose declared tool set includes `Edit` AND `Bash`. Read-only specialists (`security-reviewer`, `analyst`, `reviewer`, `gold-standards-validator`, `value-auditor`) MUST NOT be delegated implementation tasks. Tool-inventory table: guide.
 
-**BLOCKED rationalizations:** "security-reviewer is the security domain, so security-relevant edits go there" / "The agent will figure out its tool limitations" / "I'll re-launch with a different specialist if it halts" / "Read-only review IS implementation when the diff is trivial" / "The agent has Write — that's enough for code edits".
+**BLOCKED rationalizations:** guide § "Verify Specialist Tool Inventory … — BLOCKED rationalizations".
 
 **Why:** Read-only specialists halt mid-instruction at file-edit boundaries; pre-launch tool-inventory verify is O(1), re-launch is O(N) on shard size.
+
+**Read-only reviewer materialization (INCREMENTAL):** `security-reviewer` is read-only (no `Bash`) → materialize the diff/changed files to a scratchpad path and name it in the prompt, so it reviews the change instead of halting for context it cannot fetch.
 
 ## MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read
 
@@ -113,7 +90,7 @@ When delegating a /redteam round including **closure-parity verification** (mapp
 
 ## MUST: Worktree Orchestration
 
-Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/worktree-orchestration.md` (Rules 1–10 — each a full MUST). The 10 sub-rules: isolate compiling agents + ANY shared-source editor (concurrent readers read committed HEAD via `git show HEAD:<path>`, never the working tree); relative paths only in prompts; commit per milestone + verify ≥1 commit; verify deliverables exist after exit; recover orphan writes onto `recovery/<branch>`; one version owner per sub-package; binding-scoped shard PRs touch only their own package. The depth-file carries each rule's failure-mode evidence, prompt templates, DO/DO-NOT blocks, BLOCKED-rationalization corpus, and Trust Posture Wiring.
+Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/worktree-orchestration.md` (Rules 1–10 — each a full MUST): isolate compiling agents + any shared-source editor (concurrent readers read committed HEAD via `git show HEAD:<path>`); relative paths in prompts; commit per milestone + verify ≥1 commit; verify deliverables after exit; recover orphan writes onto `recovery/<branch>`; one version owner per sub-package; binding-scoped shard PRs. The skill carries each rule's evidence, prompt templates, DO/DO-NOT, BLOCKED corpus, and Wiring.
 
 **Why:** Each sub-rule converts a silent parallel-work loss (lock serialization, phantom reads, checkout drift, auto-cleanup loss, truncated writes, version clobber, shard conflicts) into clean isolation or a loud refusal.
 
@@ -123,7 +100,20 @@ Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/
 - **Sequential when parallel is possible** — wastes the autonomous execution multiplier.
 - **Raw SQL / custom API / custom agents / custom governance** — see `rules/framework-first.md` and guide for per-framework rationale.
 
-Origin: sessions 2026-04-19/20/27 (worktree drift, parallel-release PRs #552/#553, W6 closure-parity); slot-partitioned 2026-05-14 (#200); F20 extraction 2026-05-22 (journal/0143); prose trim 2026-06-11 (Gate-1 paired extraction); worktree-cluster extraction to skill Rules 1–10 + Examples 6–10 retired 2026-06-12 (#491, journal/0271). Full evidence in guide.
+## Trust Posture Wiring
+
+Applies to the **§ Triad** clause ONLY (added 2026-07-18, `journal/0543`); ships canonical-8-field-compliant. Pre-existing grandfathered sections of this baseline rule stay exempt until each is itself `/codify`-touched (precedent: `security.md` § Enforcement-Surface Parity + `git.md` § CI-check/merge).
+
+- **Severity:** `halt-and-report` at `/codify` + `/redteam` gate-review (confirm a decomposable input went onto a parallel wave + substantive changes redteamed to convergence, not self-attested); `advisory` at the hook layer per `rules/hook-output-discipline.md` MUST-2 (session-history judgment).
+- **Grace period:** 7 days (2026-07-18 → 2026-07-25).
+- **Cumulative posture impact:** same-class violations (decomposable input run inline-serially; a change called "done" without redteam-to-convergence) route to `rules/trust-posture.md` MUST-4 cumulative math (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** GENERIC `regression_within_grace` trigger per `rules/trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated key; named deviation from key-per-clause per Rule 8 (same disposition as `wave-loop.md` MUST-6/7).
+- **Receipt requirement:** SessionStart soft-gate `[ack: agents]` IFF `posture.json::pending_verification` includes `agents`.
+- **Detection mechanism:** Phase 1 (manual) — cc-architect / reviewer inspect the transcript for a parallel-wave dispatch + convergence receipt. Phase 2 (deferred) — advisory Stop detector + fixtures `.claude/audit-fixtures/wave-loop/orchestration-hygiene/` (shared with `wave-loop.md` MUST-6/7) per `rules/cc-artifacts.md` Rule 9.
+- **Violation scope:** the § Triad clause ONLY; grandfathered sections exempt until `/codify`-touched.
+- **Origin:** `journal/0543` (co-owner-directed); see § Origin below.
+
+Origin: sessions 2026-04-19/20/27 (worktree drift, parallel-release PRs #552/#553, W6 closure-parity); slot-partitioned 2026-05-14 (#200); F20 extraction 2026-05-22 (journal/0143); prose trim 2026-06-11 (Gate-1 paired extraction); worktree-cluster extraction to skill Rules 1–10 + Examples 6–10 retired 2026-06-12 (#491, journal/0271); triad default-execution-mode clause + paired extraction to `parallel-dispatch-default.md` 2026-07-18 (co-owner-directed origination, `journal/0543`). Full evidence in guide.
 
 <!-- /slot:neutral-body -->
 
@@ -131,79 +121,6 @@ Origin: sessions 2026-04-19/20/27 (worktree drift, parallel-release PRs #552/#55
 
 ## Examples (CLI-specific delegation syntax)
 
-The MUST clauses in the neutral-body section reference numbered examples here. Each example shows the CC `Agent(subagent_type=...)` delegation primitive; the Codex variant of this rule (`.claude/variants/codex/rules/agents.md`) replaces these with `codex_agent(agent=...)` syntax, and the Gemini variant uses `@specialist` invocation.
-
-### Example 1 — Parallel Brief-Claim Verification (≥3-issue brief)
-
-```python
-# DO — parallel deep-dive verification for ≥3-issue brief
-# (one agent per claim cluster, run concurrently)
-Agent(subagent_type="general-purpose", run_in_background=True, prompt="""
-  Verify brief claim #1: 'ExperimentTracker creates _kml_model_versions'.
-  Re-grep the source tree; cite file:line. Report TRUE / FALSE / UNCLEAR.""")
-Agent(subagent_type="general-purpose", run_in_background=True, prompt="""
-  Verify brief claim #2: 'InferenceServer at engines/inference_server.py'.
-  Re-grep + re-read the cited path. Report TRUE / FALSE / UNCLEAR.""")
-Agent(subagent_type="general-purpose", run_in_background=True, prompt="""
-  Verify brief claim #3: '1.1.x kwargs silently dropped in 1.5.x'.
-  Re-read the 1.5.x signature; check raise vs silent-drop. Report.""")
-# Wait for all three; reconcile findings; record corrections in journal +
-# architecture plan BEFORE /todos.
-
-# DO NOT — single-agent analysis on a ≥3-issue brief
-Agent(subagent_type="analyst", prompt="Analyze the brief and produce architecture plan.")
-# (the analyst inherits whatever framing the brief asserts; brief inaccuracies
-# propagate into the plan, the plan into /todos, and three sessions later
-# the workstream is solving the wrong problem.)
-```
-
-### Example 2 — Background Reviewer Dispatch (Quality Gates)
-
-```
-# Background agent pattern for MUST gates — review costs near-zero parent context
-Agent({subagent_type: "reviewer", run_in_background: true, prompt: "Review all changes since last gate..."})
-Agent({subagent_type: "security-reviewer", run_in_background: true, prompt: "Security audit all changes..."})
-```
-
-### Example 3 — Mechanical Sweep in Reviewer Prompt
-
-```python
-# DO — reviewer prompt enumerates mechanical sweeps
-Agent(subagent_type="reviewer", prompt="""
-Mechanical sweeps (run BEFORE LLM judgment):
-1. Parity grep (`grep -c`) on critical call-site patterns
-2. `pytest --collect-only -q` exit 0 across all test dirs
-3. Every public symbol in __all__ added by this PR has an eager import
-""")
-
-# DO NOT — reviewer prompt only includes diff context
-Agent(subagent_type="reviewer", prompt="Review the diff between main and feat/X.")
-```
-
-### Example 4 — Closure-Parity Specialist Dispatch (Bash+Read required)
-
-```python
-# DO — pact-specialist or general-purpose for Round-2+ closure-parity verification
-Agent(subagent_type="pact-specialist", prompt="""
-Verify W5→W6 closure parity. Run gh pr view, gh pr diff, grep, pytest --collect-only,
-ast.parse() for __all__ enumeration. Convert FORWARDED rows to VERIFIED with command output.""")
-
-# DO NOT — analyst (Read/Grep/Glob only) — cannot run gh / pytest / ast.parse()
-Agent(subagent_type="analyst", prompt="Verify W5→W6 closure parity...")
-```
-
-### Example 5 — Delegation-Time Closure-Parity Scan
-
-```python
-# DO — orchestrator detects closure-parity markers in draft prompt, picks Bash+Read specialist
-draft_prompt = "Verify W5→W6 closure parity. Run gh pr view, ast.parse() for __all__..."
-# scan: contains "closure parity" + "gh pr view" + "ast.parse(" → MUST use Bash+Read
-Agent(subagent_type="pact-specialist", prompt=draft_prompt)
-
-# DO NOT — orchestrator drafts a closure-parity prompt and delegates to read-only analyst
-draft_prompt = "Verify W5→W6 closure parity. Run gh pr view, ast.parse() for __all__..."
-Agent(subagent_type="analyst", prompt=draft_prompt)
-# (analyst lacks Bash; will FORWARD the gh-pr-view rows; round burned)
-```
+The MUST clauses in the neutral-body section reference numbered examples by their inline "(Example N = …)" descriptors. The WORKED examples (Examples 1–5) — the concrete CC `Agent(subagent_type=…)` delegation code for each clause — live in `.claude/skills/30-claude-code-patterns/specialist-delegation-syntax.md`. That skill also carries the Codex (`bin/coc` inline-cat injection) and Gemini (`@specialist`) mappings. The examples are reference material loaded on-demand when delegating; the MUST clauses above are the CLI-neutral contract.
 
 <!-- /slot:examples -->
