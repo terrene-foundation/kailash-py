@@ -1,50 +1,114 @@
-# Session Notes — 2026-07-17
+# Session Notes — 2026-07-18
 
 ## Where we are
 
-Wave 1 code-health CONVERGED → merged (#1799) → kaizen 2.34.2 released + verified →
-post-Wave-1 `/sweep` done. Repo is clean & fully released. Next: **`/autonomize`
-Wave 2 (#1779 + #1727 in PARALLEL) → `/redteam` to convergence**, then Wave 3
-(#1720, soak-gated). Workspace issue-1720-llm-consolidation, phase 05-codify.
+**#1779 governance_required posture: SHIPPED, RELEASED, CODIFIED, CLOSED.**
+kailash 2.54.0 / kailash-kaizen 2.35.0 / kaizen-agents 0.10.0 are live on PyPI
+(TestPyPI-validated in dependency order, then prod-published, full-chain
+clean-venv verified). Docs landed (`docs/core/trust.rst` § "Governance-Required
+Posture"). Issue #1779 closed with release refs. Repo is **clean & fully
+released — zero version drift (all 9 packages main == PyPI)**. Working tree
+clean. Workspace issue-1720-llm-consolidation, phase 05-codify.
+
+Next: decide the **gate-vs-delete fork** for the legacy provider layer, then run
+the wave plan below.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-07-17-post-wave1.md` — live forest + ranked next-session items. START HERE.
-2. `workspaces/issue-1720-llm-consolidation/01-analysis/1779-governance-egress-analysis.md` — #1779 impl design (gate at construction, NOT openai.py; parallel-safe w/ #1727).
-3. `tools/sweep-redteam.py` — drift tool, hardened this session (CapWords-tail contract carve-out).
+1. `workspaces/issue-1720-llm-consolidation/journal/0003-DISCOVERY-release-hazards-1779.md` — 3 reusable release hazards (pin-floor / CI-order / TestPyPI). START HERE.
+2. `workspaces/issue-1720-llm-consolidation/journal/0004-DECISION-codify-1779-docs.md` — this cycle's codify record + violations triage.
+3. `docs/core/trust.rst` § "Governance-Required Posture" — the shipped posture + its documented **non-coverage** boundary (= exactly what #1803 covers).
 
 ## In-flight state
 
-- PR #1801 (the `/sweep` report) may still be merging — verify it landed; admin-merge if open.
-- Unreleased packages: **NONE** — all 8 main==PyPI (sweep Sweep-8 verified).
+- **NONE.** All session PRs merged (#1804 pins+CI, #1805 fail-closed test, #1807
+  codify docs, #1808 gitignore). Working tree clean. No uncommitted work.
+- Unreleased packages: **NONE** — all 9 main == PyPI (sweep-verified this session).
 
 ## Executed this session
 
-- Released **kaizen 2.34.2** to PyPI (tag `kaizen-v2.34.2`, publish run SUCCESS, clean-venv bare-install import verified). External to this repo's git log.
+- **Released** kailash 2.54.0 + kailash-kaizen 2.35.0 + kaizen-agents 0.10.0 to
+  PyPI (TestPyPI-first per user; dependency-order; clean-venv chain verified).
+- **PR #1804** — tightened dependency pins (fail-closed-guard hazard) + fixed the
+  kaizen CI local-editable install ordering it exposed.
+- **PR #1805** — fail-closed posture-read-branch test (security-reviewer gap).
+- **PR #1807** — /codify docs: trust.rst posture section, CHANGELOG → [2.54.0]
+  dated, stale doc version badges 0.12.5 → 2.54.0.
+- **PR #1808** — gitignore kaizen-agents task/session/memory test-scratch.
+- **Filed** rs#1932 (max_completion_tokens defect) + rs#1933 (posture parity) on
+  the Rust SDK repo (fresh-confirmed cross-repo grant; journal/0002).
+- **Closed** #1779 with release refs.
 
-## Outstanding ledger (forest)
+## Outstanding ledger (forest) — value-ranked
 
 | ID | Item | Value-anchor (MUST-1) | Status |
 | --- | --- | --- | --- |
-| F1779 | #1779 governance_required posture | #1779 user-filed; EATP D6 parity | Wave 2 — design done, ready |
-| F1727 | #1727 max_completion_tokens (four-axis openai) | #1727 user-filed | Wave 2 — VERIFY-FIRST (may be no-op), PARALLEL w/ F1779 |
-| F1720C | #1720 Wave C legacy `providers/llm` prune | #1720 tracker (session terminal goal) | SOAK-GATED (2.34.2 just shipped) |
-| FVERT | Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in `.env` |
-| F1782 | PR #1782 loom Gate-2 rule sync | sync-artifact policy (user gate) | user merge/hold decision |
-| FRECON | Reconcile+archive 2 stale workspaces | sweep F5; value-prioritization MUST-4 | queued — user-gated prune of 5 verified-CLOSED-issue rows (issue-1717-vertex-claude, sdk-backlog) |
+| **F-FORK** | **DECIDE: gate (#1803) vs delete (#1720 Wave C) the legacy provider layer** | #1720 tracker (terminal goal) + #1779 non-coverage doc | **DECISION GATE — recommend DELETE (see below)** |
+| F1720C | #1720 consolidate/delete legacy `providers/llm` onto four-axis | #1720 user-filed (session terminal goal) | READY post-fork; needs /analyze first; SUBSUMES #1803 if delete |
+| F1803 | #1803 gate legacy/multimodal/azure provider layer | #1779 follow-up (user-filed) | OPEN; MOOT if F1720C = delete |
+| F1782 | PR #1782 loom Gate-2 rule sync (152 files, ±10k, open since 07-16) | sync-artifact policy (user gate) | needs review + merge/hold decision |
+| F-TESTHYG | kaizen-agents tests → `tmp_path` (stop CWD-scratch writes) | test-hygiene; .gitignore (#1808) is the band-aid | READY — small, isolated to tests/ |
+| F-LOOMCANON | Canonicalize release-hazards #1 (dependencies.md pin-floor) + #3 (deployment.md interdependent-minors TestPyPI) | journal/0003; loom rule fleet | loom /codify (not this repo) |
+| FRECON | Reconcile + archive 4 stale workspaces (sdk-backlog, issue-1717-vertex-claude, observability-1708, mops-onboarding) | value-prioritization MUST-4 | user-gated prune |
+| FVERT | Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in .env |
+| rs#1932 / rs#1933 | Rust cross-SDK (max_completion_tokens / posture parity) | cross-sdk-inspection | filed; Rust-side implementation, tracked |
 
-Closed this session: `WAVE1` → PR #1799 + tag `kaizen-v2.34.2`.
+Closed this session: **F1779** (shipped + released + closed).
+
+## Parallelizable wave plan
+
+**F-FORK decision (human — blocks Wave 2 ONLY).** Recommend **DELETE** — retire
+the legacy `providers/llm` layer onto the four-axis client (#1720 Wave C).
+Rationale: the legacy layer is redundant with the four-axis client (optimal
+architecture, no shims); deleting it **closes #1803's non-coverage boundary
+entirely** (nothing to gate once gone) rather than maintaining a second
+enforcement surface. Con: public-API removal may need a deprecation cycle
+(zero-tolerance 6a) — the /analyze scopes that. If instead you want the legacy
+layer KEPT, do #1803 (gate it) and drop #1720 Wave C.
+
+**Wave 1 — parallel NOW, no decision needed (disjoint file trees → no shared invariants):**
+- **1A · F-TESTHYG** — convert kaizen-agents CWD-scratch tests to `tmp_path`
+  (touches `packages/kaizen-agents/tests/**` only). Small.
+- **1B · F1782** — review + merge (or hold) the loom Gate-2 rule sync (touches
+  `.claude/**` only). Big review; land it BEFORE Wave 2 so implementation
+  doesn't drift from freshly-synced rules.
+- **1C · FRECON** — reconcile + archive the 4 stale workspaces (touches
+  `workspaces/**` only). User-gated prune.
+- 1A ∥ 1B ∥ 1C are fully independent (tests/ vs .claude/ vs workspaces/) → one
+  parallel wave. Per wave-loop.md: Wave 1 invariant-surface is tiny (hygiene +
+  artifact-sync), well under the bound-B ceiling.
+
+**Wave 2 — provider-layer consolidation (post-F-FORK), internally sharded:**
+- /analyze #1720 Wave C: enumerate legacy `providers/llm` public surface +
+  consumers + deprecation-cycle needs.
+- Sharded /implement across ≤3 worktrees (worktree-isolation R4 cold-start cap)
+  by provider family: {openai, anthropic, google} ∥ {docker, perplexity} ∥
+  {multimodal/document, azure backends} — each shard = migrate onto four-axis +
+  remove legacy. Holistic /redteam across merged shards → /release.
+- Subsumes F1803 (a deleted layer needs no gate). Wave-loop bound-B: the
+  provider migrations share the four-axis-contract invariant set — if the
+  shard-union exceeds ~10 invariants without a live harness, split at the
+  provider boundary into Wave 2a/2b.
+
+**Wave 3 — async at loom (not this repo):** F-LOOMCANON — promote release-hazard
+#1 + #3 into fleet rules via loom /codify.
+
+Overlap: Wave 1 can run concurrently with the F-FORK /analyze; Wave 2 /implement
+starts after F-FORK decided AND ideally after 1B (rule sync) lands.
 
 ## Traps
 
-- kaizen tests PER-PACKAGE (`cd packages/<pkg> && ../../.venv/bin/python -m pytest`); combined kaizen-agents+kailash-kaizen pytest → `ImportPathMismatchError` (both ship `tests/conftest.py`) — rootdir artifact, not a defect.
-- Autonomy examples MUST compile on Python **3.11** (no f-string backslash; 3.12+ only). `Validate Autonomy Examples` job.
-- pyright false-positive storm on `kaizen.*` (resolves stale installed wheel) — pytest via editable `.venv` is authoritative.
-- pre-commit shim stale → `.venv/bin/python -m pre_commit run --files <files>`; isort/ruff/black auto-fix reports "Failed" on modify → re-stage to idempotency. `# type` comment fragment trips `python-use-type-annotations` → reword.
-- uv index-cache lag on fresh PyPI publish → pip `--no-cache-dir` fallback (build-repo-release-discipline R2).
-- **Wave 2 #1779 gate MUST live at construction/selection (`get_provider`/LlmClient/Agent), NEVER inside `providers/llm/openai.py` `chat()`** — else it collides with #1727 (2A) and loses the parallel guarantee.
-- Worktree wave cap ~3 cold-start (worktree-isolation R4); each shard carries curated governance slices (governed-throughput).
+- kaizen tests PER-PACKAGE (`cd packages/<pkg> && ../../.venv/bin/python -m pytest`); combined kaizen-agents+kailash-kaizen → `ImportPathMismatchError` (both ship `tests/conftest.py`) — rootdir artifact, not a defect.
+- **CI install ordering:** local editable `kailash-kaizen` MUST install BEFORE `kaizen-agents` (else its `>=2.35.0` pin resolves from PyPI). Fixed in test-kailash-kaizen.yml this session.
+- **TestPyPI for interdependent packages:** dispatch in dependency order + `--index-strategy unsafe-best-match` (deps live on prod PyPI, pkg-under-test on TestPyPI); capture uv's REAL exit code (a `| tail` pipe masks it).
+- PyPI `info.version` lags minutes after publish; the `/pypi/<pkg>/<ver>/json` endpoint + clean install are ground truth (build-repo-release-discipline R2).
+- Autonomy examples MUST compile on Python **3.11**. `Validate Autonomy Examples` job.
+- pyright false-positive storm on `kaizen.*` (stale installed wheel) — editable `.venv` pytest is authoritative.
+- `Test (Python 3.11)/(3.12)` core jobs run SLOW on the self-hosted queue (~15-18 min); earlier matrix jobs finish ~4-5 min. Not a hang. A .gitignore/docs-only PR with all other checks green MAY admin-merge (matrix is inert to it).
+- CI shows a stale CANCELLED "Build Documentation"/build duplicate on most PRs (concurrency cancel-in-progress) — pin the head SHA's run; the current-head run is the real result.
 
 ## Open questions for the human
 
-- Merge or hold PR #1782 (loom Gate-2 rule sync)?
+1. **F-FORK:** delete the legacy provider layer (#1720 Wave C, recommended — subsumes #1803) OR gate it (#1803)? Only blocker for Wave 2.
+2. **F1782:** merge or hold the loom Gate-2 rule sync (152 files)?
+3. **FRECON:** approve archiving the 4 stale workspaces?
