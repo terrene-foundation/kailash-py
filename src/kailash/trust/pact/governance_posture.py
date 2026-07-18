@@ -53,9 +53,25 @@ Coverage (what an ACTIVE posture gates) — enforced from Kaizen:
   ``ungoverned`` opt-out is threaded top-down through ``Delegate`` →
   ``AgentLoop`` → the adapter registry → each adapter.
 
-NON-coverage (the posture does NOT gate): RAW direct use of the deprecated
-``kaizen.providers.llm.*`` providers (calling a provider's ``.chat()`` yourself
-OUTSIDE ``LLMAgentNode``) — retiring in #1720 Wave C.
+NON-coverage (the posture does NOT gate — an operator relying on the posture as a
+hard egress boundary MUST NOT treat these as governed; tracked for a dedicated
+follow-up audit of the kaizen provider/backend layer):
+
+* the LEGACY ``kaizen.providers.llm.*`` providers (openai / anthropic / google /
+  docker / perplexity) + their ``BYOKClientCache`` — the pre-#1720 provider layer.
+  Reached VIA ``LLMAgentNode`` they ARE gated (at ``_provider_llm_response`` /
+  ``_legacy_provider_chat``); direct standalone use is NOT. Retiring in #1720
+  Wave C;
+* the VISION / MULTIMODAL providers — ``kaizen.providers.document.*`` (vision /
+  OCR) and ``kaizen.providers.multi_modal_adapter`` — construct provider clients
+  directly for a distinct (non-chat) egress capability;
+* the AZURE backend layer — ``kaizen.nodes.ai.azure_backends`` /
+  ``unified_azure_provider`` (standalone Azure chat/embed).
+
+These construct provider clients (``openai`` / ``anthropic`` / ``genai``)
+DIRECTLY, outside the gated four-axis / adapter surfaces. Comprehensively gating
+this provider/backend layer is a separate substantial workstream (its own audit)
+and is NOT covered by this landing.
 
 An installed process-global interceptor does NOT waive the posture for the
 four-axis ``LlmClient`` (it does not route through the interceptor — see

@@ -1,0 +1,25 @@
+# #1779: kaizen-agents consensus/voting/orchestration tests write scratch
+# proposal/vote/rationale artifacts to CWD without cleanup (pre-existing
+# test-hygiene issue). Ignore them so they cannot be accidentally committed.
+# Follow-up: those tests should use tmp_path.
+proposal*.md
+proposal*.txt
+proposal_*
+proposals/
+rationale*.md
+rationale*.txt
+rationales/
+*vote*.txt
+*vote*.json
+votes.json
+updated_votes.json
+sample_vote.txt
+Topic*_Voting_Result.txt
+approval_result.txt
+approved_proposal.txt
+test_proposal*.txt
+test_rationale.txt
+test_topic.txt
+Test.txt
+*voting*
+voting_decision.txt

@@ -422,6 +422,23 @@ def test_embedding_node_real_provider_refused_and_typed(
         )
 
 
+def test_embedding_node_run_propagates_typed_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redteam round-7: the PUBLIC run() entry must propagate UngovernedEgressRefused
+    unwrapped, not swallow it into a {success: False} dict (invariant 4)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    kailash.set_governance_required(True)
+    node = _make_embedding_node()
+    with pytest.raises(UngovernedEgressRefused):
+        node.run(
+            operation="embed_text",
+            input_text="hi",
+            provider="openai",
+            model="text-embedding-3-small",
+        )
+
+
 def test_embedding_node_ungoverned_bypasses_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

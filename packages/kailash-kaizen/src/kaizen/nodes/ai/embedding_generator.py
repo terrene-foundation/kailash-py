@@ -344,6 +344,14 @@ class EmbeddingGeneratorNode(Node):
                 }
 
         except Exception as e:
+            # #1779: a governance refusal is a typed contract signal, NOT an
+            # operation failure — propagate it UNWRAPPED rather than swallowing
+            # it into a success:False dict at the public run() boundary
+            # (invariant 4; redteam round-7).
+            from kailash.trust.pact import UngovernedEgressRefused
+
+            if isinstance(e, UngovernedEgressRefused):
+                raise
             return {
                 "success": False,
                 "error": str(e),
