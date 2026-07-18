@@ -76,6 +76,7 @@ class LLMClient:
         base_url: str | None = None,
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        ungoverned: bool = False,
     ) -> None:
         """Initialise the LLM client.
 
@@ -85,9 +86,18 @@ class LLMClient:
             base_url: Override base URL (for proxies or compatible APIs).
             temperature: Sampling temperature. Default 0.0 for deterministic output.
             max_tokens: Maximum tokens in the response.
+            ungoverned: #1779 opt-out. When True, this client is exempt from the
+                KAILASH_GOVERNANCE_REQUIRED posture gate. Default False
+                (fail-closed). The orchestration subsystem (planner / recovery /
+                protocols / monitor / context) injects a single LLMClient into
+                its sub-components, so gating this chokepoint + this opt-out
+                covers every orchestration egress at construction time.
 
         Raises:
             ValueError: If no API key is available.
+            kailash.trust.pact.UngovernedEgressRefused: If the governance_required
+                posture is active and this un-governed client would make real
+                egress (unless ungoverned=True).
         """
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not resolved_key:
@@ -99,6 +109,22 @@ class LLMClient:
         self._model = model or _resolve_model()
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this client egresses DIRECTLY via
+        # the OpenAI SDK (complete / complete_structured -> self._client.chat.
+        # completions.create), NOT through the gated four-axis kaizen.llm.LlmClient,
+        # so the four-axis construction gate cannot cover it. Gate at construction,
+        # fail-closed. There is no mock path here (always a real OpenAI client),
+        # so is_mock=False; the only exemption is ungoverned=True (or posture OFF).
+        # Runs BEFORE building the OpenAI client so a refusal wastes no transport.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.LLMClient",
+        )
 
         client_kwargs: dict[str, Any] = {"api_key": resolved_key}
         if base_url:

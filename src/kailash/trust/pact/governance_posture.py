@@ -38,7 +38,12 @@ Coverage (what an ACTIVE posture gates) — enforced from Kaizen:
   four-axis ``LlmClient``);
 * the ``LLMAgentNode`` legacy provider-chat fallback (providers with no
   four-axis wire, e.g. ``azure_ai_foundry``) — gated explicitly at that
-  chokepoint.
+  chokepoint;
+* ``EmbeddingGeneratorNode`` — four-axis embed path AND the ollama legacy
+  fallback;
+* the ``kaizen-agents`` orchestration subsystem (planner / recovery / protocols
+  / monitor / context) — gated at its ``kaizen_agents.llm.LLMClient``
+  construction chokepoint (every orchestration component injects one client).
 
 NON-coverage (the posture does NOT gate): RAW direct use of the deprecated
 ``kaizen.providers.llm.*`` providers (calling a provider's ``.chat()`` yourself
