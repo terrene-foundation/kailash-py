@@ -529,3 +529,44 @@ def test_embedding_fallback_off_posture_byte_identical() -> None:
         raise AssertionError("OFF posture must not gate")
     except Exception:
         pass
+
+
+# --------------------------------------------------------------------------- #
+# Fail-closed: a posture-read error is treated as ACTIVE (invariant 5)
+# --------------------------------------------------------------------------- #
+
+
+def test_enforce_fail_closed_when_posture_read_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # If is_governance_required() raises, the gate MUST treat the posture as
+    # ACTIVE and refuse — never silently allow ungoverned egress (invariant 5,
+    # governance_gate.py:99-108). Security-reviewer flagged this branch as the
+    # one release-cycle test gap; here is the direct coverage.
+    from kaizen.llm.governance_gate import enforce_governance_posture
+
+    def _boom() -> bool:
+        raise RuntimeError("posture backend unavailable")
+
+    monkeypatch.setattr(kailash, "is_governance_required", _boom)
+    with pytest.raises(UngovernedEgressRefused):
+        enforce_governance_posture(
+            is_mock=False, ungoverned=False, surface="LlmClient"
+        )
+
+
+def test_enforce_fail_closed_exemptions_short_circuit_before_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ungoverned=True and is_mock=True short-circuit BEFORE the posture read, so
+    # a raising reader is never reached — the exemptions still allow even when
+    # the posture backend is unavailable.
+    from kaizen.llm.governance_gate import enforce_governance_posture
+
+    def _boom() -> bool:
+        raise RuntimeError("must not be reached when exempt")
+
+    monkeypatch.setattr(kailash, "is_governance_required", _boom)
+    # Neither raises despite the poisoned reader (exemptions short-circuit).
+    enforce_governance_posture(is_mock=False, ungoverned=True, surface="LlmClient")
+    enforce_governance_posture(is_mock=True, ungoverned=False, surface="Agent")
