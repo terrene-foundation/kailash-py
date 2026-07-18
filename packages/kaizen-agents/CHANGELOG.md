@@ -5,7 +5,7 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.0] — 2026-07-18 — StreamingAgent token-streaming cutover to the four-axis LlmClient (#1720 Wave-2b)
+## [0.11.0] — 2026-07-19 — StreamingAgent token-streaming cutover to the four-axis LlmClient (#1720 Wave-2b)
 
 ### Changed
 
