@@ -5,6 +5,22 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-07-18 — governance_required posture on the orchestration egress chokepoint (#1779)
+
+### Added
+
+- **`governance_required` posture enforcement for the orchestration subsystem
+  (#1779, EATP D6 parity).** The orchestration components (planner / recovery /
+  protocols / monitor / context) egress via `kaizen_agents.llm.LLMClient` (the
+  raw OpenAI SDK), NOT the gated four-axis `kaizen.llm.LlmClient`. `LLMClient`
+  now enforces the core `kailash.is_governance_required()` posture at its
+  construction chokepoint: when the posture is ACTIVE, a bare client is refused
+  fail-closed with `kailash.trust.pact.UngovernedEgressRefused` unless
+  constructed with `ungoverned=True`. Because every orchestration component
+  INJECTS a single `LLMClient` (dependency injection), this one chokepoint +
+  the `ungoverned` opt-out covers all orchestration egress. OFF by default —
+  byte-identical to prior behavior.
+
 ## [0.9.11] — 2026-06-17 — Gemini adapters on supported google-genai SDK; provider SDKs are runtime deps
 
 ### Changed
