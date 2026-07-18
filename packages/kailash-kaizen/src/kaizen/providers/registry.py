@@ -25,14 +25,7 @@ from kaizen.providers.base import (
 from kaizen.providers.embedding.cohere import CohereProvider
 from kaizen.providers.embedding.huggingface import HuggingFaceProvider
 from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
-from kaizen.providers.llm.anthropic import AnthropicProvider
 from kaizen.providers.llm.azure import AzureAIFoundryProvider
-from kaizen.providers.llm.docker import DockerModelRunnerProvider
-from kaizen.providers.llm.google import GoogleGeminiProvider
-from kaizen.providers.llm.mock import MockProvider
-from kaizen.providers.llm.ollama import OllamaProvider
-from kaizen.providers.llm.openai import OpenAIProvider
-from kaizen.providers.llm.perplexity import PerplexityProvider
 from kaizen.providers.provider_names import (
     _MODEL_PREFIX_MAP,
     MODEL_PREFIX_MAP,
@@ -57,20 +50,11 @@ def _get_unified_azure_provider() -> type:
 # Provider registry mapping names to classes.
 # UnifiedAzureProvider is resolved lazily via a string sentinel.
 PROVIDERS: dict[str, type | str] = {
-    "ollama": OllamaProvider,
-    "openai": OpenAIProvider,
-    "anthropic": AnthropicProvider,
     "cohere": CohereProvider,
     "huggingface": HuggingFaceProvider,
-    "mock": MockProvider,
     "azure": "_unified_azure",
     "azure_openai": "_unified_azure",
     "azure_ai_foundry": AzureAIFoundryProvider,
-    "docker": DockerModelRunnerProvider,
-    "google": GoogleGeminiProvider,
-    "gemini": GoogleGeminiProvider,
-    "perplexity": PerplexityProvider,
-    "pplx": PerplexityProvider,
 }
 
 

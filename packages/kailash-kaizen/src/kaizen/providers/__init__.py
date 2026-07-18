@@ -57,16 +57,16 @@ from kaizen.providers.types import (
 # ``LLMProvider`` base, ``kaizen.providers.registry`` for the accessors)
 # instead.
 # ---------------------------------------------------------------------------
+# #1720 Wave-2: the seven legacy chat providers (openai / anthropic / google /
+# ollama / docker / perplexity / mock) were RETIRED onto the four-axis LlmClient
+# and their canonical modules deleted. Their barrel re-exports are removed here;
+# a ``from kaizen.providers import OpenAIProvider`` now raises AttributeError
+# (end of the deprecation cycle that shipped the DeprecationWarning in 2.34.0).
+# The remaining shims (base ``LLMProvider``, the kept ``AzureAIFoundryProvider``,
+# the embedding providers, the registry accessors) stay deprecated until Wave-C.
 _LEGACY_PROVIDER_MODULES: dict[str, str] = {
     "LLMProvider": "kaizen.providers.base",
-    "OpenAIProvider": "kaizen.providers.llm.openai",
-    "AnthropicProvider": "kaizen.providers.llm.anthropic",
-    "GoogleGeminiProvider": "kaizen.providers.llm.google",
-    "OllamaProvider": "kaizen.providers.llm.ollama",
-    "DockerModelRunnerProvider": "kaizen.providers.llm.docker",
     "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
-    "PerplexityProvider": "kaizen.providers.llm.perplexity",
-    "MockProvider": "kaizen.providers.llm.mock",
     "CohereProvider": "kaizen.providers.embedding.cohere",
     "HuggingFaceProvider": "kaizen.providers.embedding.huggingface",
     "PROVIDERS": "kaizen.providers.registry",
@@ -80,14 +80,7 @@ if TYPE_CHECKING:
     from kaizen.providers.base import LLMProvider
     from kaizen.providers.embedding.cohere import CohereProvider
     from kaizen.providers.embedding.huggingface import HuggingFaceProvider
-    from kaizen.providers.llm.anthropic import AnthropicProvider
     from kaizen.providers.llm.azure import AzureAIFoundryProvider
-    from kaizen.providers.llm.docker import DockerModelRunnerProvider
-    from kaizen.providers.llm.google import GoogleGeminiProvider
-    from kaizen.providers.llm.mock import MockProvider
-    from kaizen.providers.llm.ollama import OllamaProvider
-    from kaizen.providers.llm.openai import OpenAIProvider
-    from kaizen.providers.llm.perplexity import PerplexityProvider
     from kaizen.providers.registry import (
         PROVIDERS,
         get_available_providers,
@@ -162,17 +155,10 @@ __all__ = [
     "CostTracker",
     "CostConfig",
     "ModelPricing",
-    # Providers
-    "OpenAIProvider",
-    "AnthropicProvider",
-    "GoogleGeminiProvider",
-    "OllamaProvider",
-    "DockerModelRunnerProvider",
+    # Providers (kept — legacy chat providers retired in #1720 Wave-2)
     "AzureAIFoundryProvider",
-    "PerplexityProvider",
     "CohereProvider",
     "HuggingFaceProvider",
-    "MockProvider",
     # Registry
     "PROVIDERS",
     "get_provider",

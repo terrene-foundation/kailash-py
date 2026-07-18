@@ -27,20 +27,11 @@ from __future__ import annotations
 # asserts equality at load as a drift tripwire.
 PROVIDER_NAMES: frozenset[str] = frozenset(
     {
-        "ollama",
-        "openai",
-        "anthropic",
         "cohere",
         "huggingface",
-        "mock",
         "azure",
         "azure_openai",
         "azure_ai_foundry",
-        "docker",
-        "google",
-        "gemini",
-        "perplexity",
-        "pplx",
     }
 )
 
@@ -51,34 +42,16 @@ PROVIDER_NAMES: frozenset[str] = frozenset(
 # Every tuple on the left is a set of model-id prefixes owned by the provider
 # on the right. New providers extend this table; the resolver's prefix scan
 # has no keyword reasoning.
-MODEL_PREFIX_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("gpt-", "o1-", "o3-", "o4-", "o1", "o3", "o4-mini", "ft:gpt"), "openai"),
-    (("claude-",), "anthropic"),
-    (("gemini-",), "google"),
-    (
-        (
-            "llama",
-            "mistral",
-            "mixtral",
-            "qwen",
-            "phi-",
-            "phi3",
-            "phi4",
-            "codellama",
-            "deepseek",
-        ),
-        "ollama",
-    ),
-    (("ai/",), "docker"),
-    (
-        (
-            "sonar",
-            "sonar-",
-        ),
-        "perplexity",
-    ),
-    (("mock-", "mock"), "mock"),
-)
+#
+# #1720 Wave-2: the legacy chat providers (openai / anthropic / google / ollama
+# / docker / perplexity / mock) were retired onto the four-axis LlmClient, whose
+# ``kaizen.llm.deployment_resolver`` owns model-id -> wire dispatch. Their prefix
+# rows were removed with them. The registry's remaining providers (cohere /
+# huggingface embeddings, unified azure, azure_ai_foundry) resolve by explicit
+# provider NAME, not model-id prefix, so this table is intentionally empty —
+# ``get_provider_for_model`` now raises UnknownProviderError for every model,
+# which is the retired-registry contract.
+MODEL_PREFIX_MAP: tuple[tuple[tuple[str, ...], str], ...] = ()
 
 # Backward-compatible alias for the underscore name used by
 # ``kaizen.providers.registry`` (and its unit tests) before the extraction.

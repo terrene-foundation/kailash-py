@@ -16,14 +16,7 @@ from typing import TYPE_CHECKING
 # ---------------------------------------------------------------------------
 _LEGACY_PROVIDER_MODULES: dict[str, str] = {
     "LLMProvider": "kaizen.providers.base",
-    "AnthropicProvider": "kaizen.providers.llm.anthropic",
     "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
-    "DockerModelRunnerProvider": "kaizen.providers.llm.docker",
-    "GoogleGeminiProvider": "kaizen.providers.llm.google",
-    "MockProvider": "kaizen.providers.llm.mock",
-    "OllamaProvider": "kaizen.providers.llm.ollama",
-    "OpenAIProvider": "kaizen.providers.llm.openai",
-    "PerplexityProvider": "kaizen.providers.llm.perplexity",
     "PROVIDERS": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
@@ -33,14 +26,7 @@ if TYPE_CHECKING:
     # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
     # autodoc still resolve the legacy names kept in ``__all__`` below.
     from kaizen.providers.base import LLMProvider
-    from kaizen.providers.llm.anthropic import AnthropicProvider
     from kaizen.providers.llm.azure import AzureAIFoundryProvider
-    from kaizen.providers.llm.docker import DockerModelRunnerProvider
-    from kaizen.providers.llm.google import GoogleGeminiProvider
-    from kaizen.providers.llm.mock import MockProvider
-    from kaizen.providers.llm.ollama import OllamaProvider
-    from kaizen.providers.llm.openai import OpenAIProvider
-    from kaizen.providers.llm.perplexity import PerplexityProvider
     from kaizen.providers.registry import (
         PROVIDERS,
         get_available_providers,
@@ -139,16 +125,9 @@ __all__ = [
     "QueryAnalysisNode",
     # Embedding and Vector Operations
     "EmbeddingGeneratorNode",
-    # Provider Infrastructure
+    # Provider Infrastructure (kept — legacy chat providers retired in #1720 Wave-2)
     "LLMProvider",
-    "OllamaProvider",
-    "OpenAIProvider",
-    "AnthropicProvider",
     "AzureAIFoundryProvider",
-    "DockerModelRunnerProvider",
-    "GoogleGeminiProvider",
-    "PerplexityProvider",
-    "MockProvider",
     "get_provider",
     "get_available_providers",
     "PROVIDERS",
