@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`governance_required` posture for direct LLM egress (#1779, EATP D6 parity;
+  kailash 2.54.0 / kailash-kaizen 2.35.0 / kaizen-agents 0.10.0).** An opt-OUT
+  process/env posture that makes ungoverned direct-LLM egress fail-closed.
+  New core API: `kailash.is_governance_required()` / `kailash.set_governance_required()`
+  (resolution: programmatic override → `KAILASH_GOVERNANCE_REQUIRED` env truthy
+  in `{1,true,yes,on}` → default OFF; unrecognized env → OFF, byte-identical to
+  today) and the typed `kailash.UngovernedEgressRefused` error (naming both
+  remedies). When ACTIVE, a bare un-governed client/agent that would make REAL
+  egress is refused at construction (and, defense-in-depth, at real-transport
+  binding) unless the caller passes `ungoverned=True`; mock/deterministic paths
+  are exempt by class identity, never a network probe. Enforced from Kaizen at
+  every egress chokepoint: the four-axis `LlmClient` (all constructors + lazy
+  re-check), `Agent`, `LLMAgentNode` (both node-config builders + the legacy
+  provider-chat fallback), `EmbeddingGeneratorNode` (four-axis + ollama
+  fallback), `BaseAgent`, and the `kaizen-agents` orchestration subsystem
+  (`kaizen_agents.llm.LLMClient` chokepoint). `ungoverned=True` is available on
+  every one of those construction surfaces. OFF by default → zero back-compat
+  break to adopt.
+
 ### Deprecated
 
 - **kailash-kaizen: legacy `from_env()` per-provider-key auto-detect tier

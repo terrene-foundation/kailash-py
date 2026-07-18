@@ -690,6 +690,14 @@ class MockLlmHttpClient:
 
     __slots__ = ("_closed", "_normalize")
 
+    # #1779 duck-typed mock marker. Read by production code
+    # (``LlmClient._enforce_lazy_governance``) via ``getattr(transport,
+    # "is_mock_transport", False)`` so the governance gate can exempt an
+    # injected mock transport WITHOUT production code importing from
+    # ``kaizen.llm.testing`` (which the test-isolation invariant forbids). A
+    # class attribute coexists with ``__slots__`` (it is not an instance slot).
+    is_mock_transport: bool = True
+
     def __init__(self, *, normalize: bool = True) -> None:
         """``normalize``: L2-normalize embedding vectors (default ``True``,
         matching the legacy ``MockProvider.embed`` contract). Set ``False``

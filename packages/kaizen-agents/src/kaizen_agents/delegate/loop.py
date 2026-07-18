@@ -289,6 +289,7 @@ class AgentLoop:
         system_prompt: str | None = None,
         budget_check: Callable[[], bool] | None = None,
         hydrator: ToolHydrator | None = None,
+        ungoverned: bool = False,
     ) -> None:
         """Initialise the agent loop.
 
@@ -320,9 +321,16 @@ class AgentLoop:
             selection and discovery to the hydrator. When ``None`` and the
             tool count exceeds the hydrator's default threshold, a hydrator
             is created automatically.
+        ungoverned:
+            #1779 opt-out threaded into the adapter/legacy-client governance
+            gate. Default False (fail-closed): under the ``governance_required``
+            posture, auto-building a real adapter (or the legacy AsyncOpenAI
+            client) refuses unless ``ungoverned=True``.
         """
         self._config = config
         self._tools = tools
+        # Store BEFORE adapter resolution: _build_adapter() reads _ungoverned.
+        self._ungoverned = ungoverned
 
         # Resolve the streaming adapter.
         # Priority: explicit adapter > explicit client (legacy) > auto-detect
@@ -419,6 +427,7 @@ class AgentLoop:
             provider=self._config.provider,
             temperature=self._config.temperature,
             max_tokens=self._config.max_tokens,
+            ungoverned=getattr(self, "_ungoverned", False),
         )
 
     def _build_client(self) -> Any:
@@ -432,6 +441,19 @@ class AgentLoop:
             raise ValueError(
                 "No OpenAI API key found. Set OPENAI_API_KEY in your .env file."
             )
+
+        # #1779 governance_required posture: this legacy factory builds a real
+        # AsyncOpenAI client that egresses DIRECTLY, NOT through the gated
+        # four-axis kaizen.llm.LlmClient. Gate BEFORE building the client,
+        # fail-closed: no mock path here, so is_mock=False; the only exemption
+        # is the loop's threaded ungoverned=True (or posture OFF).
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=getattr(self, "_ungoverned", False),
+            surface="kaizen_agents.AgentLoop",
+        )
 
         import httpx
         from openai import AsyncOpenAI

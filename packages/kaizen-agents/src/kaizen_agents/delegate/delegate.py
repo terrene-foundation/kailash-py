@@ -342,6 +342,11 @@ class Delegate:
     config:
         Optional pre-built :class:`KzConfig`.  When provided, ``model``,
         ``max_turns``, and other config fields are ignored.
+    ungoverned:
+        #1779 opt-out. When True, the Delegate's inner loop adapter is exempt
+        from the ``governance_required`` posture gate. Default False
+        (fail-closed): under the posture, constructing a Delegate over a real
+        model refuses (via its loop adapter) unless ``ungoverned=True``.
     """
 
     def __init__(
@@ -362,6 +367,7 @@ class Delegate:
         inner_agent: BaseAgent | None = None,
         adapter: StreamingChatAdapter | None = None,
         config: KzConfig | None = None,
+        ungoverned: bool = False,
     ) -> None:
         # Validate budget (safety guard -- permitted deterministic logic)
         if budget_usd is not None:
@@ -375,6 +381,13 @@ class Delegate:
         self._api_key = api_key
         self._base_url = base_url
         self._inner_agent = inner_agent
+        # #1779 governance_required opt-out. Default False (fail-closed). The
+        # _LoopAgent bridge below is built with llm_provider="mock" (a BRIDGE
+        # ARTIFACT -- the real egress is the loop's adapter, gated with is_mock=
+        # False), so the mock bridge does NOT exempt the egress; the adapter gate
+        # fires regardless. Threading ungoverned into AgentLoop is the only
+        # opt-out.
+        self._ungoverned = ungoverned
 
         # Deferred MCP configuration -- no IO in constructor (SPEC-05 SS9.1)
         self._deferred_mcp = list(mcp_servers) if mcp_servers else None
@@ -414,6 +427,7 @@ class Delegate:
             adapter=adapter,
             system_prompt=system_prompt,
             budget_check=budget_check,
+            ungoverned=ungoverned,
         )
 
         # ---- SPEC-05: Compose wrapper stack ----

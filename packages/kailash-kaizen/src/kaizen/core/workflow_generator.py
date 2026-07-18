@@ -275,6 +275,17 @@ class WorkflowGenerator:
             "generation_config": generation_config,
         }
 
+        # #1779: thread the governance opt-out into the PRIMARY agent run-path
+        # node_config (this builder — not base_agent.to_workflow — is what the
+        # default strategy executes). Dual dataclass/dict access mirrors the
+        # base_url handling above so an Agent(ungoverned=True) is not wrongly
+        # refused under posture ON (redteam round-5 F1).
+        node_config["ungoverned"] = (
+            getattr(self.config, "ungoverned", False)
+            if hasattr(self.config, "ungoverned")
+            else self.config.get("ungoverned", False)
+        )
+
         # Register per-request credentials in CredentialStore (never in node_config)
         if api_key or base_url:
             credential_ref = get_credential_store().register(
@@ -412,6 +423,14 @@ class WorkflowGenerator:
             "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
             "generation_config": generation_config,
         }
+
+        # #1779: thread the governance opt-out (redteam round-5 F1 — the fallback
+        # builder is the second run-path node_config surface).
+        node_config["ungoverned"] = (
+            getattr(self.config, "ungoverned", False)
+            if hasattr(self.config, "ungoverned")
+            else self.config.get("ungoverned", False)
+        )
 
         # Register per-request credentials in CredentialStore (never in node_config)
         fallback_api_key = (

@@ -4,6 +4,34 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.35.0] — 2026-07-18 — governance_required posture enforcement (#1779)
+
+### Added
+
+- **`governance_required` posture enforcement for direct LLM egress (#1779,
+  EATP D6 parity).** Kaizen enforces the core `kailash.is_governance_required()`
+  posture at every LLM egress chokepoint. When the posture is ACTIVE, a bare
+  un-governed client/agent that would make REAL egress is refused fail-closed
+  with `kailash.trust.pact.UngovernedEgressRefused` (names both remedies) unless
+  the caller passes `ungoverned=True`. Surfaces gated + given the `ungoverned`
+  opt-out: the four-axis `LlmClient` (`__init__` / `from_deployment` /
+  `from_env` / `from_deployment_sync` / `with_deployment`, plus a defense-in-depth
+  re-check in `embed`/`complete`/`stream` at real-transport binding);
+  `kaizen.agent.Agent`; `BaseAgent` (four-axis path); `LLMAgentNode` (both
+  `workflow_generator` node-config builders + the `_legacy_provider_chat`
+  fallback for no-four-axis-wire providers, e.g. azure_ai_foundry);
+  `EmbeddingGeneratorNode` (four-axis embed + the ollama legacy fallback).
+  Mock/deterministic paths (`mock_preset` / `MockLlmHttpClient` /
+  `llm_provider="mock"`) are exempt by class identity. `UngovernedEgressRefused`
+  propagates UNWRAPPED through the node error handlers (not re-typed to
+  RuntimeError). OFF by default — byte-identical to prior behavior.
+
+### Fixed
+
+- **`max_completion_tokens` for GPT-5 / o-series on the four-axis `openai_chat`
+  shaper (#1727)** — verified already shipped (`_token_limit_field`); regression
+  test confirmed. Cross-SDK parity note filed for the Rust SDK.
+
 ## [2.34.2] — 2026-07-17 — monitoring installability fix
 
 ### Fixed

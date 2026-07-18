@@ -40,6 +40,24 @@ def __getattr__(name):
         from kailash.workflow.visualization import WorkflowVisualizer
 
         return WorkflowVisualizer
+    # governance_required posture — direct LLM egress (#1779, EATP D6 parity).
+    # Lazy so plain `import kailash` does not eagerly load the PACT trust
+    # package; the posture module itself is pure-stdlib but importing it via
+    # kailash.trust.pact triggers that package's __init__.
+    if name in ("is_governance_required", "set_governance_required"):
+        from kailash.trust.pact.governance_posture import (
+            is_governance_required,
+            set_governance_required,
+        )
+
+        return {
+            "is_governance_required": is_governance_required,
+            "set_governance_required": set_governance_required,
+        }[name]
+    if name == "UngovernedEgressRefused":
+        from kailash.trust.pact.exceptions import UngovernedEgressRefused
+
+        return UngovernedEgressRefused
     if name == "WorkflowGraph":
         warnings.warn(
             "WorkflowGraph is deprecated and will be removed in v3.0.0. "
@@ -95,7 +113,7 @@ def __getattr__(name):
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 
-__version__ = "2.53.0"
+__version__ = "2.54.0"
 
 __all__ = [
     # Core workflow components
@@ -125,6 +143,10 @@ __all__ = [
     # from_brief() family — Sg-Bootstrap surface (issue #1125 AC 4 + AC 9)
     "bootstrap",
     "BootstrapConfig",
+    # governance_required posture — direct LLM egress (#1779, EATP D6 parity)
+    "is_governance_required",
+    "set_governance_required",
+    "UngovernedEgressRefused",
 ]
 
 # Eager bind of the bootstrap callable + BootstrapConfig (issue #1125 AC 4 + AC 9).

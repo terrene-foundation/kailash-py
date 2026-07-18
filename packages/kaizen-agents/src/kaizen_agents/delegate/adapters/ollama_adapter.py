@@ -102,6 +102,7 @@ class OllamaStreamAdapter:
         default_model: str = "",
         default_temperature: float = 0.4,
         default_max_tokens: int = 4096,
+        ungoverned: bool = False,
     ) -> None:
         self._base_url = (
             base_url or os.environ.get("OLLAMA_BASE_URL") or _DEFAULT_OLLAMA_BASE_URL
@@ -109,6 +110,21 @@ class OllamaStreamAdapter:
         self._default_model = default_model
         self._default_temperature = default_temperature
         self._default_max_tokens = default_max_tokens
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # a per-request httpx.AsyncClient in stream_chat, NOT through the gated
+        # four-axis kaizen.llm.LlmClient. The per-request client is built inside
+        # stream_chat; gate ONCE here at construction, fail-closed. No mock path
+        # (always real egress to the Ollama endpoint), so is_mock=False; the only
+        # exemption is ungoverned=True (or posture OFF).
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.OllamaAdapter",
+        )
 
     async def stream_chat(
         self,
@@ -373,11 +389,27 @@ class OllamaEmbeddingAdapter:
         *,
         base_url: str | None = None,
         default_model: str = _DEFAULT_EMBEDDING_MODEL,
+        ungoverned: bool = False,
     ) -> None:
         self._base_url = (
             base_url or os.environ.get("OLLAMA_BASE_URL") or _DEFAULT_OLLAMA_BASE_URL
         ).rstrip("/")
         self._default_model = default_model
+        self._ungoverned = ungoverned
+
+        # #1779 governance_required posture: this adapter egresses DIRECTLY via
+        # a per-request httpx.AsyncClient in embed(), NOT through the gated
+        # four-axis kaizen.llm.LlmClient. The per-request client is built inside
+        # embed(); gate ONCE here at construction, fail-closed. No mock path
+        # (always real egress to the Ollama endpoint), so is_mock=False; the only
+        # exemption is ungoverned=True (or posture OFF).
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=ungoverned,
+            surface="kaizen_agents.OllamaEmbeddingAdapter",
+        )
 
     async def embed(
         self,

@@ -396,7 +396,10 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                 "_simple_execute_async: could not resolve an OpenAI four-axis "
                 "deployment; set OPENAI_API_KEY (or pass config.api_key)."
             )
-        client = LlmClient.from_deployment(deployment)
+        # #1779: honor the agent's governance opt-out at the four-axis chokepoint.
+        client = LlmClient.from_deployment(
+            deployment, ungoverned=self.config.ungoverned
+        )
 
         # generation_config temperature/max_tokens -> four-axis sampling kwargs.
         sampling_kwargs = _sampling_kwargs_from_generation_config(
@@ -408,6 +411,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         try:
             result = await client.complete(messages, model=model, **sampling_kwargs)
         except Exception as e:
+            # #1779: a lazy-re-check governance refusal propagates UNWRAPPED (inv 4).
+            from kailash.trust.pact import UngovernedEgressRefused
+
+            if isinstance(e, UngovernedEgressRefused):
+                raise
             # #1720 Wave-B1 redteam MED — sanitize provider errors at
             # enforcement-surface parity with the B1a live path
             # (llm_agent._provider_llm_response). A raw wire exception can echo
@@ -607,6 +615,8 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             node_config["provider_config"] = self.config.provider_config
         if self.config.response_format is not None:
             node_config["response_format"] = self.config.response_format
+        # #1779: thread the governance opt-out into the LLMAgentNode egress path.
+        node_config["ungoverned"] = self.config.ungoverned
 
         workflow.add_node("LLMAgentNode", "agent", node_config)
 

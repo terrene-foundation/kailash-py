@@ -5,6 +5,33 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-07-18 — governance_required posture on the orchestration egress chokepoint (#1779)
+
+### Added
+
+- **`governance_required` posture enforcement across the ENTIRE kaizen-agents
+  direct-LLM-egress surface (#1779, EATP D6 parity).** kaizen-agents constructs
+  provider clients directly (not through the four-axis `kaizen.llm.LlmClient`) in
+  several places; all are now gated on the core `kailash.is_governance_required()`
+  posture. When the posture is ACTIVE, a bare un-governed construction is refused
+  fail-closed with `kailash.trust.pact.UngovernedEgressRefused` unless
+  `ungoverned=True` is passed; OFF by default (byte-identical to prior behavior).
+  Gated surfaces:
+  - `kaizen_agents.llm.LLMClient` (the orchestration DI chokepoint — planner /
+    recovery / protocols / monitor / context inject it);
+  - the flagship `Delegate` primitive's execution path: `AgentLoop`'s client
+    factory + every streaming adapter (`OpenAIStreamAdapter`,
+    `AnthropicStreamAdapter`, `GoogleStreamAdapter`, `OllamaStreamAdapter`,
+    `OllamaEmbeddingAdapter`);
+  - the orchestration structured adapters (`OpenAIStructuredAdapter`,
+    `AnthropicStructuredAdapter`);
+  - the runtime adapters (`OpenAICodexAdapter`, `GeminiCLIAdapter`).
+
+  The `ungoverned` opt-out is threaded top-down through `Delegate` → `AgentLoop`
+  → the adapter registry (`get_adapter` / `get_adapter_for_model` /
+  `get_embedding_adapter`) → each adapter, so `Delegate(..., ungoverned=True)`
+  disables the gate for its whole egress chain.
+
 ## [0.9.11] — 2026-06-17 — Gemini adapters on supported google-genai SDK; provider SDKs are runtime deps
 
 ### Changed

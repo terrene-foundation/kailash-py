@@ -398,17 +398,42 @@ class LlmClient:
         *,
         classification_policy: Optional[object] = None,
         caller_clearance: Optional[object] = None,
+        ungoverned: bool = False,
     ) -> None:
         self._deployment = deployment
         self._classification_policy = classification_policy
         self._caller_clearance = caller_clearance
+        self._ungoverned = ungoverned
         # Opt-in pooled HTTP transport. Stays None for one-shot callers
         # (each embed() constructs + closes its own client). Set only on
         # the managed (async-context-manager) path, where it is the
         # persistent transport reused across embed() calls and closed at
-        # aclose().
+        # aclose(). MUST be assigned BEFORE the #1779 gate below can raise —
+        # __del__ reads self._http_client, so a gate-refused partial
+        # construction would otherwise AttributeError in the GC finalizer.
         self._http_client: Optional[LlmHttpClient] = None
         self._managed: bool = False
+        # #1779 governance_required posture: refuse a bare un-governed client
+        # that would make REAL egress, at CONSTRUCTION. A deployment-less client
+        # cannot egress (complete/embed/stream need a deployment), so it is not
+        # gated here; mock/deterministic deployments, ungoverned=True, and the
+        # OFF posture are the ONLY exemptions (an installed interceptor does NOT
+        # exempt — the four-axis client never routes through it; redteam
+        # CRITICAL). See governance_gate. The lazy defense-in-depth re-check in
+        # embed()/complete()/stream() closes the posture-flipped-after-
+        # construction hole (and the inject-a-real-transport-at-call path).
+        # Runs LAST so every instance attribute __del__ touches is already set.
+        if deployment is not None:
+            from kaizen.llm.governance_gate import (
+                enforce_governance_posture,
+                is_mock_deployment,
+            )
+
+            enforce_governance_posture(
+                is_mock=is_mock_deployment(deployment),
+                ungoverned=ungoverned,
+                surface="LlmClient",
+            )
         logger.debug(
             "llm_client.constructed",
             extra={
@@ -446,6 +471,36 @@ class LlmClient:
             caller_clearance=self._caller_clearance,
         )
 
+    def _enforce_lazy_governance(self, http_client: Optional[LlmHttpClient]) -> None:
+        """#1779 defense-in-depth: re-check the ``governance_required`` posture
+        at real-transport binding time.
+
+        The construction gate (``__init__``) fires when the posture is already
+        ON at construction. This lazy check closes two remaining holes: (1) the
+        posture is flipped ON *after* the client is constructed, and (2) a real
+        transport is injected at call time on an otherwise-ungated client.
+
+        Exempt when the caller injected a MOCK transport (duck-typed via the
+        ``is_mock_transport`` class marker so production code never imports the
+        test-only transport package). A ``None`` ``http_client`` means a real
+        ``LlmHttpClient`` is about to be constructed, so it is NOT exempt here;
+        mock/deterministic deployment, ``ungoverned=True``, and the OFF posture
+        are handled inside the gate (an installed interceptor does NOT exempt —
+        redteam CRITICAL).
+        """
+        if http_client is not None and getattr(http_client, "is_mock_transport", False):
+            return
+        from kaizen.llm.governance_gate import (
+            enforce_governance_posture,
+            is_mock_deployment,
+        )
+
+        enforce_governance_posture(
+            is_mock=is_mock_deployment(self._deployment),
+            ungoverned=self._ungoverned,
+            surface="LlmClient",
+        )
+
     @classmethod
     def from_deployment(
         cls,
@@ -453,8 +508,13 @@ class LlmClient:
         *,
         classification_policy: Optional[object] = None,
         caller_clearance: Optional[object] = None,
+        ungoverned: bool = False,
     ) -> "LlmClient":
-        """Construct a client for the given deployment."""
+        """Construct a client for the given deployment.
+
+        ``ungoverned=True`` is the #1779 explicit opt-out: it disables the
+        ``governance_required`` posture gate for this client.
+        """
         if not isinstance(deployment, LlmDeployment):
             raise TypeError(
                 "LlmClient.from_deployment requires an LlmDeployment; "
@@ -464,6 +524,7 @@ class LlmClient:
             deployment=deployment,
             classification_policy=classification_policy,
             caller_clearance=caller_clearance,
+            ungoverned=ungoverned,
         )
 
     @classmethod
@@ -472,6 +533,7 @@ class LlmClient:
         *,
         classification_policy: Optional[object] = None,
         caller_clearance: Optional[object] = None,
+        ungoverned: bool = False,
     ) -> "LlmClient":
         """Construct a client from environment variables.
 
@@ -494,6 +556,7 @@ class LlmClient:
             deployment,
             classification_policy=classification_policy,
             caller_clearance=caller_clearance,
+            ungoverned=ungoverned,
         )
 
     @classmethod
@@ -503,6 +566,7 @@ class LlmClient:
         *,
         classification_policy: Optional[object] = None,
         caller_clearance: Optional[object] = None,
+        ungoverned: bool = False,
     ) -> "LlmClient":
         """Synchronous variant of `from_deployment` for non-async callers.
 
@@ -511,15 +575,23 @@ class LlmClient:
         entry point exists for API symmetry with Rust's `LlmClient::
         from_deployment_sync` and to signal intent: this client will be
         used from sync code paths that call the sync wire-send methods.
+
+        ``ungoverned=True`` is the #1779 explicit opt-out for the
+        ``governance_required`` posture gate.
         """
         return cls.from_deployment(
             deployment,
             classification_policy=classification_policy,
             caller_clearance=caller_clearance,
+            ungoverned=ungoverned,
         )
 
     def with_deployment(self, deployment: LlmDeployment) -> "LlmClient":
-        """Return a NEW client configured with the given deployment."""
+        """Return a NEW client configured with the given deployment.
+
+        The new client inherits this client's ``ungoverned`` opt-out so the
+        #1779 posture gate treats the re-deployed client consistently.
+        """
         if not isinstance(deployment, LlmDeployment):
             raise TypeError(
                 "with_deployment requires an LlmDeployment; "
@@ -529,6 +601,7 @@ class LlmClient:
             deployment=deployment,
             classification_policy=self._classification_policy,
             caller_clearance=self._caller_clearance,
+            ungoverned=self._ungoverned,
         )
 
     # -----------------------------------------------------------------
@@ -709,6 +782,7 @@ class LlmClient:
         #   3. Unmanaged client with no injection → construct a fresh transport
         #      per call and close it in the error/finally paths below
         #      (owns_client stays True). UNCHANGED legacy one-shot behavior.
+        self._enforce_lazy_governance(http_client)
         owns_client = http_client is None
         if owns_client and self._managed:
             if self._http_client is None:
@@ -1250,6 +1324,7 @@ class LlmClient:
         payload, url = self._build_completion_payload_and_url(request, stream=False)
         body_bytes = json.dumps(payload).encode("utf-8")
 
+        self._enforce_lazy_governance(http_client)
         owns_client = http_client is None
         if owns_client and self._managed:
             if self._http_client is None:
@@ -1446,6 +1521,7 @@ class LlmClient:
         payload, url = self._build_completion_payload_and_url(request, stream=True)
         body_bytes = json.dumps(payload).encode("utf-8")
 
+        self._enforce_lazy_governance(http_client)
         owns_client = http_client is None
         if owns_client and self._managed:
             if self._http_client is None:
