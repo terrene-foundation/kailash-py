@@ -15,14 +15,18 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   for all seven on the live agent path since Wave-B; the legacy direct-provider
   classes were redundant. `azure_ai_foundry` is the only provider the four-axis
   resolver cannot serve, so `providers/llm/azure.py` + its registry entry are
-  KEPT. `kaizen.providers.registry.PROVIDERS` / `provider_names.PROVIDER_NAMES`
-  were pruned in lockstep to `{cohere, huggingface, azure, azure_openai,
-azure_ai_foundry}`; `get_provider_for_model(...)` now raises
-  `UnknownProviderError` for model ids (the four-axis `deployment_resolver` owns
-  model→wire dispatch). The `DeprecationWarning` barrel shims for the seven
-  providers shipped in 2.34.0 and lived through 2.35.0 (≥1 minor cycle,
-  zero-tolerance Rule 6a), so `from kaizen.providers import OpenAIProvider` now
-  raises `AttributeError`.
+  KEPT. `kaizen.providers.registry.PROVIDERS` was pruned to `{cohere,
+huggingface, azure, azure_openai, azure_ai_foundry}` and `registry.py`'s drift
+  tripwire relaxed from equality to subset (`PROVIDERS.keys() ⊆ PROVIDER_NAMES`);
+  `get_provider_for_model(...)` is retired and now raises `UnknownProviderError`
+  (the four-axis `deployment_resolver` owns model→wire dispatch). **No metrics
+  behavior change:** `provider_names.PROVIDER_NAMES` + `MODEL_PREFIX_MAP` are the
+  observability classification vocabulary consumed by
+  `kaizen.production.metrics` and stay complete — a four-axis `gpt-*` /
+  `claude-*` call still labels to its family, never collapsing to `_other`. The
+  `DeprecationWarning` barrel shims for the seven providers shipped in 2.34.0 and
+  lived through 2.35.0 (≥1 minor cycle, zero-tolerance Rule 6a), so `from
+kaizen.providers import OpenAIProvider` now raises `AttributeError`.
 
   **Migration.** Replace direct legacy-provider use with the four-axis client —
   e.g. `LlmClient.from_env(...)` / `LlmClient.from_deployment(...)` and its

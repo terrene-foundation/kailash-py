@@ -5,16 +5,20 @@
 
 The seven legacy chat providers (openai / anthropic / google / ollama / docker /
 perplexity / mock) were RETIRED onto the four-axis LlmClient in #1720 Wave-2 and
-their registry entries + model-prefix rows pruned in lockstep. ``PROVIDERS`` now
-holds only the surviving providers (``cohere`` / ``huggingface`` embedding +
-``azure`` / ``azure_openai`` / ``azure_ai_foundry`` unified-azure) and
-``_MODEL_PREFIX_MAP`` is empty (prefix dispatch retired with the chat providers).
+their registry entries pruned. ``PROVIDERS`` now holds only the surviving
+providers (``cohere`` / ``huggingface`` embedding + ``azure`` / ``azure_openai``
+/ ``azure_ai_foundry`` unified-azure). Registry model-id dispatch
+(``get_provider_for_model``) is RETIRED and raises for every input — model-id ->
+wire dispatch lives in ``kaizen.llm.deployment_resolver``. The model-family
+prefix CLASSIFICATION table stays complete in
+``kaizen.providers.provider_names`` (metrics label bounding), decoupled from the
+pruned registry (registry asserts ``PROVIDERS.keys() <= PROVIDER_NAMES``).
 
 Covers the surviving registry surface:
 - ``PROVIDERS`` contains the surviving entries and none of the retired ones.
 - ``get_provider`` capability filtering + typed errors.
 - ``get_provider_for_model`` now raises ``UnknownProviderError`` for every model
-  (the prefix table is empty).
+  (dispatch retired).
 - ``get_streaming_provider`` capability gating (embedding-only rejection).
 - ``get_available_providers`` structured info.
 - Backward-compat: ``kaizen.providers`` re-exports match
@@ -27,7 +31,6 @@ import pytest
 
 from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
 from kaizen.providers.registry import (
-    _MODEL_PREFIX_MAP,
     PROVIDERS,
     get_available_providers,
     get_provider,
@@ -96,7 +99,16 @@ class TestGetProvider:
 
 
 class TestGetProviderForModel:
-    """get_provider_for_model — the prefix table is empty post-Wave-2."""
+    """get_provider_for_model — RETIRED in #1720 Wave-2, raises for every input.
+
+    Registry model-id dispatch was retired with the chat providers; model-id ->
+    wire dispatch now lives in ``kaizen.llm.deployment_resolver``. The function
+    is kept as a typed, named failure (not a silent ``None``) so any lingering
+    caller fails loudly with a pointer to the four-axis path. The model-family
+    prefix CLASSIFICATION table (``MODEL_PREFIX_MAP``, for metrics labels) lives
+    in ``kaizen.providers.provider_names`` and is covered by
+    ``tests/regression/test_issue_1720_b2b_name_registry.py``.
+    """
 
     @pytest.mark.parametrize(
         "model",
@@ -111,7 +123,7 @@ class TestGetProviderForModel:
     )
     def test_retired_model_prefixes_now_raise(self, model: str):
         """Every model that used to dispatch to a retired chat provider now
-        raises — the prefix rows were removed with the providers."""
+        raises — registry model-id dispatch was retired."""
         with pytest.raises(UnknownProviderError):
             get_provider_for_model(model)
 
@@ -127,18 +139,12 @@ class TestGetProviderForModel:
         with pytest.raises(UnknownProviderError, match="Cannot detect provider"):
             get_provider_for_model("xyz-totally-unknown-model-999")
 
-    def test_prefix_table_is_empty(self):
-        """The model-prefix dispatch table was retired with the chat providers."""
-        assert len(_MODEL_PREFIX_MAP) == 0
-
-    def test_prefix_table_has_no_duplicate_prefixes(self):
-        """No two provider rows share the same prefix string (vacuous on empty)."""
-        all_prefixes: list[str] = []
-        for prefixes, _name in _MODEL_PREFIX_MAP:
-            all_prefixes.extend(prefixes)
-        assert len(all_prefixes) == len(
-            set(all_prefixes)
-        ), "Duplicate prefix in _MODEL_PREFIX_MAP"
+    def test_dispatch_is_retired_for_a_surviving_family_prefix_too(self):
+        """Even a still-classified family prefix (openai/gpt) does NOT resolve —
+        the registry no longer dispatches by model id at all (the family label
+        survives only for metrics, not for provider construction)."""
+        with pytest.raises(UnknownProviderError, match="retired"):
+            get_provider_for_model("gpt-4o")
 
 
 class TestGetStreamingProvider:

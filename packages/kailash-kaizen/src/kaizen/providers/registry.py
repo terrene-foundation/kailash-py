@@ -26,11 +26,7 @@ from kaizen.providers.embedding.cohere import CohereProvider
 from kaizen.providers.embedding.huggingface import HuggingFaceProvider
 from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
 from kaizen.providers.llm.azure import AzureAIFoundryProvider
-from kaizen.providers.provider_names import (
-    _MODEL_PREFIX_MAP,
-    MODEL_PREFIX_MAP,
-    PROVIDER_NAMES,
-)
+from kaizen.providers.provider_names import PROVIDER_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +60,14 @@ PROVIDERS: dict[str, type | str] = {
 # added to one and not the other, fail loudly at import instead of silently
 # diverging the metrics label bound (which reuses PROVIDER_NAMES) from the
 # resolver's actual class map.
-assert set(PROVIDERS.keys()) == PROVIDER_NAMES, (
-    "provider name drift: kaizen.providers.registry.PROVIDERS keys "
-    f"{sorted(PROVIDERS.keys())} != kaizen.providers.provider_names.PROVIDER_NAMES "
-    f"{sorted(PROVIDER_NAMES)}"
+assert set(PROVIDERS.keys()) <= PROVIDER_NAMES, (
+    "provider name drift: kaizen.providers.registry.PROVIDERS has keys not in "
+    "kaizen.providers.provider_names.PROVIDER_NAMES (the metrics classification "
+    f"vocabulary): {sorted(set(PROVIDERS.keys()) - PROVIDER_NAMES)}. Every "
+    "registry provider MUST be a known observability family; add it to "
+    "PROVIDER_NAMES. Since #1720 Wave-2 PROVIDER_NAMES is a SUPERSET (it also "
+    "carries the four-axis-served families openai/anthropic/google/etc. that "
+    "are no longer registry providers), so the check is subset, not equality."
 )
 
 
@@ -134,43 +134,30 @@ def get_provider(
 
 
 def get_provider_for_model(model: str) -> BaseProvider:
-    """Resolve a model id to its owning provider via structural prefix match.
+    """RETIRED (#1720 Wave-2): model-id -> provider dispatch always raises.
 
-    SPEC-02 §3.1. This is NOT semantic classification — it is a pure string-
-    prefix scan over a declared table. Adding a new provider means extending
-    ``_MODEL_PREFIX_MAP``, not teaching an LLM to recognise new prefixes.
+    Model-id -> transport dispatch now lives in
+    ``kaizen.llm.deployment_resolver.resolve_deployment_for`` (four-axis
+    ``LlmClient``). The legacy chat providers this function used to resolve
+    (openai / anthropic / google / ollama / docker / perplexity / mock) were
+    deleted, and no surviving registry provider is model-id-prefix addressable
+    (they resolve by explicit NAME via :func:`get_provider`). So this function
+    now raises :class:`UnknownProviderError` for every input — kept as a typed,
+    named failure (not a silent ``None``) so any lingering caller fails loudly
+    with a pointer to the four-axis path rather than mis-resolving.
 
     Args:
-        model: Model identifier (e.g. ``"gpt-4o"``, ``"claude-3-opus-20240229"``,
-            ``"gemini-2.5-flash"``).
-
-    Returns:
-        A provider instance whose declared prefixes match *model*.
+        model: Model identifier (unused beyond the message).
 
     Raises:
-        UnknownProviderError: When no declared prefix matches *model*.
+        UnknownProviderError: Always. Migrate to
+            ``kaizen.llm.LlmClient`` / ``resolve_deployment_for``.
     """
-    if not model or not isinstance(model, str):
-        raise UnknownProviderError(
-            f"Cannot detect provider for model: {model!r}", provider_name=str(model)
-        )
-
-    model_lower = model.lower()
-    for prefixes, provider_name in _MODEL_PREFIX_MAP:
-        for prefix in prefixes:
-            if model_lower.startswith(prefix.lower()):
-                logger.debug(
-                    "provider.resolve model=%s prefix=%s provider=%s",
-                    model,
-                    prefix,
-                    provider_name,
-                )
-                return get_provider(provider_name)
-
     raise UnknownProviderError(
-        f"Cannot detect provider for model: {model}. "
-        f"Add a prefix mapping to kaizen.providers.registry._MODEL_PREFIX_MAP.",
-        provider_name=model,
+        f"Cannot detect provider for model {model!r}: registry model-id dispatch "
+        "was retired in #1720 Wave-2. Use kaizen.llm.LlmClient (model-id -> wire "
+        "dispatch lives in kaizen.llm.deployment_resolver.resolve_deployment_for).",
+        provider_name=str(model),
     )
 
 
