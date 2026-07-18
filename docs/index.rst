@@ -7,7 +7,7 @@ Kailash SDK Documentation
    :target: https://www.python.org/downloads/
    :alt: Python Version
 
-.. image:: https://img.shields.io/badge/version-0.12.5-green.svg
+.. image:: https://img.shields.io/badge/version-2.54.0-green.svg
    :alt: SDK Version
 
 .. image:: https://img.shields.io/badge/trust-CARE%20%2F%20EATP-blueviolet.svg

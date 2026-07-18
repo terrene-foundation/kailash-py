@@ -288,6 +288,62 @@ Nexus Integration
 Nexus multi-channel deployments can enforce trust at the API gateway level.
 See :doc:`../frameworks/nexus`.
 
+Governance-Required Posture
+===========================
+
+The ``governance_required`` posture (added in kailash 2.54.0, #1779) makes
+direct LLM egress **fail-closed**: when the posture is active, a bare
+un-governed client or agent that would make a real LLM call is refused at
+construction instead of silently sending the request. It is an **opt-OUT**
+posture -- **OFF by default**, so adopting it is a zero-back-compat change.
+
+Resolution (most-specific wins):
+
+1. programmatic override -- :func:`kailash.set_governance_required` (``True`` /
+   ``False`` / ``None`` to clear)
+2. environment variable ``KAILASH_GOVERNANCE_REQUIRED`` -- truthy in
+   ``{1, true, yes, on}`` (case-insensitive)
+3. default **OFF** -- an unset *or unrecognized* value resolves OFF, byte-identical
+   to pre-2.54.0 behaviour.
+
+.. code-block:: python
+
+   import kailash
+
+   # Read the current posture (False by default)
+   kailash.is_governance_required()          # -> False
+
+   # Turn it on for this process (or set KAILASH_GOVERNANCE_REQUIRED=1)
+   kailash.set_governance_required(True)
+   kailash.is_governance_required()          # -> True
+
+When the posture is active, constructing a bare un-governed client/agent that
+would make **real** egress raises :class:`kailash.UngovernedEgressRefused`
+(a ``PactError``) at construction, and -- defense-in-depth -- again at
+real-transport binding. Two exemptions short-circuit the refusal:
+
+- **explicit opt-out** -- pass ``ungoverned=True`` on any construction surface
+  (``LlmClient``, ``Agent``, ``LLMAgentNode``, ``EmbeddingGeneratorNode``);
+- **mock / deterministic** -- mock-preset deployments are exempt by class
+  identity, never a network probe.
+
+Enforcement lives in Kaizen (framework-first: core ``kailash`` owns the posture
+state + the typed error; Kaizen owns the client and enforces). It fires at every
+egress chokepoint: the four-axis ``LlmClient`` (all constructors + a lazy
+re-check on ``embed`` / ``complete`` / ``stream``), ``Agent``, ``LLMAgentNode``
+(both node-config builders + the legacy provider-chat fallback),
+``EmbeddingGeneratorNode`` (four-axis + ollama fallback), ``BaseAgent``, and the
+``kaizen-agents`` orchestration + delegate/adapter layer.
+
+.. note::
+
+   **Non-coverage.** The posture does NOT yet gate direct standalone use of the
+   legacy ``kaizen.providers.llm.*`` provider layer, the vision/multimodal
+   providers, or the standalone Azure backends -- those construct provider
+   clients outside the gated four-axis/adapter surfaces. Do NOT treat the
+   posture as a hard egress boundary for those paths. Comprehensive gating of
+   that provider/backend layer is tracked as a follow-up (#1803).
+
 Best Practices
 ==============
 
