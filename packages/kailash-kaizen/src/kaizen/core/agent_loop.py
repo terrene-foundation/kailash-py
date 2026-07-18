@@ -26,7 +26,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+# NOTE: ``sanitize_provider_error`` is imported LAZILY inside the one method that
+# uses it (below), NOT at module scope. A module-scope
+# ``from kaizen.nodes.ai.error_sanitizer import ...`` forces the ENTIRE
+# ``kaizen.nodes.ai`` package ``__init__`` to run on every ``import
+# kaizen.core.base_agent`` (agent_loop is a base_agent module-scope dep), and
+# that package eagerly imports ``kaizen.nodes.ai.a2a``. When a2a (or a [rag]
+# extra it transitively needs) is unavailable, that chain hard-crashed the base
+# import surface — the F31-FU5 graceful-degradation regression. Deferring the
+# import keeps ``kaizen.core.base_agent`` (and therefore
+# ``kaizen_agents.patterns.runtime``) importable without the a2a subtree.
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +422,10 @@ class AgentLoop:
             try:
                 run_async_hook(agent.discover_mcp_tools())
             except Exception as e:
+                # Lazy import (see module-top NOTE): keep the a2a subtree off the
+                # base_agent module-scope import chain.
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
                 logger.warning(
                     "MCP auto-discovery failed: %s", sanitize_provider_error(e, "MCP")
                 )
