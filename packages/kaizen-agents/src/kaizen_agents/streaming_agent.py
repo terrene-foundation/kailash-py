@@ -225,8 +225,9 @@ class StreamingAgent(WrapperBase):
         Maps each parsed stream chunk dict (the shaper's ``parse_response``
         output: ``{text, usage, stop_reason, model, tool_calls?}``) onto typed
         ``StreamEvent`` instances, preserving the per-event timeout check, the
-        buffer-overflow accounting, ``accumulated_text``, ``usage``, and
-        ``tool_calls_emitted`` bookkeeping of the pre-cutover provider path.
+        buffer-overflow accounting, ``accumulated_text``, and ``usage``
+        bookkeeping of the pre-cutover provider path. Tool-call de-duplication
+        uses ``emitted_tool_call_ids``.
         """
         start_time = time.monotonic()
         event_count = 0
@@ -235,7 +236,6 @@ class StreamingAgent(WrapperBase):
         accumulated_text = ""
         iterations = 1
         usage: dict[str, int] = {}
-        tool_calls_emitted: list[dict[str, Any]] = []
         emitted_tool_call_ids: set[str] = set()
 
         # Build the messages list from kwargs for the client
@@ -330,7 +330,6 @@ class StreamingAgent(WrapperBase):
                             dropped_count += 1
                             if oldest_dropped == 0.0:
                                 oldest_dropped = time.monotonic()
-                        tool_calls_emitted.append(tc)
 
             # Emit turn complete
             if event_count < self._buffer_size:
@@ -379,8 +378,16 @@ class StreamingAgent(WrapperBase):
                     consumed_usd=exc.consumed_usd,
                 )
             else:
+                # Sink-side credential scrub (parity with the batch path's
+                # sanitize_provider_error at base_agent._simple_execute_async):
+                # a raw httpx.HTTPError renders request.url, so a base_url with
+                # embedded userinfo would otherwise reach the user-facing stream.
+                # Lazy import — module-scope would re-pull the kaizen.nodes.ai
+                # tree the #1720 Wave-2b circular-import fix removed.
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
                 yield ErrorEvent(
-                    error=str(exc),
+                    error=sanitize_provider_error(exc, "stream"),
                     details={"type": type(exc).__name__},
                 )
 
@@ -552,8 +559,16 @@ class StreamingAgent(WrapperBase):
                     consumed_usd=exc.consumed_usd,
                 )
             else:
+                # Sink-side credential scrub (parity with the batch path's
+                # sanitize_provider_error at base_agent._simple_execute_async):
+                # a raw httpx.HTTPError renders request.url, so a base_url with
+                # embedded userinfo would otherwise reach the user-facing stream.
+                # Lazy import — module-scope would re-pull the kaizen.nodes.ai
+                # tree the #1720 Wave-2b circular-import fix removed.
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
                 yield ErrorEvent(
-                    error=str(exc),
+                    error=sanitize_provider_error(exc, "stream"),
                     details={"type": type(exc).__name__},
                 )
 

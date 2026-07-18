@@ -304,3 +304,32 @@ class TestFourAxisStreaming:
         result = await streaming.run_async(prompt="explain step by step please")
         assert result["text"] != ""
         assert result.get("usage")
+
+    async def test_stream_error_event_scrubs_credentials(self) -> None:
+        """#1720 Wave-2b security: a stream transport error whose message embeds
+        a credential (e.g. a base_url with userinfo, rendered by a raw
+        httpx.HTTPError) MUST be scrubbed via sanitize_provider_error before it
+        reaches the user-facing ErrorEvent — parity with the batch path."""
+        from kaizen.llm.testing import MockLlmHttpClient
+
+        class _CredLeakTransport(MockLlmHttpClient):
+            async def stream_lines(self, *args: Any, **kwargs: Any):
+                raise RuntimeError(
+                    "connection to https://svc:supersecretpw@proxy.internal/v1 failed"
+                )
+                yield  # pragma: no cover - makes this an async generator
+
+        agent = _ConfiguredAgent()
+        streaming = StreamingAgent(
+            agent, mcp_servers=[], http_client=_CredLeakTransport()
+        )
+        events = [e async for e in streaming.run_stream(prompt="hello")]
+
+        errors = [e for e in events if isinstance(e, ErrorEvent)]
+        assert errors, "an ErrorEvent should be emitted on transport failure"
+        joined = " ".join(e.error for e in errors)
+        # The credential must NOT survive into the user-facing stream.
+        assert "supersecretpw" not in joined
+        assert "svc:supersecretpw@" not in joined
+        # It went through sanitize_provider_error (scrubbed form).
+        assert "[REDACTED]" in joined

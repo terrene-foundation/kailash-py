@@ -42,6 +42,22 @@ def __getattr__(name: str) -> object:
         try:
             from kaizen_agents import Agent as _Agent  # canonical async Agent
         except ImportError:
+            # kaizen_agents INSTALLED but its async Agent failed to import is a
+            # genuine breakage (broken transitive dep) — surface it at WARN
+            # rather than silently downgrading to the sync CoreAgent
+            # (zero-tolerance Rule 3). The not-installed case is expected and
+            # stays quiet: find_spec is None there.
+            import importlib.util as _ilu
+
+            if _ilu.find_spec("kaizen_agents") is not None:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "kaizen.Agent: kaizen_agents is installed but its async Agent "
+                    "could not be imported; falling back to the sync CoreAgent. "
+                    "This usually indicates a broken kaizen_agents dependency.",
+                    exc_info=True,
+                )
             from kaizen.core.agents import Agent as _Agent  # CoreAgent fallback
         # Cache on the module so subsequent access is a plain attribute lookup
         # (``__getattr__`` fires only for missing attributes).
