@@ -248,7 +248,11 @@ jobs:
           # Sibling packages kaizen's import graph pulls in at collection time.
           uv pip install -e "packages/kailash-nexus" --python .venv/bin/python
           uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
-          uv pip install -e "packages/kaizen-agents" --python .venv/bin/python
+          # NOTE: kailash-kaizen (below) MUST be installed BEFORE kaizen-agents:
+          # kaizen-agents pins kailash-kaizen>=2.35.0, and if the local editable
+          # kaizen is not yet present uv resolves that pin against PyPI (which lags
+          # the in-repo version) and fails "no solution found". Local-first ordering
+          # makes the in-repo editable kaizen satisfy the pin.
           # LLM-provider extras the wire/auth tests exercise: bedrock (botocore
           # SigV4), vertex (google-auth OAuth/WIF), providers-azure (Entra),
           # providers-google (google-genai), providers-tokens (tiktoken).
@@ -258,6 +262,9 @@ jobs:
           # hard top-level import of these extras' deps (they are optional
           # extras, absent from the base install, hence a local-only pass before).
           uv pip install -e "packages/kailash-kaizen[dev,bedrock,vertex,providers-azure,providers-google,providers-tokens,observability,rag]" --python .venv/bin/python
+          # kaizen-agents installed AFTER kailash-kaizen so its kailash-kaizen>=2.35.0
+          # pin resolves against the local editable kaizen (see NOTE above).
+          uv pip install -e "packages/kaizen-agents" --python .venv/bin/python
           # src/kaizen/core/autonomy/observability/tracing_manager.py hard-imports
           # opentelemetry.exporter.otlp.proto.grpc, which the [observability] extra
           # does NOT ship — install it explicitly so every test that transitively

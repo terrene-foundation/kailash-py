@@ -33,7 +33,7 @@ dependencies = [
     #   `kailash` core), not the separate `kailash-pact` package.
     # ─────────────────────────────────────────────────────────────
     "kailash>=2.14.0",
-    "kailash-kaizen>=2.25.1",
+    "kailash-kaizen>=2.35.0",  # imports kaizen.llm.governance_gate (new in 2.35.0)
     "openai>=1.30.0",
     "httpx>=0.27.0",
     # Provider SDKs imported at runtime by the delegate / runtime adapters.
