@@ -188,6 +188,12 @@ function logAndEmit(payload, event, finding, what_happened) {
         }
       }
     }
+
+    // NOTE: the guide-first cross-repo PreToolUse ceremony (B — journal/0488)
+    // lives in validate-bash-command.js (the mcp-guard Bash tripwire), NOT here
+    // — so it is CLI-neutral (mirrors to Codex shell) without reclassifying this
+    // CC-only multi-event hook to mcp-guard. This hook keeps ONLY the PostToolUse
+    // repo-scope advisory (below), which owns the authoritative violation row.
     return passthrough();
   }
 

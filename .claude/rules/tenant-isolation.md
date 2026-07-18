@@ -221,69 +221,6 @@ sql = f"INSERT ... ON CONFLICT (id) DO UPDATE SET {', '.join(set_parts)}"  # no 
 
 Origin: #1650 / kailash-dataflow 2.14.5 (2026-07-10) — a holistic `/redteam` CONFIRMED (real SQLite + PostgreSQL) that `bulk_upsert` / single `upsert` / `BulkCreatePoolNode` on a `multi_tenant` model with the default `conflict_on=["id"]` overwrote and reassigned another tenant's row via an un-guarded `ON CONFLICT DO UPDATE`; fixed across all five upsert builders. The completeness lesson (audit ALL builders) came from the closure-parity round finding the sibling `BulkCreatePoolNode` after the primary fix.
 
-### 8. Data-Product / Materialized-View Read-Path Tenant-Scope Guard
-
-A tenant-isolation guard on a data-product / materialized-view / cached-read surface MUST prove the tenant predicate was actually APPLIED to the EXECUTED query before rows return — NOT merely that the product is DECLARED `multi_tenant=True`. The guard MUST inspect the executed filter/params (or the tenant value bound into the pipeline context), never trust the declaration. Concretely, a compliant read-path guard MUST hold ALL of:
-
-- **Predicate-proof, not declaration-proof.** Inspect the executed filter/params; a product declared multi-tenant whose query carried no tenant predicate fails closed. Partitioning a downstream CACHE by tenant is NOT proof the QUERY filtered by tenant.
-- **Post-fetch assertion for single-record PK reads.** A single-record PK read carries no pre-execution filter to inspect, so it MUST assert AFTER fetch that the row's tenant field equals the bound tenant — type-normalized (`str(a) == str(b)`, so an INT tenant column does not over-block a str-bound tenant). A row missing the tenant field fails closed.
-- **Reject alternate filtering channels.** On an enforced read the guard MUST require a plain-dict filter with a SCALAR tenant value, REJECT top-level boolean / `$`-operator keys (`$or`, `$and`, `and`, `or`), and allowlist ONLY safe non-filtering kwargs (pagination: `limit` / `offset` / `order_by` / `cache_ttl` / …). Any other filtering-capable kwarg is refused fail-closed.
-- **Cross-check the declaration flag at registration.** Enforcement gated on a declaration flag (`multi_tenant=True`) MUST be cross-checked at model registration against the ACTUAL tenant column: a model WITH a tenant column DECLARED non-tenant MUST emit a loud WARN (or raise). A forgotten flag silently disables all enforcement — the silent-fallback failure mode (`zero-tolerance.md` Rule 3).
-- **Empty/blank tenant fails closed exactly like None** — at extraction AND at context construction.
-- **Refusal messages MUST NOT echo the FOREIGN tenant id** — use a hash/fingerprint (`observability.md` Rule 8 log hygiene).
-- **Scope is the READ path only.** Write paths and out-of-band source reads are DISTINCT surfaces requiring their own guards; a read-path guard MUST NOT claim to cover them.
-
-```python
-# DO — prove the predicate was applied to the EXECUTED query; post-fetch assert on PK reads
-def intercept_query(self, model, filt, **kwargs):
-    if not model.multi_tenant:
-        return filt
-    bound = get_current_tenant_id()
-    if not bound:                                    # None OR "" OR "  " → fail closed
-        raise TenantRequiredError(model.name)
-    unsafe = set(kwargs) - {"limit", "offset", "order_by", "cache_ttl"}
-    if unsafe or any(k in filt for k in ("$or", "$and", "and", "or")):
-        raise TenantScopeError(f"non-scalar filter channel refused for {model.name}")
-    if not isinstance(filt.get("tenant_id"), (str, int)):   # scalar predicate required
-        raise TenantScopeError(f"tenant predicate absent/non-scalar for {model.name}")
-    return {**filt, "tenant_id": bound}
-
-def assert_pk_row(self, model, row, bound):          # single-record PK read: post-fetch
-    if model.multi_tenant and str(row.get("tenant_id")) != str(bound):  # type-normalized
-        raise TenantScopeError(f"cross-tenant row for fp={_fingerprint(bound)}")  # no foreign id echoed
-
-# DO NOT — trust the declaration; partition only the cache; skip PK post-fetch
-def intercept_query(self, model, filt, **kwargs):
-    if model.multi_tenant:
-        cache.partition_by(get_current_tenant_id())  # cache scoped, QUERY unfiltered
-    return filt                                       # every tenant's rows returned
-```
-
-**BLOCKED rationalizations:**
-
-- "The product is declared `multi_tenant=True`, so its reads are scoped"
-- "The cache is partitioned by tenant, that's the isolation"
-- "PK reads are safe — the id is unique, no filter needed" (no post-fetch assert → cross-tenant PK collision leaks)
-- "`$or` in the filter is the caller's business" (a boolean channel bypasses the scalar tenant predicate)
-- "The `multi_tenant` flag is set correctly everywhere, no registration cross-check needed"
-- "Empty tenant is basically None, the None check covers it" (blank must fail closed at BOTH extraction and context construction)
-- "This read guard covers the write path too" (distinct surface; own guard required)
-
-**Why:** A product DECLARED multi-tenant whose QUERIES never carry the tenant predicate returns every tenant's rows while looking isolated — the leak is invisible until two tenants share a key, exactly `rules/tenant-isolation.md`'s neutral-body failure mode one layer up (the read surface, not the cache key). Proving the predicate reached the EXECUTED query — plus a post-fetch assert on the one read shape that has no pre-execution filter (PK), a rejected alternate-channel set, a registration cross-check catching the forgotten flag, and fail-closed blank/None handling — is the structural defense; declaration-trust is the silent fallback.
-
-**Trust Posture Wiring (Rule 8):**
-
-- **Severity:** `halt-and-report` at gate-review (security-reviewer + reviewer at `/implement` + `/redteam`: for any `multi_tenant` data-product / materialized-view / cached-read surface, confirm the read guard inspects the EXECUTED predicate — not the declaration — carries a PK post-fetch assert, rejects boolean/`$`-operator channels, cross-checks the flag at registration, and fails closed on blank/None); `advisory` at the hook layer (the predicate-was-applied property is judgment-bearing over executed queries, not a structural tool-call signal, per `hook-output-discipline.md` MUST-2).
-- **Grace period:** 7 days from rule landing (2026-07-10 → 2026-07-17).
-- **Cumulative posture impact:** same-class violations (a `multi_tenant` read-path surface whose guard trusts the declaration instead of proving the executed predicate, OR omits the PK post-fetch assert, OR admits an alternate filtering channel) contribute to `trust-posture.md` MUST Rule 4 cumulative-window math (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
-- **Regression-within-grace:** a same-class violation within the 7-day grace window routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause trigger key (a read-path predicate-proof property is review-layer-only and judgment-bearing; minting a key would drag `trust-posture.md`, a self-referential-codify allowlist file, into a self-ref edit, and the universal `regression_within_grace` trigger already covers it). Named deviation from the canonical key-per-clause shape, recorded here per `trust-posture.md` Rule 8 — the same no-dedicated-key disposition `security.md` § Enforcement-Surface Parity and `git.md` § CI-check/merge took.
-- **Receipt requirement:** SessionStart soft-gate `[ack: tenant-isolation]` IFF `posture.json::pending_verification` includes this rule_id.
-- **Detection mechanism:** Phase 1 (manual, gate-review) — for any `multi_tenant` data-product / materialized-view / cached-read change, enumerate every read entry point over the surface and confirm each (a) inspects the executed filter/params (not the declaration flag), (b) post-fetch-asserts type-normalized tenant equality on PK reads, (c) rejects top-level boolean/`$`-operator keys and non-allowlisted filtering kwargs, (d) cross-checks `multi_tenant` against the actual tenant column at registration, (e) fails closed on blank/None; run by security-reviewer + reviewer at `/implement` + `/redteam`. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout, after ≥3 real sessions exercise Phase 1) — no hook detector; audit fixtures land with the Phase-2 detector at `.claude/audit-fixtures/data-product-tenant-scope-guard/` per `cc-artifacts.md` Rule 9.
-- **Violation scope:** Rule 8 (data-product / materialized-view read-path tenant-scope guard) ONLY; Rules 1–6 stay grandfathered until each is itself `/codify`-touched (Rule 7 landed its own canonical Wiring this cycle).
-- **Origin:** See Rule 8 Origin below.
-
-Origin: kailash-py #1654 → kailash-dataflow 2.14.6 (2026-07-10, PR #1660). The fabric read path partitioned the CACHE by tenant but never proved product QUERIES filtered by tenant nor passed `tenant_id` into the pipeline context, so a `multi_tenant` product returned every tenant's rows (RED→GREEN proven). An adversarial `/redteam` refuted the initial "never leaks" claim on five axes — an unguarded PK read, an empty-tenant bypass, declaration-only enforcement, a `$or`/kwarg filtering channel, and a serial-prewarm path — all hardened. Follow-ups #1658 (source-path scoping) + #1659 (write-path guard) fence the distinct surfaces this read-path guard does NOT cover. Cross-SDK: the Rust SDK fabric read path likely shares the shape.
-
 ## MUST NOT
 
 - Default missing tenant_id to a placeholder ("default", "global", "")
@@ -326,5 +263,7 @@ rg 'tenant_id = EXCLUDED\.tenant_id|IF\(tenant_id =' .     # the guard — a bui
 ```
 
 Any match that fails the contract above is a HIGH finding.
+
+**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body is ~269 lines, over the 200-line guidance. Named rationale: **tenant-isolation-contract scope** — the rule codifies the complete cross-tenant-leak surface across seven numbered rules (1 cache-key dimension, 2 strict-mode typed error, 3/3a invalidation scope + keyspace-bump sweep, 4 bounded metric labels, 5 audit-row persistence, 6 canonical write-path tenant source, 7 upsert `ON CONFLICT` tenant-guard) plus the mechanical Audit Protocol grep battery each rule feeds. Each rule guards a DISTINCT piece of per-tenant state (cache / query filter / metric label / audit row / write path / upsert-conflict path) that a multi-tenant audit MUST hold simultaneously; splitting into sibling rules would fragment the one contract every tenant-isolation edit consults and force cross-rule lookups per audit. The rule is `priority: 10` + `scope: path-scoped`, so it pays NO baseline-emission cost (loaded only in sessions matching its `paths:` globs) and `rule-authoring.md` Rule 10's proximity-band gate does NOT fire. Per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines": overage is permitted with named rationale. Sibling precedent: `artifact-flow.md` + `recommendation-quality.md` + `spec-accuracy.md` length rationales.
 
 <!-- /slot:neutral-body -->

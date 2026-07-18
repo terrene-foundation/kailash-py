@@ -68,14 +68,29 @@ root MUST-2 / `git.md`): dry-run first, confirm, then apply.
    cloned canon from). Re-running `--apply` on an already-cleared clone is **refused** (the canon
    snapshot can no longer be re-derived) — re-clone if you must run it again.
 
-## The `.git` history caveat (canon history is NOT in the working tree)
+## The `.git` history caveat -- and why "strip before pushing" is not always the fix (#886)
 
-A `git clone` of canon carries canon's **entire commit history** in `.git/` — commit authorship, the
+A `git clone` of canon carries canon's **entire commit history** in `.git/` -- commit authorship, the
 pre-clear journal blobs, the real root_commit. The working-tree clear (and its assert-zero gate) cannot
-reach that history; on `git push` it would ship. The engine therefore **never claims the clone is
-clean** while that history exists: it scopes its pass to "working tree" and loudly directs you to either
-re-run with **`--reset-history`** (re-anchors a fresh root commit, discarding canon history) or strip
-history yourself before pushing. Pass `--reset-history` once you have confirmed the working-tree clear.
+reach that history. The engine therefore **never claims the clone is clean** while that history exists:
+on `--apply` (and previewed in the dry-run) it scans the **local object store** for canon tokens in history AND probes `origin`,
+then gives guidance scoped to your ACTUAL situation -- because **"instantiation is a publish"** means the
+objects may ALREADY be on the server:
+
+- **Local-clone-then-fresh-push (origin has NO refs yet):** stripping history genuinely prevents canon
+  objects reaching origin. Re-run with **`--reset-history`** (re-anchors a fresh root, discarding canon
+  history) BEFORE the first push.
+- **Already published (origin already carries objects, OR the probe cannot reach origin -- fail-closed):**
+  a published git object **cannot be deleted** by force-push/reset (it is served by SHA even with no
+  ref), so "strip before pushing" does NOT help. **Destroy + recreate** the remote repo (delete it,
+  create a fresh empty one) and push the cleared tree.
+- **The real fix is SOURCE-PREVENTION:** instantiate from the pre-scrubbed **client-template edition**
+  (`scripts/publish-to-private-template.mjs`), never from a canon clone -- a client template never carries
+  canon objects in the first place, so there is no history to strip and no remote to recreate.
+
+The object-store scan certifies the **local** store only; it **cannot** certify remote cleanliness (a
+dangling published object survives with no ref). A scan or remote probe that errors is treated as
+**dirty/published** (fail-closed), never as an all-clear.
 
 ## The fail-closed assert-zero gate
 

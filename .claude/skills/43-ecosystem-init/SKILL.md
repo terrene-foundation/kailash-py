@@ -9,7 +9,7 @@ The procedure backing `.claude/commands/ecosystem-init.md` (the once-per-fork ec
 command body holds the five load-bearing invariants + the ceremony order; this skill holds the
 step-by-step procedure, the input prompts, the D6 schema field set, and the exact tool-call shapes.
 
-Three onboarding surfaces (the core distinction — `02-plans/02-ga-ecosystem-onboarding.md`):
+Three onboarding surfaces (the core distinction — `rules/enrollment-operations.md`):
 
 | Surface           | Moment                     | Writes                                | Frequency       |
 | ----------------- | -------------------------- | ------------------------------------- | --------------- |
@@ -117,8 +117,7 @@ tool, so it never trips the guard.
 The `validate-bash-command.js` state-file-write guard (`detectStateFileMutation`, Layer 3) BLOCKS any
 interpreter command (`node -e`/`-c`/`-m`, or any command LED by `node`/`python`/`ruby`/`perl`) whose
 **command string** contains a protected state-file path — `operators.roster.json`,
-`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized` (among others; the
-wired `STATE_PATH_RX` at `.claude/hooks/validate-bash-command.js` is authoritative). The documented inline
+`coordination-log.jsonl`, `posture.json`, `violations.jsonl`, `.initialized`. The documented inline
 `node -e '… operators.roster.json …'` form therefore CANNOT run; this is correct — only the canonical
 roster-write path may touch the roster. (`.claude/settings.json::permissions.deny`, where present, is a
 second lexical defense-in-depth layer matching the same paths.)
