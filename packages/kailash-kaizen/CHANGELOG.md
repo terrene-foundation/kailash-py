@@ -4,6 +4,51 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+### Removed
+
+- **Retired the legacy `kaizen.providers.llm` chat-provider layer onto the
+  four-axis `LlmClient` (#1720 Wave-2).** Deleted `OpenAIProvider`,
+  `AnthropicProvider`, `GoogleGeminiProvider`, `OllamaProvider`,
+  `DockerModelRunnerProvider`, `PerplexityProvider`, and `MockProvider`
+  (`kaizen/providers/llm/{openai,anthropic,google,ollama,docker,perplexity,mock}.py`).
+  The four-axis client (`kaizen.llm.LlmClient`) has served chat / embed / stream
+  for all seven on the live agent path since Wave-B; the legacy direct-provider
+  classes were redundant. `azure_ai_foundry` is the only provider the four-axis
+  resolver cannot serve, so `providers/llm/azure.py` + its registry entry are
+  KEPT. `kaizen.providers.registry.PROVIDERS` / `provider_names.PROVIDER_NAMES`
+  were pruned in lockstep to `{cohere, huggingface, azure, azure_openai,
+azure_ai_foundry}`; `get_provider_for_model(...)` now raises
+  `UnknownProviderError` for model ids (the four-axis `deployment_resolver` owns
+  model→wire dispatch). The `DeprecationWarning` barrel shims for the seven
+  providers shipped in 2.34.0 and lived through 2.35.0 (≥1 minor cycle,
+  zero-tolerance Rule 6a), so `from kaizen.providers import OpenAIProvider` now
+  raises `AttributeError`.
+
+  **Migration.** Replace direct legacy-provider use with the four-axis client —
+  e.g. `LlmClient.from_env(...)` / `LlmClient.from_deployment(...)` and its
+  `complete` / `stream` / `embed` methods. Known deltas at this release (each
+  tracked for a follow-up):
+
+  - **Multimodal file-path / high-level-audio input.** The legacy providers
+    accepted `{"type": "image", "path": "x.jpg"}` and `{"type": "audio", ...}`
+    high-level shapes (disk read + size validation + audio-format normalization).
+    The four-axis path accepts already-wire-shaped content blocks
+    (`{"type": "image_url", ...}`) and raw bytes; pass raw bytes (four-axis
+    encodes them) or wire-shape the block. Native file-path support is tracked in
+    a follow-up issue.
+  - **Google (Gemini) embeddings.** `GoogleGeminiProvider.embed`
+    (`text-embedding-004`) has no four-axis wire yet; a `google_embeddings` wire
+    is tracked in a follow-up. Use `cohere` / `huggingface` / `openai` / `ollama`
+    embeddings in the interim.
+
+### Fixed
+
+- **CI/tests:** swept the legacy-provider test surface after the #1720 Wave-2
+  retirement — removed tests of the deleted providers, updated the barrel
+  deprecation-contract test to assert the retired names now raise
+  `AttributeError`, and ported the #1140 `parts=None` Gemini regression onto the
+  four-axis `google_generate_content` wire.
+
 ## [2.35.0] — 2026-07-18 — governance_required posture enforcement (#1779)
 
 ### Added
