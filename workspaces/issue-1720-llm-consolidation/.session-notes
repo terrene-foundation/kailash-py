@@ -9,8 +9,12 @@ pruned; `provider_names` KEPT full as the metrics classification vocabulary (dec
 — drift-assert relaxed to subset); `get_provider_for_model` retired to raise.
 Gate-reviewed (reviewer + security), CI-green, zero regression.
 
-**Wave 2b-C: PR #1821 OPEN, green-and-mergeable** (branch
-`feat/1720-wave2b-streaming-cutover`, head `42dd8e47d`). Cut `kaizen-agents`
+**Wave 2b-C: PR #1821 OPEN, review-clean + locally-verified; CI RE-RUNNING**
+(branch `feat/1720-wave2b-streaming-cutover`, head `42dd8e47d`). The only prior CI
+red was `test_base_agent_under_1010_lines` (LOC invariant); FIXED (budget→<1015,
+verified locally 1013 passes) + pushed as the last commit. CI was re-running at
+handoff — **CONFIRM green on `42dd8e47d` before merge (step 1); do NOT assume.** Cut
+`kaizen-agents`
 streaming over to four-axis `LlmClient.stream` (was silently degrading to batch after
 2a); fixed a pre-existing kaizen<->kaizen_agents circular import; bumped
 `kaizen-agents` → `0.11.0` + pin `kailash-kaizen>=2.36.0`. Both reviewers ran
