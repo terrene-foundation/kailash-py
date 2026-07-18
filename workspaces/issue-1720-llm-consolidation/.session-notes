@@ -10,14 +10,19 @@ Posture"). Issue #1779 closed with release refs. Repo is **clean & fully
 released — zero version drift (all 9 packages main == PyPI)**. Working tree
 clean. Workspace issue-1720-llm-consolidation, phase 05-codify.
 
-Next: decide the **gate-vs-delete fork** for the legacy provider layer, then run
-the wave plan below.
+**Fork RESOLVED = DELETE** (owner-approved): retire legacy `providers/llm` onto
+four-axis (#1720 Wave C), which subsumes #1803. Wave 1 landed; **Wave 2 (the
+delete) is scoped + deferred to a FRESH session** per owner (irreversible, 2-wave
+split, 2 releases — too large for this session's tail). Cross-SDK rs#1945 filed.
+
+Next session: START the Wave 2 handoff section below.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/journal/0003-DISCOVERY-release-hazards-1779.md` — 3 reusable release hazards (pin-floor / CI-order / TestPyPI). START HERE.
-2. `workspaces/issue-1720-llm-consolidation/journal/0004-DECISION-codify-1779-docs.md` — this cycle's codify record + violations triage.
-3. `docs/core/trust.rst` § "Governance-Required Posture" — the shipped posture + its documented **non-coverage** boundary (= exactly what #1803 covers).
+1. `01-analysis/1720-wave2-delete-scoping.md` — **the Wave 2 /analyze; START HERE.** Consolidation already done → this is the ~90% surgical DELETE; azure_ai_foundry kept; deprecation gate resolved (no hard break); missed consumer `kaizen-agents/streaming_agent.py`.
+2. `journal/0003-DISCOVERY-release-hazards-1779.md` — 3 reusable release hazards (pin-floor / CI-order / TestPyPI).
+3. `journal/0004-DECISION-codify-1779-docs.md` — #1779 codify record + violations triage.
+4. `docs/core/trust.rst` § "Governance-Required Posture" — the shipped #1779 posture + its non-coverage boundary (what #1803 covered; now subsumed by the delete).
 
 ## In-flight state
 
@@ -38,22 +43,36 @@ the wave plan below.
 - **Filed** rs#1932 (max_completion_tokens defect) + rs#1933 (posture parity) on
   the Rust SDK repo (fresh-confirmed cross-repo grant; journal/0002).
 - **Closed** #1779 with release refs.
+- **F-FORK resolved = DELETE** (owner-approved) → #1720 Wave C; subsumes #1803.
+- **Wave 1B** — PR #1782 loom Gate-2 sync merged (safety-verified: no roster/settings/coordination-enable changes; brought in newer rule corpus incl. wave-loop/product-completion-first).
+- **Wave 1C** — PR #1810 FRECON: 4 stale workspaces → `workspaces/_archive/`.
+- **Wave 2 /analyze** — PR #1811 persisted `01-analysis/1720-wave2-delete-scoping.md`.
+- **Filed** rs#1945 (cross-SDK #1720 legacy-provider retirement + BYOK parity; grant journal/0005).
+- **Wave 1A** (tests→tmp_path) — testing-specialist agent still running; merge its PR when it lands.
 
 ## Outstanding ledger (forest) — value-ranked
 
 | ID | Item | Value-anchor (MUST-1) | Status |
 | --- | --- | --- | --- |
-| **F-FORK** | **DECIDE: gate (#1803) vs delete (#1720 Wave C) the legacy provider layer** | #1720 tracker (terminal goal) + #1779 non-coverage doc | **DECISION GATE — recommend DELETE (see below)** |
-| F1720C | #1720 consolidate/delete legacy `providers/llm` onto four-axis | #1720 user-filed (session terminal goal) | READY post-fork; needs /analyze first; SUBSUMES #1803 if delete |
-| F1803 | #1803 gate legacy/multimodal/azure provider layer | #1779 follow-up (user-filed) | OPEN; MOOT if F1720C = delete |
-| F1782 | PR #1782 loom Gate-2 rule sync (152 files, ±10k, open since 07-16) | sync-artifact policy (user gate) | needs review + merge/hold decision |
-| F-TESTHYG | kaizen-agents tests → `tmp_path` (stop CWD-scratch writes) | test-hygiene; .gitignore (#1808) is the band-aid | READY — small, isolated to tests/ |
-| F-LOOMCANON | Canonicalize release-hazards #1 (dependencies.md pin-floor) + #3 (deployment.md interdependent-minors TestPyPI) | journal/0003; loom rule fleet | loom /codify (not this repo) |
-| FRECON | Reconcile + archive 4 stale workspaces (sdk-backlog, issue-1717-vertex-claude, observability-1708, mops-onboarding) | value-prioritization MUST-4 | user-gated prune |
+| **F1720C** | **#1720 Wave 2 — DELETE legacy `providers/llm` (subsumes #1803)** | #1720 tracker (terminal goal) | **SCOPED (01-analysis/1720-wave2-delete-scoping.md); DEFERRED to fresh session — see Wave 2 handoff below** |
+| F1803 | gate legacy/multimodal/azure provider layer | #1779 follow-up | **SUBSUMED by F1720C delete** (deleted layer needs no gate) |
+| F1782 | loom Gate-2 rule sync | sync-artifact policy | **DONE** — merged (safety-verified) |
+| F-TESTHYG | kaizen-agents tests → `tmp_path` | test-hygiene | **IN FLIGHT** — Wave 1A agent running; merge its PR |
+| FRECON | archive 4 stale workspaces | value-prioritization MUST-4 | **DONE** — PR #1810 |
+| F-LOOMCANON | Canonicalize release-hazards #1 (dependencies.md pin-floor) + #3 (deployment.md interdependent-minors TestPyPI) | journal/0003; loom rule fleet | OPEN — loom /codify (not this repo) |
 | FVERT | Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in .env |
-| rs#1932 / rs#1933 | Rust cross-SDK (max_completion_tokens / posture parity) | cross-sdk-inspection | filed; Rust-side implementation, tracked |
+| rs#1932 / rs#1933 / rs#1945 | Rust cross-SDK (max_completion_tokens / posture parity / #1720 legacy-provider+BYOK) | cross-sdk-inspection | filed; Rust-side, tracked |
 
-Closed this session: **F1779** (shipped + released + closed).
+Closed this session: **F1779** (shipped+released+closed), **F1782**, **FRECON**, **F-FORK** (=delete).
+
+## Wave 2 handoff (fresh session — START HERE)
+
+Read `01-analysis/1720-wave2-delete-scoping.md` first. Decisions already resolved:
+- **D1 deprecation:** RESOLVED — shims shipped kaizen 2.34.0, live ≥1 minor → delete lands next kaizen minor, NO hard break.
+- **D2 azure_ai_foundry:** KEEP as legacy (no four-axis wire) — ~90% delete, not 100%.
+- **D3 cross-SDK:** rs#1945 filed.
+
+Then: `/todos` (human gate) writing the **Wave 2a** (serial — 7 provider deletes converge on registry.py + provider_names.py `assert`) + **Wave 2b** (≤3 parallel: 2b-A barrel-shim removal, 2b-B embedding/azure-unified delete, 2b-C test sweep + `kaizen-agents/streaming_agent.py` cutover) shard plan. Then `/implement` → holistic `/redteam` → **two releases** (kailash-kaizen + kaizen-agents). Verify-at-todos: OpenAI vision content-block transform + Google finish_reason map (before deleting openai.py/google.py). Per build-repo-release-discipline: done = released, both packages.
 
 ## Parallelizable wave plan
 
