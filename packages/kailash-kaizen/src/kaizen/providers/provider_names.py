@@ -22,9 +22,16 @@ keyword classifier taught to an LLM.
 
 from __future__ import annotations
 
-# Canonical set of provider NAMES. MUST stay consistent with the keys of
-# ``kaizen.providers.registry.PROVIDERS`` (the name -> class dict); that module
-# asserts equality at load as a drift tripwire.
+# Canonical observability CLASSIFICATION vocabulary — the full set of provider
+# family NAMES ``kaizen.production.metrics`` bounds its Prometheus ``provider``
+# label against (``_bound_provider_label``). This is a SUPERSET of the runtime
+# ``kaizen.providers.registry.PROVIDERS`` name set: since #1720 Wave-2 the legacy
+# chat providers (openai / anthropic / google / ollama / docker / perplexity /
+# mock) are served by the four-axis ``LlmClient`` rather than the registry, but
+# their calls still flow through ``track_llm_usage`` and MUST keep labelling to
+# their own family (never collapsing to ``_other``). registry.py therefore
+# asserts ``set(PROVIDERS.keys()) <= PROVIDER_NAMES`` (subset) as its drift
+# tripwire — every registry provider is a known family, not the reverse.
 PROVIDER_NAMES: frozenset[str] = frozenset(
     {
         "ollama",
@@ -45,12 +52,17 @@ PROVIDER_NAMES: frozenset[str] = frozenset(
 )
 
 
-# SPEC-02 §3.1 — model-name prefix dispatch.
+# SPEC-02 §3.1 — model-id prefix -> family CLASSIFICATION table.
 #
 # This is a declared structural mapping, NOT a classification of user intent.
-# Every tuple on the left is a set of model-id prefixes owned by the provider
-# on the right. New providers extend this table; the resolver's prefix scan
-# has no keyword reasoning.
+# Every tuple on the left is a set of model-id prefixes owned by the family on
+# the right. Since #1720 Wave-2 its sole consumer is
+# ``kaizen.production.metrics._bound_model_label`` (Prometheus model-family
+# label bounding) — model->wire DISPATCH now lives in
+# ``kaizen.llm.deployment_resolver`` and ``get_provider_for_model`` is retired
+# (raises). The table stays complete so a four-axis ``gpt-*`` / ``claude-*`` /
+# ``gemini-*`` call still labels to its family. New families extend this table;
+# the scan has no keyword reasoning.
 MODEL_PREFIX_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
     (("gpt-", "o1-", "o3-", "o4-", "o1", "o3", "o4-mini", "ft:gpt"), "openai"),
     (("claude-",), "anthropic"),

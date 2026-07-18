@@ -3,44 +3,27 @@
 
 """#1720 parity harness — SHARED-CANNED-BYTES injection + normalization.
 
+The seven legacy chat providers were retired in #1720 Wave-2 (their
+``kaizen.providers.llm.*`` modules deleted), so the legacy-vs-four-axis parity
+drivers this harness once carried are gone. What remains is the four-axis
+injection + normalization machinery the surviving parity/regression tests still
+use to drive canned provider-shaped response bytes through the four-axis stack.
+
 # Why shared canned bytes (the CRITICAL correctness constraint)
 
-The four-axis mock (``kaizen.llm.testing.mock_transport.MockLlmHttpClient``)
-and the legacy mock (``kaizen.providers.llm.mock.MockProvider``) are each
-deterministic but NOT byte-identical to each other (different id/seed
-derivation — see the ``mock_transport`` docstring: four-axis uses an
-md5-derived id, legacy uses a process-salted ``hash()``; legacy
-``MockProvider`` even hardcodes ``usage.total_tokens = 0``). Relying on
-each mock's own generator agreeing would be a FALSE parity. So this
-harness injects the SAME canned provider-shaped response bytes into BOTH
-stacks:
+A parity/regression assertion on the four-axis parse contract feeds the SAME
+canned provider-shaped response bytes into the four-axis stack:
 
-* four-axis: the canned JSON is returned by :class:`CapturingTransport`
-  (a ``typing.Protocol``-satisfying offline adapter, NOT a Tier-2/3-blocked
-  mock — same exception ``rules/testing.md`` § "3-Tier Testing" grants
+* the canned JSON is returned by :class:`CapturingTransport` (a
+  ``typing.Protocol``-satisfying offline adapter, NOT a Tier-2/3-blocked mock —
+  the exception ``rules/testing.md`` § "3-Tier Testing" grants
   ``MockLlmHttpClient``) and parsed by ``<wire>.parse_response`` →
-  ``kaizen.llm._legacy_shape.to_legacy_shape``;
-* legacy: the SAME canned JSON is deserialized by the provider's OWN vendor
-  SDK model (``ChatCompletion.model_validate`` / ``anthropic.types.Message``
-  / ``google.genai`` types) and parsed by ``provider.chat()``.
+  ``kaizen.llm._legacy_shape.to_legacy_shape`` → :func:`normalize`.
 
-Both sides parse the SAME bytes, so an equality assertion on the normalized
-``{content, tool_calls, finish_reason, usage}`` dict is REAL parse-contract
-parity — stronger than the Wave-2 dual-run shadow's length/hash diff.
-
-# Architectural asymmetry the harness surfaces (PLANE A)
-
-Every legacy chat provider DELEGATES to a vendor SDK
-(``client.chat.completions.create`` / ``client.messages.create`` /
-``client.models.generate_content``) — it never builds raw wire bytes
-itself. The four-axis path builds a raw JSON body and POSTs it via
-``LlmHttpClient``. So the two "requests" are DIFFERENT representations: the
-legacy request is the kwargs dict handed to the vendor SDK; the four-axis
-request is the literal wire body. PLANE A captures BOTH and asserts on the
-semantically-shared invariants (model, messages, tools, tool_choice),
-pinning the benign byte-level deltas (the legacy SDK sends ``n=1`` /
-``temperature`` / ``top_p`` / ``stream`` defaults the four-axis path omits,
-relying on server defaults) as documented facts so a regression fires.
+``CapturingTransport`` records the four-axis outbound request (PLANE A: model,
+messages, tools, tool_choice) AND replays the canned response (PLANE B: the
+normalized ``{content, tool_calls, finish_reason, usage}`` parse), so a single
+``complete(..., http_client=CapturingTransport(canned))`` call yields both.
 """
 
 from __future__ import annotations
@@ -49,7 +32,6 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from unittest import mock
 
 import httpx
 
@@ -250,137 +232,3 @@ def drive_four_axis(
 
     parsed = asyncio.run(_run())
     return normalize(to_legacy_shape(parsed)), transport.calls[0]
-
-
-# ---------------------------------------------------------------------------
-# Legacy drivers — deserialize canned bytes through the provider's OWN vendor
-# SDK model, then run provider.chat(). Returns (legacy_return_dict,
-# captured_sdk_request_kwargs). Tier-1 offline injection of the SDK boundary
-# (mocking is PERMITTED in Tier 1 per rules/testing.md § 3-Tier); the parsed
-# object is a REAL vendor-SDK deserialization of the canned bytes, not a
-# fabricated stand-in.
-# ---------------------------------------------------------------------------
-
-
-class _Captured:
-    """Records the kwargs the provider hands to the vendor SDK ``create``."""
-
-    def __init__(self, response: Any) -> None:
-        self._response = response
-        self.kwargs: Dict[str, Any] = {}
-
-    def create(self, **kwargs: Any) -> Any:
-        self.kwargs = kwargs
-        return self._response
-
-    # anthropic uses client.messages.create; google uses
-    # client.models.generate_content — aliases onto the same recorder.
-    def generate_content(self, **kwargs: Any) -> Any:
-        self.kwargs = kwargs
-        return self._response
-
-
-def drive_legacy_openai_family(
-    provider_cls: Any,
-    canned: Dict[str, Any],
-    *,
-    model: str,
-    messages: List[Dict[str, Any]],
-    tools: Optional[List[Dict[str, Any]]] = None,
-    generation_config: Optional[Dict[str, Any]] = None,
-    api_key: Optional[str] = None,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Drive an openai-SDK-based legacy provider (openai / docker / perplexity).
-
-    ``api_key`` is an OPTIONAL per-request override forwarded to ``chat()``.
-    It is only needed for providers whose ``chat()`` resolves a credential
-    (e.g. Perplexity reads ``PERPLEXITY_API_KEY`` BEFORE building the — here
-    mocked — ``openai.OpenAI`` client, so an offline parity run must supply a
-    dummy). The key is never sent on the wire (the client is stubbed); it
-    exists only to reach the parse path. openai/docker do not require it.
-    """
-    from openai.types.chat import ChatCompletion
-
-    recorder = _Captured(ChatCompletion.model_validate(canned))
-
-    class _Completions:
-        create = recorder.create
-
-    class _Chat:
-        completions = _Completions()
-
-    class _StubClient:
-        chat = _Chat()
-
-    chat_kwargs: Dict[str, Any] = dict(
-        messages=messages,
-        model=model,
-        generation_config=generation_config or {},
-        tools=tools or [],
-    )
-    if api_key is not None:
-        chat_kwargs["api_key"] = api_key
-
-    provider = provider_cls()
-    with mock.patch("openai.OpenAI", return_value=_StubClient()):
-        legacy = provider.chat(**chat_kwargs)
-    return legacy, recorder.kwargs
-
-
-def drive_legacy_anthropic(
-    canned: Dict[str, Any],
-    *,
-    model: str,
-    messages: List[Dict[str, Any]],
-    tools: Optional[List[Dict[str, Any]]] = None,
-    generation_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    from anthropic.types import Message
-
-    from kaizen.providers.llm.anthropic import AnthropicProvider
-
-    recorder = _Captured(Message.model_validate(canned))
-
-    class _StubClient:
-        messages = recorder
-
-    provider = AnthropicProvider()
-    with mock.patch("anthropic.Anthropic", return_value=_StubClient()):
-        legacy = provider.chat(
-            messages=messages,
-            model=model,
-            generation_config=generation_config or {},
-            tools=tools or [],
-        )
-    return legacy, recorder.kwargs
-
-
-def drive_legacy_google(
-    canned: Dict[str, Any],
-    *,
-    model: str,
-    messages: List[Dict[str, Any]],
-    tools: Optional[List[Dict[str, Any]]] = None,
-    generation_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    from google.genai import types as gtypes
-
-    from kaizen.providers.llm.google import GoogleGeminiProvider
-
-    recorder = _Captured(gtypes.GenerateContentResponse.model_validate(canned))
-
-    class _Models:
-        generate_content = recorder.generate_content
-
-    class _StubClient:
-        models = _Models()
-
-    provider = GoogleGeminiProvider()
-    with mock.patch.object(provider, "_get_client", return_value=_StubClient()):
-        legacy = provider.chat(
-            messages=messages,
-            model=model,
-            generation_config=generation_config or {},
-            tools=tools or [],
-        )
-    return legacy, recorder.kwargs

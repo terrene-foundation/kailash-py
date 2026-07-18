@@ -1,29 +1,39 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""#1720 Wave-B2a — barrel legacy-provider deprecation shims (behavioral).
+"""#1720 barrel legacy-provider deprecation shims (behavioral).
 
 The `kaizen.nodes.ai` and `kaizen.providers` barrels used to eagerly re-export
 the legacy provider classes + registry accessors from their canonical
-`kaizen.providers.*` locations. Wave-B2a converts those legacy re-exports to
+`kaizen.providers.*` locations. Wave-B2a converted those legacy re-exports to
 lazy PEP 562 ``__getattr__`` DeprecationWarning shims (zero-tolerance Rule 6a:
-public-API removal needs a deprecation cycle; this STARTS the clock — Wave-C
-removes them). The public contract is unchanged: every legacy name stays in
-``__all__`` and resolves to the same real symbol; only the barrel access PATH
-now warns.
+public-API removal needs a deprecation cycle — the DeprecationWarning shipped in
+kaizen 2.34.0).
 
-This pins the behavioral contract so a refactor cannot silently drop the
-warning, break identity, or eagerly re-inline the symbols:
+Wave-2 then RETIRED the seven legacy chat providers (openai / anthropic /
+google / ollama / docker / perplexity / mock) onto the four-axis LlmClient and
+DELETED their canonical modules. Their barrel re-exports were removed in the
+same step — the deprecation cycle for those seven is COMPLETE, so accessing them
+via either barrel now raises ``AttributeError`` (no warning, no resolution). The
+STILL-shimmed names (the base ``LLMProvider``, the kept
+``AzureAIFoundryProvider``, the embedding ``CohereProvider`` /
+``HuggingFaceProvider``, and the registry accessors ``PROVIDERS`` /
+``get_provider`` / ``get_available_providers``) stay on the warn+resolve shim
+until Wave-C.
 
-* Accessing a legacy provider (e.g. ``OpenAIProvider``) via either barrel emits
-  a ``DeprecationWarning`` AND returns the real class (identity-equal to the
-  canonical-module symbol).
+This pins the behavioral contract so a refactor cannot silently change it:
+
+* Accessing a STILL-shimmed legacy name (e.g. ``AzureAIFoundryProvider``) via
+  either barrel emits a ``DeprecationWarning`` AND returns the real class
+  (identity-equal to the canonical-module symbol).
+* Accessing a REMOVED legacy provider (e.g. ``OpenAIProvider``) via either
+  barrel raises ``AttributeError`` — the end-of-cycle contract.
 * The registry accessors (``PROVIDERS`` / ``get_provider`` /
   ``get_available_providers``) warn + resolve the same way.
 * A NON-legacy eager export (``EmbeddingGeneratorNode``, ``BaseAIProvider``)
   does NOT warn — only the shimmed legacy names do.
 * A bare ``import`` of the barrel does NOT warn (only attribute access does).
-* Every legacy name remains in each barrel's ``__all__``.
+* Every still-shimmed legacy name remains in each barrel's ``__all__``.
 * An unknown attribute raises ``AttributeError`` (no silent stub).
 
 Tier-1 offline + deterministic (no network, no live keys). Behavioral asserts
@@ -43,17 +53,12 @@ import kaizen.providers as providers
 pytestmark = pytest.mark.regression
 
 
-# Legacy name -> canonical module, per barrel.
+# Still-shimmed legacy name -> canonical module, per barrel (warn + resolve).
+# The seven Wave-2-retired chat providers are NOT here — their deprecation cycle
+# is complete and they now raise AttributeError (see _REMOVED_LEGACY_PROVIDERS).
 _NODES_AI_LEGACY = {
     "LLMProvider": "kaizen.providers.base",
-    "AnthropicProvider": "kaizen.providers.llm.anthropic",
     "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
-    "DockerModelRunnerProvider": "kaizen.providers.llm.docker",
-    "GoogleGeminiProvider": "kaizen.providers.llm.google",
-    "MockProvider": "kaizen.providers.llm.mock",
-    "OllamaProvider": "kaizen.providers.llm.ollama",
-    "OpenAIProvider": "kaizen.providers.llm.openai",
-    "PerplexityProvider": "kaizen.providers.llm.perplexity",
     "PROVIDERS": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
@@ -65,19 +70,35 @@ _PROVIDERS_LEGACY = {
     "HuggingFaceProvider": "kaizen.providers.embedding.huggingface",
 }
 
+_PROVIDERS_LEGACY_WARNS = _PROVIDERS_LEGACY
+
+# #1720 Wave-2: these seven legacy chat providers were retired onto the four-axis
+# LlmClient and their canonical modules deleted. Their barrel re-exports were
+# removed, ending the deprecation cycle — accessing them now raises
+# AttributeError (no warning, no resolution) on BOTH barrels.
+_REMOVED_LEGACY_PROVIDERS = [
+    "AnthropicProvider",
+    "DockerModelRunnerProvider",
+    "GoogleGeminiProvider",
+    "MockProvider",
+    "OllamaProvider",
+    "OpenAIProvider",
+    "PerplexityProvider",
+]
+
 # The test harness (tests/conftest.py, module scope) deliberately rebinds
 # ``kaizen.providers.MockProvider = KaizenMockProvider`` for unit tests, so under
 # the harness ``MockProvider`` is a REAL attribute on the ``kaizen.providers``
-# module dict and the PEP 562 shim never fires for it (nor does it resolve to the
-# canonical class). That override is a harness artifact, not a shim defect — the
-# shim warns + resolves correctly in a clean interpreter. The ``nodes.ai`` barrel
-# is NOT patched by conftest, so ``MockProvider`` shim behavior is still fully
-# covered there; here it is excluded ONLY from the ``kaizen.providers``
-# warn+resolve parametrization (it remains in the ``__all__`` contract check).
+# module dict and the barrel ``__getattr__`` never fires for it. That override is
+# a harness artifact, not a barrel defect — in a clean interpreter
+# ``kaizen.providers.MockProvider`` raises AttributeError like every other
+# removed name. It is therefore excluded ONLY from the ``kaizen.providers``
+# AttributeError parametrization; the ``nodes.ai`` barrel is NOT patched by
+# conftest, so MockProvider's removed-name behavior is still fully covered there.
 _PROVIDERS_CONFTEST_PATCHED = {"MockProvider"}
-_PROVIDERS_LEGACY_WARNS = {
-    k: v for k, v in _PROVIDERS_LEGACY.items() if k not in _PROVIDERS_CONFTEST_PATCHED
-}
+_PROVIDERS_REMOVED_RAISES = [
+    n for n in _REMOVED_LEGACY_PROVIDERS if n not in _PROVIDERS_CONFTEST_PATCHED
+]
 
 
 def _canonical(name: str, module_path: str) -> object:
@@ -89,11 +110,11 @@ def _canonical(name: str, module_path: str) -> object:
 # --------------------------------------------------------------------------
 
 
-def test_nodes_ai_openai_provider_warns_and_resolves_real_class() -> None:
+def test_nodes_ai_azure_provider_warns_and_resolves_real_class() -> None:
     with pytest.warns(DeprecationWarning, match=r"kaizen\.nodes\.ai.*#1720"):
-        resolved = nodes_ai.OpenAIProvider
+        resolved = nodes_ai.AzureAIFoundryProvider
 
-    from kaizen.providers.llm.openai import OpenAIProvider as Canonical
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider as Canonical
 
     assert resolved is Canonical
 
@@ -112,11 +133,11 @@ def test_nodes_ai_every_legacy_name_warns_and_resolves(
 # --------------------------------------------------------------------------
 
 
-def test_providers_openai_provider_warns_and_resolves_real_class() -> None:
+def test_providers_azure_provider_warns_and_resolves_real_class() -> None:
     with pytest.warns(DeprecationWarning, match=r"kaizen\.providers.*#1720"):
-        resolved = providers.OpenAIProvider
+        resolved = providers.AzureAIFoundryProvider
 
-    from kaizen.providers.llm.openai import OpenAIProvider as Canonical
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider as Canonical
 
     assert resolved is Canonical
 
@@ -194,6 +215,30 @@ def test_providers_registry_accessors_warn_and_resolve() -> None:
         assert providers.PROVIDERS is CanonPROVIDERS
     with pytest.warns(DeprecationWarning, match=r"#1720"):
         assert providers.get_provider is canon_get_provider
+
+
+# --------------------------------------------------------------------------
+# (f) #1720 Wave-2 end-of-cycle — the seven RETIRED chat providers now raise
+#     AttributeError on BOTH barrels (deprecation cycle complete, modules gone).
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(_REMOVED_LEGACY_PROVIDERS))
+def test_nodes_ai_removed_legacy_provider_raises_attribute_error(name: str) -> None:
+    # No DeprecationWarning, no resolution — the shim entry is gone.
+    with pytest.raises(AttributeError):
+        getattr(nodes_ai, name)
+    # And it is no longer advertised in __all__.
+    assert name not in nodes_ai.__all__
+
+
+@pytest.mark.parametrize("name", sorted(_PROVIDERS_REMOVED_RAISES))
+def test_providers_removed_legacy_provider_raises_attribute_error(name: str) -> None:
+    # MockProvider is excluded here (conftest rebinds it on the providers barrel);
+    # every other retired provider raises AttributeError.
+    with pytest.raises(AttributeError):
+        getattr(providers, name)
+    assert name not in providers.__all__
 
 
 # --------------------------------------------------------------------------

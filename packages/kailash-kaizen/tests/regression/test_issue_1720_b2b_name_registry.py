@@ -50,18 +50,26 @@ pytestmark = pytest.mark.regression
 
 
 # ---------------------------------------------------------------------------
-# (a) PROVIDER_NAMES stays consistent with the PROVIDERS class-map keys.
+# (a) Every registry provider is a known observability family (subset).
+#     Since #1720 Wave-2 PROVIDER_NAMES is the metrics CLASSIFICATION vocabulary
+#     (a superset) and PROVIDERS is the pruned runtime registry, so the drift
+#     tripwire is subset, not equality (registry.py asserts the same).
 # ---------------------------------------------------------------------------
-def test_provider_names_matches_registry_provider_keys():
-    """The pure-data name set equals the resolver's name -> class dict keys."""
+def test_registry_provider_keys_are_a_subset_of_the_name_vocabulary():
+    """Every runtime registry provider MUST be a known metrics family."""
     from kaizen.providers.provider_names import PROVIDER_NAMES
     from kaizen.providers.registry import PROVIDERS
 
-    assert PROVIDER_NAMES == set(PROVIDERS.keys())
+    assert set(PROVIDERS.keys()) <= PROVIDER_NAMES
+    # The retired chat families remain in the vocabulary (four-axis serves them)
+    # but are NOT runtime registry providers.
+    assert "openai" in PROVIDER_NAMES
+    assert "openai" not in PROVIDERS
 
 
 def test_provider_names_is_the_expected_fourteen():
-    """Pin the exact 14-name set so an accidental add/drop fails loudly."""
+    """Pin the exact 14-name metrics-family vocabulary (a superset of the pruned
+    5-provider registry) so an accidental add/drop fails loudly."""
     from kaizen.providers.provider_names import PROVIDER_NAMES
 
     assert PROVIDER_NAMES == frozenset(
@@ -114,11 +122,15 @@ def test_model_prefix_map_underscore_alias_is_same_object():
     assert provider_names._MODEL_PREFIX_MAP is provider_names.MODEL_PREFIX_MAP
 
 
-def test_registry_underscore_alias_matches_pure_data_source():
-    """registry.py re-exports the same prefix map (single source of truth)."""
-    from kaizen.providers import provider_names, registry
+def test_registry_no_longer_couples_to_the_prefix_map():
+    """Since #1720 Wave-2 registry.py no longer imports/re-exports the prefix
+    map: model-id dispatch is retired, and the family CLASSIFICATION table is
+    owned solely by provider_names (metrics). The decoupling is the fix for the
+    dual-purpose conflation (dispatch vs. metric-label classification)."""
+    from kaizen.providers import registry
 
-    assert registry._MODEL_PREFIX_MAP is provider_names.MODEL_PREFIX_MAP
+    assert not hasattr(registry, "_MODEL_PREFIX_MAP")
+    assert not hasattr(registry, "MODEL_PREFIX_MAP")
 
 
 # ---------------------------------------------------------------------------
