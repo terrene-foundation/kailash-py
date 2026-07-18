@@ -23,3 +23,28 @@ test_topic.txt
 Test.txt
 *voting*
 voting_decision.txt
+
+# #1779 follow-up: kaizen-agents delegate/orchestration/memory tests ALSO write
+# task/session/conversation/memory scratch artifacts to CWD without cleanup
+# (same pre-existing test-hygiene issue as the proposal/vote artifacts above).
+# Root-anchored (/) so they can NEVER shadow a real file under src/ or tests/.
+# Follow-up: those tests should use tmp_path.
+/can_handle.txt
+/conversation_history.txt
+/conversation_memory.txt
+/delegation_plan.txt
+/evaluation_results.json
+/favorite_color.txt
+/final_result.txt
+/memory.txt
+/session.txt
+/session_c.txt
+/session_memory.txt
+/summary.txt
+/user_message.txt
+/very_complex_task_error.txt
+/test_add.py
+/subtask_*_result.txt
+/task_*.txt
+/task_execution/
+/task_results/
