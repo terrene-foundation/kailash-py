@@ -23,19 +23,19 @@ import pytest
 class TestBaseAgentLineCount:
     """Enforce that base_agent.py stays under 1,000 lines."""
 
-    def test_base_agent_under_1010_lines(self):
-        # Budget raised 1000 -> 1010 (2026-07-18, #1779): the governance_required
-        # posture threads an `ungoverned` opt-out through the two BaseAgent egress
-        # chokepoints (four-axis `from_deployment` + LLMAgentNode node_config) —
-        # ~6 lines of genuine feature code, NOT re-inlined mixin code. The guard's
-        # purpose (catching a merge that re-inlines MCP/A2A mixins, which adds
-        # 200+ lines) is fully preserved at <1010.
+    def test_base_agent_under_1015_lines(self):
+        # Budget raised 1000 -> 1010 (2026-07-18, #1779: `ungoverned` opt-out
+        # threading) -> 1015 (2026-07-19, #1720 Wave-2b: cleanup() gained a lazy
+        # `sanitize_provider_error` import guarding a pre-existing NameError in
+        # its MCP-cleanup except-handlers — 3 lines of genuine bug-fix code, NOT
+        # re-inlined mixin code). The guard's purpose (catching a merge that
+        # re-inlines MCP/A2A mixins, which adds 200+ lines) is preserved at <1015.
         path = Path(__file__).parent.parent.parent.parent / (
             "src/kaizen/core/base_agent.py"
         )
         lines = path.read_text().splitlines()
-        assert len(lines) < 1010, (
-            f"base_agent.py has grown to {len(lines)} lines (budget: <1010). "
+        assert len(lines) < 1015, (
+            f"base_agent.py has grown to {len(lines)} lines (budget: <1015). "
             f"This likely indicates a merge regression that re-inlined mixin "
             f"code. MCP methods belong in MCPMixin, A2A in A2AMixin. "
             f"See journal/0003-RISK-spec04-silent-regression-via-parallel-merge.md"

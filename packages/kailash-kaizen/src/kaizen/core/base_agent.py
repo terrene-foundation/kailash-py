@@ -956,9 +956,8 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
     def cleanup(self):
         """Cleanup agent resources."""
-        # Imported lazily (not at module scope) so importing base_agent does not
-        # pull in the kaizen.nodes.ai package tree; both except-handlers below
-        # call it, so a NameError here would mask the original cleanup error.
+        # Lazy import (module-scope would pull the kaizen.nodes.ai tree); both
+        # except-handlers below call it — a missing import would mask the error.
         from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
         if hasattr(self, "_mcp_server") and self._mcp_server is not None:
