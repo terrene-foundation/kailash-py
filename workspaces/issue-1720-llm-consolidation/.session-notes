@@ -48,7 +48,7 @@ Next session: START the Wave 2 handoff section below.
 - **Wave 1C** — PR #1810 FRECON: 4 stale workspaces → `workspaces/_archive/`.
 - **Wave 2 /analyze** — PR #1811 persisted `01-analysis/1720-wave2-delete-scoping.md`.
 - **Filed** rs#1945 (cross-SDK #1720 legacy-provider retirement + BYOK parity; grant journal/0005).
-- **Wave 1A** (tests→tmp_path) — testing-specialist agent still running; merge its PR when it lands.
+- **Wave 1A** (tests→tmp_path) — agent hit a session limit mid-investigation; DEFERRED as INCREMENTAL (real fix is src-level discovered-root redirect, captured in `04-validate/f-testhyg-followup.md`; orphaned worktree cleaned; `.gitignore` #1808 mitigates the symptom).
 
 ## Outstanding ledger (forest) — value-ranked
 
@@ -57,7 +57,7 @@ Next session: START the Wave 2 handoff section below.
 | **F1720C** | **#1720 Wave 2 — DELETE legacy `providers/llm` (subsumes #1803)** | #1720 tracker (terminal goal) | **SCOPED (01-analysis/1720-wave2-delete-scoping.md); DEFERRED to fresh session — see Wave 2 handoff below** |
 | F1803 | gate legacy/multimodal/azure provider layer | #1779 follow-up | **SUBSUMED by F1720C delete** (deleted layer needs no gate) |
 | F1782 | loom Gate-2 rule sync | sync-artifact policy | **DONE** — merged (safety-verified) |
-| F-TESTHYG | kaizen-agents tests → `tmp_path` | test-hygiene | **IN FLIGHT** — Wave 1A agent running; merge its PR |
+| F-TESTHYG | kaizen-agents test-scratch root writes | test-hygiene | **DEFERRED** (INCREMENTAL) — Wave 1A agent hit session limit; found the real fix is src-level (discovered-root writes, not just CWD); chdir-fixture partial captured. See `04-validate/f-testhyg-followup.md`; `.gitignore` #1808 mitigates. Revisit `after-milestone:1720-wave2` |
 | FRECON | archive 4 stale workspaces | value-prioritization MUST-4 | **DONE** — PR #1810 |
 | F-LOOMCANON | Canonicalize release-hazards #1 (dependencies.md pin-floor) + #3 (deployment.md interdependent-minors TestPyPI) | journal/0003; loom rule fleet | OPEN — loom /codify (not this repo) |
 | FVERT | Vertex-Claude/Gemini LIVE validation | #1717 headline path | BLOCKED — GCP creds not in .env |
