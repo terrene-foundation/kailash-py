@@ -915,6 +915,15 @@ class LLMAgentNode(Node):
         model = kwargs["model"]
         messages = kwargs["messages"]
         system_prompt = kwargs.get("system_prompt")
+        # #1859: provider-specific settings (Azure deployment name + api-version).
+        # Node config wins over connection inputs (same precedence as the other
+        # config params below). For Azure this carries {"deployment": ...,
+        # "api_version": ...}; the four-axis path uses `deployment` as the wire /
+        # URL deployment name so `model` stays the canonical family reasoning-model
+        # detection keys off.
+        provider_config = self.config.get(
+            "provider_config", kwargs.get("provider_config")
+        )
         # Extract config parameters from self.config first (node configuration),
         # then fall back to kwargs (connection inputs) for backward compatibility
         tools = self.config.get("tools", kwargs.get("tools", []))
@@ -1043,6 +1052,7 @@ class LLMAgentNode(Node):
                     generation_config,
                     api_key=per_request_api_key,
                     base_url=per_request_base_url,
+                    provider_config=provider_config,
                 )
 
             # Handle tool execution if enabled and tools were called
@@ -1094,6 +1104,7 @@ class LLMAgentNode(Node):
                             generation_config,
                             api_key=per_request_api_key,
                             base_url=per_request_base_url,
+                            provider_config=provider_config,
                         )
 
                 # Update final response metadata
@@ -2365,12 +2376,20 @@ Final Answer: 6 hours"""
         generation_config: dict,
         api_key: str = None,
         base_url: str = None,
+        provider_config: dict | None = None,
     ) -> dict[str, Any]:
         """Generate LLM response using provider architecture.
 
         Args:
             api_key: Optional per-request API key override for BYOK scenarios.
             base_url: Optional per-request base URL override.
+            provider_config: Provider-specific settings. #1859: for Azure
+                (`azure` / `azure_openai`) this carries `{"deployment": ...,
+                "api_version": ...}` — the Azure DEPLOYMENT NAME (URL / wire
+                `model` field) and api-version. When `deployment` is present,
+                `model` is the canonical model FAMILY, so reasoning-model
+                detection keys off the family regardless of the deployment name.
+                Ignored by every non-Azure provider.
 
         #1720 Wave-B1a — LIVE CUTOVER. This method now returns the four-axis
         ``kaizen.llm.client.LlmClient`` result (mapped onto the legacy shape via
@@ -2402,9 +2421,20 @@ Final Answer: 6 hours"""
             # the legacy get_provider(...).chat(...) path until a wire lands.
             # BYOK overrides are validated inside resolve_deployment_for (the
             # sibling enforcement surface to LlmClient.complete's api_key guard).
+            # #1859: for Azure, thread the deployment NAME + api-version from
+            # provider_config so `model` stays the canonical family that
+            # reasoning-model detection keys off. Non-Azure providers ignore both.
+            _pc = provider_config or {}
+            azure_deployment = _pc.get("deployment")
+            azure_api_version = _pc.get("api_version")
             try:
                 deployment = resolve_deployment_for(
-                    provider, model, api_key=api_key, base_url=base_url
+                    provider,
+                    model,
+                    api_key=api_key,
+                    base_url=base_url,
+                    deployment=azure_deployment,
+                    api_version=azure_api_version,
                 )
             except UnsupportedDeploymentProvider:
                 return self._legacy_provider_chat(

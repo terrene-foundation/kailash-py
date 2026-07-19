@@ -1755,6 +1755,7 @@ def azure_openai_preset(
     auth: AzureEntra,
     *,
     api_version: Optional[str] = None,
+    canonical_model: Optional[str] = None,
 ) -> LlmDeployment:
     """Azure OpenAI deployment -- composed with an AzureEntra auth strategy.
 
@@ -1778,6 +1779,13 @@ def azure_openai_preset(
     Optional:
 
     * `api_version` -- defaults to `AZURE_OPENAI_DEFAULT_API_VERSION`.
+    * `canonical_model` (#1859) -- the canonical model FAMILY (`"gpt-5"` /
+      `"o1"` / …) this deployment serves, when the caller-chosen
+      `deployment_name` is NOT itself the family. Reasoning-model detection +
+      the `max_tokens`/`max_completion_tokens` field selection key off this so a
+      gpt-5 deployment named e.g. `"my-gpt5-deploy"` gets its reasoning params
+      stripped instead of taking a 400 `unsupported_value`. `None` (default) =>
+      detection falls back to the deployment name (byte-identical to pre-#1859).
 
     Cross-SDK parity: preset name `azure_openai` + default api-version +
     endpoint path template are byte-identical to the Rust SDK.
@@ -1815,6 +1823,9 @@ def azure_openai_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_deployment,
+        # #1859: family for reasoning/token detection; None keeps pre-#1859
+        # behavior (detection keys off the deployment name).
+        canonical_model=canonical_model,
         preset_name="azure_openai",
     )
     logger.info(
@@ -1852,12 +1863,14 @@ def _register_and_attach_session_6_presets() -> None:
         auth: AzureEntra,
         *,
         api_version: Optional[str] = None,
+        canonical_model: Optional[str] = None,
     ) -> LlmDeployment:
         return azure_openai_preset(
             resource_name,
             deployment_name,
             auth,
             api_version=api_version,
+            canonical_model=canonical_model,
         )
 
     @classmethod  # type: ignore[misc]

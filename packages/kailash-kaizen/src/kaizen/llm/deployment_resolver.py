@@ -169,7 +169,12 @@ _UNSUPPORTED_PROVIDERS = frozenset({"azure_ai_foundry"})
 
 
 def _resolve_azure_deployment(
-    model: str, api_key: Optional[str], base_url: Optional[str]
+    model: str,
+    api_key: Optional[str],
+    base_url: Optional[str],
+    *,
+    deployment: Optional[str] = None,
+    api_version: Optional[str] = None,
 ):
     """Build an ``OpenAiChat``-wire Azure-OpenAI deployment (#1720 Wave-A #3).
 
@@ -177,17 +182,32 @@ def _resolve_azure_deployment(
     (``/openai/deployments/{deployment}/...?api-version=``) and the auth
     header (``api-key: <KEY>`` via ``AzureEntra`` api-key variant) differ —
     mirrors ``kaizen.llm.presets.azure_openai_preset``'s endpoint shape,
-    sourcing the resource host from ``base_url`` and the deployment name from
-    ``model`` instead of separate ``resource_name`` / ``deployment_name``
-    args (the shadow/live callers only carry ``provider, model, api_key,
-    base_url``).
+    sourcing the resource host from ``base_url``.
+
+    #1859 deployment-name vs model-family split. Azure's deployment name is
+    caller-chosen and is what Azure requires in the URL / wire ``model`` field;
+    the model FAMILY (``gpt-5`` / ``o1`` / …) is what reasoning-model detection
+    must key off. Two caller shapes:
+
+    * ``deployment`` given (``BaseAgentConfig(model="gpt-5",
+      provider_config={"deployment": "my-gpt5-deploy"})``): ``deployment`` is the
+      URL / wire deployment name, ``model`` is the canonical family. The built
+      deployment carries ``default_model=<deployment name>`` (URL + wire) AND
+      ``canonical_model=<family>`` so the reasoning-param strip fires off the
+      family regardless of the deployment name.
+    * ``deployment`` absent (legacy shape, ``model`` IS the deployment name):
+      ``default_model`` and ``canonical_model`` both resolve to ``model`` —
+      byte-identical to pre-#1859. (No family is available in this shape, so the
+      strip still keys off the deployment name; callers with a non-canonical
+      deployment name must pass ``model``=family + ``provider_config.deployment``.)
 
     Credentials mirror the canonical Azure env resolution
     (``kaizen.llm.azure_env.resolve_azure_env``): the per-request
     override wins, else the canonical ``AZURE_*`` env vars (legacy
     ``AZURE_OPENAI_*`` names still resolve with a DeprecationWarning). A
     missing endpoint or api-key returns ``None`` (skip), matching the
-    base-url family's missing-credential contract.
+    base-url family's missing-credential contract. ``api_version`` from
+    ``provider_config`` wins over the ``AZURE_*`` env vars when supplied.
     """
     from kaizen.llm.auth.azure import AzureEntra
     from kaizen.llm.azure_env import resolve_azure_env
@@ -211,29 +231,36 @@ def _resolve_azure_deployment(
             extra={"provider": "azure", "reason": "missing_api_key"},
         )
         return None
-    api_version = (
-        resolve_azure_env("AZURE_API_VERSION", "AZURE_OPENAI_API_VERSION")
+    resolved_api_version = (
+        api_version
+        or resolve_azure_env("AZURE_API_VERSION", "AZURE_OPENAI_API_VERSION")
         or AZURE_OPENAI_DEFAULT_API_VERSION
     )
 
-    # The deployment name is interpolated into the URL path; validate it
+    # #1859: the DEPLOYMENT NAME (from provider_config, else `model` for the
+    # legacy single-arg shape) is interpolated into the URL path; validate it
     # through the canonical Azure grammar (fail-closed on path-control chars)
     # BEFORE the f-string interpolation below — the same validator
-    # azure_openai_preset uses.
-    resolved_deployment = AzureOpenAIGrammar().resolve(model)
+    # azure_openai_preset uses. `model` remains the canonical FAMILY.
+    deployment_name = deployment or model
+    resolved_deployment = AzureOpenAIGrammar().resolve(deployment_name)
 
     endpoint = Endpoint(
         base_url=resolved_endpoint,
         path_prefix=f"/openai/deployments/{resolved_deployment}",
         # Azure REQUIRES ?api-version= on EVERY request URL; both
         # _build_completion_url and _build_embed_url append query_params.
-        query_params={"api-version": api_version},
+        query_params={"api-version": resolved_api_version},
     )
     return LlmDeployment(
         wire=WireProtocol.OpenAiChat,
         endpoint=endpoint,
         auth=AzureEntra(api_key=resolved_key),
         default_model=resolved_deployment,
+        # #1859: reasoning-model detection keys off the canonical family, not the
+        # deployment name. When no separate deployment was supplied `model` IS the
+        # deployment name, so family == deployment name (byte-neutral).
+        canonical_model=model,
         preset_name="azure_openai",
     )
 
@@ -279,6 +306,8 @@ def resolve_deployment_for(
     *,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    deployment: Optional[str] = None,
+    api_version: Optional[str] = None,
 ):
     """Resolve a four-axis ``LlmDeployment`` for a legacy ``provider`` name.
 
@@ -294,6 +323,13 @@ def resolve_deployment_for(
     did not pass a per-request override, the same ``<PROVIDER>_API_KEY`` env
     var the legacy provider itself reads (``rules/env-models.md``) is tried
     before giving up.
+
+    ``deployment`` / ``api_version`` are Azure-only (#1859): they come from the
+    caller's ``provider_config`` (``{"deployment": ..., "api_version": ...}``).
+    When ``deployment`` is given, ``model`` is the canonical model FAMILY and
+    ``deployment`` is the Azure deployment NAME (URL / wire ``model`` field), so
+    reasoning-model detection keys off the family regardless of the deployment
+    name. Both are ignored by every non-Azure provider.
     """
     provider_key = (provider or "").strip().lower()
 
@@ -321,7 +357,13 @@ def resolve_deployment_for(
         raise UnsupportedDeploymentProvider(provider_key)
 
     if provider_key in _AZURE_PROVIDERS:
-        return _resolve_azure_deployment(model, api_key, base_url)
+        return _resolve_azure_deployment(
+            model,
+            api_key,
+            base_url,
+            deployment=deployment,
+            api_version=api_version,
+        )
 
     api_key_map = _api_key_preset_map()
     if provider_key in api_key_map:

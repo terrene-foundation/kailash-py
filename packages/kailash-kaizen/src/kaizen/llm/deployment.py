@@ -276,6 +276,24 @@ class CompletionRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     model: str
+    # #1859 provider-API param-compatibility hint. The CANONICAL model FAMILY
+    # this request targets — used ONLY for provider-side parameter compatibility
+    # (reasoning-model sampling-param filtering + the
+    # ``max_tokens``/``max_completion_tokens`` field selection), NEVER emitted on
+    # the wire. Set when ``model`` is a routing ALIAS that does not name the
+    # model family: the canonical case is an Azure OpenAI deployment whose name
+    # is caller-chosen (e.g. ``"my-gpt5-deploy"`` for a gpt-5 deployment). Azure
+    # requires the deployment NAME in the URL path AND the wire body ``model``
+    # field, so ``model`` here IS the deployment name — ``LlmClient`` resolves the
+    # wire ``model`` to the deployment's ``default_model`` (the deployment name)
+    # for any deployment that declares a ``canonical_model``, even when the caller
+    # passes the family as ``complete(model=...)`` (the live node path). Meanwhile
+    # reasoning-model detection keys off THIS field (the FAMILY, ``"gpt-5"``) or
+    # the reasoning-param strip is skipped and Azure returns 400
+    # ``unsupported_value``. ``None`` (the default) => detection falls back to
+    # ``model``, byte-identical to pre-#1859 for every direct provider whose
+    # ``model`` already IS the family.
+    canonical_model: Optional[str] = None
     messages: list[dict[str, Any]]
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -408,6 +426,28 @@ class LlmDeployment(BaseModel):
     endpoint: Endpoint
     auth: Any  # AuthStrategy Protocol; validated at preset construction
     default_model: Optional[str] = None
+    canonical_model: Optional[str] = None
+    """#1859 canonical model FAMILY for provider-API param compatibility.
+
+    ``default_model`` is the value sent on the wire / interpolated into the URL;
+    for Azure OpenAI that is the caller-chosen DEPLOYMENT NAME (a routing alias),
+    NOT the model family. ``canonical_model`` carries the family
+    (``"gpt-5"`` / ``"o1"`` / …) so the reasoning-model sampling-param filter and
+    the ``max_tokens``/``max_completion_tokens`` field selection key off the
+    family — a gpt-5 deployment named ``"my-gpt5-deploy"`` still gets its
+    reasoning params stripped instead of taking a 400 ``unsupported_value``.
+
+    When this field is set, ``LlmClient._build_completion_request`` resolves the
+    wire ``CompletionRequest.model`` to ``default_model`` (the deployment name)
+    even if the caller passes the family as ``complete(model=...)`` — the live
+    node path calls ``complete(model=<family>)`` — so the Azure URL AND the wire
+    body ``model`` field both carry the deployment name while ``canonical_model``
+    drives detection. ``None`` (the default, every direct provider whose
+    ``default_model`` already IS the family) => the wire model is the passed
+    ``model`` and detection falls back to it, byte-identical to pre-#1859.
+    Threaded onto the request as ``CompletionRequest.canonical_model`` by
+    ``LlmClient._build_completion_request``.
+    """
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
     completion_routing: Optional[CompletionRouting] = None
