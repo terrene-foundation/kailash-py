@@ -2,6 +2,39 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.37.1] — 2026-07-19 — Cost fix: obsolete-model call-defaults now resolve from .env (#1844, #1845)
+
+### Fixed
+
+- **Hardcoded `gpt-4` / `gpt-3.5-turbo` call-defaults across core agent/framework/node/provider
+  paths now resolve from the environment (#1844).** `.env` sets `OPENAI_PROD_MODEL` /
+  `DEFAULT_LLM_MODEL` (current, non-deprecated models) but several LLM call sites still fell
+  back to a hardcoded, deprecated, billed literal whenever no explicit `model=` was supplied —
+  silently spending against `gpt-4` / `gpt-3.5-turbo-0125` (root cause of a ~$208 obsolete-model
+  spend across the shared dev environment). Fixed at five call sites: `core/agents.py`'s CoT and
+  ReAct param builders and the multi-cycle-pattern base params (`self.config.get("model",
+"gpt-4")` / an unconditional `model="gpt-4"` → `self.config.get("model") or` env-first
+  resolution via a new `_resolve_default_model()` helper — `OPENAI_PROD_MODEL` →
+  `DEFAULT_LLM_MODEL` → the provider-intrinsic `DEFAULT_OPENAI_MODEL` constant, `gpt-4o-mini`);
+  `core/framework.py`'s `create_team` (`model="gpt-3.5-turbo"` → the same env-first resolution);
+  `nodes/ai/iterative_llm_agent.py`'s action and synthesis LLM calls (`kwargs.get("model",
+"gpt-4")` → a new `_resolve_action_model(kwargs)` helper — caller-supplied `kwargs["model"]`
+  still wins); `nodes/ai/llm_agent.py`'s `LLMAgentNode` `model` `NodeParameter` default
+  (hardcoded `"gpt-4"` → the same env-first resolution). `providers/multi_modal_adapter.py`'s
+  text-only OpenAI path switched its hardcoded literal from `gpt-4` to `gpt-4o` (matching the
+  adapter's own vision call site, which already used `gpt-4o`). No public signature changes —
+  every fix is a default-_value_ change; explicit `model=` / `config["model"]` callers are
+  unaffected.
+- **Removed the stray `nodes/ai/monitored_llm.py.backup`** — a 407-line dead backup file with
+  no import references anywhere in the tree (orphan cleanup, no behavior change).
+
+Companion release: `kaizen-agents` `0.11.2` (released alongside) extends the equivalent
+`resolve_default_model()` env-first pattern to its specialized agents, pattern factories, and
+workflow templates. `kailash` core also gained a `kailash.testing.env_cost_guard` test-infra
+module in the same source range (#1845 — a bare `pytest` now makes zero real LLM calls even
+when a provider key is present); it ships in the next core release and is not part of this
+kaizen bump.
+
 ## [2.37.0] — 2026-07-19 — Multimodal normalizer + Gemini structured-output guard + legacy-provider retirement (#1817, #1819, #1820)
 
 ### Added
