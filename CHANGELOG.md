@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.55.0] - 2026-07-19
+
+### Added (Security)
+
+- **OIDC SSO enforces PKCE S256 + `nonce` validation on the authorization-code
+  flow (#1815).** `kailash.nodes.auth.sso` now generates an RFC 7636
+  `code_verifier` / `code_challenge` (S256) pair for every authorization
+  request and sends `code_challenge_method=S256`, closing the authorization-code
+  interception gap on public/native clients. A random `nonce` is minted at
+  authorization time and cached alongside the PKCE verifier; on token exchange,
+  the returned `id_token`'s `nonce` claim MUST be present and MUST match the
+  minted value via a constant-time comparison (`hmac.compare_digest`) — a
+  missing `id_token` or a `nonce` mismatch rejects the login. Closes the OIDC
+  id_token replay/injection defense gap.
+
 ## [2.54.0] - 2026-07-18
 
 ### Added
