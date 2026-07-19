@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.12.1] — 2026-07-19 — Webhook signature verification fails closed (#1814)
+
+### Fixed (Security)
+
+- **`WebhookTransport.verify_signature` / `verify_signature_for_request` now
+  fail closed when no signing secret is configured (#1814).** Previously,
+  reaching either verification method with a signature but no secret
+  configured returned `True` — accepting ANY signature as valid, including
+  a forged or absent one. Both methods now raise
+  `ValueError("Cannot verify signature: no secret configured")` instead,
+  matching the existing fail-closed behavior of `compute_signature`.
+  **Behavior change:** any
+  caller relying on the prior fail-open default (an unconfigured secret
+  silently accepting all webhooks) now gets a typed `ValueError` at
+  verification time — configure a signing secret, or catch the error to
+  reject the request explicitly.
+
 ## [2.12.0] — 2026-07-13 — HTTP metrics label bounding + core-gateway route coverage (#1708)
 
 Part of the coordinated 5-package #1708 observability release. Requires
