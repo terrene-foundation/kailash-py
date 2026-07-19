@@ -374,6 +374,133 @@ class TestImpersonationDefeat:
 
 
 # ---------------------------------------------------------------------------
+# require_caller_identity: strict mode disables the metadata["tenant_id"]
+# fallback entirely (security-reviewer HIGH-1 fix) -- deployments with no
+# transport-level identity resolution can opt into a REAL isolation
+# guarantee instead of the (documented, attacker-controlled) fallback.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.security
+class TestRequireCallerIdentity:
+    """McpGovernanceConfig.require_caller_identity=True disables the
+    self-asserted metadata["tenant_id"] fallback -- an absent (or
+    tenant-less) trusted identity fails closed instead of trusting the body."""
+
+    def _strict_config(self) -> McpGovernanceConfig:
+        return McpGovernanceConfig(
+            default_policy=DefaultPolicy.ALLOW,
+            tenant_grants=_two_tenant_grants(),
+            require_caller_identity=True,
+            audit_enabled=False,
+        )
+
+    def test_metadata_fallback_disabled_blocks_without_caller_identity(self) -> None:
+        """The exact HIGH-1 bypass: no caller_identity + a self-asserted
+        metadata["tenant_id"] that WOULD otherwise be honored. In strict
+        mode this is BLOCKED -- the metadata channel is never consulted."""
+        enf = McpGovernanceEnforcer(self._strict_config())
+        ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
+        decision = enf.check_tool_call(ctx)
+        assert decision.level == "blocked"
+        assert "no tenant was declared" in decision.reason
+
+    def test_metadata_fallback_disabled_blocks_when_identity_tenant_is_none(
+        self,
+    ) -> None:
+        """A caller_identity IS supplied but its own tenant is None -- strict
+        mode does NOT fall back to metadata (unlike the default/non-strict
+        behavior proven in TestImpersonationDefeat)."""
+        enf = McpGovernanceEnforcer(self._strict_config())
+        identity = McpCallerIdentity(agent_id="agent-1", tenant=None)
+        ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
+        decision = enf.check_tool_call(ctx, caller_identity=identity)
+        assert decision.level == "blocked"
+
+    def test_metadata_fallback_disabled_still_honors_trusted_identity(self) -> None:
+        """Strict mode does not break the trusted-identity path -- a genuine
+        caller_identity.tenant is honored exactly as in non-strict mode."""
+        enf = McpGovernanceEnforcer(self._strict_config())
+        identity = McpCallerIdentity(agent_id="agent-1", tenant="tenant-a")
+        decision = enf.check_tool_call(
+            _tool_ctx(tool_name="tool-a"), caller_identity=identity
+        )
+        assert decision.level == "auto_approved"
+
+    def test_metadata_fallback_disabled_also_applies_to_resource_read(self) -> None:
+        enf = McpGovernanceEnforcer(self._strict_config())
+        ctx = _resource_ctx(
+            uri="resource://tenant-a/doc", metadata={"tenant_id": "tenant-a"}
+        )
+        decision = enf.check_resource_read(ctx)
+        assert decision.level == "blocked"
+
+    def test_require_caller_identity_defaults_false(self) -> None:
+        """Additive + backward-compatible: constructing McpGovernanceConfig
+        with no require_caller_identity argument preserves the (default)
+        metadata-fallback behavior."""
+        config = McpGovernanceConfig()
+        assert config.require_caller_identity is False
+
+
+# ---------------------------------------------------------------------------
+# McpTenantGrant / McpCallerIdentity type-confusion defenses
+# (security-reviewer MEDIUM-2 + LOW-3 fixes)
+# ---------------------------------------------------------------------------
+
+
+class TestTenantGrantTypeConfusion:
+    """A bare string passed where an iterable of tool/resource names was
+    intended must raise, not silently become a per-character frozenset
+    (frozenset("admin") == {'a','d','m','i','n'}) -- an access-control
+    allowlist silently misinterpreted this way both denies the intended
+    name and grants unintended single-character names."""
+
+    def test_direct_construction_bare_string_tools_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bare string"):
+            McpTenantGrant(tenant="t", tools="admin")
+
+    def test_direct_construction_bare_string_resources_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bare string"):
+            McpTenantGrant(tenant="t", resources="admin")
+
+    def test_direct_construction_non_string_element_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must contain only strings"):
+            McpTenantGrant(tenant="t", tools=frozenset({1, 2}))  # type: ignore[arg-type]
+
+    def test_from_dict_bare_string_tools_rejected_before_frozenset_split(self) -> None:
+        """The from_dict guard MUST fire before frozenset(str) silently
+        produces a per-character set -- by the time __post_init__ would see
+        it, the damage is indistinguishable from a deliberate single-char
+        grant."""
+        with pytest.raises(ValueError, match="bare string"):
+            McpTenantGrant.from_dict({"tenant": "t", "tools": "admin"})
+
+    def test_from_dict_bare_string_resources_rejected(self) -> None:
+        with pytest.raises(ValueError, match="bare string"):
+            McpTenantGrant.from_dict({"tenant": "t", "resources": "docs"})
+
+    def test_from_dict_proper_list_accepted(self) -> None:
+        grant = McpTenantGrant.from_dict({"tenant": "t", "tools": ["search", "read"]})
+        assert grant.tools == frozenset({"search", "read"})
+
+
+class TestCallerIdentityValidation:
+    def test_non_string_tenant_rejected(self) -> None:
+        with pytest.raises(ValueError, match="tenant must be a string or None"):
+            McpCallerIdentity(agent_id="a", tenant=12345)  # type: ignore[arg-type]
+
+    def test_none_tenant_accepted(self) -> None:
+        identity = McpCallerIdentity(agent_id="a", tenant=None)
+        assert identity.tenant is None
+
+    def test_string_tenant_accepted(self) -> None:
+        identity = McpCallerIdentity(agent_id="a", tenant="tenant-a")
+        assert identity.tenant == "tenant-a"
+
+
+# ---------------------------------------------------------------------------
 # Rate windows re-keyed on (tenant, agent_id, tool)
 # ---------------------------------------------------------------------------
 
@@ -422,7 +549,10 @@ class TestRateLimitReKeyedByTenant:
         assert d3.level == "blocked"
         assert "Rate limit exceeded" in d3.reason
 
-    def test_rate_tracker_keys_carry_tenant_prefix_when_isolation_on(self) -> None:
+    def test_rate_tracker_keys_are_tuple_when_isolation_on(self) -> None:
+        """The tenant-keyed rate-tracker key is a TUPLE (tenant, agent_id,
+        tool), not a colon-joined string -- collision-free by construction
+        (see test_colon_containing_identifiers_do_not_collide below)."""
         grants = {
             "tenant-a": McpTenantGrant(tenant="tenant-a", tools=frozenset({"t"})),
         }
@@ -434,7 +564,40 @@ class TestRateLimitReKeyedByTenant:
         enf.check_tool_call(
             _tool_ctx(tool_name="t", agent_id="agent-1"), caller_identity=identity
         )
-        assert "tenant-a:agent-1:t" in enf._rate_tracker
+        assert ("tenant-a", "agent-1", "t") in enf._rate_tracker
+
+    def test_colon_containing_identifiers_do_not_collide(self) -> None:
+        """A tuple key is collision-free even when tenant/agent_id contain a
+        literal ":" -- a colon-JOINED string would let tenant="a:b", agent="c"
+        collide with tenant="a", agent="b:c" (both -> "a:b:c:t"); the tuple
+        form keeps them as distinct dict keys."""
+        grants = {
+            "a:b": McpTenantGrant(tenant="a:b", tools=frozenset({"t"})),
+            "a": McpTenantGrant(tenant="a", tools=frozenset({"t"})),
+        }
+        policy = McpToolPolicy(tool_name="t", rate_limit=1, max_cost=None)
+        enf = McpGovernanceEnforcer(
+            _config(tenant_grants=grants, tool_policies={"t": policy})
+        )
+        id_1 = McpCallerIdentity(agent_id="c", tenant="a:b")
+        id_2 = McpCallerIdentity(agent_id="b:c", tenant="a")
+
+        d1 = enf.check_tool_call(
+            _tool_ctx(tool_name="t", agent_id="c", timestamp=_T0), caller_identity=id_1
+        )
+        assert d1.level == "auto_approved"
+        # A colliding string-join ("a:b:c:t" for both) would have this call
+        # blocked (rate_limit=1 already consumed by id_1); the tuple form
+        # keeps the two principals' budgets independent.
+        d2 = enf.check_tool_call(
+            _tool_ctx(
+                tool_name="t", agent_id="b:c", timestamp=_T0 + timedelta(seconds=1)
+            ),
+            caller_identity=id_2,
+        )
+        assert d2.level == "auto_approved"
+        assert ("a:b", "c", "t") in enf._rate_tracker
+        assert ("a", "b:c", "t") in enf._rate_tracker
 
 
 # ---------------------------------------------------------------------------

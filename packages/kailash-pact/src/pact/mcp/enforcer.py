@@ -92,9 +92,19 @@ def _clearance_restrictiveness(value: str | None) -> int:
     return _CLEARANCE_LEVELS_ASCENDING.index(level)
 
 
+# Rate-tracker dict key: "agent_id:tool_name" (isolation off / no tenant) OR
+# the tuple (tenant, agent_id, tool_name) (issue #1843, tenant resolved). A
+# tuple -- not a colon-joined string -- makes the tenant-keyed form
+# collision-free: a tenant/agent_id/tool_name containing a literal ":" can
+# never make two distinct principals hash to the same string key.
+_RateTrackerKey = str | tuple[str, str, str]
+
+
 def _resolve_effective_tenant(
     metadata: Mapping[str, Any],
     caller_identity: McpCallerIdentity | None,
+    *,
+    require_caller_identity: bool = False,
 ) -> str | None:
     """Resolve the AUTHORITATIVE tenant for an MCP call (issue #1843).
 
@@ -103,14 +113,24 @@ def _resolve_effective_tenant(
     ``metadata["tenant_id"]`` (impersonation defeat): a caller cannot widen
     its own access by putting a different tenant in the request body. Only
     when no trusted identity (or no identity tenant) is supplied does this
-    fall back to the self-asserted metadata channel.
+    fall back to the self-asserted metadata channel -- UNLESS
+    ``require_caller_identity`` is set, in which case the metadata fallback is
+    never consulted at all: an absent (or tenant-less) trusted identity
+    resolves straight to None (fail-closed), rather than trusting a
+    caller-supplied ``metadata["tenant_id"]``. Deployments with no
+    transport-level identity resolution (no caller_identity ever wired) MUST
+    set ``McpGovernanceConfig.require_caller_identity=True`` to get a REAL
+    isolation guarantee; without it, the self-asserted metadata channel is a
+    legitimate but attacker-controlled fallback (documented, not a bypass).
 
     Returns:
         The tenant string, or None if neither the caller identity nor the
-        metadata channel carries one.
+        (optionally-disabled) metadata channel carries one.
     """
     if caller_identity is not None and caller_identity.tenant is not None:
         return caller_identity.tenant
+    if require_caller_identity:
+        return None
     metadata_tenant = metadata.get("tenant_id") if metadata else None
     return metadata_tenant if isinstance(metadata_tenant, str) else None
 
@@ -230,8 +250,13 @@ class McpGovernanceEnforcer:
         )
         # Mutable overlay for runtime tool registration
         self._policy_overlay: dict[str, McpToolPolicy] = {}
-        # Rate tracking: "agent_id:tool_name" -> deque of timestamps
-        self._rate_tracker: dict[str, deque[datetime]] = {}
+        # Rate tracking: "agent_id:tool_name" (isolation off / no tenant) OR
+        # (tenant, agent_id, tool_name) (issue #1843, tenant resolved) -> deque
+        # of timestamps. The tenant-keyed form is a TUPLE, not a colon-joined
+        # string, so a tenant/agent_id/tool_name containing a literal ":" can
+        # never collide two distinct principals into the same bucket (a
+        # string-join would: tenant="a:b" -- see _check_rate_limit).
+        self._rate_tracker: dict[_RateTrackerKey, deque[datetime]] = {}
         # Observed-time high-water of the last window-expiry GC sweep. None until
         # the first rate-limited check. Amortizes the O(n) silent-pair sweep so
         # the hot path stays O(1) between sweeps (see _gc_expired_rate_entries).
@@ -430,7 +455,11 @@ class McpGovernanceEnforcer:
             # compatibility (issue #1843 acceptance criterion).
             return None
 
-        tenant = _resolve_effective_tenant(metadata, caller_identity)
+        tenant = _resolve_effective_tenant(
+            metadata,
+            caller_identity,
+            require_caller_identity=self._config.require_caller_identity,
+        )
         if tenant is None:
             reason = (
                 f"tenant isolation is enabled but no tenant was declared for "
@@ -829,7 +858,11 @@ class McpGovernanceEnforcer:
         # re-resolving is cheap and keeps this step's tenant self-contained.
         if policy.rate_limit is not None:
             rate_tenant = (
-                _resolve_effective_tenant(context.metadata, caller_identity)
+                _resolve_effective_tenant(
+                    context.metadata,
+                    caller_identity,
+                    require_caller_identity=self._config.require_caller_identity,
+                )
                 if self._config.tenant_grants
                 else None
             )
@@ -867,19 +900,21 @@ class McpGovernanceEnforcer:
             rate_limit: Maximum invocations per minute.
             now: Current timestamp.
             tenant: The resolved tenant (issue #1843), if tenant isolation is
-                enabled. When set, the tracking key is re-keyed on
-                (tenant, agent_id, tool) so two tenants sharing an agent_id +
-                tool do NOT share a rate budget. None (the default --
-                isolation OFF, or no tenant resolved) preserves the
-                pre-existing "agent_id:tool_name" key format BYTE-FOR-BYTE --
-                backward compatibility for every caller that never passes a
-                tenant.
+                enabled. When set, the tracking key is re-keyed on the TUPLE
+                (tenant, agent_id, tool) -- not a colon-joined string, so a
+                tenant/agent_id/tool_name containing a literal ":" can never
+                collide two distinct principals into the same rate bucket --
+                so two tenants sharing an agent_id + tool do NOT share a rate
+                budget. None (the default -- isolation OFF, or no tenant
+                resolved) preserves the pre-existing "agent_id:tool_name"
+                string key format BYTE-FOR-BYTE -- backward compatibility for
+                every caller that never passes a tenant.
 
         Returns:
             A BLOCKED GovernanceDecision if rate limit exceeded, None otherwise.
         """
-        key = (
-            f"{tenant}:{agent_id}:{tool_name}" if tenant else f"{agent_id}:{tool_name}"
+        key: _RateTrackerKey = (
+            (tenant, agent_id, tool_name) if tenant else f"{agent_id}:{tool_name}"
         )
         cutoff = now.timestamp() - self._RATE_LIMIT_WINDOW_SECONDS
         with self._lock:
@@ -1000,7 +1035,7 @@ class McpGovernanceEnforcer:
         # Empty deques sort to epoch so they are evicted first.
         epoch = datetime.min.replace(tzinfo=UTC)
 
-        def _last_ts(k: str) -> datetime:
+        def _last_ts(k: _RateTrackerKey) -> datetime:
             dq = self._rate_tracker[k]
             return dq[-1] if dq else epoch
 

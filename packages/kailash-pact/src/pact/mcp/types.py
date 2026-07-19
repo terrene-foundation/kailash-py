@@ -127,7 +127,14 @@ class McpTenantGrant:
             resources/read. Empty means this tenant is granted no resources.
 
     Raises:
-        ValueError: If tenant is empty.
+        ValueError: If tenant is empty, or tools/resources is a bare string
+            or contains a non-string element (a bare string passed where an
+            iterable of names was intended silently becomes a per-character
+            frozenset via ``frozenset(str)`` -- this is an access-control
+            allowlist, so that silent split is both a false-deny of the
+            intended name AND a false-grant of the individual characters as
+            tool/resource names; see security.md's redactor-contract framing
+            of the analogous substring-matching failure mode).
     """
 
     tenant: str
@@ -137,6 +144,17 @@ class McpTenantGrant:
     def __post_init__(self) -> None:
         if not self.tenant:
             raise ValueError("tenant must not be empty")
+        for field_name, value in (("tools", self.tools), ("resources", self.resources)):
+            if isinstance(value, str):
+                raise ValueError(
+                    f"{field_name} must be an iterable of tool/resource "
+                    f"names, not a bare string {value!r} -- frozenset(str) "
+                    f"would silently split it into individual characters"
+                )
+            if not all(isinstance(item, str) for item in value):
+                raise ValueError(
+                    f"{field_name} must contain only strings, got {value!r}"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -148,11 +166,32 @@ class McpTenantGrant:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> McpTenantGrant:
-        """Deserialize from a dictionary."""
+        """Deserialize from a dictionary.
+
+        Raises ValueError on a bare-string "tools" / "resources" value
+        BEFORE wrapping in frozenset() -- catching the type-confusion at the
+        untrusted-deserialization boundary, one step earlier than
+        __post_init__ can (by the time __post_init__ runs on this path, a
+        bare string would already be a silently-wrong per-character
+        frozenset, indistinguishable from a deliberate set of single-char
+        names).
+        """
+        raw_tools = data.get("tools", [])
+        raw_resources = data.get("resources", [])
+        for field_name, raw_value in (
+            ("tools", raw_tools),
+            ("resources", raw_resources),
+        ):
+            if isinstance(raw_value, str):
+                raise ValueError(
+                    f"{field_name} must be a list of tool/resource names, "
+                    f"not a bare string {raw_value!r} -- frozenset(str) "
+                    f"would silently split it into individual characters"
+                )
         return cls(
             tenant=data["tenant"],
-            tools=frozenset(data.get("tools", [])),
-            resources=frozenset(data.get("resources", [])),
+            tools=frozenset(raw_tools),
+            resources=frozenset(raw_resources),
         )
 
 
@@ -179,6 +218,17 @@ class McpGovernanceConfig:
             fail-closed on an absent, unrecognized, or ungranted tenant. See
             ``McpGovernanceEnforcer._tenant_isolation_decision`` (enforcer.py)
             -- the ONE shared restrictiveness function both surfaces call.
+        require_caller_identity: When True (default False), the tenant
+            resolver NEVER consults the self-asserted ``metadata["tenant_id"]``
+            fallback -- an absent, or tenant-less, trusted ``McpCallerIdentity``
+            resolves straight to no-tenant (fail-closed), rather than trusting
+            a caller-supplied metadata value. Deployments with no
+            transport-level identity resolution wired (no caller_identity ever
+            passed to check_tool_call / check_resource_read) MUST set this to
+            True to get a REAL tenant-isolation guarantee; the default False
+            preserves the documented metadata-fallback behavior (weaker, but
+            explicit) for backward compatibility. A no-op when tenant_grants
+            is empty (isolation OFF).
 
     Raises:
         ValueError: If max_audit_entries is < 1, or a tenant_grants key does
@@ -190,6 +240,7 @@ class McpGovernanceConfig:
     audit_enabled: bool = True
     max_audit_entries: int = 10_000
     tenant_grants: dict[str, McpTenantGrant] = field(default_factory=dict)
+    require_caller_identity: bool = False
 
     def __post_init__(self) -> None:
         if self.max_audit_entries < 1:
@@ -235,6 +286,7 @@ class McpGovernanceConfig:
             "tenant_grants": {
                 name: grant.to_dict() for name, grant in self.tenant_grants.items()
             },
+            "require_caller_identity": self.require_caller_identity,
         }
 
     @classmethod
@@ -249,6 +301,7 @@ class McpGovernanceConfig:
         return cls(
             default_policy=DefaultPolicy(data.get("default_policy", "DENY")),
             tool_policies=policies,
+            require_caller_identity=data.get("require_caller_identity", False),
             tenant_grants=grants,
             audit_enabled=data.get("audit_enabled", True),
             max_audit_entries=data.get("max_audit_entries", 10_000),
@@ -442,7 +495,21 @@ class McpCallerIdentity:
             transport layer did not resolve a tenant for this caller (the
             enforcer then falls back to the self-asserted
             ``metadata["tenant_id"]``, which is weaker but not absent).
+
+    Raises:
+        ValueError: If tenant is not a string or None.
     """
 
     agent_id: str = ""
     tenant: str | None = None
+
+    def __post_init__(self) -> None:
+        # Symmetric with the untrusted metadata["tenant_id"] path in
+        # _resolve_effective_tenant (enforcer.py), which guards with
+        # isinstance(..., str) -- this trusted construction path gets the
+        # same defense-in-depth rather than silently carrying a non-str
+        # tenant through to a dict-key lookup that would just never match.
+        if self.tenant is not None and not isinstance(self.tenant, str):
+            raise ValueError(
+                f"tenant must be a string or None, got " f"{type(self.tenant).__name__}"
+            )

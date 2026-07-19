@@ -249,7 +249,7 @@ class McpTenantGrant:
     resources: frozenset[str] = frozenset()   # resources/read keyed on URI
 ```
 
-**Validation:** `tenant` must be non-empty. Config-level allowlist entry: which tools and which resource URIs a tenant may reach.
+**Validation:** `tenant` must be non-empty. `tools` / `resources` must not be a bare string and must contain only strings -- rejected in both `__post_init__` (direct construction) and `from_dict` (rejected BEFORE the `frozenset(str)` wrap, which would otherwise silently split a bare string into single-character grants). Config-level allowlist entry: which tools and which resource URIs a tenant may reach.
 
 ### 17.3 McpGovernanceConfig
 
@@ -261,9 +261,10 @@ class McpGovernanceConfig:
     audit_enabled: bool = True
     max_audit_entries: int = 10_000
     tenant_grants: dict[str, McpTenantGrant]              # MappingProxyType (immutable)
+    require_caller_identity: bool = False
 ```
 
-Config dict keys must match policy `tool_name` (`tool_policies`) / `tenant` (`tenant_grants`). Both dicts are replaced with `MappingProxyType` at construction for immutability. `tenant_grants` is ADDITIVE and OPTIONAL -- empty (the default) means tenant isolation is OFF, byte-identical to the pre-`tenant_grants` behavior on both `tools/call` and `resources/read`.
+Config dict keys must match policy `tool_name` (`tool_policies`) / `tenant` (`tenant_grants`). Both dicts are replaced with `MappingProxyType` at construction for immutability. `tenant_grants` is ADDITIVE and OPTIONAL -- empty (the default) means tenant isolation is OFF, byte-identical to the pre-`tenant_grants` behavior on both `tools/call` and `resources/read`. `require_caller_identity` (additive, default `False`) disables the self-asserted `metadata["tenant_id"]` fallback entirely when `True` -- an absent, or tenant-less, trusted `McpCallerIdentity` then resolves straight to no-tenant (fail-closed) instead of trusting the caller-supplied metadata channel. Deployments with no transport-level identity resolution wired MUST set this to get a real isolation guarantee; the default preserves the documented (weaker but explicit) metadata-fallback behavior.
 
 ### 17.4 McpGovernanceEnforcer
 
@@ -292,7 +293,7 @@ The core enforcement engine for MCP tool calls AND resource reads.
 
 **`check_resource_read`** (issue #1843): the enforcement entry point for `resources/read`. Prior to #1843, `resources/read` had NO governance layer at all. Currently performs ONLY the tenant-isolation check (via the SAME shared restrictiveness function `tools/call` uses, keyed on resource URI) -- no cost/arg/clearance/rate-limit layer for resources yet. When `tenant_grants` is empty, every resource read is AUTO_APPROVED unconditionally (byte-identical to the pre-#1843, fully-ungoverned behavior).
 
-**Rate limiting:** Per `agent_id:tool_name` key when tenant isolation is off (or no tenant resolves) -- preserved BYTE-FOR-BYTE for backward compatibility. Per `tenant:agent_id:tool_name` when a tenant resolves (issue #1843). Uses bounded deque per key, max 10,000 total rate tracker entries with oldest-10% eviction.
+**Rate limiting:** Per `agent_id:tool_name` STRING key when tenant isolation is off (or no tenant resolves) -- preserved BYTE-FOR-BYTE for backward compatibility. Per `(tenant, agent_id, tool_name)` TUPLE key when a tenant resolves (issue #1843) -- a tuple, not a colon-joined string, so a tenant/agent_id/tool_name containing a literal `:` cannot collide two distinct principals into the same rate bucket. Uses bounded deque per key, max 10,000 total rate tracker entries with oldest-10% eviction.
 
 **Runtime tool registration:** `register_tool(policy)` enforces monotonic tightening against existing policy:
 
@@ -304,7 +305,7 @@ The core enforcement engine for MCP tool calls AND resource reads.
 
 ### 17.4a Tenant Isolation Contract (issue #1843) -- Byte-Neutral
 
-Tenant rides the existing free-form `metadata["tenant_id"]` channel on `McpActionContext` / `McpResourceContext` -- NO new first-class serialized field was added to either wire envelope. `McpCallerIdentity` (new: `agent_id`, `tenant`) is the trusted caller identity resolved by the transport/auth layer BEFORE governance evaluation; it carries deliberately NO `to_dict()` / `from_dict()` -- it is never part of the wire-serialized envelope. Its `tenant` (when set) OVERWRITES any self-asserted `metadata["tenant_id"]` on the context (impersonation defeat: a caller cannot widen its own access by asserting a different tenant in the request body). When no trusted identity (or no identity tenant) is supplied, the enforcer falls back to the self-asserted `metadata["tenant_id"]`.
+Tenant rides the existing free-form `metadata["tenant_id"]` channel on `McpActionContext` / `McpResourceContext` -- NO new first-class serialized field was added to either wire envelope. `McpCallerIdentity` (new: `agent_id`, `tenant`) is the trusted caller identity resolved by the transport/auth layer BEFORE governance evaluation; it carries deliberately NO `to_dict()` / `from_dict()` -- it is never part of the wire-serialized envelope. Its `tenant` (when set) OVERWRITES any self-asserted `metadata["tenant_id"]` on the context (impersonation defeat: a caller cannot widen its own access by asserting a different tenant in the request body). When no trusted identity (or no identity tenant) is supplied, the enforcer falls back to the self-asserted `metadata["tenant_id"]` -- UNLESS `McpGovernanceConfig.require_caller_identity=True`, in which case the metadata fallback is never consulted and an absent/tenant-less trusted identity fails closed (see 17.3). Deployments with no transport-level identity resolution wired MUST set `require_caller_identity=True` for a real isolation guarantee; without it, the metadata channel is a documented, but caller-controlled, fallback -- not a bypass, but also not a substitute for a trusted identity.
 
 **Byte-diff verdict:** the Rust SDK deliberately did NOT add a first-class serialized `tenant_id` field to its `McpActionContext` equivalent -- it kept the envelope frozen and routed tenant through the existing free-form metadata channel instead. This Python port makes the SAME choice: the field form is NOT adopted here (per `cross-sdk-inspection.md` Rule 4b, a byte-CHANGING wire-envelope field addition would require cross-SDK lockstep); adopt it only if ecosystems later converge on that shape.
 
@@ -376,6 +377,9 @@ class McpAuditTrail:
 - Absent tenant (no caller_identity, no metadata["tenant_id"]) with tenant_grants non-empty -> BLOCKED
 - Unrecognized tenant (not a key in tenant_grants) -> BLOCKED
 - Recognized tenant with no grant for the tool/resource -> BLOCKED
+- require_caller_identity=True and no caller_identity.tenant supplied (metadata fallback never consulted) -> BLOCKED
+- McpTenantGrant with a bare-string `tools`/`resources` value, or a non-string element -> ValueError
+- McpCallerIdentity with a non-string, non-None `tenant` -> ValueError
 
 ---
 
