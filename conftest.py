@@ -1,22 +1,26 @@
 """
-Root conftest.py — Auto-loads .env for ALL pytest sessions, with an LLM cost-guard.
+Root conftest.py — Auto-loads .env for ALL pytest sessions, with an active LLM cost-guard.
 
-This ensures environment variables (model names, database URLs, non-secret config)
-are available in every test without manual setup. Works with any Kailash project.
+Environment variables (model names, database URLs, non-secret config) are
+available in every test without manual setup. Provider credentials are actively
+withheld from a bare run.
 
-Cost-guard (defense-in-depth against accidental billed LLM calls)
------------------------------------------------------------------
-A bare ``pytest`` run MUST make ZERO real LLM calls — even on a machine where a
-production provider key sits in ``.env``. Two independent layers enforce this:
+Cost-guard (never spend on a bare test run)
+-------------------------------------------
+A bare ``pytest`` MUST make ZERO billed LLM calls — even when a real provider
+credential sits in ``.env`` OR is exported in the shell. The guard is ACTIVE and
+process-wide (see ``kailash.testing.env_cost_guard`` for the full rationale):
 
-1. **Provider-secret gating in .env injection.** When
-   ``os.environ.get("KAIZEN_ALLOW_REAL_LLM") != "1"``, provider secret keys
-   (``OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``, ``GOOGLE_API_KEY``,
-   ``GEMINI_API_KEY``, ``DEEPSEEK_API_KEY``, ``MISTRAL_API_KEY``, plus any
-   ``*_API_KEY`` / ``*_SECRET``) are NOT injected from ``.env`` into the process
-   environment. Model names, DB URLs, and every other non-secret var still load
-   normally, and an already-set env var is never overridden. A test that would
-   reach a provider therefore finds no credential and cannot bill.
+1. **Active secret scrub.** ``install_cost_guard`` loads ``.env`` with provider
+   secret keys withheld, monkeypatches ``dotenv.load_dotenv`` so any later call
+   (a sibling test module's module-scope ``load_dotenv()``, a runtime fixture)
+   self-scrubs, and POPS any provider secret already in ``os.environ`` — closing
+   the incomplete-name, re-injection, and inherited-key vectors a decline-to-add
+   loader cannot. The comprehensive predicate covers every credential family
+   (``*_API_KEY`` / ``*_SECRET`` / ``*_TOKEN`` / ``*_CREDENTIALS`` /
+   ``AWS_BEARER_TOKEN_*`` / ``*ACCESS_KEY*`` …). Model names, DB URLs, and other
+   non-secret vars still load; already-set non-secret vars are never overridden.
+   ``pytest_collection_finish`` re-scrubs after every module is imported.
 
 2. **Opt-in marker gate.** Tests marked ``@pytest.mark.requires_real_llm`` are
    SKIPPED unless ``KAIZEN_ALLOW_REAL_LLM=1`` (see ``pytest_collection_modifyitems``).
@@ -36,17 +40,7 @@ from pathlib import Path
 
 import pytest
 
-# Explicit provider secret keys severed from the default pytest path.
-_PROVIDER_SECRET_KEYS = frozenset(
-    {
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GOOGLE_API_KEY",
-        "GEMINI_API_KEY",
-        "DEEPSEEK_API_KEY",
-        "MISTRAL_API_KEY",
-    }
-)
+from kailash.testing.env_cost_guard import install_cost_guard, scrub_provider_secrets
 
 _REAL_LLM_ENV_FLAG = "KAIZEN_ALLOW_REAL_LLM"
 _REAL_LLM_MARKER = "requires_real_llm"
@@ -57,61 +51,19 @@ def _real_llm_allowed() -> bool:
     return os.environ.get(_REAL_LLM_ENV_FLAG) == "1"
 
 
-def _is_provider_secret(key: str) -> bool:
-    """A key is a provider secret if it's an explicit provider key OR matches
-    the generic ``*_API_KEY`` / ``*_SECRET`` secret-name conventions."""
-    return (
-        key in _PROVIDER_SECRET_KEYS
-        or key.endswith("_API_KEY")
-        or key.endswith("_SECRET")
-    )
-
-
 def pytest_configure(config):
-    """Load .env at the very start of the pytest session."""
-    env_path = Path(__file__).parent / ".env"
-    if env_path.exists():
-        _load_env(env_path)
+    """Install the active cost-guard at the very start of the pytest session.
 
-
-def _load_env(env_path: Path):
-    """Parse .env and inject into os.environ (lightweight, no dependencies).
-
-    Provider secret keys are withheld unless ``KAIZEN_ALLOW_REAL_LLM=1`` so a
-    bare ``pytest`` run cannot make a billed LLM call from a key that only lives
-    in ``.env``.
+    Runs before collection, so the ``dotenv.load_dotenv`` monkeypatch is active
+    before any nested conftest / test module imports and re-injects a secret.
     """
-    allow_real_llm = _real_llm_allowed()
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        # Handle `export VAR=value` syntax
-        if line.startswith("export "):
-            line = line[7:].strip()
-        eq = line.find("=")
-        if eq == -1:
-            continue
-        key = line[:eq].strip()
-        val = line[eq + 1 :].strip()
-        # Cost-guard: do NOT inject provider secret keys on the default path.
-        # Model names, DB URLs, and other non-secret vars still load below.
-        if not allow_real_llm and _is_provider_secret(key):
-            continue
-        # Strip surrounding quotes
-        is_quoted = (val.startswith('"') and val.endswith('"') and len(val) >= 2) or (
-            val.startswith("'") and val.endswith("'") and len(val) >= 2
-        )
-        if is_quoted:
-            val = val[1:-1]
-        else:
-            # Strip inline comments for unquoted values (e.g. "value # comment")
-            comment_idx = val.find(" #")
-            if comment_idx > -1:
-                val = val[:comment_idx].strip()
-        # Only set if not already in environment (don't override explicit env)
-        if key not in os.environ:
-            os.environ[key] = val
+    install_cost_guard(Path(__file__).parent / ".env")
+
+
+def pytest_collection_finish(session):
+    """Backstop: after every module (and its module-scope ``load_dotenv``) is
+    imported, remove any provider secret re-injected during collection."""
+    scrub_provider_secrets()
 
 
 def pytest_collection_modifyitems(config, items):
