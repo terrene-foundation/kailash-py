@@ -186,3 +186,22 @@ async def test_exchange_sends_cached_code_verifier():
 
     token_data = captured["data"]
     assert token_data["code_verifier"] == expected_verifier
+
+
+def test_decode_id_token_rejects_non_object_payload():
+    """A valid-JSON but non-object id_token payload fails closed with a typed
+    ValueError (not an opaque AttributeError from a later ``claims.get``)."""
+    import base64 as _b64
+    import json as _json
+
+    from kailash.nodes.auth.sso import SSOAuthenticationNode
+
+    for non_object in (123, [1, 2], "just-a-string", True):
+        payload = (
+            _b64.urlsafe_b64encode(_json.dumps(non_object).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        token = f"header.{payload}.sig"
+        with pytest.raises(ValueError, match="not a JSON object"):
+            SSOAuthenticationNode._decode_id_token_claims(token)

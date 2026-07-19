@@ -15,6 +15,7 @@ Enterprise-grade SSO implementation supporting multiple protocols:
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import secrets
 import time
@@ -468,9 +469,15 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         padding = "=" * (-len(payload_segment) % 4)
         try:
             decoded = base64.urlsafe_b64decode(payload_segment + padding)
-            return json.loads(decoded)
+            claims = json.loads(decoded)
         except (ValueError, json.JSONDecodeError) as e:
             raise ValueError(f"Invalid id_token: undecodable payload ({e})")
+        if not isinstance(claims, dict):
+            # A valid-JSON but non-object payload (e.g. "123", "[]") has no
+            # claims to read; fail closed with a typed error rather than let
+            # a later ``claims.get(...)`` raise an opaque AttributeError.
+            raise ValueError("Invalid id_token: payload is not a JSON object")
+        return claims
 
     async def _initiate_oauth(
         self, provider: str, redirect_uri: str, **kwargs
@@ -700,7 +707,11 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 )
             claims = self._decode_id_token_claims(id_token)
             returned_nonce = claims.get("nonce")
-            if returned_nonce != expected_nonce:
+            # Constant-time compare (defense-in-depth; the one-shot state pop
+            # already bounds attempts). A missing/non-string claim fails closed.
+            if not isinstance(returned_nonce, str) or not hmac.compare_digest(
+                returned_nonce, expected_nonce
+            ):
                 raise ValueError(
                     "OIDC nonce mismatch — id_token nonce claim does not match "
                     "the value minted at authorization time; rejecting "
